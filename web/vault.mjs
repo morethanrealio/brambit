@@ -181,3 +181,13 @@ export function decMaybe(v) {
   const s = String(v);
   return s.startsWith('v1:') ? decryptSecret(s) : v;
 }
+
+// Índice cego: o mesmo texto sempre dá o mesmo valor, pra achar uma linha sem
+// guardar o dado em claro (ex.: telefone de quem fala com o assistente público).
+// HMAC com chave derivada da chave do cofre por contexto, então um índice não
+// serve pra comparar com outro contexto nem dá pra recalcular sem a chave
+// (telefone tem poucas combinações; hash puro seria quebrado por força bruta).
+export function indiceCego(texto, contexto) {
+  const k = Buffer.from(crypto.hkdfSync('sha256', key(), Buffer.alloc(0), 'indice-cego:' + contexto, 32));
+  return crypto.createHmac('sha256', k).update(String(texto)).digest('base64url');
+}
