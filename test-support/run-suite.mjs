@@ -23,7 +23,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { affectedTests } from './affected.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
+// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+const root = process.cwd();
 
 const PRODUCTION_PROBES = {
   'ops/tenancy-test.mjs': 'sonda HTTP com cookies reais SID_A/SID_B (servidor local por padrão; remoto só com ALLOW_REMOTE=1); rodar à mão: SID_A=… SID_B=… node ops/tenancy-test.mjs',
