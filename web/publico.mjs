@@ -22,6 +22,8 @@ export const MENSAGEM_MAX = 4000;     // chars da mensagem recebida
 export const ESTADO_MAX_CHAVES = 50;  // memória curta por contato
 export const ESTADO_MAX_VALOR = 500;
 export const PASSOS_MAX = 8;
+export const LIMITE_POR_HORA = 30;    // mensagens de um contato por hora que chegam ao modelo
+export const LIMPEZA_LOTE = 5000;
 
 export const esquemaPublico = (S) => `
  CREATE TABLE IF NOT EXISTS ${S}.public_agents (
@@ -47,12 +49,19 @@ export const esquemaPublico = (S) => `
    contact_id uuid NOT NULL REFERENCES ${S}.public_contacts(id) ON DELETE CASCADE,
    chave text NOT NULL, valor text NOT NULL, atualizado_em timestamptz NOT NULL DEFAULT now(),
    PRIMARY KEY (contact_id, chave));
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS limite_por_hora integer NOT NULL DEFAULT ${LIMITE_POR_HORA} CHECK (limite_por_hora BETWEEN 1 AND 600);
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS teto_diario_usd numeric(12,4) CHECK (teto_diario_usd > 0);
+ ALTER TABLE ${S}.public_contacts ADD COLUMN IF NOT EXISTS parado_em timestamptz;
+ ALTER TABLE ${S}.public_contacts ADD COLUMN IF NOT EXISTS limite_avisado_em timestamptz;
+ CREATE INDEX IF NOT EXISTS public_messages_criado_idx ON ${S}.public_messages(criado_em);
 `;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
 const chaveDoContato = (canal, endereco) => indiceCego(`${canal}:${endereco}`, 'contato-publico');
+const COLUNAS_AGENTE = 'agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd::float AS teto_diario_usd';
 
-export function createPublicoStore(pool, { S = 'mtr_harness' } = {}) {
+// fuso: o "dia" do teto de gasto começa à meia-noite deste fuso.
+export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sao_Paulo' } = {}) {
   async function transacao(fn) {
     const c = await pool.connect();
     try { await c.query('BEGIN'); const r = await fn(c); await c.query('COMMIT'); return r; }
@@ -63,26 +72,31 @@ export function createPublicoStore(pool, { S = 'mtr_harness' } = {}) {
     init: () => pool.query(esquemaPublico(S)),
 
     // Só o dono do agente configura: o UPDATE/INSERT confere agents.user_id.
-    async configurar(agentId, userId, { ativo, instrucoes, retencaoDias } = {}) {
+    // Campo ausente fica como está; tetoDiarioUsd: null tira o teto.
+    async configurar(agentId, userId, { ativo, instrucoes, retencaoDias, limitePorHora, tetoDiarioUsd } = {}) {
       const { rows } = await pool.query(
-        `INSERT INTO ${S}.public_agents (agent_id, user_id, ativo, instrucoes, retencao_dias)
-         SELECT a.id, a.user_id, coalesce($3, false), coalesce($4, ''), coalesce($5, 90)
+        `INSERT INTO ${S}.public_agents (agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd)
+         SELECT a.id, a.user_id, coalesce($3, false), coalesce($4, ''), coalesce($5, 90), coalesce($6, ${LIMITE_POR_HORA}), $7::numeric
            FROM ${S}.agents a WHERE a.id = $1 AND a.user_id = $2
          ON CONFLICT (agent_id) DO UPDATE SET
            ativo = coalesce($3, ${S}.public_agents.ativo),
            instrucoes = coalesce($4, ${S}.public_agents.instrucoes),
            retencao_dias = coalesce($5, ${S}.public_agents.retencao_dias),
+           limite_por_hora = coalesce($6, ${S}.public_agents.limite_por_hora),
+           teto_diario_usd = CASE WHEN $8 THEN $7::numeric ELSE ${S}.public_agents.teto_diario_usd END,
            atualizado_em = now()
          WHERE ${S}.public_agents.user_id = $2
-         RETURNING agent_id, user_id, ativo, instrucoes, retencao_dias`,
-        [agentId, userId, ativo ?? null, instrucoes == null ? null : texto(instrucoes, 20000), retencaoDias ?? null]);
+         RETURNING ${COLUNAS_AGENTE}`,
+        [agentId, userId, ativo ?? null, instrucoes == null ? null : texto(instrucoes, 20000), retencaoDias ?? null,
+          limitePorHora ?? null, tetoDiarioUsd ?? null, tetoDiarioUsd !== undefined]);
       return rows[0] || null;
     },
 
     // Config + nome do agente. Nada mais do agente sai daqui.
     async agente(agentId) {
       const { rows } = await pool.query(
-        `SELECT p.agent_id, p.user_id, p.ativo, p.instrucoes, p.retencao_dias, a.name AS nome
+        `SELECT p.agent_id, p.user_id, p.ativo, p.instrucoes, p.retencao_dias, p.limite_por_hora,
+                p.teto_diario_usd::float AS teto_diario_usd, a.name AS nome
            FROM ${S}.public_agents p JOIN ${S}.agents a ON a.id = p.agent_id AND a.user_id = p.user_id
           WHERE p.agent_id = $1 AND a.archived_at IS NULL`, [agentId]);
       return rows[0] || null;
@@ -96,10 +110,82 @@ export function createPublicoStore(pool, { S = 'mtr_harness' } = {}) {
       const { rows } = await pool.query(
         `INSERT INTO ${S}.public_contacts (agent_id, canal, chave, endereco) VALUES ($1, $2, $3, $4)
          ON CONFLICT (agent_id, canal, chave) DO UPDATE SET ultima_em = now()
-         RETURNING id, canal, endereco, criado_em, (xmax = 0) AS novo`,
+         RETURNING id, canal, endereco, criado_em, parado_em, limite_avisado_em, (xmax = 0) AS novo`,
         [agentId, canal, chave, encMaybe(end)]);
       const r = rows[0];
-      return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo };
+      return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em };
+    },
+
+    // "parar": o assistente para de responder esse contato até ele mandar "voltar".
+    async parar(contatoId, parado) {
+      await pool.query(`UPDATE ${S}.public_contacts SET parado_em = ${parado ? 'now()' : 'NULL'} WHERE id = $1`, [contatoId]);
+    },
+
+    // Mensagens do contato na última hora (as que foram ao modelo ficam gravadas).
+    async mensagensNaUltimaHora(contatoId) {
+      const { rows } = await pool.query(
+        `SELECT count(*)::int AS n FROM ${S}.public_messages
+          WHERE contact_id = $1 AND role = 'user' AND criado_em > now() - interval '1 hour'`, [contatoId]);
+      return rows[0].n;
+    },
+
+    // Marca o aviso de limite; devolve true só pra quem marcou agora (1 aviso por hora).
+    async avisarLimite(contatoId) {
+      const { rows } = await pool.query(
+        `UPDATE ${S}.public_contacts SET limite_avisado_em = now()
+          WHERE id = $1 AND (limite_avisado_em IS NULL OR limite_avisado_em < now() - interval '1 hour') RETURNING id`, [contatoId]);
+      return rows.length > 0;
+    },
+
+    // Custo de modelo do atendimento público deste assistente desde a meia-noite (fuso).
+    async gastoDoDia(agentId) {
+      const { rows } = await pool.query(
+        `SELECT coalesce(sum(cost_usd), 0)::float AS usd FROM ${S}.usage_events
+          WHERE agent_id = $1 AND kind = 'publico'
+            AND ts >= (date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2)`, [agentId, fuso]);
+      return rows[0].usd;
+    },
+
+    // LGPD: tudo o que existe de um contato (pedido de acesso do titular).
+    async exportar(contatoId) {
+      const { rows: [c] } = await pool.query(
+        `SELECT id, agent_id, canal, endereco, criado_em, ultima_em, parado_em FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
+      if (!c) return null;
+      const { rows: msgs } = await pool.query(
+        `SELECT role, content, criado_em FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id`, [contatoId]);
+      const { rows: notas } = await pool.query(
+        `SELECT chave, valor, atualizado_em FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
+      return {
+        contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em },
+        anotacoes: notas.map((n) => ({ chave: n.chave, valor: n.valor, atualizadoEm: n.atualizado_em })),
+        mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em })),
+      };
+    },
+
+    // LGPD: apaga o contato, as mensagens e as anotações (cascata).
+    async apagarContato(contatoId) {
+      const { rowCount } = await pool.query(`DELETE FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
+      return rowCount > 0;
+    },
+
+    // Retenção (retencao_dias de cada assistente): apaga mensagem e anotação mais
+    // velhas que o prazo e o contato sem conversa no prazo (com o telefone junto).
+    // Em lotes, pra não segurar o banco; roda até esvaziar.
+    async limparVencidos() {
+      const total = { mensagens: 0, anotacoes: 0, contatos: 0 };
+      const lote = async (sql) => { let n = 0, r; do { r = await pool.query(sql, []); n += r.rowCount ?? r.affectedRows ?? 0; } while ((r.rowCount ?? r.affectedRows) === LIMPEZA_LOTE); return n; };
+      total.contatos = await lote(`DELETE FROM ${S}.public_contacts WHERE id IN (
+        SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
+         WHERE c.ultima_em < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+      total.mensagens = await lote(`DELETE FROM ${S}.public_messages WHERE id IN (
+        SELECT m.id FROM ${S}.public_messages m JOIN ${S}.public_contacts c ON c.id = m.contact_id
+          JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
+         WHERE m.criado_em < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+      total.anotacoes = await lote(`DELETE FROM ${S}.public_contact_state WHERE (contact_id, chave) IN (
+        SELECT s.contact_id, s.chave FROM ${S}.public_contact_state s JOIN ${S}.public_contacts c ON c.id = s.contact_id
+          JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
+         WHERE s.atualizado_em < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+      return total;
     },
 
     async historico(contatoId, limite = HISTORICO_MAX) {
@@ -175,6 +261,25 @@ export function promptPublico({ nome, instrucoes, canal, agora, instrucoesExtras
 }
 
 export const RESPOSTA_INDISPONIVEL = 'No momento não consigo responder por aqui. Tente de novo mais tarde, por favor.';
+export const RESPOSTA_PARADO = 'Pronto, não vou mais responder por aqui. Se quiser voltar a falar comigo, mande VOLTAR. Para apagar o que ficou guardado desta conversa, mande APAGAR MEUS DADOS.';
+export const RESPOSTA_VOLTOU = 'Oi de novo! Pode mandar sua mensagem.';
+export const RESPOSTA_APAGADO = 'Apaguei as mensagens e as anotações desta conversa. Se você escrever de novo, começamos do zero.';
+export const RESPOSTA_LIMITE = 'Recebi muitas mensagens em pouco tempo. Daqui a pouco volto a responder.';
+
+// Comandos do contato, resolvidos ANTES do modelo (o modelo pode errar ou ser
+// convencido a ignorar; isto não). Só a mensagem inteira conta: "quero parar de
+// receber promoção" vai pro modelo, "parar" sozinho para.
+const COMANDOS = {
+  parar: ['parar', 'pare', 'sair', 'stop', 'unsubscribe'],
+  voltar: ['voltar', 'start'],
+  apagar: ['apagar meus dados', 'apague meus dados', 'excluir meus dados', 'exclua meus dados', 'delete my data'],
+};
+export function comandoDoContato(mensagem) {
+  const t = String(mensagem || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const [cmd, frases] of Object.entries(COMANDOS)) if (frases.includes(t)) return cmd;
+  return null;
+}
 
 // deps (o servidor injeta):
 //  store: createPublicoStore.
@@ -184,8 +289,13 @@ export const RESPOSTA_INDISPONIVEL = 'No momento não consigo responder por aqui
 //  ferramentas: porta de ferramentas (doTurno/vetar/instrucoes); só entram as
 //   tools com publico:true, e doTurno recebe o contato.
 //  agora() → data e hora por extenso pro prompt.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', runAgent = runAgentPadrao, log = console }) {
-  const filas = new Map(); // contatoId → promessa do turno em andamento (1 turno por contato)
+//  gastoDoDia(agentId) → US$ do atendimento público hoje (padrão: store.gastoDoDia).
+//
+// Ordem dos freios, antes do modelo: comando do contato (parar/voltar/apagar) →
+// contato parado (silêncio, nada gravado) → limite por hora do contato (1 aviso
+// por hora, depois silêncio) → saldo do dono → teto diário do assistente.
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, log = console }) {
+  const filas = new Map(); // contato (assistente+canal+endereço) → turno em andamento (1 por contato)
   function emFila(id, fn) {
     const antes = filas.get(id) || Promise.resolve();
     const atual = antes.catch(() => {}).then(fn);
@@ -211,16 +321,35 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   async function turno({ agentId, canal, endereco, mensagem }) {
     const agente = await store.agente(agentId);
     if (!agente?.ativo) return { text: null, motivo: 'inativo' };
-    const contato = await store.contato(agentId, canal, endereco);
     const msg = texto(mensagem, MENSAGEM_MAX);
-    if (!msg) return { text: null, motivo: 'vazia', contatoId: contato.id };
-    return emFila(contato.id, async () => {
+    // O contato é lido DENTRO da fila: um "apagar meus dados" na frente apaga a
+    // linha, e o turno seguinte começa num contato novo.
+    return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
+      const contato = await store.contato(agentId, canal, endereco);
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
-      const credito = await saldo(agente.user_id);
-      if (!credito || credito.over !== false) {
-        await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
-        return { text: RESPOSTA_INDISPONIVEL, motivo: 'sem_saldo', ...ident };
+      if (!msg) return { text: null, motivo: 'vazia', ...ident };
+      const comando = comandoDoContato(msg);
+      if (comando === 'apagar') {
+        await store.apagarContato(contato.id);
+        return { text: RESPOSTA_APAGADO, motivo: 'apagado', ...ident, contatoId: null };
       }
+      if (comando === 'parar') { await store.parar(contato.id, true); return { text: RESPOSTA_PARADO, motivo: 'parado', ...ident }; }
+      if (contato.paradoEm) {
+        if (comando !== 'voltar') return { text: null, motivo: 'parado', ...ident };
+        await store.parar(contato.id, false);
+        return { text: RESPOSTA_VOLTOU, motivo: 'voltou', ...ident };
+      }
+      if (await store.mensagensNaUltimaHora(contato.id) >= agente.limite_por_hora) {
+        const avisar = await store.avisarLimite(contato.id);
+        return { text: avisar ? RESPOSTA_LIMITE : null, motivo: 'limite', ...ident };
+      }
+      const indisponivel = async (motivo) => {
+        await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
+        return { text: RESPOSTA_INDISPONIVEL, motivo, ...ident };
+      };
+      const credito = await saldo(agente.user_id);
+      if (!credito || credito.over !== false) return indisponivel('sem_saldo');
+      if (agente.teto_diario_usd != null && await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return indisponivel('teto_diario');
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, instrucoes: agente.instrucoes, canal, agora: agora(),
         instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
