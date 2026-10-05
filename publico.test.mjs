@@ -8,7 +8,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL } = await import('./web/publico.mjs');
+const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('./web/publico.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -17,7 +17,8 @@ async function montar(t) {
   await db.exec(`CREATE SCHEMA mtr_harness;
     CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY);
     CREATE TABLE mtr_harness.agents(id uuid PRIMARY KEY, user_id uuid REFERENCES mtr_harness.users(id) ON DELETE CASCADE,
-      name text, instructions text, profile text, summary text, archived_at timestamptz);`);
+      name text, instructions text, profile text, summary text, archived_at timestamptz);
+    CREATE TABLE mtr_harness.usage_events(id bigserial PRIMARY KEY, ts timestamptz DEFAULT now(), agent_id uuid, kind text, cost_usd numeric(12,6));`);
   const dono = randomUUID(), outro = randomUUID(), ag = randomUUID(), ag2 = randomUUID();
   await db.query('INSERT INTO mtr_harness.users VALUES ($1), ($2)', [dono, outro]);
   await db.query(`INSERT INTO mtr_harness.agents VALUES ($1,$3,'Lia',$4,$4,$4,null), ($2,$3,'Bia',$4,$4,$4,null)`, [ag, ag2, dono, SEGREDO]);
@@ -116,6 +117,75 @@ test('sem saldo do dono: resposta neutra sem chamar o modelo; turnos do mesmo co
   const a = atendimento(store, { provider: () => lento });
   await Promise.all([1, 2, 3].map((i) => a.turno({ agentId: ag, canal: 'whatsapp', endereco: '7', mensagem: 'msg ' + i })));
   assert.equal(max, 1);
+});
+
+test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) => {
+  const { db, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true });
+  const m = modelo([{ name: 'lembrar_do_contato', args: { chave: 'nome', valor: 'Ana' } }]);
+  const a = atendimento(store, m);
+  const fala = (mensagem, endereco = '5511000000009') => a.turno({ agentId: ag, canal: 'whatsapp', endereco, mensagem });
+  await fala('oi, sou a Ana');
+  assert.equal((await fala('quero parar de receber promoção')).motivo, undefined);
+  const chamadas = m.chamadas.length;
+  assert.equal((await fala('  Parar! ')).text, RESPOSTA_PARADO);
+  assert.equal((await fala('oi?')).text, null);
+  assert.equal(m.chamadas.length, chamadas, 'contato parado não pode chegar ao modelo');
+  assert.equal((await fala('voltar')).text, RESPOSTA_VOLTOU);
+  assert.match((await fala('tudo bem?')).text, /^resposta/);
+  // Apagar: some contato, mensagens e anotações; quem volta começa do zero.
+  await fala('5511000000008', '5511000000008');
+  assert.equal((await fala('Apagar meus dados.')).text, RESPOSTA_APAGADO);
+  const conta = async (tab) => (await db.query(`SELECT count(*)::int n FROM mtr_harness.${tab}`)).rows[0].n;
+  assert.deepEqual([await conta('public_contacts'), await conta('public_contact_state')], [1, 0]);
+  m.chamadas.length = 0;
+  await fala('oi de novo');
+  assert.ok(!JSON.stringify(m.chamadas).includes('Ana'));
+});
+
+test('limite por hora do contato e teto diário do assistente', async (t) => {
+  const { db, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, limitePorHora: 2 });
+  const m = modelo();
+  const a = atendimento(store, m);
+  const fala = (mensagem, endereco = '1') => a.turno({ agentId: ag, canal: 'whatsapp', endereco, mensagem });
+  for (const x of ['a', 'b']) await fala(x);
+  assert.equal((await fala('c')).text, RESPOSTA_LIMITE);
+  assert.equal((await fala('d')).text, null, 'um aviso por hora, depois silêncio');
+  assert.equal(m.chamadas.length, 2);
+  assert.match((await fala('oi', '2')).text, /^resposta/, 'o limite é por contato');
+  // Teto: só conta o custo do atendimento público deste assistente, de hoje.
+  await store.configurar(ag, dono, { tetoDiarioUsd: 0.5, limitePorHora: 10 });
+  await db.query(`INSERT INTO mtr_harness.usage_events (agent_id, kind, cost_usd, ts) VALUES
+    ($1, 'chat', 9, now()), ($1, 'publico', 9, now() - interval '2 days'), ($1, 'publico', 0.4, now())`, [ag]);
+  assert.match((await fala('oi', '3')).text, /^resposta/);
+  await db.query(`INSERT INTO mtr_harness.usage_events (agent_id, kind, cost_usd) VALUES ($1, 'publico', 0.1)`, [ag]);
+  const r = await fala('oi', '3');
+  assert.deepEqual([r.text, r.motivo], [RESPOSTA_INDISPONIVEL, 'teto_diario']);
+  assert.equal((await store.configurar(ag, dono, { tetoDiarioUsd: null })).teto_diario_usd, null);
+  assert.match((await fala('oi', '3')).text, /^resposta/);
+});
+
+test('retenção apaga o que passou do prazo; exportar devolve tudo do contato', async (t) => {
+  const { db, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, retencaoDias: 30 });
+  const a = atendimento(store, modelo([{ name: 'lembrar_do_contato', args: { chave: 'tamanho', valor: 'M' } }]));
+  const r1 = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000001', mensagem: 'antiga' });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000001', mensagem: 'nova' });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000002', mensagem: 'sumido' });
+  const exp = await store.exportar(r1.contatoId);
+  assert.equal(exp.contato.endereco, '5511000000001');
+  assert.deepEqual(exp.anotacoes.map((x) => x.valor), ['M']);
+  assert.deepEqual(exp.mensagens.filter((x) => x.role === 'user').map((x) => x.content), ['antiga', 'nova']);
+  await db.query(`UPDATE mtr_harness.public_messages SET criado_em = now() - interval '31 days' WHERE content = 'antiga'`);
+  await db.query(`UPDATE mtr_harness.public_contact_state SET atualizado_em = now() - interval '31 days'`);
+  const sumido = await store.contato(ag, 'whatsapp', '5511000000002');
+  await db.query(`UPDATE mtr_harness.public_contacts SET ultima_em = now() - interval '31 days' WHERE id = $1`, [sumido.id]);
+  assert.deepEqual(await store.limparVencidos(), { contatos: 1, mensagens: 1, anotacoes: 1 });
+  assert.equal(await store.exportar(sumido.id), null);
+  const depois = await store.exportar(r1.contatoId);
+  assert.deepEqual(depois.mensagens.filter((x) => x.role === 'user').map((x) => x.content), ['nova']);
+  assert.deepEqual(depois.anotacoes, []);
 });
 
 // O isolamento é por construção: o módulo não pode passar a importar quem lê
