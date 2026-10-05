@@ -219,7 +219,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const credito = await saldo(agente.user_id);
       if (!credito || credito.over !== false) {
         await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
-        return { text: RESPOSTA_INDISPONIVEL, motivo: 'sem_saldo', contatoId: contato.id };
+        return { text: RESPOSTA_INDISPONIVEL, motivo: 'sem_saldo', ...ident };
       }
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, instrucoes: agente.instrucoes, canal, agora: agora(),
@@ -235,7 +235,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       }
       if (!text) text = RESPOSTA_INDISPONIVEL;
       await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: text }]);
-      return { text, contatoId: contato.id };
+      return { text, ...ident };
     });
   }
 
