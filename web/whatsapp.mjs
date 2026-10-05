@@ -18,6 +18,7 @@ import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
 import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markdownParaWa } from './wa-format.mjs';
+import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const PHONE_ID = () => process.env.WA_PHONE_NUMBER_ID;
@@ -89,18 +90,22 @@ export function prepararTextoWa(text) {
 // Texto puro, cortado em pedaços de WA_CHUNK chars.
 // Devolve os wamids das partes enviadas (pra indexar a resposta e permitir que
 // o usuário "responda/cite" ela depois). Callers que ignoram o retorno seguem ok.
-async function sendText(to, text, { requireReceipt = false, tracking } = {}) {
+// `reenvio`: repete cada parte que falhou com erro incerto (aviso-canal.mjs), por
+// parte, pra não mandar de novo as que a Meta já aceitou. No erro, `error.wamids`
+// traz as partes que saíram (cobrança e citação continuam valendo pra elas).
+async function sendText(to, text, { requireReceipt = false, tracking, reenvio = false } = {}) {
   const wamids = [];
   const parts = prepararTextoWa(text);
   await tracking?.start({ total: parts.length, recipient: to });
   for (const [part, parte] of parts.entries()) {
     try {
       const opaque = await tracking?.beforePart(part);
-      const j = await graph(`${PHONE_ID()}/messages`, {
+      const enviar = () => graph(`${PHONE_ID()}/messages`, {
         messaging_product: 'whatsapp', to, type: 'text',
         ...(opaque ? { biz_opaque_callback_data: opaque } : {}),
         text: { body: parte, preview_url: false },
       });
+      const j = await (reenvio ? comReenvio(enviar, { rotulo: 'whatsapp' }) : enviar());
       const id = j?.messages?.[0]?.id;
       if (requireReceipt && (typeof id !== 'string' || !id.trim())) {
         throw Object.assign(new Error('WhatsApp sem recibo para uma parte da mensagem'), { definitive: false, partial: true });
@@ -110,6 +115,7 @@ async function sendText(to, text, { requireReceipt = false, tracking } = {}) {
     } catch (error) {
       await tracking?.failed(part, error);
       if (wamids.length) { error.definitive = false; error.partial = true; }
+      error.wamids = wamids;
       throw error;
     }
   }
@@ -536,8 +542,11 @@ export function verifySignature(rawBody, signature) {
 //   runConversation(agent, userId, text) -> reply
 //   loadAgent(agentId, userId) -> agent   (valida ownership)
 //   db = { getWhatsAppLink, listAgents, setWhatsAppActiveAgent }
-export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null }) {
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
+// registro dele no histórico da thread WhatsApp.
+export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {} }) {
   const seen = new Set(); // ids já processados (dedup de retries do Meta)
+  const avisar = criarAvisoCanal({ rotulo: 'whatsapp', ...avisoCanal });
 
   const DEBOUNCE_MS = Number(process.env.WA_DEBOUNCE_MS || 3000);
   const MAX_BATCH=20,MAX_IMAGES=10,MAX_FILES=3;
@@ -581,7 +590,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     for(const p of b.parts){if(count&&(count>=MAX_BATCH||imageCount+(p.images?.length||0)>MAX_IMAGES||fileCount+(p.files?.length||0)>MAX_FILES))break;count++;imageCount+=p.images?.length||0;fileCount+=p.files?.length||0;}
     if(count<b.parts.length){const remaining=b.parts.slice(count);b.parts=b.parts.slice(0,count);buffers.set(key,{...b,parts:remaining,timer:null});}
     const {from}=b,token={pending:[],consumed:[...b.parts]};running.set(key,token);
-    let finishHeartbeat=async()=>{};
+    let finishHeartbeat=async()=>{},fase='turno',text='';
     try{
       const liveAgent=await loadAgent(b.agentId,b.userId);
       if(!await sameRecipient(from,b.userId)||!liveAgent){
@@ -590,7 +599,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       b.agent=liveAgent;
       if(inbox)await inbox.begin(ids(b.parts));
       const images=b.parts.flatMap(p=>p.images||[]),files=b.parts.flatMap(p=>p.files||[]);
-      const text=b.parts.map(p=>p.text).filter(Boolean).join('\n')||notaMidiaSemTexto({images:images.length,files:files.length});
+      text=b.parts.map(p=>p.text).filter(Boolean).join('\n')||notaMidiaSemTexto({images:images.length,files:files.length});
       finishHeartbeat=startTurnHeartbeat({afterMs:TURN_HEARTBEAT_MS,send:async()=>{
         if(!await sameRecipient(from,b.userId))return;
         if(inbox)await inbox.assertRunning(ids(token.consumed));
@@ -605,22 +614,34 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       await finishHeartbeat();
       if(!await sameRecipient(from,b.userId))throw Object.assign(Error('Recipient changed'),{code:'WA_RECIPIENT_CHANGED'});
       if(inbox)await inbox.assertRunning(ids(token.consumed));
+      // Daqui pra baixo o turno terminou e a resposta está no histórico: falha é
+      // só de entrega. Cada parte que falha na rede é reenviada (nunca o turno);
+      // se não sair, a pessoa recebe o aviso de entrega (caso Luffy 05/10/2026).
+      fase='entrega';
       const reply=typeof res==='string'?res:res?.text,attachments=typeof res==='string'?[]:(res?.attachments||[]);
-      let cobraveis=0;
+      let cobraveis=0,naoEntregue=false;
+      const saveRefs=(wamids,body)=>{if(db?.saveWaMsgRef)for(const w of wamids)db.saveWaMsgRef({wamid:w,userId:b.userId,agentId:b.agentId,direction:'out',body}).catch(()=>{});};
       if(reply||!attachments.length)for(const part of channelReplyParts(res,'(sem resposta)')){
-        const wamids=await sendText(from,part.text,{requireReceipt:!!inbox||!!part.id});cobraveis+=wamids.length;
+        let wamids=null;
+        try{wamids=await sendText(from,part.text,{requireReceipt:!!inbox||!!part.id,reenvio:true});}
+        catch(e){naoEntregue=true;console.error('[whatsapp] resposta não entregue:',e?.code||e?.name||'error');saveRefs(e?.wamids||[],part.text);cobraveis+=e?.wamids?.length||0;continue;}
+        cobraveis+=wamids.length;
         await part.onReplySent?.({channel:'whatsapp',messageIds:wamids});
-        if(db?.saveWaMsgRef)for(const w of wamids)db.saveWaMsgRef({wamid:w,userId:b.userId,agentId:b.agentId,direction:'out',body:part.text}).catch(()=>{});
+        saveRefs(wamids,part.text);
       }
       cobraveis+=await sendAttachments(from,attachments,getMedia);
       billWa(b.userId,cobraveis,{agentId:b.agentId});
+      if(naoEntregue)throw Object.assign(Error('Reply not delivered'),{code:'WA_REPLY_NOT_DELIVERED'});
       if(inbox)await inbox.complete(ids(token.consumed));
     }catch(e){
       await finishHeartbeat();console.error('[whatsapp] erro na conversa:',e?.code||e?.name||'error');
-      if(inbox)await failInbox(token.consumed,e?.code==='WA_RECIPIENT_CHANGED'?'recipient_changed':'execution_or_delivery_uncertain').catch(()=>{});
-      // A failed send may already have reached the user; do not send a second
-      // speculative reply or replay effects. The inbox exposes the uncertainty.
-      else if(await sameRecipient(from,b.userId).catch(()=>false))await sendText(from,'Tive um problema pra responder agora. Tenta de novo?').catch(()=>{});
+      if(inbox)await failInbox(token.consumed,e?.code==='WA_RECIPIENT_CHANGED'?'recipient_changed':e?.code==='WA_REPLY_NOT_DELIVERED'?'delivery_failed':'execution_or_delivery_uncertain').catch(()=>{});
+      // Never replay the turn: `turno` asks whether to try again, `entrega` says the
+      // ready reply did not arrive. Both notices enter the thread history, so the
+      // next "tenta de novo" points to the right request. The inbox keeps the
+      // uncertain state for operators. A lost inbox lease or new recipient: silence.
+      if(e?.code!=='WA_RECIPIENT_CHANGED'&&e?.code!=='WA_INBOX_CONFLICT'&&b.agent&&await sameRecipient(from,b.userId).catch(()=>false))
+        await avisar({agent:b.agent,userId:b.userId,tipo:fase,mensagem:text,enviar:t=>sendText(from,t)});
     }finally{
       await finishHeartbeat();running.delete(key);releaseParts(token.consumed);
       for(const part of token.pending)await enqueue(from,part,{interject:false});

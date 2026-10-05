@@ -12,6 +12,7 @@ import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
 import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markVoiceInput } from './voice-input.mjs';
+import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 
 // Compara o código de pareamento sem vazar acerto parcial pelo tempo de resposta.
 export function codeEq(a, b) {
@@ -76,14 +77,17 @@ export async function validateBotToken(token) {
 // (partia palavra e URL); agora usa channel-split.mjs.
 const TG_CHUNK = 4000;
 
-async function sendMessage(token, chatId, text, { requireReceipt = false } = {}) {
+// `reenvio`: repete cada parte que falhou com erro incerto (aviso-canal.mjs). É
+// por parte, pra não mandar de novo as que o Telegram já aceitou.
+async function sendMessage(token, chatId, text, { requireReceipt = false, reenvio = false } = {}) {
   // Texto puro (sem parse_mode) pra não quebrar com markdown malformado do modelo.
   const chunks = splitMessage(text || '', TG_CHUNK);
   if (!chunks.length) chunks.push('');
   const receipts=[];
   for (const c of chunks) {
     try {
-      const receipt = await tg(token, 'sendMessage', { chat_id: chatId, text: c });
+      const enviar = () => tg(token, 'sendMessage', { chat_id: chatId, text: c });
+      const receipt = await (reenvio ? comReenvio(enviar, { rotulo: 'telegram' }) : enviar());
       if (requireReceipt && (!Number.isSafeInteger(receipt?.message_id) || receipt.message_id <= 0)) {
         throw Object.assign(new Error('Telegram sem recibo para uma parte da mensagem'), { definitive: false });
       }
@@ -232,7 +236,10 @@ async function downloadFile(token, fileId, mimeHint) {
 // Gerencia os pollers. Injeta as dependências do server (evita import circular).
 // runConversation(agent, userId, text, images) -> reply ; loadAgent(agentId, userId) -> agent
 // transcribe(buffer, mime, userId) -> texto (STT); db = { getTelegramBot, bindTelegramChat, setTelegramOffset }
-export function createTelegramManager({ runConversation, reactionConfirm, loadAgent, db, getMedia, transcribe }) {
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
+// registro dele no histórico da thread Telegram.
+export function createTelegramManager({ runConversation, reactionConfirm, loadAgent, db, getMedia, transcribe, avisoCanal = {} }) {
+  const avisar = criarAvisoCanal({ rotulo: 'telegram', ...avisoCanal });
   const running = new Map(); // token -> { stop: boolean }
   const configuredHeartbeatMs = Number(process.env.TELEGRAM_TURN_HEARTBEAT_MS ?? process.env.TURN_HEARTBEAT_MS ?? 60000);
   const TURN_HEARTBEAT_MS = Number.isFinite(configuredHeartbeatMs) && configuredHeartbeatMs > 0
@@ -354,29 +361,44 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
       send: () => sendMessage(bot.token, chatId, TURN_HEARTBEAT_TEXT),
       onError: (e) => console.warn('[telegram] heartbeat:', e?.message ?? e),
     });
+    const enviarAviso = (t) => sendMessage(bot.token, chatId, t);
+    let res;
     try {
       await tg(bot.token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
-      const res = await runConversation(agent, fresh.user_id, text, images, files, {
+      res = await runConversation(agent, fresh.user_id, text, images, files, {
         confirmationInputId: msg.message_id == null ? null : `telegram:${chatId}:${msg.message_id}`,
         confirmationTarget: msg.reply_to_message ? { channel: 'telegram', messageId: msg.reply_to_message.message_id == null ? null : `${chatId}:${msg.reply_to_message.message_id}` } : undefined,
       });
-      await finishHeartbeat();
-      const reply = typeof res === 'string' ? res : res?.text;
-      const attachments = typeof res === 'string' ? [] : (res?.attachments || []);
-      await sendAttachments(bot.token, chatId, attachments, getMedia);
-      if (reply || !attachments.length) {
-        for (const part of channelReplyParts(res, '(sem resposta)')) {
-          const receipt = await sendMessage(bot.token, chatId, part.text, {requireReceipt:!!part.id});
-          await part.onReplySent?.({channel:'telegram',messageIds:(receipt?.message_ids || []).filter(id=>id!=null).map(id=>`${chatId}:${id}`)});
-        }
-      }
     } catch (e) {
       await finishHeartbeat();
       console.error('[telegram] erro na conversa:', e?.message ?? e);
-      await sendMessage(bot.token, chatId, 'Tive um problema pra responder agora. Tenta de novo?').catch(() => {});
+      await avisar({ agent, userId: fresh.user_id, tipo: 'turno', mensagem: text, enviar: enviarAviso });
+      return;
     } finally {
       await finishHeartbeat();
     }
+    // Daqui pra baixo o turno já terminou e a resposta está no histórico: falha
+    // aqui é só de entrega, e rodar o turno de novo poderia repetir ações.
+    let entregou = true;
+    const reply = typeof res === 'string' ? res : res?.text;
+    const attachments = typeof res === 'string' ? [] : (res?.attachments || []);
+    try { await sendAttachments(bot.token, chatId, attachments, getMedia); } catch (e) {
+      entregou = false;
+      console.error('[telegram] anexo não entregue:', e?.message ?? e);
+    }
+    if (reply || !attachments.length) {
+      for (const part of channelReplyParts(res, '(sem resposta)')) {
+        let receipt;
+        try { receipt = await sendMessage(bot.token, chatId, part.text, { requireReceipt: !!part.id, reenvio: true }); } catch (e) {
+          entregou = false;
+          console.error('[telegram] resposta não entregue:', e?.message ?? e);
+          continue;
+        }
+        await Promise.resolve(part.onReplySent?.({channel:'telegram',messageIds:(receipt?.message_ids || []).filter(id=>id!=null).map(id=>`${chatId}:${id}`)}))
+          .catch((e) => console.error('[telegram] recibo da resposta:', e?.message ?? e));
+      }
+    }
+    if (!entregou) await avisar({ agent, userId: fresh.user_id, tipo: 'entrega', enviar: enviarAviso });
   }
 
   async function poll(bot) {

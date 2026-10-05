@@ -5104,8 +5104,8 @@ export async function persistAgentOpening({ agentId, userId, title, text }) {
 }
 
 // History and transcript commit together; no full snapshot replacement.
-export async function appendAssistantToThread({ threadId, userId, text, deliveryKey, attachments }) {
-  return appendThreadMessage(pool, S, { threadId, userId, text, clean, deliveryKey, attachments });
+export async function appendAssistantToThread({ threadId, userId, text, deliveryKey, attachments, pergunta }) {
+  return appendThreadMessage(pool, S, { threadId, userId, text, clean, deliveryKey, attachments, pergunta });
 }
 
 export async function updateRoutine(id, userId, fields) {

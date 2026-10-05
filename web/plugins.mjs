@@ -1,7 +1,7 @@
 // Formato de plugin (C2, passo 11b). O núcleo não importa nada da distribuição:
-// quem instala põe a lista de plugins em web/plugins/ativos.mjs
-// (`export default [plugin, ...]`), e o servidor carrega essa lista no boot. Sem
-// o arquivo, o núcleo sobe sozinho com cada porta no padrão (createXSimples).
+// quem instala põe a lista de plugins em web/plugins/ativos.mjs ou no arquivo
+// de BRAMBIT_PLUGINS (`export default [plugin, ...]`), e o servidor carrega essa
+// lista no boot. Sem o arquivo, o núcleo sobe sozinho com cada porta no padrão (createXSimples).
 // Plugin = objeto com:
 //  nome: texto curto, aparece no log e no erro de boot.
 //  esquema({pool,S}): tabelas e colunas do plugin; o initDb roda depois das do
@@ -39,6 +39,7 @@
 // boot, e não no primeiro uso.
 import fs from 'node:fs';
 import path from 'node:path';
+import {pathToFileURL,fileURLToPath} from 'node:url';
 import {leitorDePagina} from './app-encaixes.mjs';
 
 export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek'];
@@ -54,11 +55,23 @@ export function conferirPlugin(p){
  return p;
 }
 
-// arquivo existe = a lista tem que carregar; erro dentro dela derruba o boot.
-export async function carregarPlugins(arquivo=new URL('./plugins/ativos.mjs',import.meta.url)){
- if(!fs.existsSync(arquivo))return [];
+// Onde está a lista: BRAMBIT_PLUGINS (caminho absoluto, ou relativo à pasta de
+// onde o servidor sobe) pra quem instala o núcleo como pacote e guarda os plugins
+// no próprio repositório; sem ela, web/plugins/ativos.mjs.
+export function arquivoDosPlugins(env=process.env){
+ return env.BRAMBIT_PLUGINS?pathToFileURL(path.resolve(env.BRAMBIT_PLUGINS)):new URL('./plugins/ativos.mjs',import.meta.url);
+}
+
+// arquivo existe = a lista tem que carregar; erro dentro dela derruba o boot. Com
+// BRAMBIT_PLUGINS, o arquivo tem que existir: lista pedida e não achada não sobe
+// em silêncio sem os plugins.
+export async function carregarPlugins(arquivo=arquivoDosPlugins()){
+ if(!fs.existsSync(arquivo)){
+  if(process.env.BRAMBIT_PLUGINS&&arquivo.href===arquivoDosPlugins().href)throw Error('BRAMBIT_PLUGINS aponta pra um arquivo que não existe: '+process.env.BRAMBIT_PLUGINS);
+  return [];
+ }
  const lista=(await import(arquivo.href)).default;
- if(!Array.isArray(lista))throw Error('plugins/ativos.mjs precisa exportar uma lista');
+ if(!Array.isArray(lista))throw Error(`${fileURLToPath(arquivo)} precisa exportar uma lista de plugins`);
  const nomes=new Set();
  for(const p of lista){
   conferirPlugin(p);

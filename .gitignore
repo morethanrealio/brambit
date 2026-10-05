@@ -45,3 +45,7 @@ __pycache__/
 
 # executáveis do Runner gerados por runner-go/build.sh (a nuvem guarda os dela na pasta da marca)
 web/public/runner-bin/
+
+# deploy-prod.sh: instalação nova ao lado e a anterior guardada
+.npm-novo.*/
+node_modules.antigo/

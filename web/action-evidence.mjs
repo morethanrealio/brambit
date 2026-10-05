@@ -55,6 +55,7 @@ const connectorWords = {
 };
 export function renderAction(e, language = 'pt-BR') {
   const lang=languageKey(language),w = words[lang];
+  if (e.family === 'tracker') return renderTracker(e, lang);
   if (e.family === 'list' && e.state === 'saved') return lang==='en' ? `List "${clean(e.subject)}" saved.` : lang==='es' ? `Lista "${clean(e.subject)}" guardada.` : `Lista "${clean(e.subject)}" salva.`;
   if (e.family === 'reminder' && e.state === 'deleted') return (lang==='en' ? 'Reminder canceled.' : lang==='es' ? 'Recordatorio cancelado.' : 'Lembrete cancelado.') + (e.inFlight ? (lang==='en'?' A delivery already started and may still arrive.':lang==='es'?' Un envío ya empezó y todavía puede llegar.':' Um envio já havia começado e ainda pode chegar.') : '');
   if (e.family === 'reminder' && e.state === 'updated') return (lang==='en'?'Next reminder rescheduled; the remaining cadence is unchanged.':lang==='es'?'Próximo aviso reprogramado; la cadencia restante no cambia.':'Próximo aviso remarcado; a cadência dos demais foi preservada.') + ` ${w.at}: ${clean(e.at)}. ${w.target}: ${clean(e.target)}.`;
@@ -98,7 +99,65 @@ export function renderCompletedActions(entries, language = 'pt-BR') {
     return true;
   }), language);
 }
+// Registros contáveis (web/trackers.mjs): só a frase de sucesso da tool prova a
+// gravação. Pergunta, ambiguidade e erro não viram recibo, e o "anotei" do
+// modelo nesses casos continua sem prova. Sem isto, o "anotei" de um
+// registrar_evento que gravou de verdade saía da resposta e, quando era a
+// resposta inteira, virava "Não consegui confirmar isso agora" (caso 05/10/2026).
+const TRACKER = {
+  registrar_evento: [/^Registrado em "(.+)": (\d{4}-\d{2}-\d{2})(?: valor (-?\d+(?:\.\d+)?))?/, m => ({ state:'recorded', subject:m[1], at:m[2], value:m[3] })],
+  remover_evento: [/^Removi (\d+) lançamentos? de "(.+)" em (\d{4}-\d{2}-\d{2})\.$/, m => ({ state:'removed', subject:m[2], at:m[3], value:m[1] })],
+  remover_tracker: [/^Parei de acompanhar "(.+)" \(/, m => ({ state:'stopped', subject:m[1] })],
+};
+// A consulta também prova, mas só o estado que leu: "já está anotado" depois
+// do consultar_evento era cortado como "fiz sem prova" e o fato lido no banco
+// sumia da resposta (msg 8494, 05/10/2026). Erro e "não achei" seguem sem recibo.
+function trackerReadReceipt(out) {
+  const d = resultData(out);
+  if (typeof d?.registro !== 'string' || !Number.isInteger(d.eventos)) return null;
+  const p = d.periodo && typeof d.periodo === 'object' ? d.periodo : {};
+  return { family:'tracker', tool:'consultar_evento', state:'found', subject:d.registro, value:String(d.eventos),
+    total:Number(d.soma) ? String(d.soma) : '', unit:clean(d.unidade || '', 30), from:clean(p.de || ''), to:clean(p.ate || ''),
+    id:`tracker:${d.registro}:${p.de || ''}:${p.ate || ''}` };
+}
+function trackerReceipt(name, out) {
+  const [re, read] = TRACKER[name];
+  const m = typeof out === 'string' ? out.match(re) : null;
+  if (!m) return null;
+  const r = read(m);
+  return { family:'tracker', tool:name, ...r, id:`tracker:${r.subject}:${r.at || ''}` };
+}
+function renderTracker(e, lang) {
+  const t = clean(e.subject), iso = clean(e.at);
+  const dia = lang === 'en' ? iso : iso.split('-').reverse().join('/');
+  const valor = e.value ? (lang === 'en' ? `, value ${clean(e.value)}` : `, valor ${clean(e.value).replace('.', ',')}`) : '';
+  const n = Number(e.value);
+  if (e.state === 'found') return renderTrackerRead(e, lang, t, n);
+  if (e.state === 'recorded') return lang==='en' ? `Recorded in "${t}" (${dia}${valor}).`
+    : lang==='es' ? `Anotado en "${t}" (${dia}${valor}).` : `Anotado em "${t}" (${dia}${valor}).`;
+  if (e.state === 'removed') return lang==='en' ? `Removed from "${t}": ${n} ${n === 1 ? 'entry' : 'entries'} on ${dia}.`
+    : lang==='es' ? `Eliminado de "${t}": ${n} ${n === 1 ? 'registro' : 'registros'} del ${dia}.`
+    : `Removido de "${t}": ${n} ${n === 1 ? 'lançamento' : 'lançamentos'} de ${dia}.`;
+  return lang==='en' ? `Stopped tracking "${t}"; the history is kept.`
+    : lang==='es' ? `Dejé de seguir "${t}"; el historial se conserva.` : `Parei de acompanhar "${t}"; o histórico fica guardado.`;
+}
+function renderTrackerRead(e, lang, t, n) {
+  const d = iso => lang === 'en' ? clean(iso) : clean(iso).split('-').reverse().join('/');
+  const de = e.from, ate = e.to;
+  const quando = de && de === ate ? { pt:` em ${d(de)}`, en:` on ${d(de)}`, es:` el ${d(de)}` }
+    : de && ate ? { pt:` de ${d(de)} a ${d(ate)}`, en:` from ${d(de)} to ${d(ate)}`, es:` del ${d(de)} al ${d(ate)}` }
+    : de ? { pt:` desde ${d(de)}`, en:` since ${d(de)}`, es:` desde ${d(de)}` }
+    : ate ? { pt:` até ${d(ate)}`, en:` until ${d(ate)}`, es:` hasta ${d(ate)}` } : { pt:'', en:'', es:'' };
+  const unit = e.unit ? ` ${clean(e.unit)}` : '';
+  const total = e.total ? (lang === 'en' ? `, total ${clean(e.total)}${unit}` : `, total ${clean(e.total).replace('.', ',')}${unit}`) : '';
+  if (!n) return lang==='en' ? `Nothing recorded in "${t}"${quando.en}.` : lang==='es' ? `No hay nada anotado en "${t}"${quando.es}.` : `Não há nada anotado em "${t}"${quando.pt}.`;
+  return lang==='en' ? `Recorded in "${t}"${quando.en}: ${n} ${n === 1 ? 'entry' : 'entries'}${total}.`
+    : lang==='es' ? `Anotado en "${t}"${quando.es}: ${n} ${n === 1 ? 'registro' : 'registros'}${total}.`
+    : `Consta em "${t}"${quando.pt}: ${n} ${n === 1 ? 'lançamento' : 'lançamentos'}${total}.`;
+}
 function receipt(name, args, out) {
+  if (name === 'consultar_evento') return trackerReadReceipt(out);
+  if (TRACKER[name]) return trackerReceipt(name, out);
   const d = resultData(out);
   if (['editar_lembrete','cancelar_lembrete'].includes(name)) return {family:'reminder',tool:name,
     state:d?.ok===true && validId(d.id) && typeof d.canal==='string' ? (name==='editar_lembrete'?'updated':'deleted') : d?.ok===false ? 'failed' : 'unknown',
@@ -222,6 +281,13 @@ function claimFamily(line, authenticatedEmailSources) {
   if (/\b(?:mensagem|whatsapp|telegram|email|e-mail|rascunho|message|draft|correo|borrador)\b/.test(t)) return 'message';
   return null;
 }
+// "Anotei" é ação deste turno; "já está anotado" é estado. A leitura do
+// registro só prova o estado: um "anotei" sem registrar_evento continua cortado.
+function actionNow(line) {
+  const t = line.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return /\b(?:anotei|registrei|registramos|salvei|guardei|memorizei|criei|anote|guarde|registre)\b/.test(t)
+    || /\bi(?:'ve| have)?\s+(?:just\s+)?(?:saved|noted|stored|recorded)\b/.test(t);
+}
 function reportedByUser(task, ownerText) {
   const norm = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const key = norm(task);
@@ -263,7 +329,7 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // Um aviso de cobertura/erro anexado depois da validação impede silêncio.
       // As evidências permanecem em entries para persistência e métricas.
       if (suppressRoutineMemoryReceipts === true && !proposalShown && (!termination || termination === 'completed') && !String(text || '').trim()) {
-        const onlySavedMemory = entries.every(e => e.family === 'memory'
+        const onlySavedMemory = entries.every(e => e.state === 'found' || e.family === 'memory'
           && ['memoria_anotar','memoria_atualizar','memoria_escrever'].includes(e.tool)
           && ['saved','already_saved'].includes(e.state));
         // Outro recibo, inclusive falha/incerteza, precisa continuar visível.
@@ -335,7 +401,10 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
           const refs = markerMatches.map(m => m[1] || m[2]).filter(Boolean);
           const es = shown.filter(e => refs.includes(e.ref));
           if (allUsed(es) || (!es.length && refs.some(r => entries.some(e => e.ref === r)))) { afterReceipt = true; return ''; }
-          const out = emit(es);
+          // Slot que não é deste turno (o modelo copia o de um recibo antigo do
+          // histórico) sai como afirmação sem prova: no meio da resposta, a frase
+          // de sistema aparecia em cima do cartão de confirmação (05/10/2026).
+          const out = emitOrDrop(es);
           afterReceipt = es.length > 0;
           return out;
         }
@@ -358,7 +427,8 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
           if (!f) { afterReceipt = false; return part; }
           // Nunca conserva o destino/objeto inventado pelo modelo: substitui a
           // afirmação INTEIRA pelos recibos desta família, ou a remove.
-          const es = shown.filter(e => e.family === f || (f === 'memory' && e.family === 'list') || (f === 'reminder' && e.tool === 'enviar_mensagem'));
+          const es = shown.filter(e => (e.state !== 'found' || !actionNow(part))
+            && (e.family === f || (f === 'memory' && ['list','tracker'].includes(e.family)) || (f === 'reminder' && e.tool === 'enviar_mensagem')));
           if (allUsed(es)) { afterReceipt = true; return ''; }
           if (!es.length) onDroppedClaim?.(part, f); // TEMPORÁRIO: porta diagnosticoDosFiltros
           const out = emitOrDrop(es);
@@ -370,8 +440,11 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // A successful first action must not hide a failed or uncertain later
       // step just because the model omits that receipt from its final answer.
       const hasCompletedStep = shown.some(e => !['unknown','failed','pending'].includes(e.state));
+      // O recibo de registro só confirma o "anotei"; a tool já devolve ao modelo a
+      // frase do que gravou, e anexá-lo depois da resposta repetia a confirmação.
       const missing = shown.filter(e => !used.has(e.ref)
-        && (hasCompletedStep || !['unknown','failed'].includes(e.state)));
+        && (hasCompletedStep || !['unknown','failed'].includes(e.state))
+        && (e.family !== 'tracker' || (!result && e.state !== 'found')));
       const final = [result, missing.length ? emit(missing) : ''].filter(Boolean).join('\n\n');
       // Remover a afirmação nunca pode virar silêncio.
       // Com cartão abaixo, a resposta já não fica em silêncio.

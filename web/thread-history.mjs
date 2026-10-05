@@ -7,7 +7,10 @@ export function mergeThreadHistory(base, current, completed) {
   if (current.slice(base.length).some(m => m?.role !== 'assistant')) throw new Error('THREAD_HISTORY_CONFLICT: outro turno alterou o histórico; não repetir ações automaticamente');
   return [...completed,...current.slice(base.length)];
 }
-export async function appendThreadMessage(pool, schema, {threadId,userId,text,clean,deliveryKey,attachments}) {
+// `pergunta`: mensagem da pessoa que vai pro history ANTES do texto, quando o turno
+// dela quebrou sem gravar nada (aviso-canal.mjs). Só no history: a linha dela em
+// messages já foi gravada no começo do turno (startThreadTurn).
+export async function appendThreadMessage(pool, schema, {threadId,userId,text,clean,deliveryKey,attachments,pergunta}) {
   const c=await pool.connect();
   try {
     await c.query('BEGIN');
@@ -20,7 +23,7 @@ export async function appendThreadMessage(pool, schema, {threadId,userId,text,cl
       if(!claim.rows.length){await c.query('COMMIT');return true;}
     }
     const content=clean(String(text||''));
-    await c.query(`UPDATE ${schema}.threads SET history=history || $2::jsonb,updated_at=now() WHERE id=$1`,[threadId,JSON.stringify([{role:'assistant',content}])]);
+    await c.query(`UPDATE ${schema}.threads SET history=history || $2::jsonb,updated_at=now() WHERE id=$1`,[threadId,JSON.stringify([...(pergunta?[{role:'user',content:clean(String(pergunta))}]:[]),{role:'assistant',content}])]);
     // Anexo fica só na linha do assistente, igual ao turno normal de conversa.
     const att=Array.isArray(attachments)&&attachments.length?JSON.stringify(attachments):null;
     await c.query(`INSERT INTO ${schema}.messages(agent_id,thread_id,role,content,attachments) VALUES($1,$2,'assistant',$3,$4)`,[t.agent_id,threadId,content,att]);

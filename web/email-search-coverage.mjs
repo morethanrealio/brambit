@@ -56,9 +56,9 @@ export function guardEmailCoverageClaims(text, { partial = false, active = false
 export function renderEmailCoverage(rows, accounts, language = 'pt-BR') {
   if (!rows.length && !accounts.length) return '';
   const lang=String(language).slice(0,2);
-  const labels=lang==='en' ? {title:'Search coverage',complete:'query completed',partial:'incomplete',failed:'failed',not_consulted:'not consulted',consulted:'accessed',more_pages:'pages remaining',body_truncated:'body read only in part',query_failed:'query failed',search_incomplete:'search not completed',attachment_truncated:'attachment read only in part',attachment_failed:'attachment could not be read',evidence_limited:'part of the content was excluded from the analysis'}
-    : lang==='es' ? {title:'Alcance de la búsqueda',complete:'consulta completada',partial:'incompleta',failed:'falló',not_consulted:'sin consultar',consulted:'consultada',more_pages:'quedan páginas',body_truncated:'cuerpo leído parcialmente',query_failed:'falló la consulta',search_incomplete:'búsqueda sin completar',attachment_truncated:'adjunto leído parcialmente',attachment_failed:'no se pudo leer el adjunto',evidence_limited:'parte del contenido quedó fuera del análisis'}
-    : {title:'Cobertura da busca',complete:'consulta concluída',partial:'incompleta',failed:'falhou',not_consulted:'não consultada',consulted:'acessada',more_pages:'há páginas restantes',body_truncated:'corpo lido parcialmente',query_failed:'falha na consulta',search_incomplete:'busca não concluída',attachment_truncated:'anexo lido parcialmente',attachment_failed:'anexo não pôde ser lido',evidence_limited:'parte do conteúdo ficou fora da análise'};
+  const labels=lang==='en' ? {title:'Search coverage',complete:'query completed',partial:'incomplete',failed:'failed',not_consulted:'not consulted',needs_reconnect:'needs reconnecting',consulted:'accessed',more_pages:'pages remaining',body_truncated:'body read only in part',query_failed:'query failed',search_incomplete:'search not completed',attachment_truncated:'attachment read only in part',attachment_failed:'attachment could not be read',evidence_limited:'part of the content was excluded from the analysis'}
+    : lang==='es' ? {title:'Alcance de la búsqueda',complete:'consulta completada',partial:'incompleta',failed:'falló',not_consulted:'sin consultar',needs_reconnect:'hay que reconectar',consulted:'consultada',more_pages:'quedan páginas',body_truncated:'cuerpo leído parcialmente',query_failed:'falló la consulta',search_incomplete:'búsqueda sin completar',attachment_truncated:'adjunto leído parcialmente',attachment_failed:'no se pudo leer el adjunto',evidence_limited:'parte del contenido quedó fuera del análisis'}
+    : {title:'Cobertura da busca',complete:'consulta concluída',partial:'incompleta',failed:'falhou',not_consulted:'não consultada',needs_reconnect:'precisa reconectar',consulted:'acessada',more_pages:'há páginas restantes',body_truncated:'corpo lido parcialmente',query_failed:'falha na consulta',search_incomplete:'busca não concluída',attachment_truncated:'anexo lido parcialmente',attachment_failed:'anexo não pôde ser lido',evidence_limited:'parte do conteúdo ficou fora da análise'};
   const safe=s=>String(s||'').replace(/[\r\n`<>*_\[\]]/g,' ').slice(0,180);
   const filters=q=>safe(q).replace(/\bin:anywhere\b/gi,lang==='en'?'all folders':lang==='es'?'todas las carpetas':'todas as pastas')
     .replace(/\bafter:/gi,lang==='en'?'since ':lang==='es'?'desde ':'desde ')
@@ -81,23 +81,26 @@ const LIMITATIONS = {
     body_truncated:'parte do conteúdo dos e-mails não pôde ser lida',
     evidence_limited:'parte do conteúdo das mensagens ficou fora da análise',
     attachment_truncated:'um anexo não pôde ser lido por inteiro', attachment_failed:'não consegui ler um anexo',
-    not_consulted:'a conta não foi consultada', account_failed:'não consegui concluir o acesso' },
+    not_consulted:'a conta não foi consultada', account_failed:'não consegui concluir o acesso',
+    needs_reconnect:'a conexão com o Google expirou e precisa ser refeita em Conexões' },
   en: { prefix:'For the account ', suffix:'The answer may be incomplete.',
     query_failed:'a query failed', more_pages:'the search still has pages of results to check',
     search_incomplete:'I could not complete the search',
     body_truncated:'part of the email content could not be read',
     evidence_limited:'part of the message content was excluded from the analysis',
     attachment_truncated:'an attachment could not be read in full', attachment_failed:'I could not read an attachment',
-    not_consulted:'the account was not checked', account_failed:'I could not complete access' },
+    not_consulted:'the account was not checked', account_failed:'I could not complete access',
+    needs_reconnect:'the Google connection expired and needs to be reconnected in Connections' },
   es: { prefix:'En la cuenta ', suffix:'La respuesta puede estar incompleta.',
     query_failed:'falló una consulta', more_pages:'quedan páginas de resultados por consultar',
     search_incomplete:'no pude completar la búsqueda',
     body_truncated:'no se pudo leer parte del contenido de los correos',
     evidence_limited:'parte del contenido de los mensajes quedó fuera del análisis',
     attachment_truncated:'no se pudo leer un adjunto completo', attachment_failed:'no pude leer un adjunto',
-    not_consulted:'no se consultó la cuenta', account_failed:'no pude completar el acceso' },
+    not_consulted:'no se consultó la cuenta', account_failed:'no pude completar el acceso',
+    needs_reconnect:'la conexión con Google caducó y hay que volver a conectarla en Conexiones' },
 };
-const limitationKeys = ['query_failed','more_pages','search_incomplete','body_truncated','attachment_truncated','attachment_failed','evidence_limited','not_consulted','account_failed'];
+const limitationKeys = ['query_failed','more_pages','search_incomplete','body_truncated','attachment_truncated','attachment_failed','evidence_limited','not_consulted','account_failed','needs_reconnect'];
 const safeAccount = s => String(s || '').replace(/[\r\n`<>*_\[\],;]/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
 
 // Só limitações materiais chegam ao usuário. O relatório com filtros acima
@@ -118,7 +121,7 @@ export function renderEmailCoverageLimitations(rows = [], accounts = [], languag
   }
   for (const row of accounts) {
     if (row.status === 'consulted') continue;
-    add(row.account,row.status === 'not_consulted' ? 'not_consulted' : 'account_failed');
+    add(row.account,['not_consulted','needs_reconnect'].includes(row.status) ? row.status : 'account_failed');
   }
   return [...grouped].map(([account,reasons]) => {
     const clauses = limitationKeys.filter(key=>reasons.has(key)).map(key=>labels[key]);

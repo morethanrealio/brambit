@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
-# Deploy do plano de controle dos apps: git -> box de apps.
+# Deploy do plano de controle dos apps: o que está instalado -> box de apps.
 #
 # Produção viva (apps de usuário final servindo tráfego). Por padrão só SIMULA;
 # escrever de verdade exige --aplicar.
 #
-# Roda no box de prod, que é quem tem a chave do canal de controle:
-#   ops/apps-host/deploy.sh [--aplicar] [--ref origin/main]   (na raiz do repositório)
+# Roda numa máquina com a chave do canal de controle (APPS_HOST_SSH/APPS_HOST_KEY
+# no ambiente ou no .env da pasta de onde é chamado):
+#   ops/apps-host/deploy.sh [--aplicar] [--marca <arquivo>] [--carimbo <versão>]
 #
-# --ref materializa os arquivos daquele ref num temp, sem tocar na working tree
-# (publica o que foi mergeado sem mexer no web/).
+# Publica o router.py, ctl.py e test_auth.py que estão AO LADO deste script, ou
+# seja, o que está instalado (neste repositório ou no pacote do núcleo).
+# --marca: marca.json opcional (padrão: o que estiver ao lado deste script).
+# --carimbo: versão gravada na box (padrão: commit da pasta de onde é chamado).
 #
 # Ordem router -> ctl é de propósito (ver README.md): roteador novo com registry
 # velho é seguro; o inverso deixa app privado sem portão por alguns segundos.
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+AQUI=$(cd "$(dirname "$0")" && pwd)
 # Le SO as duas chaves do .env, sem executar o arquivo: tem valor com $ solto la dentro.
 env_get() { [ -f .env ] || return 0; sed -n "s/^$1=//p" .env | tail -1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//"; }
 APPS_HOST_SSH="${APPS_HOST_SSH:-$(env_get APPS_HOST_SSH)}"
@@ -21,15 +24,24 @@ APPS_HOST_KEY="${APPS_HOST_KEY:-$(env_get APPS_HOST_KEY)}"
 : "${APPS_HOST_SSH:?falta APPS_HOST_SSH no .env}"
 : "${APPS_HOST_KEY:?falta APPS_HOST_KEY no .env}"
 
-APLICAR=0; REF=HEAD
+APLICAR=0; MARCA=""; SHA=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --aplicar) APLICAR=1 ;;
-    --ref) REF="${2:?--ref precisa de um valor}"; shift ;;
-    *) echo "uso: deploy.sh [--aplicar] [--ref <git-ref>]"; exit 2 ;;
+    --marca) MARCA="${2:?--marca precisa de um arquivo}"; shift ;;
+    --carimbo) SHA="${2:?--carimbo precisa de um valor}"; shift ;;
+    # Só pra quem ainda chama do jeito antigo logo depois do pull, quando o disco já é o HEAD.
+    --ref) [ "${2:-}" = HEAD ] || { echo '--ref saiu: o deploy publica o que está no disco'; exit 2; }; shift ;;
+    *) echo "uso: deploy.sh [--aplicar] [--marca <arquivo>] [--carimbo <versão>]"; exit 2 ;;
   esac
   shift
 done
+if [ -z "$MARCA" ] && [ -f "$AQUI/marca.json" ]; then MARCA="$AQUI/marca.json"; fi
+if [ -n "$MARCA" ]; then
+  [ -f "$MARCA" ] || { echo "FALHOU: não achei a marca $MARCA"; exit 1; }
+  MARCA="$(cd "$(dirname "$MARCA")" && pwd)/$(basename "$MARCA")"
+fi
+[ -n "$SHA" ] || SHA=$(git rev-parse --short HEAD 2>/dev/null) || SHA=sem-versao
 
 # -n fecha o stdin: sem isso o ssh engole o herestring do while e o loop para na 1a linha.
 rssh() { ssh -n -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
@@ -38,21 +50,19 @@ rssh() { ssh -n -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecki
 rsend() { ssh -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
                -o ConnectTimeout=15 "$APPS_HOST_SSH" "$@"; }
 
-SHA=$(git rev-parse --short "$REF") || exit 1
 STAMP=$(date +%s)
 SRC=$(mktemp -d)
 trap 'rm -rf "$SRC"' EXIT
 for f in router.py ctl.py test_auth.py; do
-  git show "$REF:ops/apps-host/$f" > "$SRC/$f" || { echo "FALHOU: não achei $f em $REF"; exit 1; }
+  cp "$AQUI/$f" "$SRC/$f" || { echo "FALHOU: não achei $f em $AQUI"; exit 1; }
 done
-# Opcional: nome, site, logo e selo da marca no roteador (ver router.py). Sem ele
-# no ref, a box fica com o que tem (ou a marca neutra).
-git show "$REF:ops/apps-host/marca.json" > "$SRC/marca.json" 2>/dev/null || rm -f "$SRC/marca.json"
+# Opcional: nome, site, logo e selo da marca no roteador (ver router.py). Sem ela,
+# a box fica com o que tem (ou a marca neutra).
+[ -z "$MARCA" ] || cp "$MARCA" "$SRC/marca.json" || exit 1
 
 # 1. Portão: o que vai subir tem que passar nos testes do próprio caminho.
-echo "== testes do ref $SHA"
+echo "== testes da versão $SHA"
 ( cd "$SRC" && python3 test_auth.py ) || { echo 'FALHOU: teste. Nada foi enviado.'; exit 1; }
-
 # 2. O que está diferente entre o git e a box?
 MAP='router.py:/opt/brambs-router/router.py:brambs-router
 ctl.py:/opt/brambs-ctl/ctl.py:
@@ -63,10 +73,10 @@ while IFS=: read -r f dst svc; do
   a=$(md5sum "$SRC/$f" | cut -d' ' -f1)
   b=$(rssh "sudo md5sum '$dst' 2>/dev/null | cut -d' ' -f1")
   if [ "$a" = "$b" ]; then echo "== igual: $f"
-  else echo "== pendente: $f  git=${a:0:10} box=${b:0:10}"; PENDENTES+=("$f:$dst:$svc"); fi
+  else echo "== pendente: $f  aqui=${a:0:10} box=${b:0:10}"; PENDENTES+=("$f:$dst:$svc"); fi
 done <<< "$MAP"
 
-[ ${#PENDENTES[@]} -gt 0 ] || { echo 'Box já está igual ao git. Nada a fazer.'; exit 0; }
+[ ${#PENDENTES[@]} -gt 0 ] || { echo 'Box já está igual ao que está instalado aqui. Nada a fazer.'; exit 0; }
 [ "$APLICAR" = 1 ] || { echo; echo 'SIMULAÇÃO. Rode com --aplicar para enviar de verdade.'; exit 0; }
 
 # 3. Envia, confere o md5 do que chegou e só então troca o arquivo em uso.
@@ -112,4 +122,4 @@ rssh "echo '$SHA' | sudo tee /opt/brambs-router/.deployed-sha >/dev/null"
 rssh "rm -rf /tmp/apt.$STAMP /tmp/dep.$STAMP.*"
 
 echo "== conferência final"
-exec ops/apps-host/check-drift.sh "$REF"
+bash "$AQUI/check-drift.sh" ${MARCA:+--marca "$MARCA"} --carimbo "$SHA"

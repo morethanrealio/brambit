@@ -11,13 +11,34 @@ export function selectGoogleReadAccounts({ accounts, currentAccount, requested }
   return selected;
 }
 
-export async function runGoogleReadAccounts({ accounts, currentAccount, requested, objetivo, formato, createReadTools, runWorker, onAccountCoverage }) {
+// Conexão morta (grant revogado/expirado) não é falha do Google: a pessoa
+// precisa reconectar, e o assistente tem que dizer isso a ela. O erro do token
+// leva este código; a conta sem token nenhum já chega morta.
+export const GOOGLE_RECONNECT = 'google_reconnect';
+export const googleReconnectError = message => Object.assign(new Error(message), { code: GOOGLE_RECONNECT });
+// Só conta como morta quando os tokens vieram e estão apagados (clearGoogleAccount).
+const apagado = v => v === null || v === '';
+const grantMorto = row => !!row && apagado(row.access_token) && apagado(row.refresh_token);
+const reconnectPadrao = account => `A conexão com o Google da conta ${account} expirou ou foi revogada e precisa ser refeita em Conexões › Google.`;
+const reconectar = (account, reconnectMessage) => `CONTA: ${account}\nESTADO: needs_reconnect\n${reconnectMessage(account)}\nDiga isso à pessoa e peça que reconecte. Não diga que o Google não respondeu nem que não há resultados.`;
+
+export async function runGoogleReadAccounts({ accounts, currentAccount, requested, objetivo, formato, createReadTools, runWorker, onAccountCoverage, reconnectMessage = reconnectPadrao }) {
   const selected = selectGoogleReadAccounts({ accounts, currentAccount, requested });
   const results = [];
   for (const account of selected) {
-    let calls = 0, succeeded = 0;
+    const precisaReconectar = () => {
+      onAccountCoverage?.({ account, status:'needs_reconnect' });
+      results.push(reconectar(account, reconnectMessage));
+    };
+    if (grantMorto(accounts.find(a => a.google_email === account))) { precisaReconectar(); continue; }
+    let calls = 0, succeeded = 0, reconnect = false;
+    // Marca a conta quando o token morre no meio da consulta, mesmo que a
+    // ferramenta engula o erro e devolva texto.
+    const wrapToken = token => async () => {
+      try { return await token(); } catch (e) { if (e?.code === GOOGLE_RECONNECT) reconnect = true; throw e; }
+    };
     try {
-      const readTools = (await createReadTools(account)).map(tool => ({ ...tool, async run(args) {
+      const readTools = (await createReadTools(account, wrapToken)).map(tool => ({ ...tool, async run(args) {
         calls++;
         const raw = await tool.run(args);
         // Erros em JSON/texto não contam como leitura bem-sucedida.
@@ -30,10 +51,12 @@ export async function runGoogleReadAccounts({ accounts, currentAccount, requeste
         objetivo, formato, readTools, account,
         accountContext: `CONTA DESTA CONSULTA: ${account}. Todas as ferramentas abaixo estão vinculadas exclusivamente a ela. O orquestrador consulta as demais contas solicitadas separadamente. Não use from:/to: para trocar de caixa, não conclua nada sobre outras contas e não peça autorização para consultá-las.`,
       });
+      if (!succeeded && reconnect) { precisaReconectar(); continue; }
       const status = succeeded ? 'consulted' : calls ? 'failed' : 'not_consulted';
       onAccountCoverage?.({ account, status });
       results.push(`CONTA: ${account}\nESTADO: ${status}\n${status === 'consulted' ? text : 'Não foi possível obter dados desta conta. Não significa ausência de resultados.'}`);
     } catch (e) {
+      if (reconnect || e?.code === GOOGLE_RECONNECT) { precisaReconectar(); continue; }
       onAccountCoverage?.({ account, status:'failed' });
       // Sem erro cru do provedor (pode conter dados privados). Uma falha não
       // impede a consulta às outras contas explicitamente solicitadas.
