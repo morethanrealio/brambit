@@ -47,7 +47,7 @@ import {createContaPagamentoSimples} from './conta-pagamento.mjs';
 import {createGastoSimples} from './gasto-simples.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
-// Plugins (plugins.mjs): quem instala lista os seus em web/plugins/ativos.mjs (na
+// Plugins (plugins.mjs): quem instala lista os seus em web/plugins/ativos.mjs ou em BRAMBIT_PLUGINS (na
 // nuvem, o Brambs e a Comunidade). Cada porta sem plugin usa o padrão do núcleo.
 const plugins=await carregarPlugins();
 const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
@@ -121,7 +121,7 @@ import { normalizeCurationConfig, curationPrompt, curationRepairPrompt, preferCu
 import { deliverCurationEdition } from './curation-store.mjs';
 import { turnSearchCoverage, preserveSearchCoverageWarning } from './turn-search-coverage.mjs';
 import { emailSource } from './email-evidence.mjs';
-import { runGoogleReadAccounts } from './google-read-scope.mjs';
+import { runGoogleReadAccounts, googleReconnectError } from './google-read-scope.mjs';
 import { EMAIL_COVERAGE_RULE } from './email-search-coverage.mjs';
 import { SEARCH_PAGINATION_RULE } from './search-pagination.mjs';
 import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './image-context.mjs';
@@ -1042,7 +1042,8 @@ import {
   setRoutineOfferOptOut, clearRoutineOfferOptOut,
   closeUserAccount, listUsersPurgeDue, collectUserAssetKeys, hardDeleteUser,
 } from './db.mjs';
-import { IDIOMAS_OK, IDIOMA_PADRAO, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, derivaDeIdioma, lembreteDeIdioma } from './locale.mjs';
+import { IDIOMAS_OK, IDIOMA_PADRAO, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma } from './locale.mjs';
+import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
 import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
 import { costOf, registerPrices } from './pricing.mjs';
@@ -1099,6 +1100,7 @@ async function billWaMessages({ userId, messages, agentId = null, threadId = nul
 import { agentToAgentTool, confirmAgentDecisionTool, respondDecisionTool, respondExternalQuestionTool, listContactsTool, acceptContactTool, declineContactTool, inviteContactTool } from './agent2agent.mjs';
 import { createEmailPoller, emailEnabled, normalizeSubject } from './email.mjs';
 import { createSlackHandler, slackEnabled, verifySlackSignature } from './slack.mjs';
+import { avisoNaThread } from './aviso-canal.mjs';
 import {
   hashPassword, verifyPassword, newToken, readSid, readCookie, sessionCookie, clearCookie, validEmail,
   googleEnabled, googleAuthUrl, googleExchange, googleUserInfo, stateCookie, clearStateCookie,
@@ -1349,10 +1351,10 @@ async function googleAccountFor(userId, googleEmail) {
 async function validGoogleToken(userId, googleEmail = null) {
   const t = await googleAccountFor(userId, googleEmail);
   if (!t) throw new Error('Google não conectado.');
-  if (!t.access_token) throw new Error(googleReconnectMsg(t.google_email));
+  if (!t.access_token) throw googleReconnectError(googleReconnectMsg(t.google_email));
   const expired = !t.expiry || new Date(t.expiry).getTime() < Date.now() + 60_000; // margem de 1 min
   if (expired) {
-    if (!t.refresh_token) throw new Error(googleReconnectMsg(t.google_email));
+    if (!t.refresh_token) throw googleReconnectError(googleReconnectMsg(t.google_email));
     let fresh;
     try {
       fresh = await googleRefresh(t.refresh_token);
@@ -1362,7 +1364,7 @@ async function validGoogleToken(userId, googleEmail = null) {
       // Limpa SÓ a conta que morreu, não a principal do usuário.
       if (e?.code === 'invalid_grant') {
         await clearGoogleAccount(userId, t.google_email).catch(() => {});
-        throw new Error(googleReconnectMsg(t.google_email));
+        throw googleReconnectError(googleReconnectMsg(t.google_email));
       }
       // Falha transitória (rede/5xx): não apaga nada, só reporta pra tentar de novo.
       console.error('[google] refresh falhou:', e?.message ?? e);
@@ -1962,7 +1964,6 @@ async function recordUsages(usages, dims, { noBill = false, eventId = null, stri
 
 async function getCreditStatus(userId) { return gasto.status(userId); }
 
-
 // ── Aviso de crédito estourado DENTRO de rotina: 1x por semana por pessoa ──
 // Este é outro aviso, e outro momento: o preventivo (crédito acabando) mora em
 // credito-brambs.mjs; este é o que o portão de franquia devolve quando a rotina tenta
@@ -2430,18 +2431,6 @@ function withThreadLock(key, fn) {
 // canais diferentes (app + WhatsApp): sem ela, os dois leriam o mesmo perfil e o
 // último a gravar apagaria o que o outro aprendeu. Pular é seguro — o perfil é
 // cumulativo e volta a ser atualizado no próximo ciclo.
-// Observabilidade da diretriz de idioma. Em pt-BR não loga nada (é o esperado).
-// Fora dele sai UMA linha por turno com o score, mesmo quando está limpo: sem
-// número dos dois lados não dá pra dizer se a diretriz funciona nem pra calibrar
-// o limiar. NUNCA interfere na resposta, só escreve no log.
-function logDerivaIdioma(texto, language, userId) {
-  try {
-    const d = derivaDeIdioma(texto, language);
-    if (!d) return;
-    console.log(`[idioma ${d.suspeita ? 'DERIVA' : 'ok'}] u=${String(userId).slice(0, 8)} lang=${d.idioma} score=${d.score} marcas=${d.marcas}/${d.palavras}`);
-  } catch { /* observabilidade nunca derruba turno */ }
-}
-
 const _profileHkInFlight = new Set();
 function runProfileHousekeeping({ userId, agentId, threadId, turnId, userMsg, assistantMsg, language = null }) {
   if (!userId || _profileHkInFlight.has(userId)) return;
@@ -3221,9 +3210,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const nowContext = `(Contexto: agora é ${agoraG}, fuso ${userTz}.)`;
         try {
           return await runGoogleReadAccounts({
-            accounts:gAccounts, currentAccount:gEmail, requested:contas, objetivo, formato,
-            createReadTools: async account => googleTools({
-              token:()=>validGoogleToken(userId,account), account,
+            accounts:gAccounts, currentAccount:gEmail, requested:contas, objetivo, formato, reconnectMessage:googleReconnectMsg,
+            createReadTools: async (account, wrapToken) => googleTools({
+              token:wrapToken(()=>validGoogleToken(userId,account)), account,
               caps:serviceCaps(gAccounts.find(a=>a.google_email===account).scope),
               onUsage:e=>mediaUsages.push(e),
               onAccess:e=>logSensitiveAccess({userId,...e,detail:`account=${account}; ${e.detail || ''}`}),
@@ -6773,6 +6762,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     } catch (e) { console.error('[freio_fundamentacao]', e?.message ?? e); }
   }
+  // FREIO DE IDIOMA (freio-idioma.mjs): resposta em chinês sem a pessoa pedir é reescrita antes de entregar.
+  if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: userLang, pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
   let curationResult = null;
   if (curationHistory !== null) {
     curationResult = await finalizeCuration({text,config:opts.curationConfig,userId,routineId:opts.routineId,
@@ -7033,6 +7024,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }} : {}) };
 }
 
+// Aviso de erro dos canais (aviso-canal.mjs): idioma da pessoa + histórico da thread do canal.
+const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Canal Telegram: roda um bot por usuário (token do BotFather dele). Injeta as
 // deps pra evitar import circular. Os pollers sobem no boot (listEnabledTelegramBots).
 // O Telegram é um fio contínuo só: usa uma thread fixa "Telegram" por agente.
@@ -7065,14 +7058,14 @@ const telegramMgr = createTelegramManager({
   },
   // No modo S3 não há link público: o servidor lê o byte e o canal faz upload
   // direto. No disco (a.key null) devolve null -> canal usa o link estático.
-  getMedia: getMediaBytes,
+  getMedia: getMediaBytes, avisoCanal: avisoCanal('Telegram'),
 });
 
 // Canal WhatsApp: número único compartilhado (WABA Cloud API). Webhook passivo,
 // roteia pelo telefone -> usuário, agente ativo trocável por @nome/menu. Cada
 // agente usa uma thread fixa "WhatsApp" (history isolado; memória de usuário compartilhada).
 const waHandler = createWhatsAppHandler({
-  inbox:waInbox,
+  inbox:waInbox, avisoCanal: avisoCanal('WhatsApp'),
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
     // pollNewUserMsg = canal da mensagem que chega no meio do turno (ver whatsapp.mjs).
@@ -7139,7 +7132,7 @@ const slackHandler = createSlackHandler({
   db: {
     getSlackLink, upsertSlackLink, setSlackActiveAgent, listAgents, getUserByEmail,
     getSlackChannelLink, upsertSlackChannelLink, deleteSlackChannelLink, consumeSlackPairingCode,
-  },
+  }, avisoCanal: avisoCanal('Slack'),
 });
 
 // ── Rotinas: o agente executa o prompt da rotina numa thread dedicada e o
@@ -7498,7 +7491,6 @@ async function deliverLifecycle(channel, r, subject, text) {
     throw new Error('canal inválido');
   }
 }
-
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
@@ -8327,7 +8319,6 @@ if (CALENDAR_WATCH_ON) {
   setTimeout(calendarWatchTick, 2 * 60_000).unref();
   setInterval(calendarWatchTick, 10 * 60_000).unref();
 }
-
 
 // ── Destruição final de conta excluída (2ª metade do modelo de 30 dias) ──
 // closeUserAccount (db.mjs) FECHA a conta na hora do pedido; isto DESTRÓI o dado

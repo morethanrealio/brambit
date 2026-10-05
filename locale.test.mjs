@@ -3,6 +3,7 @@
 import {
   IDIOMAS_OK, IDIOMA_PADRAO, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
   tagIdioma, instrucaoDeIdioma, comIdioma, derivaDeIdioma, lembreteDeIdioma,
+  ideogramaAcidental, avisoSemIdioma,
 } from './web/locale.mjs';
 
 let ok = 0, fail = 0;
@@ -188,6 +189,21 @@ t('lembrete es em espanhol', lembreteDeIdioma('es').includes('responde en españ
 t('variante regional usa o mesmo lembrete', lembreteDeIdioma('pt') === lembreteDeIdioma('pt-BR') && lembreteDeIdioma('en-GB') === lembreteDeIdioma('en'));
 for (const l of IDIOMAS_OK) t(`lembrete ${l} é curto`, lembreteDeIdioma(l).length > 0 && lembreteDeIdioma(l).length < 250);
 for (const v of ['ja', 'zh', '', null, undefined]) t(`sem lembrete para ${JSON.stringify(v)}`, lembreteDeIdioma(v) === '');
+
+// 13) Freio de ideograma: as derivas reais de prod são pegas, e o japonês que o
+//     dono pede de propósito (sempre com kana) ou o pedido explícito de chinês
+//     passam. Quem mexer no corte vê aqui se começou a traduzir resposta legítima.
+const DERIVA_0510 = '两件事：\n\n**Pepecarteira — 现在没打通。** 我尝试访问并返回了“未找到”（404）：网站在线，但我的代理用来记录/查询的接口此刻没有响应。所以现在，我**无法**从那里记录或核实任何内容。';
+const DERIVA_3009 = '调整已安排好——今天的两个区块都不会丢，下午的区块避开了 Solar 会议（14:00–16:00）：\n\n- **区块 1**：15:30–17:00 → **16:15–17:45** *（在会议结束后，留出 15 分钟缓冲）*';
+const JAPONES_PEDIDO = '**Tarefas diárias**\n- [x] 靴を買いに行く（くつをかいにいく）\n- 言語を勉強して\n- トフの砂を買って\n- オベンの修理を頼む\n- 鶏肉を解凍する';
+t('deriva 05/10 é pega', ideogramaAcidental(DERIVA_0510, 'pt-BR', 'pode cancelar esses lembretes')?.idioma === 'pt-BR');
+t('deriva 30/09 é pega', !!ideogramaAcidental(DERIVA_3009, 'pt-BR', 'Pode ajustar os blocos das aulas gravadas na agenda'));
+t('deriva em conta en é pega', ideogramaAcidental(DERIVA_0510, 'en', 'cancel those reminders')?.idioma === 'en');
+t('japonês pedido passa', ideogramaAcidental(JAPONES_PEDIDO, 'pt-BR', 'adiciona na lista') === null);
+t('pedido de chinês passa', ideogramaAcidental(DERIVA_0510, 'pt-BR', 'traduz isso pra chinês') === null);
+t('dono escrevendo em chinês passa', ideogramaAcidental(DERIVA_0510, 'pt-BR', '你好，请帮我') === null);
+t('palavra solta em chinês passa', ideogramaAcidental('O caractere 你好 quer dizer olá; 谢谢 é obrigado.', 'pt-BR', 'como diz olá') === null);
+for (const l of IDIOMAS_OK) t(`aviso sem idioma ${l} não tem ideograma`, !!avisoSemIdioma(l) && !/\p{Script=Han}/u.test(avisoSemIdioma(l)));
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

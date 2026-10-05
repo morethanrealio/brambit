@@ -13,17 +13,19 @@ Só stdlib nos dois — nada de `pip install` na box.
 
 **Git é a única fonte da verdade. Ninguém edita arquivo direto na box.**
 
-Dois scripts, rodados na raiz do repositório numa máquina que tenha a chave do
-canal de controle (`APPS_HOST_SSH`/`APPS_HOST_KEY` no `.env`, o mesmo canal
-que o `web/appshost.mjs` usa pra chamar o `ctl.py`):
+Dois scripts, rodados numa máquina que tenha a chave do canal de controle
+(`APPS_HOST_SSH`/`APPS_HOST_KEY` no ambiente ou no `.env` da pasta de onde são
+chamados, o mesmo canal que o `web/appshost.mjs` usa pra chamar o `ctl.py`). Os
+dois publicam/comparam o `router.py` e o `ctl.py` que estão ao lado deles, ou
+seja, o que está instalado (neste repositório ou no pacote do núcleo):
 
 | script | o que faz |
 | ------ | --------- |
-| `check-drift.sh [ref]` | só lê. Compara git x box e sai 1 se divergir. |
-| `deploy.sh [--aplicar] [--ref R]` | publica. Simula por padrão. |
+| `check-drift.sh [--marca F] [--carimbo V]` | só lê. Compara o instalado x box e sai 1 se divergir. |
+| `deploy.sh [--aplicar] [--marca F] [--carimbo V]` | publica. Simula por padrão. |
 
 ```bash
-ops/apps-host/check-drift.sh            # o que está no ar bate com o git?
+ops/apps-host/check-drift.sh            # o que está no ar bate com o instalado?
 ops/apps-host/deploy.sh                 # simulação: o que mudaria
 ops/apps-host/deploy.sh --aplicar       # publica de verdade
 ```
@@ -32,7 +34,7 @@ O `deploy.sh` roda o `test_auth.py` **antes** de mandar qualquer byte, faz backu
 (`.bak.<epoch>`), envia, confere o md5 do que chegou, compila com `py_compile`,
 roda o `test_auth.py` de novo **contra os arquivos que ficaram em uso**, reinicia
 o `brambs-router` só se ele mudou (`ctl.py` é one-shot por chamada, não precisa),
-carimba o sha em `/opt/brambs-router/.deployed-sha` e **restaura o backup se
+carimba a versão (`--carimbo`, padrão o commit da pasta de onde foi chamado) em `/opt/brambs-router/.deployed-sha` e **restaura o backup se
 qualquer passo falhar**.
 
 Só `router.py` e `ctl.py` entram nesse caminho.
@@ -59,7 +61,7 @@ Os padrões abaixo valem se nada for configurado.
 | ----- | ---- | ------ |
 | domínio dos apps | `APPS_DOMAIN` no `.env` do backend. O `web/appshost.mjs` manda `dominio` em todo JSON; o `ctl.py` monta com ele o link devolvido no `publish`, o `Host` do smoke-test e o e-mail dos commits. Sem `dominio` no JSON (backend antigo), vale `APPS_DOMAIN` do ambiente do `ctl.py`, que o `sudo` normalmente limpa. | host do site da marca; sem domínio válido, `localhost` |
 | caminho do `ctl.py` | `APPS_CTL_PATH` no `.env` do backend | `/opt/brambs-ctl/ctl.py`, onde o `deploy.sh` instala |
-| marca do host (nome, site, logo e texto do selo; o nome também é o autor dos commits sem pessoa por trás) | `ops/apps-host/marca.json` no repositório (`{"nome", "site", "logo", "selo", "selo_aria"}`, tudo opcional), que o `deploy.sh` instala em `/opt/brambs-router/marca.json` e reinicia o roteador; `BRAMBS_SITE_URL` e `BRAMBS_LOGO_URL` no ambiente da unit valem por cima | `Brambit`, `http://localhost:8080/`, `<site>/logo.svg` e "Feito com Brambit" |
+| marca do host (nome, site, logo e texto do selo; o nome também é o autor dos commits sem pessoa por trás) | `marca.json` ao lado do `deploy.sh` ou o arquivo passado em `--marca` (`{"nome", "site", "logo", "selo", "selo_aria"}`, tudo opcional), que o `deploy.sh` instala em `/opt/brambs-router/marca.json` e reinicia o roteador; `BRAMBS_SITE_URL` e `BRAMBS_LOGO_URL` no ambiente da unit valem por cima | `Brambit`, `http://localhost:8080/`, `<site>/logo.svg` e "Feito com Brambit" |
 | caminhos do roteador | `BRAMBS_REGISTRY`, `BRAMBS_INTERNAL_KEY_FILE`, `BRAMBS_USERS`, `BRAMBS_HOME`, `BRAMBS_LOG_DIR` no ambiente da unit | `/opt/brambs-router/...`, `/opt/brambs-home`, `/var/log/brambs` |
 
 O roteador não depende do domínio: o label sai do primeiro pedaço do `Host`.

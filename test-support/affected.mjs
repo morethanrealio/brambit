@@ -29,9 +29,20 @@ const LITERAL = /(['"`])((?:\.{1,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\/?)\1/g;
 const SPAWNS = /\b(?:spawn|fork|execFile)\w*\s*\(/;
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g;
 
+// Apelido do "imports" do package.json (#nucleo/web/x.mjs, #regras-provedor) vira o
+// caminho na raiz; sem apelido que case, null.
+function apelido(ref, imports) {
+  for (const [k, v] of Object.entries(imports)) {
+    const alvo = k.endsWith('*') ? (ref.startsWith(k.slice(0, -1)) ? v.replace('*', ref.slice(k.length - 1)) : null) : (ref === k ? v : null);
+    if (typeof alvo === 'string' && alvo.startsWith('./')) return alvo;
+  }
+  return null;
+}
+
 // Alvos possíveis de uma referência: relativo ao arquivo e relativo à raiz
 // (os testes rodam com cwd na raiz, então readFileSync('web/x.mjs') é da raiz).
-function targets(from, ref, tracked, dirs) {
+function targets(from, ref, tracked, dirs, apelidos = {}) {
+  if (ref.startsWith('#')) { const a = apelido(ref, apelidos); if (!a) return []; from = 'x'; ref = a; }
   const clean = ref.replace(/[?#].*$/, '');
   const out = [];
   for (const base of [path.posix.dirname(from), '.']) {
@@ -53,6 +64,8 @@ export function buildGraph(files, read) {
     }
   }
   const deps = new Map();
+  let apelidos = {};
+  try { apelidos = JSON.parse(read('package.json')).imports || {}; } catch { /* sem package.json */ }
   for (const f of files) {
     if (!CODE.test(f)) continue;
     let src;
@@ -61,8 +74,8 @@ export function buildGraph(files, read) {
     const imports = new Set(), refs = new Set();
     for (const [re, kind] of [[IMPORT, imports], [LITERAL, runs ? imports : refs]]) {
       for (const m of src.matchAll(re)) {
-        if (!m[2].includes('/') && !m[2].includes('.')) continue;
-        for (const t of targets(f, m[2], tracked, dirs)) if (t !== f) kind.add(t);
+        if (!m[2].includes('/') && !m[2].includes('.') && !m[2].startsWith('#')) continue;
+        for (const t of targets(f, m[2], tracked, dirs, apelidos)) if (t !== f) kind.add(t);
       }
     }
     for (const t of imports) refs.delete(t);

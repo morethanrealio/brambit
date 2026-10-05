@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { runGoogleReadAccounts, selectGoogleReadAccounts } from './web/google-read-scope.mjs';
+import { runGoogleReadAccounts, selectGoogleReadAccounts, googleReconnectError } from './web/google-read-scope.mjs';
 import { googleTools } from './web/connectors.mjs';
 import { trackEmailPagination } from './web/email-pagination.mjs';
 import { turnSearchCoverage } from './web/turn-search-coverage.mjs';
@@ -117,4 +117,17 @@ test('regressão de prosa: preserva achado positivo e remove ausência absoluta 
   assert.ok(!guardEmailCoverageClaims('Não há rastreio. [Pedido](https://example.invalid/mail)',{partial:true,active:true}).includes('Não há rastreio'));
   assert.ok(!guardEmailCoverageClaims('There are no delivery emails.',{partial:true,active:true,language:'en'}).includes('There are no'));
   assert.ok(!guardEmailCoverageClaims('No hay correos de entrega.',{partial:true,active:true,language:'es'}).includes('No hay'));
+});
+
+test('conexão morta vira pedido de reconexão, não falha genérica',async()=>{
+  const coverage=[];const msg=a=>`Reconecte ${a}`;
+  const dead=[{google_email:personal,access_token:null,refresh_token:null},{google_email:work,access_token:'x',refresh_token:'y'}];
+  const result=await runGoogleReadAccounts({accounts:dead,currentAccount:work,requested:[personal,work],objetivo:'agenda',reconnectMessage:msg,
+    // a conta viva morre no meio (invalid_grant) e a ferramenta engole o erro
+    createReadTools:async(account,wrapToken)=>{assert.equal(account,work);const token=wrapToken(async()=>{throw googleReconnectError('morreu');});
+      return [{name:'calendar_list',run:async()=>{try{await token();}catch(e){return JSON.stringify({error:e.message});}}}];},
+    runWorker:async({readTools})=>{await readTools[0].run({});return 'nada';},onAccountCoverage:r=>coverage.push(r)});
+  assert.deepEqual(coverage.map(r=>r.status),['needs_reconnect','needs_reconnect']);
+  assert.ok(result.includes(`ESTADO: needs_reconnect\nReconecte ${personal}`));assert.ok(result.includes(`Reconecte ${work}`));
+  assert.ok(!result.includes('Não consegui concluir'));
 });

@@ -193,3 +193,65 @@ export function derivaDeIdioma(texto, language) {
     suspeita: score >= LIMIAR,
   };
 }
+
+// ── Freio de ideograma (este BLOQUEIA, ao contrário do detector acima) ──────
+// O lembrete por turno (30/09) não bastou: em 05/10/2026 o DeepSeek V4.1 Flash
+// respondeu em chinês de novo a um usuário em pt-BR, no WhatsApp, a ~114k
+// tokens, depois de cancelar 4 lembretes. Instrução é pedido, e o modelo às
+// vezes não atende; o que falta é a plataforma conferir a saída antes de
+// entregar. Todo idioma atendido (pt-BR, en, es) é escrito em alfabeto latino,
+// então resposta dominada por ideograma chinês é deriva, salvo dois casos
+// legítimos que existem em prod: japonês pedido de propósito (lista de tarefas
+// em japonês, sempre com kana) e pedido explícito de chinês/japonês/coreano.
+//
+// Calibrado nas 79 respostas com ideograma gravadas em prod até 05/10/2026: só
+// 4 passam pela regra, e as 4 são deriva (17/07 e 14/08 no GLM, 30/09 e 05/10 no
+// DeepSeek), com 30% a 100% de ideograma entre as letras. As demais têm menos de
+// 20 ideogramas ou têm kana (japonês pedido pelo dono). O corte de 15% deixa
+// folga dos dois lados: nenhuma resposta legítima chega perto dele.
+const RE_HAN = /\p{Script=Han}/gu;
+const RE_KANA_HANGUL = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const RE_CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const PEDIU_CJK = /chin[eê]s|chinese|chino|mandarim|mandarin|canton[eê]s|cantonese|japon[eê]s|japanese|japon[eé]s|coreano|korean|kanji|hanzi|kana|hiragana|katakana|ideograma/i;
+const MIN_HAN = 20;
+const PARTE_HAN = 0.15;
+
+export function ideogramaAcidental(texto, language, textoDoDono = '') {
+  const s = String(texto || '');
+  const han = (s.match(RE_HAN) || []).length;
+  if (han < MIN_HAN || RE_KANA_HANGUL.test(s)) return null;
+  const dono = String(textoDoDono || '');
+  if (RE_CJK.test(dono) || PEDIU_CJK.test(dono)) return null;
+  const latinas = (s.match(/\p{Script=Latin}/gu) || []).length;
+  const parte = han / (han + latinas);
+  if (parte < PARTE_HAN) return null;
+  return { idioma: normalizaIdioma(language) || IDIOMA_PADRAO, han, parte: Number(parte.toFixed(2)) };
+}
+
+// Pedido de reescrita: chamada curta, SEM ferramentas e sem a conversa, então
+// nada do turno roda de novo (os lembretes cancelados não são cancelados duas
+// vezes) e custa uns poucos milhares de tokens.
+export function reescritaNoIdioma(language) {
+  const nome = { 'pt-BR': 'português do Brasil', en: 'inglês', es: 'espanhol' }[normalizaIdioma(language) || IDIOMA_PADRAO];
+  return {
+    system: `Você reescreve mensagens de um assistente pessoal. A única tarefa é devolver a MESMA mensagem escrita inteiramente em ${nome}. Traduza linha por linha, sem pular nenhuma (títulos em negrito e itens de lista também), então a mensagem reescrita tem exatamente as mesmas linhas da original. Mantenha números, datas, nomes, links, emojis e a formatação. Não acrescente nem tire informação, não responda ao pedido da pessoa e não comente a tarefa. Devolva só a mensagem reescrita.`,
+    entrada: (pedido, mensagem) => `${pedido ? `Contexto, NÃO responda a isto. Pedido da pessoa:\n<<<\n${pedido}\n>>>\n\n` : ''}Mensagem a reescrever em ${nome}:\n<<<\n${mensagem}\n>>>`,
+  };
+}
+
+// Se nem a reescrita sair no idioma, a pessoa recebe isto em vez de um texto
+// que não consegue ler. Os recibos de ação continuam indo logo abaixo.
+const SEM_IDIOMA = {
+  'pt-BR': 'Tive um problema ao escrever esta resposta no seu idioma. Pode me pedir de novo?',
+  en: 'I had a problem writing this reply in your language. Could you ask me again?',
+  es: 'Tuve un problema al escribir esta respuesta en tu idioma. ¿Me lo pides de nuevo?',
+};
+// Mesmo número de linhas com texto: a reescrita que pula uma linha (o título
+// "Lembretes cancelados", no teste de 05/10) perde informação sem ninguém ver.
+export function mesmasLinhas(original, reescrito) {
+  const n = (t) => String(t || '').split('\n').filter((l) => l.trim()).length;
+  return n(original) === n(reescrito);
+}
+export function avisoSemIdioma(language) {
+  return SEM_IDIOMA[normalizaIdioma(language) || IDIOMA_PADRAO];
+}

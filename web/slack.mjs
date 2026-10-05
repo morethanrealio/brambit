@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 import { hostDaMarca, marca } from './marca.mjs';
 import { splitMessage } from './channel-split.mjs';
+import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 
 const SLACK_API = 'https://slack.com/api';
 
@@ -41,7 +42,12 @@ async function slackApi(method, body) {
     body: JSON.stringify(body || {}),
   });
   const j = await r.json().catch(() => ({}));
-  if (!j.ok) throw new Error(`slack ${method}: ${j.error || r.status}`);
+  if (!j.ok) {
+    // Igual ao Telegram: recusa do Slack (canal inexistente, sem permissão) é
+    // determinística; limite de taxa e 5xx são incertos e valem nova tentativa.
+    throw Object.assign(new Error(`slack ${method}: ${j.error || r.status}`),
+      { definitive: r.status < 500 && r.status !== 429 && j.error !== 'ratelimited' });
+  }
   return j;
 }
 
@@ -70,16 +76,18 @@ async function slackEmail(slackUserId) {
 // quebra era seca a cada 3500; agora usa channel-split.mjs.
 const SLACK_CHUNK = 3500;
 
-async function postMessage(channel, text, threadTs) {
+// `reenvio`: repete a parte que falhou com erro incerto, sem repetir as já aceitas.
+async function postMessage(channel, text, threadTs, { reenvio = false } = {}) {
   const body = (text || '').trim() || '(sem resposta)';
   for (const parte of splitMessage(body, SLACK_CHUNK)) {
-    await slackApi('chat.postMessage', {
+    const enviar = () => slackApi('chat.postMessage', {
       channel,
       text: parte,
       thread_ts: threadTs || undefined,
       unfurl_links: false,
       unfurl_media: false,
     });
+    await (reenvio ? comReenvio(enviar, { rotulo: 'slack' }) : enviar());
   }
 }
 
@@ -115,7 +123,10 @@ export function verifySlackSignature(rawBody, timestamp, signature) {
 //   runConversation(agent, userId, text) -> reply
 //   loadAgent(agentId, userId) -> agent   (valida ownership)
 //   db = { getSlackLink, upsertSlackLink, setSlackActiveAgent, listAgents, getUserByEmail }
-export function createSlackHandler({ runConversation, loadAgent, db }) {
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
+// registro dele no histórico da thread Slack.
+export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal = {} }) {
+  const avisar = criarAvisoCanal({ rotulo: 'slack', ...avisoCanal });
   const seen = new Set(); // event_id já processados (dedup de retries do Slack)
   const seenMsg = new Set(); // channel:ts já processados (colapsa app_mention + message)
 
@@ -145,6 +156,23 @@ export function createSlackHandler({ runConversation, loadAgent, db }) {
     // se a pessoa mencionou dentro de uma).
     const threadTs = type === 'app_mention' ? (evt.thread_ts || evt.ts) : evt.thread_ts;
     const reply = (t) => postMessage(evt.channel, t, threadTs).catch((e) => console.error('[slack] post:', e?.message ?? e));
+    // Roda o turno e entrega. Falha do turno e falha só da entrega têm avisos
+    // diferentes (aviso-canal.mjs); a resposta pronta é reenviada, nunca refeita.
+    const responder = async (agent, userId) => {
+      const enviarAviso = (t) => postMessage(evt.channel, t, threadTs);
+      let res;
+      try { res = await runConversation(agent, userId, text, reply); } catch (e) {
+        console.error('[slack] erro na conversa:', e?.message ?? e);
+        await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso });
+        return;
+      }
+      if (res?.suppressed) return;
+      const out = typeof res === 'string' ? res : res?.text;
+      try { await postMessage(evt.channel, out || '(sem resposta)', threadTs, { reenvio: true }); } catch (e) {
+        console.error('[slack] resposta não entregue:', e?.message ?? e);
+        await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso });
+      }
+    };
 
     const teamId = meta.teamId || evt.team || '';
     const channel = evt.channel;
@@ -199,15 +227,7 @@ export function createSlackHandler({ runConversation, loadAgent, db }) {
       const agent = await loadAgent(chLink.agent_id, chLink.user_id);
       if (!agent) { await reply(`O assistente conectado aqui não está mais disponível. Gere um novo código no ${marca().nome}.`); return; }
       if (!text) { await reply(`Oi! Sou o *${agent.name}*. Pode mandar sua mensagem.`); return; }
-      try {
-        const res = await runConversation(agent, chLink.user_id, text, reply);
-        if (res?.suppressed) return;
-        const out = typeof res === 'string' ? res : res?.text;
-        await reply(out || '(sem resposta)');
-      } catch (e) {
-        console.error('[slack] erro na conversa:', e?.message ?? e);
-        await reply('Tive um problema pra responder agora. Tenta de novo?');
-      }
+      await responder(agent, chLink.user_id);
       return;
     }
 
@@ -285,15 +305,7 @@ export function createSlackHandler({ runConversation, loadAgent, db }) {
 
     if (!text) { await reply(`Falando com *${agent.name}*. Pode mandar sua mensagem.`); return; }
 
-    try {
-      const res = await runConversation(agent, userId, text, reply);
-      if (res?.suppressed) return;
-      const out = typeof res === 'string' ? res : res?.text;
-      await reply(out || '(sem resposta)');
-    } catch (e) {
-      console.error('[slack] erro na conversa:', e?.message ?? e);
-      await reply('Tive um problema pra responder agora. Tenta de novo?');
-    }
+    await responder(agent, userId);
   }
 
   // Processa o payload do webhook (já validado). NÃO bloqueia a resposta ao Slack:

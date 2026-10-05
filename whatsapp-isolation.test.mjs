@@ -6,7 +6,7 @@ import {createWhatsAppHandler} from './web/whatsapp.mjs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<500;i++){if(await fn())return;await wait(10);}throw Error('Expected state did not arrive');}
-Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'100',WA_TURN_HEARTBEAT_MS:'0',WA_INTERJECT:'1'});
+Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'100',WA_TURN_HEARTBEAT_MS:'0',WA_INTERJECT:'1',CANAL_REENVIO_MS:'0,0'});
 const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'synthetic-phone'},messages}}]}]});
 const message=(n,text,extra={})=>({id:'integration-'+n,from:'5511000000000',type:'text',text:{body:text},...extra});
 
