@@ -1,0 +1,13 @@
+# Varredura de segredos (gitleaks), roda na checagem rápida do CI.
+# Regras padrão do gitleaks + exceções conferidas à mão em 01/10/2026:
+#   - test-support/apple-iap/*: cadeia de certificados de TESTE (CN "Test Leaf"),
+#     gerada só pros testes do Apple IAP; não vale em lugar nenhum.
+# Exceção nova só com o motivo escrito aqui.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "falsos positivos conferidos"
+paths = [
+  '''^test-support/apple-iap/''',
+]

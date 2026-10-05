@@ -1,0 +1,141 @@
+# Rede de proteção do repositório.
+# rapido: sintaxe, nome usado sem existir (eslint no-undef), artefatos gerados em dia, trava de crescimento de server.mjs/db.mjs,
+#         trava de teste novo que lê o texto do código, .env.example em dia, núcleo sobe
+#         sozinho e
+#         varredura de segredos (gitleaks) e trava de workflow perigoso (zizmor).
+# testes: DESLIGADO no PR até a abertura do código (decisão de 01/10/2026): hoje quem
+#         manda PR já roda os testes da área na própria máquina. Na abertura, voltar o
+#         `if:` abaixo para `github.event_name != 'push'` (no PR roda só os testes que
+#         alcançam o que mudou, test-support/affected.mjs).
+#         A suíte inteira NÃO roda sozinha: só pelo botão "Run workflow" (Actions > CI)
+#         ou com `npm test` na máquina de quem quiser.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rapido:
+    name: Checagem rápida
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Sintaxe de todo .mjs
+        run: git ls-files -z '*.mjs' | xargs -0 -n1 -P4 node --check
+      # O node --check não vê nome que não existe: isso só quebra quando a linha roda.
+      - name: Nome usado sem existir (eslint no-undef)
+        run: git ls-files -z '*.mjs' | xargs -0 npx eslint --no-warn-ignored
+      - name: Artefatos gerados em dia
+        run: |
+          for b in */build.mts; do node "$b"; done
+          git diff --exit-code || { echo "::error::Rode os build.mts e commite os arquivos gerados."; exit 1; }
+      - name: Trava de crescimento (web/server.mjs, web/db.mjs)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            base=$(git merge-base "$PR_BASE" HEAD)
+            # Lido na hora (não do evento) para um re-run enxergar o rótulo posto depois.
+            if gh api "repos/$GITHUB_REPOSITORY/issues/$PR/labels" --jq '.[].name' | grep -qx crescimento-autorizado; then
+              export GROWTH_GUARD_ALLOW=1
+            fi
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base=$BEFORE
+          else
+            base=$(git merge-base origin/main HEAD)
+          fi
+          node test-support/growth-guard.mjs "$base"
+      - name: Trava de teste que lê o texto do código
+        run: node test-support/fragile-guard.mjs
+      - name: .env.example completo e sem nada nosso
+        run: node test-support/env-example-guard.mjs
+      - name: Núcleo sobe sozinho
+        run: node test-support/nucleo-guard.mjs
+      - name: Varredura de segredos (gitleaks, histórico inteiro)
+        env:
+          GL_VER: 8.30.1
+          GL_SHA: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -sSfL -o /tmp/gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VER}/gitleaks_${GL_VER}_linux_x64.tar.gz"
+          echo "${GL_SHA}  /tmp/gl.tgz" | sha256sum -c -
+          tar -xzf /tmp/gl.tgz -C /tmp gitleaks
+          /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
+      # Barra workflow que, por escrito, dá escrita a PR, roda código de fork com acesso
+      # às chaves (pull_request_target) ou injeta texto do PR em comando. As regras do
+      # repo (token padrão só leitura, Action fixada por commit) não cobrem isso.
+      - name: Trava de workflow perigoso (zizmor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZZ_VER: 1.30.1
+          ZZ_SHA: e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a
+        run: |
+          curl -sSfL -o /tmp/zz.tgz "https://github.com/zizmorcore/zizmor/releases/download/v${ZZ_VER}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ZZ_SHA}  /tmp/zz.tgz" | sha256sum -c -
+          tar -xzf /tmp/zz.tgz -C /tmp zizmor
+          /tmp/zizmor --persona auditor --min-severity medium --format github .github/workflows/
+
+  testes:
+    name: ${{ github.event_name == 'pull_request' && 'Testes da área' || 'Suíte completa' }}
+    needs: rapido
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Pré-requisitos dos testes (Postgres, Chromium, pandas)
+        run: |
+          pip install pandas openpyxl
+          echo "PLANILHA_PY=$(which python)" >> "$GITHUB_ENV"
+          # Postgres 14 embutido (npm), a mesma versão do prod; o do runner é outro.
+          pg=$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")
+          [ -x "$pg/initdb" ] || { echo "::error::Postgres embutido não instalado (npm ci)"; exit 1; }
+          "$pg/postgres" --version
+          echo "TEST_POSTGRES_BIN=$pg" >> "$GITHUB_ENV"
+          chrome=$(which google-chrome || which chromium || which chromium-browser)
+          [ -n "$chrome" ] || { echo "::error::Chromium não encontrado no runner"; exit 1; }
+          echo "CHROMIUM_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: Testes
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            npm test -- --changed-since "$(git merge-base "$PR_BASE" HEAD)"
+          else
+            npm test
+          fi

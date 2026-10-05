@@ -1,0 +1,50 @@
+{
+  "name": "brambit",
+  "version": "1.0.0",
+  "main": "index.js",
+  "imports": {
+    "#regras-provedor": "./core-proto/providers/regras.mjs"
+  },
+  "scripts": {
+    "local": "node dev/local.mjs",
+    "modelos": "node dev/modelos.mjs",
+    "test": "node test-support/run-suite.mjs",
+    "routines:build": "node --experimental-strip-types routines/build.mts",
+    "routines:test": "npm run routines:build && node routines-storage.test.mjs && node routines-browser.test.mjs",
+    "deepseek:build": "node --experimental-strip-types deepseek/build.mts",
+    "deepseek:test": "npm run deepseek:build && node --test .deepseek-build/*.test.mjs",
+    "billing:build": "node --experimental-strip-types billing/build.mts",
+    "onboarding:build": "node --experimental-strip-types onboarding/build.mts",
+    "onboarding:test": "npm run onboarding:build && node --test .onboarding-build/*.test.mjs && node onboarding-browser.test.mjs",
+    "discovery:build": "node --experimental-strip-types discovery/build.mts",
+    "discovery:test": "npm run discovery:build && node --test .discovery-build/*.test.mjs && node --test discovery-delivery.test.mjs",
+    "coding:lifecycle:test": "node --import ./test-support/coding/isolate-preload.mjs --experimental-loader ./test-support/coding/isolate-loader.mjs --test coding-lifecycle.test.mjs coding-notify.test.mjs && node --test coding-runtime.test.mjs coding-delivery.test.mjs",
+    "coding:context:test": "node --import ./test-support/coding/isolate-preload.mjs --experimental-loader ./test-support/coding/isolate-loader.mjs --test coding-context.test.mjs && node --test coding-context-store.test.mjs",
+    "reliability:test": "npm run routines:build && node --test --test-concurrency=2 confirmation-target.test.mjs confirmation-channel.test.mjs confirmation-durable.test.mjs confirmation-server.test.mjs confirmation-recovery.test.mjs confirmation-tools.test.mjs confirmation-coding-dedup.test.mjs reminder-execution-store.test.mjs reminder-execution.test.mjs reminder-delivery-integration.test.mjs reminder-history.test.mjs routine-execution-outcomes.test.mjs scheduled-delivery.test.mjs scheduled-transport-receipts.test.mjs routines-health.test.mjs",
+    "confirmation:test": "node --test --test-concurrency=2 confirmation-target.test.mjs confirmation-channel.test.mjs confirmation-durable.test.mjs confirmation-server.test.mjs confirmation-recovery.test.mjs confirmation-tools.test.mjs confirmation-coding-dedup.test.mjs",
+    "coding:resume:test": "node --test --test-concurrency=2 coding-resumption.test.mjs coding-runtime.test.mjs coding-notify.test.mjs confirmation-server.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "AGPL-3.0-only",
+  "description": "",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.80",
+    "html-to-text": "10.0.0",
+    "imapflow": "^1.4.3",
+    "mailparser": "^3.9.12",
+    "nodemailer": "^9.0.3",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.22.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@types/node": "^22.0.0",
+    "embedded-postgres": "14.23.0-beta.17",
+    "eslint": "9.39.5",
+    "globals": "17.13.0",
+    "playwright-core": "1.55.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,344 @@
+[
+  {
+    "arquivo": "server.js",
+    "inicio": 0,
+    "fim": 6000,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "public/index.html",
+    "inicio": 0,
+    "fim": 6000,
+    "total_chars": 6257
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 6000,
+    "fim": 12000,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "public/index.html",
+    "inicio": 6000,
+    "fim": 6257,
+    "total_chars": 6257
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 12000,
+    "fim": 12024,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 1900,
+    "fim": 5100,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 5100,
+    "fim": 8700,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 8700,
+    "fim": 12024,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 0,
+    "fim": 2000,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 2000,
+    "fim": 4000,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 4000,
+    "fim": 6200,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 6200,
+    "fim": 8800,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 8800,
+    "fim": 11400,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 11400,
+    "fim": 12024,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 1500,
+    "fim": 2400,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 700,
+    "fim": 1600,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 0,
+    "fim": 720,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 2400,
+    "fim": 3300,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 3300,
+    "fim": 4200,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 4200,
+    "fim": 5100,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 5100,
+    "fim": 6000,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 6000,
+    "fim": 6900,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 6900,
+    "fim": 7800,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 7800,
+    "fim": 8700,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 8700,
+    "fim": 9600,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 9600,
+    "fim": 10500,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "server.js",
+    "inicio": 10500,
+    "fim": 11450,
+    "total_chars": 12024
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 0,
+    "fim": 2400,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 2400,
+    "fim": 4800,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 4800,
+    "fim": 7200,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 7200,
+    "fim": 9600,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 9600,
+    "fim": 12000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 12000,
+    "fim": 14400,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 14400,
+    "fim": 16244,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 0,
+    "fim": 1500,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 1500,
+    "fim": 3000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 3000,
+    "fim": 4500,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 4500,
+    "fim": 6000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 6000,
+    "fim": 7500,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 7500,
+    "fim": 9000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 9000,
+    "fim": 10500,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 10500,
+    "fim": 12000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 12000,
+    "fim": 13400,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 13400,
+    "fim": 14800,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 14800,
+    "fim": 16244,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 1700,
+    "fim": 3200,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 3200,
+    "fim": 4800,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 4800,
+    "fim": 6400,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 6400,
+    "fim": 8000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 8000,
+    "fim": 9600,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 9600,
+    "fim": 11200,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 11200,
+    "fim": 12800,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 12800,
+    "fim": 14400,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 14400,
+    "fim": 16000,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/lobby.js",
+    "inicio": 16000,
+    "fim": 16244,
+    "total_chars": 16244
+  },
+  {
+    "arquivo": "public/index.html",
+    "inicio": 0,
+    "fim": 4000,
+    "total_chars": 6257
+  },
+  {
+    "arquivo": "public/game.js",
+    "inicio": 0,
+    "fim": 1000,
+    "total_chars": 50846
+  }
+]

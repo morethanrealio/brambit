@@ -1,0 +1,159 @@
+// Cofre: gravação de segredo tem que FALHAR FECHADA.
+// Bug: vaultEnabled() olhava só a VAULT_KEY do env, então numa instalação com
+// chave via KMS (VAULT_KEY_ENC) — ou quando o unwrap do KMS falha no boot —
+// encMaybe() devolvia o segredo em TEXTO PURO e ele era gravado assim no banco.
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const ENV_KEYS = ['VAULT_KEY', 'VAULT_KEY_ENC', 'BRAMBS_LOCAL', 'VAULT_KEY_FILE'];
+let n = 0;
+// vault.mjs cacheia a chave no módulo; cada cenário precisa de uma instância nova.
+async function loadVault(env) {
+  const saved = {};
+  for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+  Object.assign(process.env, env);
+  const mod = await import(`./web/vault.mjs?caso=${++n}`);
+  return { mod, restore() { for (const k of ENV_KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } } };
+}
+
+const KEY32 = Buffer.alloc(32, 7).toString('base64');
+
+test('sem chave nenhuma: initVault acusa e gravação recusa texto puro', async () => {
+  const { mod, restore } = await loadVault({});
+  try {
+    assert.equal(mod.vaultConfigured(), false);
+    assert.equal(mod.vaultEnabled(), false);
+    assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
+    assert.equal(mod.encMaybe(null), null);
+    await assert.rejects(mod.initVault(), (e) => e.code === 'VAULT_BOOT' && /BRAMBS_LOCAL/.test(e.message));
+  } finally { restore(); }
+});
+
+// O bug do plano (fase B item 4): VAULT_KEY malformada contava como "sem cofre"
+// e o segredo ia pro banco em claro, com o servidor de pé.
+for (const [nome, valor] of [['curta demais', 'abc'], ['hex no lugar de base64', 'a'.repeat(64)], ['lixo', 'não é base64 nenhum!!']]) {
+  test(`VAULT_KEY malformada (${nome}): initVault acusa e nada vai em texto puro`, async () => {
+    const { mod, restore } = await loadVault({ VAULT_KEY: valor });
+    try {
+      assert.equal(mod.vaultConfigured(), true, 'malformada = cofre configurado e quebrado');
+      assert.equal(mod.vaultEnabled(), false);
+      assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
+      await assert.rejects(mod.initVault(), (e) => e.code === 'VAULT_BOOT' && /32/.test(e.message));
+      assert.ok(!(await mod.initVault().catch((e) => e.message)).includes(valor), 'mensagem não ecoa a chave');
+    } finally { restore(); }
+  });
+}
+
+// Chave ruim não derruba o servidor: o boot (initVaultNoBoot) segue em modo
+// degradado, só com o alarme no log, e a gravação de segredo continua recusando.
+for (const [nome, env] of [['sem chave', {}], ['VAULT_KEY malformada', { VAULT_KEY: 'abc' }]]) {
+  test(`boot com ${nome}: servidor segue de pé, alarme no log, segredo recusado`, async () => {
+    const { mod, restore } = await loadVault(env);
+    const logs = [];
+    try {
+      const r = await mod.initVaultNoBoot({ error: (...a) => logs.push(a.join(' ')) });
+      assert.equal(r.ok, false);
+      assert.match(logs.join('\n'), /ALERTA.*modo degradado/);
+      assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
+    } finally { restore(); }
+  });
+}
+
+test('boot com chave boa: initVaultNoBoot ok e cifra normalmente', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
+  try {
+    assert.deepEqual(await mod.initVaultNoBoot({ error: () => assert.fail('não devia logar erro') }), { ok: true });
+    assert.match(mod.encMaybe('segredo'), /^v1:/);
+  } finally { restore(); }
+});
+
+test('VAULT_KEY sem o "=" do fim (43 caracteres) segue valendo', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY: KEY32.replace(/=+$/, '') });
+  try {
+    await mod.initVault();
+    assert.equal(mod.decMaybe(mod.encMaybe('segredo')), 'segredo');
+  } finally { restore(); }
+});
+
+test('modo local: gera a chave sozinho, 0600, e reaproveita no boot seguinte', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
+  const file = path.join(dir, 'sub', 'vault.key');
+  const env = { BRAMBS_LOCAL: '1', VAULT_KEY_FILE: file };
+  try {
+    const a = await loadVault(env);
+    let blob;
+    try {
+      assert.equal(a.mod.vaultConfigured(), true);
+      await a.mod.initVault();
+      assert.equal((fs.statSync(file).mode & 0o777), 0o600);
+      blob = a.mod.encMaybe('segredo');
+      assert.ok(blob.startsWith('v1:'));
+    } finally { a.restore(); }
+    const b = await loadVault(env);
+    try {
+      await b.mod.initVault();
+      assert.equal(b.mod.decMaybe(blob), 'segredo', 'segundo boot abre o que o primeiro cifrou');
+    } finally { b.restore(); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('modo local com arquivo de chave estragado: para, sem sobrescrever', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
+  const file = path.join(dir, 'vault.key');
+  fs.writeFileSync(file, 'curta\n');
+  const { mod, restore } = await loadVault({ BRAMBS_LOCAL: '1', VAULT_KEY_FILE: file });
+  try {
+    await assert.rejects(mod.initVault(), (e) => e.code === 'VAULT_BOOT');
+    assert.equal(fs.readFileSync(file, 'utf8'), 'curta\n');
+  } finally { restore(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('chave do env vence o modo local (não gera arquivo)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
+  const file = path.join(dir, 'vault.key');
+  const { mod, restore } = await loadVault({ BRAMBS_LOCAL: '1', VAULT_KEY_FILE: file, VAULT_KEY: KEY32 });
+  try {
+    await mod.initVault();
+    assert.equal(fs.existsSync(file), false);
+  } finally { restore(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('VAULT_KEY legado: cifra e decifra', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
+  try {
+    assert.equal(mod.vaultConfigured(), true);
+    assert.equal(mod.vaultEnabled(), true);
+    const blob = mod.encMaybe('segredo');
+    assert.ok(blob.startsWith('v1:'));
+    assert.equal(mod.decMaybe(blob), 'segredo');
+  } finally { restore(); }
+});
+
+test('modo KMS sem initVault: recusa gravar em vez de vazar texto puro', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY_ENC: 'blob-kms-qualquer' });
+  try {
+    assert.equal(mod.vaultConfigured(), true, 'instalação TEM cofre');
+    assert.equal(mod.vaultEnabled(), false, 'mas a chave não carregou');
+    assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
+  } finally { restore(); }
+});
+
+test('KMS falhou com VAULT_KEY velha no env: não cifra com a chave errada', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY_ENC: 'blob-kms-qualquer', VAULT_KEY: KEY32 });
+  try {
+    assert.equal(mod.vaultEnabled(), false);
+    assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
+    assert.throws(() => mod.encryptSecret('segredo'), /KMS/);
+  } finally { restore(); }
+});
+
+test('leitura continua tolerante com linha legada em texto puro', async () => {
+  const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
+  try {
+    assert.equal(mod.decMaybe('token-legado-em-claro'), 'token-legado-em-claro');
+    assert.equal(mod.decMaybe(null), null);
+  } finally { restore(); }
+});

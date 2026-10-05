@@ -1,0 +1,92 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Modelos do Brambit: qual provedor e qual modelo cada função usa.
+#
+# Como usar:
+#   1. cp modelos.example.yaml modelos.yaml
+#   2. deixe em "provedores" só os que você vai usar e cole as chaves no .env
+#   3. em "funcoes", escolha o modelo de cada função (no mínimo o "padrao")
+#   4. npm run modelos      → mostra a tabela função → modelo e avisa chave faltando
+#
+# Sem o modelos.yaml, vale o roteamento embutido.
+# Com ele, este arquivo manda: o que estiver aqui vale pra todas as funções.
+# Erro de digitação aqui faz o servidor recusar subir e diz a linha do problema.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Provedores ───────────────────────────────────────────────────────────────
+# Provedor é só dado: um apelido seu, o endereço da API e o NOME da variável do
+# .env que guarda a chave (nunca a chave em si: este arquivo pode ir pro git).
+#
+# Qualquer serviço que fale o protocolo da OpenAI (/chat/completions) entra
+# assim, sem código: Together, OpenAI, OpenRouter, DeepSeek, Groq, Fireworks,
+# DeepInfra, Mistral, vLLM e Ollama locais, etc. Em "endereco", vai a base
+# (o servidor completa com /chat/completions).
+# O Gemini tem protocolo próprio: use "tipo: gemini" e não precisa de endereço.
+provedores:
+  together:
+    endereco: https://api.together.xyz/v1
+    chave: TOGETHER_API_KEY
+  gemini:
+    tipo: gemini
+    chave: GEMINI_API_KEY
+  openai:
+    endereco: https://api.openai.com/v1
+    chave: OPENAI_API_KEY
+  # openrouter:
+  #   endereco: https://openrouter.ai/api/v1
+  #   chave: OPENROUTER_API_KEY
+  # Modelo rodando na sua máquina (sem chave: é só não pôr a linha "chave").
+  # ollama:
+  #   endereco: http://localhost:11434/v1
+
+# ── Funções ──────────────────────────────────────────────────────────────────
+# Cada linha escolhe o modelo de uma função, no formato provedor/modelo (o
+# modelo é o id exato que o provedor usa na API dele).
+#
+# Função sem linha herda de outra, então dá pra começar só com o "padrao":
+#   padrao ............ tudo que não tiver linha própria
+#   conversa .......... o assistente falando com o usuário; precisa saber
+#                       chamar ferramentas (agenda, e-mail, busca...)  ← padrao
+#   imagem ............ turno em que o usuário mandou foto; precisa enxergar
+#                       imagem                                         ← conversa
+#   leitura_imagem .... descrever ou ler o texto de uma imagem guardada ← imagem
+#   pesquisa .......... sub-agentes de leitura: web, Google, conectores ← padrao
+#   programacao ....... escrever código, construir app, planilhas     ← padrao
+#   memoria ........... manter o perfil e o resumo das conversas       ← padrao
+#   classificacao ..... tarefas curtas de rótulo: assuntos, moderação,
+#                       risco de app, ofertas de rotina                ← padrao
+#
+# "reserva" (opcional): modelo que entra se o principal cair (fora do ar, erro
+# do provedor). Pode ser de outro provedor; é o jeito de não ficar sem resposta.
+#
+# "opcoes" (opcional): campos extras mandados como estão no corpo da chamada,
+# pra ajustes que cada provedor tem (ex.: reasoning_effort, temperature).
+# No Gemini, a única opção lida é thinkingBudget.
+funcoes:
+  padrao:
+    modelo: together/deepseek-ai/DeepSeek-V4.1-Flash
+    opcoes:
+      reasoning_effort: high
+    reserva: gemini/gemini-3.7-flash
+
+  # Exemplos (descomente pra usar):
+  # programacao:
+  #   modelo: openai/gpt-5.4-mini
+  #   reserva: together/deepseek-ai/DeepSeek-V4.1-Flash
+  # classificacao: together/deepseek-ai/DeepSeek-V4.1-Flash   ← forma curta, sem reserva
+  # memoria:
+  #   modelo: gemini/gemini-3.7-flash
+  #   opcoes:
+  #     thinkingBudget: 0
+
+# ── Preços (opcional) ────────────────────────────────────────────────────────
+# O gasto de cada chamada é calculado pelo preço do modelo. Os modelos acima já
+# têm preço cadastrado. Pra modelo novo, ponha uma linha aqui; sem ela, o
+# servidor usa a tabela de reserva (US$ 1,50 entrada / 9,00 saída), que
+# costuma ser mais cara que o preço real. Valores em US$ por 1 milhão de tokens:
+#   entrada = texto que vai pro modelo; cache = entrada que o provedor reaproveitou
+#   (mais barata); saida = texto que volta (inclui o "raciocínio").
+precos:
+  # id-do-modelo-novo:        ← o mesmo id usado em "funcoes", sem o provedor
+  #   entrada: 0.50            ← valores ilustrativos: confira na página de preço do provedor
+  #   cache: 0.05
+  #   saida: 2.00

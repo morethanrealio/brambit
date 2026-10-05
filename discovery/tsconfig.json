@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"noEmitOnError":true,"lib":["ES2022","DOM","DOM.Iterable"],"types":["node"],"rootDir":".","outDir":"../.discovery-build","skipLibCheck":true},"include":["*.mts"]}

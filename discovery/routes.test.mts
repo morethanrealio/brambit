@@ -1,0 +1,20 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { discoveryRoutes, type RouteIO } from './routes.mjs';
+import { DiscoveryError, type DiscoveryStore } from './store.mjs';
+function fixture() {
+    const calls: unknown[][] = [], sent: unknown[][] = [];
+    const store = { overview: async () => { calls.push(['overview']); return {}; }, candidates: async () => [], invite: async (b: unknown) => { calls.push(['invite', b]); return {}; }, configure: async (b: unknown) => { calls.push(['configure', b]); return {}; }, state: async (u: string) => { calls.push(['state', u]); return {}; }, control: async (u: string, b: unknown) => { calls.push(['control', u, b]); return {}; }, editNote: async (u: string, b: unknown) => { calls.push(['editNote', u, b]); return {}; } } as unknown as DiscoveryStore;
+    const io: RouteIO = { admin: () => false, user: async () => null, read: async () => ({ user_id: 'victim', action: 'accept' }), limit: () => false, send: (s, b) => sent.push([s, b]), error: () => sent.push([500]) };
+    return { store, io, calls, sent };
+}
+test('admin authentication before reads or writes', async () => { const f = fixture(); await discoveryRoutes('/api/admin/discovery', 'GET', f.store, f.io); await discoveryRoutes('/api/admin/discovery/invite', 'POST', f.store, f.io); assert.equal(f.calls.length, 0); });
+test('removed owner API cannot consent or expose notes, even authenticated', async () => { const f = fixture(); f.io.user = async () => ({ id: 'owner' }); for (const path of ['/api/discovery', '/api/discovery/control', '/api/discovery/note'])
+    for (const method of ['GET', 'POST']) {
+        await discoveryRoutes(path, method, f.store, f.io);
+        assert.equal(f.sent.at(-1)![0], 404);
+    } assert.equal(f.calls.length, 0); f.io.admin = () => true; await discoveryRoutes('/api/admin/discovery/control', 'POST', f.store, f.io); assert.equal(f.sent.at(-1)![0], 404); });
+test('admin methods, rate limit, validation errors and unrelated routes', async () => { const f = fixture(); f.io.admin = () => true; await discoveryRoutes('/api/admin/discovery/invite', 'GET', f.store, f.io); assert.equal(f.sent.at(-1)![0], 405); f.io.limit = () => true; await discoveryRoutes('/api/admin/discovery/invite', 'POST', f.store, f.io); assert.equal(f.calls.length, 0); assert.equal(await discoveryRoutes('/api/unrelated', 'POST', f.store, f.io), false); f.io.limit = () => false; f.io.read = async () => { throw new DiscoveryError(400, 'Dados inválidos.'); }; await discoveryRoutes('/api/admin/discovery/invite', 'POST', f.store, f.io); assert.equal(f.sent.at(-1)![0], 400); });
+test('real server installs conversational tools through strict gate and direct controls clear stale confirmation', () => { const s = readFileSync('web/server.mjs', 'utf8'); assert.match(s, /if \(discovery.participant \|\| opts.confirmationRestore/); assert.match(s, /addGated\(registry, journeyTools.gated, thread.id\)/); assert.match(s, /activeSession.pending\(\).filter\(p => p.name.startsWith\('jornada_'\)\)/); assert.match(s, /activeSession.close\(row, 'superseded'\)/); assert.match(s, /validateChannel:validateDiscoveryChannel/); });
+test('actual server integration: before commercial short-circuits, CSRF, guarded writes, no raw profile in proactive draft', () => { const s = readFileSync('web/server.mjs', 'utf8'); assert.ok(s.indexOf('if (!csrfOk(req, url.pathname))') < s.indexOf('if(await discoveryRoutes(')); assert.match(s, /!ephemeral && !noTools && !viaReaction && !webhook && \['chat','telegram','whatsapp'\]/); assert.match(s, /discovery\.source && \['memoria_anotar','memoria_atualizar','memoria_escrever'\]/); assert.match(s, /if \(!discovery\.source && \(userTurns/); assert.match(s, /discoveryDraft \? '' : \(await getWikiPage/); assert.match(s, /isolatedAgentDraft\(agent,p.user_id,prompt,\{discoveryDraft:true\}\)/); assert.match(s, /discoveryRunner\.stop\(\)/); assert.ok(s.indexOf('await discoveryIncoming') < s.indexOf('const credit = await getCreditStatus', s.indexOf('async function runConversationTurn'))); });
