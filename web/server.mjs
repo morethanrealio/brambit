@@ -1056,6 +1056,7 @@ import { sendEmail, mailEnabled } from './mailer.mjs';
 import { insertMobileError } from './db.mjs';
 import { registerPushTokenDb, unregisterPushTokenDb, listPushTokensForUserDb, removePushTokensDb } from './db.mjs';
 import { createTelegramManager, validateBotToken, sendTelegramMessage, sendTelegramVideo, sendTelegramDocument } from './telegram.mjs';
+import { criarAtendimentoDoServidor, esquemaDoAtendimento } from './publico-canal.mjs';
 import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sendWhatsAppTemplate, sendWhatsAppProactive, sendWhatsAppDocument, whatsappWindowOpen as waWindowOpen, WA_TEMPLATE_MAX, setWaHooks } from './whatsapp.mjs';
 
 // Deixa o envio proativo consultar a janela de 24h do WhatsApp por dado nosso
@@ -7025,6 +7026,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
 }
 
 // Aviso de erro dos canais (aviso-canal.mjs): idioma da pessoa + histórico da thread do canal.
+// STT dos canais: transcreve o áudio e grava o custo (kind='stt'); chavinha desligada = STT_DISABLED (o canal avisa).
+const transcreverDoCanal = async (buffer, mime, userId) => {
+  if (!(await getUserMediaPrefs(userId)).stt) throw new Error('STT_DISABLED');
+  const { text, usage } = await transcribeAudio(buffer, mime);
+  await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
+};
+// Atendimento ao público (publico-canal.mjs): desconhecido no WhatsApp vai pro assistente que a instalação escolheu.
+const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas,
+  makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('conversa', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Canal Telegram: roda um bot por usuário (token do BotFather dele). Injeta as
 // deps pra evitar import circular. Os pollers sobem no boot (listEnabledTelegramBots).
@@ -7047,15 +7057,7 @@ const telegramMgr = createTelegramManager({
   }),
   loadAgent: getAgentOwned, // (agentId, userId) -> agent (valida ownership)
   db: { getTelegramBot, bindTelegramChat, setTelegramOffset },
-  // STT: transcreve o áudio recebido e grava o custo (crédito) com kind='stt'.
-  // Respeita a chavinha do usuário (se desligou, sinaliza pro canal avisar).
-  transcribe: async (buffer, mime, userId) => {
-    const prefs = await getUserMediaPrefs(userId);
-    if (!prefs.stt) throw new Error('STT_DISABLED');
-    const { text, usage } = await transcribeAudio(buffer, mime);
-    await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' });
-    return text;
-  },
+  transcribe: transcreverDoCanal,
   // No modo S3 não há link público: o servidor lê o byte e o canal faz upload
   // direto. No disco (a.key null) devolve null -> canal usa o link estático.
   getMedia: getMediaBytes, avisoCanal: avisoCanal('Telegram'),
@@ -7065,7 +7067,7 @@ const telegramMgr = createTelegramManager({
 // roteia pelo telefone -> usuário, agente ativo trocável por @nome/menu. Cada
 // agente usa uma thread fixa "WhatsApp" (history isolado; memória de usuário compartilhada).
 const waHandler = createWhatsAppHandler({
-  inbox:waInbox, avisoCanal: avisoCanal('WhatsApp'),
+  inbox:waInbox, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
     // pollNewUserMsg = canal da mensagem que chega no meio do turno (ver whatsapp.mjs).
@@ -7085,15 +7087,7 @@ const waHandler = createWhatsAppHandler({
   loadAgent: getAgentOwned,
   db: { getWhatsAppLink, listAgents, setWhatsAppActiveAgent, recordWaStatus, saveWaMsgRef, getWaMsgRef, touchWaInbound, claimWaMsg, consumeWaClaim },
   aoReprovar: (d) => eventos.emitir('whatsapp_reprovada', d), // no Brambs, a campanha com esse wamid vira failed (eventos-brambs.mjs)
-  // STT: transcreve o áudio recebido e grava o custo (crédito) com kind='stt'.
-  // Respeita a chavinha do usuário (se desligou, sinaliza pro canal avisar).
-  transcribe: async (buffer, mime, userId) => {
-    const prefs = await getUserMediaPrefs(userId);
-    if (!prefs.stt) throw new Error('STT_DISABLED');
-    const { text, usage } = await transcribeAudio(buffer, mime);
-    await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' });
-    return text;
-  },
+  transcribe: transcreverDoCanal,
   // Entrega de mídia: no modo S3, byte-upload (sem link público); no disco, link.
   getMedia: getMediaBytes,
 });
@@ -12283,7 +12277,7 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-initDb(...plugins.map((p) => p.esquema).filter(Boolean))
+initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
   .then(async () => {
     await discoveryStore.init();
     await onboardingStore.init();

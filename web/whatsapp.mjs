@@ -186,6 +186,8 @@ export function setWaHooks(h) { waHooks = { ...waHooks, ...(h || {}) }; }
 //
 // Fire-and-forget de propósito: falha de cobrança nunca atrasa nem derruba a
 // entrega da mensagem (o lançamento é gravado depois do envio, de qualquer forma).
+const PUBLICO_SO_TEXTO = 'Por enquanto só consigo ler mensagens de texto por aqui. Pode escrever, por favor?';
+
 function billWa(userId, n, meta = {}) {
   if (!userId || !(n > 0) || !waHooks.billMessages) return;
   try {
@@ -544,7 +546,7 @@ export function verifySignature(rawBody, signature) {
 //   db = { getWhatsAppLink, listAgents, setWhatsAppActiveAgent }
 // avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
 // registro dele no histórico da thread WhatsApp.
-export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {} }) {
+export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {}, publico = null }) {
   const seen = new Set(); // ids já processados (dedup de retries do Meta)
   const avisar = criarAvisoCanal({ rotulo: 'whatsapp', ...avisoCanal });
 
@@ -689,6 +691,33 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     return pumpPromise;
   }
 
+  // Desconhecido num número com atendimento ao público (publico-canal.mjs): quem
+  // responde é o assistente público, fora do pump (o turno chama o modelo) e sem
+  // nada do fluxo do dono (menu, @nome, reação, confirmação, referência de msg).
+  // Um turno por telefone, na ordem de chegada. Fase 1: só texto.
+  const filaPublico=new Map();
+  function atenderPublico(msg,from){
+    if(msg._inboxId)loaded.add(msg._inboxId);
+    const antes=filaPublico.get(from)||Promise.resolve();
+    const work=antes.then(async()=>{
+      try{
+        const mensagem=msg.type==='text'?(msg.text?.body||''):'';
+        if(msg.type!=='reaction'){
+          const r=mensagem?await publico.turno({endereco:from,mensagem}):{text:PUBLICO_SO_TEXTO};
+          const wamids=r?.text?await sendText(from,r.text,{requireReceipt:!!msg._inboxId,reenvio:true}):[];
+          if(mensagem&&r?.motivo!=='sem_saldo')billWa(r?.userId,wamids.length,{agentId:r?.agentId});
+        }
+        if(msg._inboxId)await inbox.complete([msg._inboxId]);
+      }catch(e){
+        console.error('[whatsapp] atendimento público:',e?.code||e?.name||'error');
+        if(msg._inboxId)await inbox.uncertain([msg._inboxId],'publico_falhou').catch(()=>{});
+      }finally{if(msg._inboxId)loaded.delete(msg._inboxId);}
+    });
+    filaPublico.set(from,work);turns.add(work);
+    work.finally(()=>{turns.delete(work);if(filaPublico.get(from)===work)filaPublico.delete(from);});
+    return true;
+  }
+
   async function handleMessage(msg) {
     const from = msg.from; // telefone do remetente em E.164 sem '+', ex: "5511999998888"
     if (!from) return;
@@ -727,6 +756,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
         await sendReply( `Pronto! Número confirmado e conectado à sua conta do ${marca().nome}. Pode falar comigo por aqui. 🙂`);
         return;
       }
+      if (publico && await publico.atende()) return atenderPublico(msg, from);
       await sendReply( `Oi! Pra falar comigo por aqui, entre em ${hostDaMarca()}, faça login e conecte seu número de WhatsApp (com DDD e o 55 na frente).`);
       return;
     }
