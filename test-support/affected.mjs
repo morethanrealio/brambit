@@ -34,7 +34,10 @@ const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"
 function apelido(ref, imports) {
   for (const [k, v] of Object.entries(imports)) {
     const alvo = k.endsWith('*') ? (ref.startsWith(k.slice(0, -1)) ? v.replace('*', ref.slice(k.length - 1)) : null) : (ref === k ? v : null);
-    if (typeof alvo === 'string' && alvo.startsWith('./')) return alvo;
+    // Apelido pro pacote brambit (#nucleo/* na nuvem): os arquivos do pacote entram
+    // no mapa com o caminho de dentro dele (fragile-guard.mjs).
+    const local = typeof alvo === 'string' ? alvo.replace(/^brambit\//, './') : null;
+    if (local?.startsWith('./')) return local;
   }
   return null;
 }

@@ -12,7 +12,7 @@
 //
 // Uso: node test-support/fragile-guard.mjs
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildGraph } from './affected.mjs';
@@ -38,10 +38,26 @@ export function check({ tests, deps, listed }) {
   return { found, news, gone };
 }
 
+// Quem instala o Brambit como pacote: os arquivos do núcleo entram no mapa com o
+// caminho de dentro do pacote, e teste que lê nucleo('web/server.mjs') como texto
+// continua contando. Arquivo do mesmo nome no repo de quem instala vale o dele.
+const PACOTE = path.join(root, 'node_modules/brambit');
+function arquivosDoPacote(dir = '', out = []) {
+  for (const nome of readdirSync(path.join(PACOTE, dir))) {
+    if (nome === 'node_modules' || nome === '.git') continue;
+    const rel = dir ? `${dir}/${nome}` : nome;
+    if (statSync(path.join(PACOTE, rel)).isDirectory()) arquivosDoPacote(rel, out); else out.push(rel);
+  }
+  return out;
+}
+
 function main() {
-  const files = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n')
+  const proprios = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n')
     .filter((f) => f && existsSync(path.join(root, f)) && statSync(path.join(root, f)).isFile());
-  const deps = buildGraph(files, (f) => readFileSync(path.join(root, f), 'utf8'));
+  const doPacote = existsSync(path.join(PACOTE, 'package.json'))
+    ? arquivosDoPacote().filter((f) => !existsSync(path.join(root, f))) : [];
+  const files = [...proprios, ...doPacote];
+  const deps = buildGraph(files, (f) => readFileSync(path.join(existsSync(path.join(root, f)) ? root : PACOTE, f), 'utf8'));
   const tests = new Set(listTests().map((t) => t.source));
   const listed = new Set(readFileSync(path.join(root, LIST), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')));
   const { found, news, gone } = check({ tests, deps, listed });
