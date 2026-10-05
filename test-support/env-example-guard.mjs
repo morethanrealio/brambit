@@ -10,7 +10,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
+// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+const root = process.cwd();
 export const EXAMPLE = '.env.example';
 
 // Lidas no código mas que NÃO são configuração do servidor.

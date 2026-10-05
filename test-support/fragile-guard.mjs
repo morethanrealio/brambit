@@ -18,7 +18,9 @@ import { fileURLToPath } from 'node:url';
 import { buildGraph } from './affected.mjs';
 import { listTests } from './run-suite.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
+// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+const root = process.cwd();
 export const LIST = 'test-support/testes-que-leem-codigo.txt';
 
 // Código de produção lido como texto. Fica de fora o que é servido ao navegador
