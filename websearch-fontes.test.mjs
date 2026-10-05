@@ -1,0 +1,60 @@
+// DRY-RUN offline: a busca web (buscar_web) tem que devolver o bloco "Fontes:" quando a
+// Tavily responde. Regressão do bug de 08-12/09/2026: renderFontes passou a ser só
+// REEXPORTADA de links.mjs (`export { x } from` não cria o nome local) e toda busca
+// caía em "renderFontes is not defined", com o log culpando a Tavily.
+import assert from 'node:assert/strict';
+import net from 'node:net';
+import tls from 'node:tls';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+const forbidden = () => { throw new Error('I/O REAL PROIBIDO NO DRY-RUN'); };
+net.Socket.prototype.connect = forbidden; tls.connect = forbidden;
+for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) childProcess[name] = forbidden;
+syncBuiltinESMExports();
+process.env.TAVILY_API_KEY = 'MOCK_ONLY';
+let fetchMode = 'ok';
+const fetchCalls = [];
+globalThis.fetch = async (url, opts) => {
+  fetchCalls.push(String(url));
+  if (!String(url).includes('api.tavily.com/search')) throw new Error(`fetch inesperado: ${url}`);
+  if (fetchMode === 'rede') throw new Error('fetch failed: ECONNRESET');
+  const body = JSON.parse(opts.body);
+  return {
+    ok: true, status: 200,
+    json: async () => ({
+      answer: `resumo mock para "${body.query}"`,
+      results: [
+        { title: 'Epagri/Ciram', url: 'https://ciram.epagri.sc.gov.br/vento', content: 'rosa dos ventos de Florianópolis' },
+        { title: 'INMET', url: 'https://bdmep.inmet.gov.br/', content: 'estação A802' },
+      ],
+    }),
+    text: async () => '',
+  };
+};
+const { webSearchTool } = await import('./web/websearch.mjs');
+const { withDeepSeek } = await import('./core-proto/deepseek/scope.mjs');
+let checks = 0;
+const check = (c, label) => { assert.ok(c, label); checks++; };
+const usos = [];
+const tool = webSearchTool({ onUsage: (u) => usos.push(u) });
+
+// 1) caminho feliz: Tavily responde → texto + Fontes numeradas, sem erro de binding.
+const out = await tool.run({ consulta: 'frequência de chuva com vento oeste em Florianópolis' });
+check(typeof out === 'string' && !/renderFontes|not defined|ERRO/.test(out), `saída sem ReferenceError: ${out.slice(0, 120)}`);
+check(out.includes('Fontes:'), 'tem bloco Fontes:');
+check(out.includes('[1] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento'), 'fonte 1 numerada com URL');
+check(out.includes('[2] INMET — https://bdmep.inmet.gov.br/'), 'fonte 2 numerada com URL');
+check(out.includes('resumo mock'), 'traz o answer da Tavily');
+check(usos.some(u => u.kind === 'search' && u.usage.model === 'tavily-search'), 'contabiliza a busca');
+check(!usos.some(u => u.kind === 'search_degraded'), 'NÃO marca busca degradada quando deu certo');
+check(fetchCalls.length === 1, 'uma chamada só (sem relaxar nem fallback)');
+
+// 2) queda REAL de rede em turno DeepSeek: erro honesto, rotulado como Tavily, sem Gemini.
+fetchMode = 'rede'; usos.length = 0;
+const err = await withDeepSeek(() => ({}), () => tool.run({ consulta: 'x' }));
+check(/^ERRO: a busca Tavily falhou/.test(err), `erro honesto no DeepSeek: ${err.slice(0, 80)}`);
+check(/não responda como se tivesse pesquisado/.test(err), 'instrui a não fingir pesquisa');
+check(usos.some(u => u.kind === 'search_degraded' && u.usage.model === 'tavily-erro'), 'queda de rede conta como tavily-erro');
+check(!usos.some(u => u.usage.model === 'websearch-bug'), 'queda de rede NÃO é rotulada como bug interno');
+
+console.log(`websearch-fontes: ${checks} checagens ok`);

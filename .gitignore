@@ -1,0 +1,47 @@
+# deps
+# sem barra tambem: com barra so casa DIRETORIO, e um symlink chamado
+# node_modules escapava e ia parar no commit (quebrou o prod em 09/09)
+node_modules
+node_modules/
+
+# secrets / runtime env (NUNCA commitar)
+.env
+.env.*
+!.env.example
+
+# mídia gerada em runtime (vai pro S3, não pro repo)
+web/public/media/
+
+# logs / temporários
+*.log
+*.tmp
+__pycache__/
+
+# índice local de ferramentas de desenvolvimento
+.graymatter/
+
+.engagement-build/
+
+.routines-build/
+
+.deepseek-build/
+.billing-build/
+
+.onboarding-build/
+
+# Encrypted runtime task checkpoints (never publish)
+.brambs-coding-tasks/
+
+# Encrypted provider observations and billing recovery (never publish)
+.brambs-credit-calls/
+
+.discovery-build/
+
+# setup local (npm run local): banco descartável e stores
+.local/
+
+# escolha local de provedores e modelos (o exemplo é o modelos.example.yaml)
+/modelos.yaml
+
+# executáveis do Runner gerados por runner-go/build.sh (a nuvem guarda os dela na pasta da marca)
+web/public/runner-bin/

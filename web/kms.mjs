@@ -1,0 +1,118 @@
+// Cliente AWS KMS mínimo, dependency-free (só node:crypto/http/https). Faz
+// Encrypt e Decrypt assinando na mão (SigV4) com as credenciais da IAM role do
+// EC2, obtidas via IMDSv2. Usado no boot pra desembrulhar a chave mestra do cofre
+// (envelope encryption): VAULT_KEY_ENC (blob cifrado pela CMK do KMS) volta a ser
+// a chave crua de 32 bytes, que nunca é persistida em texto puro.
+//
+// Roda NO HOST do harness (que tem a instance role), não no container do gateway.
+// A conexão com o KMS é direta (não passa por proxy) — o endpoint regional é
+// alcançável da rede da instância.
+import crypto from 'crypto';
+import http from 'http';
+import https from 'https';
+
+const REGION = process.env.KMS_REGION || 'sa-east-1';
+const SERVICE = 'kms';
+const HOST = `kms.${REGION}.amazonaws.com`;
+const IMDS = '169.254.169.254';
+
+const sha256hex = (d) => crypto.createHash('sha256').update(d).digest('hex');
+const hmac = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
+
+// Lê o corpo de uma resposta HTTP inteira. O listener de 'error' aqui NÃO é
+// enfeite: se o socket cai DEPOIS dos headers (reset de rede, servidor que
+// desiste no meio), o stream da resposta emite 'error'; um EventEmitter sem
+// listener de 'error' JOGA a exceção, e como isso acontece fora de qualquer
+// try/catch, virava uncaughtException e matava o processo inteiro (achado #22).
+// Com o listener, a falha de rede vira uma rejeição comum, que quem chamou trata.
+export function lerCorpo(res) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    res.on('data', (d) => (body += d));
+    res.on('end', () => resolve(body));
+    res.on('error', reject);
+  });
+}
+
+// GET/PUT no serviço de metadados (IMDSv2). HTTP puro, timeout curto.
+function imds(method, path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: IMDS, method, path, headers, timeout: 3000 }, (res) => {
+      lerCorpo(res).then((body) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(body);
+        else reject(new Error(`IMDS ${method} ${path} -> ${res.statusCode}`));
+      }, reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('IMDS timeout')));
+    req.end();
+  });
+}
+
+let _creds = null; // { accessKeyId, secretAccessKey, token, expiration }
+async function getCreds() {
+  // reusa enquanto faltar > 5 min pra expirar
+  if (_creds && new Date(_creds.expiration).getTime() - Date.now() > 300000) return _creds;
+  const token = await imds('PUT', '/latest/api/token', { 'X-aws-ec2-metadata-token-ttl-seconds': '21600' });
+  const h = { 'X-aws-ec2-metadata-token': token };
+  const role = (await imds('GET', '/latest/meta-data/iam/security-credentials/', h)).trim();
+  const j = JSON.parse(await imds('GET', `/latest/meta-data/iam/security-credentials/${role}`, h));
+  _creds = { accessKeyId: j.AccessKeyId, secretAccessKey: j.SecretAccessKey, token: j.Token, expiration: j.Expiration };
+  return _creds;
+}
+
+async function kmsCall(target, payloadObj) {
+  const creds = await getCreds();
+  const body = JSON.stringify(payloadObj);
+  const amzdate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
+  const datestamp = amzdate.slice(0, 8);
+
+  const canonicalHeaders =
+    `content-type:application/x-amz-json-1.1\n` +
+    `host:${HOST}\n` +
+    `x-amz-date:${amzdate}\n` +
+    `x-amz-security-token:${creds.token}\n` +
+    `x-amz-target:${target}\n`;
+  const signedHeaders = 'content-type;host;x-amz-date;x-amz-security-token;x-amz-target';
+  const canonicalRequest = ['POST', '/', '', canonicalHeaders, signedHeaders, sha256hex(body)].join('\n');
+  const scope = `${datestamp}/${REGION}/${SERVICE}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzdate, scope, sha256hex(canonicalRequest)].join('\n');
+  const kSigning = hmac(hmac(hmac(hmac('AWS4' + creds.secretAccessKey, datestamp), REGION), SERVICE), 'aws4_request');
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+  const authorization = `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      host: HOST, method: 'POST', path: '/', timeout: 10000,
+      headers: {
+        'Content-Type': 'application/x-amz-json-1.1',
+        'X-Amz-Target': target,
+        'X-Amz-Date': amzdate,
+        'X-Amz-Security-Token': creds.token,
+        'Authorization': authorization,
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      lerCorpo(res).then((out) => {
+        if (res.statusCode === 200) { try { resolve(JSON.parse(out)); } catch (e) { reject(e); } }
+        else reject(new Error(`KMS ${target} -> ${res.statusCode}: ${out}`));
+      }, reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('KMS timeout')));
+    req.end(body);
+  });
+}
+
+// Cifra um Buffer com a CMK. Retorna o CiphertextBlob em base64.
+export async function kmsEncrypt(plaintextBuf, keyId = process.env.KMS_KEY_ID) {
+  if (!keyId) throw new Error('KMS_KEY_ID não configurada');
+  const r = await kmsCall('TrentService.Encrypt', { KeyId: keyId, Plaintext: Buffer.from(plaintextBuf).toString('base64') });
+  return r.CiphertextBlob;
+}
+
+// Decifra um CiphertextBlob (base64) produzido pela CMK. Retorna Buffer.
+export async function kmsDecrypt(ciphertextB64) {
+  const r = await kmsCall('TrentService.Decrypt', { CiphertextBlob: String(ciphertextB64) });
+  return Buffer.from(r.Plaintext, 'base64');
+}

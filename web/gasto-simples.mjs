@@ -1,0 +1,67 @@
+// Implementação padrão da porta de gasto (gasto.mjs) no núcleo. Sem créditos e
+// sem cobrança: o modelo é chamado direto e o uso fica gravado como veio, em US$.
+// Opcional: teto mensal em US$ por pessoa (tetoUsd), e `spend` (createCreditSpend
+// com unidade 'usd') pra o assistente responder quanto a pessoa gastou. Passou do teto, status.over
+// para o turno antes de chamar o modelo, como a franquia faz no Brambs. É teto
+// suave: a chamada que cruza o teto termina; a próxima é que não começa.
+import {randomUUID} from 'node:crypto';
+import {conferirGasto} from './gasto.mjs';
+import {tagIdioma} from './locale.mjs';
+import {ferramentaConsultarGasto} from './credit-spend.mjs';
+// Sem crédito nem plano, o único motivo de barrar um turno é o teto em US$.
+const SEM_SALDO={
+ 'pt-BR':{texto:t=>`Você chegou ao limite de uso deste mês (US$ ${t}). O limite volta no começo do mês que vem; quem administra esta instalação pode aumentá-lo.`,nota:'⚠️ Este foi um turno de emergência (só para recuperar app). O limite de uso deste mês acabou.'},
+ en:{texto:t=>`You've reached this month's usage limit (US$ ${t}). It resets at the start of next month; whoever runs this installation can raise it.`,nota:"⚠️ This was an emergency turn (app recovery only). This month's usage limit has been reached."},
+ es:{texto:t=>`Llegaste al límite de uso de este mes (US$ ${t}). Se reinicia a principios del mes que viene; quien administra esta instalación puede aumentarlo.`,nota:'⚠️ Este fue un turno de emergencia (solo para recuperar la app). Se alcanzó el límite de uso de este mes.'},
+};
+export function createGastoSimples({tetoUsd=null,gastoDoMes,gravarUso,deepseek=null,usdBrl=5.40,spend=null}){
+ if(tetoUsd!==null&&!(Number.isFinite(tetoUsd)&&tetoUsd>0))throw Error('tetoUsd precisa ser um número maior que zero');
+ if(tetoUsd!==null&&typeof gastoDoMes!=='function')throw Error('Com teto, gastoDoMes(userId) é obrigatório');
+ if(typeof gravarUso!=='function')throw Error('gravarUso é obrigatório');
+ // Idempotência só dentro do processo: aqui não há dinheiro em jogo, então um
+ // registro repetido depois de reiniciar custa uma linha a mais, não uma cobrança.
+ const registrados=new Map();
+ return conferirGasto({
+  vincular:({provider})=>provider,
+  vincularDeepSeek:({maxTokens,secret})=>{
+   if(!deepseek)throw Error('DeepSeek oficial não configurado');
+   return deepseek({maxTokens,secret});
+  },
+  // Sem reserva e sem saldo em créditos: null diz "não há saldo pra mostrar".
+  disponivel:async()=>null,
+  async status(userId){
+   if(tetoUsd===null)return {over:false,limitUsd:null,usedUsd:null};
+   const usedUsd=Number(await gastoDoMes(userId))||0;
+   return {over:usedUsd>=tetoUsd,limitUsd:tetoUsd,usedUsd};
+  },
+  async registrar({userId,callId,usage,charge,dimensions={}}){
+   if(!registrados.has(callId)){
+    registrados.set(callId,(async()=>{
+     await gravarUso({...dimensions,...usage,cost:charge?.cost||0,billCredits:0,userId,callId});
+     return {userId,callId,attempt:randomUUID(),settled:true};
+    })().catch(e=>{registrados.delete(callId);throw e;}));
+   }
+   return registrados.get(callId);
+  },
+  limparCheckpoints:async()=>0,
+  apagarConta:async()=>{},
+  // Sem crédito: nada é cobrado; o uso fica só com o custo real em US$.
+  creditosDe:()=>0,
+  dolarEmReais:()=>usdBrl,
+  dolarPorCredito:()=>0,
+  async avisoSemSaldo(status,{language}={}){
+   const t=SEM_SALDO[tagIdioma(language)]||SEM_SALDO['pt-BR'];
+   const teto=Number(status?.limitUsd??tetoUsd??0).toFixed(2);
+   return {texto:t.texto(teto),notaEmergencia:t.nota};
+  },
+  contextoDoTurno:()=>'',
+  // Sem saldo pra consultar; só o gasto em US$, se houver de onde ler.
+ ferramentas:({userId,agentId,turnId}={})=>spend?[ferramentaConsultarGasto({spend,unidade:'usd',userId,agentId,turnId})]:[],
+  // Sem plano nem pacote: a tela mostra o gasto do mês em US$ e o teto, se houver.
+  telaDeCreditos:async({status,extras={}})=>({...status,...extras}),
+  // Sem empresa que pague: o saldo é sempre da própria pessoa.
+  conta:()=>({tipo:'pessoal'}),
+  // Nada à venda: o teto é do operador.
+  compraNaWeb:()=>false,
+ });
+}

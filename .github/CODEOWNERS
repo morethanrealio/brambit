@@ -1,0 +1,17 @@
+# Dono padrão de tudo. Quando houver mantenedores além do Marcos, eles entram
+# nas áreas abaixo (plano open source, seção 9). As linhas explícitas marcam o
+# que é sensível e vai exigir revisão de quem cuida da área.
+*                           @marcostrinca
+
+# Governança e cadeia de dependências
+/.github/                   @marcostrinca
+/package.json               @marcostrinca
+/package-lock.json          @marcostrinca
+
+# Banco
+/web/db.mjs                 @marcostrinca
+
+# Auth, segredos e cobrança
+/web/auth.mjs               @marcostrinca
+/web/vault*.mjs             @marcostrinca
+/web/pricing.mjs            @marcostrinca

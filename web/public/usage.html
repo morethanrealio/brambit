@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Uso & Custo · __MARCA__</title>
+<style nonce="__CSP_NONCE__">
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0e0f13; color: #e6e7ea; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid #23252c; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .sub { color: #8a8d96; font-size: 12px; margin-top: 2px; }
+  main { padding: 20px 24px; max-width: 1100px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 20px; }
+  label { display: block; font-size: 11px; color: #8a8d96; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  select, input { background: #181a20; color: #e6e7ea; border: 1px solid #2b2e37; border-radius: 8px; padding: 7px 10px; font-size: 14px; }
+  button { background: #3b6cf6; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2f5be0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: #15171d; border: 1px solid #23252c; border-radius: 12px; padding: 14px 16px; }
+  .card .k { font-size: 11px; color: #8a8d96; text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .card .v small { font-size: 12px; color: #8a8d96; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid #1d1f26; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: #8a8d96; font-weight: 500; font-size: 12px; position: sticky; top: 0; background: #0e0f13; }
+  tbody tr:hover { background: #15171d; }
+  .cost { color: #6ee7a8; }
+  .muted { color: #8a8d96; }
+  .err { color: #f87171; padding: 12px 0; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #23252c; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Uso & Custo</h1>
+  <div class="sub" id="scope">Carregando…</div>
+</header>
+<main>
+  <div class="controls">
+    <div>
+      <label>Agrupar por</label>
+      <select id="by">
+        <option value="hour">Hora</option>
+        <option value="day" selected>Dia</option>
+        <option value="month">Mês</option>
+        <option value="kind">Tipo (chat/onboard/rotina…)</option>
+        <option value="model">Modelo</option>
+        <option value="agent">Assistente</option>
+        <option value="thread">Conversa</option>
+        <option value="turn">Turno</option>
+        <option value="user">Usuário</option>
+      </select>
+    </div>
+    <div><label>De</label><input type="date" id="from" /></div>
+    <div><label>Até</label><input type="date" id="to" /></div>
+    <div id="userBox" style="display:none"><label>Usuário (id, admin)</label><input type="text" id="user" placeholder="todos" size="14" /></div>
+    <button id="go">Atualizar</button>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div id="out"></div>
+</main>
+
+<script nonce="__CSP_NONCE__">
+const fmt = (n) => Number(n || 0).toLocaleString('pt-BR');
+const usd = (n) => '$' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const $ = (id) => document.getElementById(id);
+
+async function load() {
+  const by = $('by').value;
+  const qs = new URLSearchParams({ by });
+  if ($('from').value) qs.set('from', $('from').value);
+  if ($('to').value)   qs.set('to', $('to').value + 'T23:59:59');
+  if ($('user').value) qs.set('user', $('user').value.trim());
+  const out = $('out');
+  out.innerHTML = '<p class="muted">Carregando…</p>';
+  let data;
+  try {
+    const r = await fetch('api/usage?' + qs.toString());
+    data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+  } catch (e) {
+    out.innerHTML = '<p class="err">Erro: ' + e.message + '</p>';
+    return;
+  }
+  $('scope').innerHTML = data.admin
+    ? 'Visão <span class="pill">admin</span> · todos os usuários (ou filtre por id)'
+    : 'Seus dados de uso';
+  $('userBox').style.display = data.admin ? '' : 'none';
+
+  const t = data.totals || {};
+  $('cards').innerHTML = [
+    ['Custo total', '<span class="cost">' + usd(t.cost_usd) + '</span>'],
+    ['Tokens totais', fmt(t.tok_total)],
+    ['Entrada <small>(cache ' + (t.tok_in > 0 ? Math.round((t.tok_cached / t.tok_in) * 100) : 0) + '%)</small>', fmt(t.tok_in)],
+    ['Saída', fmt(t.tok_out)],
+    ['Pensamento', fmt(t.tok_think)],
+    ['Turnos', fmt(t.turns)],
+    ['Chamadas', fmt(t.calls)],
+    data.admin ? ['Usuários', fmt(t.users)] : null,
+  ].filter(Boolean).map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  const rows = data.rows || [];
+  if (!rows.length) { out.innerHTML = '<p class="muted">Sem dados na janela.</p>'; return; }
+  const label = { hour: 'Hora', day: 'Dia', month: 'Mês', kind: 'Tipo', model: 'Modelo', agent: 'Assistente', thread: 'Conversa', turn: 'Turno', user: 'Usuário' }[by] || by;
+  out.innerHTML = `<table><thead><tr>
+    <th>${label}</th><th>Custo</th><th>Tokens</th><th>Entrada</th><th>Cache</th>
+    <th>Saída</th><th>Pensamento</th><th>Turnos</th><th>Chamadas</th>
+  </tr></thead><tbody>` + rows.map((r) => `<tr>
+    <td>${r.bucket ?? '—'}</td>
+    <td class="cost">${usd(r.cost_usd)}</td>
+    <td>${fmt(r.tok_total)}</td>
+    <td>${fmt(r.tok_in)}</td>
+    <td>${fmt(r.tok_cached)}</td>
+    <td>${fmt(r.tok_out)}</td>
+    <td>${fmt(r.tok_think)}</td>
+    <td>${fmt(r.turns)}</td>
+    <td>${fmt(r.calls)}</td>
+  </tr>`).join('') + '</tbody></table>';
+}
+
+$('go').addEventListener('click', load);
+$('by').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>
