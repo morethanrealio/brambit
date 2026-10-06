@@ -1,12 +1,12 @@
 // A tool retry repairs missing media; it must not send the same offer twice.
 // Keep this state within one turn, shared by all explicit selections and retries.
 export const PRODUCT_RECOMMENDATION_CONTRACT = [
-  'PRODUTOS: trate as exigências do usuário (modelo, variante, função, conectores, tamanho, quantidade e teto) como obrigatórias. Uma alteração de orçamento ou tamanho preserva as demais exigências da conversa.',
-  'Recomende somente ofertas que atendem às exigências demonstradas pela fonte. Se há apenas uma adequada, entregue uma; não complete a lista com alternativas incompatíveis. Característica ausente é não confirmada, não aprovação.',
-  'Preço, vendedor, estoque, imagem e variante pertencem à oferta consultada. Ao mudar loja, link ou variante, confira novamente esses dados e o teto; não transfira o preço ou a disponibilidade de outra oferta. Separe frete não calculado do preço observado.',
-  'Não deduza potência simultânea, compatibilidade, segurança, qualidade ou reputação apenas do nome comercial ou potência anunciada. Atribua alegações do anúncio à fonte; destaque o que falta verificar quando isso decide a compra.',
-  'Só diga que consegue comprar após a ferramenta comprovar essa capacidade para a loja e oferta exatas. Se não houver suporte, diga diretamente que a compra precisa ser finalizada no site; não exponha nomes de plataformas internas nem prometa Pix sem confirmação.',
-  'Cards sem foto já foram entregues: não repita mostrar_produtos para corrigir mídia. Termine com recomendação curta, sustentada pelas exigências e fontes, sem repetir todos os cards.',
+  'PRODUCTS: treat the user\'s requirements (model, variant, function, connectors, size, quantity and price ceiling) as mandatory. A change of budget or size keeps the other requirements from the conversation.',
+  'Recommend only offers that the source shows meet the requirements. If only one fits, deliver one; do not pad the list with incompatible alternatives. A missing feature counts as unconfirmed, not as approved.',
+  'Price, seller, stock, image and variant belong to the offer that was checked. When the store, link or variant changes, check these data and the ceiling again; do not carry over the price or availability of another offer. Keep uncalculated shipping separate from the observed price.',
+  'Do not infer simultaneous power, compatibility, safety, quality or reputation from the product name or advertised power alone. Attribute listing claims to their source; point out what still needs checking when it decides the purchase.',
+  'Only say you can buy after the tool proves that capability for the exact store and offer. If there is no support, say plainly that the purchase has to be completed on the website; do not expose internal platform names or promise Pix without confirmation.',
+  'Cards without a photo have already been delivered: do not repeat mostrar_produtos to fix media. End with a short recommendation grounded in the requirements and sources, without repeating every card.',
 ].join('\n');
 
 export function productOfferKey(value) {
