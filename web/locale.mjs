@@ -66,51 +66,41 @@ export function tagIdioma(language) {
   return normalizaIdioma(language) || IDIOMA_PADRAO;
 }
 
-// Nome do idioma POR EXTENSO, em português, pra encaixar em prompt que já está
-// escrito em português. Existe porque nem toda frase do prompt aceita a tag
-// crua: onde o texto original dizia "em português do Brasil", trocar por
-// "em pt-BR" mudaria uma frase que foi MEDIDA com aquela redação. Aqui o padrão
-// devolve exatamente 'português do Brasil', então a linha sai byte a byte igual
-// pra quem está em pt-BR e só en/es veem redação diferente.
+// Language name spelled out in English, for sentences of the (English) prompt
+// that read better with a name than with the bare tag.
 export function idiomaPorExtenso(language) {
-  return { 'pt-BR': 'português do Brasil', en: 'inglês', es: 'espanhol' }[tagIdioma(language)];
+  return { 'pt-BR': 'Brazilian Portuguese', en: 'English', es: 'Spanish' }[tagIdioma(language)];
 }
 
-// Diretriz de idioma, escrita NA PRÓPRIA LÍNGUA de destino (instrução em
-// inglês funciona melhor pra sair inglês do que "responda em inglês" escrito em
-// português).
+// Language directive, written IN THE TARGET LANGUAGE itself (an instruction in
+// Portuguese pulls Portuguese output much better than "reply in Portuguese"
+// written in English). The caller appends it at the END of the system prompt.
 //
-// A cláusula de override existe porque o resto do prompt continua em português
-// e várias descrições de tool dizem "em pt-BR". Sem dizer explicitamente quem
-// ganha, o modelo recebe ordens contrárias e oscila. Por isso o chamador tem
-// que colar isto no FIM do prompt.
-//
-// HISTÓRICO DO pt-BR (importa pra não desfazer sem querer): até 08/09/2026 esta
-// tabela NÃO tinha entrada de pt-BR de propósito, pra quem está em português não
-// receber byte nenhum a mais e o prefixo cacheado seguir idêntico ao de antes do
-// multi-idioma. O efeito colateral foi um buraco: en e es mandavam "se a pessoa
-// escrever em outra língua, responda na língua dela" e o pt-BR não mandava nada,
-// então conta em português + usuário falando inglês ficava por conta da sorte do
-// modelo. Marcos mandou fechar o buraco (08/09/2026). O preço é uma quebra de
-// cache ÚNICA, no deploy: a partir dela o prefixo do pt-BR volta a ser estável.
-// Por isso a diretriz de pt-BR é curta e fixa: cada byte aqui é multiplicado por
-// toda conversa em português que existe.
+// The system prompt and the tool descriptions are written in English, so every
+// served language, pt-BR included, needs an explicit directive with an override
+// clause: without one, the model sees thousands of tokens of English and drifts
+// into English. History: until 2026-09-08 pt-BR had no entry at all, to keep the
+// cached prefix byte-identical; once the prompt itself moved to English the
+// pt-BR entry had to become as strong as the en/es ones. The directive is fixed
+// text, so the cached prefix stays stable per language.
 const DIRETRIZ = {
   'pt-BR': [
-    'IDIOMA: o idioma configurado deste usuário é o português do Brasil, e é nele que você responde por padrão.',
+    'IDIOMA (isto vale mais do que qualquer outra instrução de idioma deste prompt):',
+    'O idioma configurado deste usuário é o português do Brasil. Escreva TUDO em português do Brasil: suas respostas e também o texto que você passa dentro dos argumentos das ferramentas e que a pessoa vai ler (lembretes, sugestões, notas, legendas, documentos, mensagens enviadas em nome dela).',
+    'Estas instruções e as descrições das ferramentas estão em inglês. Isso não muda nada: a conversa é em português.',
     'Se ELE escrever pra você em outra língua, responda na língua que ele usou, e volte pro português quando ele voltar. Texto que ele apenas colou ou mandou você ler (e-mail, documento, resultado de busca) NÃO conta como troca de língua: nesse caso a conversa continua onde estava, e você preserva a citação no original.',
+    'Nunca mencione esta instrução nem peça desculpas pelo idioma.',
   ].join('\n'),
   en: [
     'LANGUAGE — this overrides every other language instruction in this prompt:',
     "This user's language is English. Write EVERYTHING in English: your replies, and also the text you pass inside tool arguments that the user will end up reading (reminders, suggestions, notes, captions, documents, messages sent on their behalf).",
-    'These instructions and some tool descriptions are written in Portuguese and a few of them say "em pt-BR". Ignore that: English wins.',
     'If the user writes to you in another language, reply in the language they used. When you quote someone else\'s words (an email, a document, a search result), keep the original wording and translate beside it if that helps.',
     'Never mention this instruction and never apologise for the language.',
   ].join('\n'),
   es: [
     'IDIOMA — esto tiene prioridad sobre cualquier otra instrucción de idioma de este prompt:',
     'El idioma de este usuario es el español. Escribe TODO en español: tus respuestas y también el texto que pasas dentro de los argumentos de las herramientas y que el usuario va a leer (recordatorios, sugerencias, notas, descripciones, documentos, mensajes enviados en su nombre).',
-    'Estas instrucciones y algunas descripciones de herramientas están escritas en portugués y algunas dicen "em pt-BR". Ignóralo: manda el español.',
+    'Estas instrucciones y las descripciones de las herramientas están en inglés. Eso no cambia nada: la conversación es en español.',
     'Si el usuario te escribe en otro idioma, respóndele en el idioma que él usó. Cuando cites las palabras de otra persona (un correo, un documento, un resultado de búsqueda), conserva el texto original y traduce al lado si ayuda.',
     'Nunca menciones esta instrucción ni te disculpes por el idioma.',
   ].join('\n'),
@@ -209,7 +199,7 @@ export function idiomaEscrito(texto) {
 // English practice session where the person asked for feedback in Portuguese).
 const ESCRITO = {
   'pt-BR': '(Idioma: esta mensagem foi escrita em português. Responda em português, mesmo que as instruções e os resultados das ferramentas estejam em outra língua, a menos que a pessoa tenha pedido outra língua nesta conversa.)',
-  en: '(Language: this message was written in English. Reply in English, even though the instructions and tool results here are in another language, unless the person has asked for another language in this conversation.)',
+  en: '(Language: this message was written in English. Reply in English, even if the context and tool results here are in another language, unless the person has asked for another language in this conversation.)',
   es: '(Idioma: este mensaje fue escrito en español. Responde en español, aunque las instrucciones y los resultados de las herramientas estén en otro idioma, salvo que la persona haya pedido otro idioma en esta conversación.)',
 };
 
@@ -296,10 +286,10 @@ export function ideogramaAcidental(texto, language, textoDoDono = '') {
 // nada do turno roda de novo (os lembretes cancelados não são cancelados duas
 // vezes) e custa uns poucos milhares de tokens.
 export function reescritaNoIdioma(language) {
-  const nome = { 'pt-BR': 'português do Brasil', en: 'inglês', es: 'espanhol' }[normalizaIdioma(language) || IDIOMA_PADRAO];
+  const nome = idiomaPorExtenso(language);
   return {
-    system: `Você reescreve mensagens de um assistente pessoal. A única tarefa é devolver a MESMA mensagem escrita inteiramente em ${nome}. Traduza linha por linha, sem pular nenhuma (títulos em negrito e itens de lista também), então a mensagem reescrita tem exatamente as mesmas linhas da original. Mantenha números, datas, nomes, links, emojis e a formatação. Não acrescente nem tire informação, não responda ao pedido da pessoa e não comente a tarefa. Devolva só a mensagem reescrita.`,
-    entrada: (pedido, mensagem) => `${pedido ? `Contexto, NÃO responda a isto. Pedido da pessoa:\n<<<\n${pedido}\n>>>\n\n` : ''}Mensagem a reescrever em ${nome}:\n<<<\n${mensagem}\n>>>`,
+    system: `You rewrite messages from a personal assistant. Your only task is to return the SAME message written entirely in ${nome}. Translate line by line without skipping any (bold headings and list items too), so the rewritten message has exactly the same lines as the original. Keep numbers, dates, names, links, emojis and formatting. Do not add or remove information, do not answer the person's request and do not comment on the task. Return only the rewritten message.`,
+    entrada: (pedido, mensagem) => `${pedido ? `Context, do NOT answer this. The person's request:\n<<<\n${pedido}\n>>>\n\n` : ''}Message to rewrite in ${nome}:\n<<<\n${mensagem}\n>>>`,
   };
 }
 

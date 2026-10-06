@@ -103,14 +103,12 @@ t('comIdioma em língua não atendida devolve o prompt IDÊNTICO', comIdioma(PRO
 t('pt-BR tem diretriz', typeof instrucaoDeIdioma('pt-BR') === 'string');
 t('pt e pt-PT usam a mesma diretriz de pt-BR',
   instrucaoDeIdioma('pt') === instrucaoDeIdioma('pt-BR') && instrucaoDeIdioma('pt-PT') === instrucaoDeIdioma('pt-BR'));
-t('diretriz de pt-BR está em português', instrucaoDeIdioma('pt-BR').startsWith('IDIOMA:'));
+t('diretriz de pt-BR está em português', instrucaoDeIdioma('pt-BR').startsWith('IDIOMA ('));
 // A regra que motivou a mudança: espelhar a língua de QUEM ESCREVE.
 t('pt-BR manda espelhar a língua do usuário', /responda na língua que ele usou/i.test(instrucaoDeIdioma('pt-BR')));
 // E o contrapeso: texto colado (e-mail, documento) não é troca de língua, senão
 // mandar ler um e-mail em inglês viraria a conversa inteira pro inglês.
 t('pt-BR ressalva o texto colado', /NÃO conta como troca de língua/.test(instrucaoDeIdioma('pt-BR')));
-// Custo por conversa: cada byte daqui entra em TODO prompt em português.
-t('diretriz de pt-BR é curta', instrucaoDeIdioma('pt-BR').length < 700);
 t('pt-BR sem ${} solto', !instrucaoDeIdioma('pt-BR').includes('${'));
 t('pt-BR anexa no fim, preservando o prompt',
   comIdioma(PROMPT, 'pt-BR') === `${PROMPT}\n\n${instrucaoDeIdioma('pt-BR')}`);
@@ -122,13 +120,15 @@ for (const l of ['en', 'es']) {
   t(`${l} anexa no fim, preservando o prompt`, comIdioma(PROMPT, l) === `${PROMPT}\n\n${d}`);
   // Interpolação não resolvida vira texto literal no prompt do modelo: barra.
   t(`${l} sem \${} solto`, !d.includes('${'));
-  // A cláusula de override é o que resolve a contradição com os "em pt-BR" que
-  // continuam espalhados pelo prompt. Sem ela o modelo oscila entre as línguas.
-  t(`${l} diz que sobrepõe as outras instruções`, /overrid|prioridad/i.test(d));
-  t(`${l} manda ignorar o "em pt-BR"`, d.includes('em pt-BR'));
-  // Argumento de tool que o usuário lê (lembrete, sugestão, nota) também conta.
-  t(`${l} cobre texto dentro de argumento de tool`, /tool|herramienta/i.test(d));
 }
+// The prompt and tool descriptions are in English, so EVERY served language
+// needs the override clause and has to cover text inside tool arguments.
+for (const l of IDIOMAS_OK) {
+  const d = instrucaoDeIdioma(l);
+  t(`${l} diz que sobrepõe as outras instruções`, /overrid|prioridad|vale mais/i.test(d));
+  t(`${l} cobre texto dentro de argumento de tool`, /tool|herramienta|ferramenta/i.test(d));
+}
+t('pt-BR diz que o prompt em inglês não muda o idioma', /estão em inglês/.test(instrucaoDeIdioma('pt-BR')));
 // Variantes regionais recebem a MESMA diretriz da língua base.
 t('en-GB usa a diretriz de en', instrucaoDeIdioma('en-GB') === instrucaoDeIdioma('en'));
 t('es-419 usa a diretriz de es', instrucaoDeIdioma('es-419') === instrucaoDeIdioma('es'));

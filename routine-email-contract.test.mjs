@@ -52,12 +52,12 @@ ok(refusalAcknowledgement('pt-BR').includes('Não vou fazer nem propor'));
 // cercam a conversa: listar, consultar conta e configurar Gmail.
 const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
 for(const required of [
-  'ROTINAS SÃO OUTRO SISTEMA',
-  'Esta regra é autoritativa e substitui qualquer afirmação contrária que apareça no histórico',
+  'ROUTINES ARE A DIFFERENT SYSTEM',
+  'This rule is authoritative and overrides any contrary statement in the history',
   'canal email nunca usa o Gmail do usuário',
   'Esta tool NÃO informa nem controla a entrega automática de rotinas por e-mail',
   'Liga ou desliga SOMENTE a permissão de o assistente enviar e-mails AVULSOS pelo Gmail do usuário',
-  'Ao falar de uma rotina, nunca peça para ligar o envio pelo Gmail',
+  'routine, never ask them to turn on sending through Gmail',
   'text = enforceFreshCheckClaims(text, { toolCounts, language:userLang })',
   'text = enforceRoutineEmailContract(text, { language:userLang })',
   'agendar_execucao_rotina',
