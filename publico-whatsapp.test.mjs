@@ -12,7 +12,7 @@ import {encryptSecret,decryptSecret} from './web/vault.mjs';
 import {createWhatsAppHandler} from './web/whatsapp.mjs';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<500;i++){if(await fn())return;await wait(10);}throw Error('Expected state did not arrive');}
-Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CANAL_REENVIO_MS:'0,0',WA_PUBLICO_JUNTAR_MS:'50',WA_PUBLICO_JUNTAR_MAX_MS:'2000'});
+Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CANAL_REENVIO_MS:'0,0',WA_PUBLICO_JUNTAR_MS:'50',WA_PUBLICO_JUNTAR_MAX_MS:'2000',WA_ESPERA_ENTREGA_MS:'0'});
 const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'synthetic-phone'},messages}}]}]});
 const DONO='5511000000001',CLIENTE='5511000000002';
 let n=0;const msg=(from,text,extra={})=>({id:'publico-'+(++n),from,type:'text',text:{body:text},...extra});
@@ -25,6 +25,7 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
   assert(String(url).startsWith('https://graph.facebook.com/'),'unexpected network');
   const body=JSON.parse(options?.body||'{}');
   if(body.type==='text'){sent.push({to:body.to,text:body.text.body});return {ok:true,json:async()=>({messages:[{id:'out-'+sent.length}]})};}
+  if(body.template?.name==='recusado')return {ok:false,status:400,json:async()=>({error:{message:'(#132000) recusado'}})};
   if(['image','interactive','template'].includes(body.type)){sent.push({to:body.to,[body.type]:body[body.type]});return {ok:true,json:async()=>({messages:[{id:'out-'+sent.length}]})};}
   return {ok:true,json:async()=>({success:true})};
  };
@@ -79,6 +80,17 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
    {to:CLIENTE,interactive:{type:'cta_url',header:{type:'image',image:{link:'https://x.example/b.jpg'}},body:{text:'Batom'},action:{name:'cta_url',parameters:{display_text:'Ver',url:'https://x.example/b'}}}},
    {to:CLIENTE,template:{name:'boas_vindas',language:{code:'pt_BR'}}}]);
   assert.equal(await estado(m.id),'completed');
+  turno=async({mensagem})=>({text:'público: '+mensagem});
+ });
+ await t.test('saída recusada vira a reserva; com imagem, a seguinte espera a entrega',async()=>{
+  sent.length=0;process.env.WA_ESPERA_ENTREGA_MS='3000';t.after(()=>{process.env.WA_ESPERA_ENTREGA_MS='0';});
+  turno=async()=>({text:'x',saidas:[{tipo:'template',nome:'recusado',idioma:'pt_BR',componentes:[],reserva:'Opções: 1. Blusa'},
+   {tipo:'imagem',url:'https://x.example/a.jpg',reserva:'Foto: https://x.example/a.jpg'},{tipo:'texto',texto:'Gostou?'}]});
+  const m=msg(CLIENTE,'oi');await h.accept(payload([m]));await h.process(payload([m]));
+  await until(async()=>sent.length===2);await wait(100);assert.equal(sent.length,2,'o texto espera a entrega da foto');
+  await h.process({entry:[{changes:[{value:{statuses:[{id:'out-2',status:'failed',recipient_id:CLIENTE,errors:[{code:131053}]}]}}]}]});
+  await until(done);
+  assert.deepEqual(sent.map(x=>x.text??Object.keys(x)[1]),['Opções: 1. Blusa','image','Foto: https://x.example/a.jpg','Gostou?']);
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
  await t.test('turno que falha: nada enviado e a entrada fica incerta (sem repetir)',async()=>{

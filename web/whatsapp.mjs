@@ -19,6 +19,8 @@ import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markdownParaWa } from './wa-format.mjs';
 import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
+import { imagemParaWa } from './wa-imagem.mjs';
+import { avisarEntrega, esperarEntrega } from './wa-entrega.mjs';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const PHONE_ID = () => process.env.WA_PHONE_NUMBER_ID;
@@ -124,23 +126,56 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
 
 // Saídas ricas do atendimento ao público (publico-saidas.mjs, já normalizadas),
 // uma mensagem da Meta por saída, na ordem. Texto segue por sendText (quebra em
-// balões); imagem por link, botão de link (cta_url) e template aprovado vão
-// direto. Erro igual ao do sendText: `error.wamids` traz o que já saiu.
-const corpoDaSaida = (s) => {
-  if (s.tipo === 'imagem') return { type: 'image', image: { link: s.url, ...(s.legenda ? { caption: markdownParaWa(s.legenda) } : {}) } };
-  if (s.tipo === 'botao') return { type: 'interactive', interactive: { type: 'cta_url', ...(s.imagem ? { header: { type: 'image', image: { link: s.imagem } } } : {}), body: { text: markdownParaWa(s.texto) },
+// balões); imagem, botão de link (cta_url) e template aprovado vão direto, com
+// as imagens subidas antes como JPEG/PNG (wa-imagem.mjs). Saída com imagem que
+// tem outra depois espera a Meta confirmar a entrega (wa-entrega.mjs), senão o
+// texto seguinte chega antes da foto. Saída com `reserva` que a Meta recusa,
+// na hora ou depois pelo webhook, vira esse texto. Sem reserva, o erro é igual
+// ao do sendText: `error.wamids` traz o que já saiu.
+const ESPERA_ENTREGA_MS = () => Number(process.env.WA_ESPERA_ENTREGA_MS ?? 15000);
+const RESERVA_TARDIA_MS = 5 * 60 * 1000;
+const subirImagem = (url) => imagemParaWa(url, (buf, mime) => uploadMedia(buf, mime, mime === 'image/png' ? 'imagem.png' : 'imagem.jpg'));
+// Troca todo {type:'image', image:{link}} dos componentes de um template pela
+// imagem já subida (cabeçalho de template e cartões de carrossel).
+async function imagensDoTemplate(v) {
+  if (Array.isArray(v)) return Promise.all(v.map(imagensDoTemplate));
+  if (!v || typeof v !== 'object') return v;
+  if (v.type === 'image' && typeof v.image?.link === 'string') return { ...v, image: await subirImagem(v.image.link) };
+  return Object.fromEntries(await Promise.all(Object.entries(v).map(async ([k, x]) => [k, await imagensDoTemplate(x)])));
+}
+const temImagem = (s) => s.tipo === 'imagem' || !!s.imagem || (s.tipo === 'template' && JSON.stringify(s.componentes).includes('"image"'));
+const corpoDaSaida = async (s) => {
+  if (s.tipo === 'imagem') return { type: 'image', image: { ...await subirImagem(s.url), ...(s.legenda ? { caption: markdownParaWa(s.legenda) } : {}) } };
+  if (s.tipo === 'botao') return { type: 'interactive', interactive: { type: 'cta_url', ...(s.imagem ? { header: { type: 'image', image: await subirImagem(s.imagem) } } : {}), body: { text: markdownParaWa(s.texto) },
     action: { name: 'cta_url', parameters: { display_text: s.rotulo, url: s.url } } } };
-  return { type: 'template', template: { name: s.nome, language: { code: s.idioma }, ...(s.componentes.length ? { components: s.componentes } : {}) } };
+  return { type: 'template', template: { name: s.nome, language: { code: s.idioma }, ...(s.componentes.length ? { components: await imagensDoTemplate(s.componentes) } : {}) } };
 };
 async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false } = {}) {
   const wamids = [];
-  for (const s of saidas) {
+  for (const [i, s] of saidas.entries()) {
+    const ultima = i === saidas.length - 1;
     try {
       if (s.tipo === 'texto') { wamids.push(...await sendText(to, s.texto, { requireReceipt, reenvio })); continue; }
-      const enviar = () => graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, ...corpoDaSaida(s) });
-      const id = (await (reenvio ? comReenvio(enviar, { rotulo: 'whatsapp' }) : enviar()))?.messages?.[0]?.id;
-      if (requireReceipt && (typeof id !== 'string' || !id.trim())) throw Object.assign(new Error('WhatsApp sem recibo para uma saída'), { definitive: false });
+      const corpo = await corpoDaSaida(s);
+      const enviar = () => graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, ...corpo });
+      let id;
+      try {
+        id = (await (reenvio ? comReenvio(enviar, { rotulo: 'whatsapp' }) : enviar()))?.messages?.[0]?.id;
+        if (requireReceipt && (typeof id !== 'string' || !id.trim())) throw Object.assign(new Error('WhatsApp sem recibo para uma saída'), { definitive: false });
+      } catch (error) {
+        if (!s.reserva || !error.definitive) throw error;
+        console.warn(`[whatsapp] saída ${s.tipo}${s.nome ? ' ' + s.nome : ''} recusada, indo a reserva: ${error.message}`);
+        wamids.push(...await sendText(to, s.reserva, { requireReceipt, reenvio }));
+        continue;
+      }
       if (id) wamids.push(id);
+      if (!id) continue;
+      if (!ultima && temImagem(s)) {
+        if (await esperarEntrega(id, ESPERA_ENTREGA_MS()) === 'failed' && s.reserva) wamids.push(...await sendText(to, s.reserva, { requireReceipt, reenvio }));
+      } else if (s.reserva) {
+        void esperarEntrega(id, RESERVA_TARDIA_MS).then((st) => st === 'failed' && sendText(to, s.reserva))
+          .catch((e) => console.error('[whatsapp] reserva tardia:', e?.message ?? e));
+      }
     } catch (error) {
       error.wamids = [...wamids, ...(error.wamids || [])];
       if (error.wamids.length) { error.definitive = false; error.partial = true; }
@@ -1038,6 +1073,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
               // registro ia pra tabela e ninguém lia). Foi assim que 4 cards de
               // produto (131053) e 2 envios de campanha (131049) se perderam sem
               // deixar rastro em log entre 03 e 04/09.
+              avisarEntrega(st.id, st.status);
               if (String(st.status) === 'failed') {
                 console.warn(`[whatsapp] REPROVADA pela Meta: destino=${st.recipient_id || '?'} code=${err?.code ?? '?'} "${err?.title || err?.message || 'sem detalhe'}" wamid=${st.id}`);
                 // Quem registrou o envio como 'sent' (nasceu no 200 da Meta, que é
