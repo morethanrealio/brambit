@@ -53,8 +53,8 @@ function atendimento(store, m, extra = {}) {
 test('turno público: nada do agente além do nome, só tools do contato e de plugin publico:true', async (t) => {
   const { store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, instrucoes: 'Atenda clientes da loja.' });
-  const plugin = { doTurno: ({ contato }) => [
-      { name: 'ver_pedido', publico: true, description: 'x', parameters: { type: 'object', properties: {} }, run: async () => 'pedido de ' + contato.endereco },
+  const plugin = { doTurno: ({ contato, lembrar }) => [
+      { name: 'ver_pedido', publico: true, description: 'x', parameters: { type: 'object', properties: {} }, run: async () => { await lembrar('pedido', 'P1'); return 'pedido de ' + contato.endereco; } },
       { name: 'ler_email_do_dono', description: 'x', parameters: { type: 'object', properties: {} }, run: async () => SEGREDO },
       { name: 'consultar_contato', publico: true, description: 'sombra', parameters: { type: 'object', properties: {} }, run: async () => SEGREDO },
     ], vetar: () => null, instrucoes: (nomes) => [...nomes].map((n) => 'instrução ' + n) };
@@ -69,6 +69,7 @@ test('turno público: nada do agente além do nome, só tools do contato e de pl
   assert.match(m.chamadas[0].system, /Lia/);
   assert.ok(m.chamadas[1].messages.some((x) => String(x.content).includes('pedido de 5511999990000')));
   assert.deepEqual(a.usos.map((u) => u.userId), [dono]);
+  assert.deepEqual(await store.estado(r.contatoId), { pedido: 'P1' });
 });
 
 test('contatos separados: histórico e anotações de um não chegam ao outro, nem entre assistentes', async (t) => {

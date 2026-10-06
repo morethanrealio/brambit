@@ -351,7 +351,7 @@ export function comandoDoContato(mensagem) {
 //  recordUsage(usages,{userId,agentId,contatoId}) → grava o uso do turno.
 //  saldo(userId) → {over}. over=true: responde a mensagem neutra, sem chamar modelo.
 //  ferramentas: porta de ferramentas (doTurno/vetar/instrucoes); só entram as
-//   tools com publico:true, e doTurno recebe o contato.
+//   tools com publico:true, e doTurno recebe o contato e estado()/lembrar() dele.
 //  agora() → data e hora por extenso pro prompt.
 //  gastoDoDia(agentId) → US$ do atendimento público hoje (padrão: store.gastoDoDia).
 //  ganchos: porta atendimentoPublico de plugin (roteiro de quem atende), opcional:
@@ -390,7 +390,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   function registro(agente, contato, mensagem) {
     const reg = new ToolRegistry();
     for (const t of ferramentasDoContato(store, contato.id)) reg.add(t);
-    const doPlugin = (ferramentas?.doTurno({ userId: agente.user_id, agentId: agente.agent_id, contato: { ...contato } }) || [])
+    // estado/lembrar já presos a este contato: a tool do plugin guarda o que precisa
+    // pro próximo turno (ex.: a lista que mostrou) sem poder ler outro contato.
+    const doPlugin = (ferramentas?.doTurno({ userId: agente.user_id, agentId: agente.agent_id, contato: { ...contato },
+      estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) }) || [])
       .filter((t) => t?.publico === true && !reg.map.has(t.name));
     for (const t of doPlugin) {
       reg.add({ ...t, run: async (args) => {
