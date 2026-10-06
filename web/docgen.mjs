@@ -1,14 +1,13 @@
-// Geração de documentos INDEPENDENTE DE PLATAFORMA.
+// PLATFORM-INDEPENDENT document generation.
 //
-// Recebe conteúdo em markdown simples (ou HTML simples) e produz o binário de
-// um .docx, .pdf, .md ou .txt — SEM depender de Google Drive nem de nenhuma lib
-// externa (usa só node:zlib para o deflate do zip do .docx). O arquivo gerado é
-// gravado no bucket do próprio usuário (media_assets) pelo chamador; aqui a
-// gente só devolve { buffer, mime, ext }.
+// Takes simple markdown (or simple HTML) and produces the binary of a .docx,
+// .pdf, .md or .txt, WITHOUT Google Drive or any external lib (only node:zlib
+// for the .docx zip deflate). The caller stores the file in the user's own
+// bucket (media_assets); here we only return { buffer, mime, ext }.
 //
-// Filosofia (pedido do Marcos): ler um PDF e gerar um .doc NÃO pode depender do
-// Google. O layout não precisa ser cópia pixel a pixel do original — a gente
-// extrai o conteúdo e recria uma estrutura aproximada, e é honesto sobre isso.
+// Philosophy: reading a PDF and producing a .doc must NOT depend on Google.
+// The layout needn't be a pixel copy of the original: we extract the content
+// and rebuild an approximate structure, and are honest about it.
 
 import zlib from 'node:zlib';
 import { fetchFixado } from './net-pin.mjs';

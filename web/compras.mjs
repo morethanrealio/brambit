@@ -1,35 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import {recoverOrderPix} from './checkout-recovery.mjs';
 import { paymentRequest, checkoutFailure, pixCodeDiagnostic } from './checkout-payment.mjs';
-// ── Compra em loja online pelo assistente (analisar, montar carrinho, fechar) ──
+// ── Buying in an online store through the assistant (analyze, build cart, place) ──
 //
-// O dono manda um LINK de produto e o assistente compra pra ele, identificando-o
-// como CONVIDADO no estabelecimento. Provado ao vivo em 25/08 (Hering, pedido
-// pago de verdade) com ZERO credencial de lojista: a jornada inteira roda no
-// storefront público da VTEX, com um cookie jar compartilhado do começo ao fim.
-// Detalhe da jornada e das armadilhas: projetos/compra-vtex-agente.md.
+// The owner sends a product LINK and the assistant buys it for them, as a
+// GUEST at the store. Proven live on 25/08 (a VTEX store, a real paid order)
+// with ZERO merchant credentials: the whole journey runs on the public VTEX
+// storefront, with one cookie jar shared from start to end.
 //
-// DUAS PLATAFORMAS, e elas NÃO chegam no mesmo lugar (sondagem 25/08):
-//   - VTEX    → dá pra ir até o fim: o checkout dela é API pública documentada.
-//   - Shopify → dá pra ler o produto, calcular frete e montar o carrinho, mas o
-//               checkout é app fechado dela. Fechar por API exigiria token do
-//               LOJISTA, que é justamente o que esta jornada dispensa. Então na
-//               Shopify a entrega é um LINK de checkout com o carrinho já montado
-//               e o total na mesa: o último toque é do dono.
-// Nuvemshop ficou de fora: sem catálogo JSON e com desafio de bot na escrita.
+// TWO PLATFORMS, and they do NOT reach the same point (probe 25/08):
+//   - VTEX    → can go all the way: its checkout is a documented public API.
+//   - Shopify → can read the product, compute shipping and build the cart, but
+//               checkout is its closed app. Placing via API would need the
+//               MERCHANT's token, exactly what this journey avoids. So on
+//               Shopify the delivery is a checkout LINK with the cart already
+//               built and the total on the table: the last tap is the owner's.
+// Nuvemshop was left out: no JSON catalog and a bot challenge on writes.
 //
-// O que é REVERSÍVEL (nada cobra, nada cria pedido) roda direto:
-//   - analisar_produto  → o que é, tamanhos com estoque, preço, cupom, frete
-//   - montar_carrinho   → carrinho real com perfil, endereço, frete e melhor cupom
-//   - salvar/ver perfil de compra (OPCIONAL, cifrado no cofre)
-// O que é IRREVERSÍVEL passa pela trava do confirm.mjs:
-//   - fechar_pedido     → cria o pedido na loja e devolve o Pix pro dono pagar
-// A separação entre montar e fechar não é cosmética: o dono só pode aprovar um
-// total que já existe, e total só existe depois de frete e cupom.
+// What is REVERSIBLE (charges nothing, creates no order) runs directly:
+//   - analisar_produto  → what it is, sizes in stock, price, coupon, shipping
+//   - montar_carrinho   → real cart with profile, address, shipping and best coupon
+//   - save/view purchase profile (OPTIONAL, encrypted in the vault)
+// What is IRREVERSIBLE goes through the confirm.mjs gate:
+//   - fechar_pedido     → creates the order in the store and returns the Pix to pay
+// Splitting build and place isn't cosmetic: the owner can only approve a total
+// that exists, and a total only exists after shipping and coupon.
 //
-// Perfil no cofre é OPCIONAL por decisão do Marcos (25/08): quem não salvou fala
-// os dados na hora e o modelo passa em `comprador`. Salvar é só pra não
-// re-perguntar CPF a cada compra.
+// The vault profile is OPTIONAL (decided 25/08): whoever didn't save one gives
+// the data on the spot and the model passes it in `comprador`. Saving just
+// avoids asking for the CPF on every purchase.
 
 import { addConnection, getConnectionByProvider, updateConnectionSecret, checkoutRecoveryStore } from './db.mjs';
 import { encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
@@ -319,8 +318,8 @@ async function simular(origin, { skuId, seller = '1', quantidade = 1, cep }) {
       nome: s.id || s.name, preco: Number(s.price || 0), prazo: prazo(s.shippingEstimate),
       canal: s.deliveryChannel || 'delivery', retirada: !!s.pickupStoreInfo?.isPickupStore,
     })),
-    // O paymentSystem do Pix é descoberto pelo nome/grupo, então isto funciona
-    // em qualquer loja VTEX (na Hering é o 713, "Pagaleve Pix A Vista Transparente").
+    // The Pix paymentSystem is found by name/group, so this works on any VTEX
+    // store (on one store it's 713, "Pagaleve Pix A Vista Transparente").
     pix: sistemas.find((s) => /pix/i.test(`${s.name} ${s.groupName}`)) || null,
     sistemas: sistemas.map((s) => ({ id: s.id, nome: s.name, grupo: s.groupName })),
   };
@@ -445,11 +444,11 @@ function ateQueHoras(v) {
   return d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 }
 
-// Payload de conector: às vezes é URL da tela dele, às vezes é um JSON com o
-// código dentro (a Hering/Pagaleve mudou de um pro outro entre 25/08 e 09/09).
-// Devolve { code } ou { url }, NUNCA o payload cru: no dia 09/09 o JSON caiu no
-// ramo de link e o assistente colou o objeto inteiro (com o PNG do QR em base64,
-// milhares de caracteres) no chat do dono.
+// Connector payload: sometimes a URL of its page, sometimes JSON with the code
+// inside (one store's Pagaleve connector switched between 25/08 and 09/09).
+// Returns { code } or { url }, NEVER the raw payload: on 09/09 the JSON fell
+// into the link branch and the assistant pasted the whole object (with the QR
+// PNG in base64, thousands of characters) into the owner's chat.
 // A continuation link is provider-supplied, never constructed from order IDs.
 // Preserve its query byte-for-byte. Reject insecure/credential-bearing links.
 function linkPagamento(raw) {
@@ -487,16 +486,16 @@ function lerPayloadConector(raw) {
   return null;
 }
 
-// Onde nasce o Pix depende do CONECTOR da loja, não da VTEX (ver doc). Duas
-// formas, e a loja escolhe qual: Pix nativo transparente devolve o copia-e-cola
-// em `paymentAppData`; conector com payment app (Hering/Pagaleve) devolve em
-// `paymentAuthorizationAppCollection` ora a URL da tela dele, ora um JSON já com
-// o código. Procuro nas duas respostas (pagamento e callback) porque cada loja
-// responde numa.
-// REGRA DURA: só sai daqui código que passou no pixValido (inclusive CRC) ou
-// URL HTTPS sem credenciais. Nada de imagem base64 e nada de payload cru. Código com cara de
-// Pix mas com CRC errado vira tipo 'quebrado' e NÃO é entregue: melhor admitir
-// que a loja devolveu lixo do que mandar algo que o banco vai recusar.
+// Where the Pix comes from depends on the store's CONNECTOR, not on VTEX. Two
+// forms, and the store picks: native transparent Pix returns the copy-paste
+// code in `paymentAppData`; a connector with a payment app (e.g. Pagaleve)
+// returns in `paymentAuthorizationAppCollection` either its page URL or JSON
+// with the code. I look in both responses (payment and callback) because each
+// store answers in one.
+// HARD RULE: only code that passed pixValido (CRC included) or an HTTPS URL
+// without credentials leaves here. No base64 image and no raw payload. Code
+// that looks like Pix with a wrong CRC becomes type 'quebrado' and is NOT
+// delivered: better admit the store returned junk than send what the bank rejects.
 function extrairPix(...respostas) {
   let quebrado = null;
   for (const o of respostas) {
@@ -858,13 +857,13 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
       },
       prepareConfirmation: args => prepareCheckout(args),
       restoreConfirmation: (args,descriptor) => prepareCheckout(args,descriptor),
-      // Portão de sanidade ANTES de virar cartão de confirmação (confirm.mjs
-      // chama isto em gateTool). Sem ele, id de carrinho morto virava pedido de
-      // confirmação com valor e tudo, o dono aprovava e SÓ ENTÃO a tool recusava:
-      // ele tinha confirmado uma compra que nunca existiu (caso Hering 10/09/2026,
-      // em que o modelo remontou o carrinho mas mandou o id da montagem anterior).
-      // Devolvendo {erro} aqui, o modelo corrige o argumento no mesmo turno e o
-      // dono nunca vê o fantasma.
+      // Sanity gate BEFORE it becomes a confirmation card (confirm.mjs calls
+      // this in gateTool). Without it, a dead cart id became a confirmation
+      // request with a total, the owner approved and ONLY THEN the tool refused:
+      // they had confirmed a purchase that never existed (case of 10/09/2026,
+      // where the model rebuilt the cart but sent the previous build's id).
+      // Returning {erro} here, the model fixes the argument in the same turn and
+      // the owner never sees the ghost.
       preflight: async ({ carrinho_id } = {}) => {
         const id = String(carrinho_id || '').trim();
         if (id && getCarrinho(userId, id)) return null;
@@ -949,13 +948,13 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           // Validade do código Pix não determina o estado/cancelamento do pedido.
           const avisoPix = 'O vencimento do Pix não confirma o cancelamento do pedido. ' + conferirPedido;
 
-          // NÃO existe link de pagamento pra entregar. A compra é feita como
-          // convidado pelo cookie jar DESTE processo, então `/checkout/#/
-          // orderPlaced?og=` e `/api/checkout/pub/orders/order-group/` só abrem
-          // nessa sessão: de qualquer outro navegador a loja devolve 403 Access
-          // denied (medido na Hering em 10/09, pedido v24548377hrg). Mandar esse
-          // link é prometer uma saída que não existe, então ele saiu daqui. O
-          // caminho disponível aqui é o Pix; não inferir cancelamento sem consulta.
+          // There is NO payment link to deliver. The purchase is made as a
+          // guest through THIS process's cookie jar, so `/checkout/#/
+          // orderPlaced?og=` and `/api/checkout/pub/orders/order-group/` only
+          // open in that session: from any other browser the store returns 403
+          // Access denied (measured on a VTEX store on 10/09). Sending that link
+          // promises an exit that doesn't exist, so it was removed. The path
+          // available here is Pix; don't infer cancellation without checking.
           const cabecalho = [
             `Pedido *${og}* na ${loja}.`,
             `${cart.produto.nome}${cart.produto.variacao ? ` (${cart.produto.variacao})` : ''} × ${cart.produto.qtd}`,
@@ -1066,16 +1065,16 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
     },
   ];
 
-  // Envelope de honestidade + rastro, aplicado depois de montar a lista pra não
-  // espalhar a mesma regra por dez pontos de retorno.
+  // Honesty envelope + trace, applied after building the list so the same rule
+  // isn't spread across ten return points.
   //
-  // 1. montar_carrinho falha devolvendo PROSA ("Não achei a variação...", "está
-  //    com 0 em estoque..."), indistinguível de narração de sucesso pra quem só
-  //    lê o texto. Um prefixo duro impede o modelo de seguir a compra achando
-  //    que existe carrinho.
-  // 2. o log dá o rastro que faltou no post-mortem do caso Hering (10/09/2026),
-  //    quando a única forma de saber se a montagem tinha dado certo foi inferir
-  //    pelo tamanho do resultado no cache. Sem URL, sem CPF, sem endereço.
+  // 1. montar_carrinho fails by returning PROSE ("Não achei a variação...",
+  //    "está com 0 em estoque..."), indistinguishable from success narration to
+  //    whoever only reads text. A hard prefix stops the model from continuing
+  //    the purchase thinking a cart exists.
+  // 2. the log gives the trace missing from the post-mortem of 10/09/2026,
+  //    when the only way to know if the build worked was to infer it from the
+  //    result size in the cache. No URL, no CPF, no address.
   const marcar = (t) => {
     const orig = t.run;
     t.run = async (args = {}) => {

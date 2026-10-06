@@ -1,19 +1,19 @@
-// ── runnerd: HTTP fino na frente do runner de sandbox ──
-// Roda NO host dedicado de sandbox (não no dev.mara). O backend (dev.mara) chama
-// estes endpoints por HTTP, na rede privada da VPC, autenticado por um token
-// compartilhado (Bearer). Sem token = 401. Bind no IP PRIVADO (nunca público).
+// ── runnerd: thin HTTP layer in front of the sandbox runner ──
+// Runs ON the dedicated sandbox host (not on the application server). The backend
+// calls these endpoints over HTTP, on the VPC private network, authenticated by a
+// shared token (Bearer). No token = 401. Binds to the PRIVATE IP (never public).
 //
-// Endpoints (todos POST, corpo JSON):
+// Endpoints (all POST, JSON body):
 //   /shell  {userId, command, timeout?, cwd?}  -> {exitCode, stdout, stderr, timedOut}
 //   /write  {userId, path, content}            -> {ok, path, error?}
 //   /read   {userId, path}                     -> {ok, path, content?, error?}
-//   /readfile {userId, path}                    -> streama os bytes crus (application/octet-stream); 404/413/400 em erro
+//   /readfile {userId, path}                    -> streams the raw bytes (application/octet-stream); 404/413/400 on error
 //   /stop   {userId}                           -> {ok}
 //   /health (GET)                              -> {ok:true}
 //
-// Segurança: o isolamento de verdade está nas flags do docker (runner.mjs) e no
-// firewall do host (rede do sandbox bloqueada da rede interna + metadata).
-// runnerd só orquestra; nunca recebe/expõe credencial nenhuma.
+// Security: the real isolation lives in the docker flags (runner.mjs) and in the
+// host firewall (sandbox network blocked from the internal network + metadata).
+// runnerd only orchestrates; it never receives/exposes any credential.
 
 import http from 'node:http';
 import { shellRun, writeFile, readFile, stopSandbox, statFile, spawnCat } from './runner.mjs';

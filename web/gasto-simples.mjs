@@ -1,9 +1,9 @@
-// Implementação padrão da porta de gasto (gasto.mjs) no núcleo. Sem créditos e
-// sem cobrança: o modelo é chamado direto e o uso fica gravado como veio, em US$.
-// Opcional: teto mensal em US$ por pessoa (tetoUsd), e `spend` (createCreditSpend
-// com unidade 'usd') pra o assistente responder quanto a pessoa gastou. Passou do teto, status.over
-// para o turno antes de chamar o modelo, como a franquia faz no Brambs. É teto
-// suave: a chamada que cruza o teto termina; a próxima é que não começa.
+// Core default implementation of the spend port (gasto.mjs). No credits and no
+// billing: the model is called directly and usage is recorded as is, in US$.
+// Optional: monthly US$ cap per person (tetoUsd), and `spend` (createCreditSpend
+// with unit 'usd') so the assistant can say how much the person spent. Past the cap,
+// status.over stops the turn before calling the model, like a plan allowance would. It's
+// a soft cap: the call that crosses it finishes; the next one doesn't start.
 import {randomUUID} from 'node:crypto';
 import {conferirGasto} from './gasto.mjs';
 import {tagIdioma} from './locale.mjs';

@@ -52,7 +52,7 @@ test('preço afirmado como pesquisado sem nenhuma consulta', () => {
 
 test('preço pesquisado de verdade passa, e conta do dono sem alegação de pesquisa não é tocada', () => {
   const comBusca = checkGrounding('Fiz um levantamento com base em preços reais: R$ 3.378.', {
-    toolOutputs: ['{"voos":[{"preco":"R$3378,00","cia":"LATAM"}]}'],
+    toolOutputs: ['{"voos":[{"preco":"R$3378,00","cia":"Acme Air"}]}'],
   });
   assert.deepEqual(kinds(comBusca), []);
   const semAlegacao = checkGrounding('Somando o que você me passou, dá R$ 3.378 no total.', { toolOutputs: [] });

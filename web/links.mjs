@@ -32,16 +32,16 @@
 import { uaBot } from './marca.mjs';
 import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
 
-// O texto daqui é ANEXADO à resposta final, ou seja, a pessoa lê direto, sem o
-// modelo reescrever. Por isso precisa do idioma DELA (`users.language`), a mesma
-// fonte da diretriz do prompt.
+// The text here is APPENDED to the final reply, so the person reads it
+// directly, with no model rewrite. That's why it needs THEIR language
+// (`users.language`), the same source as the prompt directive.
 //
-// Contraste que importa: o "Fontes:" do `websearch.mjs` fica em português de
-// propósito, porque aquele texto é RETORNO DE TOOL, vai pro modelo e não pra
-// tela; o modelo já responde no idioma de quem perguntou.
+// Contrast that matters: the "Fontes:" in `websearch.mjs` stays in Portuguese
+// on purpose, because that text is a TOOL RESULT, goes to the model and not to
+// the screen; the model already answers in the asker's language.
 //
-// Os avisos são determinísticos nos três idiomas atendidos e falam a língua de
-// quem lê: nada de código HTTP, "rede" ou "teto" (Marcos, 06/10/2026).
+// Notices are deterministic in the three supported languages and speak the
+// reader's language: no HTTP codes, "network" or "cap" (06/10/2026).
 const TEXTOS = {
   'pt-BR': {
     fontes: 'Fontes:', naoVerificado: '[link não verificado]', itemNaoVerificado: '[Item omitido: link não verificado]', indisponivel: '[link indisponível]', item: '[Item omitido: link indisponível]',
@@ -323,7 +323,7 @@ export async function fontesEConferencia(texto, sources = [], { mostrarFontes = 
   // A link the check could not confirm (401/403/429, timeout, TLS, over the cap of
   // 8) stays in the text with no notice, in chat and in routines. In prod (30 days
   // to 06/10/2026) these were almost all live sites refusing a robot, so the
-  // notice told people to distrust links that open fine (Marcos, 06/10/2026).
+  // notice told people to distrust links that open fine (06/10/2026).
   // Only proven-dead links (404/410/5xx, unknown domain, refused connection) go.
   return { texto: out, quebrados, indefinidos, naoChecados, authenticatedSources, fontes: bloco ? bloco.split('\n').length - 1 : 0 };
 }

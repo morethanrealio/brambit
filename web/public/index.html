@@ -41,9 +41,9 @@
   input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
   .primary { width:100%; margin-top:22px; padding:13px; border:0; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
   .primary:disabled { opacity:.6; cursor:default; }
-  /* Mesma caixa do .primary, pintado como secundário. Usado no botão que troca
-     cadastro ↔ login: antes era um link de 13px escondido embaixo do cartão e
-     quase ninguém achava (Marcos, 07/09/2026). */
+  /* Same box as .primary, painted as secondary. Used on the sign-up ↔ login
+     toggle: it used to be a 13px link hidden under the card and almost nobody
+     found it (07/09/2026). */
   /* padding 12px (e não 13px como o .primary) porque a borda de 1px em cima e
      embaixo já repõe os 2px: assim os dois botões medem exatamente 43px. */
   .secondary { width:100%; margin-top:8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--txt); font-size:15px; font-weight:600; cursor:pointer; }
@@ -602,7 +602,7 @@
       <p class="sub" id="authSub">Acesse sua conta pra falar com seus assistentes.</p>
       <div id="nameRow" class="hidden">
         <label>Seu nome</label>
-        <input id="auName" placeholder="ex: Marcos" />
+        <input id="auName" placeholder="ex: Ana" />
       </div>
       <label>E-mail</label>
       <input id="auEmail" type="email" placeholder="voce@email.com" />
@@ -612,13 +612,13 @@
         <button type="button" id="pwToggle" class="pwtoggle" aria-label="Mostrar senha">Mostrar</button>
       </div>
       <div id="referrerRow" class="hidden">
-        <!-- O código deixou de ser a porta em 28/08 (signupGate): enquanto houver
-             vaga no beta, cadastro sem código entra normal. A tela seguia dizendo
-             que sem código a pessoa cai na fila, o que virou mentira e assustava
-             quem não tem convite (Marcos 02/09). O que o código faz hoje é só o
-             bônus de indicação: 200 créditos pra quem indicou quando esta conta
-             manda a primeira mensagem, e mais 500 pros dois lados se ela assinar
-             (regra nova, Marcos 08/09). -->
+        <!-- The code stopped being the gate on 28/08 (signupGate): while there
+             are beta seats, sign-up without a code goes through. The screen kept
+             saying that without a code you go to the queue, which became false
+             and scared people without an invite (02/09). Today the code only
+             gives the referral bonus: 200 credits to the referrer when this
+             account sends its first message, and 500 more to both if it
+             subscribes (new rule, 08/09). -->
         <label>Código de convite <span style="color:var(--mut);font-weight:400">(opcional)</span></label>
         <input id="auReferrer" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4 dígitos, ex: 1234" />
         <p class="sub" style="margin:6px 2px 0;font-size:12px;">Se alguém te indicou, põe aqui o código de 4 dígitos dele: quem te indicou ganha créditos quando você começar a usar. Não é obrigatório: você pode criar sua conta sem código.</p>
@@ -644,9 +644,9 @@
       <div class="err hidden" id="authErr"></div>
       <p id="authLegal" class="authlegal hidden">Ao continuar com o Google, você concorda com os <a href="/termos" target="_blank">Termos de Uso</a> e a <a href="/privacidade" target="_blank">Política de Privacidade</a>.</p>
       <div class="forgotrow" id="forgotRow"><span class="link" id="forgotLink">Esqueci minha senha</span></div>
-      <!-- Troca cadastro ↔ login. É um botão de largura cheia, do mesmo tamanho
-           do botão principal: como link miúdo ninguém achava e as pessoas
-           acabavam criando uma segunda conta (Marcos, 07/09/2026). -->
+      <!-- Sign-up ↔ login toggle. A full-width button, same size as the main
+           one: as a tiny link nobody found it and people ended up creating a
+           second account (07/09/2026). -->
       <div class="toggle"><span id="toggleTxt">Não tem conta?</span></div>
       <button type="button" class="secondary" id="toggleLink">Criar conta</button>
     </div>
@@ -1445,12 +1445,12 @@
   </div>
 
 <script nonce="__CSP_NONCE__">
-// O modo do cartão vem da URL: /login?modo=entrar abre em login, qualquer outra
-// coisa abre em cadastro (padrão histórico da home, beta por convite).
-// Antes disso o modo era fixo em cadastro, então quem clicava em "Entrar" na home
-// caía no formulário de criar conta e criava uma segunda conta sem perceber
-// (relato do Marcos, 07/09/2026). Os links de "Entrar" das páginas públicas
-// apontam pra /login?modo=entrar.
+// The card mode comes from the URL: /login?modo=entrar opens login, anything
+// else opens sign-up (the home's historical default, invite-only beta).
+// Before this the mode was fixed to sign-up, so whoever clicked "Entrar" on the
+// home landed on the create-account form and made a second account unknowingly
+// (reported 07/09/2026). The "Entrar" links on public pages point to
+// /login?modo=entrar.
 let signupMode = new URLSearchParams(location.search).get('modo') !== 'entrar';
 let userName = '';
 let APP_CFG = {};
@@ -1519,13 +1519,13 @@ function render(text) {
       return '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>' + cauda;
     })
     .replace(/^#{1,6}\s*(.+)$/gm, '<strong>$1</strong>')
-    // O negrito não pode ATRAVESSAR outro asterisco. Com /\*(.+?)\*/ a sequência
-    // "***" virava <strong>*</strong>, ou seja, dois asteriscos SUMIAM da tela.
-    // Isso quebrava código Pix copia-e-cola: o txid de uma cobrança dinâmica é
-    // literalmente "***" (campo 62), e comê-lo deixa o tamanho do campo e o CRC
-    // errados, então o banco recusa o código (caso Hering, 10/09). O mesmo valia
-    // pra qualquer texto com run de asteriscos. Os demais renderizadores do
-    // produto (memória, e-mail, /metrics) já usavam [^*\n]+; só o chat não.
+    // Bold must not CROSS another asterisk. With /\*(.+?)\*/ the sequence
+    // "***" became <strong>*</strong>, i.e. two asterisks VANISHED on screen.
+    // That broke copy-paste Pix codes: a dynamic charge's txid is literally
+    // "***" (field 62), and eating it makes the field length and CRC wrong, so
+    // the bank rejects the code (case of 10/09). Same for any text with a run
+    // of asterisks. The product's other renderers (memory, e-mail, /metrics)
+    // already used [^*\n]+; only the chat didn't.
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
     .replace(/^\s*[-*]\s+/gm, '• ');
@@ -1725,11 +1725,11 @@ E('pwToggle').onclick = () => {
 // caminho (o Ads separa por ação, não por parâmetro), e também como evento GA4,
 // que é o que rende relatório do lado do Analytics (02/09).
 const ADS_ID = 'AW-18423630060';
-// Os dois caminhos apontam pra MESMA ação "Sign-up" (decisão do Marcos 03/09):
-// pro Ads o que importa é "o anúncio trouxe um cadastro", e ele otimiza melhor
-// com uma ação só recebendo o sinal inteiro do que com duas ações pela metade.
-// A quebra por caminho (Google x e-mail) sai dos eventos GA4 abaixo, que já vão
-// com `method`. Se um dia quisermos ações separadas, basta trocar este label.
+// Both paths point to the SAME "Sign-up" action (decided 03/09): for Ads what
+// matters is "the ad brought a sign-up", and it optimizes better with one
+// action getting the whole signal than with two half actions. The split by
+// path (Google x e-mail) comes from the GA4 events below, which carry
+// `method`. If we ever want separate actions, just change this label.
 const ADS_CONV = {
   email: 'UyEeCLuu7OwcEOyRidFE',  // ação "Sign-up"
   google: 'UyEeCLuu7OwcEOyRidFE', // mesma ação, de propósito
@@ -4950,9 +4950,9 @@ function resizeImage(file, max = 1568, q = 0.85) {
     reader.readAsDataURL(file);
   });
 }
-// Reduz o lote de imagens só se o base64 combinado passar do teto de upload.
-// O nginx aceita 25m (front + dev.mara), então o teto aqui é só sanidade —
-// preserva a qualidade no caso comum e evita payload absurdo/custo alto de visão.
+// Shrinks the image batch only if the combined base64 exceeds the upload cap.
+// The reverse proxy accepts 25m, so the cap here is just sanity: it keeps
+// quality in the common case and avoids absurd payloads/high vision cost.
 const IMG_LADDER = [[1280, 0.8], [1024, 0.72], [800, 0.65], [640, 0.6]];
 async function packImages(imgs) {
   const BUDGET = 12000000; // ~12MB de base64 (bem sob os 25m do proxy)

@@ -1,7 +1,7 @@
-// Caso Luffy 05/10/2026: o turno terminou, o envio pelo Telegram falhou na rede e
-// o canal mandou "Tenta de novo?" fora do histórico; o "pode tentar de novo sim"
-// seguinte virou devolutiva da jornada. Aqui: resposta pronta é reenviada sem
-// rodar o turno de novo, e todo aviso de erro entra no histórico. Fetch simulado.
+// A user report on 05/10/2026: the turn finished, the Telegram send failed on the
+// network and the channel sent "Try again?" outside the history; the following
+// "yes, try again" became journey feedback. Here: a ready reply is resent without
+// rerunning the turn, and every error notice enters the history. Simulated fetch.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

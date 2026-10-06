@@ -188,9 +188,9 @@
     }).then(function(s){
       if(!s) return;
       var dot=$('dot'), tx=$('statustxt'), mt=$('statusmeta'), wn=$('statuswarn'), dv=$('dlver');
-      // Qual versão o download entrega HOJE. Sem isto o dono baixava de novo e não
-      // tinha como saber se pegou a nova (caso Marcos 26/08). Vem do servidor pra
-      // não haver número escrito à mão em dois lugares.
+      // Which version the download delivers TODAY. Without it the owner downloaded
+      // again with no way to know if they got the new one (user report 26/08).
+      // Comes from the server so the number isn't hand-written in two places.
       if(dv && s.currentVersion) dv.textContent='Versão '+s.currentVersion;
       if(s.online){
         dot.className='dot on'; tx.textContent='Runner conectado';

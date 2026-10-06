@@ -19,7 +19,7 @@ func nomeRunner() string { return produto + " Runner" }
 // Variável de ambiente com o prefixo da marca: envVar("RUNNER_TOKEN") = BRAMBIT_RUNNER_TOKEN.
 func envVar(s string) string { return strings.ToUpper(slug) + "_" + s }
 
-// Endereço do servidor como aparece em texto pro dono ("brambs.com.br/runner").
+// Server address as shown in text to the owner ("example.com/runner").
 func siteNoTexto() string {
 	s := strings.TrimPrefix(strings.TrimPrefix(base, "https://"), "http://")
 	return strings.TrimRight(s, "/")

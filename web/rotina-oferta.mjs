@@ -25,9 +25,9 @@ async function getRoutineNudgeFacts(userId) {
          WHERE o.user_id = $1 AND o.provider = 'microsoft' LIMIT 1) AS ms_scope,
        EXISTS (SELECT 1 FROM ${S}.trackers tk
                 WHERE tk.owner_user_id = $1 AND tk.enabled) AS tem_tracker,
-       -- Só ROTINAS (Marcos 25/09: lembrete não tem nada a ver com rotina). A
-       -- lista serve só pra não reoferecer o mesmo assunto; ter muitas rotinas
-       -- não impede oferecer outra.
+       -- Only ROUTINES (25/09: a reminder is not a routine). The list only
+       -- avoids re-offering the same subject; having many routines doesn't
+       -- block offering another.
        coalesce((SELECT json_agg(x.t) FROM (
            SELECT title AS t FROM ${S}.routines
              WHERE user_id = $1 AND enabled ORDER BY created_at DESC LIMIT 30
@@ -125,8 +125,8 @@ export function escolherPadraoDaVez(caps = [], assuntos = [], hoje = new Date())
 
 export async function routineNudgeContext(userId, { assuntosConversados } = {}) {
   if (!userId) return '';
-  // Sem teto por quantidade (Marcos 25/09): com 2 ou 30 rotinas, o assistente
-  // continua mostrando que pode ajudar. Só barram o opt-out e os 3 dias.
+  // No cap by count (25/09): with 2 or 30 routines, the assistant keeps
+  // showing it can help. Only the opt-out and the 3 days block it.
   const gate = await routineOfferGate(userId);
   if (!gate.pode) return '';
 

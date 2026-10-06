@@ -1,13 +1,13 @@
-// ── Primitiva "Projeto" (dev mode / tier avançado) ──
+// ── "Project" primitive (dev mode / advanced tier) ──
 //
-// Um Projeto amarra: um repo (GitHub do usuário) + um workspace de dev real (no
-// host mini-PaaS, provisionado via devexec) + um alvo de deploy. "Entrar num
-// projeto" = ter o repo clonado e um ambiente pronto pra codar, em vez de criar
-// um app DENTRO do Brambs (bug de 08/2026). O toolset de coding passa a operar
-// no workspace do projeto ATIVO (ver coding.mjs + server.mjs).
+// A Project ties together: a repo (the user's GitHub) + a real dev workspace (on
+// the mini-PaaS host, provisioned via devexec) + a deploy target. "Entering a
+// project" = having the repo cloned and an environment ready to code, instead of
+// creating an app INSIDE the platform (bug of 08/2026). The coding toolset then
+// works in the ACTIVE project's workspace (see coding.mjs + server.mjs).
 //
-// Transporte: devexec.mjs (canal de controle pro host de workspaces). O token do
-// GitHub do usuário só é usado no clone/push, sempre em memória.
+// Transport: devexec.mjs (control channel to the workspace host). The user's
+// GitHub token is only used for clone/push, always in memory.
 import { devexecEnabled, devCreate, devClone, devExec } from './devexec.mjs';
 import {
   createProject, listProjects, getProject, getProjectByName,

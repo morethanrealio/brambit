@@ -584,15 +584,15 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   // A specialized executor owns its structured consolidation; don't spend an
   // extra model call on a disposable plain-text salvage in that path.
   if (!salvage) return { text: '', messages, usages, sources, termination };
-  // Mensagem de fallback: honesta sobre o que houve, mas escrita PRA O USUÁRIO, não
-  // pra quem debuga. A versão antiga ("limite de passos deste turno", "usei todas as
-  // ferramentas", "não travei nem sumi") entregava jargão de bastidor e ainda tinha
-  // que negar que sumiu, o que só planta a dúvida (Marcos 26/08). Aqui a gente diz a
-  // mesma verdade em linguagem de gente e já oferece a saída ("continua").
-  // O motivo técnico continua visível em onEvent ('max_steps'/'salvage_empty'/
-  // 'salvage_error') pra log/métricas — um dead-end silencioso nunca passa batido.
-  // Curta de propósito (Marcos 26/08): quem lê isso já esperou o turno inteiro,
-  // não vai querer um parágrafo de desculpa. Uma linha do que houve + a saída.
+  // Fallback message: honest about what happened, but written FOR THE USER, not
+  // for whoever debugs. The old one ("step limit for this turn", "I used all the
+  // tools", "I didn't freeze or vanish") leaked backstage jargon and denied
+  // vanishing, which only plants the doubt (26/08). Here we say the same truth
+  // in plain language and offer the way out ("continue").
+  // The technical reason stays visible in onEvent ('max_steps'/'salvage_empty'/
+  // 'salvage_error') for logs/metrics, so a silent dead end never goes unnoticed.
+  // Short on purpose (26/08): the reader already waited the whole turn and
+  // doesn't want an apology paragraph. One line on what happened + the way out.
   const CEILING_MSG = 'Essa tarefa é grande e não coube numa resposta só. Me diz "continua" que eu sigo de onde parei.';
   // Quando caímos aqui por FIM SEM TEXTO (truncamento no teto de saída), a mensagem
   // acima não descreve o que houve; usa uma honesta sobre o corte.

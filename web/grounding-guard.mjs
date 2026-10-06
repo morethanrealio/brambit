@@ -295,11 +295,11 @@ const FERRAMENTA = {
 };
 
 /**
- * Instrução do repasse: uma REVISÃO INTERNA, que a pessoa não vê. O modelo
- * reescreve a mesma resposta inteira, confirmando com a ferramenta o que der e
- * tirando (ou dizendo com naturalidade que não está disponível) o que não der.
- * Quem lê recebe só a resposta final: sem "consultei de novo", sem nome de
- * ferramenta, sem sinal de que houve revisão (Marcos 06/10, msg 8584).
+ * Retry instruction: an INTERNAL REVIEW the person doesn't see. The model
+ * rewrites the whole reply, confirming with the tool what it can and removing
+ * (or saying naturally that it's unavailable) what it can't. The reader gets
+ * only the final reply: no "I checked again", no tool name, no sign that a
+ * review happened (06/10).
  */
 export function groundingRetryPrompt(findings, language = 'pt-BR') {
   const itens = [...new Map(findings.map(f => [f.kind + f.dado, f])).values()].slice(0, 12)

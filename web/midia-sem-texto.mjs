@@ -1,25 +1,24 @@
-// ── Mídia enviada SEM texto ────────────────────────────────────────────────
-// Quando a pessoa manda só uma foto ou só um arquivo, sem escrever nada junto,
-// o turno ainda precisa de algum texto pra virar mensagem. O que existia em
-// cada canal era uma ORDEM inventada no nome dela: "Extraia e me explique as
-// informações desta imagem" (web e cockpit), "Veja as imagens que enviei e me
-// explique" (WhatsApp e Telegram), "Leia o documento que enviei e me explique".
-// O assistente obedecia ao pé da letra, porque para ele aquilo era o pedido do
-// dono.
+// ── Media sent WITHOUT text ────────────────────────────────────────────────
+// When the person sends just a photo or just a file, writing nothing with it,
+// the turn still needs some text to become a message. What each channel had
+// was an ORDER made up in their name: "Extract and explain the information in
+// this image" (web and cockpit), "Look at the images I sent and explain"
+// (WhatsApp and Telegram), "Read the document I sent and explain".
+// The assistant obeyed to the letter, because to it that was the owner's
+// request.
 //
-// Em 09/09/2026 isso despejou no chat a CNH inteira do dono (nome, CPF, número
-// de registro) num turno em que ele só tinha mandado o documento pra abrir a
-// Conta Brambs. Ninguém pediu leitura em voz alta: o pedido era "toma o
-// documento". O bug é inventar pedido no nome do usuário, não a leitura da
-// imagem.
+// On 09/09/2026 this dumped the owner's whole driver's license (name, tax ID,
+// registration number) into the chat in a turn where they had only sent the
+// document to open a payment account. Nobody asked for it read aloud: the
+// request was "here's the document". The bug is inventing a request in the
+// user's name, not reading the image.
 //
-// Então o texto passa a DESCREVER o que aconteceu, em vez de mandar despejar, e
-// deixa a reação por conta do contexto da conversa. Nenhuma capacidade é
-// perdida: neste turno o modelo VÊ a imagem, a leitura completa dela continua
-// sendo gerada no recebimento e guardada no histórico (imageHistoryMarkers, em
-// server.mjs), e o texto do PDF continua indo pro modelo. Quem manda a foto e
-// pergunta "o que é isso?" recebe a leitura inteira como sempre, porque aí
-// existe pedido de verdade.
+// So the text now DESCRIBES what happened instead of asking for a dump, and
+// leaves the reaction to the conversation's context. No capability is lost:
+// in this turn the model SEES the image, its full reading is still generated
+// on receipt and kept in history (imageHistoryMarkers, in server.mjs), and the
+// PDF text still goes to the model. Whoever sends the photo and asks "what is
+// this?" gets the full reading as always, because then there's a real request.
 export function notaMidiaSemTexto({ images = 0, files = 0 } = {}) {
   const oque = images && files
     ? 'uma foto e um arquivo'

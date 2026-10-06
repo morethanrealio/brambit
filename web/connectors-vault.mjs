@@ -753,15 +753,15 @@ const ASAAS_BAD = [
   'Gere uma nova em *Configurações › Integrações › Chave de API* no painel da Asaas e atualize no *Cofre de credenciais* (serviço `asaas`).',
 ].join('\n');
 
-// Chamada crua à API da Asaas, dada a chave em claro. Exportada porque a
-// criação da Conta Brambs (asaas-contas.mjs) fala com a MESMA API usando a
-// chave RAIZ da STEM, que não vem do cofre do usuário: a detecção de ambiente
-// pelo prefixo da chave e o formato de erro ficam num lugar só.
-// `form` (FormData) é o caminho de UPLOAD: envio de documento da conta é
-// multipart, não JSON. Passa pelo MESMO asaasCall de propósito, pra herdar a
-// base, a autenticação e o tratamento de 401/erro, em vez de nascer um segundo
-// jeito de falar com a Asaas. Com form o content-type não é escrito à mão:
-// quem monta o boundary é o fetch.
+// Raw call to the Asaas API, given the plaintext key. Exported because a
+// plugin that opens a managed payment account for the user talks to the SAME
+// API with the operator's ROOT key, which doesn't come from the user's vault:
+// environment detection by key prefix and the error format live in one place.
+// `form` (FormData) is the UPLOAD path: sending an account document is
+// multipart, not JSON. It goes through the SAME asaasCall on purpose, to
+// inherit the base, auth and 401/error handling, instead of a second way of
+// talking to Asaas. With form the content-type isn't written by hand: fetch
+// builds the boundary.
 export async function asaasCall(key, path, { method = 'GET', body, form, query } = {}) {
   let url = asaasBase(key) + path;
   if (query) {
@@ -989,11 +989,11 @@ export function asaasTools({
   emailDisponivel = null,
   enviarComprovanteEmail = null,
 }) {
-  // Uma pessoa pode ter DUAS contas Asaas guardadas (a Conta Brambs que o
-  // Brambs abriu pra ela e uma conta própria dela). Quem escolhe qual vale é o
-  // resolvedor do server; aqui a obrigação é DIZER em qual conta a tool agiu,
-  // senão o dono move dinheiro achando que é na outra. Só aparece quando de
-  // fato existe mais de uma: com uma só, é ruído.
+  // A person can have TWO Asaas accounts stored (the managed payment account a
+  // plugin opened for them and their own). The server's resolver picks which one
+  // counts; here the duty is to SAY which account the tool acted on, or the owner
+  // moves money thinking it's the other. Only shown when there really is more
+  // than one: with one, it's noise.
   const emQualConta = async () => {
     if (!conta) return '';
     try {

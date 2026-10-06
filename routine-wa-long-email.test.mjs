@@ -97,7 +97,7 @@ assert.ok(wa[0].template.components[0].parameters[0].text.startsWith("Today's co
 // 6) Tema inutilizável: a frase telegráfica do teste de 02/10, longo demais, com
 // saudação, mais de 8 palavras, ou erro. Cai na frase fixa com o título.
 for (const ruim of [async () => 'Episódio de 6 Minute English sobre o futuro do trabalho: se a IA vai acabar com empregos',
-  async () => 'x'.repeat(2000), async () => 'Oi, Marcos! o futuro do trabalho',
+  async () => 'x'.repeat(2000), async () => 'Oi, Ana! o futuro do trabalho',
   async () => 'o futuro do trabalho e a semana de quatro dias na prática', async () => { throw new Error('modelo fora'); }]) {
   const d = createScheduledDelivery({ ...deps, runAgentMessageDraft: ruim });
   fechada(); reset();

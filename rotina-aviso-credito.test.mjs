@@ -1,7 +1,7 @@
-// Teste da cadência do aviso "seus créditos acabaram" dentro de rotina agendada.
-// Regra (Marcos, 09/09/2026): 1 aviso por SEMANA e por PESSOA. Nas execuções
-// silenciadas a rotina roda mesmo assim, sem chamar modelo, custo zero.
-// Puro, offline, sem banco. Roda com: node rotina-aviso-credito.test.mjs
+// Tests the cadence of the "your credits ran out" notice inside a scheduled routine.
+// Rule (09/09/2026): 1 notice per WEEK and per PERSON. In silenced runs the
+// routine still runs, without calling the model, at zero cost.
+// Pure, offline, no database. Run with: node rotina-aviso-credito.test.mjs
 
 import { deveAvisarRotinaSemCredito, ROUTINE_CREDIT_WARN_MS } from './web/rotina-aviso-credito.mjs';
 

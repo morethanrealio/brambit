@@ -1,17 +1,17 @@
-// ── Credenciais AWS do backend (S3) ──
-// Duas fontes, escolhidas pelo .env:
-// - S3_INSTANCE_ROLE=1: credencial TEMPORÁRIA da role da instância EC2, lida do
-//   IMDSv2 (169.254.169.254). Não fica chave nenhuma no disco; a AWS gira a
-//   credencial sozinha e a gente só relê. Decisão SOC 2 (02/out/2026): tirar a
-//   chave fixa do usuário IAM brambs-media do .env da prod.
-// - Sem a flag: chave fixa AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (legado, e o
-//   caminho de volta se a role der problema: basta tirar a flag).
-// O presign de URL é síncrono, então a credencial da role fica em cache e um
-// timer a relê a cada poucos minutos (startAwsCredentialRefresh, no boot).
+// ── Backend AWS credentials (S3) ──
+// Two sources, picked by .env:
+// - S3_INSTANCE_ROLE=1: TEMPORARY credential of the EC2 instance role, read from
+//   IMDSv2 (169.254.169.254). No key on disk; AWS rotates the credential and we
+//   just re-read it. SOC 2 decision (Oct 2, 2026): drop the static IAM user key
+//   from the production .env.
+// - Without the flag: static AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (legacy, and
+//   the way back if the role misbehaves: just remove the flag).
+// URL presigning is synchronous, so the role credential is cached and a timer
+// re-reads it every few minutes (startAwsCredentialRefresh, at boot).
 //
-// O IMDS é lido com http puro, como em kms.mjs, e NÃO pelo fetch global: o fetch
-// passa pelo egress.mjs (que não conhece o 169.254.169.254 e o barraria com
-// EGRESS_MODE=block) e pode herdar proxy do ambiente.
+// IMDS is read with plain http, as in kms.mjs, NOT with the global fetch: fetch
+// goes through egress.mjs (which doesn't know 169.254.169.254 and would block it
+// with EGRESS_MODE=block) and may inherit the environment's proxy.
 import http from 'http';
 import { lerCorpo } from './kms.mjs';
 

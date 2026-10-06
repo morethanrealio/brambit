@@ -1,31 +1,31 @@
-// Conta empresarial, Fases F0 e F1 (docs: projetos/conta-empresarial.md).
+// Company account, phases F0 and F1.
 //
-// O que existe aqui: a empresa (org), a lista de domínios liberados, os membros
-// e os convites. Desde a F1 a empresa também tem plano e saldo de crédito
-// próprios, divididos por todos os membros (a conta do saldo é a mesma da
-// pessoa, em credit-status.mjs); as colunas e tabelas dessa cobrança moram na
-// nuvem (empresaCobrancaSchemaSql, org-billing.mjs). Quem não é de empresa
-// nenhuma não passa por nada disto.
+// What lives here: the company (org), the list of allowed domains, members and
+// invites. Since F1 the company also has its own plan and credit balance,
+// shared by all members (the balance account is the same as the person's, in
+// credit-status.mjs); the billing columns and tables live in a plugin
+// (empresaCobrancaSchemaSql, org-billing.mjs). Anyone not in a company never
+// goes through any of this.
 //
-// Travas (F1): entrar, criar e sair mexem em QUAL conta paga o consumo da
-// pessoa, então pegam as mesmas travas da reserva de crédito, na mesma ordem
-// (pessoa, depois empresa; travas-de-conta.mjs) e ANTES da trava de
-// linha da empresa. Assim nenhuma reserva fica no meio de uma troca de conta.
+// Locks (F1): joining, creating and leaving change WHICH account pays for the
+// person's usage, so they take the same locks as the credit reserve, in the
+// same order (person, then company; travas-de-conta.mjs) and BEFORE the
+// company row lock. So no reserve is caught in the middle of an account swap.
 //
-// Regras que vêm das decisões do Marcos (msgs 7758 e 7760):
-// - Uma pessoa está em no máximo UMA empresa (UNIQUE em org_members.user_id).
-// - Domínio não é único no sistema: duas empresas podem listar o mesmo domínio
-//   (não há prova por DNS). O que é único é (empresa, domínio).
-// - Entra só por convite, e o e-mail convidado tem que ser de um domínio da lista.
-// - Quem instala pode barrar a entrada (impedeEntrada; no Brambs, conta com plano
-//   pessoal pago ativo precisa cancelar antes de aceitar o convite).
-// - Membro só conecta Google/Microsoft de domínio da lista; conector sem e-mail
-//   (WhatsApp, Telegram, GitHub, Notion, Slack, chave de API, MCP) fica livre.
+// Rules:
+// - A person is in at most ONE company (UNIQUE on org_members.user_id).
+// - A domain is not unique system-wide: two companies may list the same domain
+//   (there's no DNS proof). What's unique is (company, domain).
+// - Joining is invite-only, and the invited e-mail must be on a listed domain.
+// - The operator can block joining (impedeEntrada; e.g. a plan-based plugin can
+//   require an active paid personal plan to be cancelled before accepting).
+// - A member only connects Google/Microsoft on a listed domain; connectors
+//   without e-mail (WhatsApp, Telegram, GitHub, Notion, Slack, API key, MCP) are free.
 //
-// Sem conexão/import de db aqui: o db.mjs injeta o pool e os testes usam PGlite
-// com as mesmas funções. O que é de cobrança (plano pago, pacotes, reembolso)
-// entra pelos ganchos abaixo, ligados pela nuvem (empresa-brambs.mjs); na versão
-// aberta nenhum é ligado e a empresa é só membros, domínios e convites.
+// No db connection/import here: db.mjs injects the pool and tests use PGlite
+// with the same functions. Billing (paid plan, packs, refund) enters through
+// the hooks below, wired by a plugin; in the open version none is wired and
+// the company is just members, domains and invites.
 
 import { lockCreditUser, lockCreditOrg } from './travas-de-conta.mjs';
 

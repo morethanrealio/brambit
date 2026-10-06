@@ -1,14 +1,14 @@
-// E-mail do convite pra conta da empresa (Marcos 29/09): sai uma vez por
-// endereço novo convidado. Reconvite do mesmo e-mail com convite ainda pendente
-// não reenvia. Falha no envio nunca desfaz o convite: ele segue valendo dentro
-// do app (aparece quando a pessoa entra com esse e-mail).
+// Company account invite e-mail (29/09): sent once per newly invited address.
+// Re-inviting the same e-mail with a pending invite doesn't resend. A send
+// failure never undoes the invite: it stays valid in the app (it shows up
+// when the person signs in with that e-mail).
 //
-// Remetente: MAIL_INVITE_FROM, ou o institucional (MAIL_INSTITUTIONAL_FROM),
-// nunca o assistente@ (é a caixa em que os usuários falam com o assistente).
-// O endereço precisa ser o autenticado no SMTP ou ter "Enviar como" nele.
-// Resposta ao e-mail vai pra quem convidou (Reply-To). Nome e site são os da
-// marca (marca.mjs); regra é a frase de quem instala sobre como a conta da
-// empresa funciona (gancho linhaDoConvite do empresa.mjs), ou nada.
+// Sender: MAIL_INVITE_FROM, or the institutional one (MAIL_INSTITUTIONAL_FROM),
+// never assistente@ (the inbox where users talk to the assistant).
+// The address must be the SMTP-authenticated one or have "Send as" on it.
+// Replies go to the inviter (Reply-To). Name and site come from the brand
+// (marca.mjs); the rule is the operator's sentence about how the company
+// account works (linhaDoConvite hook in empresa.mjs), or nothing.
 import { marca, siteDaMarca } from './marca.mjs';
 
 const limpa = (s) => String(s || '').replace(/[\r\n]+/g, ' ').trim();

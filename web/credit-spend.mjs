@@ -1,18 +1,18 @@
-// Gasto por recorte, pro assistente responder perguntas como
-// "quanto gastei hoje?", "e no dia 15?", "quanto custaram as últimas 3 respostas?".
-// Pedido do Marcos 27/09/2026.
+// Spend by slice, so the assistant can answer questions like
+// "how much did I spend today?", "and on the 15th?", "how much did the last 3
+// replies cost?". Added 27/09/2026.
 //
-// Unidade: 'creditos' (Brambs) soma usage_events.bill_credits, o crédito cobrado,
-// o mesmo que o saldo usa; 'usd' (núcleo, sem crédito) soma cost_usd, o custo real.
-// Quem escolhe é a porta de gasto, que é quem entrega a ferramenta ao turno.
+// Unit: 'creditos' (a credit-based plugin) sums usage_events.bill_credits, the
+// billed credit, same as the balance; 'usd' (core, no credits) sums cost_usd,
+// the real cost. The spend port, which hands the tool to the turn, picks it.
 //
-// Por período: soma no fuso de SP. Vale pra todo o histórico.
+// By period: summed in the São Paulo time zone. Covers the whole history.
 //
-// Por resposta: usage_events.turn_id NÃO agrupa uma resposta (cada chamada de
-// modelo e cada busca grava com um id próprio). O que delimita uma resposta é a
-// medição de turno (task_measurements, source='conversation'): mesma pessoa,
-// mesma thread, entre started_at e finished_at. Busca, sub-agente e imagem da
-// resposta caem nessa janela com o thread_id dela. Medição existe desde 21/09.
+// By reply: usage_events.turn_id does NOT group a reply (each model call and
+// each search writes its own id). What delimits a reply is the turn
+// measurement (task_measurements, source='conversation'): same person, same
+// thread, between started_at and finished_at. Search, sub-agent and image of
+// the reply fall in that window with its thread_id. Measured since 21/09.
 const S = 'mtr_harness';
 const TZ = 'America/Sao_Paulo';
 const NAO_CONSUMO = ['admin-grant', 'purchase', 'referral'];
@@ -43,9 +43,9 @@ const CATEGORIAS = {
   onboard: 'configuração inicial',
   agent2agent: 'conversa com outros assistentes',
 };
-// Pro usuário importa o total; a divisão por categoria é detalhe interno e só
-// vai pra resposta se ele pedir (Marcos 29/09/2026). Os dados continuam vindo
-// completos pra o assistente responder um "em quê?" sem nova consulta.
+// The total is what matters to the user; the per-category split is an internal
+// detail and only goes in the reply if asked (29/09/2026). The data still comes
+// complete so the assistant can answer "on what?" without a new query.
 const ORIENTACAO_TOTAL = 'Responda só com o total de créditos (e o total de cada dia ou de cada resposta, se a pergunta for sobre vários). NÃO mostre a divisão por categoria (onde_foi) a não ser que a pessoa pergunte em que foi gasto ou peça o detalhamento.';
 const UNIDADES = {
   creditos: { campo: 'creditos', soma: 'COALESCE(sum(bill_credits), 0)::int', valor: (v) => Number(v) || 0, orientacao: ORIENTACAO_TOTAL },
@@ -145,10 +145,10 @@ export function createCreditSpend(pool, { unidade = 'creditos' } = {}) {
   return { porPeriodo, ultimasRespostas };
 }
 
-// A ferramenta consultar_gasto do turno, na unidade de `spend`. Quem a entrega é
-// a porta de gasto (ferramentas), logo depois das de saldo. Só leitura, sem
-// preço, então vale igual no app iOS. Por padrão o assistente dá só o total;
-// divisão por categoria só a pedido (Marcos 29/09).
+// The turn's consultar_gasto tool, in the unit of `spend`. The spend port
+// (ferramentas) hands it out, right after the balance ones. Read-only, no
+// price, so it's the same on the iOS app. By default the assistant gives only
+// the total; per-category split only on request (29/09).
 const O_QUE_MOSTRA = {
   creditos: 'Mostra quantos créditos foram gastos',
   usd: 'Mostra quanto foi gasto em US$ (custo real dos modelos e serviços usados)',

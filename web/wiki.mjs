@@ -13,12 +13,12 @@ import { reconciliarLigado, planejarOp } from './wiki-reconciliar.mjs';
 // Página sempre-injetada: o "quem você é" curto e estável (sucessora do perfil plano).
 const PERFIL = 'perfil';
 
-// ── FASE 2: perfil = OVERVIEW curto que linka as áreas ──
-// Formato inspirado no que o Town faz (Marcos msgs 5648/5650): a página principal
-// é um resumão com links pras páginas de área, cada assunto tem a sua página, e
-// existe um registro do que mudou. Invariante desta fase: NADA apaga e NADA é
-// truncado. O teto do perfil não corta linha: ele passa a ROTEAR o fato novo pra
-// página de área. O que já está escrito só se move na Fase 4, com dry-run.
+// ── PHASE 2: perfil = short OVERVIEW linking to the areas ──
+// Format inspired by what Town does: the main page is a summary with links to
+// the area pages, each topic has its own page, and there is a log of what
+// changed. Invariant of this phase: NOTHING is deleted and NOTHING is
+// truncated. The profile cap doesn't cut lines: it ROUTES the new fact to an
+// area page. What is already written only moves in Phase 4, with a dry run.
 const AREAS = {
   // facetas (o corte por FUNÇÃO que o Town usa)
   comunicacao: 'Como se comunica',
@@ -50,7 +50,7 @@ const MAX_ATUALIZACOES = 60;
 // Teto de FATOS do perfil (o resto vira link). Sobrescrevível sem deploy.
 const PERFIL_MAX = Math.max(5, Number(process.env.PERFIL_MAX_LINHAS || 15));
 
-// Uma página por pessoa (`pessoa-laura`), em vez de uma linha numa página `pessoas`.
+// One page per person (`pessoa-ana`), instead of a line in a `pessoas` page.
 const ehPaginaDePessoa = (slug) => /^pessoa-[a-z0-9-]{2,}$/.test(slug);
 
 export function tituloDe(slug) {
@@ -109,7 +109,7 @@ export function wikiTools(userId, { fonte = {} } = {}) {
           pagina: {
             type: 'string',
             description: 'Slug da página de destino. "perfil" é o RESUMÃO (só o que define a pessoa e vale em quase toda conversa; tem teto). Detalhe vai pra página de área: '
-              + Object.keys(AREAS).join(', ') + '. Pessoa específica = uma página por pessoa, no formato "pessoa-nome" (ex: "pessoa-laura"). Padrão: "perfil".',
+              + Object.keys(AREAS).join(', ') + '. Pessoa específica = uma página por pessoa, no formato "pessoa-nome" (ex: "pessoa-ana"). Padrão: "perfil".',
           },
           add: { type: 'array', items: { type: 'string' }, description: 'Fatos NOVOS, um por item, uma linha curta cada.' },
           corrigir: {
@@ -640,11 +640,11 @@ O trecho errado leva SÓ as palavras que a versão certa desmente. Detalhe que e
 Se a linha não contradiz a versão certa (as duas podem ser verdade juntas), devolva {"manter":true}.
 Só se a linha inteira disser a mesma coisa que a versão certa, sem nenhum dado a mais, devolva {"apagar":true}.`;
 
-// Corrige UMA linha perdedora trocando só o trecho em conflito (Marcos msg 7338:
-// "não pode haver perda"; antes a linha inteira era trocada e levava junto o que
-// era verdade, ex. uma página perdia "Algarve"). O modelo só aponta o trecho; a linha
-// nova é montada AQUI com replace, então fora do trecho ela é a velha letra por
-// letra. Apagar a linha só quando cada palavra dela já está na vencedora.
+// Fixes ONE losing line by swapping only the conflicting excerpt ("nothing may
+// be lost"; before, the whole line was swapped and took true facts with it, e.g.
+// a page lost "Algarve"). The model only points at the excerpt; the new line is
+// built HERE with replace, so outside the excerpt it is the old one letter by
+// letter. Delete the line only when each of its words is already in the winner.
 async function corrigirPerdedora(assunto, velha, vencedora) {
   const r = await makeMemoriaModel().forBillingPhase({ kind: 'housekeeping' }).complete({
     system: SYS_PERDEDORA, tools: [],
@@ -1075,7 +1075,7 @@ const sysPatch = (language) => [
   'Onde guardar:',
   `- "perfil" é o RESUMÃO: só o que define a pessoa e serve em quase toda conversa (no máximo ~${PERFIL_MAX} fatos).`,
   `- Detalhe vai pra página de área: ${Object.keys(AREAS).join(', ')}.`,
-  '- Fato sobre uma PESSOA específica vai numa página por pessoa, no formato "pessoa-nome" (ex: "pessoa-laura").',
+  '- Fato sobre uma PESSOA específica vai numa página por pessoa, no formato "pessoa-nome" (ex: "pessoa-ana").',
   '- Se o perfil já estiver no teto, o servidor manda o fato pra "notas" sozinho; prefira já escolher a página certa.',
 ].join('\n');
 

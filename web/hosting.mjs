@@ -382,11 +382,11 @@ async function ensureDraftSeeded(ownerUserId, system, app) {
   return draft;
 }
 
-// ── Teto de apps (porta de permissões, permissoes.mjs) ──
-// O teto vale só pra app NOVO e conta os apps do DONO, não do chamador: numa
-// publicação colaborativa (Modo B) quem paga a conta do recurso é o dono.
-// Republicar/editar um app que já existe NUNCA é bloqueado. Quanto é o teto e o
-// que dizer quando bate fica com quem instala (no Brambs, o plano).
+// ── App cap (permissions port, permissoes.mjs) ──
+// The cap applies only to a NEW app and counts the OWNER's apps, not the caller's:
+// in a collaborative publish (Mode B) the owner pays for the resource.
+// Republishing/editing an existing app is NEVER blocked. The cap and what to
+// say when it's hit belong to whoever installs it (e.g. a plan-based plugin).
 let permissoes = null;
 export function configurarPermissoes(p) { permissoes = conferirPermissoes(p); }
 function perm() {
@@ -399,13 +399,13 @@ async function appQuotaBlock(ownerUserId, system, { appClient = false } = {}) {
   return perm().bloqueioDeApp({ ownerUserId, atuais, appClient });
 }
 
-// Cota de disco do dono, no formato que o ctl.py espera. UM lugar só: todo
-// caminho que publica (publicar_sistema e replicar_sistema) tem que mandar este
-// valor, porque o ctl.py aplica a cota no LABEL, que é por USUÁRIO, e sem o campo
-// cai no default de 200 MB, derrubando de uma vez TODOS os apps de quem paga.
-// O sufixo "m" é obrigatório: sem unidade o XFS lê o número como bytes.
-// dono = linha do users de quem é dono do espaço; quanto disco ele tem é de
-// quem instala (no Brambs, o plano).
+// Owner's disk quota, in the format ctl.py expects. ONE place only: every
+// publish path (publicar_sistema and replicar_sistema) must send this value,
+// because ctl.py applies the quota on the LABEL, which is per USER, and without
+// the field it falls back to 200 MB, taking down ALL of a paying user's apps.
+// The "m" suffix is required: without a unit XFS reads the number as bytes.
+// dono = users row of the space owner; how much disk they get is up to
+// whoever installs it (e.g. a plan-based plugin).
 export function cotaDeDisco(dono) {
   return `${perm().discoDoAppMb(dono)}m`;
 }
@@ -886,10 +886,10 @@ export function hostingTools(userId, agentId, opts = {}) {
   const emitAppCard = emitAppCardRaw;
   // Conversa vinda do app iOS: ver appQuotaBlock.
   const appClient = !!opts.appClient;
-  // ── Guardrail: cada app é cuidado por UM assistente do dono (apps.agent_id) ──
-  // Se o assistente ATIVO não é o dono do app (e é app do próprio usuário, não
-  // colaboração entre pessoas), ele NÃO opera: devolve pra quem cuida. O usuário
-  // se resolve com o assistente certo (menu/@nome). (Marcos 27/07)
+  // ── Guardrail: each app is looked after by ONE of the owner's assistants (apps.agent_id) ──
+  // If the ACTIVE assistant doesn't own the app (and it's the user's own app,
+  // not a collaboration between people), it does NOT act: it hands off to the
+  // owner. The user switches to the right assistant (menu/@name). (27/07)
   async function ownerAgentName(ownerAgentId) {
     try {
       const ags = await listAgents(userId);
@@ -1957,9 +1957,9 @@ export function hostingTools(userId, agentId, opts = {}) {
         },
       },
       async run({ intencao = 'mostrar' } = {}) {
-        // Card é UI: só quando o usuário pediu pra ver os apps. Chamada de sondagem
-        // (achar slug, decidir onde guardar um dado) não pode pintar a tela dele
-        // — foi o que aconteceu no caso "lista de mercado" (Marcos 03/09/2026).
+        // The card is UI: only when the user asked to see the apps. A probing call
+        // (find a slug, decide where to store data) must not paint their screen;
+        // that's what happened in the "grocery list" case (03/09/2026).
         const emitAppCard = intencao === 'consulta' ? null : emitAppCardRaw;
         const { label } = await resolveLabel(userId);
         const rows = await listAppsForUser(userId);

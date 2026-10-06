@@ -2,10 +2,10 @@
 async function getCreditStatus(userId) {
   let u = await getUserById(userId);
 
-  // ── Virada de 01/09 (Marcos 28/08) ──
-  // Quem já estava na base roda agosto inteiro com o plano que tinha e só em 01/09
-  // zera e cai pro Básico. O UPDATE do boot cobre o caso normal; esta chamada cobre
-  // o dia em que ninguém reinicia o servidor. É one-shot pela própria âncora.
+  // ── 01/09 switch (decided 28/08) ──
+  // Existing users run all of August on the plan they had and only on 01/09
+  // reset and drop to Básico. The boot UPDATE covers the normal case; this call
+  // covers the day nobody restarts the server. One-shot by its own anchor.
   if (Date.now() >= VIRADA_SETEMBRO_MS && u?.cycle_anchor
       && new Date(u.cycle_anchor).getTime() < VIRADA_SETEMBRO_MS
       && await aplicarViradaSetembro(userId)) {
@@ -13,13 +13,13 @@ async function getCreditStatus(userId) {
     u = await getUserById(userId);
   }
 
-  // ── Fim do primeiro mês grátis (Marcos 28/08) ──
-  // Quem não virou assinante cai pro Free. Checagem PREGUIÇOSA, no próprio turno
-  // da pessoa, em vez de cron: dispara uma vez só, porque logo depois o plano já
-  // é 'free' e a condição não fecha mais. O teste de assinante é o período pago
-  // aberto (isCurrentlyPaying), NUNCA users.plan — que aqui é justamente o nome
-  // de plano dado de graça. trial_ends_at NÃO é limpo depois, de propósito: é ele
-  // que marca que aquela conta já consumiu o mês grátis.
+  // ── End of the free first month (decided 28/08) ──
+  // Whoever didn't subscribe drops to Free. LAZY check, on the person's own turn,
+  // instead of cron: it fires only once, because right after the plan is
+  // already 'free' and the condition no longer holds. The subscriber test is the
+  // open paid period (isCurrentlyPaying), NEVER users.plan, which here is exactly
+  // the plan name given for free. trial_ends_at is NOT cleared afterwards, on
+  // purpose: it marks that the account already used its free month.
   if (u?.trial_ends_at && u.plan && u.plan !== 'free'
       && new Date(u.trial_ends_at).getTime() <= Date.now()
       && !(await isCurrentlyPaying(userId))) {
@@ -75,14 +75,14 @@ async function getCreditStatus(userId) {
   // Excedente do período ABERTO (debita extras ao vivo, sem persistir).
   const currentOverflow = Math.max(0, used - franchise);
 
-  // ── Extras cientes de EXPIRAÇÃO (Marcos 19/08) ──
-  // Cada extra (pacote comprado / concessão / bônus de indicação) vale
-  // EXTRA_TTL_DAYS a partir da sua data; o saldo não usado até lá é PERDIDO. O
-  // consumo dos extras é FIFO do mais antigo pro mais novo. Como o mais antigo é
-  // justamente o que expira primeiro, alocar o consumo passado nele primeiro
-  // resolve a borda A FAVOR do usuário (o gasto "consome" o crédito que ia
-  // expirar, em vez de forçá-lo a perder o antigo E gastar o novo). A franquia
-  // mensal NÃO expira por aqui (reseta todo mês).
+  // ── EXPIRATION-aware extras (decided 19/08) ──
+  // Each extra (purchased pack / grant / referral bonus) is valid for
+  // EXTRA_TTL_DAYS from its date; balance unused by then is LOST. Extras are
+  // consumed FIFO from oldest to newest. Since the oldest is exactly the one
+  // that expires first, allocating past usage to it first resolves the edge
+  // IN THE USER'S FAVOR (spend "consumes" the credit about to expire, instead
+  // of making them lose the old one AND spend the new one). The monthly
+  // allowance does NOT expire here (it resets every month).
   const grants = await listUserGrants(userId); // {ts, model, usd}, mais antigo 1º
   const ttlMs = (EXTRA_TTL_DAYS > 0 ? EXTRA_TTL_DAYS : 0) * 86400_000;
   const nowMs = Date.now();
@@ -136,10 +136,10 @@ async function getCreditStatus(userId) {
   const usedTotal = used;
   const pctTotal = capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : 0;
 
-  // Detalhamento por PACOTE (Marcos 19/08): cada extra vira uma linha com sua
-  // DATA DE EXPIRAÇÃO. Mostra os que ainda valem e têm saldo, mais os que foram
-  // tocados neste mês. Ordem de consumo: franquia primeiro; extras depois, do
-  // mais antigo (mais perto de vencer) pro mais novo.
+  // Per-PACK breakdown (decided 19/08): each extra becomes a line with its
+  // EXPIRATION DATE. Shows those still valid with balance, plus those touched
+  // this month. Consumption order: allowance first; extras after, from the
+  // oldest (closest to expiring) to the newest.
   const extrasBreakdown = [];
   for (const p of packs) {
     const usedP = Math.round(p.allocClosed + p.allocOpen);

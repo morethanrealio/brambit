@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Trava do núcleo (passo 11d da separação núcleo x nuvem). O nuvem.txt da raiz lista
-// os arquivos da nuvem Brambs; todo o resto é o núcleo, que vai ser aberto. Duas provas:
+// Core guard (core x cloud split). The root nuvem.txt lists the files of a hosted
+// cloud deployment; everything else is the core, which is open. Two proofs:
 //
-//  1. Nenhum arquivo do núcleo importa arquivo da nuvem, nem o sobe como processo, nem
-//     cita o caminho dele (lê, copia, testa; mesmo grafo do affected.mjs). Ligação com a
-//     nuvem só pelas portas e pelo web/plugins/ativos.mjs, que o núcleo procura e, sem
-//     ele, segue só com os padrões.
-//  2. O núcleo sobe sozinho: copia o repositório SEM nenhum arquivo da nuvem pra uma
-//     pasta temporária e faz o que o `npm run local` faz (Postgres descartável, tabelas
-//     do boot, migrações, servidor), com a rede bloqueada como no server-boot.test.mjs.
-//     Confere as páginas, o cadastro e o login de uma conta.
+//  1. No core file imports a cloud file, starts it as a process, or cites its
+//     path (reads, copies, tests; same graph as affected.mjs). The core links to
+//     the cloud only through the ports and web/plugins/ativos.mjs, which the core
+//     looks for and, without it, runs on the defaults.
+//  2. The core boots alone: copies the repository WITHOUT any cloud file to a
+//     temp folder and does what `npm run local` does (throwaway Postgres, boot
+//     tables, migrations, server), with the network blocked as in server-boot.test.mjs.
+//     Checks the pages, sign-up and login of an account.
 //
-// Uso: node test-support/nucleo-guard.mjs          (as duas provas)
-//      node test-support/nucleo-guard.mjs --sem-boot (só a 1)
-// Sem o nuvem.txt (no repositório do núcleo) a nuvem é vazia: a 1 passa e a 2 sobe o repo como está.
+// Usage: node test-support/nucleo-guard.mjs          (both proofs)
+//        node test-support/nucleo-guard.mjs --sem-boot (only 1)
+// Without nuvem.txt (in the core repository) the cloud is empty: 1 passes and 2 boots the repo as is.
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';

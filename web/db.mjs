@@ -64,9 +64,9 @@ export const waInbox = createWaInbox(pool,{seal:encryptSecret,open:decryptSecret
 export const onboardingStore = createOnboardingStore(pool);
 
 export const S = 'mtr_harness';
-// Conta empresarial F0 (empresa.mjs): empresa, domínios, membros e convites.
-// O que a cobrança faz na entrada e na criação a nuvem liga depois
-// (empresa-brambs.mjs, por empresaStore.ligar).
+// Company account F0 (empresa.mjs): company, domains, members and invites.
+// What billing does on join and on creation a plugin wires in later
+// (through empresaStore.ligar).
 export const empresaStore = createEmpresaStore(pool, { S });
 // Porta da conta pagadora (conta-pagadora.mjs): quem paga o consumo gravado aqui.
 // Sem ela nada grava consumo (o boot liga com configurarContaPagadora).
@@ -112,8 +112,8 @@ export function cleanDeep(v) {
   return v;
 }
 
-// O esquema da distribuição (tabelas de cobrança, campanhas, cockpit, feed;
-// db-brambs.mjs) chega como argumento e roda logo depois do esquema do núcleo.
+// A plugin's schema (e.g. billing, campaigns, cockpit, feed tables) arrives
+// as an argument and runs right after the core schema.
 export async function initDb(...esquemas) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${S}.users (
@@ -133,11 +133,11 @@ export async function initDb(...esquemas) {
     UPDATE ${S}.users SET model_pref = 'flash' WHERE model_pref = 'g3';
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS model_auto boolean NOT NULL DEFAULT false;
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS timezone text;
-    -- Idioma e país do usuário (base do multi-idioma, Marcos 07/09).
-    -- NULL nos dois = ainda não sabemos, e quem lê cai no default pt-BR/Brasil.
-    -- Ficam SEPARADOS de propósito: idioma é como a pessoa quer ser atendida
-    -- (ela escolhe), país é onde ela está (define preço e o que existe pra ela,
-    -- ex. Asaas só no Brasil). Um espanhol morando no Brasil quer es + BR.
+    -- User language and country (basis of multi-language, 07/09).
+    -- NULL in both = not known yet, and readers fall back to pt-BR/Brazil.
+    -- Kept SEPARATE on purpose: language is how the person wants to be served
+    -- (they choose), country is where they are (sets price and what exists for
+    -- them, e.g. Asaas only in Brazil). A Spaniard living in Brazil wants es + BR.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS language text;
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS country text;
     -- Descadastro de e-mails institucionais/novidades (marketing). SEPARADO do
@@ -147,12 +147,12 @@ export async function initDb(...esquemas) {
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS email_optout boolean NOT NULL DEFAULT false;
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS email_optout_at timestamptz;
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS unsub_token text;
-    -- De onde a pessoa VEIO (Marcos 03/09): gclid/gbraid do Google Ads, utm_* de
-    -- qualquer campanha, referrer externo e a página de entrada. O front captura
-    -- no PRIMEIRO toque e manda quando a conta é criada (POST /api/atribuicao).
-    -- Existe porque a conversão do Ads responde "quantos" mas não "quem": sem
-    -- isso não há como ligar um cadastro ao clique que o trouxe. jsonb pra não
-    -- precisar de migração a cada parâmetro novo de campanha.
+    -- Where the person CAME FROM (03/09): Google Ads gclid/gbraid, utm_* from
+    -- any campaign, external referrer and the landing page. The front captures
+    -- on FIRST touch and sends it when the account is created (POST /api/atribuicao).
+    -- Exists because the Ads conversion answers "how many" but not "who":
+    -- without it there's no way to tie a sign-up to the click that brought it.
+    -- jsonb so a new campaign parameter needs no migration.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS attribution jsonb;
     -- Convites (indicação). Na PRIMEIRA vez que a coluna é criada, o DEFAULT 3
     -- preenche TODOS os usuários já existentes (a comunidade atual ganha 3 de
@@ -160,12 +160,12 @@ export async function initDb(...esquemas) {
     -- convites. Como é ADD COLUMN IF NOT EXISTS, restart não re-semeia.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS invites_total int NOT NULL DEFAULT 3;
     ALTER TABLE ${S}.users ALTER COLUMN invites_total SET DEFAULT 0;
-    -- Reforma do member-get-member (Marcos 28/08): o código de 4 dígitos passa a
-    -- valer 10 indicações para TODO MUNDO, e todo cadastro novo já nasce podendo
-    -- indicar (default 0 -> 10). O UPDATE é guardado por dado: roda enquanto
-    -- ninguém tiver 10, e depois da primeira passada todos têm, então restart não
-    -- re-semeia nem sobrescreve ajuste manual feito depois. Ninguém perde
-    -- indicação já usada: o consumo é contado em users.referred_by, não aqui.
+    -- Member-get-member overhaul (28/08): the 4-digit code is worth 10
+    -- referrals for EVERYONE, and every new sign-up can refer right away
+    -- (default 0 -> 10). The UPDATE is data-guarded: it runs while nobody has
+    -- 10, and after the first pass everyone does, so a restart doesn't reseed or
+    -- overwrite a later manual tweak. Nobody loses a used referral: usage is
+    -- counted in users.referred_by, not here.
     DO $do$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM ${S}.users WHERE invites_total = 10) THEN
@@ -174,24 +174,24 @@ export async function initDb(...esquemas) {
     END
     $do$;
     ALTER TABLE ${S}.users ALTER COLUMN invites_total SET DEFAULT 10;
-    -- Indicação MODELO NOVO (v2, Marcos 19/08): marca o DONO de um código v2. Só é
-    -- ligado sob demanda (Kenji gera a pedido do Marcos). Código v2 = usável 100×,
-    -- indicado entra no plano de 3000 (Básico) grátis no Beta, e o dono ganha +500
-    -- créditos quando o indicado validar o e-mail (bônus expira 90d). Códigos ANTIGOS
-    -- (v2=false) seguem intocados: indicado entra a 6000, sem bônus.
+    -- NEW referral model (v2, 19/08): marks the OWNER of a v2 code. Only turned
+    -- on on demand, by an operator. A v2 code is usable 100×, the referred user
+    -- gets the 3000 plan (Básico) free in the Beta, and the owner earns +500
+    -- credits when the referred user verifies their e-mail (bonus expires in 90d).
+    -- OLD codes (v2=false) stay untouched: referred users start at 6000, no bonus.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS referral_v2 boolean NOT NULL DEFAULT false;
     -- Marca no INDICADO se o bônus de +500 pro indicador dele já foi concedido
     -- (idempotência; só vale pra indicação v2). null/false = ainda não concedido.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS ref_bonus_done boolean NOT NULL DEFAULT false;
-    -- Marca no INDICADO se o bônus de CADASTRO (+200 só pro indicador) já saiu.
-    -- Regra nova (Marcos 08/09): indicação passou a pagar em dois momentos, 200
-    -- quando o indicado começa a usar e 500 quando ele assina (o de assinar é o
-    -- ref_bonus_done acima, e continua pros dois lados).
-    -- O DEFAULT nasce true de propósito e vira false logo em seguida: assim TODO
-    -- MUNDO que já existe fica marcado como pago e as 22 indicações antigas não
-    -- viram crédito retroativo (Marcos 08/09: "2 não"), enquanto todo cadastro
-    -- novo nasce false e elegível. Como é ADD COLUMN IF NOT EXISTS, restart não
-    -- re-semeia.
+    -- Marks on the REFERRED user whether the SIGN-UP bonus (+200, referrer only)
+    -- was paid. New rule (08/09): referrals pay at two moments, 200 when the
+    -- referred user starts using it and 500 when they subscribe (the subscribe
+    -- one is ref_bonus_done above, still for both sides).
+    -- The DEFAULT starts true on purpose and becomes false right after: so
+    -- EVERYONE already existing is marked as paid and the 22 old referrals don't
+    -- become retroactive credit (decided 08/09), while every new sign-up starts
+    -- false and eligible. Being ADD COLUMN IF NOT EXISTS, a restart doesn't
+    -- reseed.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS ref_signup_bonus_done boolean NOT NULL DEFAULT true;
     ALTER TABLE ${S}.users ALTER COLUMN ref_signup_bonus_done SET DEFAULT false;
     -- Quem indicou este usuário (null = entrou pela whitelist/admin, sem indicação).
@@ -221,14 +221,14 @@ export async function initDb(...esquemas) {
       END IF;
     END
     $do$;
-    -- EXCLUSÃO DE CONTA pedida pelo próprio dono (obrigatória pela diretriz
-    -- 5.1.1(v) da App Store, e é o direito de eliminação da LGPD). Modelo de
-    -- 30 dias (Marcos 04/09): no pedido a conta é FECHADA na hora (deleted_at
-    -- preenchido, acesso revogado, credencial de terceiro apagada, cobrança
-    -- cancelada) e o dado só é destruído de fato no purgeContasExcluidas, 30
-    -- dias depois. A janela existe pra arrependimento/erro, não pra manter a
-    -- conta em pé: enquanto deleted_at está preenchido, ninguém entra.
-    -- NULL = conta viva. Nunca voltar a NULL sem reabrir a conta de propósito.
+    -- ACCOUNT DELETION requested by the owner (required by App Store guideline
+    -- 5.1.1(v), and the LGPD right to erasure). 30-day model (04/09): on
+    -- request the account is CLOSED at once (deleted_at set, access revoked,
+    -- third-party credentials deleted, billing cancelled) and the data is only
+    -- actually destroyed in purgeContasExcluidas, 30 days later. The window is
+    -- for regret/mistakes, not to keep the account up: while deleted_at is
+    -- set, nobody gets in.
+    -- NULL = live account. Never go back to NULL without deliberately reopening.
     ALTER TABLE ${S}.users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
     CREATE INDEX IF NOT EXISTS users_deleted_idx
       ON ${S}.users(deleted_at) WHERE deleted_at IS NOT NULL;
@@ -496,11 +496,11 @@ export async function initDb(...esquemas) {
               FROM ${S}.whatsapp_msg_refs
              WHERE direction = 'in' GROUP BY user_id) r
      WHERE w.user_id = r.user_id AND w.last_inbound_at IS NULL;
-    -- Canal Slack (app inscrito num workspace): quem menciona o app no Slack (ou
-    -- fala com ele por DM) amarra no USUÁRIO do Brambs pelo e-mail do Slack; o
-    -- agente é escolhido dentro do chat (active_agent_id, trocável por @nome /
-    -- "menu"). Chave = (team, usuário do Slack) -> um usuário do Brambs. Espelha
-    -- whatsapp_links (número único compartilhado) e o roteamento por e-mail.
+    -- Slack channel (app installed in a workspace): whoever mentions the app in
+    -- Slack (or DMs it) is bound to the platform USER by Slack email; the agent
+    -- is picked inside the chat (active_agent_id, switchable via @name / "menu").
+    -- Key = (team, Slack user) -> one platform user. Mirrors whatsapp_links
+    -- (single shared number) and email routing.
     CREATE TABLE IF NOT EXISTS ${S}.slack_links (
       slack_team_id   text NOT NULL,
       slack_user_id   text NOT NULL,
@@ -511,11 +511,11 @@ export async function initDb(...esquemas) {
       PRIMARY KEY (slack_team_id, slack_user_id)
     );
     CREATE INDEX IF NOT EXISTS slack_user_idx ON ${S}.slack_links(user_id);
-    -- Slack: VÍNCULO POR CANAL (grupo/DM) -> um assistente específico. É o modelo
-    -- principal do inbound: "assistente A no grupo X, B no grupo Y", tudo por código.
-    -- Chave = (team, canal). O binding é criado ao consumir um código de pareamento
-    -- gerado no Brambs (logado, pra um agente que o dono possui). Precede o fallback
-    -- por e-mail (que só vale em DM sem binding).
+    -- Slack: PER-CHANNEL BINDING (group/DM) -> one specific assistant. The main
+    -- inbound model: "assistant A in group X, B in group Y", all by code.
+    -- Key = (team, channel). The binding is created by using a pairing code
+    -- generated in the web app (logged in, for an agent the owner has). Takes
+    -- precedence over the email fallback (which only applies to an unbound DM).
     CREATE TABLE IF NOT EXISTS ${S}.slack_channel_links (
       slack_team_id    text NOT NULL,
       slack_channel_id text NOT NULL,
@@ -526,8 +526,8 @@ export async function initDb(...esquemas) {
       PRIMARY KEY (slack_team_id, slack_channel_id)
     );
     CREATE INDEX IF NOT EXISTS slack_channel_user_idx ON ${S}.slack_channel_links(user_id);
-    -- Códigos de pareamento do Slack: uso único, TTL curto. Gerados no Brambs
-    -- (logado) pra um agente do dono; consumidos por "conectar <código>" no Slack.
+    -- Slack pairing codes: single use, short TTL. Generated in the web app
+    -- (logged in) for an owner's agent; used by "conectar <code>" in Slack.
     CREATE TABLE IF NOT EXISTS ${S}.slack_pairing_codes (
       code       text PRIMARY KEY,
       user_id    uuid REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -646,12 +646,12 @@ export async function initDb(...esquemas) {
     CREATE INDEX IF NOT EXISTS usage_ts_idx ON ${S}.usage_events(ts);
     CREATE INDEX IF NOT EXISTS usage_user_idx ON ${S}.usage_events(user_id, ts);
     CREATE INDEX IF NOT EXISTS usage_turn_idx ON ${S}.usage_events(turn_id);
-    -- COBRANÇA em crédito (Marcos 18/08): crédito cobrado por linha, calculado por
-    -- QUANTIDADE de token numa tarifa que NÓS definimos (BILL_RATE por tier), NÃO
-    -- pelo custo real (cost_usd, que fica só pra margem). Consumo de crédito agora
-    -- soma bill_credits. NULL = linha antiga ainda não backfillada (ou grant/compra,
-    -- que não é consumo). Backfill único preserva o passado: crédito histórico =
-    -- round(cost_usd/0,001), o mesmo que a barra já mostrava (não reescreve relatório).
+    -- Credit BILLING (18/08): credit charged per row, computed from token
+    -- QUANTITY at a rate WE set (BILL_RATE per tier), NOT from real cost
+    -- (cost_usd, kept only for margin). Credit usage now sums bill_credits.
+    -- NULL = old row not backfilled yet (or a grant/purchase, which isn't usage).
+    -- A one-time backfill keeps the past: historical credit = round(cost_usd/0.001),
+    -- the same the bar already showed (doesn't rewrite reports).
     ALTER TABLE ${S}.usage_events ADD COLUMN IF NOT EXISTS bill_credits int;
     UPDATE ${S}.usage_events
        SET bill_credits = GREATEST(0, round(cost_usd / 0.001))::int
@@ -693,12 +693,12 @@ export async function initDb(...esquemas) {
     ALTER TABLE ${S}.oauth_tokens ADD COLUMN IF NOT EXISTS meta jsonb DEFAULT '{}'::jsonb;
     ALTER TABLE ${S}.oauth_tokens ADD COLUMN IF NOT EXISTS confirmation_version uuid NOT NULL DEFAULT gen_random_uuid();
 
-    -- Períodos de OPT-OUT de treinamento de IA (Marcos 28/08). Assinante pode
-    -- desligar o uso dos dados dele pra melhoria do produto, na tela de
-    -- Configurações. Igual ao plan_periods, é livro-razão e não flag: se fosse
-    -- uma coluna booleana em users, desligar a chave hoje descongelaria todo o
-    -- passado protegido, e ligar de novo protegeria o que nunca esteve coberto.
-    -- Com períodos, cada registro é julgado pela data em que foi produzido.
+    -- AI training OPT-OUT periods (28/08). A subscriber can turn off the use
+    -- of their data for product improvement, in Settings. Like plan_periods,
+    -- it's a ledger, not a flag: as a boolean column on users, switching it
+    -- off today would unfreeze the whole protected past, and switching it on
+    -- again would protect what was never covered. With periods, each record is
+    -- judged by the date it was produced.
     CREATE TABLE IF NOT EXISTS ${S}.training_optout_periods (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id    uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -808,12 +808,12 @@ export async function initDb(...esquemas) {
     ALTER TABLE ${S}.user_likeness ADD COLUMN IF NOT EXISTS face3_mime text;
     ALTER TABLE ${S}.user_likeness ADD COLUMN IF NOT EXISTS face3_updated_at timestamptz;
 
-    -- Jobs de geração de vídeo das pessoas (async, worker GPU externo). Cada job
-    -- é (usuário + assistente). remote_job_id = id no wrapper da Yume. status
-    -- espelha o worker: queued|processing|done|error, + 'delivered' (nosso, já
-    -- entregue ao dono) e 'canceled'. video_seconds = duração REAL gerada (fonte
-    -- de cobrança). credits_charged = créditos já debitados (idempotência da
-    -- cobrança na entrega). O poller do scheduler avança queued/processing.
+    -- People video jobs (async, external GPU worker), one per (user + assistant).
+    -- remote_job_id = id in the worker wrapper. status mirrors the worker:
+    -- queued|processing|done|error, + 'delivered' (ours, sent to the owner) and
+    -- 'canceled'. video_seconds = REAL generated duration (billing source).
+    -- credits_charged = credits already debited (billing idempotency on
+    -- delivery). The scheduler poller advances queued/processing.
     CREATE TABLE IF NOT EXISTS ${S}.video_jobs (
       id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id        uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -936,11 +936,11 @@ export async function initDb(...esquemas) {
     );
     CREATE INDEX IF NOT EXISTS agent_convo_msgs_idx ON ${S}.agent_convo_msgs(convo_id, ts);
 
-    -- Mini-PaaS: registro de posse/estado dos "sisteminhas" publicados no
-    -- host de apps (fulano.brambs.com.br/nome_do_sistema). O container roda no
-    -- host de apps; aqui fica o registro de posse/billing/estado. O roteador do
-    -- host tem seu próprio apps.json (routing); esta tabela é a fonte de posse.
-    -- 'label' = o subdomínio do dono (users.subdomain), redundado pra facilitar.
+    -- Mini-PaaS: ownership/state record of the small apps published on the
+    -- apps host (e.g. ana.example.com/app_name). The container runs on the
+    -- apps host; this holds ownership/billing/state. The host's router has
+    -- its own apps.json (routing); this table is the source of ownership.
+    -- 'label' = the owner's subdomain (users.subdomain), duplicated for ease.
     CREATE TABLE IF NOT EXISTS ${S}.apps (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id    uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -969,21 +969,21 @@ export async function initDb(...esquemas) {
     ALTER TABLE ${S}.apps ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'private';
     ALTER TABLE ${S}.apps ADD COLUMN IF NOT EXISTS description text;
     CREATE INDEX IF NOT EXISTS apps_public_idx ON ${S}.apps(visibility) WHERE visibility = 'public';
-    -- Selo durável de MODO do app, carimbado na criação (ideia do Marcos):
-    -- 'basico' = app do mini-PaaS do Brambs, editado 100% dentro do Brambs
-    -- (ler_arquivo_do_app → escrever_arquivo_do_app → publicar_sistema); NUNCA
-    -- via sandbox/SSH. 'avancado' = dev com repo/servidor próprio (modo Projeto).
-    -- Deixa o roteamento do agente determinístico em vez de adivinhar por turno.
+    -- Durable app MODE stamp, set at creation:
+    -- 'basico' = app on the built-in mini-PaaS, edited 100% inside the platform
+    -- (ler_arquivo_do_app → escrever_arquivo_do_app → publicar_sistema); NEVER
+    -- via sandbox/SSH. 'avancado' = dev with own repo/server (Project mode).
+    -- Makes agent routing deterministic instead of guessing per turn.
     ALTER TABLE ${S}.apps ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'basico';
-    -- ACESSO DE REDE à URL pública do app. NÃO confundir com visibility, que é
-    -- só biblioteca/replicação: um app pode estar fora da biblioteca (private) e
-    -- ainda assim ter a URL aberta pra qualquer um na internet — foi exatamente
-    -- esse o buraco. Aqui: 'private' = o roteador do host de apps exige usuário
-    -- e senha (HTTP Basic) ANTES de acordar o container; 'public' = URL aberta.
-    -- App novo NASCE 'private' (decisão do Marcos, 31/08/2026).
-    -- Coluna NULLABLE de propósito: linha ANTIGA fica NULL = comportamento
-    -- legado (aberta). Trancar retroativamente app que já está em uso quebraria
-    -- link que o dono distribuiu, então migração de app existente é escolha dele.
+    -- NETWORK ACCESS to the app's public URL. NOT to be confused with
+    -- visibility, which is only library/replication: an app can be out of the
+    -- library (private) and still have its URL open to anyone online; that was
+    -- exactly the hole. Here: 'private' = the apps host router asks for user
+    -- and password (HTTP Basic) BEFORE waking the container; 'public' = open.
+    -- A new app STARTS 'private' (decided 31/08/2026).
+    -- NULLABLE on purpose: an OLD row stays NULL = legacy behavior (open).
+    -- Locking an app already in use retroactively would break links the owner
+    -- shared, so migrating an existing app is the owner's choice.
     ALTER TABLE ${S}.apps ADD COLUMN IF NOT EXISTS access text;
     ALTER TABLE ${S}.apps ADD COLUMN IF NOT EXISTS access_user text;
     -- Senha cifrada (AES-256-GCM via vault.mjs), igual aos segredos. Fica FORA
@@ -1150,10 +1150,10 @@ export async function initDb(...esquemas) {
     -- cria skill pública; usuário comum só chega a 'private'/'connections'.
     ALTER TABLE ${S}.skills ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT '';
     ALTER TABLE ${S}.skills ADD COLUMN IF NOT EXISTS summary text NOT NULL DEFAULT '';
-    -- WEBHOOK DE ENTRADA: um sistema externo (ex CMS da More Than Real) dispara
-    -- uma SKILL de um agente do Brambs via POST autenticado por token. Um token por
-    -- agente (regenerável, desativável). O token é o segredo; guardamos o hash
-    -- (sha256) e um prefixo curto só pra exibir na UI. Ver projetos abaixo.
+    -- INBOUND WEBHOOK: an external system (e.g. a company CMS) triggers a
+    -- SKILL of an agent via a token-authenticated POST. One token per agent
+    -- (regenerable, can be disabled). The token is the secret; we store the hash
+    -- (sha256) and a short prefix only for display in the UI. See projects below.
     CREATE TABLE IF NOT EXISTS ${S}.agent_webhooks (
       agent_id    uuid PRIMARY KEY REFERENCES ${S}.agents(id) ON DELETE CASCADE,
       user_id     uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -1165,12 +1165,12 @@ export async function initDb(...esquemas) {
       last_used_at timestamptz
     );
     CREATE UNIQUE INDEX IF NOT EXISTS agent_webhooks_hash_idx ON ${S}.agent_webhooks(token_hash);
-    -- TOKENS DE DEVICE: o Brambs OS (mais um canal, como WhatsApp/Telegram) autentica
-    -- por Bearer preso ao USUÁRIO. O dono loga 1x no web, gera um token por device
-    -- (regenerável, revogável) e o OS manda em Authorization: Bearer. Guardamos só o
-    -- hash (sha256) e um prefixo curto pra exibir; o token cru só aparece 1x ao gerar.
-    -- Vários devices por usuário (id próprio). O device é CLIENTE BURRO: só carrega o
-    -- Bearer opaco, nunca token OAuth nem dado restrito (fronteira CASA intacta).
+    -- DEVICE TOKENS: the device channel (an OS/desktop client, one more channel like
+    -- WhatsApp/Telegram) authenticates by a Bearer tied to the USER. The owner logs in
+    -- once on the web, makes a token per device (regenerable, revocable) and the OS
+    -- sends it as Authorization: Bearer. We keep only the hash (sha256) and a short
+    -- display prefix; the raw token shows once. Several devices per user. The device is
+    -- a DUMB CLIENT: only the opaque Bearer, never OAuth tokens or restricted data.
     CREATE TABLE IF NOT EXISTS ${S}.device_tokens (
       id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id         uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -1399,10 +1399,10 @@ export async function initDb(...esquemas) {
     ALTER TABLE ${S}.asaas_operations ADD COLUMN IF NOT EXISTS due_date date;
     CREATE INDEX IF NOT EXISTS asaas_operations_owner_idx ON ${S}.asaas_operations(owner_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS asaas_operations_account_idx ON ${S}.asaas_operations(account_id, provider_operation_id);
-    -- Agendamentos de boleto ficam no Brambs, e não na Asaas. Assim o usuário
-    -- pode cancelar pela própria conversa sem criar um "evento crítico" de
-    -- exclusão no provedor. O código/linha digitável fica cifrado; a tabela só
-    -- expõe metadados necessários para claim, auditoria e UX.
+    -- Boleto schedules live in the platform, not at Asaas. That way the user
+    -- can cancel from the conversation without creating a "critical event" of
+    -- deletion at the provider. The barcode/typeable line is encrypted; the
+    -- table only exposes the metadata needed for claim, audit and UX.
     CREATE TABLE IF NOT EXISTS ${S}.asaas_bill_schedules (
       id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       owner_user_id      uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -3927,10 +3927,10 @@ export async function createReferredUserByCode({ name, email, passwordHash, code
   return { id: u.id, name: u.name, email: u.email, referredBy: u.referred_by };
 }
 
-// ATIVA o modelo NOVO de indicação (v2) para um usuário, sob demanda (Kenji roda
-// a pedido do Marcos). Liga a flag v2, garante 100 usos (invites_total) e cunha
-// um código de 4 dígitos único se ainda não tiver. Idempotente. Retorna o código
-// e o estado, ou null se o e-mail não existe. NÃO mexe em código legado de ninguém.
+// TURNS ON the NEW referral model (v2) for a user, on demand (run by an
+// operator). Sets the v2 flag, ensures 100 uses (invites_total) and mints a
+// unique 4-digit code if missing. Idempotent. Returns the code and state, or
+// null if the e-mail doesn't exist. Does NOT touch anyone's legacy code.
 export async function activateReferralV2(email, { uses = 100 } = {}) {
   const e = String(email).toLowerCase();
   const upd = await pool.query(
@@ -3962,14 +3962,14 @@ export async function activateReferralV2(email, { uses = 100 } = {}) {
   return { id: u.id, name: u.name, email: u.email, code: code || null, invites_total: u.invites_total, v2: true };
 }
 
-// Libera o bônus de indicação, uma vez só, no momento em que o INDICADO assina.
-// Reforma de 28/08 (Marcos): o gatilho deixou de ser consumo de créditos e passou
-// a ser assinatura de verdade; ganham 500 os DOIS lados (quem indicou e quem foi
-// indicado). Idempotente: o UPDATE condicional em ref_bonus_done trava a
-// concessão numa só chamada, então reentrega de webhook não paga duas vezes, e
-// assinar de novo depois de cancelar também não. Devolve { referrerId,
-// referredId } se é pra creditar agora, ou null. O crédito em si
-// (insertUsageEvent model 'referral') é feito por quem chama.
+// Releases the referral bonus, once, when the REFERRED user subscribes.
+// Overhaul of 28/08: the trigger stopped being credit usage and became an
+// actual subscription; BOTH sides earn 500 (referrer and referred).
+// Idempotent: the conditional UPDATE on ref_bonus_done locks the grant to a
+// single call, so a webhook redelivery doesn't pay twice, nor does
+// resubscribing after cancelling. Returns { referrerId, referredId } if it's
+// time to credit, or null. The credit itself (insertUsageEvent model
+// 'referral') is done by the caller.
 export async function claimReferralBonus(referredUserId) {
   const { rows } = await pool.query(
     `UPDATE ${S}.users c
@@ -3984,19 +3984,19 @@ export async function claimReferralBonus(referredUserId) {
   return rows[0] ? { referrerId: rows[0].referrer_id, referredId: rows[0].referred_id } : null;
 }
 
-// Libera o bônus de CADASTRO (Marcos 08/09), uma vez só, quando o INDICADO
-// manda a primeira mensagem pro assistente dele. O gatilho é o primeiro uso, e
-// não o instante do cadastro, porque 200 créditos por conta criada convidariam
-// alguém a abrir 10 contas de mentira e se auto-premiar; ter que conversar com o
-// assistente derruba isso sem atrapalhar quem é de verdade (Marcos: "só quando
-// mandar a primeira mensagem").
+// Releases the SIGN-UP bonus (08/09), once, when the REFERRED user sends the
+// first message to their assistant. The trigger is first use, not the moment
+// of sign-up, because 200 credits per created account would invite someone to
+// open 10 fake accounts and reward themselves; having to talk to the
+// assistant stops that without hurting real people ("only when they send the
+// first message").
 //
-// Quem ganha aqui é SÓ o indicador. O indicado já entra com o Básico de graça
-// por um ciclo, e os 500 dos dois lados continuam presos à assinatura
-// (claimReferralBonus). Idempotente pelo mesmo mecanismo: o UPDATE condicional
-// em ref_signup_bonus_done só passa uma vez, então pode ser chamado em todo
-// primeiro turno de thread sem pagar de novo. Devolve { referrerId, referredId }
-// se é pra creditar agora, ou null. O crédito em si é feito por quem chama.
+// Only the referrer earns here. The referred user already starts with Básico
+// free for one cycle, and the 500 for both sides stays tied to subscribing
+// (claimReferralBonus). Idempotent by the same mechanism: the conditional
+// UPDATE on ref_signup_bonus_done passes only once, so it can be called on
+// every first thread turn without paying again. Returns { referrerId,
+// referredId } if it's time to credit, or null. The caller does the credit.
 export async function claimReferralSignupBonus(referredUserId) {
   const { rows } = await pool.query(
     `UPDATE ${S}.users c
@@ -4011,8 +4011,8 @@ export async function claimReferralSignupBonus(referredUserId) {
   return rows[0] ? { referrerId: rows[0].referrer_id, referredId: rows[0].referred_id } : null;
 }
 
-// Quantas contas existem. É o que decide se a fila de espera está ligada: o
-// cadastro fica aberto até o banco bater o teto do beta (Marcos 28/08).
+// How many accounts exist. It decides whether the waitlist is on: sign-up
+// stays open until the database hits the beta cap (28/08).
 export async function countUsers() {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM ${S}.users`);
   return Number(rows[0]?.n) || 0;
@@ -4589,12 +4589,12 @@ export async function getUsageTotals({ from, to, userId } = {}) {
   return rows[0];
 }
 
-// ── Listagem do conteúdo de uma pessoa, pro painel admin (Marcos 28/08) ──
-// Devolve SÓ METADADO: título da conversa, assistente, datas, quantidade de
-// mensagens; nome/tipo/data do arquivo. NÃO devolve texto de mensagem nem link
-// assinado de mídia, de propósito: o painel serve pra saber O QUE a pessoa tem
-// registrado, não pra ler a conversa dela nem abrir a foto. É o mesmo princípio
-// do resto do /metrics (agrega, não expõe conteúdo), só que item a item.
+// ── Listing a person's content, for the admin panel (28/08) ──
+// Returns ONLY METADATA: conversation title, assistant, dates, message count;
+// file name/type/date. Does NOT return message text or a signed media link,
+// on purpose: the panel is for knowing WHAT the person has stored, not for
+// reading their conversation or opening the photo. Same principle as the rest
+// of /metrics (aggregates, doesn't expose content), just item by item.
 export async function listUserThreads(userId, limit = 200) {
   const { rows } = await pool.query(
     `SELECT t.id, t.title, t.status, t.created_at, t.updated_at, t.deleted_at,
@@ -4636,10 +4636,10 @@ export async function listUserMedia(userId, { kind = null, limit = 200 } = {}) {
   );
   return rows.map((r) => ({
     id: r.id,
-    // Nome de GENTE quando existe: a legenda é onde mora o nome real do arquivo
-    // ("contrato.pdf"), enquanto a chave do bucket é um uuid que não diz nada
-    // (era só isso que a lista mostrava, Marcos 28/08). Nunca a chave inteira,
-    // que é o que permitiria montar/adivinhar caminho de objeto.
+    // A HUMAN name when there is one: the caption holds the real file name
+    // ("contrato.pdf"), while the bucket key is a meaningless uuid (all the
+    // list used to show, 28/08). Never the whole key, which would allow
+    // building/guessing an object path.
     name: String(r.caption || '').trim() || String(r.s3_key || '').split('/').pop() || '(sem nome)',
     kind: r.kind || '—',
     mime: r.mime || '',
@@ -4650,10 +4650,10 @@ export async function listUserMedia(userId, { kind = null, limit = 200 } = {}) {
   }));
 }
 
-// Última mensagem que CADA usuário mandou PRO Brambs (role='user'), all-time.
-// Usado no /metrics pra a coluna "Última mensagem" refletir a interação da
-// PESSOA -> Brambs, e não qualquer atividade (ex.: broadcast/turno do assistente)
-// que bumpa usage_events e fazia parecer que todo mundo tinha falado.
+// Last message EACH user sent TO the assistant (role='user'), all-time.
+// Used in metrics so the "Last message" column reflects the PERSON's
+// interaction, not any activity (e.g. a broadcast/assistant turn)
+// that bumps usage_events and made it look like everyone had spoken.
 export async function getLastUserMsgMap() {
   const { rows } = await pool.query(
     `SELECT a.user_id, max(m.ts) AS last_user_ts
@@ -4921,10 +4921,10 @@ export async function getWaStatuses(wamids = []) {
 // /broadcast) escrevem e leem. Tudo aqui é determinístico: quem decide se pode
 // ofertar é contagem e data, não leitura de intenção.
 
-// A régua inteira (Marcos 25/09): 3 dias entre uma oferta e a próxima, e o
-// opt-out explícito da pessoa. Nada mais. Não existe teto de ofertas nem espera
-// longa, e nada conta como recusa (nem silêncio, nem cancelar uma rotina): só o
-// "não quero mais sugestões" para as ofertas.
+// The whole cadence (25/09): 3 days between one offer and the next, and the
+// person's explicit opt-out. Nothing else. No offer cap or long wait, and
+// nothing counts as refusal (not silence, not cancelling a routine): only
+// "I don't want more suggestions" stops the offers.
 export const OFERTA_COOLDOWN_DIAS = 3;
 
 // Registra que uma oferta FOI FEITA. Chamado pela tool oferecer_rotina (via
@@ -5696,12 +5696,12 @@ export async function deleteTelegramBot(token) {
   await pool.query(`DELETE FROM ${S}.telegram_bots WHERE token_hash IN ($1,$2)`, [hash, raw]);
 }
 
-// ── Backfill dos segredos de conector ──
-// Migra o que ficou em texto puro no banco (token de bot do Telegram, headers de
-// MCP, token OAuth) pras colunas cifradas pelo cofre. O authToken de webhook da
-// Asaas é da nuvem: migrateAsaasWebhookSecrets, em db-brambs.mjs.
-// Idempotente: só toca em linha que ainda não foi migrada. Roda no boot DEPOIS
-// do initVault() (initDb roda antes dele, então não dá pra fazer aqui dentro).
+// ── Connector secrets backfill ──
+// Moves what was left in plain text in the DB (Telegram bot token, MCP headers,
+// OAuth token) into the vault-encrypted columns. A payment webhook authToken,
+// if any, is migrated by the plugin that owns it.
+// Idempotent: only touches rows not yet migrated. Runs at boot AFTER
+// initVault() (initDb runs before it, so it can't happen in there).
 export async function migrateConnectorSecrets() {
   const out = { telegram: 0, mcp: 0, oauth: 0, skipped: false };
   // Sem chave carregada, cifrar é impossível e gravar em claro é justamente o
@@ -5871,10 +5871,10 @@ export async function upsertWhatsAppLink({ phone, userId, activeAgentId, verifie
   } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
 }
 
-// Cria (ou renova) o desafio de posse de um número. NÃO amarra nada: só guarda a
-// intenção + o código que a pessoa vai mandar do WhatsApp dela pro número do
-// Brambs. Não dispara mensagem nenhuma pro número informado, de propósito: senão
-// o próprio desafio viraria ferramenta de spam contra telefone alheio.
+// Creates (or renews) the ownership challenge for a number. Binds NOTHING: just
+// stores the intent + the code the person will send from their WhatsApp to the
+// platform's number. Sends no message to the given number, on purpose: otherwise
+// the challenge itself would become a spam tool against someone else's phone.
 export async function createWaClaim({ phone, userId, activeAgentId = null, code, ttlMin = 30 }) {
   await pool.query(`DELETE FROM ${S}.wa_claims WHERE expires_at < now()`).catch(() => {});
   const { rows } = await pool.query(
@@ -5990,7 +5990,7 @@ export async function getSlackLink(teamId, slackUserId) {
   return rows[0] || null;
 }
 
-// Amarra (ou re-amarra) um usuário do Slack a um usuário do Brambs.
+// Binds (or rebinds) a Slack user to a platform user.
 export async function upsertSlackLink({ teamId, slackUserId, userId, activeAgentId }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.slack_links (slack_team_id, slack_user_id, user_id, active_agent_id, enabled)
@@ -6445,9 +6445,9 @@ export async function removeGoogleAccount(userId, googleEmail) {
   return rows.length > 0;
 }
 
-// ── Usuários / sessões ──
-// Conta nova nasce só com nome, e-mail e senha. O que quem instala dá a uma conta
-// nova (no Brambs, o primeiro mês grátis) chega pelo evento conta_criada.
+// ── Users / sessions ──
+// A new account is born with only name, email and password. What the installer
+// gives a new account (e.g. a free first month) comes via the conta_criada event.
 export async function createUser({ name, email, passwordHash }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.users (name, email, password_hash)
@@ -6759,9 +6759,9 @@ export async function resolveWebhookToken(token) {
   return rows[0] || null;
 }
 
-// ── Tokens de device (canal Brambs OS) ──
-// Mesmo modelo do webhook de agente: o token é o segredo, guardamos só o hash.
-// Diferença: chave por DEVICE (id próprio), preso ao usuário, N por usuário.
+// ── Device tokens (OS/desktop client channel) ──
+// Same model as the agent webhook: the token is the secret, we keep only the hash.
+// Difference: keyed per DEVICE (own id), tied to the user, N per user.
 
 // Cria um token de device. Recebe o token JÁ gerado (cru) e devolve o registro
 // (sem o cru). O chamador mostra o cru uma única vez e não guarda.
@@ -6865,10 +6865,10 @@ export async function listAppOwnersForQuota() {
   return rows;
 }
 
-// A conta pelo id. O núcleo só conhece nome, e-mail e datas; a distribuição
-// soma as colunas dela (a nuvem Brambs registra as de plano e Stripe em
-// db-brambs.mjs) com registrarColunasDaConta, e elas vêm na mesma linha. Lista
-// fechada de nomes, nunca `*`: a linha não pode trazer password_hash.
+// The account by id. The core only knows name, email and dates; the distribution
+// adds its own columns (e.g. a plugin's plan and billing columns) with
+// registrarColunasDaConta, and they come in the same row. A closed list of
+// names, never `*`: the row must not carry password_hash.
 const COLUNAS_DA_CONTA = ['id', 'name', 'email', 'created_at', 'deleted_at'];
 export function registrarColunasDaConta(colunas) {
   for (const c of colunas) {
@@ -7627,10 +7627,10 @@ export async function setInboundAgent(connId, userId, agentId) {
   return { ok: true };
 }
 
-// Fase 0 (agente↔agente v2): garante que o lado do usuário tenha um inbound
-// agent designado. Se NULL, seta o assistente principal (listAgents[0]) de forma
-// idempotente. Resolve conexões antigas com inbound NULL (ex.: o lado do Marcos).
-// Devolve o agentId em uso, ou null se o usuário não tiver assistente.
+// Phase 0 (agent↔agent v2): ensures the user's side has a designated inbound
+// agent. If NULL, sets the main assistant (listAgents[0]) idempotently.
+// Fixes old connections with a NULL inbound (e.g. early test accounts).
+// Returns the agentId in use, or null if the user has no assistant.
 export async function ensureInboundAgent(connId, userId) {
   const conn = await getConnectionById(connId);
   if (!conn) return null;

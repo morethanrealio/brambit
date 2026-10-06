@@ -2,10 +2,10 @@
 // poderem ser testadas sozinhas (`node locale.test.mjs`). Quem grava é o
 // db.mjs; quem lê header é o server.mjs. Aqui fica a regra.
 
-// O que o produto REALMENTE atende hoje. Enquanto só existir texto em português,
-// deixar entrar 'fr' aqui não traduziria nada: só faria o agente falar francês
-// por cima de uma interface em português. A lista cresce junto com a tradução,
-// não antes dela. (Marcos 07/09: en e es agora, japonês fora por enquanto.)
+// What the product REALLY supports today. While only Portuguese text exists,
+// letting 'fr' in here would translate nothing: it would just make the agent
+// speak French over a Portuguese interface. The list grows with the
+// translation, not before it. (07/09: en and es now, Japanese out for now.)
 export const IDIOMAS_OK = ['pt-BR', 'en', 'es'];
 export const IDIOMA_PADRAO = 'pt-BR';
 

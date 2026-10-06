@@ -169,16 +169,16 @@ export const GATED_TOOLS = new Set([
   'criar_conta_brambs',
   'canva_criar',
   'canva_editar',
-  // Auditoria 28/09 (Marcos: "tudo que envolve escrever, editar, deletar, enviar
-  // msg não pode ter furo"): gravavam, apagavam ou falavam com terceiros só por
-  // decisão do modelo. Frases em confirm-textos-portao.mjs.
+  // Audit 28/09 ("anything that writes, edits, deletes or sends a message must
+  // have no gaps"): these wrote, deleted or talked to third parties on the
+  // model's decision alone. Phrases in confirm-textos-portao.mjs.
   ...Object.keys(PORTAO_TEXTOS),
 ]);
 
-// Ações IRREVERSÍVEIS ou que saem pro mundo de terceiros: um 👍 (reaction) NÃO
-// basta pra elas — exigem confirmação por TEXTO ("pode"). As demais gated podem
-// ser confirmadas com uma reaction. (Pedido do Marcos 20/07: joinha confirma o
-// comum, fora as irreversíveis — mandar e-mail, apagar, postar, comando de shell.)
+// IRREVERSIBLE actions, or ones that reach third parties: a 👍 (reaction) is NOT
+// enough, they need TEXT confirmation ("pode"). Other gated ones can be
+// confirmed with a reaction. (Decided 20/07: thumbs-up confirms the common
+// ones, except irreversible ones: sending e-mail, deleting, posting, shell.)
 export const IRREVERSIBLE_TOOLS = new Set([
   'jornada_concluir',
   'jornada_refazer_devolutiva',
@@ -503,10 +503,10 @@ export function describe(name, args = {}, language = null) {
         `• endereço: ${args.endereco || '(?)'}, ${args.numero || '(?)'}${args.complemento ? ` ${args.complemento}` : ''} · ${args.bairro || '(?)'} · CEP ${args.cep || '(?)'}`,
         `• renda/faturamento informado: R$ ${args.renda_mensal ?? '(?)'}`,
         '',
-        // Aqui é O lugar da divulgação obrigatória: quem emite a conta é a
-        // instituição de pagamento parceira. É uma exigência regulatória, dita
-        // UMA vez, na tela em que o dono autoriza. Nas outras mensagens do
-        // fluxo isso é a Conta Brambs e ponto.
+        // This is THE place for the mandatory disclosure: the account is issued
+        // by the partner payment institution. It's a regulatory requirement,
+        // stated ONCE, on the screen where the owner authorizes. Elsewhere in
+        // the flow it's just the managed payment account.
         'Depois de abrir, faltam 2 fotos (documento e selfie), que você manda aqui mesmo nesta conversa, e uma análise de até 48h. Abrir não dá pra desfazer por aqui.',
         `A conta é emitida pela *Asaas*, instituição de pagamento parceira do ${marca().nome}.`,
       ].join('\n');
@@ -819,15 +819,15 @@ export function renderConfirmed(pend, r) {
   const out = data && (data.saida || data.output);
   const err = data && data.stderr;
   if (data && data.ok === false) {
-    // Único caminho em que o texto do PEDIDO é impresso cru pro usuário: por
-    // isso o `describe` também precisa de tradução, mesmo sendo normalmente
-    // reescrito pelo modelo.
+    // The only path where the REQUEST text is printed raw to the user: so
+    // `describe` also needs translation, even though the model usually
+    // rewrites it.
     //
-    // Só a PRIMEIRA LINHA do pedido entra no cabeçalho. Label de uma linha (a
-    // maioria) não muda em nada; label longo (o da Conta Brambs tem o cadastro
-    // inteiro) reimprimia tudo de novo aqui, e a pessoa lia um despejo em vez do
-    // motivo da falha. O que ela precisa é: o que falhou, em uma linha, e o que
-    // fazer agora.
+    // Only the request's FIRST LINE goes into the header. A one-line label (most
+    // of them) is unchanged; a long label (the managed payment account's carries
+    // the whole sign-up) reprinted everything here, and the person read a dump
+    // instead of the failure reason. What they need is: what failed, in one
+    // line, and what to do now.
     const resumo = String(pend.label || '').split('\n')[0].trim().replace(/[.:]\s*$/, '');
     const cabeca = m18n ? m18n.falhou(resumo) : `Não consegui concluir: ${resumo}.`;
     let m = `❌ ${cabeca}${data.error ? ' ' + data.error : ''}`;
@@ -1261,17 +1261,17 @@ export function confirmsPending(pend, message, target) {
 // false — negativa nova pode entrar solta, positiva nova só se não colidir com
 // palavra comum de outra língua (ex: "vale" em pt/es executaria escrita à toa).
 const NEG = /\b(n[ãa]o|nao|cancela|cancelar|espera|esquece|deixa pra?\s*(l[áa]|depois)?|pare|nem|melhor n[ãa]o|aguarda|peraí|pera[íi])\b/i;
-// "para" saiu da lista acima e ganhou regra própria (Marcos, 07/09/2026). Como
-// \bpara\b, ele casava com a PREPOSIÇÃO, e não com o verbo parar: "sim, manda
-// para o João" e até "confirmo, manda para ele" caíam na negativa e cancelavam
-// EM SILÊNCIO, em pt e em es ("sí, para el cliente"). A negativa é testada antes
-// de tudo, então nem um "confirmo" ao lado salvava.
-// Só conta como o verbo "parar" nestas formas, todas incompatíveis com o uso de
-// preposição (que sempre pede complemento depois):
-//   • "para" encerrando a fala   -> "para", "para!", "ok, para"
-//   • "para" + fecho de comando  -> "para com isso", "para tudo", "para de mandar"
-// Tirar "para" da negativa NÃO executa nada sozinho: sem NEG a frase ainda
-// precisa casar uma positiva pra confirmar. O viés conservador continua de pé.
+// "para" left the list above and got its own rule (07/09/2026). As \bpara\b
+// it matched the PREPOSITION, not the verb "parar" (stop): "sim, manda para o
+// João" and even "confirmo, manda para ele" fell into the negative and
+// cancelled SILENTLY, in pt and es ("sí, para el cliente"). The negative is
+// tested first, so not even a "confirmo" next to it helped.
+// It only counts as the verb "parar" in these forms, all incompatible with the
+// preposition (which always needs a complement after it):
+//   • "para" ending the message  -> "para", "para!", "ok, para"
+//   • "para" + command closer    -> "para com isso", "para tudo", "para de mandar"
+// Removing "para" from the negative executes NOTHING by itself: without NEG the
+// phrase still needs a positive match to confirm. The conservative bias holds.
 const PARA_STOP = /(?:^|[\s,;:])para\s*[!.…]*$|(?:^|[\s,;:])para\s+(?:com\s+isso|com\s+essa|tudo|agora|a[íi]|de\s+\w)/i;
 // Fronteira do "no" inicial por \p{L}, não por \b: o \b do JS é ASCII, então
 // uma palavra que começa com "no" e continua com letra ACENTUADA fecha fronteira

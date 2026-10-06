@@ -78,22 +78,22 @@ const GOOGLE_USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo';
 export const googleEnabled = () =>
   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
 
-// Escopos dos conectores, por serviço: leitura (read) + escrita (write).
-// Pedimos os dois juntos no "Conectar Google"; tokens antigos (só leitura)
-// continuam válidos e seguem só lendo até a pessoa reconectar.
-// Obs Gmail: o escopo de "write" é gmail.compose (criar/gerir RASCUNHOS). O
-// ENVIO não é um escopo separado pedido na conexão; é uma permissão que o
-// usuário ativa explicitamente no app (coluna users.email_send_enabled). Sem
-// isso, o agente só monta rascunho e não dispara e-mail.
-// gmail: read (readonly) + write (compose = rascunho/envio).
-// REMOVIDOS 12/08 (OK Marcos): `manage` (gmail.labels) e `settings`
-// (gmail.settings.basic). Eles estavam FORA do conjunto verificado (LoV) e faziam
-// a tela de consentimento aparecer como "app não verificado" pra todo mundo que
-// conectava. Tirar do console do Google não bastava enquanto o código ainda pedia
-// (o gatilho é a lista que o NOSSO código envia). Só reintroduzir depois de
-// ressubmeter a tela de consentimento pra verificação já incluindo o escopo
-// (ver https://support.google.com/cloud/answer/13464018). Custo de tirar: perde
-// gerir marcadores (labels) e filtros do Gmail; ler/rascunho/envio seguem.
+// Connector scopes, per service: read + write.
+// We request both together in "Connect Google"; old (read-only) tokens stay
+// valid and keep reading only until the person reconnects.
+// Gmail note: the "write" scope is gmail.compose (create/manage DRAFTS).
+// SENDING is not a separate scope requested on connect; it's a permission the
+// user enables explicitly in the app (column users.email_send_enabled). Without
+// it, the agent only builds drafts and sends no e-mail.
+// gmail: read (readonly) + write (compose = draft/send).
+// REMOVED 12/08: `manage` (gmail.labels) and `settings`
+// (gmail.settings.basic). They were OUTSIDE the verified set (LoV) and made the
+// consent screen show "unverified app" to everyone connecting. Removing them
+// from the Google console wasn't enough while the code still asked for them
+// (the trigger is the list OUR code sends). Only reintroduce after resubmitting
+// the consent screen for verification including the scope
+// (see https://support.google.com/cloud/answer/13464018). Cost of removing:
+// no managing Gmail labels and filters; read/draft/send still work.
 export const GOOGLE_SCOPES = {
   gmail:    { read: 'https://www.googleapis.com/auth/gmail.readonly',     write: 'https://www.googleapis.com/auth/gmail.compose' },
   drive:    { read: 'https://www.googleapis.com/auth/drive.readonly',     write: 'https://www.googleapis.com/auth/drive.file' },

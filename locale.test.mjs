@@ -82,14 +82,14 @@ t('tag es-MX -> es', tagIdioma('es-MX') === 'es');
   t(`tag ${JSON.stringify(v)} cai no padrão`, tagIdioma(v) === IDIOMA_PADRAO);
 });
 
-// 9) Idioma NÃO RECONHECIDO continua sem diretriz, e comIdioma devolve o prompt
-//    byte a byte. Não é detalhe: "não sei qual é" não pode virar "é português"
-//    por omissão, senão a normalizaIdioma (que separa as duas coisas de
-//    propósito) perde a serventia.
-//    MUDANÇA 08/09/2026: até aqui o pt-BR TAMBÉM devolvia null, pelo cache. O
-//    buraco disso era en/es mandarem "responda na língua em que a pessoa
-//    escreveu" e o pt-BR não mandar nada, então conta em português com usuário
-//    falando inglês ficava por conta da sorte do modelo. Marcos mandou fechar.
+// 9) An UNRECOGNIZED language still gets no directive, and comIdioma returns the
+//    prompt byte for byte. Not a detail: "I don't know which" must not become
+//    "it's Portuguese" by omission, or normalizaIdioma (which keeps the two
+//    apart on purpose) loses its point.
+//    CHANGE 08/09/2026: until then pt-BR ALSO returned null, for the cache. The
+//    gap: en/es said "answer in the language the person wrote in" and pt-BR said
+//    nothing, so a Portuguese account with a user writing English was left to
+//    the model's luck. That gap was closed.
 const PROMPT = 'Você é X.\nEstilo: pt-BR, direto.';
 ['ja', 'fr', 'de', 'xx', '', '   ', null, undefined, 0, {}].forEach((v) => {
   t(`idioma não atendido ${JSON.stringify(v)} não gera diretriz`, instrucaoDeIdioma(v) === null);
@@ -211,7 +211,7 @@ for (const l of IDIOMAS_OK) t(`aviso sem idioma ${l} não tem ideograma`, !!avis
 const escrito = (txt, esperado) => t(`escrito ${JSON.stringify(txt.slice(0, 40))} -> ${esperado}`, idiomaEscrito(txt) === esperado);
 escrito('Search the web for the latest news about the James Webb Space Telescope and cite your sources.', 'en');
 escrito('Busca en la web las noticias más recientes sobre el clima en Buenos Aires y dame las fuentes.', 'es');
-escrito('Can you put a “cortar cabelo - marcos” event on my agenda at 4:30 pm? It’ll go on for one hour', 'en');
+escrito('Can you put a “cortar cabelo - ana” event on my agenda at 4:30 pm? It’ll go on for one hour', 'en');
 escrito('Explain in three short sentences what inflation is.', 'en');
 escrito('Remind me tomorrow at 9am to call the dentist to reschedule my appointment.', 'en');
 escrito('Explícame en tres frases cortas qué es la inflación.', 'es');

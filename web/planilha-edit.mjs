@@ -61,9 +61,9 @@ export function isSheetAsset(a) {
   return SHEET_EXT_RE.test(String(a.caption || ''));
 }
 
-// Escolhe QUAL asset editar. Sem id explícito, é o mais recente que é planilha:
-// os anteriores são histórico de versionamento (decisão do Marcos, 09/09/2026).
-// `assets` vem de listMediaAssets, já ordenado por created_at DESC.
+// Picks WHICH asset to edit. Without an explicit id, the newest spreadsheet:
+// older ones are version history (decided 09/09/2026).
+// `assets` comes from listMediaAssets, already ordered by created_at DESC.
 export function pickSheetAsset(assets, { id = null } = {}) {
   const list = Array.isArray(assets) ? assets : [];
   if (id != null && String(id).trim() !== '') {

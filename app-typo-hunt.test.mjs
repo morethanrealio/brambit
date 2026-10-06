@@ -109,9 +109,9 @@ test('o campo sugestao sobrevive ao saneador de diagnósticos',()=>{
  assert.deepEqual(d.lint_avisos,[{tipo:'nome_parecido',funcao:'calcularTotal',sugestao:'calcularTotais',arquivo:'public/app.js'}]);
 });
 
-// App real (marcos/cogumelo-3d) exporta função de topo dentro de um objeto e
-// chama com ponto. Comparar chamada pontuada só com métodos calava 17 dos 22
-// typos plantados que passaram batido na calibração de 20/09.
+// A tester's real app exports a top-level function inside an object and calls
+// it with a dot. Comparing dotted calls only against methods silenced 17 of
+// the 22 planted typos that slipped through in the 20/09 calibration.
 test('função de topo exportada em objeto: chamada com ponto também é comparada',()=>{
  const files={'public/chat.js':`
    function criarChat(){ return 1; }

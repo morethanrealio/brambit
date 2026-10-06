@@ -1,11 +1,11 @@
-// ── Cadência do aviso "seus créditos acabaram" DENTRO de rotina agendada ──
-// Regra do Marcos (09/09/2026): 1 aviso por SEMANA e por PESSOA, não por rotina
-// e não por execução. Antes era um aviso a cada disparo, então quem tinha rotina
-// diária levava um por dia até recarregar (foram 42 avisos em 30 dias na base).
-// Nas execuções silenciadas a rotina roda mesmo assim e não custa nada: o portão
-// de franquia barra o modelo antes de qualquer chamada.
-// Fica fora de plans.mjs porque não depende de plano: vale pra qualquer porta de
-// gasto que diga "acabou" (crédito no Brambs, teto em US$ na versão aberta).
+// ── Cadence of the "your credits ran out" notice INSIDE a scheduled routine ──
+// Rule (09/09/2026): 1 notice per WEEK and per PERSON, not per routine and not
+// per run. Before it was one notice per trigger, so whoever had a daily
+// routine got one a day until topping up (42 notices in 30 days in the base).
+// In silenced runs the routine still runs and costs nothing: the allowance
+// gate stops the model before any call.
+// Lives outside plans.mjs because it doesn't depend on a plan: it applies to
+// any spend port that says "ran out" (credits in a plugin, USD cap in the core).
 export const ROUTINE_CREDIT_WARN_MS = 7 * 86400_000;
 
 // Decide se a rotina agendada deve ENTREGAR o aviso agora. `marca` é o que está

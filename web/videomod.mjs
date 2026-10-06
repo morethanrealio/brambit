@@ -1,15 +1,15 @@
-// ── Moderação de prompt de geração de vídeo ──
-// Guardrail da feature de geração de vídeo das pessoas. Roda ANTES de gerar:
-// classifica o texto do pedido (prompt + transcrição de áudio, se houver) contra
-// as categorias PROIBIDAS. Se qualquer uma disparar, o vídeo NÃO é gerado.
+// ── Video generation prompt moderation ──
+// Guardrail for the people video generation feature. Runs BEFORE generating:
+// classifies the request text (prompt + audio transcript, if any) against the
+// FORBIDDEN categories. If any fires, the video is NOT generated.
 //
-// Categorias proibidas (Marcos 05/08): conteúdo sexual, violência, violência
-// verbal, crianças, sangue, nudez.
+// Forbidden categories (05/08): sexual content, violence, verbal violence,
+// children, blood, nudity.
 //
-// Modelo: o mais barato que dá conta (Gemini Flash Lite), thinkingBudget 0.
+// Model: the cheapest that copes (Gemini Flash Lite), thinkingBudget 0.
 //
-// FAIL-CLOSED: se a moderação não conseguir rodar ou o retorno vier ilegível, a
-// resposta é BLOQUEAR. Guardrail que falha aberto não é guardrail.
+// FAIL-CLOSED: if moderation can't run or the response is unreadable, the
+// answer is BLOCK. A guardrail that fails open is no guardrail.
 
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
 import { modeloPara } from '../core-proto/modelos.mjs';

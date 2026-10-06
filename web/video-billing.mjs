@@ -1,11 +1,11 @@
 import { ownedMediaKey } from './security-boundaries.mjs';
 
-// Um job é a chave de cobrança, não uma tentativa de polling. Não inicia rede
-// nem executa DDL. A transação mantém débito e conclusão local inseparáveis.
-// Roda na transação da conta pagadora (conta-pagadora.mjs, injetada em
-// `transacao`) e carimba org_id com a conta que paga agora; no Brambs o débito
-// do vídeo de um membro sai do saldo da empresa. creditUsd = US$ por unidade de
-// cobrança (gasto.dolarPorCredito()); só precisa ser > 0 quando há cobrança.
+// A job is the billing key, not a polling attempt. Starts no network and runs
+// no DDL. The transaction keeps the debit and local completion inseparable.
+// Runs in the paying account's transaction (conta-pagadora.mjs, injected as
+// `transacao`) and stamps org_id with the account paying now; with a company
+// plugin, a member's video is debited from the company balance. creditUsd = US$ per
+// billing unit (gasto.dolarPorCredito()); only needs to be > 0 when billing.
 export function createVideoBillingStore(pool, schema = 'mtr_harness', { transacao } = {}) {
   if (typeof transacao !== 'function') throw new Error('Cobrança de vídeo sem conta pagadora');
   if (!/^[a-z_][a-z0-9_]*$/i.test(schema)) throw new Error('Invalid schema');

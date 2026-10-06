@@ -1,23 +1,23 @@
-// Porta 2 (permissões): o que o operador limita por conta. O núcleo pergunta,
-// quem instala responde. No Brambs a resposta vem do plano (permissoes-brambs.mjs);
-// na versão aberta o padrão é sem limite de apps e o disco fixo do ctl.
+// Port 2 (permissions): what the operator limits per account. The core asks,
+// whoever installs it answers (e.g. a plan-based plugin); in the open version
+// the default is no app limit and ctl's fixed disk.
 //
-//  bloqueioDeApp({ownerUserId,atuais,appClient}) → null (pode criar app NOVO) ou
-//    {ok:false,error,agente,...}: error vai pra pessoa, agente pro modelo. Só é
-//    chamado pra app novo; editar app que já existe nunca passa por aqui.
-//  discoDoAppMb(dono) → MB de disco dos apps do dono (o ctl aplica por usuário).
-//    dono = linha do users, ou null se a leitura falhou.
-//  filaDeEspera() → true quando o cadastro está fechado: conta nova só entra com
-//    liberação, código de indicação ou convite de empresa. Erro aqui = aberto.
-//  liberadoNoCadastro(email) → true quando o e-mail passa mesmo com o cadastro
-//    fechado (no Brambs, a whitelist do beta). Padrão: false.
-//  entrarNaFila({email,name,referrerCode,reason}) → quem bateu no cadastro
-//    fechado: {mensagem} (pôs na fila; a mensagem vai pra pessoa) ou null (não
-//    há fila; o cadastro é recusado). reason: sem_codigo, sem_convite ou
-//    codigo_invalido. Padrão: null.
-//  podeRecusarTreino(userId) → true quando a conta pode tirar as conversas do
-//    treino de modelo (o botão aparece e a rota aceita). Padrão: false, porque a
-//    versão aberta não treina nada e o botão não faz sentido.
+//  bloqueioDeApp({ownerUserId,atuais,appClient}) → null (may create a NEW app) or
+//    {ok:false,error,agente,...}: error goes to the person, agente to the model.
+//    Only called for a new app; editing an existing app never goes through here.
+//  discoDoAppMb(dono) → MB of disk for the owner's apps (ctl applies it per user).
+//    dono = users row, or null if the read failed.
+//  filaDeEspera() → true when sign-up is closed: a new account only gets in with
+//    approval, a referral code or a company invite. Error here = open.
+//  liberadoNoCadastro(email) → true when the email gets in even with sign-up
+//    closed (e.g. a beta allowlist). Default: false.
+//  entrarNaFila({email,name,referrerCode,reason}) → someone hit closed sign-up:
+//    {mensagem} (queued; the message goes to the person) or null (no queue;
+//    sign-up is refused). reason: sem_codigo, sem_convite or codigo_invalido.
+//    Default: null.
+//  podeRecusarTreino(userId) → true when the account can opt its conversations
+//    out of model training (the button shows and the route accepts). Default:
+//    false, since the open version trains nothing and the button makes no sense.
 export const METODOS_PERMISSOES=['bloqueioDeApp','discoDoAppMb','filaDeEspera','liberadoNoCadastro','entrarNaFila','podeRecusarTreino'];
 export function conferirPermissoes(p){
  const faltam=METODOS_PERMISSOES.filter(m=>typeof p?.[m]!=='function');

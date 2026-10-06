@@ -146,9 +146,9 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('duplicado com recuo é reconhecido', nada.puladas[0] === 'add:duplicado');
 }
 {
-  const r = aplicarOps([{ op: 'add', pagina: 'pessoa-laura', texto: 'Laura é a sócia dele na STEM' }], P(base));
-  t('página por pessoa é destino válido', r.paginas['pessoa-laura'] === '- Laura é a sócia dele na STEM');
-  t('título da página de pessoa é o nome', tituloDe('pessoa-laura') === 'Laura');
+  const r = aplicarOps([{ op: 'add', pagina: 'pessoa-clara', texto: 'Clara é a sócia dele na Acme' }], P(base));
+  t('página por pessoa é destino válido', r.paginas['pessoa-clara'] === '- Clara é a sócia dele na Acme');
+  t('título da página de pessoa é o nome', tituloDe('pessoa-clara') === 'Clara');
   t('título de área vem do catálogo', tituloDe('comunicacao') === 'Como se comunica');
 }
 {

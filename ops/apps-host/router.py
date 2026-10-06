@@ -224,10 +224,10 @@ LANDING = ("<!doctype html><meta charset=utf-8>"
            "<title>" + _attr(NOME) + "</title>"
            "<h1>" + _attr(NOME) + " apps host online</h1>").encode("utf-8")
 
-# Selo da marca ("Feito com ..."): presente em TODA pagina servida pelo host (home do
-# subdominio E apps publicados). Cores da marca, logo linkando pra home.
-# NUNCA flutuante por cima do conteudo (Marcos 03/09): ou ele fica no fluxo, no
-# fim da pagina, ou ocupa uma FAIXA reservada de 40px que o app nao usa.
+# Brand badge ("Made with ..."): present on EVERY page served by the host (subdomain
+# home AND published apps). Brand colors, logo linking to the home page.
+# NEVER floating over the content (03/09): it either sits in the flow at the end
+# of the page or takes a reserved 40px STRIP that the app doesn't use.
 SELO_HTML = (
     '<a href="' + _attr(SITE) + '" target="_blank" rel="noopener" '
     'aria-label="' + _attr(SELO_ARIA) + '" '

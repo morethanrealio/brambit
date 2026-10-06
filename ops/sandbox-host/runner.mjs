@@ -1,19 +1,19 @@
-// ── Runner de sandbox por usuário (Docker) ──
-// Um container por usuário, da imagem `brambs-sandbox`. O agente chama as tools
-// (shell_run / write_file / read_file) e isso vira `docker exec` no container do
-// usuário. Os arquivos da pessoa persistem num volume nomeado por usuário.
+// ── Per-user sandbox runner (Docker) ──
+// One container per user, from the `brambs-sandbox` image. The agent calls the
+// tools (shell_run / write_file / read_file) and they become `docker exec` in the
+// user's container. The person's files persist in a per-user named volume.
 //
-// ISOLAMENTO (o que importa de verdade na v1) está nas flags do `docker run`:
-//   - usuário não-root (definido na imagem)
+// ISOLATION (what really matters in v1) lives in the `docker run` flags:
+//   - non-root user (set in the image)
 //   - --cap-drop ALL  + --security-opt no-new-privileges
-//   - --read-only no rootfs, só /workspace (volume) e /tmp graváveis
-//   - limites de memória, cpu e pids
-//   - REDE: rede própria só-egress; SEM acesso à rede interna nossa
-//     (Postgres 172.31.x, outros hosts) nem ao metadata da AWS (169.254.169.254).
-//     Isso é bloqueado por firewall no host, não dá pra confiar só no Docker.
+//   - --read-only rootfs, only /workspace (volume) and /tmp writable
+//   - memory, cpu and pids limits
+//   - NETWORK: own egress-only network; NO access to the internal network
+//     (Postgres 172.31.x, other hosts) or to AWS metadata (169.254.169.254).
+//     This is blocked by the host firewall; Docker alone can't be trusted.
 //
-// Este módulo NÃO roda no dev.mara (box de produção compartilhado). Roda no host
-// dedicado de sandboxes. É chamado pelo backend via HTTP (runnerd) ou embarcado.
+// This module does NOT run on the application server. It runs on the dedicated
+// sandbox host and is called by the backend over HTTP (runnerd) or embedded.
 
 import { spawn } from 'node:child_process';
 import path from 'node:path';
