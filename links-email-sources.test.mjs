@@ -62,7 +62,7 @@ test('exceção requer formato conhecido e igualdade exata, sem liberar domínio
   assert.deepEqual(result.authenticatedSources,[known]);
   assert.deepEqual(result.indefinidos,[otherAccount]);
   assert.deepEqual(result.quebrados,candidates.filter(url=>url!==otherAccount));
-  assert.ok(result.texto.includes(known));assert.ok(result.texto.includes('HTTP 404/410'));
+  assert.ok(result.texto.includes(known));assert.ok(result.texto.includes('Removi 4 links'));
   for (const url of candidates)assert.deepEqual(requests.filter(([u])=>u===url).map(([,method])=>method),url===otherAccount ? ['HEAD'] : ['HEAD','GET']);
 });
 
@@ -82,7 +82,7 @@ test('estado autenticado fica no turno; links privados não observados continuam
     const url=gmail(id);plans.set(url,status);
     const result=await fontesEConferencia(`[Mensagem](${url})`,[],{authenticatedEmailSources:turnSearchCoverage().emailSourceLinks()});
     assert.deepEqual(result.authenticatedSources,[]);assert.deepEqual(result.indefinidos,[url]);
-    assert.ok(result.texto.includes('NÃO estão validados'));assert.equal(requests.filter(([u])=>u===url).length,1);
+    assert.ok(result.texto.includes('Não consegui conferir 1 link'));assert.equal(requests.filter(([u])=>u===url).length,1);
   }
 });
 
@@ -91,7 +91,7 @@ test('rotinas estritas conservam exigência de conferência pública, mesmo com 
   const url=gmail('strict-observed');plans.set(url,403);
   const result=await fontesEConferencia(`• [Mensagem](${url})`,[],{strictLinks:true,authenticatedEmailSources:[url]});
   assert.deepEqual(result.authenticatedSources,[]);assert.deepEqual(result.indefinidos,[url]);
-  assert.ok(result.texto.includes(url));assert.ok(result.texto.includes('NÃO estão validados'));assert.ok(!result.texto.includes('link não verificado'));
+  assert.ok(result.texto.includes(url));assert.ok(result.texto.includes('Não consegui conferir 1 link'));assert.ok(!result.texto.includes('link não verificado'));
   assert.equal(requests.filter(([u])=>u===url).length,1);
 });
 

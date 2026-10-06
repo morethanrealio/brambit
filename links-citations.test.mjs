@@ -26,7 +26,7 @@ const redirectTo=(target,status=301)=>({to:target,status});
 // Falha real repetida no GET: 404/410, 5xx, DNS inexistente, conexão recusada.
 for(const status of [404,410,500,503,'dns','refused'])for(const language of ['pt-BR','en','es']){
  const bad=url(status),good=url(),result=await fontesEConferencia(`Seleção:\n• Falhou ${bad}\n  Resumo que não deve ser recomendado.\n• Bom ${good}`,[],{language});
- eq(result.quebrados,[bad]);ok(!result.texto.includes(bad));ok(!result.texto.includes('Resumo que não deve'));ok(result.texto.includes(good));ok(result.texto.includes('404/410'));
+ eq(result.quebrados,[bad]);ok(!result.texto.includes(bad));ok(!result.texto.includes('Resumo que não deve'));ok(result.texto.includes(good));ok(result.texto.includes({'pt-BR':'Removi 1 link',en:'I removed 1 link',es:'Quité 1 enlace'}[language]));
  eq(requests.filter(x=>x[0]===bad),[[bad,'HEAD'],[bad,'GET']]);
  const repeat=await conferirLinks(bad);eq(repeat.quebrados,[bad]);eq(requests.filter(x=>x[0]===bad).length,2);
 }
@@ -42,13 +42,13 @@ for(const head of [404,410,500,'dns','refused'])for(const get of [200,401,403,42
 }
 // Sem prova no HEAD: fica no texto com aviso, sem GET.
 for(const status of [401,403,429,405,302,'throw','mixed']){
- const link=url(status),result=await fontesEConferencia(`Link ${link}`);eq(result.indefinidos,[link]);eq(result.quebrados,[]);ok(result.texto.includes('NÃO estão validados'));ok(result.texto.includes(link));eq(requests.filter(x=>x[0]===link).length,1);
+ const link=url(status),result=await fontesEConferencia(`Link ${link}`);eq(result.indefinidos,[link]);eq(result.quebrados,[]);ok(result.texto.includes('Não consegui conferir 1 link'));ok(result.texto.includes(link));eq(requests.filter(x=>x[0]===link).length,1);
 }
 // Redirect é seguido: 200 no fim é link bom; qualquer outra coisa depois de um
 // redirect fica sem veredito (não prova página morta).
 {
  const final=url(200),link=url(redirectTo(final)),r=await fontesEConferencia(`Link ${link}`);
- eq(r.quebrados,[]);eq(r.indefinidos,[]);ok(r.texto.includes(link));ok(!r.texto.includes('NÃO estão validados'));
+ eq(r.quebrados,[]);eq(r.indefinidos,[]);ok(r.texto.includes(link));ok(!r.texto.includes('Não consegui conferir 1 link'));
  eq(requests.filter(x=>x[0]===final),[[final,'HEAD']]);
  const rel=`https://links.example.invalid/${++serial}`;plans.set(rel,{HEAD:redirectTo('/destino-relativo-'+serial,308)});
  plans.set(`https://links.example.invalid/destino-relativo-${serial}`,{HEAD:200});
@@ -73,7 +73,7 @@ for(const status of [404,410,500,403]){
 }
 {
  const links=Array.from({length:11},()=>url());const r=await fontesEConferencia(links.join('\n'));
- eq(r.naoChecados,links.slice(8));eq(requests.filter(x=>links.includes(x[0])).length,8);ok(r.texto.includes('3 link(s)'));eq(r.quebrados,[]);
+ eq(r.naoChecados,links.slice(8));eq(requests.filter(x=>links.includes(x[0])).length,8);ok(r.texto.includes('3 links desta resposta'));eq(r.quebrados,[]);
 }
 // No probing of literal code, local targets, presigned attachments or truncated parentheses.
 for(const input of ['`https://code.example.invalid/x`','```\nhttps://code.example.invalid/x\n```','```\nhttps://code.example.invalid/x',
@@ -94,11 +94,11 @@ for(const input of ['`https://code.example.invalid/x`','```\nhttps://code.exampl
 for (const status of [403,429,302,'throw']) {
  const link=url(status),good=url();
  const r=await fontesEConferencia(`• Item ${link}\n• Bom ${good}`,[],{strictLinks:true});
- eq(r.quebrados,[]);eq(r.indefinidos,[link]);ok(r.texto.includes(link));ok(r.texto.includes(good));ok(r.texto.includes('NÃO estão validados'));ok(!r.texto.includes('link não verificado'));ok(!r.texto.includes('HTTP 404/410'));
+ eq(r.quebrados,[]);eq(r.indefinidos,[link]);ok(r.texto.includes(link));ok(r.texto.includes(good));ok(r.texto.includes('Não consegui conferir 1 link'));ok(!r.texto.includes('link não verificado'));ok(!r.texto.includes('Removi'));
 }
 {
  const links=Array.from({length:10},()=>url());const r=await fontesEConferencia(links.map(u=>'• '+u).join('\n'),[],{strictLinks:true});
- for(const u of links)ok(r.texto.includes(u));ok(r.texto.includes('2 link(s)'));
+ for(const u of links)ok(r.texto.includes(u));ok(r.texto.includes('2 links desta resposta'));
  const bad=url(404),s=await fontesEConferencia(`• Item ${bad}`,[],{strictLinks:true});eq(s.quebrados,[bad]);ok(!s.texto.includes(bad));
 }
 // Limpeza final que o server usa (citacoes.mjs), importada de verdade.
