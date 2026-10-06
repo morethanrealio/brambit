@@ -47,6 +47,18 @@ function hostOf(url) {
   return m[1].toLowerCase().replace(/^www\./, '').replace(/[.,;:)\]}>"']+$/, '');
 }
 
+// Endereço local ou de rede privada não é algo que se "consulta" na internet:
+// aparece quando o dono está montando um sistema (callback, porta de teste).
+const HOST_LOCAL = /^(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?)/;
+const permitido = (host, hosts) => hosts.some(h => host === h || host.endsWith(`.${h}`));
+// Último pedaço do caminho que é um identificador (id de e-mail, slug longo):
+// se ele está no material do turno, o endereço foi montado a partir de algo lido.
+function idDoCaminho(url) {
+  const partes = String(url).replace(/^https?:\/\/[^/]+/i, '').split(/[/?#&=]+/).filter(Boolean);
+  const ultimo = flatten(partes.at(-1) || '').trim();
+  return ultimo.length >= 10 ? ultimo : '';
+}
+
 const trecho = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 
 // ——— verificadores ———————————————————————————————————————————————
@@ -64,8 +76,10 @@ function checkLinks(text, ctx) {
     const host = hostOf(raw);
     if (!host || vistos.has(host)) continue;
     vistos.add(host);
-    if (ctx.allowHosts.includes(host)) continue;
-    if (ctx.pool.includes(flatten(host).trim())) continue;
+    if (permitido(host, ctx.allowHosts) || HOST_LOCAL.test(host)) continue;
+    if (ctx.pool.includes(` ${flatten(host).trim()} `)) continue;
+    const id = idDoCaminho(raw);
+    if (id && ctx.pool.includes(` ${id} `)) continue;
     out.push({ kind: 'link_nao_consultado', trecho: trecho(raw), dado: host });
   }
   return out;
@@ -76,21 +90,28 @@ function checkLinks(text, ctx) {
 // seguintes. A janela abre na linha que fala de cupom e segue enquanto as linhas
 // forem itens de lista, fechando na primeira linha em branco ou fora da lista.
 const NAO_CUPOM = new Set(["CNPJ","CPF","RG","CEP","OAB","PDF","DOC","DOCX","XLSX","CSV","HTML","JSON","URL","LGPD","API","SKU","NFE","IPTU","PIX","IOF","CDB","ICMS"]);
+// Fronteira de palavra que entende acento: com \\b do JS, "DESCARTÁVEIS" virava
+// o código "DESCART" e "promoções" contava como "promo".
+const FALA_DE_CUPOM = /(?<![\p{L}\p{N}])(?:cupom|cupons|cup[oó]n|cupones|coupons?|promocode|promo|c[óo]digos? de desconto|discount codes?)(?![\p{L}\p{N}])/iu;
+const CODIGO = /(?<![\p{L}\p{N}])[A-Z][A-Z0-9]{3,19}(?![\p{L}\p{N}])/gu;
+// "não achei cupom", "no coupon": a linha nega, não oferece código.
+const NEGA_CUPOM = /(?<![\p{L}])(?:n[ãa]o|nenhum|sem|no|not|none|ning[uú]n|sin)(?![\p{L}])[^\n]{0,40}(?:cupo|coupon|c[óo]digo|code)/iu;
 function checkCupons(text, ctx) {
   const out = [];
   const vistos = new Set();
   let janela = false;
   for (const line of String(text).split("\n")) {
-    const falaDeCupom = /\b(?:cupom|cupons|coupon|promocode|promo|c[óo]digos? de desconto)\b/i.test(line);
+    const falaDeCupom = FALA_DE_CUPOM.test(line);
     const itemDeLista = /^\s*(?:[-*+•]|\d+[.)])\s+/.test(line);
     if (falaDeCupom) janela = true;
     else if (!itemDeLista || !line.trim()) janela = falaDeCupom;
-    if (!janela) continue;
-    for (const code of line.match(/\b[A-Z][A-Z0-9]{3,19}\b/g) || []) {
+    if (!janela || NEGA_CUPOM.test(line)) continue;
+    // Pedaço de endereço (utm, slug) não é código: o link tem verificador próprio.
+    for (const code of line.replace(/https?:\/\/\S+|\S+@\S+/gi, ' ').match(CODIGO) || []) {
       if (vistos.has(code) || NAO_CUPOM.has(code)) continue;
       vistos.add(code);
       if (ctx.allowTokens.includes(code)) continue;
-      if (ctx.pool.includes(flatten(code).trim())) continue;
+      if (ctx.pool.includes(` ${flatten(code).trim()} `)) continue;
       out.push({ kind: "cupom_nao_consultado", trecho: trecho(line), dado: code });
     }
   }
@@ -102,7 +123,12 @@ function checkCupons(text, ctx) {
 // LIMITE DELIBERADO: só o bloco explícito. Atribuição solta em prosa ("de acordo
 // com a LGPD") também pode vir do conhecimento do modelo, e acusá-la dispararia
 // repasse em resposta legítima. Ampliar isso exige dado, não palpite.
+// Só vale em turno sem NENHUMA ferramenta: quando houve consulta, a lista de
+// fontes da resposta é montada pela plataforma a partir do que as ferramentas
+// devolveram (citacoes.mjs), e a prosa do modelo ao redor ("consultados agora",
+// "o vídeo está no Facebook") não é nome de fonte. Um achado por linha.
 function checkFontes(text, ctx) {
+  if (ctx.algumaFerramenta) return [];
   const out = [];
   const vistos = new Set();
   for (const line of String(text).split("\n")) {
@@ -120,6 +146,7 @@ function checkFontes(text, ctx) {
       vistos.add(chave);
       if (ctx.pool.includes(chave)) continue;
       out.push({ kind: "fonte_nao_lida", trecho: trecho(line), dado: limpo });
+      break;
     }
   }
   return out;
@@ -141,9 +168,42 @@ function checkPrecos(text, ctx) {
     if (!digits || digits.length < 3 || vistos.has(digits)) continue;
     vistos.add(digits);
     if (ctx.poolDigits.includes(digits)) continue;
+    // Conta feita em cima de valor consultado (2 pessoas, ida + volta) também
+    // tem origem: aceita k × valor ou k × (a + b), k até 6, com folga de R$ 1.
+    if (derivado(centavos(raw.replace(/^R\$\s?/i, '')), ctx)) continue;
     out.push({ kind: 'preco_sem_consulta', trecho: trecho(raw), dado: raw.trim() });
   }
   return out;
+}
+
+// Valor escrito em reais ("2.530", "998,93") ou vindo de JSON ("998.93") em
+// centavos. Ponto seguido de 3 dígitos é milhar; outro ponto é decimal.
+function centavos(v) {
+  let t = String(v).replace(/[.,]+$/, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/\.\d{3}(?:\.|$)/.test(t)) t = t.replace(/\./g, '');
+  const n = Number(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
+}
+const RE_VALOR_POOL = /R\$\s?(\d[\d.,]*)|"(?:price|preco|preço|valor|total|amount|value|price_brl|preco_total|valor_total)"\s*:\s*"?(\d[\d.,]*)/gi;
+function valoresDoPool(bruto) {
+  const vals = new Set();
+  for (const m of String(bruto).matchAll(RE_VALOR_POOL)) {
+    const c = centavos(m[1] ?? m[2]);
+    if (c > 0) vals.add(c);
+    if (vals.size >= 400) break;
+  }
+  return [...vals];
+}
+function derivado(alvo, ctx) {
+  if (!(alvo > 0)) return false;
+  const vals = ctx.valores();
+  const perto = (base) => { for (let k = 1; k <= 6; k++) if (Math.abs(k * base - alvo) <= 100) return true; return false; };
+  for (let i = 0; i < vals.length; i++) {
+    if (perto(vals[i])) return true;
+    for (let j = i + 1; j < vals.length; j++) if (perto(vals[i] + vals[j])) return true;
+  }
+  return false;
 }
 
 // Saldo/plano do próprio dono afirmado sem nenhuma consulta de crédito no turno.
@@ -194,6 +254,8 @@ export function checkGrounding(text, {
   const ctx = {
     pool: ` ${flatten(bruto)} `,
     poolDigits: ` ${String(bruto).replace(/\D+/g, ' ')} `,
+    valores: (() => { let v; return () => (v ??= valoresDoPool(bruto)); })(),
+    algumaFerramenta: Object.keys(toolCounts).length > 0,
     allowHosts: [...marca().hostsCitaveis, ...allowHosts.map(h => String(h).toLowerCase())],
     allowTokens: allowTokens.map(t => String(t).toUpperCase()),
     // O saldo/plano é dado NOSSO: quando a plataforma já entrega o número real
@@ -233,22 +295,24 @@ const FERRAMENTA = {
 };
 
 /**
- * Instrução do repasse: manda o modelo refazer a resposta CHAMANDO a ferramenta
- * que faltou. É a opção (a) escolhida pelo Marcos em 18/09: resolver pro
- * usuário, em vez de só apagar o trecho e deixá-lo sem resposta.
+ * Instrução do repasse: uma REVISÃO INTERNA, que a pessoa não vê. O modelo
+ * reescreve a mesma resposta inteira, confirmando com a ferramenta o que der e
+ * tirando (ou dizendo com naturalidade que não está disponível) o que não der.
+ * Quem lê recebe só a resposta final: sem "consultei de novo", sem nome de
+ * ferramenta, sem sinal de que houve revisão (Marcos 06/10, msg 8584).
  */
 export function groundingRetryPrompt(findings, language = 'pt-BR') {
-  const itens = [...new Map(findings.map(f => [f.kind, f])).values()]
-    .map(f => `- ${ORIENTACAO[f.kind] || 'sem origem verificada'}${f.dado ? ` (${trecho(f.dado)})` : ''}; use ${FERRAMENTA[f.kind] || 'a ferramenta adequada'}`)
+  const itens = [...new Map(findings.map(f => [f.kind + f.dado, f])).values()].slice(0, 12)
+    .map(f => `- ${ORIENTACAO[f.kind] || 'sem origem verificada'}${f.dado ? ` (${trecho(f.dado)})` : ''}; para confirmar: ${FERRAMENTA[f.kind] || 'a ferramenta adequada'}`)
     .join('\n');
   const head = {
-    en: 'Your previous reply stated facts with no source in this turn:',
-    es: 'Tu respuesta anterior afirmó datos sin origen en este turno:',
-  }[tagIdioma(language)] || 'Sua resposta anterior afirmou dados sem nenhuma origem neste turno:';
+    en: 'Internal review (the person does not see this message). In the reply you were about to send, these items do not appear in anything consulted in this conversation:',
+    es: 'Revisión interna (la persona no ve este mensaje). En la respuesta que ibas a entregar, estos datos no aparecen en nada consultado en esta conversación:',
+  }[tagIdioma(language)] || 'Revisão interna (a pessoa não vê esta mensagem). Na resposta que você ia entregar, estes dados não aparecem em nada que foi consultado nesta conversa:';
   const tail = {
-    en: 'Call the tool now and rewrite the reply using only what the tool returns. If the tool returns nothing, say plainly that you could not check, and do not invent a substitute.',
-    es: 'Llama la herramienta ahora y reescribe la respuesta usando solo lo que devuelva. Si no devuelve nada, di claramente que no pudiste comprobarlo y no inventes un sustituto.',
-  }[tagIdioma(language)] || 'Chame a ferramenta agora e reescreva a resposta usando somente o que ela devolver. Se a ferramenta não devolver nada, diga com todas as letras que não conseguiu verificar e não invente um substituto.';
+    en: 'Rewrite the SAME full reply, as the person will read it. For each item: if a tool can confirm it, confirm it and use only what it returns; if not, drop it or say naturally that this information is not available. Do not mention review, lookups, tools, verification or that you redid the reply, and do not invent a substitute.',
+    es: 'Reescribe la MISMA respuesta completa, como la persona la va a leer. Para cada dato: si una herramienta puede confirmarlo, confírmalo y usa solo lo que devuelva; si no, quítalo o di con naturalidad que esa información no está disponible. No menciones revisión, consultas, herramientas, verificación ni que rehiciste la respuesta, y no inventes un sustituto.',
+  }[tagIdioma(language)] || 'Reescreva a MESMA resposta completa, do jeito que a pessoa vai ler. Para cada item: se uma ferramenta puder confirmar, confirme e use só o que ela devolver; se não puder, tire o dado ou diga com naturalidade que essa informação não está disponível. Não mencione revisão, consulta, ferramenta, verificação nem que refez a resposta, e não invente um substituto.';
   return `${head}\n${itens}\n\n${tail}`;
 }
 

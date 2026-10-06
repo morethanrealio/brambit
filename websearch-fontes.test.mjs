@@ -49,6 +49,15 @@ check(usos.some(u => u.kind === 'search' && u.usage.model === 'tavily-search'), 
 check(!usos.some(u => u.kind === 'search_degraded'), 'NÃO marca busca degradada quando deu certo');
 check(fetchCalls.length === 1, 'uma chamada só (sem relaxar nem fallback)');
 
+// 1b) com o registro do turno, a numeração é a do turno inteiro: a 2ª busca
+// reaproveita o número de quem já apareceu (é ele que vai pra lista final).
+const { registroDeFontes } = await import('./web/citacoes.mjs');
+const reg = registroDeFontes();
+reg.add({ title: 'Outra', uri: 'https://outra.example.invalid/' });
+const comReg = await webSearchTool({ onUsage: () => {}, fontes: reg }).run({ consulta: 'vento sul em Florianópolis' });
+check(comReg.includes('[2] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento') && comReg.includes('[3] INMET'), 'numera pelo registro do turno');
+check(reg.size === 3, 'fontes da busca entram no registro');
+
 // 2) queda REAL de rede em turno DeepSeek: erro honesto, rotulado como Tavily, sem Gemini.
 fetchMode = 'rede'; usos.length = 0;
 const err = await withDeepSeek(() => ({}), () => tool.run({ consulta: 'x' }));

@@ -161,6 +161,7 @@ import { makeTogether, togetherEnabled } from '../core-proto/providers/together.
 import { STOP } from '../core-proto/provider.mjs';
 import { webSearchTool, openLinkTool, serpapiEnabled, lensSearchByUrl, shoppingSearch, createSearchBudget, SEARCH_LIMIT_MSG } from './websearch.mjs';
 import { fontesEConferencia, conferirLinks } from './links.mjs';
+import { limparTextoFinal, desgrudarPontuacaoDeLink, registroDeFontes, citarFontes } from './citacoes.mjs';
 import { extractPdfText, renderPdfPagesToPng } from './pdf.mjs';
 import { comporTools } from './compor.mjs';
 import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
@@ -727,14 +728,15 @@ Regras:
 • Use a tool buscar_web pra levantar informação factual/atual. Busque de forma AMPLA por categoria/tema (1 a 3 buscas boas), NUNCA uma busca separada por cada item — é lento e não melhora a qualidade.
 • Use abrir_link quando precisar ler o conteúdo real de uma URL específica.
 • Traga nomes próprios, números, endereços, datas, preços, fontes — nada de resposta genérica tipo "um restaurante local". Se não der pra confirmar algo, diga com honestidade em vez de inventar.
-• Ao terminar, ENTREGUE a resposta final no formato pedido, direta e organizada. Não descreva o que você fez, entregue o resultado. Cite as fontes principais no fim.`;
+• Ao terminar, ENTREGUE a resposta final no formato pedido, direta e organizada. Não descreva o que você fez, entregue o resultado. Cite cada dado com o número da fonte de onde ele veio, ex.: [2]. Não escreva lista de fontes no fim.`;
 
-async function runResearchSubagent({ objetivo, formato, onUsage, language, searchBudget = null }) {
+async function runResearchSubagent({ objetivo, formato, onUsage, language, searchBudget = null, fontes = null }) {
   const sub = new ToolRegistry();
   // Mesmo orçamento do turno que chamou: busca repetida entre sub-agentes volta
   // do cache e o teto vale pro turno inteiro, não por sub-agente.
-  sub.add(webSearchTool({ onUsage, budget: searchBudget }));
-  sub.add(openLinkTool({ onUsage }));
+  // Mesmo registro de fontes do turno: o [n] do sub-agente vale na resposta final.
+  sub.add(webSearchTool({ onUsage, budget: searchBudget, fontes }));
+  sub.add(openLinkTool({ onUsage, fontes }));
   // Sub-agentes de LEITURA/BUSCA (pesquisa, Google, conectores) só levantam
   // informação e sintetizam texto: trabalho onde o modelo barato empata o forte
   // (ver evals). Vão pro provider de sub-agente (DeepSeek V4 Flash), alta
@@ -1207,118 +1209,13 @@ function parseRecurrence({ repetirCadaMin, repetirAte, startMs, tz }) {
   return { stepMin: step, untilIso };
 }
 
-// Rede de segurança pro texto FINAL do assistente, independente de provider:
-//  1) Remove marcação crua de tool-call que às vezes escapa quando o parser do
-//     modelo (GLM) falha e a chamada vem como TEXTO (<tool_call>...</tool_call>,
-//     <arg_key>, <arg_value>) — o usuário nunca deve ver isso (bug 15/07 c/ Marcos).
-//  2) Mascara segredo que por acaso tenha ido parar na prosa (defesa extra; as
-//     saídas de tool já saem mascaradas na origem).
-// Marcadores de citação ÓRFÃOS no texto final. A saída da busca traz uma lista
-// "Fontes:\n[1] título — url" (websearch.mjs renderFontes) e o modelo copia os
-// [1] / [1, 7] pra prosa; mas essa lista fica na saída da TOOL, não vai pro
-// usuário. Sobra número solto no meio da frase ("o horário é das 9h às 18h [1,
-// 7]"). Alguns modelos ainda inventam o identificador da própria chamada de tool
-// como citação (default_api:buscar_web:0). Nada disso é conteúdo.
-//
-// Mexer no texto final é a coisa mais perigosa que existe aqui: acerta 100% das
-// respostas de todo mundo. Então a remoção é cercada por quatro portões, e fora
-// deles o texto sai byte a byte como o modelo escreveu:
-//  1. o turno precisa ter chamado uma tool que produz lista de fontes;
-//  2. a resposta não pode trazer a própria lista (aí o [1] resolve e fica);
-//  3. o marcador tem que estar DENTRO da frase, nunca abrindo linha, senão a
-//     gente apagaria o menu que o próprio assistente ofereceu ("[1] Sim");
-//  4. tem que parecer citação: números a partir de 1 (intervalo "[0, 1]" fica) e
-//     nada de dígito logo depois (DDD "[11] 98888-7777" fica).
-// Nenhuma limpeza corre solta pelo texto: o que sai é o marcador e o espaço
-// dele, decidido caractere a caractere na hora da remoção.
+// Rede de segurança pro texto FINAL do assistente, independente de provider. A
+// parte pura (tool-call vazado, citações, pontuação grudada em link) mora em
+// citacoes.mjs; aqui fica só o mascaramento de segredo que por acaso tenha ido
+// parar na prosa (defesa extra; as saídas de tool já saem mascaradas na origem).
 const TOOLS_COM_FONTES = new Set(['buscar_web', 'pesquisar', 'abrir_link']);
-const CITACAO = String.raw`\[\s*[1-9]\d*(?:\s*[,;]\s*[1-9]\d*)*\s*\]`;
-const RE_CITACAO = new RegExp(
-  String.raw`[ \t]*(?<![\w\]])(?:\(\s*${CITACAO}\s*\)|${CITACAO})(?!\()[ \t]*`,
-  'g',
-);
-function limparMarcadoresCitacao(s, preservarNumericas = false) {
-  let t = s.replace(/[ \t]*\[cite:\s*\d+(?:[.,;\s]+\d+)*\s*\][ \t]*/gi, (m, off, str) => {
-    const next = str[off + m.length] || '';
-    return !off || !next || /[\s.,;:!?)\]]/.test(next) ? '' : ' ';
-  }).replace(/default_api[:.][A-Za-z0-9_.-]+(?:\s*:\s*\d+)?/g, '');
-  // Lista de verdade = cabeçalho "Fontes:" ou uma linha "[n] título ... http...".
-  // Só "[1] " no começo de uma frase não é lista (é o próprio marcador órfão).
-  const temLista = preservarNumericas || /(^|\n)\s*(fontes|sources|fuentes)\s*:/i.test(t) || /^\s*\[\d+\]\s+\S.*https?:\/\//m.test(t);
-  if (temLista) return t;
-  return t.replace(RE_CITACAO, (m, off, str) => {
-    // Abrindo linha (com ou sem bullet/título markdown) é item de lista ou menu.
-    const linha = str.slice(str.lastIndexOf('\n', off - 1) + 1, off + m.length - m.trimStart().length);
-    if (/^\s*(?:[-*•>#]+\s*)*$/.test(linha)) return m;
-    const antes = str[off - 1] || '';
-    const depois = str[off + m.length] || '';
-    // Número logo depois não é citação, é o DDD de um telefone.
-    if (/\d/.test(depois)) return m;
-    // Só devolve espaço se ele separava duas palavras; junto de pontuação ou
-    // de quebra de linha, some junto com o marcador.
-    if (!antes || !depois || antes === '\n' || /[\s.,;:!?)\]]/.test(depois)) return '';
-    return ' ';
-  });
-}
-function stripCitationMarkers(s) {
-  // Bloco de código passa intacto: lá "[0]" é código, não citação. Cerca sem
-  // fechamento (resposta cortada no teto de saída) conta como aberta até o fim.
-  const partes = String(s).split(/(```[\s\S]*?```)/g);
-  const abertaEm = partes.findIndex((p, i) => i % 2 === 0 && p.includes('```'));
-  const temLista = partes.some((p, i) => !(i % 2) && !(abertaEm >= 0 && i >= abertaEm)
-    && (/(^|\n)\s*(fontes|sources|fuentes)\s*:/i.test(p) || /^\s*\[\d+\]\s+\S.*https?:\/\//m.test(p)));
-  return partes
-    .map((parte, i) => {
-      if (i % 2) return parte;
-      if (abertaEm >= 0 && i >= abertaEm) return parte;
-      return parte.split(/(`[^`\n]*`)/g).map((p, j) => j % 2 ? p : limparMarcadoresCitacao(p, temLista)).join('');
-    })
-    .join('');
-}
-// Bloco <tool_call>…</tool_call> (formato GLM: nome + pares <arg_key>/<arg_value>)
-// sai inteiro. Sem fechamento, sai até o último </arg_value> do bloco ou, sem
-// argumentos, até o fim da linha da tag. Espaço em volta do buraco vira um
-// espaço (ou um parágrafo, se havia quebra de linha).
-function removerToolCallVazado(s) {
-  if (!s.includes('<tool_call>')) return s;
-  const BURACO = '\u0000';
-  let out = s.replace(/<tool_call>(?:(?!<tool_call>)[\s\S])*?<\/tool_call>/g, BURACO);
-  let i;
-  while ((i = out.indexOf('<tool_call>')) >= 0) {
-    const proxima = out.indexOf('<tool_call>', i + 1);
-    const bloco = out.slice(i, proxima >= 0 ? proxima : out.length);
-    const fimArg = bloco.lastIndexOf('</arg_value>');
-    const nl = bloco.indexOf('\n');
-    const fim = fimArg >= 0 ? fimArg + '</arg_value>'.length : nl >= 0 ? nl : bloco.length;
-    out = out.slice(0, i) + BURACO + out.slice(i + fim);
-  }
-  return out.replace(/\s*\u0000(?:\s*\u0000)*\s*/g, (m, off, str) => {
-    if (!off || off + m.length >= str.length) return '';
-    return m.includes('\n') ? '\n\n' : ' ';
-  });
-}
-function sanitizeAssistantText(t, { comFontes = false } = {}) {
-  let s = String(t ?? '');
-  // Tira só o pedaço técnico vazado; o texto pro usuário antes E depois dele
-  // fica. Antes cortava tudo do primeiro <tool_call> em diante e perdia a
-  // resposta que vinha depois (29/09/2026).
-  s = removerToolCallVazado(s);
-  // Limpa fragmentos soltos de arg (caso o modelo emita sem o <tool_call> de abertura).
-  s = s.replace(/<\/?(?:tool_call|arg_key|arg_value)>/g, '');
-  if (comFontes) s = stripCitationMarkers(s);
-  return desgrudarPontuacaoDeLink(maskSecrets(s, { prose: true }).trim());
-}
-
-// Ponto final colado numa URL vira 404: o linkificador do WhatsApp/Telegram (e o
-// nosso, no web) engole o "." dentro do href. Não controlamos o cliente, então
-// tiramos a pontuação da frase quando ela está grudada num link no fim da linha.
-// Só mexe em URL COM caminho (tem "/"), pra não estragar frase que termina em
-// nome de arquivo ("veja o config.yaml."), e ignora link markdown (fecha em ")").
-function desgrudarPontuacaoDeLink(s) {
-  return String(s ?? '').replace(
-    /((?:https?:\/\/|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/)[^\s<>()[\]]*[^\s<>()[\].,;:!?])[.,;:!?]+(?=\s*$)/gm,
-    '$1',
-  );
+function sanitizeAssistantText(t, opts = {}) {
+  return desgrudarPontuacaoDeLink(maskSecrets(limparTextoFinal(t, opts), { prose: true }).trim());
 }
 
 // Mensagem única de reconexão do Google (usada quando não há refresh_token ou o
@@ -5228,6 +5125,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const mediaUsages = createIncrementalUsageCollector({userId,pending:pendingUsageWrites,write:writeMediaUsage});
   // Orçamento de buscas do turno inteiro (principal + sub-agentes de pesquisa).
   const searchBudget = createSearchBudget();
+  // Fontes que as ferramentas de busca de fato devolveram no turno; a lista do fim
+  // da resposta sai daqui, não do texto do modelo (ver citacoes.mjs).
+  const fontesDoTurno = registroDeFontes();
   // Ids das imagens que o usuário anexou NESTE turno (preenchido logo abaixo, ao
   // persistir os uploads). Existe porque ferramenta que manda foto do usuário pra
   // FORA tem que operar sobre a foto que veio COM o pedido, nunca sobre "a última
@@ -6149,12 +6049,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Modelo SEM busca embutida (OpenAI): dá grounding via tool buscar_web, cujo
   // backend é uma busca grounded no Gemini. O custo da busca entra como kind='search'.
   if (useWebSearch) {
-    registry.add(webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget }));
+    registry.add(webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno }));
     // Abrir link que o usuário manda (lê o conteúdo real da página em vez de
     // deduzir/buscar por palavra-chave num link solto — fix do bug de 01/07).
     // Se o link for um PDF, o texto é extraído e o arquivo vai pro bucket do dono.
     registry.add(openLinkTool({
-      onUsage: (e) => mediaUsages.push(e),
+      onUsage: (e) => mediaUsages.push(e), fontes: fontesDoTurno,
       // Planilha por link (Google Sheets, .xlsx, .csv) vai pro pandas, como
       // anexo e Drive; o modelo recebe só a estrutura.
       onSheetLoad: (buf, fname, mime) => loadSpreadsheetIntoSandbox(userId, buf, fname, { mime }),
@@ -6181,7 +6081,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // inteiro; já batido, não sobe outro sub-agente.
         if (searchBudget.exhausted) return SEARCH_LIMIT_MSG(searchBudget.max);
         try {
-          return await runResearchSubagent({ objetivo, formato, onUsage: (e) => mediaUsages.push(e), language: userLang, searchBudget });
+          // A lista no fim mostra ao modelo principal de onde veio cada [n].
+          const resumo = await runResearchSubagent({ objetivo, formato, onUsage: (e) => mediaUsages.push(e), language: userLang, searchBudget, fontes: fontesDoTurno });
+          return citarFontes(resumo, fontesDoTurno, { language: userLang });
         } catch (e) {
           return `ERRO na pesquisa: ${e?.message ?? e}`;
         }
@@ -6599,16 +6501,20 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const actionJournal = createActionJournal({ language: userLang, ownerText: kind === 'routine' ? '' : savedUserMsg });
   // Tudo que as ferramentas devolveram NESTE turno. É a prova de origem do freio
   // de fundamentação: um dado que não aparece aqui (nem na fala do dono) não foi
-  // consultado por ninguém. Teto por saída e no total pra não segurar megabyte
-  // de planilha na memória do turno.
+  // consultado por ninguém. Entram também o que a plataforma entregou ao modelo
+  // (mensagem com material da rotina, histórico); teto por saída e no total
+  // (~4 MB) pra não segurar megabyte de planilha na memória do turno.
   const groundingPool = [];
+  let groundingBytes = 0;
   const coletarGrounding = (out) => {
     try {
-      if (groundingPool.length > 60) return;
-      const txt = typeof out === 'string' ? out : JSON.stringify(out);
-      if (txt) groundingPool.push(txt.slice(0, 60000));
+      const txt = (typeof out === 'string' ? out : JSON.stringify(out))?.slice(0, 60000);
+      if (!txt || groundingBytes + txt.length > 4e6) return;
+      groundingBytes += txt.length; groundingPool.push(txt);
     } catch { /* saída não serializável não vira prova, e não pode quebrar o turno */ }
   };
+  coletarGrounding(userInputForModel);
+  for (const m of histParaModelo) coletarGrounding(m?.content);
   // TEMPORÁRIO (30/09/2026): antes/depois dos 5 filtros de verificação.
   const diag = pecas.diagnosticoDosFiltros?.({ userId, agentId: agent.id, threadId: thread.id, origem: kind === 'routine' ? 'rotina' : 'chat', toolCounts, saidas: groundingPool, estado: () => ({ buscaNativa }) }) ?? { removidas: [], corte() {} };
   searchCoverage.observeEmailGuard((a, d) => diag.corte('email_cobertura', a, d));
@@ -6634,7 +6540,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     transformToolResult: (call, out) => {
       curationEvidence?.observe(call,out);
       const r = actionJournal.toolResult(call, appBuildJournal.toolResult(call, out));
-      coletarGrounding(out); coletarGrounding(r);
+      coletarGrounding(out); if (r !== out) coletarGrounding(r);
       return r;
     },
     userInput: userInputForModel, images, history: histParaModelo, maxSteps: effectiveMaxSteps,
@@ -6733,7 +6639,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             transformToolResult: (call, out) => {
               curationEvidence?.observe(call,out);
               const r = actionJournal.toolResult(call, appBuildJournal.toolResult(call, out));
-              coletarGrounding(out); coletarGrounding(r);
+              coletarGrounding(out); if (r !== out) coletarGrounding(r);
               return r;
             },
             onEvent: (ev) => { if (ev?.type === 'tool_call' && ev.name) toolCounts[ev.name] = (toolCounts[ev.name] || 0) + 1; },
@@ -6809,6 +6715,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // devolve lista de fontes. Sem isso, "[1]" no texto é do assistente ou do dono.
   text = sanitizeAssistantText(text, {
     comFontes: buscaNativa || Object.keys(toolCounts).some((n) => TOOLS_COM_FONTES.has(n)),
+    fontes: fontesDoTurno, language: userLang,
   });
   // Jev (#48): pega a alegação "verifiquei agora" que a regra perde, sobre o
   // texto do modelo. Só acrescenta a correção, não tira nada (não dá pra saber a
@@ -7635,7 +7542,7 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
       style,
     ] : []),
     '',
-    'Você tem busca na web. REGRA DE OURO: qualquer informação factual ou que muda com o tempo (preço, horário, passagem, disponibilidade, endereço, telefone, link, data, notícia) você confirma na busca ANTES de responder e diz de onde veio (fonte/site). NUNCA responda esse tipo de coisa de memória e NUNCA invente um número, preço ou link que "parece existir". Se buscou e não deu pra confirmar, diga "não consegui confirmar isso agora" em vez de chutar. COMO pesquisar bem (quantas buscas, quando delegar) está detalhado logo abaixo.',
+    'Você tem busca na web. REGRA DE OURO: qualquer informação factual ou que muda com o tempo (preço, horário, passagem, disponibilidade, endereço, telefone, link, data, notícia) você confirma na busca ANTES de responder e cita a fonte com o número dela logo depois do dado, ex.: [2] (a lista de fontes no fim a plataforma monta; não escreva). NUNCA responda esse tipo de coisa de memória e NUNCA invente um número, preço ou link que "parece existir". Se buscou e não deu pra confirmar, diga "não consegui confirmar isso agora" em vez de chutar. COMO pesquisar bem (quantas buscas, quando delegar) está detalhado logo abaixo.',
   ];
   if (tools.length) {
     lines.push(
