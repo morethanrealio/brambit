@@ -212,6 +212,9 @@ const escrito = (txt, esperado) => t(`escrito ${JSON.stringify(txt.slice(0, 40))
 escrito('Search the web for the latest news about the James Webb Space Telescope and cite your sources.', 'en');
 escrito('Busca en la web las noticias más recientes sobre el clima en Buenos Aires y dame las fuentes.', 'es');
 escrito('Can you put a “cortar cabelo - marcos” event on my agenda at 4:30 pm? It’ll go on for one hour', 'en');
+escrito('Explain in three short sentences what inflation is.', 'en');
+escrito('Remind me tomorrow at 9am to call the dentist to reschedule my appointment.', 'en');
+escrito('Explícame en tres frases cortas qué es la inflación.', 'es');
 escrito('inclui um outro evento para amanhã', 'pt-BR');
 escrito('Quais são as regras de aposentadoria por idade do INSS em 2026? Me dá as fontes.', 'pt-BR');
 escrito('(node:8195) [DEP0040] DeprecationWarning: The punycode module is deprecated. Please use a userland alternative', null);

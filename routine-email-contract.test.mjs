@@ -58,8 +58,8 @@ for(const required of [
   'Esta tool NÃO informa nem controla a entrega automática de rotinas por e-mail',
   'Liga ou desliga SOMENTE a permissão de o assistente enviar e-mails AVULSOS pelo Gmail do usuário',
   'routine, never ask them to turn on sending through Gmail',
-  'text = enforceFreshCheckClaims(text, { toolCounts, language:userLang })',
-  'text = enforceRoutineEmailContract(text, { language:userLang })',
+  'text = enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta })',
+  'text = enforceRoutineEmailContract(text, { language:idiomaResposta })',
   'agendar_execucao_rotina',
   'if (!opts.confirmationRestore && standaloneRefusal(message))',
 ])ok(source.includes(required),required);
