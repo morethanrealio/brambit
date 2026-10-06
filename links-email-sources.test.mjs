@@ -82,7 +82,7 @@ test('estado autenticado fica no turno; links privados não observados continuam
     const url=gmail(id);plans.set(url,status);
     const result=await fontesEConferencia(`[Mensagem](${url})`,[],{authenticatedEmailSources:turnSearchCoverage().emailSourceLinks()});
     assert.deepEqual(result.authenticatedSources,[]);assert.deepEqual(result.indefinidos,[url]);
-    assert.ok(result.texto.includes('Não consegui confirmar que o link do site'));assert.equal(requests.filter(([u])=>u===url).length,1);
+    assert.ok(!result.texto.includes('⚠️'));assert.equal(requests.filter(([u])=>u===url).length,1);
   }
 });
 
@@ -91,7 +91,7 @@ test('rotinas estritas conservam exigência de conferência pública, mesmo com 
   const url=gmail('strict-observed');plans.set(url,403);
   const result=await fontesEConferencia(`• [Mensagem](${url})`,[],{strictLinks:true,authenticatedEmailSources:[url]});
   assert.deepEqual(result.authenticatedSources,[]);assert.deepEqual(result.indefinidos,[url]);
-  assert.ok(result.texto.includes(url));assert.ok(result.texto.includes('Não consegui confirmar que o link do site'));assert.ok(!result.texto.includes('link não verificado'));
+  assert.ok(result.texto.includes(url));assert.ok(!result.texto.includes('⚠️'));assert.ok(!result.texto.includes('link não verificado'));
   assert.equal(requests.filter(([u])=>u===url).length,1);
 });
 

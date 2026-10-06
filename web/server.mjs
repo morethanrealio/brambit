@@ -6741,8 +6741,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   //    repetida num segundo pedido (404/410, 5xx, DNS inexistente, conexão
   //    recusada) permite afirmar link quebrado; redirect, 401/403, 429 e timeout
   //    não provam página morta, e acusar página viva seria pior.
-  // Link quebrado é retirado; os não verificados ficam no texto com aviso, em
-  // rotina também (até 29/09/2026 a rotina os omitia). Regra completa em links.mjs.
+  // Broken links are removed; unverified ones stay with no notice, routines too
+  // (since 06/10/2026). Full rule in links.mjs.
   // Conferências em paralelo: teto de 8 links, 3s por pedido, sem refazer a busca.
   // Desligável por FONTES_LINKS=0 sem tirar nada do lugar.
   if (text && !curationResult && process.env.FONTES_LINKS !== '0') {
