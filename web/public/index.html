@@ -173,6 +173,7 @@
   .pagehead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px; }
   .pagehead .sechead { margin:0; }
   .btn-sm { width:auto; margin:0; padding:9px 16px; border:0; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:13.5px; font-weight:600; cursor:pointer; }
+  a.btn-sm { display:inline-block; text-decoration:none; }
   .btn-ghost { background:var(--card); color:var(--txt); border:1px solid var(--line); }
   .thread-item { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; cursor:pointer; background:var(--card); }
   .thread-item:hover { border-color:var(--accent); }
@@ -1149,6 +1150,12 @@
               <button class="primary" id="runnerSaveBtn">Salvar</button>
               <div id="runnerOk" class="hidden" style="margin-top:8px;color:var(--ok,#0a0);"></div>
               <div class="err hidden" id="runnerErr"></div>
+            </div>
+
+            <div class="section hidden" id="publicoBox">
+              <div class="title">Atendimento ao público</div>
+              <p class="sub">Um assistente seu responde quem escreve pro número de WhatsApp desta instalação sem ter conta. Configure, veja as conversas e bloqueie ou apague contatos.</p>
+              <a class="btn-sm" href="/atendimento">Abrir atendimento</a>
             </div>
 
             <div class="section hidden" id="waBox">
@@ -2469,6 +2476,16 @@ function renderRunner(agents, runner) {
   const btn = E('runnerSaveBtn'); if (btn) btn.disabled = !online;
   const ok = E('runnerOk'); if (ok) ok.classList.add('hidden');
   const err = E('runnerErr'); if (err) err.classList.add('hidden');
+  mostrarAtendimentoPublico();
+}
+// Só aparece pra quem é dono do assistente que atende o número da instalação.
+let atendimentoPublicoVisto = false;
+async function mostrarAtendimentoPublico() {
+  if (atendimentoPublicoVisto) return;
+  const r = await api('api/publico/agentes');
+  if (!r || !Array.isArray(r.agentes)) return;
+  atendimentoPublicoVisto = true;
+  const box = E('publicoBox'); if (box) box.classList.toggle('hidden', !r.agentes.some(a => a.doNumero));
 }
 function greetWord() {
   const h = new Date().getHours();

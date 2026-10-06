@@ -24,6 +24,8 @@ export const ESTADO_MAX_VALOR = 500;
 export const PASSOS_MAX = 8;
 export const LIMITE_POR_HORA = 30;    // mensagens de um contato por hora que chegam ao modelo
 export const LIMPEZA_LOTE = 5000;
+export const CONTATOS_POR_PAGINA = 100;
+export const CONVERSA_POR_PAGINA = 100;
 
 export const esquemaPublico = (S) => `
  CREATE TABLE IF NOT EXISTS ${S}.public_agents (
@@ -53,6 +55,8 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS teto_diario_usd numeric(12,4) CHECK (teto_diario_usd > 0);
  ALTER TABLE ${S}.public_contacts ADD COLUMN IF NOT EXISTS parado_em timestamptz;
  ALTER TABLE ${S}.public_contacts ADD COLUMN IF NOT EXISTS limite_avisado_em timestamptz;
+ ALTER TABLE ${S}.public_contacts ADD COLUMN IF NOT EXISTS bloqueado_em timestamptz;
+ CREATE INDEX IF NOT EXISTS public_contacts_agente_idx ON ${S}.public_contacts(agent_id, ultima_em DESC);
  CREATE INDEX IF NOT EXISTS public_messages_criado_idx ON ${S}.public_messages(criado_em);
 `;
 
@@ -110,15 +114,20 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       const { rows } = await pool.query(
         `INSERT INTO ${S}.public_contacts (agent_id, canal, chave, endereco) VALUES ($1, $2, $3, $4)
          ON CONFLICT (agent_id, canal, chave) DO UPDATE SET ultima_em = now()
-         RETURNING id, canal, endereco, criado_em, parado_em, limite_avisado_em, (xmax = 0) AS novo`,
+         RETURNING id, canal, endereco, criado_em, parado_em, limite_avisado_em, bloqueado_em, (xmax = 0) AS novo`,
         [agentId, canal, chave, encMaybe(end)]);
       const r = rows[0];
-      return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em };
+      return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em, bloqueadoEm: r.bloqueado_em };
     },
 
     // "parar": o assistente para de responder esse contato até ele mandar "voltar".
     async parar(contatoId, parado) {
       await pool.query(`UPDATE ${S}.public_contacts SET parado_em = ${parado ? 'now()' : 'NULL'} WHERE id = $1`, [contatoId]);
+    },
+
+    // Bloqueio é do dono (só ele desfaz); "parar" é do contato.
+    async bloquear(contatoId, bloqueado) {
+      await pool.query(`UPDATE ${S}.public_contacts SET bloqueado_em = ${bloqueado ? 'now()' : 'NULL'} WHERE id = $1`, [contatoId]);
     },
 
     // Mensagens do contato na última hora (as que foram ao modelo ficam gravadas).
@@ -149,17 +158,70 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
     // LGPD: tudo o que existe de um contato (pedido de acesso do titular).
     async exportar(contatoId) {
       const { rows: [c] } = await pool.query(
-        `SELECT id, agent_id, canal, endereco, criado_em, ultima_em, parado_em FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
+        `SELECT id, agent_id, canal, endereco, criado_em, ultima_em, parado_em, bloqueado_em FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
       if (!c) return null;
       const { rows: msgs } = await pool.query(
         `SELECT role, content, criado_em FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id`, [contatoId]);
       const { rows: notas } = await pool.query(
         `SELECT chave, valor, atualizado_em FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
       return {
-        contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em },
+        contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em, bloqueadoEm: c.bloqueado_em },
         anotacoes: notas.map((n) => ({ chave: n.chave, valor: n.valor, atualizadoEm: n.atualizado_em })),
         mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em })),
       };
+    },
+
+    // Apaga mensagens e anotações e mantém o contato (o bloqueio sobrevive).
+    async apagarConversa(contatoId) {
+      await transacao(async (c) => {
+        await c.query(`DELETE FROM ${S}.public_messages WHERE contact_id = $1`, [contatoId]);
+        await c.query(`DELETE FROM ${S}.public_contact_state WHERE contact_id = $1`, [contatoId]);
+      });
+    },
+
+    // Visão do dono. Toda consulta daqui confere o dono no próprio SQL
+    // (agents.user_id), então um id de outra conta devolve vazio, e não o dado.
+    async agentesDoDono(userId) {
+      const { rows } = await pool.query(
+        `SELECT a.id AS agent_id, a.name AS nome, p.agent_id IS NOT NULL AS configurado, coalesce(p.ativo, false) AS ativo,
+                coalesce(p.instrucoes, '') AS instrucoes, coalesce(p.retencao_dias, 90) AS retencao_dias,
+                coalesce(p.limite_por_hora, ${LIMITE_POR_HORA}) AS limite_por_hora, p.teto_diario_usd::float AS teto_diario_usd,
+                (SELECT count(*)::int FROM ${S}.public_contacts c WHERE c.agent_id = a.id) AS contatos
+           FROM ${S}.agents a LEFT JOIN ${S}.public_agents p ON p.agent_id = a.id AND p.user_id = a.user_id
+          WHERE a.user_id = $1 AND a.archived_at IS NULL ORDER BY a.name`, [userId]);
+      return rows;
+    },
+
+    async contatoDoDono(userId, contatoId) {
+      const { rows } = await pool.query(
+        `SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+          WHERE c.id = $1 AND a.user_id = $2`, [contatoId, userId]);
+      return !!rows[0];
+    },
+
+    // Contatos de um assistente do dono, do mais recente pro mais antigo.
+    // antes = ultima_em do último da página anterior.
+    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
+      const { rows } = await pool.query(
+        `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
+                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens
+           FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+          WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
+          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA)]);
+      return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
+        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens }));
+    },
+
+    // Conversa de um contato do dono, em ordem; antes = id da mensagem mais velha já vista.
+    async conversaDoDono(userId, contatoId, { antes = null, limite = CONVERSA_POR_PAGINA } = {}) {
+      const { rows } = await pool.query(
+        `SELECT id, role, content, criado_em FROM (
+           SELECT m.id, m.role, m.content, m.criado_em FROM ${S}.public_messages m
+             JOIN ${S}.public_contacts c ON c.id = m.contact_id JOIN ${S}.agents a ON a.id = c.agent_id
+            WHERE m.contact_id = $1 AND a.user_id = $2 AND ($3::bigint IS NULL OR m.id < $3)
+            ORDER BY m.id DESC LIMIT $4) t ORDER BY id`,
+        [contatoId, userId, antes, Math.min(Math.max(1, limite | 0), CONVERSA_POR_PAGINA)]);
+      return rows.map((r) => ({ id: Number(r.id), role: r.role, content: r.content, criadoEm: r.criado_em }));
     },
 
     // LGPD: apaga o contato, as mensagens e as anotações (cascata).
@@ -170,13 +232,14 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
 
     // Retenção (retencao_dias de cada assistente): apaga mensagem e anotação mais
     // velhas que o prazo e o contato sem conversa no prazo (com o telefone junto).
+    // Contato bloqueado fica: sem a linha, o bloqueio sumiria e ele voltaria a ser atendido.
     // Em lotes, pra não segurar o banco; roda até esvaziar.
     async limparVencidos() {
       const total = { mensagens: 0, anotacoes: 0, contatos: 0 };
       const lote = async (sql) => { let n = 0, r; do { r = await pool.query(sql, []); n += r.rowCount ?? r.affectedRows ?? 0; } while ((r.rowCount ?? r.affectedRows) === LIMPEZA_LOTE); return n; };
       total.contatos = await lote(`DELETE FROM ${S}.public_contacts WHERE id IN (
         SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
-         WHERE c.ultima_em < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+         WHERE c.ultima_em < now() - p.retencao_dias * interval '1 day' AND c.bloqueado_em IS NULL LIMIT ${LIMPEZA_LOTE})`);
       total.mensagens = await lote(`DELETE FROM ${S}.public_messages WHERE id IN (
         SELECT m.id FROM ${S}.public_messages m JOIN ${S}.public_contacts c ON c.id = m.contact_id
           JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
@@ -291,7 +354,8 @@ export function comandoDoContato(mensagem) {
 //  agora() → data e hora por extenso pro prompt.
 //  gastoDoDia(agentId) → US$ do atendimento público hoje (padrão: store.gastoDoDia).
 //
-// Ordem dos freios, antes do modelo: comando do contato (parar/voltar/apagar) →
+// Ordem dos freios, antes do modelo: contato bloqueado pelo dono (silêncio) →
+// comando do contato (parar/voltar/apagar) →
 // contato parado (silêncio, nada gravado) → limite por hora do contato (1 aviso
 // por hora, depois silêncio) → saldo do dono → teto diário do assistente.
 export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, log = console }) {
@@ -329,6 +393,12 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
       const comando = comandoDoContato(msg);
+      // Bloqueado pelo dono: silêncio e nada gravado. O pedido de apagar ainda
+      // vale (apaga a conversa), mas o contato fica, senão o bloqueio sumiria junto.
+      if (contato.bloqueadoEm) {
+        if (comando === 'apagar') await store.apagarConversa(contato.id);
+        return { text: null, motivo: 'bloqueado', ...ident };
+      }
       if (comando === 'apagar') {
         await store.apagarContato(contato.id);
         return { text: RESPOSTA_APAGADO, motivo: 'apagado', ...ident, contatoId: null };

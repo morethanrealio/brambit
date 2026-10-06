@@ -9,6 +9,7 @@
 // assistente dele.
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './publico.mjs';
+import { registrarRotasDoDono } from './publico-dono.mjs';
 
 const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,8 +32,12 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // pro número; turno({endereco,mensagem}) → {text,userId,agentId}.
 // A retenção (apagar o que passou de retencao_dias) roda sozinha a cada
 // limpezaMs, a primeira um minuto depois do boot; limpezaMs=0 desliga.
-export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS }) {
+// Com rotas (+ send/fail/tooManyRequests do servidor), registra a visão do dono
+// (publico-dono.mjs).
+export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
+  rotas, send, fail, tooManyRequests }) {
   const store = createPublicoStore(pool, { S });
+  if (rotas) registrarRotasDoDono({ rotas, store, send, fail, tooManyRequests, agenteDoNumero });
   const limpar = async () => {
     try {
       const r = await store.limparVencidos();

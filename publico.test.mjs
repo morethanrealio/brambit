@@ -5,10 +5,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
 const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('./web/publico.mjs');
+const { registrarRotasDoDono } = await import('./web/publico-dono.mjs');
+const { createRotas } = await import('./web/rotas.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -186,6 +189,77 @@ test('retenção apaga o que passou do prazo; exportar devolve tudo do contato',
   const depois = await store.exportar(r1.contatoId);
   assert.deepEqual(depois.mensagens.filter((x) => x.role === 'user').map((x) => x.content), ['nova']);
   assert.deepEqual(depois.anotacoes, []);
+});
+
+test('bloqueado pelo dono: silêncio sem gravar nada; apagar meus dados limpa a conversa e o bloqueio fica', async (t) => {
+  const { db, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, retencaoDias: 30 });
+  const m = modelo([{ name: 'lembrar_do_contato', args: { chave: 'nome', valor: 'Ana' } }]);
+  const a = atendimento(store, m);
+  const fala = (mensagem) => a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000007', mensagem });
+  const { contatoId } = await fala('oi');
+  const conta = async (tab) => (await db.query(`SELECT count(*)::int n FROM mtr_harness.${tab}`)).rows[0].n;
+  const antes = [await conta('public_messages'), m.chamadas.length];
+  await store.bloquear(contatoId, true);
+  for (const x of ['oi?', 'parar', 'voltar']) assert.deepEqual([(await fala(x)).text, (await fala(x)).motivo], [null, 'bloqueado']);
+  assert.deepEqual([await conta('public_messages'), m.chamadas.length], antes);
+  await fala('apagar meus dados');
+  assert.deepEqual([await conta('public_messages'), await conta('public_contact_state')], [0, 0]);
+  assert.ok((await store.exportar(contatoId)).contato.bloqueadoEm);
+  // A retenção também não leva o contato bloqueado (levaria o bloqueio junto).
+  await db.query(`UPDATE mtr_harness.public_contacts SET ultima_em = now() - interval '31 days'`);
+  assert.equal((await store.limparVencidos()).contatos, 0);
+  await store.bloquear(contatoId, false);
+  assert.match((await fala('oi de novo')).text, /^resposta/);
+});
+
+// A tela do dono: toda leitura confere o dono no SQL, e id de outra conta = 404.
+test('visão do dono: só os próprios assistentes, contatos e conversas', async (t) => {
+  const { db, store, dono, outro, ag, ag2 } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true });
+  const a = atendimento(store, modelo());
+  const { contatoId } = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000005', mensagem: 'quero trocar' });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000005', mensagem: 'tamanho G' });
+  const rotas = createRotas();
+  const send = (res, status, corpo, headers = {}) => Object.assign(res, { status, corpo, headers });
+  registrarRotasDoDono({ rotas, store, send, fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false, agenteDoNumero: () => ag });
+  const pede = async (quem, metodo, caminho, corpo) => {
+    const req = Readable.from(corpo ? [JSON.stringify(corpo)] : []); req.method = metodo;
+    const res = { setHeader() {} };
+    await rotas.atender(req, res, new URL('http://x' + caminho), { currentUser: async () => quem && { id: quem } });
+    return res;
+  };
+  assert.equal((await pede(null, 'GET', '/api/publico/agentes')).status, 401);
+  const lista = (await pede(dono, 'GET', '/api/publico/agentes')).corpo.agentes;
+  assert.deepEqual(lista.map((x) => [x.nome, x.ativo, x.contatos, x.doNumero]), [['Bia', false, 0, false], ['Lia', true, 1, true]]);
+  const contatos = (await pede(dono, 'GET', `/api/publico/contatos?agente=${ag}`)).corpo.contatos;
+  assert.deepEqual(contatos.map((c) => [c.endereco, c.mensagens]), [['5511000000005', 4]]);
+  const conversa = (await pede(dono, 'GET', `/api/publico/conversa?contato=${contatoId}`)).corpo.mensagens;
+  assert.deepEqual(conversa.filter((x) => x.role === 'user').map((x) => x.content), ['quero trocar', 'tamanho G']);
+  const pagina = await store.conversaDoDono(dono, contatoId, { antes: conversa.at(-1).id, limite: 2 });
+  assert.deepEqual(pagina.map((x) => x.id), conversa.slice(1, 3).map((x) => x.id));
+  // Outra conta: nada aparece e nada muda.
+  await db.query(`INSERT INTO mtr_harness.agents VALUES ($1,$2,'Zé',null,null,null,null)`, [randomUUID(), outro]);
+  assert.deepEqual((await pede(outro, 'GET', '/api/publico/agentes')).corpo.agentes.map((x) => x.nome), ['Zé']);
+  assert.deepEqual((await pede(outro, 'GET', `/api/publico/contatos?agente=${ag}`)).corpo.contatos, []);
+  for (const [metodo, caminho, corpo] of [['GET', `/api/publico/conversa?contato=${contatoId}`], ['GET', `/api/publico/exportar?contato=${contatoId}`],
+    ['POST', '/api/publico/bloquear', { contatoId, bloqueado: true }], ['POST', '/api/publico/apagar', { contatoId }],
+    ['POST', '/api/publico/configurar', { agentId: ag, ativo: false }], ['POST', '/api/publico/configurar', { agentId: ag2, ativo: true }]]) {
+    assert.equal((await pede(outro, metodo, caminho, corpo)).status, 404, `${metodo} ${caminho}`);
+  }
+  assert.equal((await store.agente(ag)).ativo, true);
+  assert.equal(await store.agente(ag2), null);
+  assert.equal((await store.exportar(contatoId)).contato.bloqueadoEm, null);
+  // Configuração: valor fora da faixa não grava; vazio no teto = sem teto.
+  assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, retencaoDias: 0 })).status, 400);
+  assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, tetoDiarioUsd: -1 })).status, 400);
+  assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, ativo: 'sim' })).status, 400);
+  const ok = (await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag2, ativo: true, limitePorHora: 5, tetoDiarioUsd: null })).corpo;
+  assert.deepEqual([ok.ativo, ok.limitePorHora, ok.tetoDiarioUsd], [true, 5, null]);
+  const exp = await pede(dono, 'GET', `/api/publico/exportar?contato=${contatoId}`);
+  assert.match(exp.headers['content-disposition'], /attachment/);
+  assert.equal((await pede(dono, 'POST', '/api/publico/apagar', { contatoId })).status, 200);
+  assert.equal(await store.exportar(contatoId), null);
 });
 
 // O isolamento é por construção: o módulo não pode passar a importar quem lê

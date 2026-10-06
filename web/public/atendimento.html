@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Atendimento ao público · __MARCA__</title>
+<style nonce="__CSP_NONCE__">
+  :root{--bg:#f4eee4;--card:#fffdf8;--line:#e5ddcd;--line2:#efe7d8;--accent:#c97a52;--accent2:#dd9568;--txt:#2b2723;--mut:#736c5f;--mut2:#a39b89;--ok:#3d7a4e;--err:#b25438;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .top{border-bottom:1px solid var(--line);padding:18px 20px;}
+  .top .in{max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .top .brandlogo{height:26px;width:auto;display:block;}
+  .top a.back{color:var(--mut);text-decoration:none;font-size:14px;}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 20px 60px;}
+  h1{font-size:28px;line-height:1.2;margin:0 0 6px;}
+  .lead{color:var(--mut);margin:0 0 22px;max-width:680px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:0 0 18px;}
+  .card h2{font-size:16px;margin:0 0 12px;}
+  label{display:block;font-size:13.5px;color:var(--mut);margin:12px 0 4px;}
+  input[type=number],select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:14.5px;background:#fff;color:var(--txt);}
+  textarea{min-height:140px;resize:vertical;}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .row>div{flex:1;min-width:160px;}
+  .check{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:15px;color:var(--txt);}
+  .btn{border:0;border-radius:9px;padding:9px 15px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.primary:hover{background:var(--accent2);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);}
+  .btn.ghost:hover{border-color:var(--accent2);color:var(--accent);}
+  .btn.danger{background:transparent;border:1px solid #e3c1b5;color:var(--err);}
+  .btn:disabled{opacity:.55;cursor:default;}
+  .acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .msg{font-size:13.5px;margin-top:8px;color:var(--mut);}
+  .msg.ok{color:var(--ok);}
+  .msg.err{color:var(--err);}
+  .warn{background:#fbf2e9;border:1px solid #e7d3bf;border-radius:10px;padding:11px 13px;color:#7a5230;font-size:13.5px;margin:0 0 6px;}
+  .grid{display:grid;grid-template-columns:minmax(240px,1fr) 2fr;gap:18px;}
+  @media (max-width:760px){.grid{grid-template-columns:1fr;}}
+  .contatos{max-height:560px;overflow:auto;}
+  .ct{padding:9px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;}
+  .ct:hover{background:var(--line2);}
+  .ct.sel{border-color:var(--accent2);background:#fbf2e9;}
+  .ct .end{font-weight:600;font-size:14.5px;}
+  .ct .meta{font-size:12.5px;color:var(--mut);}
+  .tag{display:inline-block;font-size:11.5px;border-radius:6px;padding:0 6px;margin-left:6px;background:var(--line2);color:var(--mut);}
+  .tag.blq{background:#f6dcd2;color:var(--err);}
+  .conversa{max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
+  .bolha{max-width:82%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;font-size:14.5px;}
+  .bolha.user{align-self:flex-start;background:#fff;border:1px solid var(--line);}
+  .bolha.assistant{align-self:flex-end;background:#f3e4d8;}
+  .bolha .hora{display:block;font-size:11.5px;color:var(--mut2);margin-top:3px;}
+  .vazio{color:var(--mut);font-size:14px;}
+  .espaco{margin-top:8px;}
+  .acoes.topo{margin-top:0;margin-bottom:10px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
+  <a class="back" href="/inicio">voltar ao app</a>
+</div></div>
+
+<div class="wrap">
+  <h1>Atendimento ao público</h1>
+  <p class="lead">Um assistente seu responde quem escreve pro número de WhatsApp desta instalação sem ter conta. Nesse modo ele só usa as instruções abaixo e a conversa com cada contato: não vê sua memória, seus e-mails, sua agenda nem seus arquivos.</p>
+
+  <div class="card">
+    <label for="agente">Assistente</label>
+    <select id="agente"></select>
+    <div id="semAgente" class="vazio espaco hidden">Você ainda não tem assistentes.</div>
+  </div>
+
+  <div class="card hidden" id="cfgCard">
+    <h2>Configuração</h2>
+    <div id="avisoNumero" class="warn hidden"></div>
+    <label class="check"><input type="checkbox" id="ativo"/> Atender o público com este assistente</label>
+    <label for="instrucoes">Instruções do atendimento (o que ele faz, tom, o que não deve fazer)</label>
+    <textarea id="instrucoes" maxlength="20000"></textarea>
+    <div class="row">
+      <div><label for="retencao">Guardar conversas por (dias)</label><input type="number" id="retencao" min="1" max="3650"/></div>
+      <div><label for="limite">Mensagens por hora de cada contato</label><input type="number" id="limite" min="1" max="600"/></div>
+      <div><label for="teto">Teto de gasto por dia (US$, vazio = sem teto)</label><input type="number" id="teto" min="0" step="0.01"/></div>
+    </div>
+    <div class="acoes"><button class="btn primary" id="salvar">Salvar</button></div>
+    <div id="cfgMsg" class="msg"></div>
+  </div>
+
+  <div class="grid hidden" id="atendGrid">
+    <div class="card">
+      <h2>Contatos</h2>
+      <div id="contatos" class="contatos"></div>
+      <div class="acoes"><button class="btn ghost hidden" id="maisContatos">Carregar mais</button></div>
+    </div>
+    <div class="card">
+      <h2 id="convTitulo">Conversa</h2>
+      <div id="convVazia" class="vazio">Escolha um contato pra ver a conversa.</div>
+      <div id="convBox" class="hidden">
+        <div class="acoes topo"><button class="btn ghost hidden" id="anteriores">Mensagens anteriores</button></div>
+        <div id="conversa" class="conversa"></div>
+        <div class="acoes">
+          <button class="btn ghost" id="bloquear"></button>
+          <a class="btn ghost" id="exportar" href="#" download>Exportar dados</a>
+          <button class="btn danger" id="apagar">Apagar contato</button>
+        </div>
+        <div id="convMsg" class="msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script nonce="__CSP_NONCE__">
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null;
+  function msg(el, t, cls){ el.textContent = t || ''; el.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function quando(d){ try { return new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
+  function pedir(caminho, corpo){
+    var op = { credentials:'include' };
+    if (corpo) { op.method = 'POST'; op.headers = { 'content-type':'application/json' }; op.body = JSON.stringify(corpo); }
+    return fetch(caminho, op).then(function(r){
+      if (r.status === 401) { location.href = '/login?modo=entrar'; throw new Error('sem sessão'); }
+      return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.error || 'Algo deu errado. Tente de novo.'); return j; });
+    });
+  }
+  function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+
+  function carregarAgentes(manter){
+    return pedir('/api/publico/agentes').then(function(j){
+      agentes = j.agentes || [];
+      var sel = $('agente'); sel.textContent = '';
+      $('semAgente').classList.toggle('hidden', agentes.length > 0);
+      if (!agentes.length) return;
+      agentes.forEach(function(a){ var o = el('option', null, a.nome + (a.doNumero ? ' (atende o número)' : '')); o.value = a.agentId; sel.appendChild(o); });
+      var inicial = manter || (agentes.filter(function(a){ return a.doNumero; })[0] || agentes[0]).agentId;
+      sel.value = inicial; escolherAgente(inicial);
+    });
+  }
+  function escolherAgente(id){
+    agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
+    if (!agenteAtual) return;
+    $('cfgCard').classList.remove('hidden'); $('atendGrid').classList.remove('hidden');
+    var aviso = $('avisoNumero');
+    aviso.classList.toggle('hidden', agenteAtual.doNumero);
+    aviso.textContent = 'O número desta instalação não aponta pra este assistente. Ligar aqui guarda a configuração, mas ninguém do público chega a ele até a instalação apontar o número pra cá.';
+    $('ativo').checked = !!agenteAtual.ativo;
+    $('instrucoes').value = agenteAtual.instrucoes || '';
+    $('retencao').value = agenteAtual.retencaoDias;
+    $('limite').value = agenteAtual.limitePorHora;
+    $('teto').value = agenteAtual.tetoDiarioUsd == null ? '' : agenteAtual.tetoDiarioUsd;
+    msg($('cfgMsg'), '');
+    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos();
+  }
+  $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
+
+  $('salvar').addEventListener('click', function(){
+    var b = this, teto = $('teto').value.trim();
+    var corpo = { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
+      retencaoDias: parseInt($('retencao').value, 10), limitePorHora: parseInt($('limite').value, 10), tetoDiarioUsd: teto === '' ? null : Number(teto) };
+    b.disabled = true; msg($('cfgMsg'), 'Salvando…');
+    pedir('/api/publico/configurar', corpo).then(function(){
+      msg($('cfgMsg'), 'Salvo.', 'ok'); return carregarAgentes(agenteAtual.agentId);
+    }).catch(function(e){ msg($('cfgMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  function carregarContatos(){
+    var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;
+    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + (antes ? '&antes=' + encodeURIComponent(antes) : '');
+    return pedir(q).then(function(j){
+      var novos = j.contatos || []; contatos = contatos.concat(novos);
+      novos.forEach(desenharContato);
+      $('maisContatos').classList.toggle('hidden', novos.length < 100);
+      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', 'Nenhum contato ainda.'));
+    }).catch(function(e){ $('contatos').appendChild(el('div', 'msg err', e.message)); });
+  }
+  $('maisContatos').addEventListener('click', carregarContatos);
+  function desenharContato(c){
+    var d = el('div', 'ct'); d.dataset.id = c.id;
+    var t = el('div', 'end', c.endereco);
+    if (c.bloqueadoEm) t.appendChild(el('span', 'tag blq', 'bloqueado'));
+    else if (c.paradoEm) t.appendChild(el('span', 'tag', 'pediu pra parar'));
+    d.appendChild(t);
+    d.appendChild(el('div', 'meta', quando(c.ultimaEm) + ' · ' + c.mensagens + ' mensagem(ns)'));
+    d.addEventListener('click', function(){ abrirConversa(c); });
+    $('contatos').appendChild(d);
+  }
+
+  function fecharConversa(){ contatoAtual = null; $('convBox').classList.add('hidden'); $('convVazia').classList.remove('hidden'); $('convTitulo').textContent = 'Conversa'; }
+  function abrirConversa(c){
+    contatoAtual = c; maisAntiga = null;
+    Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
+    $('convTitulo').textContent = c.endereco;
+    $('convVazia').classList.add('hidden'); $('convBox').classList.remove('hidden');
+    $('conversa').textContent = ''; msg($('convMsg'), '');
+    $('bloquear').textContent = c.bloqueadoEm ? 'Desbloquear' : 'Bloquear';
+    $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
+    carregarMensagens(true);
+  }
+  function carregarMensagens(primeira){
+    var c = contatoAtual;
+    var q = '/api/publico/conversa?contato=' + encodeURIComponent(c.id) + (maisAntiga ? '&antes=' + maisAntiga : '');
+    return pedir(q).then(function(j){
+      if (contatoAtual !== c) return;
+      var ms = j.mensagens || [], box = $('conversa'), topo = box.firstChild;
+      if (ms.length) maisAntiga = ms[0].id;
+      ms.forEach(function(m){
+        var b = el('div', 'bolha ' + (m.role === 'user' ? 'user' : 'assistant'), m.content);
+        b.appendChild(el('span', 'hora', quando(m.criadoEm)));
+        box.insertBefore(b, topo);
+      });
+      if (primeira && !ms.length) box.appendChild(el('div', 'vazio', 'Sem mensagens guardadas.'));
+      $('anteriores').classList.toggle('hidden', ms.length < 100);
+      if (primeira) box.scrollTop = box.scrollHeight;
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); });
+  }
+  $('anteriores').addEventListener('click', function(){ carregarMensagens(false); });
+
+  $('bloquear').addEventListener('click', function(){
+    var c = contatoAtual, b = this, bloquear = !c.bloqueadoEm;
+    b.disabled = true;
+    pedir('/api/publico/bloquear', { contatoId: c.id, bloqueado: bloquear }).then(function(){
+      c.bloqueadoEm = bloquear ? new Date().toISOString() : null;
+      b.textContent = bloquear ? 'Desbloquear' : 'Bloquear';
+      msg($('convMsg'), bloquear ? 'Bloqueado: o assistente não responde mais este contato.' : 'Desbloqueado.', 'ok');
+      $('contatos').textContent = ''; contatos.forEach(desenharContato);
+      Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  $('apagar').addEventListener('click', function(){
+    var c = contatoAtual, b = this;
+    if (!confirm('Apagar este contato, a conversa e as anotações? Não dá pra desfazer.')) return;
+    b.disabled = true;
+    pedir('/api/publico/apagar', { contatoId: c.id }).then(function(){
+      contatos = contatos.filter(function(x){ return x.id !== c.id; });
+      $('contatos').textContent = ''; contatos.forEach(desenharContato);
+      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', 'Nenhum contato ainda.'));
+      fecharConversa();
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  carregarAgentes().catch(function(e){ if (e.message !== 'sem sessão') msg($('cfgMsg'), e.message, 'err'); });
+})();
+</script>
+</body>
+</html>
