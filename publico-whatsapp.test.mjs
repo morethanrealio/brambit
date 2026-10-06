@@ -72,10 +72,11 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
  await t.test('saídas do plugin: texto, imagem, botão de link e template, na ordem',async()=>{
   sent.length=0;
   turno=async()=>({text:'versão em texto',saidas:[{tipo:'texto',texto:'Oi!'},{tipo:'imagem',url:'https://x.example/a.jpg',legenda:'Blusa'},
-   {tipo:'botao',texto:'Prove agora',rotulo:'Provar',url:'https://x.example/p'},{tipo:'template',nome:'boas_vindas',idioma:'pt_BR',componentes:[]}]});
+   {tipo:'botao',texto:'Prove agora',rotulo:'Provar',url:'https://x.example/p'},{tipo:'botao',texto:'Batom',rotulo:'Ver',url:'https://x.example/b',imagem:'https://x.example/b.jpg'},{tipo:'template',nome:'boas_vindas',idioma:'pt_BR',componentes:[]}]});
   const m=msg(CLIENTE,'oi');await chegar(m);
   assert.deepEqual(sent,[{to:CLIENTE,text:'Oi!'},{to:CLIENTE,image:{link:'https://x.example/a.jpg',caption:'Blusa'}},
    {to:CLIENTE,interactive:{type:'cta_url',body:{text:'Prove agora'},action:{name:'cta_url',parameters:{display_text:'Provar',url:'https://x.example/p'}}}},
+   {to:CLIENTE,interactive:{type:'cta_url',header:{type:'image',image:{link:'https://x.example/b.jpg'}},body:{text:'Batom'},action:{name:'cta_url',parameters:{display_text:'Ver',url:'https://x.example/b'}}}},
    {to:CLIENTE,template:{name:'boas_vindas',language:{code:'pt_BR'}}}]);
   assert.equal(await estado(m.id),'completed');
   turno=async({mensagem})=>({text:'público: '+mensagem});

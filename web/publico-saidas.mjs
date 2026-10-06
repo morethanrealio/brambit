@@ -5,7 +5,8 @@
 // Tipos:
 //  {tipo:'texto', texto}
 //  {tipo:'imagem', url, legenda?}            url https
-//  {tipo:'botao', texto, rotulo, url}        botão que abre um link (url https)
+//  {tipo:'botao', texto, rotulo, url, imagem?}  botão que abre um link (url https);
+//                                            imagem (https) vai no topo da mensagem
 //  {tipo:'template', nome, idioma?, componentes?}  template aprovado do canal
 //
 // O que vem do plugin passa por aqui antes de sair: tipo desconhecido, url que
@@ -32,7 +33,9 @@ function normalizar(s) {
   }
   if (s.tipo === 'botao') {
     const url = https(s.url), texto = corte(s.texto, LEGENDA_MAX), rotulo = corte(s.rotulo, ROTULO_MAX);
-    return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url } : null;
+    const imagem = s.imagem === undefined ? null : https(s.imagem);
+    if (s.imagem !== undefined && !imagem) return null;
+    return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url, ...(imagem ? { imagem } : {}) } : null;
   }
   if (s.tipo === 'template') {
     const nome = String(s.nome ?? '');
