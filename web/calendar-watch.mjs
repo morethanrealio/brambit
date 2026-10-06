@@ -1,20 +1,20 @@
-// Aviso proativo de mudança na agenda (Marcos 27/09/2026): quando um evento da
-// agenda da pessoa muda de horário, de local ou é cancelado por OUTRA pessoa, o
-// assistente avisa sozinho, no canal que ela usa.
+// Proactive calendar change notice (27/09/2026): when an event in the person's
+// calendar changes time or place, or is cancelled by SOMEONE ELSE, the
+// assistant tells them on its own, in the channel they use.
 //
-// Como funciona: a cada ciclo a plataforma lê os próximos dias da agenda e
-// compara com a foto guardada do ciclo anterior (calendar_watch_snap). Sem
-// escopo OAuth novo (a leitura já concedida basta) e sem rota HTTP nova (não é
-// push do Google/Microsoft, é consulta nossa). Detecção e texto são
-// determinísticos: nenhum modelo de IA roda aqui.
+// How it works: each cycle the platform reads the next days of the calendar and
+// compares with the snapshot saved in the previous cycle (calendar_watch_snap).
+// No new OAuth scope (the read already granted is enough) and no new HTTP route
+// (not a Google/Microsoft push, it's our own query). Detection and text are
+// deterministic: no AI model runs here.
 //
-// Só avisa evento ORGANIZADO POR OUTRA PESSOA. Quem organiza o evento é quem
-// mexeu nele (ou foi o próprio assistente, a pedido dela): avisar isso seria
-// contar pra ela o que ela mesma fez.
+// Only notifies events ORGANIZED BY SOMEONE ELSE. The organizer is who changed
+// it (or the assistant itself, at their request): notifying that would be
+// telling them what they did themselves.
 //
-// Ligado por padrão pra todo mundo com agenda conectada (Marcos 27/09): só sai
-// quem pedir pro assistente desligar (calendar_watch.enabled = false). Sem linha
-// em calendar_watch = ligado.
+// On by default for everyone with a connected calendar (27/09): only whoever
+// asks the assistant to turn it off opts out (calendar_watch.enabled = false).
+// No row in calendar_watch = on.
 const S = 'mtr_harness';
 export const JANELA_DIAS = 7;
 const MAX_AGENDAS = 5;

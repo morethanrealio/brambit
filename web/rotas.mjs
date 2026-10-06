@@ -1,17 +1,16 @@
-// Porta de rotas: a distribuição pluga rotas HTTP próprias sem o server.mjs
-// conhecer cada uma. No Brambs: os webhooks de pagamento do Stripe, da Apple e da
-// Asaas (pagamentos-brambs.mjs) e os painéis de admin, do /metrics e do cockpit
-// (admin-brambs.mjs, metricas-brambs.mjs, cockpit-brambs.mjs). No núcleo, só a
-// visão do dono do atendimento ao público (publico-dono.mjs).
-//  registrar: caminho EXATO (método + pathname).
-//  usar: manipulador livre, pra rota com prefixo, com mais de um caminho ou que
-//   aceita qualquer método. Devolve SEGUE quando o pedido não é dele.
-//  Uma rota exata também pode devolver SEGUE (deixa o pedido seguir pro resto
-//  do servidor, como fazia o `if` antigo que não respondia em todo caminho).
-//  O servidor despacha num ponto só do handler, depois dos SECURITY_HEADERS, então
-//  a rota plugada responde com os mesmos headers de qualquer outra. Cada uma
-//  recebe (req, res, url, ctx), com ctx.currentUser() pra sessão logada.
-//  Rota repetida falha no boot, e não no primeiro pedido.
+// Routes port: a distribution plugs in its own HTTP routes without server.mjs
+// knowing each one. A plugin might add e.g. payment webhooks (Stripe, Apple,
+// Asaas) and admin or metrics dashboards. In the core, only the public-service
+// owner view (publico-dono.mjs).
+//  registrar: EXACT path (method + pathname).
+//  usar: free handler, for a prefixed route, one with several paths or that
+//   accepts any method. Returns SEGUE when the request isn't its own.
+//  An exact route can also return SEGUE (lets the request go on to the rest of
+//  the server, like the old `if` that didn't answer on every path).
+//  The server dispatches at a single point of the handler, after SECURITY_HEADERS,
+//  so a plugged route answers with the same headers as any other. Each one
+//  receives (req, res, url, ctx), with ctx.currentUser() for the logged-in session.
+//  A duplicate route fails at boot, not on the first request.
 export const SEGUE=Symbol('segue');
 export function createRotas(){
  const mapa=new Map();

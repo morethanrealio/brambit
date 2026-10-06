@@ -1,35 +1,35 @@
-// Porta 3: ciclo de vida. O núcleo só avisa o que aconteceu (emitir) e agenda as
-// tarefas de fundo que a implementação plugada pedir; o que fazer com cada aviso é
-// decisão de quem instala. No Brambs: bônus de indicação, boas-vindas, parados da
-// semana, aviso de crédito e a rede de segurança da cobrança (eventos-brambs.mjs).
-// Na versão aberta ninguém se inscreve e nada acontece.
-//  Eventos:
-//   conta_criada {userId,origem}: conta nova (origem email, convite, google ou
-//     apple). O cadastro espera quem se inscreve antes de seguir.
-//   primeira_mensagem {userId}: mensagem de GENTE numa conversa sem histórico
-//     (rotina, cockpit e webhook não contam). Repete a cada conversa nova, então
-//     quem se inscreve tem que ser idempotente.
-//   exclusao_pedida {userId}: a pessoa pediu pra apagar a conta; chega ANTES de
-//     a conta fechar. Quem se inscreve pode devolver {campos,aviso}: os campos
-//     entram na resposta do pedido e o aviso no fim da mensagem (no Brambs, a
-//     assinatura cancelada ou o aviso de que o cancelamento ficou pendente).
-//   exclusao_final {userId}: o prazo venceu e a conta vai ser destruída; chega
-//     antes do DELETE, que é a última chance de achar o que é da conta lá fora.
-//   banco_pronto {}: o esquema subiu no boot. Quem emite não espera, então o
-//     inscrito que quiser segurar algo agenda em segundo plano.
-//   cofre_pronto {}: o boot já tentou abrir o cofre (vault.mjs) e cifrou os
-//     segredos legados do núcleo; quem se inscreve cifra os dele. O cofre pode
-//     não ter aberto: conferir vaultEnabled(). O boot espera.
-//   whatsapp_reprovada {wamid,errorCode,errorTitle,errorMessage}: a Meta
-//     aceitou uma mensagem (HTTP 200) e reprovou depois, no webhook de status
-//     (no Brambs, o envio de campanha com esse wamid vira failed). O webhook
-//     espera.
-//  Tarefas: {nome,primeiraEmMs,aCadaMs,rodar}. Agendadas com unref, então não
-//   seguram o processo vivo.
-//  emitir resolve com o que cada inscrito devolveu, na ordem da inscrição.
-//  Erro de quem se inscreve vai pro log e nunca volta pro núcleo (o lugar dele
-//  na lista fica undefined): um bônus que falha não pode derrubar a resposta da
-//  pessoa.
+// Port 3: lifecycle. The core only announces what happened (emitir) and
+// schedules the background tasks the plugged implementation asks for; what to do
+// with each event is up to whoever installs it (e.g. a plugin sending referral
+// bonuses, welcome messages, inactivity nudges, credit warnings).
+// In the open version nobody subscribes and nothing happens.
+//  Events:
+//   conta_criada {userId,origem}: new account (origin email, invite, google or
+//     apple). Sign-up waits for subscribers before going on.
+//   primeira_mensagem {userId}: a HUMAN message in a conversation with no history
+//     (routine, cockpit and webhook don't count). Repeats for each new
+//     conversation, so subscribers must be idempotent.
+//   exclusao_pedida {userId}: the person asked to delete the account; arrives
+//     BEFORE the account closes. A subscriber may return {campos,aviso}: campos
+//     go into the request's response and aviso at the end of the message (e.g.
+//     the subscription cancelled, or a notice that cancellation is pending).
+//   exclusao_final {userId}: the grace period ended and the account will be
+//     destroyed; arrives before the DELETE, the last chance to find what's outside.
+//   banco_pronto {}: the schema came up at boot. The emitter doesn't wait, so a
+//     subscriber that wants to hold something schedules it in the background.
+//   cofre_pronto {}: boot already tried to open the vault (vault.mjs) and
+//     encrypted the core's legacy secrets; subscribers encrypt their own. The
+//     vault may not have opened: check vaultEnabled(). Boot waits.
+//   whatsapp_reprovada {wamid,errorCode,errorTitle,errorMessage}: Meta accepted
+//     a message (HTTP 200) and rejected it later, in the status webhook (e.g. a
+//     plugin marks the campaign send with that wamid as failed). The webhook
+//     waits.
+//  Tasks: {nome,primeiraEmMs,aCadaMs,rodar}. Scheduled with unref, so they
+//   don't keep the process alive.
+//  emitir resolves with what each subscriber returned, in subscription order.
+//  A subscriber's error goes to the log and never back to the core (its slot
+//  in the list is undefined): a failing bonus must not take down the person's
+//  reply.
 export const EVENTOS=['conta_criada','primeira_mensagem','exclusao_pedida','exclusao_final','banco_pronto','cofre_pronto','whatsapp_reprovada'];
 export function createEventos({log=console.error}={}){
  const inscritos=new Map(EVENTOS.map(n=>[n,[]]));
@@ -61,10 +61,10 @@ export function ligarCicloDeVida(eventos,{inscricoes={},tarefas=[]}={}){
  for(const t of tarefas)eventos.agendar(t);
  return eventos;
 }
-// Todo cadastro passa por aqui: cria a conta (criar = createUser ou outra função
-// do db que devolve a linha ou null) e avisa conta_criada. Espera quem se
-// inscreve, então a conta já sai do cadastro com o que quem instala dá a uma
-// conta nova (no Brambs, o primeiro mês grátis no Básico).
+// Every sign-up goes through here: creates the account (criar = createUser or
+// another db function returning the row or null) and emits conta_criada. Waits
+// for subscribers, so the account leaves sign-up with whatever the installer
+// gives a new account (e.g. a free first month on a plan).
 export const criadorDeConta=(eventos)=>async(criar,dados,origem)=>{
  const user=await criar(dados);
  if(user)await eventos.emitir('conta_criada',{userId:user.id,origem});

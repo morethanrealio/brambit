@@ -1,21 +1,21 @@
-// ── Envio de e-mail transacional ──
-// Dois usos: o assistente manda e-mail PRO usuário (briefing das rotinas) e
-// e-mails de sistema (ex.: redefinição de senha). Configurável por env.
+// ── Transactional email ──
+// Two uses: the assistant emails the user (routine briefings) and system
+// emails (e.g. password reset). Configured via env.
 //
-// SMTP (Gmail / Google Workspace — preferido):
+// SMTP (Gmail / Google Workspace, preferred):
 //   SMTP_HOST=smtp.gmail.com
-//   SMTP_PORT=465            (TLS implícito; 587 = STARTTLS)
+//   SMTP_PORT=465            (implicit TLS; 587 = STARTTLS)
 //   SMTP_USER=oi@exemplo.com
-//   SMTP_PASS=<App Password> (senha de app do Gmail, gerada pelo dono da conta)
+//   SMTP_PASS=<App Password> (Gmail app password, made by the account owner)
 //   MAIL_FROM=oi@exemplo.com
-//   MAIL_FROM_NAME=Brambs
+//   MAIL_FROM_NAME=Acme
 //
-// Resend (HTTP, fallback, sem dependência):
+// Resend (HTTP, fallback, no dependency):
 //   RESEND_API_KEY=...
 //   MAIL_FROM=oi@exemplo.com
 //
-// Sem credencial NÃO quebra: loga e devolve { skipped:true }, pra rodar/dev
-// antes das credenciais estarem prontas.
+// Without credentials it does NOT break: logs and returns { skipped:true }, so
+// it runs in dev before credentials are ready.
 
 const RESEND_API = 'https://api.resend.com/emails';
 

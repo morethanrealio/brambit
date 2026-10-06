@@ -5,7 +5,7 @@ for (const file of ['store', 'runtime', 'routes', 'conversation', 'closing', 're
     const src = readFileSync(`.discovery-build/${file}.mjs`, 'utf8').replace(/'\.\/(store|conversation|closing|report(?:-instructions|-format|-account)?)\.mjs'/g, "'./discovery-$1.mjs'").replace("'../web/marca.mjs'", "'./marca.mjs'");
     writeFileSync(`web/discovery-${file}.mjs`, src);
 }
-// Tela do painel: arquivo da nuvem (plugin brambs); o núcleo sozinho não a compila.
+// Admin panel screen: a plugin's file; the core alone does not compile it.
 for (const file of ['admin-ui'])
     if (existsSync(`.discovery-build/${file}.mjs`))
         copyFileSync(`.discovery-build/${file}.mjs`, `web/plugins/brambs/publico/discovery-${file}.mjs`);

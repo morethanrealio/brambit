@@ -1,17 +1,18 @@
-// Aviso de erro dos canais de conversa (Telegram, Slack) e reenvio da resposta.
+// Error notice for conversation channels (Telegram, Slack) and reply resend.
 //
-// Caso Luffy 05/10/2026: o turno terminou (gravou a memória e a resposta no
-// histórico), mas o envio pelo Telegram falhou na rede. O canal mandou o aviso
-// genérico "Tive um problema pra responder agora. Tenta de novo?", que NÃO ficava
-// no histórico. Quando a pessoa respondeu "pode tentar de novo sim", o modelo não
-// tinha a que ligar o "de novo" e foi buscar a jornada de descoberta.
+// A user report on 05/10/2026: the turn finished (memory and reply saved in the
+// history), but the Telegram send failed on the network. The channel sent the
+// generic "I had a problem replying now. Try again?", which was NOT kept in the
+// history. When the person answered "yes, try again", the model had nothing to
+// tie "again" to and went for the discovery journey.
 //
-// Duas falhas diferentes pedem dois avisos diferentes:
-// - `turno`: o turno quebrou antes de responder. A pergunta da pessoa e o aviso
-//   entram no histórico, então "tenta de novo" aponta pro pedido certo.
-// - `entrega`: a resposta ficou pronta e já está no histórico, só não chegou.
-//   Antes de avisar, o canal reenvia a mesma resposta (sem rodar o turno de
-//   novo); o aviso só sai se o reenvio também falhar, e diz que nada será refeito.
+// Two different failures need two different notices:
+// - `turno`: the turn broke before replying. The person's question and the
+//   notice enter the history, so "try again" points to the right request.
+// - `entrega`: the reply was ready and is already in the history, it just didn't
+//   arrive. Before notifying, the channel resends the same reply (without
+//   rerunning the turn); the notice only goes out if the resend also fails, and
+//   says nothing will be redone.
 import { tagIdioma } from './locale.mjs';
 
 const TEXTOS = {

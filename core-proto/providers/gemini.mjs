@@ -13,13 +13,13 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 let counter = 0;
 const nextId = () => `call_${++counter}`;
 
-// ── Retry de erro TRANSITÓRIO do lado do Google ──
-// 503 UNAVAILABLE ("This model is currently experiencing high demand") e 429
-// (rate limit) são picos passageiros: a mesma chamada costuma passar segundos
-// depois. Sem retry, o turno inteiro morria e o usuário via "Falha ao falar com
-// o modelo" (caso Marcos 27/08, app iOS). Só re-tentamos status que dá pra
-// re-tentar com segurança (generateContent não tem efeito colateral do nosso
-// lado); 400/401/403 são erro nosso e sobem na hora, sem gastar tempo.
+// ── Retry of TRANSIENT errors on Google's side ──
+// 503 UNAVAILABLE ("This model is currently experiencing high demand") and 429
+// (rate limit) are short spikes: the same call usually passes seconds later.
+// Without retry the whole turn died and the user saw "Failed to talk to the
+// model" (a user report on 27/08, iOS app). We only retry statuses that are
+// safe to retry (generateContent has no side effect on our side); 400/401/403
+// are our own error and surface immediately, without wasting time.
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const RETRY_DELAYS = [600, 1800]; // ms; jitter somado na hora
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -1,6 +1,6 @@
-// Sondas de isolamento entre contas não batem em produção por padrão
-// (fase B item 5 do plano open source). Antes, sem BASE elas iam pra
-// https://brambs.com.br, inclusive a sonda que ESCREVE na conta A.
+// Cross-account isolation probes do not hit production by default
+// (phase B item 5 of the open source plan). Before, with no BASE they went
+// to the hosted production URL, including the probe that WRITES to account A.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';

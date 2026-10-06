@@ -1,13 +1,13 @@
-// Porta da conta pagadora: QUEM paga o que uma pessoa gasta. O núcleo grava o
-// consumo (usage_events) e fecha a cobrança de vídeo sempre por aqui; a pessoa
-// é quem usou (user_id), a conta que paga é carimbada em org_id.
-//  transacao(pool,{userId,orgId},run) → roda run(client, orgIdQuePaga) numa
-//    transação com as travas da conta (travas-de-conta.mjs) e devolve o que run
-//    devolver. orgId undefined = a implementação decide; orgId explícito força a
-//    conta (null = pessoal). Sem userId e sem orgId, run(pool,null) fora de
-//    transação.
-// Na versão aberta ninguém paga pela empresa (orgIdQuePaga é sempre null); no
-// Brambs a empresa de quem a pessoa é membro paga (credit-account-transaction.mjs).
+// Paying account port: WHO pays for what a person spends. The core records
+// usage (usage_events) and closes video billing always through here; the person
+// is who used it (user_id), the paying account is stamped in org_id.
+//  transacao(pool,{userId,orgId},run) → runs run(client, orgIdQuePaga) in a
+//    transaction with the account locks (travas-de-conta.mjs) and returns what
+//    run returns. orgId undefined = the implementation decides; an explicit orgId
+//    forces the account (null = personal). With no userId and no orgId,
+//    run(pool,null) outside a transaction.
+// In the open version no company pays (orgIdQuePaga is always null); a plugin
+// can make the company the person belongs to pay.
 import { emTransacao, lockCreditUser } from './travas-de-conta.mjs';
 
 export const METODOS_CONTA_PAGADORA=['transacao'];

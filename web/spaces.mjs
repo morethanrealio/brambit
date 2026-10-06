@@ -287,7 +287,7 @@ export function spaceInviteTool(userId, agentId) {
       if (who.error === 'contato_ambiguo') return contatoAmbiguoMsg(contato, who.opcoes);
       if (who.error) return `Não consegui resolver o contato (${who.error}).`;
       await addSpaceMember(r.space.id, who.userId, agentId);
-      // Aviso proativo ao outro dono (best-effort; notifyOwner é da Yume/Fase notify).
+      // Proactive notice to the other owner (best-effort; notifyOwner comes from notify.mjs).
       try {
         const { notifyOwner } = await import('./notify.mjs').catch(() => ({}));
         await notifyOwner?.(who.userId, `Você foi adicionado ao Space "${r.space.title}". Seu assistente já pode ver e anotar nele.`);

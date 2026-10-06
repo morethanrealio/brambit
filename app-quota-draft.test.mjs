@@ -9,7 +9,7 @@ const src = readFileSync(new URL('./web/hosting.mjs', import.meta.url), 'utf8');
 const cut = name => { const i = src.indexOf(`async function ${name}`); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
 
 function guard({ draft = {}, apps = 0, teto = 0 } = {}) {
-  // O texto da recusa é do plano (permissoes-brambs.mjs); aqui só importa quando o teto é checado.
+  // The refusal text comes from the plan plugin; here only when the cap is checked matters.
   const perm = () => ({ bloqueioDeApp: async ({ atuais }) => atuais >= teto ? { ok: false, error: 'Criar app é um recurso dos planos Pro (2 apps).' } : null });
   return new Function('getAppRow', 'listAppsForUser', 'perm', 'getAppDraft',
     `${cut('appQuotaBlock')}${cut('newDraftQuotaBlock')}; return newDraftQuotaBlock;`)(

@@ -75,12 +75,12 @@ export const EGRESS_ALLOW = [
   'app.startinfinity.com',
   'api.asaas.com',
   'api.appstoreconnect.apple.com',
-  // Servidor MCP configurado pelo próprio usuário (tabela `mcp_servers`). O
-  // host é ARBITRÁRIO por desenho: o usuário cola a URL e as tools daquele
-  // servidor entram no tool-loop, recebendo argumento que pode conter conteúdo
-  // dele. Hoje só existe este, do Marcos (26/06). Na Fase 4, `block` precisa
-  // ler `mcp_servers` em vez de depender desta linha fixa, senão MCP novo do
-  // usuário passa a falhar.
+  // MCP server configured by the user (table `mcp_servers`). The host is
+  // ARBITRARY by design: the user pastes the URL and that server's tools enter
+  // the tool loop, receiving arguments that may hold their content. Today only
+  // this one exists (since 26/06). In Phase 4, `block` must read `mcp_servers`
+  // instead of relying on this fixed line, or new user MCPs will start
+  // failing.
   'mcp.deepwiki.com',
 ];
 

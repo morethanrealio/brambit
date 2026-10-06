@@ -1,12 +1,12 @@
-// Freio de push repetido de parada por crédito (caso de 28/09/2026). Quando o
-// saldo livre não cobre a reserva, cada mensagem que a pessoa manda enquanto
-// espera vira um turno que para na hora com o MESMO texto de saldo, e cada um
-// disparava um push: 5 notificações iguais no mesmo segundo às 14h25.
-// Dois usos: por pessoa, a notificação não se repete em 15 minutos; por
-// conversa, a própria resposta de saldo em rajada (mensagens que estavam na
-// fila) não é gravada nem enviada de novo por 2 minutos (Marcos, 28/09).
+// Brake on repeated pushes for credit stops (case of 28/09/2026). When the
+// free balance doesn't cover the reserve, each message the person sends while
+// waiting becomes a turn that stops at once with the SAME balance text, and
+// each one fired a push: 5 identical notifications in the same second at 14:25.
+// Two uses: per person, the notification doesn't repeat within 15 minutes; per
+// conversation, the balance reply itself in a burst (queued messages) is not
+// saved or sent again for 2 minutes (28/09).
 //
-// Módulo puro: estado em memória por processo, relógio injetável pra teste.
+// Pure module: in-memory state per process, injectable clock for tests.
 export const CREDIT_PUSH_WINDOW_MS = 15 * 60 * 1000;
 export const CREDIT_REPLY_WINDOW_MS = 2 * 60 * 1000;
 

@@ -1,11 +1,11 @@
-// Porta 5 (marca): o que muda de uma instalação pra outra sem ser segredo nem
-// config de ambiente: o nome do produto, o endereço do site e a assinatura
-// (User-Agent) que o servidor usa nas chamadas pra fora, os contatos e as pastas
-// com as páginas, imagens e traduções próprias da marca. O núcleo lê daqui; quem
-// instala define uma vez no boot (o Brambs em marca-brambs.mjs). Tudo é lido na
-// hora do uso, nunca guardado em constante de módulo, pra a ordem dos imports
-// não importar. PUBLIC_BASE_URL e APP_BASE_URL do ambiente continuam valendo por
-// cima do site da marca onde já valiam.
+// Port 5 (brand): what changes from one install to another without being a
+// secret or env config: the product name, the site address and the signature
+// (User-Agent) the server uses on outbound calls, the contacts and the folders
+// with the brand's own pages, images and translations. The core reads from here;
+// whoever installs it sets it once at boot (e.g. in a brand plugin). Everything is
+// read at use time, never kept in a module constant, so import order doesn't
+// matter. PUBLIC_BASE_URL and APP_BASE_URL from the env still override the
+// brand's site where they already did.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -33,7 +33,7 @@ export function definirMarca(m = {}) {
 export const marca = () => atual;
 // Endereço do site, sem barra no fim.
 export const siteDaMarca = () => atual.site;
-// Como o endereço aparece em texto pro usuário ("entre em brambs.com.br").
+// How the address appears in text to the user ("go to example.com").
 export const hostDaMarca = () => new URL(atual.site).host;
 // Nome curto da marca (minúsculas, só letras e números): prefixo dos executáveis
 // do Runner (brambs-runner-linux) e das variáveis dele (BRAMBS_RUNNER_TOKEN). O

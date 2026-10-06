@@ -1,9 +1,9 @@
 // ── Provedores e modelos por função (modelos.yaml) ──
-// Quem instala o Brambs escolhe, num arquivo comentado, QUAIS provedores usar e
-// QUAL modelo cada função usa (com um modelo reserva opcional). Provedor é dado,
-// não código: nome + endereço + nome da variável do .env que guarda a chave.
-// Qualquer serviço que fale o protocolo da OpenAI (/chat/completions) entra assim;
-// o Gemini tem protocolo próprio e entra com `tipo: gemini`.
+// Whoever installs Brambit picks, in a commented file, WHICH providers to use
+// and WHICH model each function uses (with an optional fallback model). A
+// provider is data, not code: name + address + the .env variable holding the key.
+// Any service speaking the OpenAI protocol (/chat/completions) fits this way;
+// Gemini has its own protocol and comes in with `tipo: gemini`.
 //
 // Sem o arquivo, tudo devolve null e o servidor segue o roteamento embutido de
 // sempre (é o caso da nossa produção hoje). O modelo de exemplo, com cada campo

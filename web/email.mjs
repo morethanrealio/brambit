@@ -275,12 +275,12 @@ async function handleEmail(parsed, deps) {
     if (messageId) await deps.markEmailSeen(messageId, null);
     return 'skipped';
   }
-  // Conta que pediu exclusão (Marcos 04/09): o e-mail é o ÚNICO canal de entrada
-  // que closeUserAccount não consegue desligar apagando linha — WhatsApp/Telegram/
-  // Slack resolvem por link em tabela (apagada lá), aqui a chave é o próprio
-  // `users.email`, que tem que continuar existindo pelos 30 dias da janela de
-  // arrependimento. Sem esta trava o assistente seguiria respondendo por e-mail
-  // depois da exclusão.
+  // Account that asked for deletion (04/09): e-mail is the ONLY inbound channel
+  // closeUserAccount can't switch off by deleting a row. WhatsApp/Telegram/
+  // Slack resolve via a link table (deleted there); here the key is
+  // `users.email` itself, which must keep existing for the 30-day grace
+  // window. Without this check the assistant would keep answering by e-mail
+  // after deletion.
   if (user.deleted_at) {
     console.log('[email] conta excluída, ignorado:', fromAddr);
     if (messageId) await deps.markEmailSeen(messageId, user.id);

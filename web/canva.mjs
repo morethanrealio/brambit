@@ -1,20 +1,20 @@
 // ── Canva via MCP ──
-// A Canva não entra aqui como cliente REST escrito na mão: ela publica um
-// servidor MCP (https://mcp.canva.com/mcp) e o Brambs já tem cliente MCP
-// genérico (mcp.mjs). O que este arquivo resolve são as duas coisas que o
-// caminho genérico de servidor MCP cadastrado NÃO resolve:
+// Canva isn't a hand-written REST client here: it publishes an MCP server
+// (https://mcp.canva.com/mcp) and the platform already has a generic MCP
+// client (mcp.mjs). This file solves the two things the generic registered
+// MCP server path does NOT:
 //
-//  1) Token dinâmico. `mcp_servers.headers` é um jsonb estático; o access_token
-//     da Canva expira em ~1h. Aqui o Authorization é montado na hora da chamada,
-//     a partir do token vivo do usuário (validProviderToken renova sozinho).
-//  2) Piso de tokens de input. O servidor da Canva expõe ~34 tools. Injetar 34
-//     schemas no registry a cada chamada estoura o piso documentado em
-//     knowledge/input-tokens-e-cache.md. Aqui o agente principal vê SÓ TRÊS
-//     tools de schema fixo (canva / canva_criar / canva_editar); a lista real é
-//     buscada na HORA DA EXECUÇÃO e entregue a um sub-agente isolado.
+//  1) Dynamic token. `mcp_servers.headers` is static jsonb; Canva's access_token
+//     expires in ~1h. Here Authorization is built at call time, from the user's
+//     live token (validProviderToken refreshes it on its own).
+//  2) Input token floor. Canva's server exposes ~34 tools. Injecting 34 schemas
+//     into the registry on every call blows the per-call input token floor.
+//     Here the main agent sees ONLY THREE fixed-schema tools (canva /
+//     canva_criar / canva_editar); the real list is fetched AT RUN TIME and
+//     handed to an isolated sub-agent.
 //
-// Efeito colateral bom do (2): não há conexão MCP nenhuma nos turnos em que a
-// pessoa não fala de Canva. Conecta só quando uma das três tools roda.
+// Good side effect of (2): no MCP connection at all in turns where the person
+// doesn't talk about Canva. It connects only when one of the three tools runs.
 
 import { mcpConnect } from './mcp.mjs';
 

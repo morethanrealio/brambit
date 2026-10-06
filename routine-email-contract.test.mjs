@@ -6,7 +6,7 @@ import { routineChannelText, routineExecutionInfo, routineExecutionText } from '
 import { standaloneRefusal, refusalAcknowledgement, enforceFreshCheckClaims, enforceRoutineEmailContract } from './web/turn-claim-guard.mjs';
 
 let checks=0;const ok=(value,message)=>{assert.ok(value,message);checks++;};
-const routine={channel:'email',email:'marcostrinca@morethanreal',config:{execution:{status:'failed',phase:'delivering',startedAt:'2026-09-14T12:00:00Z',finishedAt:'2026-09-14T12:01:00Z'}}};
+const routine={channel:'email',email:'user@example.com',config:{execution:{status:'failed',phase:'delivering',startedAt:'2026-09-14T12:00:00Z',finishedAt:'2026-09-14T12:01:00Z'}}};
 
 // Estado legado ambíguo nunca vira a alegação falsa "e-mail não chegou".
 const info=routineExecutionInfo(routine),health=routineExecutionText(routine),channel=routineChannelText(routine);

@@ -206,15 +206,15 @@ function normTemplateParam(v) {
   return text;
 }
 
-// Envia uma mensagem de TEMPLATE aprovado (business-initiated). Fora da janela de
-// 24h da última mensagem do usuário, a Cloud API só deixa enviar template.
-// Os nomes vêm da marca (marca().templatesWhatsApp; no Brambs, brambs_*):
-// - notificacao (UTILITY): 1 variável ({{1}}) = conteúdo. Follow-up de algo
-//   combinado (lembretes, rotinas, notificações pedidas). É o default.
-// - engajamento (MARKETING): 2 variáveis ({{1}}=primeiro nome, {{2}}=conteúdo).
-//   Envios proativos NÃO solicitados (reativação / anúncio de novidade).
-// Para templates multi-variável passe `params` (array, em ordem {{1}}, {{2}}, …);
-// sem ele, cai no `bodyText` único ({{1}}).
+// Sends an approved TEMPLATE message (business-initiated). Outside the 24h
+// window since the user's last message, the Cloud API only allows templates.
+// Names come from the brand (marca().templatesWhatsApp, each install's own):
+// - notificacao (UTILITY): 1 variable ({{1}}) = content. Follow-up of something
+//   agreed (reminders, routines, requested notifications). The default.
+// - engajamento (MARKETING): 2 variables ({{1}}=first name, {{2}}=content).
+//   UNSOLICITED proactive sends (reactivation / feature announcement).
+// For multi-variable templates pass `params` (array, in order {{1}}, {{2}}, …);
+// without it, falls back to the single `bodyText` ({{1}}).
 export async function sendWhatsAppTemplate(to, bodyText, { name = marca().templatesWhatsApp.notificacao, lang = 'pt_BR', params = null, opaque = null } = {}) {
   const list = Array.isArray(params) && params.length ? params : [bodyText];
   const parameters = list.map((p) => ({ type: 'text', text: normTemplateParam(p) }));
@@ -679,9 +679,9 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       await finishHeartbeat();
       if(!await sameRecipient(from,b.userId))throw Object.assign(Error('Recipient changed'),{code:'WA_RECIPIENT_CHANGED'});
       if(inbox)await inbox.assertRunning(ids(token.consumed));
-      // Daqui pra baixo o turno terminou e a resposta está no histórico: falha é
-      // só de entrega. Cada parte que falha na rede é reenviada (nunca o turno);
-      // se não sair, a pessoa recebe o aviso de entrega (caso Luffy 05/10/2026).
+      // From here on the turn is done and the reply is in the history: a failure
+      // is delivery only. Each part that fails on the network is resent (never
+      // the turn); if it won't go, the person gets the delivery notice (05/10/2026).
       fase='entrega';
       const reply=typeof res==='string'?res:res?.text,attachments=typeof res==='string'?[]:(res?.attachments||[]);
       let cobraveis=0,naoEntregue=false;
@@ -1103,11 +1103,11 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
             }
           }
           if (!value.messages) continue; // sem mensagens (era só status update)
-          // Só atende mensagens endereçadas ao NOSSO número. Quando o app está
-          // inscrito numa WABA compartilhada com outros números, a Meta faz
-          // fan-out de todo inbound da WABA pra este webhook; sem esse filtro o
-          // harness responderia mensagens destinadas a outros bots (ex: um
-          // teste enviado ao número do Renner era respondido pelo Brambs).
+          // Only handle messages addressed to OUR number. When the app is
+          // subscribed to a WABA shared with other numbers, Meta fans out every
+          // WABA inbound to this webhook; without this filter the harness would
+          // answer messages meant for other bots (e.g. a test sent to another
+          // business's number was answered by this instance).
           const dest = value.metadata?.phone_number_id;
           if (dest && PHONE_ID() && dest !== PHONE_ID()) {
             console.warn(`[whatsapp] ignorando inbound endereçado a ${dest} (nosso número é ${PHONE_ID()})`);

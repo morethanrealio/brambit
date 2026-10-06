@@ -1,14 +1,14 @@
-// Classificador de intenção Jev (TypeSafe System One) nas travas de palavra-chave.
+// Jev intent classifier (TypeSafe System One) in the keyword gates.
 //
-// Regra de uso (Marcos 28/09): o Jev melhora a LEITURA da intenção, mas nunca
-// autoriza sozinho uma ação que grava, envia, apaga ou publica. Nos pontos em que
-// a trava dispara uma ação, o Jev só pode VETAR um disparo errado da regra; o que
-// ele acha a mais vai para o modelo, que passa pelo cartão de confirmação.
+// Usage rule (28/09): Jev improves the READING of intent, but never authorizes
+// on its own an action that writes, sends, deletes or publishes. Where the gate
+// fires an action, Jev can only VETO a wrong rule trigger; anything extra it
+// finds goes to the model, which goes through the confirmation card.
 //
-// Sem TYPESAFE_API_KEY, com JEV_TRAVAS=0, em erro ou em timeout, devolve null e
-// quem chamou segue com a regra antiga: nunca fica pior que hoje.
-// As perguntas e os critérios são os do eval 28/09 (projetos/evals/travas-2026-09-28),
-// 150/158 acertos contra 90/158 das regras.
+// Without TYPESAFE_API_KEY, with JEV_TRAVAS=0, on error or timeout, returns null
+// and the caller keeps the old rule: never worse than today.
+// Questions and criteria come from an eval on 28/09,
+// 150/158 hits against 90/158 for the rules.
 
 const URL_JEV = 'https://api.typesafe.ai/v1/systemone';
 const TIMEOUT_MS = Number(process.env.JEV_TIMEOUT_MS) || 2000;

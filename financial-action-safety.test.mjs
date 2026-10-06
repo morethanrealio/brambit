@@ -238,8 +238,8 @@ await withFetch([
   eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento para 18/09/2026. Ele ainda aguarda processamento bancário; avisarei aqui quando concluir.', 'PENDING na data confirmada informa quando será processado');
 });
 
-// Sem a data mínima oficial, o Brambs falha fechado: não deixa a Asaas escolher
-// silenciosamente o vencimento nem cria um pagamento diferente do confirmado.
+// Without the official minimum date, the platform fails closed: it doesn't let
+// Asaas silently pick the due date or create a payment other than the confirmed one.
 await withFetch([
   { bankSlipInfo: { value: 108.45, dueDate: '2026-09-20', beneficiaryName: 'BHub', beneficiaryCpfCnpj: '***1111', allowChangeValue: false } },
 ], async (calls) => {
@@ -311,7 +311,7 @@ await withFetch([], async (calls) => {
   eq(calls.length, 0, 'não consulta o boleto antes de resolver a data');
 });
 
-// Agendamento Brambs ainda local é cancelado sem chamar o endpoint da Asaas.
+// A schedule that is still local only is cancelled without calling Asaas.
 await withFetch([], async (calls) => {
   let cancelled = 0;
   const localTools = asaasTools({
@@ -649,8 +649,8 @@ await withFetch([
   eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'transferência só é criada após revalidar o titular');
 });
 
-// Antes do POST financeiro, a Conta Brambs prepara o webhook que entregará o
-// comprovante. A mesma conta vinculada à confirmação também vai para o registro.
+// Before the financial POST, the managed payment account sets up the webhook that
+// delivers the receipt. The account bound to the confirmation also goes to the record.
 await withFetch([
   { name: 'Pessoa Webhook', cpfCnpj: '***4444', institutionName: 'Banco D' },
   { name: 'Pessoa Webhook', cpfCnpj: '***4444', institutionName: 'Banco D' },

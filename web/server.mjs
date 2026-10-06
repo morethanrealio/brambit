@@ -47,8 +47,8 @@ import {createContaPagamentoSimples} from './conta-pagamento.mjs';
 import {createGastoSimples} from './gasto-simples.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
-// Plugins (plugins.mjs): quem instala lista os seus em web/plugins/ativos.mjs ou em BRAMBIT_PLUGINS (na
-// nuvem, o Brambs e a Comunidade). Cada porta sem plugin usa o padrão do núcleo.
+// Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS
+// (e.g. a hosted deployment's own plugins). Each port without a plugin uses the core default.
 const plugins=await carregarPlugins();
 const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
@@ -335,24 +335,24 @@ function testProviderEnabled(p) {
   return false;
 }
 
-// ── ARQUITETURA DE MODELOS (decidida por Marcos em 31/08/2026) ──────────────
-//   1. PADRÃO do produto (era "standard" + "robusto") = DeepSeek V4 Pro 0813 na
-//      Together. Um modelo só: o roteador de tier (barato x robusto) deixou de
-//      valer pro turno do usuário, porque não há mais dois modelos pra escolher.
-//   2. Sub-agentes de CODING (codar/construir_app/planilha) = DeepSeek V4.1
-//      Flash na Together, com a API oficial da DeepSeek como reserva do mesmo
-//      modelo. A escolha é geral, não depende de flag por conta.
-//   3. Sub-agentes dos OUTROS assuntos (pesquisa/Google/conectores) = DeepSeek
-//      V4 Flash (CHEAP_MODEL), que segue no DeepInfra até medirmos latência.
-//   4. Multimodal (imagem/áudio/visão) = Gemini.
-//   5. FALLBACK de qualquer caminho de texto = Gemini 3.7 Flash. Antes era o
-//      GPT-5.4 mini; virou Gemini porque é o modelo que já provou dar conta do
-//      turno inteiro do produto (rodou como primário de 18 a 31/08) e ainda tem
-//      grounding nativo. Exceção: o Kimi 3 (escolha do dono) cai primeiro no
-//      V4 Pro, que é o padrão, e só depois no Gemini.
-// O fallback é STICKY por turno: uma vez que o primário cai, o resto do turno
-// vai direto pro fallback, pra não repetir o timeout a cada passo do tool-loop.
-// O custo sai certo porque usage.model reflete quem de fato respondeu.
+// ── MODEL ARCHITECTURE (decided 31/08/2026) ─────────────────────────────────
+//   1. Product DEFAULT (was "standard" + "robust") = DeepSeek V4 Pro 0813 on
+//      Together. A single model: the tier router (cheap x robust) no longer
+//      applies to the user's turn, since there aren't two models to pick from.
+//   2. CODING sub-agents (codar/construir_app/planilha) = DeepSeek V4.1 Flash
+//      on Together, with DeepSeek's official API as backup for the same
+//      model. The choice is global, not a per-account flag.
+//   3. Sub-agents for OTHER topics (research/Google/connectors) = DeepSeek
+//      V4 Flash (CHEAP_MODEL), which stays on DeepInfra until latency is measured.
+//   4. Multimodal (image/audio/vision) = Gemini.
+//   5. FALLBACK for any text path = Gemini 3.7 Flash. It used to be GPT-5.4
+//      mini; it became Gemini because that model already proved it can handle
+//      the product's whole turn (it ran as primary from 18 to 31/08) and has
+//      native grounding. Exception: Kimi 3 (the owner's choice) falls first to
+//      V4 Pro, the default, and only then to Gemini.
+// The fallback is STICKY per turn: once the primary fails, the rest of the turn
+// goes straight to the fallback, so the timeout isn't repeated at each tool-loop step.
+// Cost comes out right because usage.model reflects who actually answered.
 const PRIMARY_MODEL = process.env.PRIMARY_MODEL || 'deepseek-ai/DeepSeek-V4-Pro-0813';
 // Teto de saída do padrão. 32k porque este é o modelo que também escreve arquivo
 // inteiro num tool-call; com 8192 a geração era cortada no meio e o usuário via
@@ -444,15 +444,15 @@ const TOGETHER_FLASH_DEFAULT = 'deepseek-ai/DeepSeek-V4.1-Flash';
 const PRIMARY_TEXT_MODEL = process.env.PRIMARY_TEXT_MODEL ?? TOGETHER_FLASH_DEFAULT;
 const primaryIsTogetherFlash = PRIMARY_TEXT_MODEL === TOGETHER_FLASH_DEFAULT;
 const primaryIsGeminiOverride = /^gemini[-.]/i.test(PRIMARY_TEXT_MODEL);
-// MODELO BARATO: DeepSeek V4 Flash no DeepInfra, com raciocínio DESLIGADO. Rápido
-// e barato, com qualidade suficiente pra leitura/síntese e tool-calling simples
-// (ver evals/eval-texto-glm47 e eval-modelos-kimi, feitos com o GLM-4.7 no mesmo
-// papel). Desde 31/08 quem consome esse modelo são SÓ os sub-agentes de leitura
-// (makeSubagentProvider); o turno do usuário vai sempre no padrão (V4 Pro).
-// Segue no DeepInfra por decisão do Marcos (31/08) até medirmos latência: no
-// volume atual (~30 chamadas/dia, ~US$0,30/mês) a diferença de preço é irrelevante,
-// então mover de provider só se pagar em LATÊNCIA. Trocar de provider exige mexer
-// nas DUAS pontas (env + linha de preço em pricing.mjs), senão o custo grava errado.
+// CHEAP MODEL: DeepSeek V4 Flash on DeepInfra, with reasoning OFF. Fast and
+// cheap, good enough for reading/synthesis and simple tool-calling (see
+// evals/eval-texto-glm47 and eval-modelos-kimi, done with GLM-4.7 in the same
+// role). Since 31/08 ONLY the reading sub-agents use this model
+// (makeSubagentProvider); the user's turn always uses the default (V4 Pro).
+// Stays on DeepInfra (decided 31/08) until latency is measured: at the current
+// volume (~30 calls/day, ~US$0.30/month) the price difference is irrelevant,
+// so switching provider only pays off in LATENCY. Switching provider means
+// touching BOTH ends (env + price line in pricing.mjs), or cost is recorded wrong.
 const CHEAP_MODEL = process.env.CHEAP_MODEL || 'deepseek-ai/DeepSeek-V4-Flash';
 // Toggle de EMERGÊNCIA do modelo padrão: por padrão ele roda na Together (rápida).
 // Se a Together ficar sem crédito (402), setar
@@ -534,8 +534,8 @@ function kimiAvailable() {
 function makeKimiProvider() {
   const opts = { model: KIMI_MODEL, maxTokens: 8192, temperature: 0.6 };
   const kimi = KIMI_PROVIDER === 'together' ? makeTogether(opts) : makeDeepInfra(opts);
-  // Se o Kimi cair, cai no PADRÃO do produto (V4 Pro), que por sua vez tem o
-  // Gemini 3.7 Flash atrás dele. Ordem definida por Marcos em 31/08.
+  // If Kimi fails, fall to the product DEFAULT (V4 Pro), which in turn has
+  // Gemini 3.7 Flash behind it. Order set on 31/08.
   const fallback = deepseekAvailable() ? makeDeepSeekProvider() : makePrimaryProvider('robusto');
   return withFallback(kimi, fallback, 'kimi');
 }
@@ -593,17 +593,17 @@ function makeHeavyProvider(site, { maxOut = PRIMARY_MAX_OUT } = {}) {
   return wrapProvider(provider).forBillingPhase({kind:'subagent'});
 }
 
-// ── Primário de texto no override Gemini, COM REDE ──
-// O override (PRIMARY_TEXT_MODEL=gemini-*) era o único caminho de turno que
-// chamava o provider CRU: Kimi, DeepSeek e o roteador de tier já tinham fallback,
-// o primário de fato não tinha. Resultado: um 503 UNAVAILABLE do Google ("high
-// demand", pico passageiro) derrubava o turno inteiro e o usuário via "Falha ao
-// falar com o modelo" (caso Marcos 27/08, app iOS). O adapter já re-tenta o
-// transitório; aqui é a rede pra quando a re-tentativa não resolve: desce pro
-// primário do produto (GLM-5.2 → GPT-5.4 mini) e o turno segue.
-// O maxOut acompanha o do Gemini pra o fallback não truncar um turno de artefato
-// grande. Perde-se o grounding nativo do Google nesse turno; o modelo ainda tem
-// a tool de busca do produto, então a capacidade não some.
+// ── Text primary under the Gemini override, WITH A SAFETY NET ──
+// The override (PRIMARY_TEXT_MODEL=gemini-*) was the only turn path calling
+// the RAW provider: Kimi, DeepSeek and the tier router already had fallback,
+// the actual primary didn't. Result: a Google 503 UNAVAILABLE ("high
+// demand", a passing spike) took down the whole turn and the user saw "Falha
+// ao falar com o modelo" (user report 27/08, iOS app). The adapter already
+// retries transient errors; this is the net for when retrying doesn't help: it
+// falls to the product primary (GLM-5.2 → GPT-5.4 mini) and the turn goes on.
+// maxOut follows Gemini's so the fallback doesn't truncate a large artifact
+// turn. Google's native grounding is lost for that turn; the model still has
+// the product's search tool, so the capability doesn't go away.
 function makeGeminiPrimary({ maxOut = 32768 } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
   const cfg = configurado('conversa', maxOut); if (cfg) return cfg;
@@ -1066,12 +1066,12 @@ import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sen
 // de status. whatsapp.mjs não importa db.mjs; a costura é aqui.
 setWaHooks({ lastInboundAt: getWaLastInbound, billMessages: billWaMessages });
 
-// ── Cobrança das mensagens de WhatsApp enviadas ao usuário ──
-// A Meta passa a cobrar mensagem de SERVIÇO (resposta dentro da janela de 24h) em
-// 1/10/26: R$0,035 cada, com 1.000 grátis/mês por número de telefone. Isso vira
-// gasto do usuário: quanto cobrar por mensagem é da porta de gasto (gasto.creditosDe;
-// no Brambs, WA_MSG_CREDITS do painel; 0 = não cobra). Chamado por whatsapp.mjs SÓ nos pontos de resposta ao usuário — mensagem
-// de sistema, template de utilidade e disparo de marketing seguem sendo custo nosso.
+// ── Billing for WhatsApp messages sent to the user ──
+// Meta starts charging for SERVICE messages (replies inside the 24h window) on
+// 1/10/26: R$0.035 each, with 1,000 free/month per phone number. That becomes
+// user spend: how much to charge per message is the spend port's (gasto.creditosDe;
+// a plugin may read it from its own setting; 0 = no charge). Called by whatsapp.mjs ONLY at reply points to the user; system
+// messages, utility templates and marketing sends stay the operator's cost.
 const WA_MSG_MODEL = 'whatsapp-service';
 const WA_META_COST_BRL = 0.035;   // tabela Meta Brasil, vigente 1/10/2026
 const WA_META_FREE_MONTHLY = 1000; // franquia por número de telefone, por mês
@@ -1364,10 +1364,10 @@ async function providerTools(userId, opts = {}) {
   return out;
 }
 
-// O comprovante sai pela conta de e-mail conectada do próprio usuário, não pelo
-// mailer institucional do Brambs. Gmail respeita a chave separada de envio
-// avulso; Outlook já entra no produto somente com a permissão de envio e também
-// passa pelo mesmo portão textual da tool Asaas.
+// The receipt goes out through the user's own connected email account, not the
+// platform's institutional mailer. Gmail respects the separate one-off send
+// switch; Outlook already joins the product with only the send permission and
+// also goes through the same text gate as the Asaas tool.
 async function emailProviderForAsaasReceipt(userId, googleEmail = null) {
   try {
     const caps = await connectedCaps(userId, googleEmail);
@@ -1445,10 +1445,10 @@ const VAULT_CONNECTORS = [
   { provider: 'notion', build: (secret) => notionTools({ secret, oneClick: providerEnabled('notion') }), resolve: (userId) => notionSecret(userId) },
   { provider: 'splitwise', build: (secret) => splitwiseTools({ secret }) },
   { provider: 'infinity', build: (secret) => infinityTools({ secret }) },
-  // Asaas: a pessoa pode ter a Conta Brambs E uma conta Asaas própria. Quem
-  // decide qual das duas as tools de dinheiro movimentam é asaasCred (regra
-  // declarada, não ordem de cadastro), e `conta` deixa a tool DIZER em qual
-  // conta agiu quando existe mais de uma.
+  // Asaas: the person may have the managed payment account AND their own Asaas
+  // account. asaasCred decides which one the money tools move (a declared rule,
+  // not sign-up order), and `conta` lets the tool SAY which account it acted on
+  // when there's more than one.
   {
     provider: 'asaas',
     build: (secret, userId, ctx = {}) => asaasTools({
@@ -1711,10 +1711,10 @@ const paisElegivelAsaas = (country) => {
   return country === 'BR' ? 'sim' : 'nao';
 };
 
-// A política atual, num ponto ÚNICO: desconhecido conta como pode. Endurecer
-// depois (exigir país sabido) é trocar esta linha e o teste dela, nada mais.
-// Marcos 51908/51910: aceitável porque a pessoa consegue mudar o próprio idioma
-// tanto pedindo pro assistente quanto na tela de configuração.
+// The current policy, in ONE place: unknown counts as allowed. Tightening it
+// later (requiring a known country) means changing this line and its test.
+// Acceptable because the person can change their own language either by
+// asking the assistant or in the settings screen.
 const brasilOuDesconhecido = (country) => paisElegivelAsaas(country) !== 'nao';
 
 // Tools dos conectores por cofre. Sempre construídas quando o cofre está ligado
@@ -1724,11 +1724,11 @@ function vaultConnectorTools(userId, { country = null, agentId = null, threadId 
   if (!vaultEnabled()) return [];
   const out = [];
   for (const vc of VAULT_CONNECTORS) {
-    // Asaas é instituição de pagamento BRASILEIRA: conta, Pix e boleto só
-    // existem aqui. Se SABEMOS que a pessoa mora fora, as tools não entram no
-    // toolset (o assistente não pode oferecer o que não dá pra fazer). País
-    // NULL = desconhecido, e desconhecido NÃO é "fora do Brasil": mantém o
-    // comportamento de sempre. Marcos 51828.
+    // Asaas is a BRAZILIAN payment institution: account, Pix and boleto only
+    // exist here. If we KNOW the person lives abroad, the tools stay out of the
+    // toolset (the assistant can't offer what can't be done). Country NULL =
+    // unknown, and unknown is NOT "outside Brazil": keeps the usual
+    // behavior.
     if (vc.provider === 'asaas' && !brasilOuDesconhecido(country)) continue;
     const secret = vc.resolve ? () => vc.resolve(userId) : () => vaultSecret(userId, vc.provider);
     out.push(...vc.build(secret, userId, { agentId, threadId, googleEmail, originChannel }));
@@ -1819,11 +1819,11 @@ const SEARCH_FREE_MONTHLY = {
 // Tools de tool_catalog já gravadas neste processo (dedup pra não reescrever o
 // catálogo inteiro a cada turno; o boot repopula do que aparecer).
 const seenToolCatalog = new Set();
-// `opts.noBill`: grava o custo REAL em cost_usd mas zera o crédito cobrado. É
-// para gasto que é despesa nossa, não consumo do usuário (hoje: a compactação
-// de conversa). Zero explícito, não NULL: a migração de backfill preenche
-// bill_credits NULL a partir do cost_usd, e uma linha nossa não pode virar
-// cobrança do usuário num backfill futuro. (Marcos, 09/09/2026)
+// `opts.noBill`: records the REAL cost in cost_usd but zeroes the billed
+// credit. For spend that is the operator's expense, not user usage (today:
+// conversation compaction). Explicit zero, not NULL: the backfill migration
+// fills NULL bill_credits from cost_usd, and an operator row must not become
+// a user charge in a future backfill. (09/09/2026)
 async function recordUsages(usages, dims, { noBill = false, eventId = null, strict = false } = {}) {
   if (!usages?.length) return;
   // Only a process-attested, same-account ledger settlement bypasses the old
@@ -1862,16 +1862,16 @@ async function recordUsages(usages, dims, { noBill = false, eventId = null, stri
 
 async function getCreditStatus(userId) { return gasto.status(userId); }
 
-// ── Aviso de crédito estourado DENTRO de rotina: 1x por semana por pessoa ──
-// Este é outro aviso, e outro momento: o preventivo (crédito acabando) mora em
-// credito-brambs.mjs; este é o que o portão de franquia devolve quando a rotina tenta
-// rodar sem crédito nenhum. Chave própria no app_config pra um não zerar o
-// outro; o valor é { [userId]: { at, period } }. A janela e a regra de quando
-// avisar vivem em rotina-aviso-credito.mjs (deveAvisarRotinaSemCredito), com teste próprio.
+// ── Out-of-credit notice INSIDE a routine: once a week per person ──
+// A different notice at a different moment: the preventive one (credit running
+// low) lives in a plugin; this is what the allowance gate returns when a routine
+// tries to run with no credit at all. Own app_config key so neither resets the
+// other; the value is { [userId]: { at, period } }. The window and the rule for
+// when to notify live in rotina-aviso-credito.mjs (deveAvisarRotinaSemCredito), with its own test.
 const ROUTINE_CREDIT_WARN_KEY = 'routine_credit_warned';
 
-// Bônus na assinatura, período pago, Apple, empresa e handleStripeEvent saíram
-// pra pagamentos-brambs.mjs (C2 porta 3).
+// Subscription bonus, paid period, Apple, company and handleStripeEvent moved
+// to a billing plugin (C2 port 3).
 
 // Infere o MIME de um nome de arquivo pela extensão (pro upload de binário ao Drive).
 function guessMime(name = '') {
@@ -1926,18 +1926,18 @@ async function notifyOwnerEmail(userId, { subject, html, text }) {
   }
 }
 
-// Entrega PROATIVA ao dono de um agente (notifyOwner do agente↔agente v2). Quando
-// o assistente de outra pessoa fala/responde com o assistente deste dono, a gente
-// PINGA o dono na hora, no canal certo, em vez de esperar ele abrir o app.
+// PROACTIVE delivery to an agent's owner (notifyOwner of agent↔agent v2). When
+// another person's assistant talks to/answers this owner's assistant, we
+// PING the owner right away, on the right channel, instead of waiting for the app.
 //
-// Regra de canal (Marcos 17/07): a resposta volta pelo canal de ORIGEM do pedido
-// (Telegram→Telegram, WhatsApp→WhatsApp, e-mail→e-mail), com opção de o dono
-// escolher outro canal (o override chega em `channel`). Formato: uma linha.
+// Channel rule (17/07): the reply goes back through the request's ORIGIN channel
+// (Telegram→Telegram, WhatsApp→WhatsApp, e-mail→e-mail), and the owner may
+// pick another channel (the override arrives in `channel`). Format: one line.
 //
-// Fallback: se o canal pedido não está conectado, tenta os de push disponíveis
-// (telegram → whatsapp). E-MAIL só dispara com a flag A2A_NOTIFY_EMAIL ligada
-// (default OFF — regra crítica: nenhum e-mail sem ok explícito). Fire-and-forget:
-// nunca derruba o fluxo que chamou.
+// Fallback: if the requested channel isn't connected, try the available push
+// ones (telegram → whatsapp). E-MAIL only fires with A2A_NOTIFY_EMAIL on
+// (default OFF; critical rule: no e-mail without explicit ok). Fire-and-forget:
+// never breaks the calling flow.
 const EMAIL_NOTIFY_ON = String(process.env.A2A_NOTIFY_EMAIL || '').toLowerCase() === 'true'
   || process.env.A2A_NOTIFY_EMAIL === '1';
 
@@ -2197,15 +2197,15 @@ function pickTargetedBasicApp(message, apps) {
   return null;
 }
 
-// O guard acima só enxerga a mensagem DO TURNO, então valia só enquanto a pessoa
-// repetisse o nome do app. Na conversa real ela nomeia uma vez ("no meu app de
-// plantas, registra a rega") e o resto vira "não deu certo", "tenta de novo" —
-// e aí o sandbox/coding-SSH voltava a aparecer e o modelo se perdia (dois casos
-// de 08/2026). Aqui o alvo passa a viver na CONVERSA: nomeou = grava; não nomeou =
-// herda o que estava valendo; falou de repo/servidor/rodar código = solta.
-// Jev (#12): a regra por nome/foco prendia no app pedidos de sandbox (QR do
-// brambs.com.br, "script que converte esse csv"). O Jev só VETA: quando ele diz
-// que o turno não é sobre o app, o sandbox fica. Nunca prende um turno sozinho.
+// The guard above only sees the CURRENT turn's message, so it held only while the
+// user kept repeating the app name. In real chats they name it once ("in my plant
+// app, log the watering") and then say "didn't work", "try again", so the
+// sandbox/coding-SSH came back and the model got lost (two cases in 08/2026).
+// Here the target lives in the CONVERSATION: named = stored; not named = inherit
+// the current one; talk of repo/server/running code = release.
+// Jev (#12): the name/focus rule pinned sandbox requests to the app (a QR for
+// example.com, "script to convert this csv"). Jev only VETOES: when it says the
+// turn is not about the app, the sandbox stays. It never pins a turn on its own.
 async function jevVetoesAppFocus(message, userApps, focus = '') {
   if (!jevEnabled()) return false;
   const apps = userApps.filter((a) => (a.mode || 'basico') === 'basico').map((a) => a.system);
@@ -2315,20 +2315,20 @@ function withThreadLock(key, fn) {
   return next;
 }
 
-// ── Housekeeping da página `perfil`: FORA do caminho crítico ──
-// Manter o perfil em dia é uma ida ao Gemini que reescreve a página INTEIRA. Isso
-// rodava com await ANTES de devolver a resposta, então a pessoa ficava esperando o
-// housekeeping terminar pra ver o que o assistente já tinha respondido. Medido em
-// 30/08/2026 na conta do Marcos: 26-29s no 1º turno de uma conversa contra 6,7-7,3s
-// nos turnos seguintes (que não rodam housekeeping) — ~20s de espera pura.
-// Dá pra tirar do caminho crítico sem mudar comportamento nenhum porque o perfil é
-// LIDO no começo do turno (wikiContext, ao montar o system prompt) e ESCRITO só no
-// fim: todo turno já enxerga a versão anterior a ele. Escrever depois de responder
-// não muda o que turno nenhum vê.
-// A trava por USUÁRIO existe porque a mesma pessoa pode ter turnos simultâneos em
-// canais diferentes (app + WhatsApp): sem ela, os dois leriam o mesmo perfil e o
-// último a gravar apagaria o que o outro aprendeu. Pular é seguro — o perfil é
-// cumulativo e volta a ser atualizado no próximo ciclo.
+// ── `perfil` page housekeeping: OFF the critical path ──
+// Keeping the profile current is a Gemini call that rewrites the WHOLE page. It
+// ran with await BEFORE returning the reply, so the person waited for
+// housekeeping to finish to see what the assistant had already answered.
+// Measured on 30/08/2026 on a test account: 26-29s on a conversation's 1st turn
+// vs 6.7-7.3s on later turns (which skip housekeeping), ~20s of pure waiting.
+// It can leave the critical path with no behavior change because the profile is
+// READ at turn start (wikiContext, building the system prompt) and WRITTEN only
+// at the end: every turn already sees the version before it. Writing after
+// replying doesn't change what any turn sees.
+// The per-USER lock exists because the same person can have simultaneous turns
+// on different channels (app + WhatsApp): without it, both would read the same
+// profile and the last write would erase what the other learned. Skipping is
+// safe: the profile is cumulative and gets updated again next cycle.
 const _profileHkInFlight = new Set();
 function runProfileHousekeeping({ userId, agentId, threadId, turnId, userMsg, assistantMsg, language = null }) {
   if (!userId || _profileHkInFlight.has(userId)) return;
@@ -2616,12 +2616,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (selo) text = selo.comTexto(text);
     return { text, attachments: anexoSelo ? [anexoSelo] : [] };
   }
-  // Bônus de indicação de CADASTRO: quem foi indicado começou a usar de fato, então
-  // o indicador dele ganha os 200 (evento primeira_mensagem, eventos-brambs.mjs). Só em mensagem de
-  // GENTE: rotina e cockpit disparam sozinhos e não provam que a pessoa apareceu.
-  // Gate barato: a primeira mensagem de alguém cai numa thread sem histórico. Threads
-  // novas depois disso repetem a chamada, mas o UPDATE lá dentro só passa uma vez.
-  // Não bloqueia o turno nem derruba nada se falhar.
+  // SIGN-UP referral bonus: the referred person actually started using it, so the
+  // referrer earns the bonus (primeira_mensagem event, handled by a plugin). Only on
+  // HUMAN messages: routines and the cockpit fire on their own and prove nothing.
+  // Cheap gate: someone's first message lands in a thread with no history. Later new
+  // threads repeat the call, but the UPDATE inside only passes once.
+  // Never blocks the turn or breaks anything if it fails.
   if (!opts.confirmationRestore && !ephemeral && kind !== 'routine' && kind !== 'cockpit' && !webhook && !(thread.history?.length)) {
     eventos.emitir('primeira_mensagem', { userId });
   }
@@ -2630,8 +2630,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const credit = await getCreditStatus(userId);
   if (credit.over && !opts.confirmationRestore) {
     const avisos = avisosTurno(idiomaResposta);
-    // O texto de quem ficou sem saldo é da implementação de gasto (no Brambs,
-    // créditos e franquia; no núcleo, o teto em US$).
+    // The out-of-balance text belongs to the spend implementation (e.g. credits
+    // and a plan allowance in a plugin; in the core, the US$ cap).
     const semSaldo = await gasto.avisoSemSaldo(credit, { userId, language: idiomaResposta, appClient });
     let reply = semSaldo.texto;
     // Mesmo sem crédito, o pedido de abertura precisa da identificação. Não
@@ -2645,19 +2645,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       : '';
     if (blockedAttachmentNotice) reply += `\n\n${blockedAttachmentNotice}`;
     let pendingCreditNotice = '';
-    // ── Rotina sem crédito avisa 1x por semana, POR PESSOA (Marcos 09/09/2026) ──
-    // Antes, cada execução de rotina de quem estava sem crédito entregava este
-    // mesmo aviso no canal da pessoa: 42 avisos em 30 dias, em 9 rotinas. Quem
-    // tem rotina diária levava um por dia, todo dia, até recarregar.
-    // O silêncio não custa nada: o portão já barra o modelo antes de qualquer
-    // chamada, então a rotina calada é tão barata quanto a que avisa.
-    // A janela é por PESSOA e não por rotina: quem tem 4 rotinas recebe UM aviso
-    // por semana, não quatro. Só rotina entra nisso — em conversa de verdade
-    // (web, Telegram, WhatsApp, e-mail) o aviso continua saindo na hora, porque
-    // ali a pessoa está esperando resposta e o silêncio pareceria bug.
-    // Vale só pro disparo AGENDADO: quando a pessoa aperta "rodar agora" no app
-    // ela está olhando pra tela esperando o resultado, e responder vazio ali
-    // seria a rotina parecendo quebrada.
+    // ── A routine without credit warns once a week, PER PERSON (09/09/2026) ──
+    // Before, every routine run of someone out of credit delivered this same
+    // warning on their channel: 42 warnings in 30 days, across 9 routines.
+    // Anyone with a daily routine got one a day, every day, until topping up.
+    // Silence costs nothing: the gate already blocks the model before any
+    // call, so a silent routine is as cheap as one that warns.
+    // The window is per PERSON, not per routine: someone with 4 routines gets ONE
+    // warning a week, not four. Only routines are affected; in real conversation
+    // (web, Telegram, WhatsApp, e-mail) the warning still goes out at once,
+    // because there the person is waiting and silence would look like a bug.
+    // Applies only to the SCHEDULED run: when the person taps "run now" in the
+    // app they're watching the screen for the result, and an empty reply there
+    // would make the routine look broken.
     if (kind === 'routine' && routineScheduled) {
       const avisados = (await getConfig(ROUTINE_CREDIT_WARN_KEY).catch(() => null)) || {};
       const marca = avisados[userId] || null;
@@ -3030,12 +3030,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     registry.add({name:'jornada_resultado',description:'Registra aceite, recusa ou utilidade relatada da ajuda proposta, somente quando a mensagem atual contém evidência literal. Não confundir sua promessa com resultado, nem aceite com execução.',parameters:{type:'object',properties:{outcome:{type:'string',enum:['accepted','declined','useful_reported']},quote:{type:'string'}},required:['outcome','quote']},run:args=>discoveryStore.outcome(userId,agent.id,discovery.source,args)});
   }
 
-  // AÇÃO NATIVA DO BRAMBS OS (canal `device`): o OS é conversa-primeiro. Quando o
-  // usuário pede pra ABRIR/MOSTRAR/INSTALAR um app, o agente não descreve nem
-  // finge que fez — ele emite uma AÇÃO que o aparelho executa nativamente
-  // (system intent / PackageManager / Play Store). A tool só registra a ação do
-  // turno num holder; o endpoint /api/device/chat devolve `action` junto do
-  // `reply`, e o OS resolve nome→pacote e executa. Só existe no canal device.
+  // NATIVE ACTION on the device channel (an OS/desktop client), chat-first. When
+  // the user asks to OPEN/SHOW/INSTALL an app, the agent neither describes it nor
+  // pretends it did: it emits an ACTION the device runs natively
+  // (system intent / PackageManager / Play Store). The tool only records the turn's
+  // action in a holder; /api/device/chat returns `action` along with `reply`, and
+  // the client maps name→package and runs it. Only exists on the device channel.
   let deviceAction = null;
   if (kind === 'device') {
     registry.add({
@@ -3259,10 +3259,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     for (const t of cTools.filter((t) => t.name !== 'fechar_pedido')) registry.add(t);
     addGated(registry, cTools.filter((t) => t.name === 'fechar_pedido'), thread.id);
   }
-  // Saldo e gasto (consultar_creditos e consultar_gasto no Brambs; só o gasto
-  // em US$ no núcleo): vêm da porta de gasto, no mesmo lugar da lista de sempre
-  // pra não mexer na ordem das ferramentas. Gasto por recorte (Marcos 27/09):
-  // "quanto gastei hoje", "quanto custou essa busca". Ver credit-spend.mjs.
+  // Balance and spend (consultar_creditos and consultar_gasto with a credit
+  // plugin; only USD spend in the core): come from the spend port, in the
+  // usual spot in the list so the tool order doesn't change. Spend by slice
+  // (27/09): "quanto gastei hoje", "quanto custou essa busca". See credit-spend.mjs.
   for (const t of gasto.ferramentas({ userId, appClient, agentId: agent.id, turnId })) registry.add(t);
   // Aviso de mudança na agenda: ligado por padrão; a pessoa desliga (ou religa)
   // conversando. Só aparece
@@ -3450,15 +3450,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Pronto, seu fuso agora é ${saved}. Aí são ${agoraLocal}. Vou usar isso pra datas e eventos.`;
     },
   });
-  // Idioma do usuário: quando ele pedir pra ser atendido em outra língua
+  // User language: when they ask to be served in another language
   // ("fala comigo em inglês", "responde en español", "volta pro português").
-  // Não-gated, mesma natureza do fuso: grava preferência do próprio dono.
+  // Not gated, same nature as the timezone: stores the owner's own preference.
   //
-  // Esta tool é PRÉ-REQUISITO da decisão de carimbar BR nos usuários antigos
-  // (Marcos 51910): carimbar um palpite só é aceitável porque a pessoa tem como
-  // corrigir sozinha, pelos DOIS caminhos, pedindo aqui pro assistente ou no
-  // seletor de Config › Idioma. Se esta tool não existir, o carimbo vira uma
-  // decisão que a pessoa não consegue desfazer conversando, e aí não vale.
+  // This tool is a PREREQUISITE of the decision to stamp BR on older users:
+  // stamping a guess is only acceptable because the person can fix it
+  // themselves, BOTH ways, by asking the assistant here or in the
+  // Config › Idioma selector. Without this tool, the stamp becomes a decision
+  // the person can't undo by talking, and then it isn't acceptable.
   registry.add({
     name: 'definir_meu_idioma',
     description: `Salva o idioma em que o usuário quer ser atendido. Use quando ele pedir pra você falar outra língua (ex: "fala comigo em inglês", "responde en español", "volta pro português"). Idiomas atendidos: ${IDIOMAS_OK.join(', ')}. Vale a partir da PRÓXIMA mensagem (o idioma é lido no começo do turno), então responda esta confirmação já na língua nova. Não chame por conta própria só porque o usuário escreveu numa língua diferente: uma mensagem em outro idioma não é pedido pra trocar a preferência.`,
@@ -3573,10 +3573,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return `Trecho desta mesma conversa${busca ? ` (busca: "${busca}")` : ' (mensagens recentes)'}:\n\n${body}`;
       },
     });
-    // CÓDIGO DE CONVITE: quando o dono pergunta "qual meu código pra convidar
-    // alguém pro Brambs" / "como convido uma pessoa". Devolve o código de 4 dígitos
-    // DELE + quantos convites ainda tem + como a pessoa usa. Escopo: só o próprio
-    // dono (userId travado no servidor). Não-gated: é leitura de dado do próprio dono.
+    // INVITE CODE: when the owner asks "what's my code to invite someone" /
+    // "how do I invite a person". Returns THEIR 4-digit code + how many invites
+    // are left + how the person uses it. Scope: the owner only (userId locked on
+    // the server). Not gated: it reads the owner's own data.
     registry.add({
       name: 'meu_convite',
       description: `Mostra o CÓDIGO DE CONVITE do próprio dono desta conversa pra ele convidar alguém pro ${marca().nome}, junto de quantos convites ainda restam. Use quando ele perguntar "qual meu código de convite", "como convido uma pessoa", "código pra chamar alguém pro ${marca().nome}" e afins. Só devolve dados do próprio dono. Explique também COMO a pessoa convidada usa o código.`,
@@ -3849,14 +3849,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // criada a partir de texto de EXEMPLO/citado (um testemunho de outra pessoa colado
   // na conversa) sem o dono querer de fato (incidente 24/07: um exemplo do Panelinha
   // virou rotina de WhatsApp sem o dono pedir).
-  // Canal de entrega da rotina. 'app' = não empurra em canal nenhum: o texto fica
-  // salvo na thread ⏰ da rotina, dentro do app (é o mesmo 'none' que o banco já
-  // grava desde sempre pra rotina sem entrega — valor existente, não inventado).
-  // Ele existir como VALOR ESCOLHÍVEL é o que permite ao dono PEDIR "entrega só no
-  // app" numa edição: antes, omitir o canal em editar_rotina queria dizer "não
-  // mexe", então não havia como desfazer um WhatsApp. Caso Marcos 09/08→09/09: o
-  // pedido não tinha onde caber no schema, virou texto livre dentro do prompt, a
-  // rotina seguiu disparando no WhatsApp e a tela ainda mostrou ✅.
+  // Routine delivery channel. 'app' = pushes to no channel: the text stays
+  // saved in the routine's ⏰ thread, inside the app (the same 'none' the DB has
+  // always stored for a routine without delivery; an existing value).
+  // Being a CHOOSABLE VALUE is what lets the owner ASK for "deliver only in the
+  // app" in an edit: before, omitting the channel in editar_rotina meant "leave
+  // it", so a WhatsApp delivery couldn't be undone. Case of 09/08→09/09: the
+  // request had nowhere to fit in the schema, became free text in the prompt, the
+  // routine kept firing on WhatsApp and the screen still showed ✅.
   const normalizarCanalRotina = (canal) => {
     const c = String(canal ?? '').toLowerCase().trim();
     if (!c) return { ch: '' };
@@ -4407,7 +4407,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // atuais deste assistente pelas novas (não acumula).
   registry.add({
     name: 'atualizar_sugestoes',
-    description: 'Reescreve o box "Sugestões" da tela inicial do usuário com sugestões novas, concretas e acionáveis. Use quando o usuário pedir pra atualizar/renovar as sugestões, ou quando você tiver base (e-mails, agenda, conversa) pra propor algo mais útil que o que está lá. Substitui as sugestões atuais (não acumula). Passe de 2 a 4 sugestões curtas, cada uma uma ação clara que ele possa tocar (ex: "Responder o e-mail da Renner sobre a reunião de quinta").',
+    description: 'Reescreve o box "Sugestões" da tela inicial do usuário com sugestões novas, concretas e acionáveis. Use quando o usuário pedir pra atualizar/renovar as sugestões, ou quando você tiver base (e-mails, agenda, conversa) pra propor algo mais útil que o que está lá. Substitui as sugestões atuais (não acumula). Passe de 2 a 4 sugestões curtas, cada uma uma ação clara que ele possa tocar (ex: "Responder o e-mail do fornecedor sobre a reunião de quinta").',
     parameters: {
       type: 'object',
       properties: {
@@ -4424,8 +4424,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Box "Sugestões" atualizado com ${list.length} sugestão(ões).`;
     },
   });
-  // Tools que o operador pluga pela porta de ferramentas (no Brambs: sugestão
-  // pro time e Renner). A trava de cada uma fica em ferramentas.vetar().
+  // Tools the operator plugs in through the tools port (e.g. a feedback-to-team
+  // or a store catalog tool). Each one's gate lives in ferramentas.vetar().
   for (const t of ferramentas.doTurno({ userId, agentId: agent.id })) registry.add(t);
   // Consciência da conta: o agente enxerga o que está conectado/ligado (a mesma
   // tela de Conexões que o usuário vê no app) e pode responder sobre isso pela
@@ -4744,42 +4744,42 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Tools de SSH (cofre): gerar_chave_ssh (não-gated) + rodar_no_servidor (gated).
-  // Rodam DE DENTRO do sandbox SP (egress BR, rede interna bloqueada pelo firewall).
-  // sshTools já filtra por sandboxEnabled() + vaultEnabled(); addGated envolve só
-  // a rodar_no_servidor (a de gerar chave passa intacta).
-  // MODO LIVRE (tier avançado, perm_mode 'livre'): quando o agente está em modo
-  // livre E o usuário tem uma máquina conectada (chave SSH no cofre), ele opera
-  // COMO SE estivesse logado nela — um TERMINAL ao vivo, persistente (cwd mantido
-  // entre comandos) e NÃO-gated — em vez de retransmitir comando por comando pelas
-  // tools básicas. Vale INCLUSIVE dentro de um projeto de dev (o dono pode querer
-  // tocar o projeto direto na máquina dele, ex: brambs-os no box AOSP); aí o
-  // terminal ao vivo SUBSTITUI o coding-SSH gated do projeto. Aqui a gente SUPRIME
-  // o toolset básico (rodar_no_servidor + coding-SSH) pra o modelo não ter dois
-  // caminhos sobrepostos; só o gerar_chave_ssh segue (pra conectar outro host).
-  // O risco é assumido pelo dono (é a máquina DELE). Fora do modo livre, tudo
-  // segue como antes (básico gated).
-  // O modo livre agora É a categoria 'super' (não mais um perm_mode que o próprio
-  // agente possa setar via tool). Só liga se o dono marcou a categoria 'super' na
-  // config E existe uma máquina conectada pra ele assumir o shell: um servidor por
-  // SSH (chave no cofre) OU um Brambs Runner online (a máquina local do usuário,
-  // canal outbound). A tool `terminal` é a mesma; o transporte é escolhido lá.
-  // Runner amarrado a ESTE agente? (modo "1 assistente responde", igual à
-  // extensão): o Brambs Runner só entra pra o assistente configurado em
+  // SSH tools (vault): gerar_chave_ssh (not gated) + rodar_no_servidor (gated).
+  // They run FROM INSIDE the sandbox (internal network blocked by the firewall).
+  // sshTools already filters by sandboxEnabled() + vaultEnabled(); addGated wraps
+  // only rodar_no_servidor (the key generator passes untouched).
+  // FREE MODE (advanced tier, perm_mode 'livre'): when the agent is in free
+  // mode AND the user has a connected machine (SSH key in the vault), it works
+  // AS IF logged into it: a live, persistent TERMINAL (cwd kept between
+  // commands) and NOT gated, instead of relaying command by command through
+  // the basic tools. It applies EVEN inside a dev project (the owner may want
+  // to drive the project straight on their machine, e.g. a build server); then
+  // the live terminal REPLACES the project's gated coding-SSH. Here we SUPPRESS
+  // the basic toolset (rodar_no_servidor + coding-SSH) so the model doesn't have
+  // two overlapping paths; only gerar_chave_ssh stays (to connect another host).
+  // The risk is the owner's (it's THEIR machine). Outside free mode, everything
+  // stays as before (basic, gated).
+  // Free mode now IS the 'super' category (no longer a perm_mode the agent
+  // itself can set via a tool). It's on only if the owner checked 'super' in
+  // config AND there's a connected machine to take over the shell: a server via
+  // SSH (key in the vault) OR an online Brambit Runner (the user's local
+  // machine, outbound channel). The `terminal` tool is the same; transport is picked there.
+  // Runner bound to THIS agent? ("1 assistant answers" mode, like the
+  // extension): the Runner only joins for the assistant configured in
   // Conexões. Binding = device_tokens.active_agent_id (runnerBoundAgentId);
-  // unset => primeiro assistente, mesmo default do device-chat. Só resolve a
-  // lista de agentes no caso raro de binding não-setado com runner online.
-  // O opt-in é DIFERENTE por transporte (Marcos 25/08):
-  //  • SSH-in: continua exigindo categoria 'super'. O shell abre num servidor
-  //    conectado, sem confinamento nenhum, e a categoria é o único freio.
-  //  • Runner: o VÍNCULO já É o opt-in. Pra chegar aqui o dono instalou o daemon
-  //    na máquina dele, colou o token, escolheu o modo de escrita (confinado no
-  //    kernel: seatbelt/bwrap) e amarrou UM assistente em Conexões. Exigir
-  //    'super' em cima disso era um 4º consentimento invisível: a tela dizia
-  //    "pronto, esse assistente opera no Runner" e o terminal nunca aparecia.
-  //    Bloqueio duro que FICA: categoria 'grupo' nunca ganha terminal, porque
-  //    grupo roda em canal com várias pessoas e shell na máquina pessoal do dono
-  //    ali não pode.
+  // unset => first assistant, same default as device-chat. The agent list is
+  // only resolved in the rare case of an unset binding with the runner online.
+  // The opt-in DIFFERS per transport (25/08):
+  //  • SSH-in: still requires the 'super' category. The shell opens on a
+  //    connected server with no confinement, and the category is the only brake.
+  //  • Runner: the BINDING already IS the opt-in. To get here the owner installed
+  //    the daemon on their machine, pasted the token, chose the write mode
+  //    (kernel-confined: seatbelt/bwrap) and bound ONE assistant in Conexões.
+  //    Requiring 'super' on top was a 4th invisible consent: the screen said
+  //    "ready, this assistant works on the Runner" and the terminal never showed.
+  //    Hard block that STAYS: the 'grupo' category never gets a terminal, since
+  //    a group runs on a channel with several people and a shell on the owner's
+  //    personal machine can't be there.
   let runnerForThisAgent = false;
   if (agentCategory !== 'grupo' && runnerOnline(userId)) {
     const rb = runnerBoundAgentId(userId);
@@ -4821,28 +4821,28 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // Sandbox (execução de código no container isolado). Suprimido quando o turno
     // mira um app básico (route-guard) pra não dar caminho paralelo ao modelo.
     if (!targetedApp) for (const t of sandboxTools(userId)) registry.add(t);
-    // Servidor/terminal. Dois caminhos possíveis, e eles NÃO miram o mesmo alvo:
-    //  • terminal ao vivo (modo livre): SSH-in num servidor conectado (exige
-    //    categoria 'super') OU a máquina LOCAL do dono pelo Brambs Runner
-    //    (exige só o vínculo em Conexões).
-    //  • coding-SSH: sempre um servidor por SSH.
-    // Livre por SSH SUPRIME o coding-SSH (seria a mesma máquina por dois
-    // caminhos). Livre só pelo Runner NÃO suprime: tirar mataria o acesso ao
-    // servidor de quem amarrou o Runner. Como os dois podem cair no MESMO
-    // sub-agente `codar` (o registry indexa por nome: dois `codar` = o segundo
-    // apaga o primeiro), a montagem do sub é uma só, aqui.
-    // Sem chave no cofre e sem projeto ativo, TODA tool de coding-SSH é impossível:
-    // o transporte é o `sshExec`, que morre em "Você ainda não tem uma chave SSH
-    // criada" antes de tentar qualquer coisa. Deixar essas tools no contexto é
-    // oferecer ao modelo um caminho que só sabe falhar, e é exatamente o que
-    // aconteceu em dois casos (21/07 e 05/09): os dois estavam editando
-    // um app BÁSICO, o modelo pegou `escrever_arquivo` (SSH) em vez de
-    // `escrever_arquivo_do_app` (hosting), e o erro interno de SSH foi parar na
-    // cara de quem só queria mexer no próprio app. Hoje 3 de 96 contas têm chave
-    // conectada; pras outras 93 isso é só superfície de erro (e schema de tool
-    // ocupando contexto). Quem TEM chave não perde absolutamente nada.
-    // `gerar_chave_ssh` fica FORA da trava, senão ninguém conseguiria criar a
-    // primeira chave e o recurso morreria por dependência circular.
+    // Server/terminal. Two possible paths, and they do NOT aim at the same target:
+    //  • live terminal (free mode): SSH-in to a connected server (needs the
+    //    'super' category) OR the owner's LOCAL machine via the Brambit Runner
+    //    (needs only the binding in Connections).
+    //  • coding-SSH: always a server over SSH.
+    // Free mode over SSH SUPPRESSES coding-SSH (it would be the same machine by two
+    // paths). Free mode only via the Runner does NOT: removing it would kill server
+    // access for whoever bound the Runner. Since both can land in the SAME
+    // `codar` sub-agent (the registry indexes by name: two `codar` = the second
+    // erases the first), the sub is assembled once, here.
+    // With no key in the vault and no active project, EVERY coding-SSH tool is
+    // impossible: the transport is `sshExec`, which dies with "you don't have an SSH
+    // key yet" before trying anything. Leaving those tools in context offers the
+    // model a path that can only fail, which is exactly what happened in two
+    // cases (21/07 and 05/09): both were editing a BASIC app, the model took
+    // `escrever_arquivo` (SSH) instead of `escrever_arquivo_do_app` (hosting),
+    // and the internal SSH error landed in front of someone who just wanted to
+    // edit their own app. At the time 3 of 96 accounts had a key connected; for
+    // the other 93 this is just error surface (and tool schema taking up
+    // context). Whoever HAS a key loses nothing at all.
+    // `gerar_chave_ssh` stays OUTSIDE the gate, or nobody could create the
+    // first key and the feature would die of circular dependency.
     const codingSshUsable = hasSshKey || !!activeProject;
     const subLivre = !activeProject && livreActive;
     const subCoding = (!!activeProject || !sshLivre) && !suppressCodingSSH && codingSshUsable && permMode === 'aceitar_edicoes';
@@ -5135,14 +5135,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // (documento, print de conta, passaporte) e pegar a mais recente é escolher um
   // arquivo que ninguém apontou. Ver buscar_produto_por_imagem.
   const turnImageIds = [];
-  // Ids de TODOS os anexos deste turno (imagem E documento), na ordem em que
-  // chegaram. `turnImageIds` não serve pra isso: ele tem uma posição por IMAGEM
-  // (o marcador de history e a busca por imagem contam com esse paralelismo), e
-  // documento não entra lá. Sem esta lista, um PDF que a pessoa anexa fica só no
-  // bucket e nenhuma tool o enxerga: a tool responde "não veio arquivo" e o
-  // modelo inventa uma explicação. Foi o que aconteceu com a eCNH em PDF na
-  // abertura de Conta Brambs (09/09/2026): o nosso código aceita PDF, mas o
-  // arquivo nunca chegava até ele.
+  // Ids of ALL this turn's attachments (image AND document), in arrival order.
+  // `turnImageIds` won't do: it has one slot per IMAGE (the history marker and
+  // image search rely on that parallelism), and documents don't go there.
+  // Without this list, a PDF the person attaches stays only in the bucket and
+  // no tool sees it: the tool says "no file came" and the model makes up an
+  // explanation. That's what happened with a PDF driver's license when opening
+  // a managed payment account (09/09/2026): our code accepts PDF, but the
+  // file never reached it.
   const turnAttachmentIds = [...(opts.confirmationRestore?.source?.attachmentIds || [])];
   if (confirmationSession) confirmationSession.captureSource = () => ({ attachmentIds:[...turnAttachmentIds], channel:kind });
   // Legendas das imagens deste turno. A imagem em si NÃO fica no history (ver o
@@ -5516,14 +5516,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Documento "${filename}" gerado e já enviado ao usuário no chat. Responda em uma frase curta (não cole o conteúdo de novo).`;
     },
   });
-  // ── Trazer um ARQUIVO da máquina do dono (Brambs Runner) ────────────────────
-  // Existe pra fechar o buraco que empurrava pra gambiarra: o canal `terminal` só
-  // devolve TEXTO e com teto, então mover um binário (foto, PDF, zip) da máquina
-  // dele não tinha caminho interno nenhum. Sem esta tool, o jeito "criativo" era
-  // subir o arquivo num host de terceiro pra buscar de volta — ou seja, vazamento.
-  // Aqui os bytes vão da máquina do dono direto pro NOSSO S3 (saveBlob) e viram
-  // anexo no chat. O conteúdo NUNCA entra no contexto do modelo: a tool devolve
-  // só metadado (nome, tamanho, tipo).
+  // ── Fetch a FILE from the owner's machine (Brambit Runner) ──────────────────
+  // Closes the hole that pushed toward hacks: the `terminal` channel only returns
+  // TEXT, capped, so moving a binary (photo, PDF, zip) off their machine had
+  // no internal path. Without this tool, the "creative" way was to upload the
+  // file to a third-party host to fetch it back, i.e. a leak.
+  // Here the bytes go from the owner's machine straight to OUR S3 (saveBlob) and
+  // become a chat attachment. The content NEVER enters the model's context: the
+  // tool returns only metadata (name, size, type).
   if (runnerForThisAgent) registry.add({
     name: 'pegar_arquivo_da_maquina',
     description:
@@ -5642,8 +5642,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       // Âncora entregue ao worker como URL S3 pré-assinada (HTTPS, caduca em 15min).
       const imageUrl = presignGet(lk.anchor_key, 900);
       if (!imageUrl) return 'ERRO: não consegui preparar a imagem base do vídeo. Avise que houve um problema e tente de novo daqui a pouco.';
-      // Fotos extras de rosto (até 2): melhoram a reconstrução dos traços. Também
-      // pré-assinadas; entram como face_ref_urls no worker (contrato Yume 07/08).
+      // Extra face photos (up to 2): improve feature reconstruction. Also
+      // presigned; sent as face_ref_urls to the worker (contract of 07/08).
       const faceRefUrls = [lk.face2_key, lk.face3_key]
         .filter(Boolean).map((k) => presignGet(k, 900)).filter(Boolean);
       // Rota de voz, por prioridade:
@@ -5838,12 +5838,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           },
         },
         run: async ({ id } = {}) => {
-          // Esta tool manda a foto do usuário pra FORA (URL temporária pública que
-          // o Google Lens baixa). Por isso o alvo tem que ser explícito: ou a foto
-          // que veio COM esta mensagem, ou um id que o usuário apontou. O antigo
-          // "pega a mais recente da biblioteca" mandava pra terceiro um arquivo que
-          // ninguém escolheu: a biblioteca acumula tudo que a pessoa já enviou um
-          // dia, inclusive documento. Sem alvo explícito, recusa. (Marcos, 27/08/2026)
+          // This tool sends the user's photo OUTSIDE (a temporary public URL that
+          // Google Lens downloads). So the target must be explicit: either the photo
+          // that came WITH this message, or an id the user pointed to. The old
+          // "take the latest from the library" sent a third party a file nobody
+          // chose: the library piles up everything the person ever sent,
+          // documents included. No explicit target, refuse. (27/08/2026)
           let asset;
           if (id != null && String(id).trim()) asset = await getMediaAsset(userId, id);
           // A lista tem uma posição por imagem do turno, com buraco onde o
@@ -6264,17 +6264,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[router] onboard=barato thread=${thread.id}`);
     provider = makeSubagentProvider();
   } else if (usePrimaryLLM && hasImages) {
-    // Turno com FOTO. Continua fora do primário quando o primário é só-texto (o
-    // GLM-5.2 devolvia 400 multimodal_processing_failed), mas o destino mudou:
-    // vai pro GEMINI, o MESMO modelo do texto, e não mais pro GPT-5.4 mini
-    // (decisão do Marcos 08/09, medição em projetos/custo-por-turno-franquia.md
-    // §3-D). Duas razões, as duas medidas: o GPT leu PIOR os prints de uma
-    // usuária real (4 de 7 contra 6 de 7 do Gemini, reproduzindo os dois erros
-    // que ela recebeu em produção) e custava MAIS, porque trocar de provider no
-    // meio da thread joga fora o prefixo cacheado (~70k tokens) e reprocessa
-    // tudo no preço cheio — ~62 créditos por foto só de perda de cache, além de
-    // ~36% mais token de entrada pela mesma imagem.
-    // O caminho de foto crua NÃO morre: ele é este, só troca quem lê.
+    // Turn with a PHOTO. Still off the primary when the primary is text-only
+    // (GLM-5.2 returned 400 multimodal_processing_failed), but the target changed:
+    // it goes to GEMINI, the SAME model as text, no longer to GPT-5.4 mini
+    // (decided 08/09, after measuring cost per turn). Two reasons, both
+    // measured: GPT read a real user's screenshots WORSE (4 of 7 vs 6 of 7
+    // for Gemini, reproducing the two errors she got in production) and
+    // cost MORE, because switching provider mid-thread throws away the cached
+    // prefix (~70k tokens) and reprocesses everything at full price: ~62
+    // credits per photo in cache loss alone, plus ~36% more input tokens for
+    // the same image.
+    // The raw photo path does NOT die: it's this one, only the reader changes.
     provider = makeVisionProvider({ maxOut: 32768 });
     console.log(`[router] vision=${modelosCfg ? provider.name : primaryIsTogetherFlash ? TOGETHER_FLASH_DEFAULT : 'gemini'} thread=${thread.id}`);
     buscaNativa = !modelosCfg && !primaryIsTogetherFlash && geminiEnabled(); // Together, modelos.yaml and their fallbacks use tool-based search.
@@ -6313,12 +6313,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     provider = makeGeminiPrimary({ maxOut: 32768 });
     buscaNativa = true; // makeGemini({ search: true })
   } else if (usePrimaryLLM) {
-    // UM modelo só pro turno do usuário: DeepSeek V4 Pro 0813 na Together (decisão
-    // do Marcos, 31/08). O roteador de tier (pickPrimaryTier) SAIU do caminho: ele
-    // existia pra escolher entre dois modelos (barato x robusto) e não há mais dois.
-    // A função continua em models.mjs, intacta, pra ser fácil voltar atrás.
-    // O teto de saída já é 32k por padrão (PRIMARY_MAX_OUT), o que resolve de vez o
-    // truncamento de turno que gera arquivo inteiro (caso de 19/08).
+    // ONE model for the user's turn: DeepSeek V4 Pro 0813 on Together (decided
+    // 31/08). The tier router (pickPrimaryTier) LEFT the path: it existed to
+    // pick between two models (cheap x robust) and there aren't two anymore.
+    // The function stays in models.mjs, intact, so it's easy to go back.
+    // The output cap is already 32k by default (PRIMARY_MAX_OUT), which settles
+    // truncation of turns that generate a whole file (case of 19/08).
     console.log(`[router] primary=${PRIMARY_MODEL} thread=${thread.id} perm=${permMode}`);
     provider = makePrimaryProvider('robusto', appsManual ? { maxOut: 32768 } : {});
   } else {
@@ -6458,13 +6458,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Contador de chamadas de tools deste turno (uma linha por tool → nº de vezes).
   // Persistido depois do turno pra visibilidade no /metrics; nunca afeta o loop.
   const toolCounts = Object.create(null);
-  // Modo livre (perm=livre) roda skills longas e trabalho de shell multi-passo
-  // (criar cliente, buildar APK) que estoura o teto padrão de 22 — sobe pra 40
-  // (Marcos msg 4178). Seguro por causa do freio anti-loop do core (chamada
-  // idêntica repetida = corte). Fora disso, mantém o teto normal.
-  // (O build de app tinha o mesmo teto de 40 aqui, pendurado numa heurística de
-  // texto que errava; agora ele roda no sub-agente `construir_app`, que já nasce
-  // com 40 passos SEMPRE, inclusive nas continuações. Ver roteamento-modelo-dsh.md.)
+  // Free mode (perm=livre) runs long skills and multi-step shell work
+  // (create a client, build an APK) that blows the default cap of 22, so it
+  // goes up to 40. Safe because of the core's anti-loop brake (an identical
+  // repeated call = cut). Otherwise, the normal cap stays.
+  // (App builds had the same 40 cap here, hung on a text heuristic that
+  // misfired; now they run in the `construir_app` sub-agent, which always
+  // starts with 40 steps, continuations included.)
   const effectiveMaxSteps = livreActive ? Math.max(maxSteps, 40) : maxSteps;
   const interjecoes = [];
   const appBuildJournal = createAppBuildJournal({ language:idiomaResposta, userRequest:message, failedPublication:confirmedToolLog.some(c => c.name === 'publicar_sistema'), publicationError:confirmedToolLog.find(c => c.name === 'publicar_sistema')?.usuario || '' });
@@ -6575,12 +6575,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (ev?.type === 'loop_break') {
         console.log(`[loop_break] thread=${thread.id} agent=${agent.id} step=${ev.step}/${ev.steps} tool=${ev.tool} argsLen=${ev.argsLen} args=${maskSecrets(String(ev.args || '').replace(/\s+/g, ' '))}`);
       }
-      // Feedback ao vivo: posta no canal cada comando assim que o modelo o
-      // dispara, pra o usuário ver o que está rodando num turno longo e não
-      // achar que travou (Marcos msg 4182). Vale pro 'terminal' do modo livre
-      // (super) E pras tools de shell/código de um agente 'grupo'. Só quando o
-      // canal fornece onProgress (Slack). Fire-and-forget, nunca derruba o
-      // turno; mascara segredo antes de mostrar.
+      // Live feedback: posts each command to the channel as soon as the model
+      // fires it, so the user sees what's running in a long turn and doesn't
+      // think it froze. Applies to free mode's 'terminal' (super) AND to a
+      // 'grupo' agent's shell/code tools. Only when the channel provides
+      // onProgress (Slack). Fire-and-forget, never breaks the turn; masks
+      // secrets before showing.
       if (onProgress && ev?.type === 'tool_call' && ev.name && (livreActive || agentCategory === 'grupo')) {
         const field = NARRATE_CMD_FIELD[ev.name];
         const raw = field ? String(ev.args?.[field] || '').trim() : '';
@@ -6592,23 +6592,23 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     },
   });
-  // ── FREIO DE FUNDAMENTAÇÃO (grounding-guard.mjs) ──────────────────────────
-  // O recibo de ação responde "a ação aconteceu?". Este responde a pergunta que
-  // ficava sem dono: "o fato afirmado foi CONSULTADO?". Cupom, link, nome de
-  // fonte, preço apresentado como pesquisado, saldo do dono e conteúdo de anexo
-  // só podem vir de uma saída de ferramenta DESTE turno ou do que o dono
-  // escreveu; não vindo de lugar nenhum, a plataforma não tem base pra entregar
-  // aquilo como fato. Nasceu de cinco casos reais de 18/09/2026 em que o
-  // assistente afirmou saldo, preço, cupom, link e fonte sem nenhuma consulta.
+  // ── FREIO DE FUNDAMENTAÇÃO / grounding brake (grounding-guard.mjs) ────────
+  // The action receipt answers "did the action happen?". This one answers the
+  // question nobody owned: "was the stated fact LOOKED UP?". Coupon, link,
+  // source name, price presented as researched, the owner's balance and
+  // attachment content can only come from a tool output of THIS turn or from
+  // what the owner wrote; coming from nowhere, the platform has no basis to
+  // deliver it as fact. Born from five real cases on 18/09/2026 where the
+  // assistant stated balance, price, coupon, link and source with no lookup.
   //
-  // Decisão do Marcos (18/09): não basta marcar. Pegou, REFAZ o turno uma vez
-  // nomeando a ferramenta que faltou, porque quem perde com o dado inventado é o
-  // usuário, e apagar o trecho o deixa sem resposta. Só se a segunda passada
-  // também não produzir origem é que a linha sem base sai do texto, com aviso.
+  // Decision (18/09): flagging isn't enough. When caught, REDO the turn once
+  // naming the missing tool, because the user is who loses with made-up data,
+  // and deleting the passage leaves them without an answer. Only if the second
+  // pass also yields no origin does the baseless line leave the text, with a notice.
   //
-  // Roda AQUI, no texto cru do modelo, e não lá embaixo: o fontesEConferencia
-  // acrescenta um bloco "Fontes:" legítimo, e o verificador acusaria o que a
-  // própria plataforma escreveu.
+  // Runs HERE, on the model's raw text, not further down: fontesEConferencia
+  // appends a legitimate "Fontes:" block, and the checker would flag what the
+  // platform itself wrote.
   let groundingFindings = [];
   let groundingDesfecho = null;
   if (text && !approvedAppContinuation && process.env.FREIO_FUNDAMENTACAO !== '0') {
@@ -6658,8 +6658,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         }
         console.log(`[freio_fundamentacao] thread=${thread.id} desfecho=${groundingDesfecho}`);
         diag.corte('fundamentacao', diagAntes, text, { desfecho: groundingDesfecho, achados: diagIniciais, restantes: groundingDesfecho === 'removido' ? groundingFindings : [], fontesNativas: fontesGrounding || [] });
-        // Registro (opção C, Marcos 18/09): sem log não dá pra saber se o freio
-        // acerta o alvo nem quanto o problema aparece. Nunca derruba o turno.
+        // Logging (option C, 18/09): without a log there's no telling whether the
+        // brake hits the target or how often the problem shows. Never breaks the turn.
         logGroundingBrakes(groundingFindings, {
           userId, agentId: agent.id, threadId: thread.id,
           origem: kind === 'routine' ? 'rotina' : 'chat',
@@ -6760,13 +6760,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // como aviso espontâneo no corpo que será entregue ao usuário; ele continua
   // disponível para diagnóstico e explicação sob demanda.
   text = curationResult ? text : searchCoverage.finish(text, idiomaResposta, {suppressEmptyEmailSources: routineNoNews});
-  // Recibos e confirmações reais entram aqui pelo actionJournal. Oferta sem
-  // pedido, papel de "time do Brambs" e apelido inventado são regra do prompt:
-  // os cortes por regex que existiam aqui apagavam pergunta de confirmação e
-  // dado pedido pelo dono (29/09/2026).
-  // Mostra o cartão da proposta realmente guardada pelo gate, incluindo os
-  // detalhes preparados por tools financeiras. A confirmação não pode aprovar
-  // uma paráfrase da LLM que omitiu data, recorrência ou destinatário.
+  // Real receipts and confirmations come in here via actionJournal. Unasked
+  // offers, a "platform team" persona and invented nicknames are prompt rules:
+  // the regex cuts that lived here erased confirmation questions and data the
+  // owner asked for (29/09/2026).
+  // Shows the card of the proposal the gate really stored, including details
+  // prepared by financial tools. The confirmation can't approve an LLM
+  // paraphrase that left out the date, recurrence or recipient.
   const deterministicConfirmation = confirmationSession
     ? proposalPresentation(confirmationSession.pending().filter(p => confirmationSession.createdIds.has(p.id)))
     : peekPending(thread.id)?.confirmationText;
@@ -6885,13 +6885,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const { history, summary, compacted, droppedTurns, leanedTok } = await compactIfNeeded({
     messages, prevSummary: thread.summary || '', onUsage: (u) => compactUsages.push(u),
   });
-  // A chamada de resumo da compactação entra no ledger como as outras, com kind
-  // próprio: sem isso ela era gasto real que não aparecia em nenhuma linha.
-  // Medida sim, cobrada não: a compactação é decisão nossa de engenharia, não
-  // consumo que o usuário pediu, então o custo fica como despesa e o crédito
-  // dele não é tocado (decisão do Marcos, 09/09/2026, com os números de 7 dias
-  // na mesa: 72 compactações, 17 dos 78 usuários ativos, até 10% do consumo do
-  // período de um usuário leve). Revisitar com o dado do kind='compact'.
+  // The compaction summary call enters the ledger like the others, with its own
+  // kind: without that it was real spend that showed up in no row.
+  // Measured, not billed: compaction is an engineering decision of ours, not
+  // usage the user asked for, so the cost stays as expense and their credit
+  // is untouched (decided 09/09/2026, with 7 days of numbers on the table:
+  // 72 compactions, 17 of 78 active users, up to 10% of a light user's
+  // usage for the period). Revisit with the kind='compact' data.
   if (compactUsages.length) {
     await recordUsages(
       compactUsages,
@@ -6993,16 +6993,16 @@ const waHandler = createWhatsAppHandler({
   }),
   loadAgent: getAgentOwned,
   db: { getWhatsAppLink, listAgents, setWhatsAppActiveAgent, recordWaStatus, saveWaMsgRef, getWaMsgRef, touchWaInbound, claimWaMsg, consumeWaClaim },
-  aoReprovar: (d) => eventos.emitir('whatsapp_reprovada', d), // no Brambs, a campanha com esse wamid vira failed (eventos-brambs.mjs)
+  aoReprovar: (d) => eventos.emitir('whatsapp_reprovada', d), // e.g. a plugin marks the campaign send with this wamid as failed
   transcribe: transcreverDoCanal,
   // Entrega de mídia: no modo S3, byte-upload (sem link público); no disco, link.
   getMedia: getMediaBytes,
 });
 
-// Canal E-mail: caixa única (assistente@brambs.com.br) lida por IMAP. Roteia
-// pelo REMETENTE (= e-mail de cadastro) -> usuário; assistente pelo nome escrito
-// no assunto/corpo; thread pelo assunto normalizado. Responde por SMTP como o
-// assistente. Poller sobe no boot.
+// Email channel: a single inbox (e.g. assistente@example.com) read over IMAP.
+// Routes by SENDER (= sign-up email) -> user; assistant by the name written in
+// subject/body; thread by normalized subject. Replies over SMTP as the
+// assistant. The poller starts at boot.
 const emailPoller = createEmailPoller({
   runConversation: async (agent, userId, message, threadTitle) => {
     const thread = await getOrCreateThreadByTitle({
@@ -7020,10 +7020,10 @@ const emailPoller = createEmailPoller({
   unclaimEmail,
 });
 
-// Canal Slack: app inscrito num workspace. Menção ao app (app_mention) ou DM
-// (message.im) roteia pelo e-mail do usuário do Slack -> usuário do Brambs (mesmo
-// caminho do e-mail); o assistente é escolhido dentro do chat (sticky por pessoa,
-// trocável por @nome / "menu"). Thread "Slack" isolada por agente.
+// Slack channel: app installed in a workspace. An app mention (app_mention) or DM
+// (message.im) routes by the Slack user's email -> platform user (same path as
+// email); the assistant is picked inside the chat (sticky per person,
+// switchable via @name / "menu"). Isolated "Slack" thread per agent.
 const slackHandler = createSlackHandler({
   runConversation: async (agent, userId, message, onProgress) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'Slack' });
@@ -7216,8 +7216,8 @@ async function pollVideoJobs() {
         continue;
       }
       if (key) {
-        // Nome curto: só a cena (antes do " — fala/áudio"), 1ª frase, ~40 chars.
-        // Antes salvava o prompt inteiro como nome, ficava enorme (Marcos msg 3282).
+        // Short name: just the scene (before " — fala/áudio"), 1st sentence, ~40 chars.
+        // It used to save the whole prompt as the name, which got huge.
         const cena = String(job.prompt || '').split(' — ')[0].replace(/\s+/g, ' ').trim();
         let nome = cena ? cena.slice(0, 40).trim() : '';
         if (cena.length > 40) nome += '…';
@@ -7336,16 +7336,16 @@ async function whatsappProse(target, text) {
 }
 const firstNameOf = (n) => (String(n || '').trim().split(/\s+/)[0] || '');
 
-// Quem FALA numa campanha tem que ser quem vai RECEBER a resposta.
-// No WhatsApp o número é único e o inbound cai sempre no assistente ATIVO do
-// número (whatsapp_links.active_agent_id), cada um com a própria thread
-// 'WhatsApp'. Se a campanha falar em nome de outro assistente, a pessoa
-// responde e a resposta chega num assistente que nunca viu a oferta (foi o que
-// aconteceu no teste do Marcos: escreveu um assistente, respondeu outro, que emendou
-// no assunto anterior dele). Então, no WhatsApp, quem escreve é o assistente já
-// ativo no canal; não trocamos o ativo da pessoa (decisão do Marcos 01/09, "B").
-// Telegram já resolve isso sozinho (getTelegramBotForDelivery prefere o bot do
-// próprio agente) e o e-mail threadeia por assunto, então só o WhatsApp muda.
+// Whoever SPEAKS in a campaign must be whoever will RECEIVE the reply.
+// On WhatsApp the number is unique and inbound always lands on the number's
+// ACTIVE assistant (whatsapp_links.active_agent_id), each with its own
+// 'WhatsApp' thread. If the campaign speaks for another assistant, the person
+// replies and the reply reaches an assistant that never saw the offer (it
+// happened in a test: one assistant wrote, another answered, picking up
+// its previous topic). So on WhatsApp the writer is the assistant already
+// active on the channel; we don't switch the person's active one (decided 01/09, "B").
+// Telegram solves this on its own (getTelegramBotForDelivery prefers the
+// agent's own bot) and e-mail threads by subject, so only WhatsApp changes.
 async function agentForLifecycleChannel(userId, channel, agentId, agentName) {
   const keep = { agent_id: agentId, agent_name: agentName };
   if (channel !== 'whatsapp') return keep;
@@ -7583,7 +7583,7 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
   );
   lines.push(
     '',
-    'You have a long-term MEMORY about the user, shared among all their assistants. It is a WIKI: the "perfil" page is the SUMMARY (only what defines the person and is useful in almost every conversation; it has a size cap and already comes with an index of the other pages) and the DETAIL lives in area pages (comunicacao, preferencias, background, rotina, rede, objetivos, projetos, trabalho, saude, alimentacao, treinos, financas, casa, compras, notas). A fact about a specific person goes on one page per person, in the format "pessoa-name" (e.g. "pessoa-laura"), not in a generic list. Look things up with memoria_listar/memoria_ler/memoria_buscar. To SAVE: a fact that has ONE current value and may change (where they live, company, job title, size, main goal) goes through memoria_atualizar, with a stable key (topic); if the key already appears under "Fatos com chave", reuse it and the old value is replaced automatically, instead of both living side by side. Everything else goes through memoria_anotar (one fact per operation: add for a new fact, corrigir when the new one contradicts an old line), passing the target page; neither of them rewrites the page. The "perfil" page is also maintained automatically, so do not recreate it. The "atualizacoes" page is an automatic log of what changed: you do not write to it. memoria_escrever is only for CREATING a new page or for rewriting one when the owner asks; durable facts, nothing ephemeral.',
+    'You have a long-term MEMORY about the user, shared among all their assistants. It is a WIKI: the "perfil" page is the SUMMARY (only what defines the person and is useful in almost every conversation; it has a size cap and already comes with an index of the other pages) and the DETAIL lives in area pages (comunicacao, preferencias, background, rotina, rede, objetivos, projetos, trabalho, saude, alimentacao, treinos, financas, casa, compras, notas). A fact about a specific person goes on one page per person, in the format "pessoa-name" (e.g. "pessoa-ana"), not in a generic list. Look things up with memoria_listar/memoria_ler/memoria_buscar. To SAVE: a fact that has ONE current value and may change (where they live, company, job title, size, main goal) goes through memoria_atualizar, with a stable key (topic); if the key already appears under "Fatos com chave", reuse it and the old value is replaced automatically, instead of both living side by side. Everything else goes through memoria_anotar (one fact per operation: add for a new fact, corrigir when the new one contradicts an old line), passing the target page; neither of them rewrites the page. The "perfil" page is also maintained automatically, so do not recreate it. The "atualizacoes" page is an automatic log of what changed: you do not write to it. memoria_escrever is only for CREATING a new page or for rewriting one when the owner asks; durable facts, nothing ephemeral.',
   );
   lines.push(
     '',
@@ -8046,7 +8046,7 @@ function composeExtPageContext(page) {
       'VOCÊ AGE EM MÚLTIPLOS PASSOS. Depois de cada bloco de ações, a página é relida e você',
       'recebe o novo contexto (URL, texto e ELEMENTOS atualizados). Continue emitindo blocos de',
       'ações, um passo de cada vez, até concluir o objetivo. Se precisa ir para outro site',
-      '(ex.: o usuário está na Renner mas pediu voo na Latam), primeiro faça um "goto" para o site',
+      '(ex.: o usuário está numa loja de roupas mas pediu um voo), primeiro faça um "goto" para o site',
       'certo; no passo seguinte, com os elementos já carregados, preencha e busque. NÃO invente',
       'ids de uma página que ainda não foi carregada — navegue primeiro e aja no próximo passo.',
       'Quando o objetivo estiver concluído (ou se for só uma pergunta/resumo/explicação),',
@@ -8179,16 +8179,16 @@ setInterval(() => {
   for (const [k, exp] of appleNonces) if (now > exp) appleNonces.delete(k);
 }, 5 * 60_000).unref();
 
-// Autorização da Apple já verificada, esperando a pessoa dizer o que fazer com
-// ela. Existe por causa de um caso que não tem como adivinhar: ID Apple que a
-// gente nunca viu, com e-mail de relay (que não casa com conta nenhuma, porque é
-// exclusivo deste app). Pode ser gente nova OU alguém que já usa o Brambs por
-// e-mail/Google. Criar conta na hora é o que produz a conta duplicada e vazia;
-// então guardamos a autorização aqui e perguntamos.
+// An already verified Apple authorization, waiting for the person to say what
+// to do with it. Exists for a case we can't guess: an Apple ID we've never
+// seen, with a relay email (which matches no account, since it's unique to
+// this app). Could be someone new OR someone already using the app via
+// email/Google. Creating the account right away produces a duplicate, empty
+// account; so we keep the authorization here and ask.
 //
-// Guardar o resultado JÁ VERIFICADO — em vez de mandar o app autorizar de novo
-// depois — é o que evita um segundo Face ID no meio do fluxo. O identity token
-// não é guardado, só o que ele provou. 10 min: tempo de entrar na conta antiga.
+// Keeping the ALREADY VERIFIED result, instead of making the app authorize again
+// later, is what avoids a second Face ID mid-flow. The identity token isn't
+// stored, only what it proved. 10 min: time to log into the old account.
 const applePendings = new Map(); // chave -> { exp, sub, email, isPrivateEmail, refreshToken, fullName }
 function putApplePending(dados) {
   const chave = newToken();
@@ -8206,10 +8206,10 @@ setInterval(() => {
   for (const [k, p] of applePendings) if (now > p.exp) applePendings.delete(k);
 }, 5 * 60_000).unref();
 
-// Aviso proativo de mudança na agenda (Marcos 27/09): a cada 10 min compara os
-// próximos dias da agenda de todo mundo com agenda conectada com a foto anterior e avisa, no canal
-// da pessoa, o que OUTRA pessoa remarcou, mudou de local ou cancelou. Ligado por
-// padrão; a pessoa desliga pela tool aviso_mudanca_agenda; CALENDAR_WATCH=0 desliga o ciclo todo.
+// Proactive calendar change notice (27/09): every 10 min compares the next days of
+// everyone with a connected calendar against the previous snapshot and tells the person,
+// on their channel, what SOMEONE ELSE rescheduled, moved or cancelled. On by
+// default; the person turns it off via aviso_mudanca_agenda; CALENDAR_WATCH=0 stops the loop.
 if (CALENDAR_WATCH_ON) {
   const calendarWatchTick = () => calendarWatch.tick()
     .then((r) => { if (r?.avisos) console.log(`[calendar-watch] avisos: ${r.avisos}`); })
@@ -8238,8 +8238,8 @@ async function purgeUser(u) {
     settle: settleMediaDeletion,
     onErro: (e, k) => console.error(`[purge] user ${u.id} key ${k}:`, e?.message ?? e),
   });
-  // Última chance de quem instala encerrar o que a conta tem lá fora: depois do
-  // DELETE não sobra o id pra achar (no Brambs, assinatura que ainda cobra).
+  // Last chance for the installer to close what the account has outside: after
+  // the DELETE no id is left to find it (e.g. a subscription still charging).
   await eventos.emitir('exclusao_final', { userId: u.id });
   await gasto.apagarConta(u.id);
   await hardDeleteUser(u.id);
@@ -8324,36 +8324,36 @@ function clientIp(req) {
   return req.socket?.remoteAddress || 'unknown';
 }
 
-// Palpite de IDIOMA a partir do Accept-Language desta requisição, e SÓ idioma.
-// A regra de parsing está em locale.mjs (pura, testada em locale.test.mjs).
+// LANGUAGE guess from this request's Accept-Language, and ONLY language.
+// The parsing rule lives in locale.mjs (pure, tested in locale.test.mjs).
 //
-// `localeDoAcceptLanguage` também devolve a região da tag ('es-AR' -> 'AR'),
-// porque é isso que a tag literalmente diz. Mas região de tag de idioma NÃO é
-// evidência de onde a pessoa mora: brasileiro com navegador em inglês existe
-// aos montes, e 'es-AR' pode ser um argentino morando aqui. País manda em
-// cobrança (USD fora do Brasil) e em disponibilidade de recurso (Asaas só no
-// Brasil), decisões que não descansam em palpite.
+// `localeDoAcceptLanguage` also returns the tag's region ('es-AR' -> 'AR'),
+// because that's what the tag literally says. But a language tag's region is
+// NOT evidence of where the person lives: Brazilians with English browsers are
+// plenty, and 'es-AR' may be an Argentine living here. Country drives billing
+// (USD outside Brazil) and feature availability (Asaas only in Brazil),
+// decisions that can't rest on a guess.
 //
-// Regra do Marcos (51918): SEM EVIDÊNCIA, PAÍS FICA NULL. Evidência é CEP ou
-// CPF/CNPJ, que a pessoa dá quando compra ou abre Conta Brambs. Até lá o país é
-// desconhecido, e o gate do Asaas já trata desconhecido como "pode ser Brasil"
-// (`paisElegivelAsaas`), então ninguém perde recurso por isso.
+// Rule: NO EVIDENCE, COUNTRY STAYS NULL. Evidence is a CEP or CPF/CNPJ,
+// given when the person buys or opens a managed payment account. Until then the
+// country is unknown, and the Asaas gate already treats unknown as "may be
+// Brazil" (`paisElegivelAsaas`), so nobody loses a feature over it.
 const idiomaDoHeader = (req) => ({ language: localeDoAcceptLanguage(req.headers['accept-language']).language });
 
-// ── Idioma do SITE (o seletor do rodapé) ────────────────────────────────────
-// Guardado só num cookie, e PROPOSITALMENTE separado de `users.language`. São
-// duas escolhas diferentes (regra do Marcos, 08/09/2026):
-//   • rodapé  -> a língua da TELA (site);
-//   • config. -> a língua do SISTEMA (a conversa com a IA).
-// Quem lê o site em inglês mas tem a conta em português continua conversando em
-// português: a diretriz de idioma do prompt sai de `users.language`, que este
-// cookie não encosta. O caminho contrário também vale: mudar em configurações
-// sincroniza o cookie (ver POST /api/prefs/idioma), senão as duas telas ficariam
-// discordando sem a pessoa entender por quê.
+// ── SITE language (the footer selector) ─────────────────────────────────────
+// Kept only in a cookie, and DELIBERATELY separate from `users.language`. They
+// are two different choices (rule of 08/09/2026):
+//   • footer  -> the SCREEN language (site);
+//   • settings -> the SYSTEM language (the conversation with the AI).
+// Someone reading the site in English with a Portuguese account keeps chatting
+// in Portuguese: the prompt's language directive comes from `users.language`,
+// which this cookie doesn't touch. The reverse holds too: changing settings
+// syncs the cookie (see POST /api/prefs/idioma), or the two screens would
+// disagree without the person understanding why.
 //
-// HttpOnly como todo cookie nosso (checklist CASA): nada de JS precisa ler isto,
-// porque a página já chega traduzida do servidor e o estado do botão vem no
-// atributo `data-idioma` que o sendHtml preenche.
+// HttpOnly like all our cookies (CASA checklist): no JS needs to read it,
+// because the page already arrives translated from the server and the button
+// state comes in the `data-idioma` attribute that sendHtml fills.
 const COOKIE_IDIOMA = 'sidioma';
 const idiomaDoCookie = (req) => {
   const v = readCookie(req, COOKIE_IDIOMA);
@@ -8383,12 +8383,12 @@ function isWebhookPath(pathname) {
     // autenticada por Bearer (token de sessão), não por cookie, então o vetor de
     // CSRF (cookie enviado automaticamente) não existe aqui.
     || pathname.startsWith('/api/ext/')
-    // Chat do device (Brambs OS): autenticado por Bearer de device, não por cookie.
-    // A gestão dos tokens (/api/device/tokens*) segue exigindo login e NÃO entra aqui.
+    // Device chat (OS/desktop client): authenticated by device Bearer, not cookie.
+    // Token management (/api/device/tokens*) still requires login and is NOT here.
     || pathname === '/api/device/chat'
-    // Canal do Brambs Runner: o daemon na máquina do usuário disca (outbound) e
-    // é autenticado por Bearer de device, sem cookie -> sem vetor de CSRF. A
-    // gestão dos tokens segue em /api/device/tokens* (exige login).
+    // Brambit Runner channel: the daemon on the user's machine dials out and is
+    // authenticated by device Bearer, no cookie -> no CSRF vector. Token
+    // management stays in /api/device/tokens* (requires login).
     || pathname.startsWith('/api/runner/')
     // Telemetria do App Mobile: o app disca (outbound) reportando os próprios
     // erros de JS, autenticado por Bearer de app (env), sem cookie -> sem CSRF.
@@ -8581,13 +8581,13 @@ const GA_SCRIPT_SRC = 'https://www.googletagmanager.com';
 const GA_TRANSPORT_SRC =
   'https://www.google-analytics.com https://*.google-analytics.com '
   + 'https://*.analytics.google.com https://*.googletagmanager.com';
-// Google Ads: conversão de CADASTRO (Marcos 02/09, OK explícito pra ampliar).
-// Hosts recomendados pelo próprio Google em
-// developers.google.com/tag-platform/security/guides/csp; o `<TLD>` de lá é
-// google.com.br no nosso caso (CSP não aceita curinga à direita do host).
-// Isso mete o doubleclick no CSP, que estava fora de propósito: o alcance é
-// só o ping de conversão do tag (não há remarketing/Signals ligado no painel).
-// Se um dia sair o Ads, tirar as duas constantes junto com o gtag do AW-.
+// Google Ads: SIGN-UP conversion (02/09, CSP widened on purpose).
+// Hosts recommended by Google itself at
+// developers.google.com/tag-platform/security/guides/csp; their `<TLD>` is
+// google.com.br in our case (CSP doesn't accept a wildcard right of the host).
+// This puts doubleclick into the CSP, where it was kept out on purpose: the
+// reach is only the tag's conversion ping (no remarketing/Signals enabled).
+// If Ads ever goes, remove both constants along with the AW- gtag.
 const ADS_SCRIPT_SRC = 'https://www.googleadservices.com https://www.google.com '
   + 'https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net';
 const ADS_PIXEL_SRC = 'https://www.googleadservices.com https://www.google.com '
@@ -8788,13 +8788,13 @@ async function atenderRequest(req, res) {
       } else if (code) {
         user = await criarConta(createReferredUserByCode, { name, email: em, passwordHash: hashPassword(password), code }, 'convite');
       }
-      // Sem código (ou com código furado) e ainda há vaga no beta: entra assim
-      // mesmo. É a regra do Marcos (28/08): cadastro é aberto até o teto; o código
-      // não é a porta. Desde a virada do primeiro mês grátis, TODO cadastro novo
-      // já nasce no Básico por um ciclo (evento conta_criada), então o que o código dá
-      // de diferente é o bônus de 500 créditos pros dois lados quando o indicado
-      // assina, e a passagem quando o teto do beta já bateu.
-      // Convidado pra uma empresa passa pela fila: o convite é a vaga dele.
+      // No code (or a bad code) and the beta still has room: get in anyway.
+      // Rule of 28/08: sign-up is open up to the cap; the code isn't the
+      // door. Since the free-first-month switch, EVERY new sign-up starts on
+      // Básico for one cycle (conta_criada event), so what the code adds is
+      // the 500-credit bonus for both sides when the referred user
+      // subscribes, and entry once the beta cap is hit.
+      // Someone invited to a company skips the queue: the invite is their seat.
       if (!user && (!fila || await empresaStore.temConvitePendente(em))) {
         user = await criarConta(createUser, { name, email: em, passwordHash: hashPassword(password) }, 'email');
       }
@@ -8805,16 +8805,16 @@ async function atenderRequest(req, res) {
         if (!naFila) return send(res, 403, { error: 'O cadastro de contas novas está fechado.' });
         return send(res, 200, { queued: true, message: naFila.mensagem });
       }
-      // Idioma da conta nova: primeiro o que a pessoa ESCOLHEU no seletor do
-      // site, e só depois o palpite do navegador. É o pedido do Marcos: quem
-      // leu o site em inglês e clicou em cadastrar faz o onboarding inteiro em
-      // inglês, com a conta já em inglês. País NÃO: fica NULL até existir
-      // evidência (CEP/CPF). Falhar aqui não pode derrubar um cadastro que já
-      // deu certo: no pior caso a pessoa fica sem idioma gravado e cai no padrão.
+      // New account language: first what the person CHOSE in the site
+      // selector, only then the browser's guess. Whoever read the site in
+      // English and clicked sign up does the whole onboarding in English,
+      // with the account already in English. Country NOT: stays NULL until
+      // there's evidence (CEP/CPF). Failing here can't break a sign-up that
+      // succeeded: worst case the person has no stored language and gets the default.
       try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
       catch (e) { console.warn('[signup] idioma do navegador não gravado:', e?.message || e); }
-      // Conta criada: NÃO mandamos e-mail aqui. O job diário de onboarding (Kenji)
-      // detecta a conta nova e envia o e-mail de primeiro acesso no dia seguinte.
+      // Account created: we DON'T send e-mail here. The daily onboarding job
+      // detects the new account and sends the first-access e-mail the next day.
       const token = newToken();
       await createSession(token, user.id);
       return send(res, 200, { name: user.name, agents: [], ...(mobileClient ? { token } : {}) }, { 'set-cookie': sessionCookie(token) });
@@ -8870,19 +8870,19 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true }, { 'set-cookie': clearCookie() });
   }
 
-  // ── Excluir a própria conta ──
-  // Obrigatório pela diretriz 5.1.1(v) da App Store (quem cria conta no app tem
-  // que poder apagar de dentro do app) e é o direito de eliminação da LGPD.
-  // Modelo de 30 dias (Marcos 04/09): fecha agora, destrói depois (ver
-  // closeUserAccount em db.mjs e purgeTick aqui). O corpo tem que repetir o
-  // e-mail da conta logada: é confirmação de intenção, não autenticação (quem
-  // está logado já provou quem é), e evita excluir conta por toque errado.
+  // ── Delete your own account ──
+  // Required by App Store guideline 5.1.1(v) (whoever creates an account in the
+  // app must be able to delete it from the app) and the LGPD right to erasure.
+  // 30-day model (04/09): close now, destroy later (see closeUserAccount in
+  // db.mjs and purgeTick here). The body must repeat the logged-in account's
+  // e-mail: it confirms intent, not identity (whoever is logged in already
+  // proved who they are), and avoids deleting an account by a mistaken tap.
   //
-  // A palavra EXCLUIR vale como confirmação alternativa por causa do Sign in
-  // with Apple: quem esconde o e-mail fica com um endereço tipo
-  // a1b2c3d4e5@privaterelay.appleid.com, que ninguém decora nem digita sem
-  // errar. Como isto é confirmação de intenção e não senha, a palavra cumpre a
-  // mesma função sem transformar o direito de eliminação em prova de datilografia.
+  // The word EXCLUIR works as an alternative confirmation because of Sign in
+  // with Apple: whoever hides their e-mail gets an address like
+  // a1b2c3d4e5@privaterelay.appleid.com, which nobody memorizes or types
+  // right. Since this confirms intent and isn't a password, the word does the
+  // same job without turning the right to erasure into a typing test.
   if (req.method === 'POST' && url.pathname === '/api/account/delete') {
     const sess = await currentUser();
     if (!sess) return send(res, 401, { error: 'Faça login.' });
@@ -8894,18 +8894,18 @@ async function atenderRequest(req, res) {
     try {
       const user = await getUserById(sess.id);
       if (!user) return send(res, 401, { error: 'Faça login.' });
-      // Quem instala encerra o que é dele PRIMEIRO, fora da transação (no Brambs,
-      // a assinatura do Stripe: quem pediu pra sair não pode seguir pagando nos
-      // 30 dias). Falha lá não trava a exclusão, que é o pedido da pessoa; volta
-      // como campos e aviso que entram na resposta, pra ela não ler "tudo
-      // encerrado" quando não está.
+      // The installer closes what's theirs FIRST, outside the transaction (e.g.
+      // a plugin's Stripe subscription: someone who asked to leave can't keep
+      // paying for 30 days). A failure there doesn't block deletion, which is what
+      // the person asked for; it comes back as fields and a notice in the reply,
+      // so they don't read "all closed" when it isn't.
       const extras = (await eventos.emitir('exclusao_pedida', { userId: user.id })).filter(Boolean);
-      // Revogar o vínculo na Apple ANTES de fechar, porque fechar apaga o
-      // refresh token. Exigência da 5.1.1(v): apagar só do nosso lado deixa o
-      // Brambs listado pra sempre em Ajustes > ID Apple > Usar ID Apple. Mesma
-      // regra de cima: falha aqui NÃO trava a exclusão — a pessoa pediu pra
-      // sair. Sem a chave .p8 configurada, registra e segue (o login com Apple
-      // funciona sem ela; a revogação, não).
+      // Revoke the Apple link BEFORE closing, because closing deletes the
+      // refresh token. Guideline 5.1.1(v): deleting only on our side leaves the
+      // app listed forever in Settings > Apple ID > Sign in with Apple. Same
+      // rule as above: a failure here does NOT block deletion, the person asked
+      // to leave. Without the .p8 key configured, log and go on (Apple login
+      // works without it; revocation doesn't).
       const appleToken = await getAppleRefreshToken(user.id).catch(() => null);
       if (appleToken) {
         if (!appleRevokeReady()) {
@@ -9070,11 +9070,11 @@ async function atenderRequest(req, res) {
       // começa uma nova, em vez de ressuscitar o dado que ela mandou apagar.
       if (user?.deleted_at) { await purgeUser(user); user = null; }
       if (!user) {
-        // Mesmo portão do /api/signup (Marcos 28/08): enquanto houver vaga no
-        // beta, o Google cria a conta (com o primeiro mês grátis no Básico, igual
-        // ao cadastro por e-mail: evento conta_criada). Batido o teto, só passa
-        // whitelist; sem código pra digitar aqui, o resto volta pra tela com
-        // ?e=beta (que é onde o cadastro por e-mail, com código, existe).
+        // Same gate as /api/signup (28/08): while the beta has room, Google
+        // creates the account (with the free first month on Básico, like the
+        // e-mail sign-up: conta_criada event). Once the cap is hit, only the
+        // whitelist passes; with no code to type here, the rest go back to the
+        // screen with ?e=beta (where the e-mail sign-up, with a code, exists).
         const fila = await permissoes.filaDeEspera();
         if (fila && !await permissoes.liberadoNoCadastro(email) && !await empresaStore.temConvitePendente(email)) {
           res.writeHead(302, { Location: isMobile ? 'brambs://auth?e=beta' : home + '?e=beta', 'set-cookie': clearAll });
@@ -9171,18 +9171,18 @@ async function atenderRequest(req, res) {
       // de ressuscitar o dado que a pessoa mandou apagar.
       if (user?.deleted_at) { await purgeUser(user); user = null; }
 
-      // ID Apple desconhecido: NÃO criamos conta por conta própria.
+      // Unknown Apple ID: we do NOT create an account on our own.
       //
-      // Com e-mail escondido não há como saber se é gente nova ou alguém que já
-      // usa o Brambs por e-mail/Google — o endereço de relay é exclusivo deste
-      // app e não casa com nada. Criar na hora produz uma segunda conta, e ela
-      // não nasce vazia: o onboarding já grava conversas e integrações. Depois
-      // não dá pra descartar nem juntar sem destruir dado de alguém.
+      // With a hidden email there's no way to tell someone new from someone who
+      // already uses the app via email/Google: the relay address is unique to
+      // this app and matches nothing. Creating it right away makes a second
+      // account, and it isn't born empty: onboarding already stores conversations
+      // and integrations. Later it can't be discarded or merged without destroying data.
       //
-      // Então guardamos a autorização (já verificada) e devolvemos a pergunta
-      // pro app. Quem responde "é minha primeira vez" volta aqui com
-      // `pending` + `create`; quem responde "já tenho conta" entra do jeito de
-      // sempre e o app usa o mesmo `pending` pra vincular, sem novo Face ID.
+      // So we keep the (already verified) authorization and send the question
+      // back to the app. Whoever answers "first time" comes back here with
+      // `pending` + `create`; whoever answers "I have an account" logs in as
+      // usual and the app uses the same `pending` to link, with no new Face ID.
       if (!user && !body?.create) {
         if (!id.email) return send(res, 400, { error: 'Não recebemos seu e-mail da Apple. Tente novamente.' });
         const pending = putApplePending({
@@ -9225,24 +9225,24 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Vincular o ID Apple a uma conta que JÁ EXISTE ──
-  // O buraco que isto fecha: quem já usava o Brambs por e-mail/Google e entra
-  // com a Apple escondendo o endereço vira uma SEGUNDA conta, porque o relay é
-  // exclusivo do app e não casa com nada. Do lado de fora parece que os dados
-  // sumiram. Aqui a pessoa entra normalmente na conta de sempre, toca em
-  // "vincular" e autoriza — a sessão prova quem ela é e o identity token prova
-  // qual ID Apple é dela.
+  // ── Link the Apple ID to an account that ALREADY EXISTS ──
+  // The hole this closes: someone who already used the app via email/Google and
+  // signs in with Apple hiding the address becomes a SECOND account, because the
+  // relay is unique to the app and matches nothing. From outside it looks like
+  // the data vanished. Here the person logs into their usual account, taps
+  // "link" and authorizes: the session proves who they are and the identity
+  // token proves which Apple ID is theirs.
   //
-  // Duas entradas: a pessoa toca em "vincular" na tela de Conta (autorização
-  // nova), ou vem da tela de login, onde respondeu "já tenho conta" e entrou —
-  // nesse caso a autorização já foi verificada e está guardada em
-  // `applePendings`, e o app manda só a chave `pending`. O segundo caminho
-  // existe pra não pedir Face ID duas vezes no mesmo minuto.
+  // Two entries: the person taps "link" on the Account screen (new
+  // authorization), or comes from the login screen, where they answered "I have
+  // an account" and logged in; then the authorization is already verified and
+  // kept in `applePendings`, and the app sends only the `pending` key. The second
+  // path exists so Face ID isn't asked twice in the same minute.
   //
-  // O que esta rota NÃO faz: fundir duas contas com conteúdo. Juntar histórico,
-  // agentes e cobrança de duas contas é migração, dá errado de formas que
-  // ninguém desfaz, e não é o que a pessoa está pedindo. Quando o ID Apple já
-  // está ligado a outra conta, respondemos 409 explicando.
+  // What this route does NOT do: merge two accounts with content. Joining
+  // history, agents and billing of two accounts is a migration, fails in ways
+  // nobody can undo, and isn't what the person asks. When the Apple ID is
+  // already linked to another account, we answer 409 explaining.
   if (req.method === 'POST' && url.pathname === '/api/account/apple/link') {
     if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
     const sess = await currentUser();
@@ -9259,10 +9259,10 @@ async function atenderRequest(req, res) {
         const nonce = String(body?.nonce || '');
         if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'Autorização expirada. Tente de novo.' });
         id = await verifyAppleIdentityToken(body?.identityToken, { expectedNonce: nonce });
-        // Refresh token: mesma lógica do login. Só vem na PRIMEIRA autorização,
-        // e é o que permite revogar na exclusão da conta. Se a pessoa já tinha
-        // autorizado o Brambs antes, não vem de novo — e o COALESCE do
-        // linkAppleAccount preserva o que já estiver guardado.
+        // Refresh token: same logic as login. It only comes on the FIRST
+        // authorization, and is what allows revoking on account deletion. If the
+        // person had authorized the app before, it doesn't come again, and
+        // linkAppleAccount's COALESCE keeps whatever is already stored.
         if (body?.authorizationCode && appleRevokeReady()) {
           try { ({ refreshToken } = await appleExchangeCode(String(body.authorizationCode))); }
           catch (e) { console.warn('[apple-link] troca do authorization code falhou:', e?.message || e); }
@@ -9294,14 +9294,14 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Desvincular. Revoga na Apple antes de apagar o refresh token — depois não
-  // há mais como, e o Brambs ficaria listado pra sempre em Ajustes > ID Apple.
+  // Unlink. Revokes at Apple before deleting the refresh token; afterwards there's
+  // no way, and the app would stay listed forever in Settings > Apple ID.
   //
-  // Trava: conta cujo e-mail é o relay da Apple não pode desvincular. O e-mail
-  // dela não é um endereço que a pessoa saiba digitar, a senha foi gerada
-  // aleatória no cadastro e nunca existiu pra ela — tirar o botão da Apple
-  // deixaria a conta sem NENHUMA porta de entrada. Quem quiser sair do login da
-  // Apple nesse caso exclui a conta (o direito de eliminação continua inteiro).
+  // Guard: an account whose email is the Apple relay can't unlink. Its email
+  // isn't an address the person can type, and the password was randomly
+  // generated at sign-up and never existed for them; removing the Apple button
+  // would leave the account with NO way in. Someone who wants off Apple login in
+  // that case deletes the account (the right to erasure stays whole).
   if (req.method === 'POST' && url.pathname === '/api/account/apple/unlink') {
     const sess = await currentUser();
     if (!sess) return send(res, 401, { error: 'Faça login.' });
@@ -9390,9 +9390,9 @@ async function atenderRequest(req, res) {
       providers: await listOAuthProviders(user.id),
       microsoftServices: await microsoftServicesFor(user.id),
       credits,
-      // De quem é o saldo que a pessoa usa (porta de gasto). Pessoal = só o
-      // tipo; no Brambs, membro de empresa = empresa (id, nome), papel (admin
-      // ou membro) e o plano da empresa.
+      // Whose balance the person uses (spend port). Personal = just the type;
+      // with a company plugin, a member = company (id, name), role (admin or
+      // member) and the company's plan.
       conta: gasto.conta(credits),
       media: await getUserMediaPrefs(user.id),
       model: await getUserModelPref(user.id),
@@ -9453,8 +9453,8 @@ async function atenderRequest(req, res) {
         if (body?.acao === 'convidar') {
           if (tooManyRequests(req, res, 'empresa-convite', 60, 60 * 60_000)) return;
           const r = await empresaStore.convidar(user.id, body?.email);
-          // Endereço novo: avisa a pessoa por e-mail (Marcos 29/09). Reconvite
-          // de convite ainda pendente não reenvia.
+          // New address: notify the person by e-mail (29/09). Re-inviting a
+          // still-pending invite doesn't resend.
           if (r?.ok && !r.ja_existia) {
             r.email_enviado = await enviarConviteEmpresa({ sendEmail, email: r.convite.email, quem: user.name || user.email,
               quemEmail: user.email, empresa: r.empresa, base: PUBLIC_BASE(), regra: empresaStore.linhaDoConvite() });
@@ -9645,11 +9645,11 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Liga/desliga o OPT-OUT de treinamento de IA (Marcos 28/08). Só assinante
-  // pode: no plano grátis o uso dos dados pra melhoria do produto faz parte do
-  // acordo (é o que a Política de Privacidade diz), então a chave nem aparece.
-  // Grava PERÍODO, não flag: o trecho de tempo já protegido segue protegido
-  // mesmo que a pessoa desligue depois, e ligar hoje não protege o passado.
+  // Toggles the AI training OPT-OUT (28/08). Subscribers only: on the free
+  // plan, using data for product improvement is part of the deal (it's what
+  // the Privacy Policy says), so the switch doesn't even show.
+  // Stores a PERIOD, not a flag: an already protected time span stays protected
+  // even if the person turns it off later, and turning it on today doesn't protect the past.
   if (req.method === 'POST' && url.pathname === '/api/prefs/training-optout') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9806,15 +9806,14 @@ async function atenderRequest(req, res) {
 
   }))return;
 
-  // ── Cobrança (Stripe) ──
-  // As rotas da conta pessoal (assinatura, pacote, portal, compra na Apple), a
-  // tabela de preços, o link de oferta e a cobrança da empresa (plano
-  // corporativo) estão em cobranca-brambs.mjs (porta de rotas).
+  // ── Billing (Stripe) ──
+  // Personal account routes (subscription, pack, portal, Apple purchase), the
+  // price table, the offer link and company billing (corporate plan) come from
+  // a plugin through the routes port.
 
-  // Rotas que a distribuição plugou (rotas.mjs). No Brambs: os webhooks de
-  // pagamento (pagamentos-brambs.mjs), a cobrança pessoal e a da empresa
-  // (cobranca-brambs.mjs) e os painéis de admin, do /metrics e do
-  // cockpit (admin-brambs.mjs, metricas-brambs.mjs, cockpit-brambs.mjs).
+  // Routes the distribution plugged in (rotas.mjs). A plugin might add e.g.
+  // payment webhooks, personal and company billing, and admin or
+  // metrics dashboards.
   if (await rotas.atender(req, res, url, { currentUser, idiomaDaPagina })) return;
 
   // ── Webhooks de LGPD da Nuvemshop (obrigatórios p/ app público). NÃO exigem login.
@@ -10042,8 +10041,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Tokens de device (canal Brambs OS) — gestão pelo dono, EXIGE login ──
-  // Lista os devices do usuário (sem o token; só o hint de 8 chars).
+  // ── Device tokens (OS/desktop client channel): managed by the owner, REQUIRES login ──
+  // Lists the user's devices (without the token; only the 8-char hint).
   if (req.method === 'GET' && url.pathname === '/api/device/tokens') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10099,11 +10098,11 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Chat do device (Brambs OS) — autenticado por Bearer de device, SEM cookie ──
-  // O OS manda { message, session_id? } com Authorization: Bearer <token>. Resolve
-  // o token -> usuário, escolhe o agente (fixo no device via @nome, senão o 1º do
-  // dono), roda o cérebro numa thread fixa "Brambs OS" e devolve o texto. Igual à
-  // mecânica do webhook de skill, mas conversacional (sem ping-pong de skill).
+  // ── Device chat (OS/desktop client): authenticated by device Bearer, NO cookie ──
+  // The OS sends { message, session_id? } with Authorization: Bearer <token>. Resolves
+  // token -> user, picks the agent (fixed on the device via @name, else the owner's
+  // 1st), runs the brain in a fixed "<brand> OS" thread and returns the text. Same
+  // mechanics as the skill webhook, but conversational (no skill ping-pong).
   if (req.method === 'POST' && url.pathname === '/api/device/chat') {
     if (tooManyRequests(req, res, 'device-chat', 120, 60_000)) return;
     const token = readBearer(req);
@@ -10131,10 +10130,10 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Canal do Brambs Runner (máquina local do usuário) — Bearer de device ──
-  // O daemon disca (outbound) e faz long-poll aqui esperando comando; a saída
-  // volta por /api/runner/result. Reusa o device token do Brambs OS: o runner é
-  // um "device". Fase 0 (transporte long-poll HTTP, zero dep nova).
+  // ── Brambit Runner channel (user's local machine): device Bearer ──
+  // The daemon dials out and long-polls here waiting for a command; the output
+  // comes back via /api/runner/result. Reuses the device channel's token: the
+  // runner is a "device". Phase 0 (HTTP long-poll transport, no new dep).
   if (req.method === 'GET' && url.pathname === '/api/runner/poll') {
     const token = readBearer(req);
     if (!token) return send(res, 401, { error: 'unauthorized', detail: 'Envie o token do device em Authorization: Bearer <token>.' });
@@ -10184,11 +10183,11 @@ async function atenderRequest(req, res) {
     return send(res, 200, st);
   }
 
-  // Configura qual ÚNICO assistente atende o Brambs Runner (modo livre "1
-  // assistente responde"). Session-authed (o dono escolhendo em Conexões). O
-  // binding mora no device_tokens.active_agent_id do runner ONLINE; por isso
-  // exige o runner aberto (Fase 0 = ~1 runner por pessoa). Fica em memória na
-  // hora e persiste no banco (sobrevive a restart do daemon).
+  // Sets which SINGLE assistant serves the Brambit Runner (free mode "1
+  // assistant answers"). Session-authed (the owner choosing in Connections). The
+  // binding lives in the ONLINE runner's device_tokens.active_agent_id; so it
+  // requires the runner open (Phase 0 = ~1 runner per person). Kept in memory
+  // right away and persisted in the database (survives a daemon restart).
   if (req.method === 'POST' && url.pathname === '/api/runner/agent') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10289,8 +10288,8 @@ async function atenderRequest(req, res) {
     catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // ══ Biblioteca pública de apps (brambs.com.br/apps) ══
-  // Lista os apps marcados como públicos (copiáveis). Aberto, sem login.
+  // ══ Public app library (e.g. example.com/apps) ══
+  // Lists apps marked public (copyable). Open, no login.
   if (req.method === 'GET' && url.pathname === '/api/apps') {
     const q = (url.searchParams.get('q') || '').trim();
     try {
@@ -10327,7 +10326,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // Copia um app público pro espaço do usuário logado. Exige conta Brambs.
+  // Copies a public app into the logged-in user's space. Requires an account.
   if (req.method === 'POST' && url.pathname === '/api/apps/copy') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Crie uma conta ou faça login no __MARCA__ pra copiar este app pro seu espaço.', precisa_login: true });
@@ -10454,8 +10453,8 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // ══ Biblioteca oficial de habilidades (brambs.com.br/habilidades) ══
-  // Lista as skills públicas/curadas. Aberto, sem login (igual /api/apps).
+  // ══ Official skills library (e.g. example.com/habilidades) ══
+  // Lists public/curated skills. Open, no login (like /api/apps).
   if (req.method === 'GET' && url.pathname === '/api/skills/biblioteca') {
     const q = (url.searchParams.get('q') || '').trim();
     let jaInstaladas = new Set();
@@ -10772,12 +10771,12 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Webhook de ENTRADA: um sistema externo (ex CMS da More Than Real) dispara
-  // uma SKILL de um agente do Brambs. Autenticado só pelo token do webhook (Bearer)
-  // — SEM cookie, então isento de CSRF; é chamada servidor-a-servidor. O 1º POST
-  // nomeia a skill + manda os dados e abre uma sessão; POSTs seguintes com o mesmo
-  // session_id continuam o ping-pong (a skill pede infos no começo) até done:true.
-  // Os dados do sistema são tratados como REFERÊNCIA, nunca como instrução.
+  // ── INBOUND webhook: an external system (e.g. a company CMS) triggers an
+  // agent's SKILL. Authenticated only by the webhook token (Bearer), with NO
+  // cookie, so exempt from CSRF; it's a server-to-server call. The 1st POST
+  // names the skill + sends the data and opens a session; later POSTs with the
+  // same session_id continue the ping-pong (the skill asks for info at the start)
+  // until done:true. The system's data is treated as REFERENCE, never as instruction.
   if (req.method === 'POST' && url.pathname === '/api/webhook/skill') {
     if (tooManyRequests(req, res, 'webhook-skill', 120, 60_000)) return;
     const token = readBearer(req);
@@ -11277,9 +11276,9 @@ async function atenderRequest(req, res) {
     return send(res, 200, { code, agentName: agent.name, expiresInMin: 15 });
   }
 
-  // Conectar WhatsApp: o usuário informa o próprio número (com DDI/DDD) e o
-  // agente padrão. NÃO amarra nada aqui: devolve um código que a pessoa manda do
-  // WhatsApp dela pro número do Brambs, e é o inbound que prova a posse e amarra.
+  // Connect WhatsApp: the user gives their own number (with country/area code)
+  // and default agent. Binds NOTHING here: returns a code the person sends from
+  // their WhatsApp to the platform's number, and that inbound proves ownership and binds.
   if (req.method === 'POST' && url.pathname === '/api/connect/whatsapp') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11982,9 +11981,9 @@ async function atenderRequest(req, res) {
     res.writeHead(200, { 'content-type': MIME[path.extname(full)] || 'text/plain' });
     return res.end(fs.readFileSync(full));
   }
-  // Rede de segurança pros links que JÁ saíram com a pontuação da frase colada
-  // ("...em brambs.com.br/creditos."): em vez de 404, manda pro caminho limpo.
-  // Nunca redireciona pra "//algo" (seria protocol-relative = redirect aberto).
+  // Safety net for links ALREADY sent with the sentence's punctuation attached
+  // ("...at example.com/creditos."): redirect to the clean path instead of 404.
+  // Never redirects to "//something" (protocol-relative = open redirect).
   const limpo = url.pathname.replace(/[.,;:!?]+$/, '');
   if (limpo !== url.pathname && limpo.length > 1 && !limpo.startsWith('//') && !path.extname(limpo)) {
     res.writeHead(302, { Location: limpo + (url.search || '') });
@@ -12186,7 +12185,7 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     await discoveryStore.init();
     await onboardingStore.init();
     await taskMetrics.init();
-    // Sem esperar: no Brambs, a nova tentativa do que a empresa deixou pendente (eventos-brambs.mjs).
+    // No wait: e.g. a plugin retrying what a company left pending.
     eventos.emitir('banco_pronto', {});
     // Desembrulha a chave mestra do cofre ANTES de qualquer coisa que use
     // credenciais cifradas (KMS > VAULT_KEY > chave local). Chave inválida,
@@ -12204,11 +12203,11 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     if (vaultConfigured() && !vaultEnabled()) {
       console.error('[vault] ALERTA: cofre configurado mas chave NÃO carregada; nenhum segredo novo será gravado (falha fechada) até isso ser resolvido');
     }
-    // Segredo de conector que ficou em texto puro no banco (token de bot do
-    // Telegram, headers de MCP, OAuth) vai pras colunas cifradas; os segredos de
-    // quem instala vão no evento cofre_pronto (no Brambs, o da Asaas).
-    // Idempotente e só depois do initVault, porque o initDb roda antes dele.
-    // Falhou = loga e segue: leitura de linha legada continua funcionando.
+    // Connector secrets left in plain text in the database (Telegram bot token,
+    // MCP headers, OAuth) move to the encrypted columns; the installer's secrets
+    // go in the cofre_pronto event (e.g. a plugin's payment account keys).
+    // Idempotent and only after initVault, because initDb runs before it.
+    // Failed = log and go on: reading a legacy row still works.
     try {
       const mig = await migrateConnectorSecrets();
       if (mig.skipped) console.warn('[vault] backfill de segredos de conector adiado (cofre indisponível)');

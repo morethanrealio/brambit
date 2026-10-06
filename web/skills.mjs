@@ -275,7 +275,7 @@ export function skillShareTool(userId, agentId) {
       if (r.skill.visibility !== 'connections') {
         await updateSkill(r.skill.id, userId, { visibility: 'connections' });
       }
-      // Aviso proativo (best-effort; notifyOwner é da Yume/Fase notify).
+      // Proactive notice (best-effort; notifyOwner comes from notify.mjs).
       try {
         const { notifyOwner } = await import('./notify.mjs').catch(() => ({}));
         await notifyOwner?.(who.userId, `Um contato compartilhou a Skill "${r.skill.title}" com você. Seu assistente pode instalá-la.`);

@@ -6,7 +6,7 @@ import http from 'node:http';
 import { ipPrivado, resolverPublico, fetchFixado } from './web/net-pin.mjs';
 
 test('reconhece faixas internas', () => {
-  for (const ip of ['127.0.0.1', '10.1.2.3', '169.254.169.254', '172.31.1.100',
+  for (const ip of ['127.0.0.1', '10.1.2.3', '169.254.169.254', '172.16.5.10',
     '192.168.0.1', '100.64.0.1', '::1', 'fd00::1', 'fe80::1', '::ffff:169.254.169.254']) {
     assert.equal(ipPrivado(ip), true, ip);
   }

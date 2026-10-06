@@ -2,28 +2,28 @@ import {TOGETHER_FLASH_MODEL,flashReasoning,estimateTogetherFlashInput,togetherR
 import {makeCompativel} from './compativel.mjs';
 export {TOGETHER_FLASH_MODEL} from './together-flash-contract.mjs';
 export {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './ferramenta-em-texto.mjs';
-// ── Adapter real: Together AI (OpenAI-compatible Chat Completions) ──
-// Predefinição do motor compatível (compativel.mjs). A chave vem de
-// process.env.TOGETHER_API_KEY (NUNCA hardcode no repo). Serve pra rodar o
-// GLM-5.2 (zai-org/GLM-5.2) MUITO mais rápido que a DeepInfra: a DeepInfra serve
-// o modelo em FP4 a ~40 tok/s (o mais lento de todos), a Together entrega o mesmo
-// modelo a ~347 tok/s (~8,5x mais rápido) e sem quantização FP4.
+// ── Real adapter: Together AI (OpenAI-compatible Chat Completions) ──
+// Preset of the compatible engine (compativel.mjs). The key comes from
+// process.env.TOGETHER_API_KEY (NEVER hardcoded in the repo). It runs
+// GLM-5.2 (zai-org/GLM-5.2) MUCH faster than DeepInfra: DeepInfra serves the
+// model in FP4 at ~40 tok/s (the slowest of all), Together serves the same
+// model at ~347 tok/s (~8.5x faster) and without FP4 quantization.
 //
-// IMPORTANTE: o GLM na Together NÃO tem busca embutida como o Gemini. Aqui o
-// parâmetro `search` é ignorado; o grounding vem da tool `buscar_web`, injetada
-// no tool-loop pra qualquer provider não-Gemini.
+// IMPORTANT: GLM on Together has NO built-in search like Gemini. The `search`
+// parameter is ignored here; grounding comes from the `buscar_web` tool,
+// injected in the tool loop for any non-Gemini provider.
 //
-// RACIOCÍNIO: o GLM-5.2 raciocina por padrão em `reasoning_effort:'max'` (cadeia
-// de pensamento longa). Como `max_tokens` é o teto TOTAL da geração (raciocínio +
-// texto visível), com um teto baixo o raciocínio pode consumir TODO o orçamento e
-// sobrar ~0 token pro texto → resposta vazia (bug de 02/07, out=8192
-// reason=8191). Pra o raciocínio nunca monopolizar a saída:
-//   (a) rodamos em `reasoning_effort:'high'` (menos raciocínio que o 'max' default);
-//   (b) `max_tokens` generoso (16384) pra o raciocínio terminar e sobrar espaço;
-//   (c) GARANTIA DURA: se ainda assim o content vier vazio, refazemos a chamada no
-//       PRÓPRIO GLM com o raciocínio DESLIGADO (reasoning:{enabled:false}) pedindo
-//       resposta direta — nunca entregamos vazio. (Sem fallback pro GPT, decisão
-//       Marcos 02/07.)
+// REASONING: GLM-5.2 reasons by default at `reasoning_effort:'max'` (long chain
+// of thought). Since `max_tokens` is the TOTAL generation cap (reasoning +
+// visible text), with a low cap the reasoning can eat the WHOLE budget and
+// leave ~0 tokens for text → empty answer (bug of 02/07, out=8192
+// reason=8191). So reasoning never monopolizes the output:
+//   (a) we run at `reasoning_effort:'high'` (less reasoning than the 'max' default);
+//   (b) generous `max_tokens` (16384) so reasoning finishes and room is left;
+//   (c) HARD GUARANTEE: if content still comes back empty, we redo the call on
+//       the SAME GLM with reasoning OFF (reasoning:{enabled:false}) asking for a
+//       direct answer; we never deliver empty. (No fallback to GPT, decided
+//       02/07.)
 
 
 const BASE = process.env.TOGETHER_URL || 'https://api.together.xyz/v1/chat/completions';

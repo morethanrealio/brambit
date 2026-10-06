@@ -1,29 +1,29 @@
-// ── Cofre de credenciais do produto ──
-// Sistema PRÓPRIO (NÃO é o OneCli). Guarda segredos do usuário (API keys, chaves
-// SSH, tokens colados) cifrados no banco. Decifra SÓ em memória, no momento de
-// usar a credencial.
+// ── Product credential vault ──
+// Its OWN system. Stores user secrets (API keys, SSH keys, pasted tokens)
+// encrypted in the database. Decrypts ONLY in memory, at the moment the
+// credential is used.
 //
-// Origem da chave mestra (32 bytes), em ordem de preferência:
-//   1. VAULT_KEY_ENC — chave mestra cifrada por um serviço de chaves de fora
-//      (envelope encryption), desembrulhada UMA vez no boot via initVault(). O
-//      núcleo não sabe qual serviço é: quem instala registra o desembrulho com
-//      definirChaveDoCofre() (o Brambs pluga o AWS KMS em cofre-brambs.mjs). O
-//      material nunca fica em texto puro.
-//   2. VAULT_KEY — chave em base64 direto no env (modo legado / dev local).
-//   3. BRAMBS_LOCAL=1 sem nenhuma das duas — chave gerada sozinha na primeira vez
-//      e guardada em arquivo (VAULT_KEY_FILE, padrão ~/.brambs/vault.key, 0600).
-//      É o caminho de quem roda na própria máquina, sem AWS.
-// Quem chama initVault() no boot antes de servir; depois key() serve do cache.
+// Master key source (32 bytes), in order of preference:
+//   1. VAULT_KEY_ENC: master key encrypted by an external key service
+//      (envelope encryption), unwrapped ONCE at boot via initVault(). The
+//      core doesn't know which service: whoever installs it registers the
+//      unwrap with definirChaveDoCofre() (e.g. a plugin wiring AWS KMS). The
+//      material never sits in plain text.
+//   2. VAULT_KEY: base64 key straight in the env (legacy mode / local dev).
+//   3. BRAMBS_LOCAL=1 with neither: key generated on first run and stored
+//      in a file (VAULT_KEY_FILE, default ~/.brambs/vault.key, 0600).
+//      It's the path for running on your own machine, without AWS.
+// The caller runs initVault() at boot before serving; then key() serves from cache.
 //
-// FALHA FECHADA na gravação, não no boot: chave malformada (VAULT_KEY que não dá
-// 32 bytes, KMS devolvendo tamanho errado) ou nenhuma chave fora do modo local faz
-// initVault() lançar VaultBootError. O servidor sobe mesmo assim (initVaultNoBoot),
-// em modo degradado: tudo funciona menos gravar/ler segredo, e o log dá o alarme.
-// Antes, VAULT_KEY malformada era tratada como "sem cofre" e os segredos iam pro
-// banco em texto puro.
+// FAILS CLOSED on write, not on boot: a malformed key (VAULT_KEY not 32 bytes,
+// KMS returning a wrong size) or no key outside local mode makes initVault()
+// throw VaultBootError. The server boots anyway (initVaultNoBoot), degraded:
+// everything works except storing/reading secrets, and the log raises the alarm.
+// Before, a malformed VAULT_KEY was treated as "no vault" and secrets went to
+// the database in plain text.
 //
-// Formato do blob cifrado: "v1:" + base64( iv(12) || tag(16) || ciphertext ).
-// AES-256-GCM: o tag autentica (detecta adulteração/chave errada).
+// Encrypted blob format: "v1:" + base64( iv(12) || tag(16) || ciphertext ).
+// AES-256-GCM: the tag authenticates (detects tampering/wrong key).
 import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';

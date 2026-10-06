@@ -260,18 +260,18 @@ function noteTavilyFailure(err, onUsage, planoB = 'fallback Gemini (lento)') {
 // Trocável por env pra rollback sem deploy.
 const SEARCH_FALLBACK_MODEL = process.env.SEARCH_FALLBACK_MODEL || 'gemini-3.7-flash';
 
-// ── Orçamento de buscas POR TURNO (caso de 28/09/2026) ──
-// Num único turno pedindo "onde assistir" pra uma lista de filmes, o modelo
-// chamou `pesquisar` 6 vezes seguidas e cada sub-agente refez as mesmas buscas
-// filme por filme: 139 buscas, Bacurau e Parasita buscados 3 a 4 vezes, ~1.100
-// créditos num turno só, até o saldo acabar. A instrução no prompt ("1 a 3
-// buscas amplas") não segurou, então o freio agora é no código: um objeto por
-// turno, compartilhado entre o principal e os sub-agentes de pesquisa, que
-// (1) devolve do cache a busca repetida ou quase igual sem gastar outra chamada,
-// e (2) corta de vez quando o teto do turno é atingido, mandando o modelo
-// responder com o que já tem. Teto em 50 (Marcos, 28/09): nos últimos 10 dias
-// só 13 de 127 pedidos com busca passaram de 20, então 50 pega só o caso fora
-// da curva sem cortar pedido legítimo grande.
+// ── Search budget PER TURN (case of 28/09/2026) ──
+// In a single turn asking "where to watch" for a list of films, the model
+// called `pesquisar` 6 times in a row and each sub-agent redid the same
+// searches film by film: 139 searches, Bacurau and Parasite searched 3 to 4
+// times, ~1,100 credits in one turn, until the balance ran out. The prompt
+// instruction ("1 to 3 broad searches") didn't hold, so the brake is now in
+// code: one object per turn, shared by the main agent and research sub-agents,
+// which (1) returns a repeated or near-identical search from cache without
+// another call, and (2) cuts off once the turn cap is hit, telling the model to
+// answer with what it has. Cap at 50 (28/09): in the previous 10 days only 13
+// of 127 requests with search went past 20, so 50 only catches the outlier
+// without cutting a large legitimate request.
 export const MAX_SEARCHES_PER_TURN = Number(process.env.MAX_SEARCHES_PER_TURN) || 50;
 
 // Chave "quase igual": sem acento, sem pontuação, sem palavra curta e com as

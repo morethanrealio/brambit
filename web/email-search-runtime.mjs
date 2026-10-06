@@ -211,8 +211,8 @@ export function emailSearchPromptBlock(c, r, { language = 'pt-BR' } = {}) {
   lines.push(`Janela: últimos ${r.days} dia${r.days === 1 ? '' : 's'}. Resultado: ${r.total} e-mail${r.total === 1 ? '' : 's'}${r.truncated ? ` (lista cortada no teto de ${EMAIL_SEARCH_CAP}; os mais recentes estão aqui)` : ' (lista completa, paginada até o fim)'}.`);
   if (r.errors.length) lines.push(`${r.errors.length} mensagem(ns) não abriram e ficaram de fora.`);
   lines.push('Regras: NÃO refaça a busca, NÃO use ferramenta de e-mail e NÃO diga que vai buscar; trabalhe SOMENTE com a lista abaixo. Cumpra o que a rotina pede usando esses e-mails. Cite remetente, assunto e data quando relevante. Não invente conteúdo que não esteja no trecho/corpo.');
-  // Decisão de produto (Marcos 13/09): rotina de busca SEMPRE dá sinal de vida. Silêncio parece falha
-  // ("deu pau, o assistente não fez o trabalho"). Vazio = uma frase dizendo o que buscou e que não achou.
+  // Product decision (13/09): a search routine ALWAYS shows signs of life. Silence looks like failure
+  // ("it broke, the assistant didn't do the job"). Empty = one sentence saying what it searched and found nothing.
   if (r.total === 0) lines.push(`A lista está VAZIA. Responda em UMA frase que a busca foi feita (${prov}, últimos ${r.days} dia${r.days === 1 ? '' : 's'}) e não encontrou nenhum e-mail sobre o assunto. NUNCA responda [ROTINA_SEM_NOVIDADES] nem fique em silêncio, mesmo que a rotina peça isso: sem mensagem, a pessoa acha que a rotina falhou.`);
   else lines.push('Se nenhum e-mail da lista for relevante pro que a rotina pede, diga isso em UMA frase (o que foi buscado e que não chegou nada relevante). NUNCA responda [ROTINA_SEM_NOVIDADES] nem fique em silêncio, mesmo que a rotina peça isso.');
   lines.push('--- E-MAILS (mais recentes primeiro) ---');

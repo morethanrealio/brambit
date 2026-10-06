@@ -1,20 +1,20 @@
 import { readOnlyCommand } from './read-only-command.mjs';
 import { marca, siteDaMarca } from './marca.mjs';
-// ── Tools de coding sobre SSH (a partir do sandbox SP) ──
+// ── Coding tools over SSH (from the sandbox) ──
 //
-// Espelha o desenho do Agent SDK: um toolset pequeno e afiado, orientado a
-// arquivo, em vez de "vira-se com um shell cru".
+// Mirrors the Agent SDK design: a small, sharp, file-oriented toolset instead
+// of "make do with a raw shell".
 //
-//  LEITURA (ler_arquivo, listar_arquivos, buscar_no_codigo, rodar_leitura):
-//    NÃO-gated, rodam INLINE e devolvem a saída na hora. Marcos pediu explícito:
-//    leitura/listagem/busca livre, sem pedir permissão.
-//  ESCRITA (editar_arquivo, escrever_arquivo, rodar_comando): GATED (ver
-//    confirm.mjs) — só executam após confirmação explícita do usuário.
-//  DELETE nunca é silencioso: cai em rodar_comando (gated).
+//  READ (ler_arquivo, listar_arquivos, buscar_no_codigo, rodar_leitura):
+//    NOT gated, run INLINE and return output right away. Explicit product
+//    decision: reading/listing/searching is free, no permission asked.
+//  WRITE (editar_arquivo, escrever_arquivo, rodar_comando): GATED (see
+//    confirm.mjs), run only after explicit user confirmation.
+//  DELETE is never silent: it goes through rodar_comando (gated).
 //
-// Transporte: a MESMA via segura do ssh.mjs — chave SSH do cofre, conexão a
-// partir do sandbox SP (egress BR, rede interna da VPC bloqueada pelo firewall
-// do host). Reusa `sshExec` do ssh.mjs; nada de nova superfície de ataque.
+// Transport: the SAME secure path as ssh.mjs, SSH key from the vault, connection
+// from the sandbox (internal VPC network blocked by the host firewall). Reuses
+// `sshExec` from ssh.mjs; no new attack surface.
 
 import { sshExec, maskSecrets } from './ssh.mjs';
 import { sandboxEnabled } from './sandbox.mjs';

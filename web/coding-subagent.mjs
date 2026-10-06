@@ -394,10 +394,10 @@ export function makeCodarTool({ buildCodingContext, sessionKey, executionId, onU
       'Ele mantém a própria sessão de trabalho entre chamadas, então pode dar',
       'continuidade ("agora ajusta o CSS do header") sem repetir tudo. Volta só',
       'o resumo do que fez; a saída crua das ferramentas fica no sub-agente.',
-      // Quando há um transporte extra montado no sub (hoje: a máquina local do
-      // dono pelo Brambs Runner), a descrição precisa DIZER isso: senão a única
-      // porta pro terminal se anuncia como "só código" e o principal responde
-      // "não tenho acesso à sua máquina" com a capacidade montada (caso 25/08).
+      // When the sub has an extra transport mounted (today: the owner's local
+      // machine via the Brambit Runner), the description must SAY so: otherwise
+      // the only terminal door advertises itself as "code only" and the main agent
+      // answers "I can't access your machine" with the capability mounted (25/08).
       ...(dispatch?['Neste canal, retorna recibo de tarefa em andamento, não conclusão. O worker salva o resultado na conversa ao terminar. Para andamento use consultar_programacao; não peça para continuar por causa de uma janela operacional.']:[]),
       ...(extra ? [String(extra)] : []),
     ].join(' '),

@@ -295,15 +295,15 @@ function calendarWriteConfirmation(tool, token, account) {
   return {...tool,prepareConfirmation:args => prepare(args),restoreConfirmation:(args,descriptor) => prepare(args,descriptor)};
 }
 
-// Escrita de agenda em QUALQUER conta Google conectada (Marcos 27/09/2026).
-// Antes a escrita ia sempre pra conta do assistente, então um evento lido da
-// agenda de trabalho (a leitura cobre todas) não podia ser editado nem apagado.
-// Aqui cada tool de escrita ganha `conta`: sem ela, fica como sempre foi; com
-// ela, a proposta, a confirmação e a execução usam o token daquela conta. A
-// `conta` fica nos args guardados, então a confirmação restaurada volta pra
-// mesma conta (e o descriptor dela continua travando contra troca de conta).
-// `contas` = e-mails com escopo de escrita de agenda; `construir(conta)` devolve
-// as tools Google daquela conta.
+// Calendar writes on ANY connected Google account (27/09/2026).
+// Before, writes always went to the assistant's account, so an event read from
+// the work calendar (reads cover all) couldn't be edited or deleted. Here each
+// write tool gets `conta`: without it, it behaves as always; with it, the
+// proposal, confirmation and execution use that account's token. `conta` stays
+// in the saved args, so a restored confirmation goes back to the same account
+// (and its descriptor still locks against an account swap).
+// `contas` = e-mails with calendar write scope; `construir(conta)` returns
+// the Google tools for that account.
 export function calendarWritesPorConta(tools, { contas = [], padrao = '', construir }) {
   const nomes = ['calendar_create', 'calendar_update', 'calendar_delete'];
   const outras = contas.filter((c) => c && c !== padrao);

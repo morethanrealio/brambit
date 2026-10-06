@@ -1,20 +1,20 @@
-// ── Brambs Runner (Fase 0): execução na MÁQUINA do usuário via canal outbound ──
+// ── Brambit Runner (Phase 0): execution on the user's MACHINE via an outbound channel ──
 //
-// Problema: o modo livre de hoje (ssh.mjs livreExec) disca DE FORA PRA DENTRO
-// (o sandbox SP faz `ssh usuario@host`). Um notebook pessoal atrás de NAT não
-// tem IP/porta pra receber, então não é alcançável por SSH-in. A solução é o
-// caminho inverso: um daemon ("Brambs Runner") na máquina do usuário DISCA pra
-// nós (saída), fica esperando comando e roda LOCALMENTE, devolvendo a saída.
+// Problem: today's free mode (ssh.mjs livreExec) dials FROM OUTSIDE IN (the
+// sandbox runs `ssh user@host`). A personal laptop behind NAT has no IP/port
+// to receive on, so it can't be reached by SSH-in. The fix is the reverse
+// path: a daemon ("Brambit Runner") on the user's machine DIALS us
+// (outbound), waits for commands and runs them LOCALLY, returning the output.
 //
-// Este módulo é o SEGUNDO transporte atrás da MESMA tool `terminal` (padrão de
-// costura: o consumer/tool não muda, troca-se só o provider/canal). Fase 0 usa
-// long-poll HTTP (zero dependência nova, outbound-only, NAT-safe) reusando o
-// device token que já existe (resolveDeviceToken); WS/SSE é otimização de fase
-// posterior e entra AQUI sem mexer na tool nem em runnerExec.
+// This module is the SECOND transport behind the SAME `terminal` tool (seam
+// pattern: the consumer/tool doesn't change, only the provider/channel). Phase 0
+// uses HTTP long-poll (no new dependency, outbound-only, NAT-safe) reusing the
+// existing device token (resolveDeviceToken); WS/SSE is a later-phase
+// optimization and goes HERE without touching the tool or runnerExec.
 //
-// Auth: o runner é um "device" (mesmo sistema do Brambs OS). Autentica no
-// handshake por Bearer <device_token>; o server resolve token -> userId antes
-// de chamar qualquer coisa aqui.
+// Auth: the runner is a "device" (same system as the device channel, e.g. an
+// OS/desktop client). Authenticates on handshake with Bearer <device_token>;
+// the server resolves token -> userId before calling anything here.
 
 import { marca } from './marca.mjs';
 
@@ -31,10 +31,10 @@ const MAX_FILE = 25 * 1024 * 1024;   // teto de bytes por arquivo trazido da má
 const FILE_GRACE_MS = 20_000;        // folga sobre o timeout do pedido de arquivo
 const MIN_FILE_VERSION = '2.1.0';    // runner mais velho descarta o frame calado
 
-// Versão que /runner DISTRIBUI hoje (= runner-go/main.go `version`). Exportada
-// porque a tela precisa dizer qual versão o download entrega e comparar com a
-// que está conectada: sem isso o dono atualizava o binário e não tinha como
-// saber se pegou o novo (caso Marcos 26/08). Ao subir o núcleo Go, subir aqui.
+// Version /runner SERVES today (= runner-go/main.go `version`). Exported
+// because the page must say which version the download delivers and compare it
+// with the connected one: without it the owner updated the binary with no way
+// to know if they got the new one (user report 26/08). Bump with the Go core.
 export const RUNNER_VERSION = '2.2.0';
 
 // key `${userId}:${deviceId}` -> { userId, deviceId, meta, lastSeen, waiter, queue }
@@ -298,12 +298,12 @@ export function runnerStatus(userId) {
   };
 }
 
-// Bloco de contexto pro prompt, quando o Runner está online E amarrado a ESTE
-// assistente. Existe porque o vínculo sozinho não bastava: o gate abria, a tool
-// `codar` era montada, e mesmo assim o assistente respondia "não tenho acesso à
-// sua máquina" (caso Marcos 25/08) — nada no prompt contava que a máquina do dono
-// estava ali, e a porta de entrada tem descrição de CÓDIGO, não de "máquina do
-// dono". Aqui a capacidade fica declarada, com o escopo real de escrita.
+// Prompt context block, when the Runner is online AND bound to THIS assistant.
+// It exists because the binding alone wasn't enough: the gate opened, the
+// `codar` tool was built, and the assistant still answered "I have no access to
+// your machine" (user report 25/08). Nothing in the prompt said the owner's
+// machine was there, and the entry tool is described as CODE, not "owner's
+// machine". Here the capability is declared, with the real write scope.
 export function runnerContext(userId) {
   const s = runnerStatus(userId);
   if (!s.online) return '';
@@ -337,9 +337,9 @@ export function runnerContext(userId) {
   ].join(' ');
 }
 
-// Diagnóstico somente leitura. Diferencia heartbeat expirado de ausência de
-// observação neste processo. Não infere instalação pelo label de device_token:
-// esse cadastro também atende Brambs OS. Não modifica o gate de acesso.
+// Read-only diagnostics. Tells an expired heartbeat from no observation in
+// this process. Doesn't infer installation from the device_token label: that
+// registry also serves other device clients. Doesn't change the access gate.
 export function runnerAvailability(userId) {
   const online=pickDevice(userId);
   if (online) return {state:'online',activeAgentId:online.activeAgentId || null};

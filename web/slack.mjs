@@ -1,18 +1,18 @@
-// ── Canal Slack (app inscrito num workspace, Events API) ──
-// Espelha o WhatsApp: um app de Slack atende VÁRIOS usuários do mesmo workspace.
-// Roteamos pelo e-mail do usuário do Slack -> usuário do Brambs (mesmo caminho do
-// canal de e-mail), e dentro do chat a pessoa escolhe qual assistente fala.
+// ── Slack channel (app installed in a workspace, Events API) ──
+// Mirrors WhatsApp: one Slack app serves SEVERAL users of the same workspace.
+// We route by the Slack user's email -> platform user (same path as the email
+// channel), and inside the chat the person picks which assistant speaks.
 //
-// Modelo: AGENTE ATIVO fixo por (team + usuário do Slack) (sticky). Mensagem
-//   normal vai pro ativo.
-//   "@nome ..."  troca o ativo e roteia aquela mensagem pra ele.
-//   "menu" / "agentes"  lista os assistentes.
-// Cada agente tem sua própria thread "Slack" (history isolado); a memória de
-// USUÁRIO (wiki/perfil) segue compartilhada entre os assistentes da pessoa.
+// Model: ACTIVE AGENT fixed per (team + Slack user) (sticky). A normal
+//   message goes to the active one.
+//   "@name ..."  switches the active one and routes that message to it.
+//   "menu" / "agentes"  lists the assistants.
+// Each agent has its own "Slack" thread (isolated history); USER memory
+// (wiki/profile) stays shared across the person's assistants.
 //
-// Dispara em dois eventos: `app_mention` (menção ao app num canal onde ele está)
-// e `message.im` (mensagem direta pro app). Ignora as próprias mensagens (loop) e
-// subtipos (edição/remoção/join).
+// Fires on two events: `app_mention` (app mentioned in a channel it's in)
+// and `message.im` (direct message to the app). Ignores its own messages (loop)
+// and subtypes (edit/delete/join).
 
 import crypto from 'crypto';
 import { hostDaMarca, marca } from './marca.mjs';
@@ -61,8 +61,8 @@ async function getBotUserId() {
   return cachedBotUserId;
 }
 
-// E-mail do usuário do Slack (precisa do escopo users:read.email). É a chave de
-// roteamento pro usuário do Brambs.
+// Slack user's email (needs the users:read.email scope). It's the routing key
+// to the platform user.
 async function slackEmail(slackUserId) {
   try {
     const j = await slackApi('users.info', { user: slackUserId });
@@ -196,10 +196,10 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       if (seenMsg.size > 5000) seenMsg.clear();
     }
 
-    // ── Comando: conectar <código> — pareia ESTE canal a um assistente ──
-    // O código é gerado no Brambs (logado, pra um agente do dono). Consumi-lo
-    // amarra o assistente àquele canal (grupo ou DM): é assim que se tem "assistente
-    // A no grupo X, B no grupo Y". Uso único; sobrescreve um vínculo anterior.
+    // ── Command: conectar <code>, pairs THIS channel with an assistant ──
+    // The code is generated in the web app (logged in, for one of the owner's agents).
+    // Using it binds the assistant to that channel (group or DM): that's how you get
+    // "assistant A in group X, B in group Y". Single use; overwrites a prior binding.
     const mConnect = text.match(/^conectar\s+([A-Za-z0-9]{4,})\b/i);
     if (mConnect) {
       const code = mConnect[1].toUpperCase();
@@ -244,11 +244,11 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     if (!userId) {
       const email = await slackEmail(slackUser);
       const user = email ? await db.getUserByEmail(email) : null;
-      // `deleted_at` entra aqui junto com o !user de propósito (Marcos 04/09):
-      // closeUserAccount apaga slack_links, mas ESTE fallback por e-mail recriaria
-      // o vínculo no próximo DM e o assistente voltaria a responder pra uma conta
-      // excluída. Tratar como "não tem conta" é o certo: a conta, pra efeito de
-      // acesso, não existe mais.
+      // `deleted_at` is checked here with !user on purpose (04/09):
+      // closeUserAccount deletes slack_links, but THIS e-mail fallback would
+      // recreate the link on the next DM and the assistant would answer a
+      // deleted account again. Treating it as "no account" is right: for
+      // access purposes, the account no longer exists.
       if (!user || user.deleted_at) {
         await reply(`Oi! Pra falar comigo por aqui, o e-mail da sua conta do Slack precisa ser o mesmo da sua conta no ${marca().nome} (${hostDaMarca()}). Faça login lá com esse e-mail e me chame de novo.`);
         return;

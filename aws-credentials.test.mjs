@@ -1,5 +1,5 @@
-// SOC 2 (02/out/2026): o S3 da prod passa a assinar com a credencial temporária
-// da role da instância (IMDSv2) em vez da chave fixa do usuário IAM brambs-media.
+// SOC 2 (Oct 2, 2026): production S3 now signs with the instance role's temporary
+// credential (IMDSv2) instead of a static IAM user key.
 import test from 'node:test';
 import http from 'node:http';
 import assert from 'node:assert/strict';

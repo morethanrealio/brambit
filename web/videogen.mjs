@@ -1,17 +1,17 @@
-// ── Cliente do worker de geração de vídeo (ComfyUI/H3, via wrapper HTTP) ──
-// A geração de vídeo das pessoas roda FORA do harness, num worker GPU (ComfyUI
-// na Mumbai) exposto por um wrapper HTTP fino da Yume. O fluxo é ASSÍNCRONO:
-//   1) createRender() cria o job (POST /v1/render) e devolve { job_id, ... }
-//   2) getRender(jobId) faz poll (GET /v1/render/{id}) até status done|error
-//   3) fetchRenderVideo(jobId) baixa o mp4 (GET /v1/render/{id}/video)
+// ── Video generation worker client (ComfyUI/H3, via HTTP wrapper) ──
+// People's video generation runs OUTSIDE the harness, on a GPU worker (ComfyUI)
+// exposed by a thin HTTP wrapper. The flow is ASYNCHRONOUS:
+//   1) createRender() creates the job (POST /v1/render) and returns { job_id, ... }
+//   2) getRender(jobId) polls (GET /v1/render/{id}) until status done|error
+//   3) fetchRenderVideo(jobId) downloads the mp4 (GET /v1/render/{id}/video)
 //
-// Contrato (Yume 05/08): image_url e audio_url podem ser URLs S3 pré-assinadas
-// (o worker baixa por HTTPS no momento de criar o job). duration é OBRIGATÓRIO
-// quando não há audio_url; com áudio, a duração sai do próprio áudio. Teto de
-// 15s é do lado do worker também (duration>15 -> 400), mas validamos aqui antes.
+// Contract (05/08): image_url and audio_url may be presigned S3 URLs (the
+// worker downloads over HTTPS when the job is created). duration is REQUIRED
+// when there's no audio_url; with audio, the duration comes from the audio.
+// The 15s cap is on the worker too (duration>15 -> 400), but we validate first.
 //
-// Cobrança: pelo `video_seconds` REAL que volta no GET quando done, não pelo
-// `credits_seconds` estimado do POST nem pelo tempo de processamento.
+// Billing: by the REAL `video_seconds` returned by GET when done, not by the
+// estimated `credits_seconds` of the POST nor by processing time.
 
 import { lerCorpoComTeto } from './baixar-corpo.mjs';
 
@@ -65,24 +65,24 @@ async function withTimeout(promise, ms, label) {
   }
 }
 
-// Cria o job. Retorna { job_id, status, estimated_video_seconds, credits_seconds }.
-//   imageUrl        (req) — foto-âncora de FRENTE (URL S3 pré-assinada) -> <Picture 1>
-//   prompt          (req) — SÓ a cena/ação (no modo clone a fala NÃO vai aqui)
-//   audioUrl        (opt) — áudio de referência
-//   voiceCloneOnly  (opt) — modo clone: audioUrl vira só referência de TIMBRE e a
-//                           fala vem de speechText (o server NÃO repete o áudio).
-//                           Exige audioUrl + speechText. Duração deriva do texto
-//                           (não mandar duration, senão a fala embola no fim).
-//   speechText      (opt) — as palavras exatas a falar (obrigatório no modo clone).
-//   duration        (opt) — segundos; OBRIGATÓRIO quando não há audioUrl. No clone,
-//                           deixe null pra o server dimensionar pelo texto.
-//   appImageUrl     (opt) — referência de app (screenshot) -> vem depois no numbering
-//   faceRefUrls     (opt) — até 2 fotos EXTRA do MESMO rosto (outro ângulo/expressão),
-//                           URLs S3 pré-assinadas. Entram como <Picture 2>/<Picture 3>
-//                           "mesma pessoa, outro ângulo" e ajudam a reconstruir os
-//                           traços. Contrato Yume 07/08: lista de strings, máx 2 (VRAM
-//                           do L40S); mais que isso o worker rejeita com 400. Omitir
-//                           quando o usuário só tem a âncora (retrocompatível).
+// Creates the job. Returns { job_id, status, estimated_video_seconds, credits_seconds }.
+//   imageUrl        (req): FRONT anchor photo (presigned S3 URL) -> <Picture 1>
+//   prompt          (req): ONLY the scene/action (in clone mode the speech is NOT here)
+//   audioUrl        (opt): reference audio
+//   voiceCloneOnly  (opt): clone mode: audioUrl is only a TIMBRE reference and the
+//                           speech comes from speechText (the server does NOT repeat
+//                           the audio). Needs audioUrl + speechText. Duration comes
+//                           from the text (don't send duration, or speech bunches up).
+//   speechText      (opt): the exact words to speak (required in clone mode).
+//   duration        (opt): seconds; REQUIRED when there's no audioUrl. In clone mode,
+//                           leave null so the server sizes it from the text.
+//   appImageUrl     (opt): app reference (screenshot) -> comes later in the numbering
+//   faceRefUrls     (opt): up to 2 EXTRA photos of the SAME face (other angle/expression),
+//                           presigned S3 URLs. They enter as <Picture 2>/<Picture 3>
+//                           "same person, other angle" and help rebuild the features.
+//                           Contract 07/08: list of strings, max 2 (L40S VRAM); more
+//                           than that the worker rejects with 400. Omit when the
+//                           user only has the anchor (backward compatible).
 export async function createRender({ imageUrl, prompt, audioUrl = null, voiceCloneOnly = false, speechText = null, duration = null, appImageUrl = null, faceRefUrls = [] } = {}) {
   if (!videoGenEnabled()) throw new Error('video gen desabilitado (COMFY_URL/COMFY_TOKEN ausentes)');
   if (!imageUrl) throw new Error('imageUrl obrigatório');

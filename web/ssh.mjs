@@ -25,12 +25,12 @@ const executionResult=(body,state,operation)=>JSON.stringify({...body,effect:exe
 const SSH_DIR = '/workspace/.ssh';
 const KNOWN_HOSTS = `${SSH_DIR}/known_hosts`;
 
-// Mascara segredo na SAÍDA de qualquer comando remoto antes de devolver pro
-// modelo (e, por tabela, pro chat/histórico). Rede de segurança que NÃO depende
-// do modelo se comportar: se um `cat .env`/`grep` cuspir credencial, ela já sai
-// redigida. Cobre o que vazou pro Marcos 15/07 (senha do Postgres na
-// DATABASE_URL, AWS_ACCESS_KEY_ID/SECRET) + os suspeitos usuais. Usada aqui e no
-// coding.mjs (que importa daqui pra não duplicar).
+// Masks secrets in the OUTPUT of any remote command before returning it to the
+// model (and so to the chat/history). A safety net that does NOT depend on the
+// model behaving: if a `cat .env`/`grep` spits a credential, it comes out
+// redacted. Covers what leaked into a chat on 15/07 (Postgres password in
+// DATABASE_URL, AWS_ACCESS_KEY_ID/SECRET) + the usual suspects. Used here and
+// in coding.mjs (which imports it to avoid duplication).
 export function maskSecrets(s, { prose = false } = {}) {
   let t = String(s ?? '');
   // Senha em connection string: scheme://user:SENHA@host  ->  user:***@host
@@ -293,7 +293,7 @@ export function livreTools(userId, threadId, runnerBound = false, sshLivre = tru
   };
   if (!soRunner) {
     props.host = { type: 'string', description: 'host da máquina (só precisa se o usuário tiver mais de uma conectada). Opcional.' };
-    props.rotulo = { type: 'string', description: 'rótulo da chave SSH a usar (o "label" que aparece no cofre). Passe isto quando você tiver mais de uma chave salva e o host não bastar pra escolher, ex: "aws-aosp-build". Opcional.' };
+    props.rotulo = { type: 'string', description: 'rótulo da chave SSH a usar (o "label" que aparece no cofre). Passe isto quando você tiver mais de uma chave salva e o host não bastar pra escolher, ex: "aws-build-server". Opcional.' };
   }
   return [
     {
@@ -316,11 +316,11 @@ export function livreTools(userId, threadId, runnerBound = false, sshLivre = tru
         if (!comando || !String(comando).trim()) {
           return executionResult({ ok: false, error: 'Passe "comando" (string) ou "comandos" (lista de strings).' },'not_applied','terminal');
         }
-        // Costura de transporte: se o usuário tem um Brambs Runner online, ELE
-        // está amarrado a ESTE assistente (runnerBound, config em Conexões) e não
-        // apontou um host/rótulo (que denotam uma máquina SSH específica), o
-        // alvo é a MÁQUINA LOCAL dele (runner outbound). Senão, SSH-in de sempre.
-        // Mesma assinatura de retorno nos dois; o maskSecrets abaixo cobre ambos.
+        // Transport seam: if the user has a Brambit Runner online, IT is bound
+        // to THIS assistant (runnerBound, set in Connections) and no host/label
+        // was given (those point to a specific SSH machine), the target is the
+        // user's LOCAL MACHINE (outbound runner). Otherwise, the usual SSH-in.
+        // Same return signature for both; maskSecrets below covers both.
         const useRunner = !host && !rotulo && runnerBound && runnerOnline(userId);
         if (!useRunner && soRunner) {
           return executionResult({ ok: false, error: `O ${marca().nome} Runner saiu do ar (a máquina do usuário desconectou). Peça pra ele reabrir o Runner na máquina dele e tente de novo.` },'not_applied','terminal');
@@ -408,7 +408,7 @@ export function sshTools(userId) {
           comando: { type: 'string', description: 'comando shell a rodar no servidor remoto' },
           host: { type: 'string', description: 'host do servidor (IP ou domínio). Obrigatório se a chave foi gerada sem host, ou se o usuário tem mais de uma chave.' },
           usuario: { type: 'string', description: 'usuário de login no servidor, ex: ubuntu, root. Use se a chave foi gerada sem usuário fixo (opcional).' },
-          rotulo: { type: 'string', description: 'rótulo da chave SSH a usar (o "label" do cofre). Passe isto quando houver mais de uma chave e o host não bastar pra escolher, ex: "aws-aosp-build". Opcional.' },
+          rotulo: { type: 'string', description: 'rótulo da chave SSH a usar (o "label" do cofre). Passe isto quando houver mais de uma chave e o host não bastar pra escolher, ex: "aws-build-server". Opcional.' },
         },
         required: ['comando'],
       },

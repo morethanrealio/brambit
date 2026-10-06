@@ -38,12 +38,12 @@ export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
 export function ttsEnabled() { return !!process.env.GEMINI_API_KEY; }
 export function sttEnabled() { return !!process.env.GEMINI_API_KEY; }
 
-// Estimativa APROXIMADA de quanto cada operação de mídia consome de crédito.
-// Baseada em contagens de token típicas e na tabela de pricing.mjs; o valor real
-// varia (tamanho da imagem, duração do áudio, modelo de chat escolhido p/ visão).
-// Serve pra mostrar ao usuário uma ordem de grandeza ("gerar imagem ~X créditos").
-// `toUnits` converte o custo em US$ para a unidade mostrada (créditos, no Brambs);
-// sem ele, a estimativa sai em US$.
+// ROUGH estimate of how much credit each media operation uses.
+// Based on typical token counts and the pricing.mjs table; the real value varies
+// (image size, audio length, chat model chosen for vision).
+// Meant to show the user an order of magnitude ("generate image ~X credits").
+// `toUnits` converts the US$ cost to the displayed unit (e.g. a plugin's credits);
+// without it, the estimate is in US$.
 export function mediaEstimates(toUnits = (usd) => usd) {
   // Gerar imagem: ~1290 tokens de saída no modelo de imagem (Nano Banana).
   const image = toUnits(costOf({ model: IMAGE_MODEL, in: 30, out: 1290, total: 1320 }));
@@ -188,15 +188,15 @@ export async function deleteMedia(key) {
   return true;
 }
 
-// Gera uma URL HTTPS pré-assinada (SigV4, query-string) de GET pra uma key
-// PRIVADA do S3, válida por `expiresSec`. Usada pra entregar uma mídia do
-// bucket privado a um SERVIÇO EXTERNO (ex.: o worker de vídeo da Yume, que
-// baixa a foto-âncora por HTTPS no momento de criar o job) sem expor o bucket
-// nem compartilhar credencial: a assinatura embute a autorização e caduca.
-// Nada de x-amz-content-sha256; payload de GET presigned = UNSIGNED-PAYLOAD.
-// Com a role da instância, a URL leva o X-Amz-Security-Token e vale no máximo
-// até a credencial temporária vencer. Síncrono: usa a credencial em cache e
-// devolve null se a role ainda não respondeu (os callers já tratam o null).
+// Builds a presigned HTTPS GET URL (SigV4, query-string) for a PRIVATE S3 key,
+// valid for `expiresSec`. Used to hand media from the private bucket to an
+// EXTERNAL SERVICE (e.g. the video worker, which downloads the anchor photo
+// over HTTPS when creating the job) without exposing the bucket or sharing a
+// credential: the signature carries the authorization and expires.
+// No x-amz-content-sha256; presigned GET payload = UNSIGNED-PAYLOAD.
+// With the instance role, the URL carries X-Amz-Security-Token and is valid at
+// most until the temporary credential expires. Synchronous: uses the cached
+// credential and returns null if the role hasn't answered yet (callers handle it).
 export function presignGet(key, expiresSec = 900, { bucket = S3_BUCKET(), region = S3_REGION(), now = new Date() } = {}) {
   const cred = currentAwsCredentials();
   if (!key || !cred || !bucket) return null;
@@ -231,9 +231,9 @@ export function presignGet(key, expiresSec = 900, { bucket = S3_BUCKET(), region
 }
 
 // ── Bucket dedicado de CAMPANHA/marketing (separado do bucket privado) ───────
-// Handoff Yume (13/08): mídia de campanha é pública/lifecycle diferente, então
-// vive num bucket próprio (CAMPAIGN_S3_BUCKET), não sob campanhas/ no privado.
-// Mesmas credenciais AWS; só muda o bucket/região. Reusa a assinatura SigV4.
+// Since 13/08: campaign media is public with a different lifecycle, so it
+// lives in its own bucket (CAMPAIGN_S3_BUCKET), not under campanhas/ in the
+// private one. Same AWS credentials; only bucket/region change. Reuses SigV4.
 const CAMPAIGN_BUCKET = () => process.env.CAMPAIGN_S3_BUCKET;
 const CAMPAIGN_REGION = () => process.env.CAMPAIGN_S3_REGION || process.env.S3_REGION || 'us-east-1';
 export function campaignS3Enabled() {

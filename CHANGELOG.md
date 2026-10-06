@@ -14,6 +14,12 @@ Changes merged since the last tag go under "Unreleased".
 - This changelog, and a "Why it belongs in Brambit" section in the pull
   request template.
 
+### Changed
+- Core comments, docs, prompt examples and test fixtures use neutral names:
+  no deployment, client, person or internal host names. Identifiers and
+  values the code sends or stores (env vars, headers, paths, keys) are
+  unchanged.
+
 ## [0.2.4] - 2026-10-06
 
 ### Changed

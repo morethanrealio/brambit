@@ -21,7 +21,7 @@ const cancela = (txt) => t(`cancela : ${JSON.stringify(txt)}`, isConfirmation(tx
 // 3) O bug do "para": \bpara\b casava com a PREPOSIÇÃO e cancelava em silêncio.
 //    Vale pra pt e pra es. Estas linhas eram todas CANCELADA antes do conserto.
 ['pode enviar para a Ana', 'sim, para o cliente',
- 'confirmo, manda para ele', 'ok, envia para marcos@x.com', 'pode mandar para mim',
+ 'confirmo, manda para ele', 'ok, envia para ana@x.com', 'pode mandar para mim',
  'sim, envia para nós', 'manda para você mesmo', 'pode, para os dois',
  'sí, para el cliente', 'sí, mándalo para Juan', 'ok para mí',
  'sí, es para mañana', 'claro, para ella'].forEach(confirma);

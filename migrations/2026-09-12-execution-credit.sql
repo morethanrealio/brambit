@@ -1,4 +1,4 @@
--- PROPOSAL ONLY. Production execution requires Marcos's separate approval.
+-- PROPOSAL ONLY. Production execution requires the operator's separate approval.
 -- Additive ledger; does not backfill/reprice/delete existing usage or grants.
 BEGIN;
 CREATE TABLE mtr_harness.execution_credit_calls (
