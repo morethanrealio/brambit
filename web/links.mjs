@@ -40,22 +40,35 @@ import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
 // propósito, porque aquele texto é RETORNO DE TOOL, vai pro modelo e não pra
 // tela; o modelo já responde no idioma de quem perguntou.
 //
-// Os avisos são determinísticos nos três idiomas atendidos.
+// Os avisos são determinísticos nos três idiomas atendidos e falam a língua de
+// quem lê: nada de código HTTP, "rede" ou "teto" (Marcos, 06/10/2026).
 const TEXTOS = {
   'pt-BR': {
     fontes: 'Fontes:', naoVerificado: '[link não verificado]', itemNaoVerificado: '[Item omitido: link não verificado]', indisponivel: '[link indisponível]', item: '[Item omitido: link indisponível]',
-    removidos: n => `⚠️ Removi ${n} link(s) que falharam em duas tentativas (HTTP 404/410, erro 5xx, domínio inexistente ou conexão recusada). Não encontrei substitutos nesta conferência.`,
-    limitados: n => `⚠️ Não consegui verificar ${n} link(s) por bloqueio, erro de rede ou limite de conferência. Eles NÃO estão validados; isso não prova que as páginas deixaram de existir.`,
+    removidos: n => n === 1
+      ? '⚠️ Removi 1 link que não abriu em duas tentativas: a página não existe mais ou o site está fora do ar. Não achei outro endereço para pôr no lugar.'
+      : `⚠️ Removi ${n} links que não abriram em duas tentativas: as páginas não existem mais ou os sites estão fora do ar. Não achei outros endereços para pôr no lugar.`,
+    limitados: n => n === 1
+      ? '⚠️ Não consegui conferir 1 link desta resposta: o site não abriu quando tentei ou havia links demais para conferir de uma vez. Ele pode funcionar normalmente, mas confira antes de confiar nele.'
+      : `⚠️ Não consegui conferir ${n} links desta resposta: os sites não abriram quando tentei ou havia links demais para conferir de uma vez. Eles podem funcionar normalmente, mas confira antes de confiar neles.`,
   },
   en: {
     fontes: 'Sources:', naoVerificado: '[link not verified]', itemNaoVerificado: '[Item omitted: link not verified]', indisponivel: '[link unavailable]', item: '[Item omitted: link unavailable]',
-    removidos: n => `⚠️ Removed ${n} link(s) that failed twice (HTTP 404/410, 5xx error, nonexistent domain or refused connection). This check did not find replacements.`,
-    limitados: n => `⚠️ Could not verify ${n} link(s) due to blocking, network errors or the checking limit. They are NOT validated; this does not prove that the pages no longer exist.`,
+    removidos: n => n === 1
+      ? '⚠️ I removed 1 link that did not open after two tries: the page no longer exists or the site is down. I could not find another address to put in its place.'
+      : `⚠️ I removed ${n} links that did not open after two tries: the pages no longer exist or the sites are down. I could not find other addresses to put in their place.`,
+    limitados: n => n === 1
+      ? '⚠️ I could not check 1 link in this answer: the site did not open when I tried, or there were too many links to check at once. It may work fine, but check it before relying on it.'
+      : `⚠️ I could not check ${n} links in this answer: the sites did not open when I tried, or there were too many links to check at once. They may work fine, but check them before relying on them.`,
   },
   es: {
     fontes: 'Fuentes:', naoVerificado: '[enlace no verificado]', itemNaoVerificado: '[Elemento omitido: enlace no verificado]', indisponivel: '[enlace no disponible]', item: '[Elemento omitido: enlace no disponible]',
-    removidos: n => `⚠️ Retiré ${n} enlace(s) que fallaron en dos intentos (HTTP 404/410, error 5xx, dominio inexistente o conexión rechazada). Esta comprobación no encontró reemplazos.`,
-    limitados: n => `⚠️ No pude verificar ${n} enlace(s) por bloqueo, error de red o límite de comprobación. NO están validados; esto no demuestra que las páginas hayan dejado de existir.`,
+    removidos: n => n === 1
+      ? '⚠️ Quité 1 enlace que no abrió en dos intentos: la página ya no existe o el sitio está caído. No encontré otra dirección para poner en su lugar.'
+      : `⚠️ Quité ${n} enlaces que no abrieron en dos intentos: las páginas ya no existen o los sitios están caídos. No encontré otras direcciones para poner en su lugar.`,
+    limitados: n => n === 1
+      ? '⚠️ No pude comprobar 1 enlace de esta respuesta: el sitio no abrió cuando lo intenté o había demasiados enlaces para revisar de una vez. Puede funcionar bien, pero revísalo antes de confiar en él.'
+      : `⚠️ No pude comprobar ${n} enlaces de esta respuesta: los sitios no abrieron cuando lo intenté o había demasiados enlaces para revisar de una vez. Pueden funcionar bien, pero revísalos antes de confiar en ellos.`,
   },
 };
 const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[IDIOMA_PADRAO];
@@ -255,11 +268,20 @@ export async function resolveGroundingUri(uri) {
   return '';
 }
 
-/** Lista numerada "[1] título — url", com os redirects já resolvidos. */
-export async function renderFontes(sources) {
+/**
+ * Lista numerada "[1] título — url", com os redirects já resolvidos.
+ * Com `registro` (registroDeFontes do turno, citacoes.mjs) o número é o do
+ * registro: fixo no turno inteiro, é o que o modelo escreve na resposta e o que a
+ * plataforma troca pela fonte real. Fonte sem endereço resolvido fica sem número,
+ * porque não tem como ser citada.
+ */
+export async function renderFontes(sources, registro = null) {
   const arr = (sources || []).slice(0, 10);
   const resolved = await Promise.all(arr.map(async (s) => ({ title: s.title, uri: await resolveGroundingUri(s.uri) })));
-  return resolved.map((s, i) => `[${i + 1}] ${s.title}${s.uri ? ' — ' + s.uri : ''}`).join('\n');
+  return resolved.map((s, i) => {
+    const n = registro ? registro.add(s) : i + 1;
+    return `${n ? `[${n}] ` : '- '}${s.title}${s.uri ? ' — ' + s.uri : ''}`;
+  }).join('\n');
 }
 
 /**

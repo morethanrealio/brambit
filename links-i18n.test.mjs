@@ -67,7 +67,7 @@ await t('URL e título sobrevivem à tradução', async () => {
 
 // Exercita o verificador real com HTTP simulado (inclui confirmação GET).
 await t('link removido e aviso traduzido nos três idiomas', async () => {
-  for (const [language, fragment] of [['pt-BR', 'Removi 2 link(s)'], ['en', 'Removed 2 link(s)'], ['es', 'Retiré 2 enlace(s)']]) {
+  for (const [language, fragment] of [['pt-BR', 'Removi 2 links'], ['en', 'I removed 2 links'], ['es', 'Quité 2 enlaces']]) {
     const text = '• https://broken.example.invalid/' + language + '/a\n• https://broken.example.invalid/' + language + '/b';
     const r = await fontesEConferencia(text, [], {language});
     eq(r.quebrados.length, 2);

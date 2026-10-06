@@ -123,3 +123,41 @@ test('rede de baixo remove a linha sem base e nunca devolve silêncio', () => {
   const so = applyGroundingFallback('Fonte: Canção Nova', findings);
   assert.ok(so.trim().length > 0);
 });
+
+// Calibração 06/10/2026: 186 disparos reais em prod, nenhuma invenção
+// confirmada. Um representante de cada causa de falso positivo; cada um tem
+// que passar, e o caso inventado ao lado continua sendo pego.
+test('calibração: o que tem origem não é acusado', () => {
+  const sem = (texto, ctx) => assert.deepEqual(kinds(checkGrounding(texto, ctx)), [], texto);
+  // palavra acentuada não vira código ("DESCART"), "promoções" não abre janela de cupom
+  sem('*2) DESCARTÁVEIS* — propaganda, promoções, newsletter', { toolOutputs: [] });
+  // linha que nega cupom
+  sem('Não achei nenhum cupom ativo pra TESTANI hoje.', { toolOutputs: [] });
+  // pedaço de endereço e e-mail na linha de cupom
+  sem('Cupom: veja em https://loja.example/promo?utm=VERAO2026 ou fale com VENDAS@loja.example', { toolOutputs: ['loja.example'] });
+  // material da rotina entregue pela plataforma ao modelo conta como origem
+  sem('Promo do remetente MAPFRE no cupom da semana', { toolOutputs: ['De: MAPFRE comunicação'] });
+  // subdomínio de host da marca e endereço local
+  definirMarca({ hostsCitaveis: ['minhamarca.example'] });
+  try { sem('Seu app: https://joana.minhamarca.example/planner/', { toolOutputs: [] }); } finally { definirMarca(); }
+  sem('Use http://localhost:3000/callback no cadastro.', { toolOutputs: [] });
+  // link montado a partir de id lido (e-mail)
+  sem('Abrir: https://mail.google.com/mail/#all/1a0b54264c258800', { toolOutputs: ['{"id":"1a0b54264c258800"}'] });
+  // conta feita em cima de valor consultado (2 passagens; ida + volta)
+  sem('Cotei agora: R$ 4.240 para duas pessoas, R$ 4.760 ida e volta.', { toolOutputs: ['{"preco":"R$ 2.120"} volta R$ 2.640'] });
+  // prosa ao redor da lista de fontes quando houve consulta
+  sem('Fontes: INSS (gov.br), G1, consultados agora.', { toolOutputs: ['inss gov br'], toolCounts: { buscar_web: 1 } });
+  // ainda pega: preço sem relação com o consultado, cupom e link inventados
+  assert.deepEqual(kinds(checkGrounding('Cotei agora: R$ 9.999.', { toolOutputs: ['{"preco":"R$ 2.120"}'] })), ['preco_sem_consulta']);
+  assert.deepEqual(kinds(checkGrounding('Cupom: VERAO2026', { toolOutputs: [] })), ['cupom_nao_consultado']);
+  assert.deepEqual(kinds(checkGrounding('Veja https://inventado.example/abc', { toolOutputs: [] })), ['link_nao_consultado']);
+});
+
+test('instrução de repasse é revisão interna, sem nada que vaze pra pessoa', () => {
+  const { findings } = checkGrounding('Cupom: VERAO2026', { toolOutputs: [] });
+  for (const lang of ['pt-BR', 'en', 'es']) {
+    const p = groundingRetryPrompt(findings, lang);
+    assert.match(p, /VERAO2026/);
+    assert.match(p, /(n[ãa]o v[êe]|not see|no ve)/i, lang);
+  }
+});
