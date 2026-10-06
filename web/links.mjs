@@ -48,44 +48,21 @@ const TEXTOS = {
     removidos: n => n === 1
       ? '⚠️ Removi 1 link que não abriu em duas tentativas: a página não existe mais ou o site está fora do ar. Não achei outro endereço para pôr no lugar.'
       : `⚠️ Removi ${n} links que não abriram em duas tentativas: as páginas não existem mais ou os sites estão fora do ar. Não achei outros endereços para pôr no lugar.`,
-    limitados: (n, sites) => n === 1
-      ? `⚠️ Não consegui confirmar que o link do site ${sites} funciona. Antes de usar, abra o link e veja se a página certa aparece.`
-      : `⚠️ Não consegui confirmar que ${n} links desta resposta funcionam (${sites}). Antes de usar, abra cada link e veja se a página certa aparece.`,
-    e: 'e', outros: 'outros sites',
   },
   en: {
     fontes: 'Sources:', naoVerificado: '[link not verified]', itemNaoVerificado: '[Item omitted: link not verified]', indisponivel: '[link unavailable]', item: '[Item omitted: link unavailable]',
     removidos: n => n === 1
       ? '⚠️ I removed 1 link that did not open after two tries: the page no longer exists or the site is down. I could not find another address to put in its place.'
       : `⚠️ I removed ${n} links that did not open after two tries: the pages no longer exist or the sites are down. I could not find other addresses to put in their place.`,
-    limitados: (n, sites) => n === 1
-      ? `⚠️ I could not confirm that the link to ${sites} works. Before using it, open the link and check that the right page appears.`
-      : `⚠️ I could not confirm that ${n} links in this answer work (${sites}). Before using them, open each link and check that the right page appears.`,
-    e: 'and', outros: 'other sites',
   },
   es: {
     fontes: 'Fuentes:', naoVerificado: '[enlace no verificado]', itemNaoVerificado: '[Elemento omitido: enlace no verificado]', indisponivel: '[enlace no disponible]', item: '[Elemento omitido: enlace no disponible]',
     removidos: n => n === 1
       ? '⚠️ Quité 1 enlace que no abrió en dos intentos: la página ya no existe o el sitio está caído. No encontré otra dirección para poner en su lugar.'
       : `⚠️ Quité ${n} enlaces que no abrieron en dos intentos: las páginas ya no existen o los sitios están caídos. No encontré otras direcciones para poner en su lugar.`,
-    limitados: (n, sites) => n === 1
-      ? `⚠️ No pude confirmar que el enlace del sitio ${sites} funcione. Antes de usarlo, abre el enlace y verifica que aparezca la página correcta.`
-      : `⚠️ No pude confirmar que ${n} enlaces de esta respuesta funcionen (${sites}). Antes de usarlos, abre cada enlace y verifica que aparezca la página correcta.`,
-    e: 'y', outros: 'otros sitios',
   },
 };
 const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[IDIOMA_PADRAO];
-
-// The notice names the sites: "could not check 1 link" alone left the reader
-// guessing which link it meant (Marcos, 06/10/2026). Up to three distinct sites,
-// then "other sites".
-function sitesDosLinks(urls, t) {
-  const sites = [...new Set(urls.map((u) => {
-    try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return null; }
-  }).filter(Boolean))];
-  const nomes = sites.length > 3 ? [...sites.slice(0, 3), t.outros] : sites;
-  return nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} ${t.e} ${nomes.at(-1)}` : (nomes[0] || '');
-}
 
 const TIMEOUT_MS = 3000;       // por pedido (HEAD ou GET), somando os saltos de redirect
 const MAX_REDIRECTS = 5;
@@ -321,7 +298,7 @@ export async function blocoDeFontes(sources, language) {
  *  - `sources`: grounding da busca nativa (pode vir vazio);
  *  - anexa "Fontes:" quando a busca rodou e a resposta ainda não traz uma lista;
  *  - avisa, com honestidade, quando algum link entregue não abriu.
- * Retira links comprovadamente quebrados e sinaliza limites, sem inventar substitutos.
+ * Retira links comprovadamente quebrados, sem inventar substitutos.
  * @returns {Promise<{texto:string, quebrados:string[], fontes:number}>}
  */
 export async function fontesEConferencia(texto, sources = [], { mostrarFontes = true, language, strictLinks = false, authenticatedEmailSources = [] } = {}) {
@@ -343,11 +320,11 @@ export async function fontesEConferencia(texto, sources = [], { mostrarFontes = 
     out = omitBrokenLinks(out, quebrados, language);
     out += `\n\n${t.removidos(quebrados.length)}`;
   }
-  // Link não verificado (redirect, 401/403, 429, timeout, teto de 8) fica no
-  // texto, com o aviso abaixo, inclusive em rotina. Até 29/09/2026 a rotina
-  // (`strictLinks`) tirava esses links também.
-  const naoVerificados = [...indefinidos, ...naoChecados];
-  if (naoVerificados.length) out += `\n\n${t.limitados(naoVerificados.length, sitesDosLinks(naoVerificados, t))}`;
+  // A link the check could not confirm (401/403/429, timeout, TLS, over the cap of
+  // 8) stays in the text with no notice, in chat and in routines. In prod (30 days
+  // to 06/10/2026) these were almost all live sites refusing a robot, so the
+  // notice told people to distrust links that open fine (Marcos, 06/10/2026).
+  // Only proven-dead links (404/410/5xx, unknown domain, refused connection) go.
   return { texto: out, quebrados, indefinidos, naoChecados, authenticatedSources, fontes: bloco ? bloco.split('\n').length - 1 : 0 };
 }
 
