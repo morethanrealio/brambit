@@ -1,8 +1,8 @@
 // Porta de rotas: a distribuição pluga rotas HTTP próprias sem o server.mjs
 // conhecer cada uma. No Brambs: os webhooks de pagamento do Stripe, da Apple e da
 // Asaas (pagamentos-brambs.mjs) e os painéis de admin, do /metrics e do cockpit
-// (admin-brambs.mjs, metricas-brambs.mjs, cockpit-brambs.mjs). Na versão aberta
-// ninguém registra e nada muda.
+// (admin-brambs.mjs, metricas-brambs.mjs, cockpit-brambs.mjs). No núcleo, só a
+// visão do dono do atendimento ao público (publico-dono.mjs).
 //  registrar: caminho EXATO (método + pathname).
 //  usar: manipulador livre, pra rota com prefixo, com mais de um caminho ou que
 //   aceita qualquer método. Devolve SEGUE quando o pedido não é dele.
