@@ -15,6 +15,7 @@
 import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
 import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
+import { normalizarSaidas, textoDasSaidas } from './publico-saidas.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp'];
 export const HISTORICO_MAX = 40;      // mensagens do contato que voltam pro modelo
@@ -353,12 +354,30 @@ export function comandoDoContato(mensagem) {
 //   tools com publico:true, e doTurno recebe o contato.
 //  agora() → data e hora por extenso pro prompt.
 //  gastoDoDia(agentId) → US$ do atendimento público hoje (padrão: store.gastoDoDia).
+//  ganchos: porta atendimentoPublico de plugin (roteiro de quem atende), opcional:
+//   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes troca as do
+//    dono só neste turno; pular com saidas responde sem chamar o modelo (abertura,
+//    resposta fixa).
+//   depoisDoModelo({...ctx, texto}) → {saidas?}: troca o texto do modelo por
+//    saídas ricas (publico-saidas.mjs).
+//   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
+//    primeira (histórico vazio), estado(), lembrar(chave,valor)}.
+//   Gancho que falha ou devolve lixo é ignorado: o turno segue como sem plugin.
+//
+// O turno devolve {text, saidas?, motivo?, userId, agentId, contatoId}. Com
+// saidas, text é a versão em texto delas (canal que não entrega o tipo rico).
 //
 // Ordem dos freios, antes do modelo: contato bloqueado pelo dono (silêncio) →
 // comando do contato (parar/voltar/apagar) →
 // contato parado (silêncio, nada gravado) → limite por hora do contato (1 aviso
 // por hora, depois silêncio) → saldo do dono → teto diário do assistente.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, log = console }) {
+  async function gancho(nome, ctx) {
+    if (typeof ganchos?.[nome] !== 'function') return null;
+    try { const r = await ganchos[nome](ctx); return r && typeof r === 'object' ? r : null; }
+    catch (e) { log.error?.(`[publico] gancho ${nome} falhou:`, e?.message ?? e); return null; }
+  }
+
   const filas = new Map(); // contato (assistente+canal+endereço) → turno em andamento (1 por contato)
   function emFila(id, fn) {
     const antes = filas.get(id) || Promise.resolve();
@@ -420,10 +439,20 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const credito = await saldo(agente.user_id);
       if (!credito || credito.over !== false) return indisponivel('sem_saldo');
       if (agente.teto_diario_usd != null && await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return indisponivel('teto_diario');
-      const tools = registro(agente, contato, msg);
-      const system = promptPublico({ nome: agente.nome, instrucoes: agente.instrucoes, canal, agora: agora(),
-        instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
       const history = await store.historico(contato.id);
+      const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
+        canal, mensagem: msg, primeira: !history.length,
+        estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
+      const antes = await gancho('antesDoModelo', ctx);
+      const prontas = normalizarSaidas(antes?.saidas);
+      if (antes?.pular === true && prontas.length) {
+        const text = textoDasSaidas(prontas);
+        await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: text }]);
+        return { text, saidas: prontas, motivo: 'roteiro', ...ident };
+      }
+      const tools = registro(agente, contato, msg);
+      const system = promptPublico({ nome: agente.nome, instrucoes: typeof antes?.instrucoes === 'string' ? antes.instrucoes : agente.instrucoes,
+        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
       let text = '';
       try {
         const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, history, maxSteps: PASSOS_MAX });
@@ -432,9 +461,14 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       } catch (e) {
         log.error?.('[publico] turno falhou:', e?.message ?? e);
       }
-      if (!text) text = RESPOSTA_INDISPONIVEL;
+      if (!text) {
+        await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
+        return { text: RESPOSTA_INDISPONIVEL, ...ident };
+      }
+      const saidas = normalizarSaidas((await gancho('depoisDoModelo', { ...ctx, texto: text }))?.saidas);
+      if (saidas.length) text = textoDasSaidas(saidas);
       await store.registrar(contato.id, [{ role: 'user', content: msg }, { role: 'assistant', content: text }]);
-      return { text, ...ident };
+      return { text, ...(saidas.length ? { saidas } : {}), ...ident };
     });
   }
 

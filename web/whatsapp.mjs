@@ -122,6 +122,34 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
   return wamids;
 }
 
+// Saídas ricas do atendimento ao público (publico-saidas.mjs, já normalizadas),
+// uma mensagem da Meta por saída, na ordem. Texto segue por sendText (quebra em
+// balões); imagem por link, botão de link (cta_url) e template aprovado vão
+// direto. Erro igual ao do sendText: `error.wamids` traz o que já saiu.
+const corpoDaSaida = (s) => {
+  if (s.tipo === 'imagem') return { type: 'image', image: { link: s.url, ...(s.legenda ? { caption: markdownParaWa(s.legenda) } : {}) } };
+  if (s.tipo === 'botao') return { type: 'interactive', interactive: { type: 'cta_url', body: { text: markdownParaWa(s.texto) },
+    action: { name: 'cta_url', parameters: { display_text: s.rotulo, url: s.url } } } };
+  return { type: 'template', template: { name: s.nome, language: { code: s.idioma }, ...(s.componentes.length ? { components: s.componentes } : {}) } };
+};
+async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false } = {}) {
+  const wamids = [];
+  for (const s of saidas) {
+    try {
+      if (s.tipo === 'texto') { wamids.push(...await sendText(to, s.texto, { requireReceipt, reenvio })); continue; }
+      const enviar = () => graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, ...corpoDaSaida(s) });
+      const id = (await (reenvio ? comReenvio(enviar, { rotulo: 'whatsapp' }) : enviar()))?.messages?.[0]?.id;
+      if (requireReceipt && (typeof id !== 'string' || !id.trim())) throw Object.assign(new Error('WhatsApp sem recibo para uma saída'), { definitive: false });
+      if (id) wamids.push(id);
+    } catch (error) {
+      error.wamids = [...wamids, ...(error.wamids || [])];
+      if (error.wamids.length) { error.definitive = false; error.partial = true; }
+      throw error;
+    }
+  }
+  return wamids;
+}
+
 // Tamanho máximo de um parâmetro de template; acima disso o texto é cortado.
 export const WA_TEMPLATE_MAX = 900;
 
@@ -675,7 +703,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     pumpPromise=(async()=>{
       if(!inbox.isOwner()){
         if(turns.size)return;
-        await inbox.acquire();for(const b of buffers.values())clearTimeout(b.timer);buffers.clear();loaded.clear();
+        await inbox.acquire();for(const b of buffers.values())clearTimeout(b.timer);buffers.clear();for(const b of esperaPublico.values())clearTimeout(b.timer);esperaPublico.clear();loaded.clear();
       }
       await inbox.reconcile([...loaded]);
       await restoreBuffered();
@@ -694,29 +722,44 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   // Desconhecido num número com atendimento ao público (publico-canal.mjs): quem
   // responde é o assistente público, fora do pump (o turno chama o modelo) e sem
   // nada do fluxo do dono (menu, @nome, reação, confirmação, referência de msg).
-  // Um turno por telefone, na ordem de chegada. Fase 1: só texto.
-  const filaPublico=new Map();
+  // Mensagens picadas viram um turno só: espera JUNTAR_MS depois da última (no
+  // máximo JUNTAR_MAX_MS desde a primeira), e o que chega durante um turno espera
+  // ele acabar e vai junto no seguinte. Um turno por telefone. Fase 1: só texto.
+  const JUNTAR_MS=Number(process.env.WA_PUBLICO_JUNTAR_MS??1500),JUNTAR_MAX_MS=Number(process.env.WA_PUBLICO_JUNTAR_MAX_MS??5000);
+  const filaPublico=new Map(),esperaPublico=new Map();
   function atenderPublico(msg,from){
     if(msg._inboxId)loaded.add(msg._inboxId);
-    const antes=filaPublico.get(from)||Promise.resolve();
-    const work=antes.then(async()=>{
-      try{
-        const mensagem=msg.type==='text'?(msg.text?.body||''):'';
-        if(msg.type!=='reaction'){
-          const r=mensagem?await publico.turno({endereco:from,mensagem}):{text:PUBLICO_SO_TEXTO};
-          const wamids=r?.text?await sendText(from,r.text,{requireReceipt:!!msg._inboxId,reenvio:true}):[];
-          if(mensagem&&r?.motivo!=='sem_saldo')billWa(r?.userId,wamids.length,{agentId:r?.agentId});
-        }
-        if(msg._inboxId)await inbox.complete([msg._inboxId]);
-      }catch(e){
-        console.error('[whatsapp] atendimento público:',e?.code||e?.name||'error');
-        if(msg._inboxId)await inbox.uncertain([msg._inboxId],'publico_falhou').catch(()=>{});
-      }finally{if(msg._inboxId)loaded.delete(msg._inboxId);}
-    });
-    filaPublico.set(from,work);turns.add(work);
-    work.finally(()=>{turns.delete(work);if(filaPublico.get(from)===work)filaPublico.delete(from);});
+    let b=esperaPublico.get(from);
+    if(!b){b={msgs:[],timer:null,desde:Date.now()};esperaPublico.set(from,b);}
+    b.msgs.push(msg);clearTimeout(b.timer);b.vencido=false;
+    if(!closing)b.timer=setTimeout(()=>{b.vencido=true;soltarPublico(from);},Math.max(0,Math.min(JUNTAR_MS,b.desde+JUNTAR_MAX_MS-Date.now())));
     return true;
   }
+  function soltarPublico(from){
+    const b=esperaPublico.get(from);if(!b||closing||filaPublico.has(from))return;
+    esperaPublico.delete(from);clearTimeout(b.timer);
+    const inboxIds=b.msgs.map(m=>m._inboxId).filter(Boolean);
+    const work=(async()=>{
+      try{
+        const mensagem=b.msgs.filter(m=>m.type==='text').map(m=>(m.text?.body||'').trim()).filter(Boolean).join('\n');
+        if(mensagem||b.msgs.some(m=>m.type!=='text'&&m.type!=='reaction')){
+          const r=mensagem?await publico.turno({endereco:from,mensagem}):{text:PUBLICO_SO_TEXTO};
+          const opts={requireReceipt:inboxIds.length>0,reenvio:true};
+          const wamids=r?.saidas?.length?await sendSaidas(from,r.saidas,opts):r?.text?await sendText(from,r.text,opts):[];
+          if(mensagem&&r?.motivo!=='sem_saldo')billWa(r?.userId,wamids.length,{agentId:r?.agentId});
+        }
+        if(inboxIds.length)await inbox.complete(inboxIds);
+      }catch(e){
+        console.error('[whatsapp] atendimento público:',e?.code||e?.name||'error');
+        if(inboxIds.length)await inbox.uncertain(inboxIds,'publico_falhou').catch(()=>{});
+      }finally{for(const id of inboxIds)loaded.delete(id);}
+    })();
+    filaPublico.set(from,work);turns.add(work);
+    work.finally(()=>{turns.delete(work);filaPublico.delete(from);soltarSeVencido(from);});
+    return true;
+  }
+  // Ao fim de um turno: o que chegou durante ele sai logo se a espera já venceu.
+  function soltarSeVencido(from){const b=esperaPublico.get(from);if(b&&b.vencido)soltarPublico(from);}
 
   async function handleMessage(msg) {
     const from = msg.from; // telefone do remetente em E.164 sem '+', ex: "5511999998888"
@@ -1047,6 +1090,6 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     process: async payload=>{if(inbox)void pump();return processPayload(payload);},
     accept: payload=>{if(!inbox||closing)throw Error('WA_INBOX_UNAVAILABLE');return inbox.accept(payload,PHONE_ID());},
     async start(){if(!inbox)return;await inbox.acquire();closing=false;void pump();pollTimer=setInterval(()=>void pump(),1000);pollTimer.unref?.();},
-    async stop(){closing=true;clearInterval(pollTimer);for(const b of buffers.values())clearTimeout(b.timer);await pumpPromise;await Promise.allSettled([...turns]);await inbox?.release();},
+    async stop(){closing=true;clearInterval(pollTimer);for(const b of buffers.values())clearTimeout(b.timer);for(const b of esperaPublico.values())clearTimeout(b.timer);await pumpPromise;await Promise.allSettled([...turns]);await inbox?.release();},
   };
 }

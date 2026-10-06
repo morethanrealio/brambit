@@ -1,7 +1,8 @@
 // Atendimento ao público no WhatsApp: quem escreve pro número sem conta vai pro
 // assistente público só quando a instalação ligou; o código de conexão do número
 // continua valendo antes disso; o dono vinculado nunca cai no público. Inbox real
-// (PostgreSQL local) e o handler real; o turno público é falso.
+// (PostgreSQL local) e o handler real; o turno público é falso. Mensagens picadas
+// viram um turno só, e saídas ricas do plugin saem como mensagens próprias.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {inboxFixture,uuid} from './test-support/wa-inbox-fixture.mjs';
@@ -11,7 +12,7 @@ import {encryptSecret,decryptSecret} from './web/vault.mjs';
 import {createWhatsAppHandler} from './web/whatsapp.mjs';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<500;i++){if(await fn())return;await wait(10);}throw Error('Expected state did not arrive');}
-Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CANAL_REENVIO_MS:'0,0'});
+Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CANAL_REENVIO_MS:'0,0',WA_PUBLICO_JUNTAR_MS:'50',WA_PUBLICO_JUNTAR_MAX_MS:'2000'});
 const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'synthetic-phone'},messages}}]}]});
 const DONO='5511000000001',CLIENTE='5511000000002';
 let n=0;const msg=(from,text,extra={})=>({id:'publico-'+(++n),from,type:'text',text:{body:text},...extra});
@@ -24,6 +25,7 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
   assert(String(url).startsWith('https://graph.facebook.com/'),'unexpected network');
   const body=JSON.parse(options?.body||'{}');
   if(body.type==='text'){sent.push({to:body.to,text:body.text.body});return {ok:true,json:async()=>({messages:[{id:'out-'+sent.length}]})};}
+  if(['image','interactive','template'].includes(body.type)){sent.push({to:body.to,[body.type]:body[body.type]});return {ok:true,json:async()=>({messages:[{id:'out-'+sent.length}]})};}
   return {ok:true,json:async()=>({success:true})};
  };
  const links=new Map([[DONO,{enabled:true,user_id:uuid(1),active_agent_id:uuid(11)}]]);
@@ -40,15 +42,18 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
  handlers.push(h);await h.start();
  const chegar=async(...msgs)=>{await h.accept(payload(msgs));await h.process(payload(msgs));await until(done);};
 
- await t.test('desconhecido recebe o público, na ordem, e a entrada fecha',async()=>{
+ await t.test('mensagens picadas viram um turno; o que chega durante o turno vai junto no seguinte',async()=>{
   let soltar;const lento=new Promise(r=>{soltar=r;});
-  turno=async({mensagem})=>{if(mensagem==='primeira')await lento;return {text:'público: '+mensagem};};
-  const a=msg(CLIENTE,'primeira'),b=msg(CLIENTE,'segunda');
+  turno=async({mensagem})=>{if(mensagem.startsWith('primeira'))await lento;return {text:'público: '+mensagem};};
+  const a=msg(CLIENTE,'primeira'),b=msg(CLIENTE,'segunda'),c=msg(CLIENTE,'terceira'),d=msg(CLIENTE,'quarta');
   await h.accept(payload([a,b]));await h.process(payload([a,b]));
-  await wait(100);assert.deepEqual(sent,[]);soltar();await until(done);
-  assert.deepEqual(sent.map(s=>s.text),['público: primeira','público: segunda']);
+  await until(async()=>turnos.length===1);
+  await h.accept(payload([c]));await h.process(payload([c]));await wait(80);
+  await h.accept(payload([d]));await h.process(payload([d]));await wait(150);
+  assert.deepEqual(sent,[]);assert.equal(turnos.length,1);soltar();await until(done);
+  assert.deepEqual(sent.map(s=>s.text),['público: primeira\nsegunda','público: terceira\nquarta']);
   assert.deepEqual(turnos.map(x=>x.endereco),[CLIENTE,CLIENTE]);
-  assert.equal(await estado(a.id),'completed');assert.equal(await estado(b.id),'completed');
+  for(const m of [a,b,c,d])assert.equal(await estado(m.id),'completed');
   assert.deepEqual(dono,[]);
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
@@ -63,6 +68,17 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
   sent.length=0;
   await chegar(msg(CLIENTE,null,{type:'audio',text:undefined,audio:{id:'m1'}}),msg(CLIENTE,null,{type:'reaction',text:undefined,reaction:{emoji:'👍'}}));
   assert.equal(sent.length,1);assert.match(sent[0].text,/só consigo ler mensagens de texto/);assert.deepEqual(turnos,[]);
+ });
+ await t.test('saídas do plugin: texto, imagem, botão de link e template, na ordem',async()=>{
+  sent.length=0;
+  turno=async()=>({text:'versão em texto',saidas:[{tipo:'texto',texto:'Oi!'},{tipo:'imagem',url:'https://x.example/a.jpg',legenda:'Blusa'},
+   {tipo:'botao',texto:'Prove agora',rotulo:'Provar',url:'https://x.example/p'},{tipo:'template',nome:'boas_vindas',idioma:'pt_BR',componentes:[]}]});
+  const m=msg(CLIENTE,'oi');await chegar(m);
+  assert.deepEqual(sent,[{to:CLIENTE,text:'Oi!'},{to:CLIENTE,image:{link:'https://x.example/a.jpg',caption:'Blusa'}},
+   {to:CLIENTE,interactive:{type:'cta_url',body:{text:'Prove agora'},action:{name:'cta_url',parameters:{display_text:'Provar',url:'https://x.example/p'}}}},
+   {to:CLIENTE,template:{name:'boas_vindas',language:{code:'pt_BR'}}}]);
+  assert.equal(await estado(m.id),'completed');
+  turno=async({mensagem})=>({text:'público: '+mensagem});
  });
  await t.test('turno que falha: nada enviado e a entrada fica incerta (sem repetir)',async()=>{
   sent.length=0;turno=async()=>{throw Error('modelo fora');};const m=msg(CLIENTE,'vai falhar');

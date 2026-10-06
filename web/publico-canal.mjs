@@ -27,14 +27,15 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 });
 
 // deps: pool/S do banco; makeProvider(ident) já preso ao gasto do dono;
-// recordUsages e creditStatus do servidor; ferramentas = porta de ferramentas.
+// recordUsages e creditStatus do servidor; ferramentas = porta de ferramentas;
+// ganchos = porta atendimentoPublico do plugin (roteiro; ver publico.mjs).
 // Devolve o que o canal do WhatsApp usa: atende() diz se há atendimento ligado
-// pro número; turno({endereco,mensagem}) → {text,userId,agentId}.
+// pro número; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
 // A retenção (apagar o que passou de retencao_dias) roda sozinha a cada
 // limpezaMs, a primeira um minuto depois do boot; limpezaMs=0 desliga.
 // Com rotas (+ send/fail/tooManyRequests do servidor), registra a visão do dono
 // (publico-dono.mjs).
-export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
+export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
   rotas, send, fail, tooManyRequests }) {
   const store = createPublicoStore(pool, { S });
   if (rotas) registrarRotasDoDono({ rotas, store, send, fail, tooManyRequests, agenteDoNumero });
@@ -49,7 +50,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setInterval(limpar, limpezaMs).unref?.();
   }
   const atendimento = createAtendimentoPublico({
-    store, makeProvider, ferramentas, log, agora: agoraPorExtenso,
+    store, makeProvider, ferramentas, ganchos, log, agora: agoraPorExtenso,
     saldo: creditStatus,
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });

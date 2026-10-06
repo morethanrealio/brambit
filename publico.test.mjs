@@ -122,6 +122,34 @@ test('sem saldo do dono: resposta neutra sem chamar o modelo; turnos do mesmo co
   assert.equal(max, 1);
 });
 
+test('ganchos do plugin: roteiro sem modelo, instruções do turno, saídas ricas; gancho quebrado não derruba', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, instrucoes: 'do dono' });
+  const vistos = [];
+  const ganchos = {
+    async antesDoModelo(ctx) {
+      vistos.push({ primeira: ctx.primeira, endereco: ctx.contato.endereco });
+      if (ctx.primeira) { await ctx.lembrar('termos', 'avisado'); return { pular: true, saidas: [{ tipo: 'texto', texto: 'Bem-vinda!' }, { tipo: 'imagem', url: 'http://inseguro/x.jpg' }] }; }
+      return { instrucoes: 'roteiro da loja' };
+    },
+    depoisDoModelo: ({ texto }) => ({ saidas: [{ tipo: 'botao', texto, rotulo: 'Ver', url: 'https://loja.example/p' }, { tipo: 'desconhecido' }] }),
+  };
+  const m = modelo();
+  const a = atendimento(store, m, { ganchos });
+  const r1 = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'oi' });
+  assert.deepEqual(r1.saidas, [{ tipo: 'texto', texto: 'Bem-vinda!' }]);
+  assert.equal(r1.text, 'Bem-vinda!'); assert.equal(m.chamadas.length, 0);
+  assert.deepEqual(await store.estado(r1.contatoId), { termos: 'avisado' });
+  const r2 = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'tem blusa?' });
+  assert.match(m.chamadas[0].system, /roteiro da loja/); assert.doesNotMatch(m.chamadas[0].system, /do dono/);
+  assert.deepEqual(m.chamadas[0].messages.slice(0, 2).map((x) => x.content), ['oi', 'Bem-vinda!']);
+  assert.deepEqual(r2.saidas, [{ tipo: 'botao', texto: 'resposta 1', rotulo: 'Ver', url: 'https://loja.example/p' }]);
+  assert.deepEqual(vistos, [{ primeira: true, endereco: '9' }, { primeira: false, endereco: '9' }]);
+  const quebrado = atendimento(store, modelo(), { ganchos: { antesDoModelo() { throw Error('x'); }, depoisDoModelo: async () => 'lixo' } });
+  const r3 = await quebrado.turno({ agentId: ag, canal: 'whatsapp', endereco: '10', mensagem: 'oi' });
+  assert.equal(r3.text, 'resposta 1'); assert.equal(r3.saidas, undefined);
+});
+
 test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) => {
   const { db, store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
@@ -264,8 +292,8 @@ test('visão do dono: só os próprios assistentes, contatos e conversas', async
 
 // O isolamento é por construção: o módulo não pode passar a importar quem lê
 // dado do dono (memória, conectores, canais, rotinas). Import novo aqui = revisar.
-test('publico.mjs só importa o tool-loop, o cofre e a regra de saúde', () => {
+test('publico.mjs só importa o tool-loop, o cofre, a regra de saúde e as saídas', () => {
   const src = fs.readFileSync(new URL('./web/publico.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './vault.mjs']);
+  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './publico-saidas.mjs', './vault.mjs']);
 });
