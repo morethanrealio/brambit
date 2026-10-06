@@ -7033,7 +7033,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
 // Atendimento ao público (publico-canal.mjs): desconhecido no WhatsApp vai pro assistente que a instalação escolheu; o dono vê em /atendimento.
-const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests,
+const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, ganchos: pecas.atendimentoPublico,
   makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('conversa', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Canal Telegram: roda um bot por usuário (token do BotFather dele). Injeta as

@@ -16,7 +16,9 @@
 //   observa o antes/depois dos filtros de verificação do turno, e
 //   briefDaJornada() → texto que troca o brief padrão da devolutiva da jornada
 //   (discovery/report-instructions.mts), e chaveDeepSeek() → chave da API oficial
-//   do DeepSeek do modelo escolhível (sem a porta, vem de DEEPSEEK_API_KEY). Roda no começo do boot; nucleo traz só
+//   do DeepSeek do modelo escolhível (sem a porta, vem de DEEPSEEK_API_KEY), e
+//   atendimentoPublico → ganchos do roteiro do atendimento ao público
+//   (publico.mjs: antesDoModelo, depoisDoModelo). Roda no começo do boot; nucleo traz só
 //   o que já existe nessa hora (publicBase, notifyOwner).
 //  ligar(servidor): rotas (rotas.mjs), inscrições e tarefas (eventos.mjs) e
 //   mídia publicada (midia-publica.mjs). Roda com o servidor montado; servidor
@@ -42,7 +44,7 @@ import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {leitorDePagina} from './app-encaixes.mjs';
 
-export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek'];
+export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico'];
 const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app'];
 
 export function conferirPlugin(p){
