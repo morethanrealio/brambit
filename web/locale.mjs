@@ -143,7 +143,10 @@ export function lembreteDeIdioma(language, texto = '') {
 
 // Language of the turn: the one the person wrote this message in, when the
 // detector below can tell and it differs from the configured one; otherwise the
-// configured language. Used to check the reply against the right language.
+// configured language. Used to check the reply against the right language, and
+// (via idiomaDaResposta in server.mjs) for every text the platform adds to the
+// reply: credit stops, receipts, source lists, search notices, corrections. The
+// system prompt keeps the configured language (its prefix is cached per user).
 export function idiomaDoTurno(language, texto = '') {
   const l = normalizaIdioma(language);
   const escrito = idiomaEscrito(texto);

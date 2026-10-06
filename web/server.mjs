@@ -2503,27 +2503,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }
   const mismatchedConfirmation = await rejectMismatchedConfirmation();
   if (mismatchedConfirmation) return mismatchedConfirmation;
-  // Language of this reply: the one the person wrote in, when detected, else the
-  // configured one. Every text the platform adds to the reply (credit stops,
-  // receipts, source lists, search notices, corrections) uses it, so an English
-  // question from a pt-BR account does not get an English answer with a
-  // Portuguese notice. The system prompt keeps the configured language (its
-  // prefix is cached per user).
   const idiomaDaResposta = (contaLang) => idiomaDoTurno(contaLang, kind === 'routine' ? '' : message) || contaLang;
   const creditScopeIdentity=JSON.stringify([userId,agent.id,thread.id]);
   if(!hasProviderExecution(creditScopeIdentity)){
     const language=idiomaDaResposta((await getUserLocale(userId))?.language||'pt-BR');
     return withProviderExecution((provider,input,options,policy={})=>{
-      const bound=gasto.vincular({provider,userId,
-        agentId:agent.id,threadId:thread.id,kind,language,...policy});
+      const bound=gasto.vincular({provider,userId,agentId:agent.id,threadId:thread.id,kind,language,...policy});
       return options===null?bound.complete(input):bound.completeDurable(input,options);
     },()=>runConversationTurn(agent,thread,userId,message,opts),creditScopeIdentity);
   }
   const appPendingInputs = [];
-  // Não deixe o modelo consumir como interjeição uma resposta que confirma
-  // ação gated. O poll do WhatsApp é destrutivo; quando não o chamamos, o
-  // adaptador preserva a mensagem e a reenvia como o próximo turno, onde o gate
-  // determinístico acima executa/cancela a ação exatamente uma vez.
+  // O modelo não consome como interjeição resposta que confirma ação gated: o
+  // poll do WhatsApp é destrutivo; sem ele, o adaptador reenvia a mensagem como
+  // próximo turno, onde o gate acima executa/cancela a ação exatamente uma vez.
   const pollNewUserMsgAtSafeBoundary = deferIncomingWhileConfirmationPending(thread.id, pollNewUserMsg);
   let codingSubmissionId=randomUUID();
   const codingIdentity={userId,agentId:agent.id,threadId:thread.id};
