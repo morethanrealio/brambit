@@ -1,5 +1,5 @@
 // Pure text + fake HTTP; real sockets and subprocesses forbidden before imports.
-import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
 import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 const denied=()=>{throw Error('REAL I/O FORBIDDEN');};net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;
 for(const n of ['spawn','spawnSync','exec','execSync','execFile','execFileSync','fork'])cp[n]=denied;syncBuiltinESMExports();
@@ -101,10 +101,8 @@ for (const status of [403,429,302,'throw']) {
  for(const u of links)ok(r.texto.includes(u));ok(r.texto.includes('2 link(s)'));
  const bad=url(404),s=await fontesEConferencia(`• Item ${bad}`,[],{strictLinks:true});eq(s.quebrados,[bad]);ok(!s.texto.includes(bad));
 }
-// Source-extracted sanitizer actually invoked by server, not a mirrored regex.
-const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
-const a=source.indexOf('const CITACAO ='),b=source.indexOf('function sanitizeAssistantText(',a);
-const strip=new Function(source.slice(a,b)+';return stripCitationMarkers;')();
+// Limpeza final que o server usa (citacoes.mjs), importada de verdade.
+const {stripCitationMarkers:strip,limparTextoFinal,registroDeFontes,citarFontes}=await import('./web/citacoes.mjs');
 for(const marker of ['[cite: 1]','[cite: 1.1.3]','[cite: 1, 2]','[CITE: 7]']){
  eq(strip('Texto '+marker+'.'),'Texto.');eq(strip('Um '+marker+' texto'),'Um texto');eq(strip(marker+' Texto'),'Texto');
  eq(strip('Texto '+marker+'.\nFontes:\n[1] Fonte https://source.example.invalid/'),'Texto.\nFontes:\n[1] Fonte https://source.example.invalid/');
@@ -114,9 +112,7 @@ for(const text of ['[1] Sim\n[2] Não','DDD [11] 98888-7777','Intervalo [0, 1]',
 eq(strip('Texto [1]. `inline`\nFontes:\n[1] Fonte https://x.invalid/'),'Texto [1]. `inline`\nFontes:\n[1] Fonte https://x.invalid/');
 eq(strip('Texto [1].'),'Texto.');eq(strip('Texto [1, 7].'),'Texto.');ok(!strip('Texto default_api:buscar_web:0').includes('default_api'));
 // Gate: ordinary non-search conversation keeps explicit literals untouched.
-const sanitizeStart=source.indexOf('function sanitizeAssistantText('),sanitizeEnd=source.indexOf('\n}\n',sanitizeStart)+2;
-const vazadoStart=source.indexOf('function removerToolCallVazado('),vazadoEnd=source.indexOf('\n}\n',vazadoStart)+2;
-const sanitize=new Function('stripCitationMarkers','maskSecrets','desgrudarPontuacaoDeLink',source.slice(vazadoStart,vazadoEnd)+source.slice(sanitizeStart,sanitizeEnd)+';return sanitizeAssistantText;')(strip,s=>s,s=>s);
+const sanitize=(t,o)=>limparTextoFinal(t,o).trim();
 eq(sanitize('Texto [cite: 1].',{comFontes:false}),'Texto [cite: 1].');eq(sanitize('Texto [cite: 1].',{comFontes:true}),'Texto.');
 // Tool-call vazado: sai só o pedaço técnico, o texto depois dele fica (29/09/2026).
 eq(sanitize('Vou conferir.\n<tool_call>buscar_web\n<arg_key>q</arg_key>\n<arg_value>voo GRU</arg_value>\n</tool_call>\nO voo sai às 10h.'),'Vou conferir.\n\nO voo sai às 10h.');
@@ -124,4 +120,20 @@ eq(sanitize('Vou conferir. <tool_call>buscar_web <arg_key>q</arg_key><arg_value>
 eq(sanitize('Pronto.\n<tool_call>status_conta\nSeu saldo é 300 créditos.'),'Pronto.\n\nSeu saldo é 300 créditos.');
 eq(sanitize('<tool_call>a</tool_call>Texto <tool_call>b<arg_key>k</arg_key><arg_value>v</arg_value></tool_call> final.'),'Texto final.');
 eq(sanitize('Sem vazamento aqui.'),'Sem vazamento aqui.');
+// Fontes por referência: a lista sai do registro do turno, não do texto do modelo.
+{
+ const reg=registroDeFontes();const u1='https://a.example.invalid/x',u2='https://b.example.invalid/y';
+ eq(reg.add({title:'A',uri:u1}),1);eq(reg.add({title:'B',uri:u2}),2);eq(reg.add({title:'A de novo',uri:u1}),1);eq(reg.add({title:'x',uri:'ftp://z'}),0);
+ // [7] não existe no registro: some; a lista traz só o que foi citado
+ eq(citarFontes('Chove [2] e venta [7].',reg),'Chove [2] e venta.\n\nFontes:\n[2] B — '+u2);
+ // lista do modelo com as mesmas fontes é trocada pela nossa
+ eq(citarFontes('Chove [1].\n\nFontes:\n[1] A — '+u1+'\n[2] B — '+u2,reg),'Chove [1].\n\nFontes:\n[1] A — '+u1);
+ // lista do modelo com endereço que nenhuma ferramenta mostrou fica como está
+ const propria='Chove [1].\n\nFontes:\n[1] Outra — https://c.example.invalid/';eq(citarFontes(propria,reg),propria);
+ // menu numerado, DDD e código não são citação
+ for(const t of ['[1] Sim\n[2] Não','DDD [11] 98888-7777','Código `a[1]`'])eq(citarFontes(t,reg),t);
+ // sem registro, volta ao comportamento antigo
+ eq(citarFontes('Texto [1].',registroDeFontes()),'Texto.');
+ eq(citarFontes('It rains [1].',reg,{language:'en'}),'It rains [1].\n\nSources:\n[1] A — '+u1);
+}
 console.log(`OK: ${checks} verificações de links/citações; HTTP falso, sockets/processos bloqueados.`);

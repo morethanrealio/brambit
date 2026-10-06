@@ -255,11 +255,20 @@ export async function resolveGroundingUri(uri) {
   return '';
 }
 
-/** Lista numerada "[1] título — url", com os redirects já resolvidos. */
-export async function renderFontes(sources) {
+/**
+ * Lista numerada "[1] título — url", com os redirects já resolvidos.
+ * Com `registro` (registroDeFontes do turno, citacoes.mjs) o número é o do
+ * registro: fixo no turno inteiro, é o que o modelo escreve na resposta e o que a
+ * plataforma troca pela fonte real. Fonte sem endereço resolvido fica sem número,
+ * porque não tem como ser citada.
+ */
+export async function renderFontes(sources, registro = null) {
   const arr = (sources || []).slice(0, 10);
   const resolved = await Promise.all(arr.map(async (s) => ({ title: s.title, uri: await resolveGroundingUri(s.uri) })));
-  return resolved.map((s, i) => `[${i + 1}] ${s.title}${s.uri ? ' — ' + s.uri : ''}`).join('\n');
+  return resolved.map((s, i) => {
+    const n = registro ? registro.add(s) : i + 1;
+    return `${n ? `[${n}] ` : '- '}${s.title}${s.uri ? ' — ' + s.uri : ''}`;
+  }).join('\n');
 }
 
 /**

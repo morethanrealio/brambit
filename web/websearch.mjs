@@ -314,7 +314,7 @@ export function createSearchBudget({ max = MAX_SEARCHES_PER_TURN } = {}) {
   };
 }
 
-export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget = null } = {}) {
+export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget = null, fontes = null } = {}) {
   const useTavily = tavilyEnabled();
   return {
     name: 'buscar_web',
@@ -357,9 +357,9 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
           // e a tentar o caminho certo (busca simples / abrir o site oficial).
           return 'Não achei resultados, mesmo depois de ampliar a busca (tirei aspas e operadores). NÃO conclua que a informação não existe a partir disso. Refaça com uma busca mais SIMPLES (poucas palavras em pt-BR); se o usuário citou um site ou empresa, procure o site oficial e use abrir_link pra ler a página direto.';
         }
-        const fontes = await renderFontes(sources);
+        const lista = await renderFontes(sources, fontes);
         const prefix = dateNote + (relaxedNote ? `${relaxedNote}\n` : '');
-        return `${prefix}${text || '(sem resumo)'}\n\nFontes:\n${fontes || '(sem fontes)'}`;
+        return `${prefix}${text || '(sem resumo)'}\n\nFontes:\n${lista || '(sem fontes)'}`;
       } catch (e) {
         // Se o Tavily falhar, cai no Gemini como rede de segurança.
         // Datas são uma restrição: não gastar uma segunda busca sem suporte
@@ -377,8 +377,8 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
           try {
             const { text, sources, usage } = await groundedSearch(consulta, { model });
             if (usage && onUsage) onUsage({ usage, kind: 'search' });
-            const fontes = await renderFontes(sources);
-            return `${text || '(sem resumo)'}\n\nFontes:\n${fontes || '(sem fontes)'}`;
+            const lista = await renderFontes(sources, fontes);
+            return `${text || '(sem resumo)'}\n\nFontes:\n${lista || '(sem fontes)'}`;
           } catch (e2) {
             return `ERRO ao buscar na web: ${e2?.message ?? e2}`;
           }
@@ -523,7 +523,13 @@ async function lerPaginaDireto(url) {
   return { titulo, texto, url: res.url || url };
 }
 
-export function openLinkTool({ onUsage, savePdf, onSheetLoad } = {}) {
+export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = {}) {
+  // Página lida entra no registro de fontes do turno (citacoes.mjs): o número
+  // vai junto do conteúdo pro modelo citar com [n].
+  const ref = (url, title) => {
+    const n = fontes?.add({ title: title || url, uri: url });
+    return n ? ` (cite como [${n}])` : '';
+  };
   return {
     name: 'abrir_link',
     description: 'Abre uma URL e lê o conteúdo REAL da página ou documento (título, texto, no caso de produto o nome/preço; e se o link for um PDF, o texto do PDF). Se o link for uma PLANILHA (Google Sheets, .xlsx, .csv), ela é aberta no ambiente de análise e volta só a estrutura (abas, colunas, linhas), nunca as células: para qualquer pergunta sobre os dados use analisar_planilha. Use SEMPRE que o usuário mandar um LINK e você precisar saber o que é aquilo — NUNCA deduza pela conversa anterior nem busque por palavra-chave num link solto (isso confunde e traz o produto/página errado). Depois de abrir e identificar, aí sim use buscar_web se precisar comparar preços em outros sites.',
@@ -556,7 +562,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad } = {}) {
           const { text, pages, truncated } = await extractPdfText(buf, { maxChars: 20000 });
           // Local PDF extraction performs no Tavily call and incurs no search usage.
           if (!text) return `Abri o PDF (${u}) mas ele não tem texto extraível (provavelmente é escaneado, só imagem). Avise o usuário disso.`;
-          return `Conteúdo do PDF ${u}${pages ? ` (${pages} página(s))` : ''}${truncated ? ' — texto longo, mostrando o começo' : ''}:\n\n${text}`;
+          return `Conteúdo do PDF ${u}${ref(res.url || u, name)}${pages ? ` (${pages} página(s))` : ''}${truncated ? ' — texto longo, mostrando o começo' : ''}:\n\n${text}`;
         }
         // Arquivo de planilha (xlsx, xls, csv, tsv) servido direto: mesma regra,
         // vai pro ambiente de análise e só a estrutura volta.
@@ -585,7 +591,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad } = {}) {
           if (!texto) return `Não consegui ler o conteúdo dessa página (${finalUrl}). Pode ser que o site bloqueie leitura.`;
           const { corpo, corte } = recortarPagina(texto);
           const partial = !pageContentQuality(texto, finalUrl).sufficient;
-          return `Conteúdo de ${finalUrl}${titulo ? ` (título: ${titulo})` : ''}${corte}:\n\n${partial ? PARTIAL_PAGE_MARKER+'\n\n' : ''}${corpo}`;
+          return `Conteúdo de ${finalUrl}${titulo ? ` (título: ${titulo})` : ''}${ref(finalUrl, titulo)}${corte}:\n\n${partial ? PARTIAL_PAGE_MARKER+'\n\n' : ''}${corpo}`;
         } catch (e2) {
           console.error(`[abrir_link] leitura direta falhou (após ${motivo}): ${e2?.message ?? e2}`);
           return `ERRO ao abrir o link: ${e2?.message ?? e2}`;
@@ -601,7 +607,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad } = {}) {
           return {text:direct.texto,url:direct.url};
         });
         const { corpo, corte } = recortarPagina(reading.text);
-        return `Conteúdo de ${reading.url}${corte}:\n\n${reading.partial ? PARTIAL_PAGE_MARKER+'\n\n' : ''}${corpo}`;
+        return `Conteúdo de ${reading.url}${ref(reading.url)}${corte}:\n\n${reading.partial ? PARTIAL_PAGE_MARKER+'\n\n' : ''}${corpo}`;
       } catch (e) {
         noteTavilyFailure(e, onUsage, 'leitura direta da página');
         return direto('queda do Tavily');

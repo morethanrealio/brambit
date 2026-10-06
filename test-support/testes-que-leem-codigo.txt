@@ -35,7 +35,6 @@ health-guardrail.test.mjs
 image-context.test.mjs
 infinity-connector.test.mjs
 inventory-calculation.test.mjs
-links-citations.test.mjs
 lote-a-email-calendar.test.mjs
 message-draft.test.mjs
 onboarding/connections.test.mts
