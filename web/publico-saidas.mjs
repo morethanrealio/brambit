@@ -9,6 +9,9 @@
 //                                            imagem (https) vai no topo da mensagem
 //  {tipo:'template', nome, idioma?, componentes?}  template aprovado do canal
 //
+// Imagem, botão e template aceitam `reserva`: texto que o canal manda no lugar
+// quando não consegue entregar aquela saída (ex.: a Meta recusa o template).
+//
 // O que vem do plugin passa por aqui antes de sair: tipo desconhecido, url que
 // não é https ou campo vazio derrubam só aquela saída.
 export const SAIDAS_MAX = 10;
@@ -24,6 +27,12 @@ const https = (v) => {
 };
 
 function normalizar(s) {
+  const r = normalizarTipo(s);
+  const reserva = r && r.tipo !== 'texto' ? corte(s.reserva, SAIDA_TEXTO_MAX) : '';
+  return r && reserva ? { ...r, reserva } : r;
+}
+
+function normalizarTipo(s) {
   if (!s || typeof s !== 'object') return null;
   if (s.tipo === 'texto') { const texto = corte(s.texto, SAIDA_TEXTO_MAX); return texto ? { tipo: 'texto', texto } : null; }
   if (s.tipo === 'imagem') {
