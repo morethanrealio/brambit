@@ -124,8 +124,15 @@ eq(sanitize('Sem vazamento aqui.'),'Sem vazamento aqui.');
 {
  const reg=registroDeFontes();const u1='https://a.example.invalid/x',u2='https://b.example.invalid/y';
  eq(reg.add({title:'A',uri:u1}),1);eq(reg.add({title:'B',uri:u2}),2);eq(reg.add({title:'A de novo',uri:u1}),1);eq(reg.add({title:'x',uri:'ftp://z'}),0);
- // [7] não existe no registro: some; a lista traz só o que foi citado
- eq(citarFontes('Chove [2] e venta [7].',reg),'Chove [2] e venta.\n\nFontes:\n[2] B — '+u2);
+ // [7] não existe no registro: some; a lista traz só o que foi citado, numerada de 1
+ eq(citarFontes('Chove [2] e venta [7].',reg),'Chove [1] e venta.\n\nFontes:\n[1] B — '+u2);
+ // registro grande (pesquisa a fundo): numera na ordem do texto e lista TODAS as citadas
+ const grande=registroDeFontes();for(let i=1;i<=120;i++)grande.add({title:'F'+i,uri:'https://f'+i+'.example.invalid/'});
+ const muitas=citarFontes([85,3,114,2,110,7,9,11,13,15,17,19].map(n=>'Fato ['+n+'].').join(' ')+' De novo [85][3].',grande);
+ eq(muitas.split('Fontes:')[0].trim(),[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>'Fato ['+n+'].').join(' ')+' De novo [1, 2].');
+ eq(muitas.split('\n').filter(l=>/^\[\d+\] F\d+ — /.test(l)).length,12);
+ // [n] que os portões não trocam e que existe no registro: numeração do registro fica
+ eq(citarFontes('Item [5].\n[3] Sim',grande),'Item [5].\n[3] Sim\n\nFontes:\n[5] F5 — https://f5.example.invalid/');
  // lista do modelo com as mesmas fontes é trocada pela nossa
  eq(citarFontes('Chove [1].\n\nFontes:\n[1] A — '+u1+'\n[2] B — '+u2,reg),'Chove [1].\n\nFontes:\n[1] A — '+u1);
  // lista do modelo com endereço que nenhuma ferramenta mostrou fica como está

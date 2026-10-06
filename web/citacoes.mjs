@@ -170,9 +170,14 @@ function trocavel(bloco, registro) {
  *    lista dele;
  *  - sem nenhuma citação válida, nada é anexado e a linha "Fonte: X" que o
  *    modelo tenha escrito fica intacta.
- * Os números não são renumerados: cada [n] continua apontando exatamente para a
- * mesma linha da lista, inclusive um [n] que tenha escapado dos portões.
- * `comLista: false` só troca os marcadores (uso: resumo do subagente).
+ * Na lista, as fontes citadas viram 1, 2, 3... na ordem em que aparecem no
+ * texto, e todas entram (o registro do turno pode passar de 100 fontes e o
+ * modelo cita só algumas). Exceção: se sobrou no texto um [n] que os portões
+ * não trocaram (abrindo linha, colado em dígito) e esse n existe no registro,
+ * a numeração do registro fica, pra esse [n] não passar a apontar pra outra
+ * linha da lista.
+ * `comLista: false` só troca os marcadores, com os números do registro (uso:
+ * resumo do subagente, que volta pro modelo e é citado de novo).
  * @returns {string}
  */
 export function citarFontes(texto, registro, { language, comLista = true } = {}) {
@@ -182,24 +187,34 @@ export function citarFontes(texto, registro, { language, comLista = true } = {})
   if (bloco && !trocavel(bloco.texto, registro)) return naProsa(base, limparLixo);
   const antes = bloco ? base.slice(0, bloco.ini) : base;
   const depois = bloco ? base.slice(bloco.fim) : '';
+  // Ordem de inserção = ordem da primeira citação no texto.
   const citados = new Set();
+  let escapou = false;
+  // O número do registro vai entre \u0000 e \u0001 até decidir a numeração final.
   const trocar = (p) => limparLixo(p).replace(RE_GRUPO, (m, off, str) => {
-    if (abreLinha(str, off, m)) return m;
-    if (/\d/.test(str[off + m.length] || '')) return m;
+    if (abreLinha(str, off, m) || /\d/.test(str[off + m.length] || '')) {
+      if (numerosDe(m).some(n => registro.get(n))) escapou = true;
+      return m;
+    }
     const validos = [...new Set(numerosDe(m))].filter(n => registro.get(n));
     if (!validos.length) return semMarcador(m, off, str);
     validos.forEach(n => citados.add(n));
     const seguinte = str[off + m.length] || '';
     const fim = /[ \t]$/.test(m) && seguinte && !/[\s.,;:!?)\]]/.test(seguinte) ? ' ' : '';
-    return `${/^[ \t]/.test(m) ? ' ' : ''}[${validos.join(', ')}]${fim}`;
+    return `${/^[ \t]/.test(m) ? ' ' : ''}[${validos.map(n => `\u0000${n}\u0001`).join(', ')}]${fim}`;
   });
-  const corpo = naProsa(antes, trocar).replace(/\s+$/, '');
-  const resto = naProsa(depois, trocar).replace(/^\s+/, '');
+  const corpoBruto = naProsa(antes, trocar).replace(/\s+$/, '');
+  const restoBruto = naProsa(depois, trocar).replace(/^\s+/, '');
+  const ordem = !comLista || escapou ? [...citados].sort((a, b) => a - b) : [...citados];
+  const novo = new Map(ordem.map((n, i) => [n, !comLista || escapou ? n : i + 1]));
+  const numerar = t => t.replace(/\[((?:\u0000\d+\u0001(?:, )?)+)\]/g, (_, g) =>
+    `[${numerosDe(g).map(n => novo.get(n)).sort((a, b) => a - b).join(', ')}]`);
+  const corpo = numerar(corpoBruto);
+  const resto = numerar(restoBruto);
   // Nenhuma citação válida: o texto volta como veio, só sem marcador órfão.
   if (!citados.size) return bloco ? naProsa(base, limparLixo) : corpo;
   if (!comLista) return [corpo, resto].filter(Boolean).join('\n\n');
-  const linhas = [...citados].sort((a, b) => a - b).slice(0, 10)
-    .map(n => `[${n}] ${registro.get(n).title} — ${registro.get(n).uri}`);
+  const linhas = ordem.map(n => `[${novo.get(n)}] ${registro.get(n).title} — ${registro.get(n).uri}`);
   return [corpo, `${rotuloDe(language)}\n${linhas.join('\n')}`, resto].filter(Boolean).join('\n\n');
 }
 
