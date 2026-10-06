@@ -1044,7 +1044,7 @@ import {
   setRoutineOfferOptOut, clearRoutineOfferOptOut,
   closeUserAccount, listUsersPurgeDue, collectUserAssetKeys, hardDeleteUser,
 } from './db.mjs';
-import { IDIOMAS_OK, IDIOMA_PADRAO, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma } from './locale.mjs';
+import { IDIOMAS_OK, IDIOMA_PADRAO, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
 import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
 import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
@@ -6331,15 +6331,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if(measurement)await taskMetrics.observe(measurement);
   // O "agora" (data+hora) vai no FIM da mensagem do usuário, não no system prompt:
   // assim o prefixo system+tools fica byte-idêntico entre turnos e a Together
-  // reaproveita o cache (o timestamp por-minuto no system furava o cache inteiro).
-  // Este texto NÃO persiste no history (é reescrito pra savedUserMsg abaixo).
+  // reaproveita o cache (o timestamp por-minuto no system furava o cache). NÃO persiste no history.
+  const textoDoDono = kind === 'routine' ? '' : message;
   const agora = new Date().toLocaleString('pt-BR', {
     timeZone: userTz, dateStyle: 'full', timeStyle: 'short',
   });
   const tzLabel = userTz === 'America/Sao_Paulo' ? 'horário de São Paulo' : `fuso ${userTz}`;
   const nowLine = `(Contexto do sistema: agora é ${agora}, ${tzLabel}. Use pra interpretar "hoje", "amanhã", "esta semana". Ao criar eventos de agenda, use este fuso (${userTz}) e a hora de parede local do usuário, sem embutir offset no ISO. Se ficar claro que o usuário está em OUTRO fuso (ex: menciona viagem, ou uma reunião/horário de outra cidade/país), chame a tool definir_meu_fuso com o fuso IANA correto assim que perceber, pra este "agora" ficar coerente e não tratar evento passado como futuro; em criar_lembrete, passe também o parâmetro fuso nesse caso.)`
-    // Idioma lembrado a cada turno, perto da mensagem (ver lembreteDeIdioma).
-    + (lembreteDeIdioma(userLang) ? `\n${lembreteDeIdioma(userLang)}` : '');
+    // Idioma lembrado a cada turno, perto da mensagem (ver lembreteDeIdioma e idiomaEscrito).
+    + (lembreteDeIdioma(userLang, textoDoDono) ? `\n${lembreteDeIdioma(userLang, textoDoDono)}` : '');
   // Fix#3: os blocos voláteis (perfil/wiki, resumo, panorama, caixa) vão no FIM da
   // mensagem do usuário (não no system) — mantém o prefixo cacheável estável.
   // O resumo é o da THREAD, não o do agente. A compactação (compactIfNeeded ->
@@ -6670,7 +6670,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     } catch (e) { console.error('[freio_fundamentacao]', e?.message ?? e); }
   }
   // FREIO DE IDIOMA (freio-idioma.mjs): resposta em chinês sem a pessoa pedir é reescrita antes de entregar.
-  if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: userLang, pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
+  if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: idiomaDoTurno(userLang, textoDoDono), pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
   let curationResult = null;
   if (curationHistory !== null) {
     curationResult = await finalizeCuration({text,config:opts.curationConfig,userId,routineId:opts.routineId,
@@ -6863,7 +6863,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       userId, agentId: agent.id, threadId: thread.id, turnId,
       userMsg: savedUserMsg, assistantMsg: text, language: userLang,
     });
-    logDerivaIdioma(text, userLang, userId);
+    logDerivaIdioma(text, idiomaDoTurno(userLang, textoDoDono), userId);
   }
   // Onboarding "momento wow" é EFÊMERO: a saudação é mostrada na hora no wizard
   // e o que importa (perfil/wiki + itens da home) já foi gravado pelas tools.

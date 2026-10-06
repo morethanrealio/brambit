@@ -144,10 +144,74 @@ const LEMBRETE = {
   en: "(Language: reply in English, this person's configured language, unless they themselves wrote this message in another language. Never switch languages on your own.)",
   es: '(Idioma: responde en español, el idioma configurado de esta persona, salvo que ella misma haya escrito este mensaje en otro idioma. Nunca cambies de idioma por tu cuenta.)',
 };
-export function lembreteDeIdioma(language) {
+export function lembreteDeIdioma(language, texto = '') {
   const l = normalizaIdioma(language);
+  const escrito = idiomaEscrito(texto);
+  if (l && escrito && escrito !== l) return ESCRITO[escrito];
   return (l && LEMBRETE[l]) || '';
 }
+
+// Language of the turn: the one the person wrote this message in, when the
+// detector below can tell and it differs from the configured one; otherwise the
+// configured language. Used to check the reply against the right language.
+export function idiomaDoTurno(language, texto = '') {
+  const l = normalizaIdioma(language);
+  const escrito = idiomaEscrito(texto);
+  return escrito && escrito !== l ? escrito : l;
+}
+
+// ── Language the person wrote this message in ───────────────────────────────
+// The conditional reminder above ("reply in X unless they wrote in another
+// language") was not enough. On 2026-10-06 a pt-BR account asked in English and
+// in Spanish and got answers in Portuguese: the person's sentence is one short
+// line, followed by thousands of tokens of Portuguese context and tool results,
+// and the model loses track of which language that line was in. Replaying the
+// recorded final request 30 times per case: 10 of 60 replies came back in
+// Portuguese as is, 0 of 120 when the reminder states the language explicitly.
+// So the platform detects the language and says it, instead of asking the model
+// to notice it.
+//
+// Conservative on purpose: it only answers with a strong signal and returns null
+// otherwise (null = keep the configured language). Calibrated on 10,200 user
+// messages in prod (2026-10-06): long text, links, code and terminal output are
+// usually pasted content, not the person's own words, and the reply should stay
+// in the configured language. Any Portuguese word blocks en/es, because a
+// Portuguese request around an English quote is still a Portuguese request.
+const PALAVRAS = {
+  en: new Set("the and is are was were what how why when where who which you your yours i i'm it's this that these those with about please can could would should will do does did have has my me of to for from search find show tell give latest news any some there their they we our an be been being not don't isn't".split(' ')),
+  es: new Set('el los las y del al qué cómo cuál cuáles cuándo dónde quién por es son está están estoy fue muy más hoy busca búscame dame dime puedes podrías quiero necesito mi mis tu tus su sus noticias sobre también pero porque hay ese esa esto eso usted ustedes nosotros tengo tiene hacer hola gracias'.split(' ')),
+  'pt-BR': new Set('o os as é são não você vocês do da dos das no na nos nas em um uma uns umas mais isso isto esse essa meu minha meus minhas seu sua com pra pro pela pelo também então muito hoje amanhã quero preciso pode podes me faz fazer olá oi obrigado obrigada tem tenho está estou qual quais quando onde quem porque mas'.split(' ')),
+};
+const MAX_CHARS = 600;
+const MIN_PALAVRAS_ESCRITO = 4;
+// Pasted content: links, code fences, Node warnings, log levels, CLI prompts and
+// glyphs, shell prompts and lines that start with a common command.
+const RE_COLADO = /https?:\/\/|```|\(node:\d+\)|^\s*(INFO|WARN|WARNING|ERROR|DEBUG|TRACE)\b|[✔✖›❯➜]|\w@[\w.-]+:\S*\$|^\s*[$>#]\s|^\s*(git|npm|npx|pnpm|yarn|sudo|apt|apt-get|pip|node|docker|cd|ls|curl|brew)\s/im;
+
+export function idiomaEscrito(texto) {
+  const s = String(texto || '').trim();
+  if (!s || s.length > MAX_CHARS || RE_COLADO.test(s)) return null;
+  const ws = s.toLowerCase().match(/[\p{L}']+/gu) || [];
+  if (ws.length < MIN_PALAVRAS_ESCRITO) return null;
+  const n = { en: 0, es: 0, 'pt-BR': 0 };
+  for (const w of ws) for (const l of Object.keys(n)) if (PALAVRAS[l].has(w)) n[l]++;
+  if (/[ãõç]/i.test(s)) n['pt-BR'] += 2;
+  if (/[ñ¿¡]/.test(s)) n.es += 2;
+  const [a, b] = Object.entries(n).sort((x, y) => y[1] - x[1]);
+  if (a[1] < 3 || a[1] < 2 * b[1]) return null;
+  if (a[0] !== 'pt-BR' && n['pt-BR'] > 0) return null;
+  return a[0];
+}
+
+// Explicit reminder used when the person wrote in a language other than the
+// configured one. It names the language and why the context around it does not
+// count, and keeps an explicit request made earlier in the conversation (e.g. an
+// English practice session where the person asked for feedback in Portuguese).
+const ESCRITO = {
+  'pt-BR': '(Idioma: esta mensagem foi escrita em português. Responda em português, mesmo que as instruções e os resultados das ferramentas estejam em outra língua, a menos que a pessoa tenha pedido outra língua nesta conversa.)',
+  en: '(Language: this message was written in English. Reply in English, even though the instructions and tool results here are in another language, unless the person has asked for another language in this conversation.)',
+  es: '(Idioma: este mensaje fue escrito en español. Responde en español, aunque las instrucciones y los resultados de las herramientas estén en otro idioma, salvo que la persona haya pedido otro idioma en esta conversación.)',
+};
 
 // ── Detector de deriva de idioma (só observa, NUNCA bloqueia) ───────────────
 // A diretriz acima é instrução MOLE: reduz o vazamento de português, não zera.

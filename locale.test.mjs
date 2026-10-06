@@ -3,7 +3,7 @@
 import {
   IDIOMAS_OK, IDIOMA_PADRAO, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
   tagIdioma, instrucaoDeIdioma, comIdioma, derivaDeIdioma, lembreteDeIdioma,
-  ideogramaAcidental, avisoSemIdioma,
+  ideogramaAcidental, avisoSemIdioma, idiomaEscrito, idiomaDoTurno,
 } from './web/locale.mjs';
 
 let ok = 0, fail = 0;
@@ -204,6 +204,27 @@ t('pedido de chinês passa', ideogramaAcidental(DERIVA_0510, 'pt-BR', 'traduz is
 t('dono escrevendo em chinês passa', ideogramaAcidental(DERIVA_0510, 'pt-BR', '你好，请帮我') === null);
 t('palavra solta em chinês passa', ideogramaAcidental('O caractere 你好 quer dizer olá; 谢谢 é obrigado.', 'pt-BR', 'como diz olá') === null);
 for (const l of IDIOMAS_OK) t(`aviso sem idioma ${l} não tem ideograma`, !!avisoSemIdioma(l) && !/\p{Script=Han}/u.test(avisoSemIdioma(l)));
+
+// 14) Written language (real prod messages, 2026-10-06 calibration): the person's
+//     own short sentence is detected; pasted logs/CLI output and a Portuguese
+//     request around an English quote are not, so they keep the configured language.
+const escrito = (txt, esperado) => t(`escrito ${JSON.stringify(txt.slice(0, 40))} -> ${esperado}`, idiomaEscrito(txt) === esperado);
+escrito('Search the web for the latest news about the James Webb Space Telescope and cite your sources.', 'en');
+escrito('Busca en la web las noticias más recientes sobre el clima en Buenos Aires y dame las fuentes.', 'es');
+escrito('Can you put a “cortar cabelo - marcos” event on my agenda at 4:30 pm? It’ll go on for one hour', 'en');
+escrito('inclui um outro evento para amanhã', 'pt-BR');
+escrito('Quais são as regras de aposentadoria por idade do INSS em 2026? Me dá as fontes.', 'pt-BR');
+escrito('(node:8195) [DEP0040] DeprecationWarning: The punycode module is deprecated. Please use a userland alternative', null);
+escrito('✔ Generate a new App Store Connect API Key? … yes ? Select role for the generated API key: › - Use arrow-keys.', null);
+escrito('git reset --hard HEAD HEAD is now at c00bc29 feat: use official brambs star SVG for app icons and splash', null);
+escrito('INFO | Android emulator version 37.1.11.0 (build_id 15917651) (CL:N/A) INFO | Graphics backend', null);
+escrito('traduz pra mim: "what is the best way to do this and why"', null);
+escrito('ok', null);
+t('lembrete muda para o idioma escrito', lembreteDeIdioma('pt-BR', 'Search the web for the latest news about the James Webb Space Telescope.').includes('written in English'));
+t('lembrete fica no configurado quando escreveu nele', lembreteDeIdioma('pt-BR', 'Quais são meus compromissos de amanhã?') === lembreteDeIdioma('pt-BR'));
+t('conta en escrevendo em português', lembreteDeIdioma('en', 'inclui um outro evento para amanhã').includes('escrita em português'));
+t('idioma do turno', idiomaDoTurno('pt-BR', 'Busca en la web las noticias más recientes sobre el clima') === 'es' && idiomaDoTurno('pt-BR', '') === 'pt-BR');
+for (const l of IDIOMAS_OK) t(`lembrete escrito ${l} é curto`, ['Search the web for the latest news about the telescope.', 'Busca en la web las noticias más recientes sobre el clima', 'inclui um outro evento para amanhã'].every((m) => lembreteDeIdioma(l, m).length < 250));
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
