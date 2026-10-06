@@ -128,7 +128,7 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
 // direto. Erro igual ao do sendText: `error.wamids` traz o que já saiu.
 const corpoDaSaida = (s) => {
   if (s.tipo === 'imagem') return { type: 'image', image: { link: s.url, ...(s.legenda ? { caption: markdownParaWa(s.legenda) } : {}) } };
-  if (s.tipo === 'botao') return { type: 'interactive', interactive: { type: 'cta_url', body: { text: markdownParaWa(s.texto) },
+  if (s.tipo === 'botao') return { type: 'interactive', interactive: { type: 'cta_url', ...(s.imagem ? { header: { type: 'image', image: { link: s.imagem } } } : {}), body: { text: markdownParaWa(s.texto) },
     action: { name: 'cta_url', parameters: { display_text: s.rotulo, url: s.url } } } };
   return { type: 'template', template: { name: s.nome, language: { code: s.idioma }, ...(s.componentes.length ? { components: s.componentes } : {}) } };
 };
