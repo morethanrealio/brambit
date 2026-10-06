@@ -184,9 +184,9 @@ for(const fn of ['runGoogleSubagent','runConnectorSubagent'])for(const toolName 
   // Final model deliberately ignores the worker disclaimer; postprocessor wins.
   const reg=new ToolRegistry().add({name:'consultar',parameters:{type:'object',properties:{}},run:async()=>result});let n=0;
   const final=await runAgent({provider:{name:'offline',complete:async()=>++n===1?{stop:'tool',toolCalls:[{id:'main',name:'consultar',args:{}}]}:{stop:'end',text:'Lista completa.'}},tools:reg,system:'mock',history:[],userInput:'mock'});
-  const statement=source.match(/text = curationResult \? text : searchCoverage\.finish\(text, userLang, \{suppressEmptyEmailSources: routineNoNews\}\);/)[0];
+  const statement=source.match(/text = curationResult \? text : searchCoverage\.finish\(text, idiomaResposta, \{suppressEmptyEmailSources: routineNoNews\}\);/)[0];
   const sync=source.slice(source.indexOf('  for (let i = messages.length - 1; i >= 0; i--) {',source.indexOf(statement)),source.indexOf('  // As imagens do turno NÃO ficam no history:'));
-  const finished=new Function('inventoryCalculation','text','messages','searchCoverage','userLang','curationResult','selo','const routineNoNews=false;'+statement+sync+'return {text,messages};')(createInventoryCalculationSession({enabled:false}),final.text,final.messages,coverage,'pt-BR',false,false);
+  const finished=new Function('inventoryCalculation','text','messages','searchCoverage','idiomaResposta','curationResult','selo','const routineNoNews=false;'+statement+sync+'return {text,messages};')(createInventoryCalculationSession({enabled:false}),final.text,final.messages,coverage,'pt-BR',false,false);
   eq(findConnectorSearchLimitations(finished.text).length,more && !emailOnly ? 1 : 0);
   ok(!finished.text.includes('⚠️ Busca parcial:'));
   if(more && !emailOnly)ok(!finished.text.includes('Lista completa.'));
@@ -229,6 +229,6 @@ for(const toolName of ['gmail_search','drive_search']){
  ok(final.includes('parte dos resultados ficou fora da análise'));ok(!final.includes('Lista completa.'));
 }
 ok(source.includes('onPagination: searchCoverage.observe'));
-ok(source.indexOf('text = curationResult ? text : searchCoverage.finish(text, userLang,')>0);
-ok(source.indexOf('text = curationResult ? text : searchCoverage.finish(text, userLang,')<source.lastIndexOf('await saveThreadTurn(thread.id'));
+ok(source.indexOf('text = curationResult ? text : searchCoverage.finish(text, idiomaResposta,')>0);
+ok(source.indexOf('text = curationResult ? text : searchCoverage.finish(text, idiomaResposta,')<source.lastIndexOf('await saveThreadTurn(thread.id'));
 console.log(`OK: ${checks} verificações de cobertura final; workers/core reais, providers offline, zero I/O real.`);

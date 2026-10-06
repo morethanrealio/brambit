@@ -2503,9 +2503,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }
   const mismatchedConfirmation = await rejectMismatchedConfirmation();
   if (mismatchedConfirmation) return mismatchedConfirmation;
+  // Language of this reply: the one the person wrote in, when detected, else the
+  // configured one. Every text the platform adds to the reply (credit stops,
+  // receipts, source lists, search notices, corrections) uses it, so an English
+  // question from a pt-BR account does not get an English answer with a
+  // Portuguese notice. The system prompt keeps the configured language (its
+  // prefix is cached per user).
+  const idiomaDaResposta = (contaLang) => idiomaDoTurno(contaLang, kind === 'routine' ? '' : message) || contaLang;
   const creditScopeIdentity=JSON.stringify([userId,agent.id,thread.id]);
   if(!hasProviderExecution(creditScopeIdentity)){
-    const language=(await getUserLocale(userId))?.language||'pt-BR';
+    const language=idiomaDaResposta((await getUserLocale(userId))?.language||'pt-BR');
     return withProviderExecution((provider,input,options,policy={})=>{
       const bound=gasto.vincular({provider,userId,
         agentId:agent.id,threadId:thread.id,kind,language,...policy});
@@ -2522,7 +2529,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const codingIdentity={userId,agentId:agent.id,threadId:thread.id};
   const codingApprovals=createCodingApprovals({store:appTaskStore,scope:creditScopeIdentity});
   if (agent?.model === DEEPSEEK_AGENT_MODEL && !isDeepSeekTurn()) {
-    const billingLanguage=(await getUserLocale(userId))?.language;
+    const billingLanguage=idiomaDaResposta((await getUserLocale(userId))?.language||'pt-BR');
     return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId:agent.id,threadId:thread.id,kind,language:billingLanguage}), () => runConversationTurn(agent, thread, userId, message, opts));
   }
   if (agent?.model === GEMINI_COMPARISON_ID && !isGeminiComparison()) {
@@ -2572,13 +2579,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // getUserLocale já cai em pt-BR quando ninguém escolheu nada; country vem
   // null quando não sabemos, e null NÃO significa "fora do Brasil".
   const { language: userLang, country: userCountry } = await getUserLocale(userId);
+  const idiomaResposta = idiomaDaResposta(userLang);
   // Identificação obrigatória da conta de pagamento do operador (porta
   // conta-pagamento.mjs): quando a mensagem abre a jornada, o selo e o texto
   // institucional vão por conta do servidor, não do modelo, e entram no texto
   // entregue E no histórico. null = turno sem identificação.
   const selo = !opts.confirmationRestore && !ephemeral && !noTools && !viaReaction && !webhook
     && ['chat', 'telegram', 'whatsapp'].includes(kind)
-    ? contaPagamento.apresentacao({ mensagem: message, historico: baseHistory, idioma: userLang })
+    ? contaPagamento.apresentacao({ mensagem: message, historico: baseHistory, idioma: idiomaResposta })
     : null;
   const anexoSelo = selo ? selo.anexo : null;
 
@@ -2612,7 +2620,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const tagLang = tagIdioma(userLang);
   // Visão: se vieram imagens mas o usuário desligou "ler imagens", avisa e não roda.
   if (images?.length && !mprefs.vision) {
-    let text = imagensDesligadas(userLang);
+    let text = imagensDesligadas(idiomaResposta);
     if (selo) text = selo.comTexto(text);
     return { text, attachments: anexoSelo ? [anexoSelo] : [] };
   }
@@ -2629,10 +2637,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Cap suave, vale pra todos os canais (web, Telegram, WhatsApp, rotinas).
   const credit = await getCreditStatus(userId);
   if (credit.over && !opts.confirmationRestore) {
-    const avisos = avisosTurno(userLang);
+    const avisos = avisosTurno(idiomaResposta);
     // O texto de quem ficou sem saldo é da implementação de gasto (no Brambs,
     // créditos e franquia; no núcleo, o teto em US$).
-    const semSaldo = await gasto.avisoSemSaldo(credit, { userId, language: userLang, appClient });
+    const semSaldo = await gasto.avisoSemSaldo(credit, { userId, language: idiomaResposta, appClient });
     let reply = semSaldo.texto;
     // Mesmo sem crédito, o pedido de abertura precisa da identificação. Não
     // rodamos modelo nem coletamos dados, mas também não escondemos quem presta
@@ -5251,7 +5259,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       fileMarkers.push(`📎 ${name}`);
     }
     const userText = [message, imageHistoryMarkers(images.length, turnImageCaptions, turnImageIds), ...fileMarkers].filter(Boolean).join(' ');
-    let text = creditStopMessage(creditPauseReason(imageCreditPause), userLang);
+    let text = creditStopMessage(creditPauseReason(imageCreditPause), idiomaResposta);
     if (selo) text = selo.comTexto(text);
     if (!ephemeral) await saveThreadTurn(thread.id, agent.id, {
       baseHistory, history:[...baseHistory,{role:'user',content:userText},{role:'assistant',content:text,...(selo?{meta:selo.meta}:{})}],
@@ -6177,7 +6185,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       };
       return withProviderExecution((provider,input,options,policy={}) => {
         const bound=gasto.vincular({provider,userId,
-          agentId:agent.id,threadId:thread.id,kind,language:userLang,...policy});
+          agentId:agent.id,threadId:thread.id,kind,language:idiomaResposta,...policy});
         return options===null?bound.complete(input):bound.completeDurable(input,options);
       }, execute, creditScopeIdentity);
     } };
@@ -6391,7 +6399,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     ? `${discovery.context}\n\nMENSAGEM HUMANA ATUAL, PEDIDO PRIORITÁRIO (não é um check-in nem uma pendência antiga):\n`
     : '';
   const inventoryCalculation = createInventoryCalculationSession({
-    message, history:baseHistory, language:userLang,
+    message, history:baseHistory, language:idiomaResposta,
     enabled:!noTools && !ephemeral && agentCategory !== 'grupo' && !['routine','onboard'].includes(kind) && !opts.confirmationRestore,
   });
   if (inventoryCalculation.enabled) registry.add(inventoryCalculation.tool);
@@ -6467,7 +6475,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // com 40 passos SEMPRE, inclusive nas continuações. Ver roteamento-modelo-dsh.md.)
   const effectiveMaxSteps = livreActive ? Math.max(maxSteps, 40) : maxSteps;
   const interjecoes = [];
-  const appBuildJournal = createAppBuildJournal({ language:userLang, userRequest:message, failedPublication:confirmedToolLog.some(c => c.name === 'publicar_sistema'), publicationError:confirmedToolLog.find(c => c.name === 'publicar_sistema')?.usuario || '' });
+  const appBuildJournal = createAppBuildJournal({ language:idiomaResposta, userRequest:message, failedPublication:confirmedToolLog.some(c => c.name === 'publicar_sistema'), publicationError:confirmedToolLog.find(c => c.name === 'publicar_sistema')?.usuario || '' });
   const previousAssistantText = [...baseHistory].reverse().find((m) => m?.role === 'assistant')?.content || '';
   // Jev (#32): a memória permanente é escrita sem cartão, então o Jev só pode
   // VETAR a regra (ela liberou, ele diz que é relato da jornada ou nada). Nunca
@@ -6498,7 +6506,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if(veto) return {ok:false,error:veto};
     return blocked || activeRegistry.run(name,args);
   } };
-  const actionJournal = createActionJournal({ language: userLang, ownerText: kind === 'routine' ? '' : savedUserMsg });
+  const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg });
   // Tudo que as ferramentas devolveram NESTE turno. É a prova de origem do freio
   // de fundamentação: um dado que não aparece aqui (nem na fala do dono) não foi
   // consultado por ninguém. Entram também o que a plataforma entregou ao modelo
@@ -6633,7 +6641,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             provider, tools: guardedRegistry,
             control:{beforeAnswer:()=>inventoryCalculation.beforeAnswer()},
             system: systemFor(agent, { tools: activeRegistry.defs, mediaLibrary, subdomain, project: activeProject, appsManual, language: userLang }) + ACTION_EVIDENCE_POLICY,
-            userInput: groundingRetryPrompt(groundingFindings, userLang),
+            userInput: groundingRetryPrompt(groundingFindings, idiomaResposta),
             history: messages, maxSteps: 4,
             retainedToolResult: curationEvidence ? retainedCurationToolResult : null,
             transformToolResult: (call, out) => {
@@ -6649,11 +6657,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           usages.push(...(refeito.usages || []));
           if (refeito.sources?.length) fontesGrounding = [...(fontesGrounding || []), ...refeito.sources];
           const resto = checkGrounding(refeito.text, origemDoTurno()).findings;
-          text = resto.length ? applyGroundingFallback(refeito.text, resto, userLang) : refeito.text;
+          text = resto.length ? applyGroundingFallback(refeito.text, resto, idiomaResposta) : refeito.text;
           groundingDesfecho = resto.length ? 'removido' : 'corrigido';
           if (resto.length) groundingFindings = resto;
         } else {
-          text = applyGroundingFallback(text, groundingFindings, userLang);
+          text = applyGroundingFallback(text, groundingFindings, idiomaResposta);
           groundingDesfecho = 'removido';
         }
         console.log(`[freio_fundamentacao] thread=${thread.id} desfecho=${groundingDesfecho}`);
@@ -6670,7 +6678,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     } catch (e) { console.error('[freio_fundamentacao]', e?.message ?? e); }
   }
   // FREIO DE IDIOMA (freio-idioma.mjs): resposta em chinês sem a pessoa pedir é reescrita antes de entregar.
-  if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: idiomaDoTurno(userLang, textoDoDono), pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
+  if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: idiomaResposta, pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
   let curationResult = null;
   if (curationHistory !== null) {
     curationResult = await finalizeCuration({text,config:opts.curationConfig,userId,routineId:opts.routineId,
@@ -6703,7 +6711,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     text = curationResult.text;
   }
   if (!curationResult && emailAnswers.eligible({kind,toolCounts,termination,messages,nativeSearch:buscaNativa,ephemeral})) {
-    const reviewed = await emailAnswers.review({provider,text,request:savedUserMsg,language:userLang,warnings:searchCoverage.emailWarnings(userLang),
+    const reviewed = await emailAnswers.review({provider,text,request:savedUserMsg,language:idiomaResposta,warnings:searchCoverage.emailWarnings(idiomaResposta),
       nowContext:new Date().toLocaleString('pt-BR',{timeZone:userTz,dateStyle:'full',timeStyle:'short'})+'; '+userTz});
     text = reviewed.text;
     console.log(`[email_review] thread=${thread.id} status=${reviewed.status}`);
@@ -6715,19 +6723,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // devolve lista de fontes. Sem isso, "[1]" no texto é do assistente ou do dono.
   text = sanitizeAssistantText(text, {
     comFontes: buscaNativa || Object.keys(toolCounts).some((n) => TOOLS_COM_FONTES.has(n)),
-    fontes: fontesDoTurno, language: userLang,
+    fontes: fontesDoTurno, language: idiomaResposta,
   });
   // Jev (#48): pega a alegação "verifiquei agora" que a regra perde, sobre o
   // texto do modelo. Só acrescenta a correção, não tira nada (não dá pra saber a
   // linha exata). A regra continua valendo mais abaixo, junto dos outros guardas.
   if (!Object.keys(toolCounts).length && FRESH_CHECK_HINT.test(String(text || '')) && jevEnabled()
-    && enforceFreshCheckClaims(text, { toolCounts, language:userLang }) === text
+    && enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta }) === text
     && await jevFreshCheckClaim(String(text)) === 'alegacao_falsa') {
     const diagAntes = text;
-    text = [String(text).trim(), freshCheckCorrection(userLang)].join('\n\n');
+    text = [String(text).trim(), freshCheckCorrection(idiomaResposta)].join('\n\n');
     diag.corte('conferi_agora', diagAntes, text, { via: 'jev' });
   }
-  const routineFinal = routineFinalText(text, { kind, ...routineCheck, language: userLang });
+  const routineFinal = routineFinalText(text, { kind, ...routineCheck, language: idiomaResposta });
   // Preserva a origem do vazio: recibos de memória não podem reviver somente
   // o silêncio solicitado por este protocolo validado. Vazio comum é distinto.
   const routineNoNews = kind === 'routine' && String(text ?? '').trim() === ROUTINE_NO_NEWS && routineFinal === '';
@@ -6747,7 +6755,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Desligável por FONTES_LINKS=0 sem tirar nada do lugar.
   if (text && !curationResult && process.env.FONTES_LINKS !== '0') {
     try {
-      const r = await fontesEConferencia(text, fontesGrounding || [], { mostrarFontes: buscaNativa, language: userLang, strictLinks: kind === 'routine', authenticatedEmailSources:searchCoverage.emailSourceLinks() });
+      const r = await fontesEConferencia(text, fontesGrounding || [], { mostrarFontes: buscaNativa, language: idiomaResposta, strictLinks: kind === 'routine', authenticatedEmailSources:searchCoverage.emailSourceLinks() });
       if (r.quebrados.length || r.fontes) {
         console.log(`[fontes] agent=${agent?.id} fontes=${r.fontes} links_quebrados=${r.quebrados.length}${r.quebrados.length ? ' ' + r.quebrados.join(' ') : ''}`);
       }
@@ -6759,7 +6767,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Curadoria guarda cobertura/filtros no audit tipado. Não repetir esse estado
   // como aviso espontâneo no corpo que será entregue ao usuário; ele continua
   // disponível para diagnóstico e explicação sob demanda.
-  text = curationResult ? text : searchCoverage.finish(text, userLang, {suppressEmptyEmailSources: routineNoNews});
+  text = curationResult ? text : searchCoverage.finish(text, idiomaResposta, {suppressEmptyEmailSources: routineNoNews});
   // Recibos e confirmações reais entram aqui pelo actionJournal. Oferta sem
   // pedido, papel de "time do Brambs" e apelido inventado são regra do prompt:
   // os cortes por regex que existiam aqui apagavam pergunta de confirmação e
@@ -6775,13 +6783,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (diag.removidas.length) diag.corte('ja_fiz_sem_prova', diagAntesJournal, text, { removidas: diag.removidas, recibos: actionJournal.entries });
   text = appBuildJournal.finish(text, { proposalShown: Boolean(deterministicConfirmation) });
   const diagAntesRotina = text;
-  text = enforceRoutineEmailContract(text, { language:userLang });
+  text = enforceRoutineEmailContract(text, { language:idiomaResposta });
   diag.corte('rotina_email', diagAntesRotina, text);
   // Resultados de tools no histórico continuam úteis, mas não provam o estado
   // atual. Remove a alegação objetiva "verifiquei agora" quando nenhuma tool foi
   // chamada neste turno (um assistente reciclou status_conta de quatro dias antes).
   const diagAntesConferi = text;
-  text = enforceFreshCheckClaims(text, { toolCounts, language:userLang });
+  text = enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta });
   diag.corte('conferi_agora', diagAntesConferi, text, { via: 'regra' });
   // Journals and prose guards must not replace the card used to bind the
   // channel receipt. Apply it after them, including coding lifecycle proposals.
@@ -6793,11 +6801,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // after prose guards. A later model cannot turn 19 rows/units back into 13.
   if (inventoryCalculation.required) {
     const calculated = inventoryCalculation.finish(text,{termination});
-    if (calculated !== text) text = [calculated,renderCompletedActions(actionJournal.entries,userLang),deterministicConfirmation].filter(Boolean).join('\n\n');
+    if (calculated !== text) text = [calculated,renderCompletedActions(actionJournal.entries,idiomaResposta),deterministicConfirmation].filter(Boolean).join('\n\n');
   }
   // Um assunto de e-mail pode conter "pedido enviado" e ser removido pelos
   // guardas de prosa. Fontes consultadas voltam depois deles, sem tocar cartões.
-  if (!deterministicConfirmation && !curationResult) text = searchCoverage.finishEmail(text, userLang, {suppressEmptyEmailSources: routineNoNews});
+  if (!deterministicConfirmation && !curationResult) text = searchCoverage.finishEmail(text, idiomaResposta, {suppressEmptyEmailSources: routineNoNews});
   // A identificação institucional não fica por conta da síntese da LLM: entra
   // por último, no texto que será entregue E persistido. O prompt acima pede
   // que o modelo não a repita; a checagem protege contra um provider que a tenha
@@ -6863,7 +6871,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       userId, agentId: agent.id, threadId: thread.id, turnId,
       userMsg: savedUserMsg, assistantMsg: text, language: userLang,
     });
-    logDerivaIdioma(text, idiomaDoTurno(userLang, textoDoDono), userId);
+    logDerivaIdioma(text, idiomaResposta, userId);
   }
   // Onboarding "momento wow" é EFÊMERO: a saudação é mostrada na hora no wizard
   // e o que importa (perfil/wiki + itens da home) já foi gravado pelas tools.
