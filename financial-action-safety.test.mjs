@@ -61,7 +61,7 @@ ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_cancelar_pagamento_conta/.test(server), 'cance
 // O cartão determinístico vai sempre inteiro no fim da resposta; o texto do modelo
 // fica acima dele, mas é o cartão que amarra a aprovação (29/09/2026).
 ok(/peekPending\(thread\.id\)\?\.confirmationText[\s\S]*if \(deterministicConfirmation\) text = \[[^\n]*, deterministicConfirmation\]/.test(server), 'confirmação financeira determinística fecha a resposta');
-ok(/TODA ação financeira[\s\S]*asaas_receber_pix[\s\S]*confirmação por TEXTO/.test(server), 'prompt exige confirmação de toda ação financeira');
+ok(/EVERY financial action[\s\S]*asaas_receber_pix[\s\S]*confirmation in TEXT/.test(server), 'prompt exige confirmação de toda ação financeira');
 ok(!/asaas_receber_pix:[^\n]*não precisa de confirmação/.test(server), 'prompt não contém exceção antiga para receber Pix');
 
 // Defesa em profundidade: mesmo que alguém registre a tool crua por engano,

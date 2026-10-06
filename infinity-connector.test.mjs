@@ -119,7 +119,7 @@ t('evidência com id do item', actionEvidenceFor('infinity_criar_item', { board_
 const src = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 t('conector registrado no cofre', src.includes("{ provider: 'infinity', build: (secret) => infinityTools({ secret }) }"));
 t('escritas na lista de escrita do cofre', src.includes("'infinity_criar_item', 'infinity_editar_item', 'infinity_comentar',"));
-t('prompt explica a conexão mesmo com o grupo fechado', src.includes("if (vaultEnabled() && tools.some((t) => t.name === 'abrir_ferramentas' || t.name === 'infinity_boards'))") && src.includes('app.startinfinity.com/profile/developer/tokens') && src.includes('Notion, Splitwise e Infinity/StartInfinity'));
+t('prompt explica a conexão mesmo com o grupo fechado', src.includes("if (vaultEnabled() && tools.some((t) => t.name === 'abrir_ferramentas' || t.name === 'infinity_boards'))") && src.includes('app.startinfinity.com/profile/developer/tokens') && src.includes('Notion, Splitwise and Infinity/StartInfinity'));
 const egress = readFileSync(new URL('./web/egress.mjs', import.meta.url), 'utf8');
 t('host liberado no egress', egress.includes("'app.startinfinity.com'"));
 
