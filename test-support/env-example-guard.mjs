@@ -21,6 +21,7 @@ export const IGNORE = new Map([
   ['PGLITE_MODULE', 'prévia local do painel com banco em memória (engagement/preview.mts)'],
   ['DATA_DIR', 'modelo de código gerado pros apps dos usuários (web/hosting.mjs)'],
   ['NOME', 'texto de instrução pro modelo ("use process.env.NOME")'],
+  ['NAME', 'texto de instrução pro modelo ("use process.env.NAME")'],
   ['X', 'texto de comentário ("process.env.X")'],
 ]);
 

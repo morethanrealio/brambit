@@ -27,7 +27,7 @@ for(const account of ['fixture-A','fixture-B'])for(const first of [literal,'Vou 
  const reg=new ToolRegistry().add({name:'construir_app',parameters:{},run:async args=>{builds++;ok(args.objetivo.includes('não publicar'));return {ok:false,app_build:{version:1,estado:'nao_validado'}};}});
  const j=createAppBuildJournal();
  const r=await runAgent({tools:reg,userInput:'Vamos tentar de novo?',history:[{role:'assistant',content:context}],system:account,maxSteps:5,transformToolResult:(c,o)=>j.toolResult(c,o),onEvent:e=>events.push(e),provider:{name:'offline',complete:async({messages,system})=>{
- calls++;if(calls===1)return {stop:'end',text:first};if(calls===2){ok(system.includes('retomada'));ok(messages.some(m=>m.content.includes('Não publique')));return call();}return {stop:'end',text:'Ainda não validei o rascunho.'};}}});
+ calls++;if(calls===1)return {stop:'end',text:first};if(calls===2){ok(system.includes('answer NOT sent yet'));ok(messages.some(m=>m.content.includes('Não publique')));return call();}return {stop:'end',text:'Ainda não validei o rascunho.'};}}});
  eq(builds,1);eq(calls,3);ok(!events.some(e=>['assistant','end'].includes(e.type)&&e.text===first));ok(!r.messages.some(m=>m.content===first));ok(j.finish(r.text).includes('Ainda não consegui validar'));
 }
 // Unavailable builder can disclose once, without an extra workflow or paid retry.
