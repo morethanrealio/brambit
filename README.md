@@ -2,7 +2,7 @@
 
 <h1 align="center">Brambit</h1>
 
-<h3 align="center">The open-source engine for personal AI assistants.</h3>
+<h3 align="center">The open-source engine for personal AI assistants anyone can use.</h3>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
@@ -24,20 +24,29 @@ same team.
 
 ## Why Brambit
 
-- *Your model, your key.* Choose a provider and a model for each job (chat, images,
-  research, coding, memory) in one commented YAML file, with an optional fallback.
+Open-source personal agents such as OpenClaw, NanoClaw and Hermes Agent are made for
+developers: you set them up in a terminal and config files, and you are usually the
+only person using them. Brambit is made for the people who will never open a terminal.
+The features people find today in closed, hosted assistant products, in an engine you
+run yourself.
+
+- *Built for people who don't code.* Whoever installs Brambit gives everyone else a
+  web app: they sign in, a first-run guide sets up their assistant, and connectors link
+  with a button. Nobody edits a config file to use it.
+- *Many people, one install.* Each account is isolated from the others (the test suite
+  carries isolation proofs), so a family, a team or a company can share one instance.
+- *Asks before it acts.* Actions that write or send ask for confirmation first, and the
+  confirmation is stored and checked again before anything happens. Code runs in a
+  sandbox on a separate host; the Runner can run commands on the user's own machine
+  with kernel-level confinement.
 - *Where people already are.* One assistant answers on the web app, WhatsApp,
   Telegram, email and Slack, and can look back across its own channels.
-- *Does things, safely.* Actions that write or send ask for confirmation first, and
-  the confirmation is stored and checked again before anything happens. Code runs in
-  a sandbox on a separate host; the Runner can run commands on the user's own machine
-  with kernel-level confinement.
+- *Your model, your key.* Choose a provider and a model for each job (chat, images,
+  research, coding, memory) in one commented YAML file, with an optional fallback.
 - *Extensible without forking.* Plugins add branding, pages, screens, messages and
   answers to the questions the core asks the installer (spending limits, app and disk
   quotas, who pays for an account). Without plugins, every one of those has a working
   default.
-- *Batteries included for development.* `npm run local` brings its own Postgres; no
-  project credential or production access needed.
 
 ## Quick start
 

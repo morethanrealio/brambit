@@ -2,7 +2,7 @@
 
 <h1 align="center">Brambit</h1>
 
-<h3 align="center">O motor open source de assistentes pessoais de IA.</h3>
+<h3 align="center">O motor open source de assistentes pessoais de IA que qualquer pessoa consegue usar.</h3>
 
 <p align="center">
   <a href="LICENSE"><img alt="Licença: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
@@ -24,19 +24,29 @@ mantido pelo mesmo time.
 
 ## Por que o Brambit
 
-- *Seu modelo, sua chave.* Escolha provedor e modelo por função (conversa, imagem,
-  pesquisa, programação, memória) num único YAML comentado, com reserva opcional.
+Agentes pessoais open source como OpenClaw, NanoClaw e Hermes Agent são feitos para
+desenvolvedores: você configura pelo terminal e por arquivos de configuração, e em
+geral é a única pessoa que usa. O Brambit é feito para quem nunca vai abrir um
+terminal. São as funcionalidades que hoje se encontram em produtos de assistente
+fechados e hospedados, num motor que você mesmo roda.
+
+- *Feito para quem não programa.* Quem instala o Brambit entrega a todo mundo um app
+  web: a pessoa entra, um guia de primeiro acesso monta o assistente dela e os
+  conectores se ligam com um botão. Ninguém edita arquivo de configuração para usar.
+- *Muita gente, uma instalação.* Cada conta é isolada das outras (a suíte de testes
+  traz provas de isolamento), então uma família, um time ou uma empresa podem
+  dividir a mesma instância.
+- *Pergunta antes de agir.* Ações que gravam ou enviam pedem confirmação antes, e a
+  confirmação fica guardada e é conferida de novo antes do efeito. O código roda num
+  sandbox em outra máquina; o Runner executa comandos na máquina do próprio usuário,
+  com confinamento no kernel.
 - *Onde as pessoas já estão.* O mesmo assistente responde no app web, WhatsApp,
   Telegram, e-mail e Slack, e consegue consultar o que foi dito nos outros canais.
-- *Faz as coisas, com segurança.* Ações que gravam ou enviam pedem confirmação
-  antes, e a confirmação fica guardada e é conferida de novo antes do efeito. O
-  código roda num sandbox em outra máquina; o Runner executa comandos na máquina
-  do próprio usuário, com confinamento no kernel.
+- *Seu modelo, sua chave.* Escolha provedor e modelo por função (conversa, imagem,
+  pesquisa, programação, memória) num único YAML comentado, com reserva opcional.
 - *Extensível sem fork.* Plugins trazem marca, páginas, telas, mensagens e as
   respostas às perguntas que o núcleo faz a quem instala (limite de gasto, teto de
   apps e disco, quem paga uma conta). Sem plugin, cada uma tem um padrão que funciona.
-- *Pronto pra desenvolver.* O `npm run local` traz o próprio Postgres; não precisa
-  de credencial do projeto nem de acesso a produção.
 
 ## Quick start
 
