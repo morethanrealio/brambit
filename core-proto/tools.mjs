@@ -16,12 +16,12 @@ export function buildTools() {
   return new ToolRegistry()
     .add({
       name: 'search_products',
-      description: 'Busca produtos por categoria e preço máximo.',
+      description: 'Searches products by category and maximum price.',
       parameters: {
         type: 'object',
         properties: {
-          categoria: { type: 'string', description: 'ex: corrida, casual' },
-          preco_max: { type: 'number', description: 'preço máximo em R$' },
+          categoria: { type: 'string', description: 'e.g.: corrida, casual' },
+          preco_max: { type: 'number', description: 'maximum price in R$' },
         },
         required: ['categoria'],
       },

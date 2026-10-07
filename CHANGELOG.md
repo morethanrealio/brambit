@@ -10,6 +10,12 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Changed
+- Tool descriptions and parameter descriptions the model reads are in
+  English, like the main prompt. Quoted examples of what a person says,
+  enum values and labels shown to people are unchanged, and the model still
+  answers in the person's language.
+
 ## [0.2.5] - 2026-10-07
 
 ### Added

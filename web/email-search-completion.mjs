@@ -44,7 +44,7 @@ export function withEmailSearchCompletion(readTools, { maxPages = 10, maxMessage
       ...tool.parameters,
       properties: {
         ...tool.parameters?.properties,
-        complete: { type: 'boolean', description: 'true para percorrer as páginas desta consulta delimitada, dentro dos limites da plataforma. Use para listar todos os resultados pertinentes. Não amplia os filtros nem pesquisa outras contas.' },
+        complete: { type: 'boolean', description: 'true to go through the pages of this bounded query, within the platform\'s limits. Use to list all relevant results. Does not broaden the filters nor search other accounts.' },
       },
     },
     async run(args = {}) {

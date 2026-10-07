@@ -138,8 +138,8 @@ export function notionTools({ secret, oneClick = false }) {
   return [
     {
       name: 'notion_search',
-      description: 'Busca páginas e bases (databases) no Notion do usuário às quais a integração dele tem acesso. Devolve título, tipo, id e link de cada resultado. Sem "query" traz os itens editados mais recentemente. Use pra achar o id de uma página antes de ler ou escrever nela.',
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Texto a buscar (opcional).' }, tipo: { type: 'string', description: 'Filtra por "page" ou "database" (opcional).' }, max: { type: 'integer', description: 'Padrão 10 (máx 30).' } } },
+      description: 'Searches pages and databases in the user\'s Notion that their integration has access to. Returns title, type, id and link of each result. Without "query" it brings the most recently edited items. Use to find the id of a page before reading or writing to it.',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Text to search for (optional).' }, tipo: { type: 'string', description: 'Filters by "page" or "database" (optional).' }, max: { type: 'integer', description: 'Default 10 (max 30).' } } },
       async run({ query, tipo, max = 10 } = {}) {
         const body = { page_size: Math.min(max, 30), sort: { direction: 'descending', timestamp: 'last_edited_time' } };
         if (query) body.query = query;
@@ -159,7 +159,7 @@ export function notionTools({ secret, oneClick = false }) {
     },
     {
       name: 'notion_read_page',
-      description: 'Lê uma página do Notion pelo id (use o notion_search pra achar o id). Devolve o título e o conteúdo em texto (os blocos: parágrafos, títulos, listas, to-dos).',
+      description: 'Reads a Notion page by id (use notion_search to find the id). Returns the title and the content as text (the blocks: paragraphs, headings, lists, to-dos).',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         const page = await nReq(secret, `/pages/${encodeURIComponent(id)}`);
@@ -201,8 +201,8 @@ export function notionTools({ secret, oneClick = false }) {
     },
     {
       name: 'notion_create_page',
-      description: 'Cria uma NOVA página no Notion dentro de uma página-pai (parent_id). Passe o título e, opcionalmente, o conteúdo em texto (cada linha vira um parágrafo). SEMPRE confirme onde e o quê com o usuário ANTES; não crie sem o ok explícito dele.',
-      parameters: { type: 'object', properties: { parent_id: { type: 'string', description: 'Id da página-pai onde a nova página será criada (ache com notion_search).' }, titulo: { type: 'string' }, conteudo: { type: 'string', description: 'Texto do corpo (opcional). Cada linha vira um parágrafo.' } }, required: ['parent_id', 'titulo'] },
+      description: 'Creates a NEW page in Notion inside a parent page (parent_id). Pass the title and, optionally, the content as text (each line becomes a paragraph). ALWAYS confirm where and what with the user BEFORE; do not create without their explicit ok.',
+      parameters: { type: 'object', properties: { parent_id: { type: 'string', description: 'Id of the parent page where the new page will be created (find it with notion_search).' }, titulo: { type: 'string' }, conteudo: { type: 'string', description: 'Body text (optional). Each line becomes a paragraph.' } }, required: ['parent_id', 'titulo'] },
       async run({ parent_id, titulo, conteudo }) {
         const body = {
           parent: { page_id: parent_id },
@@ -218,8 +218,8 @@ export function notionTools({ secret, oneClick = false }) {
     },
     {
       name: 'notion_append',
-      description: 'Acrescenta texto ao FINAL de uma página existente do Notion (id da página; cada linha vira um parágrafo). Não apaga nada do que já existe. SEMPRE confirme o texto e a página com o usuário ANTES; não escreva sem o ok explícito dele.',
-      parameters: { type: 'object', properties: { id: { type: 'string', description: 'Id da página onde acrescentar.' }, conteudo: { type: 'string' } }, required: ['id', 'conteudo'] },
+      description: 'Appends text to the END of an existing Notion page (page id; each line becomes a paragraph). Does not delete anything that already exists. ALWAYS confirm the text and the page with the user BEFORE; do not write without their explicit ok.',
+      parameters: { type: 'object', properties: { id: { type: 'string', description: 'Id of the page to append to.' }, conteudo: { type: 'string' } }, required: ['id', 'conteudo'] },
       async run({ id, conteudo }) {
         const r = await nReq(secret, `/blocks/${encodeURIComponent(id)}/children`, { method: 'PATCH', body: { children: textToBlocks(conteudo).slice(0, 90) } });
         if (r.__notConnected) return setup;
@@ -294,7 +294,7 @@ export function splitwiseTools({ secret }) {
   return [
     {
       name: 'splitwise_groups',
-      description: 'Lista os grupos do Splitwise do usuário (viagens, casa, etc.), com id, nome e membros. Use pra achar o id de um grupo antes de ver despesas ou lançar um gasto.',
+      description: 'Lists the user\'s Splitwise groups (trips, home, etc.), with id, name and members. Use to find the id of a group before viewing expenses or adding an expense.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const j = await swReq(secret, '/get_groups');
@@ -306,8 +306,8 @@ export function splitwiseTools({ secret }) {
     },
     {
       name: 'splitwise_expenses',
-      description: 'Lista as despesas recentes do Splitwise, opcionalmente de um grupo específico (group_id, ache com splitwise_groups). Devolve descrição, valor, moeda, data e quem lançou.',
-      parameters: { type: 'object', properties: { group_id: { type: 'integer', description: 'Id do grupo (opcional; sem ele traz de todos).' }, max: { type: 'integer', description: 'Padrão 20 (máx 50).' } } },
+      description: 'Lists recent Splitwise expenses, optionally of a specific group (group_id, find it with splitwise_groups). Returns description, amount, currency, date and who added it.',
+      parameters: { type: 'object', properties: { group_id: { type: 'integer', description: 'Group id (optional; without it, brings from all).' }, max: { type: 'integer', description: 'Default 20 (max 50).' } } },
       async run({ group_id, max = 20 } = {}) {
         const params = new URLSearchParams({ limit: String(Math.min(max, 50)) });
         if (group_id != null) params.set('group_id', String(group_id));
@@ -320,8 +320,8 @@ export function splitwiseTools({ secret }) {
     },
     {
       name: 'splitwise_add_expense',
-      description: 'Lança uma NOVA despesa num grupo do Splitwise, dividida IGUALMENTE entre os membros do grupo. Passe o group_id, uma descrição e o valor total. Isso altera a conta compartilhada de terceiros: SEMPRE confirme grupo, descrição e valor com o usuário ANTES; não lance sem o ok explícito dele.',
-      parameters: { type: 'object', properties: { group_id: { type: 'integer', description: 'Id do grupo (ache com splitwise_groups).' }, descricao: { type: 'string' }, valor: { type: 'number', description: 'Valor total da despesa.' }, moeda: { type: 'string', description: 'Código da moeda (padrão BRL).' } }, required: ['group_id', 'descricao', 'valor'] },
+      description: 'Adds a NEW expense to a Splitwise group, split EQUALLY among the group members. Pass the group_id, a description and the total amount. This changes a shared account of third parties: ALWAYS confirm group, description and amount with the user BEFORE; do not add it without their explicit ok.',
+      parameters: { type: 'object', properties: { group_id: { type: 'integer', description: 'Group id (find it with splitwise_groups).' }, descricao: { type: 'string' }, valor: { type: 'number', description: 'Total amount of the expense.' }, moeda: { type: 'string', description: 'Currency code (default BRL).' } }, required: ['group_id', 'descricao', 'valor'] },
       async run({ group_id, descricao, valor, moeda = 'BRL' }) {
         const body = {
           group_id,
@@ -567,18 +567,18 @@ export function infinityTools({ secret }) {
       members: members.data,
     };
   }
-  const wsParam = { type: 'integer', description: 'Id do workspace (ache com infinity_boards).' };
-  const boardParam = { type: 'string', description: 'Id do board (ache com infinity_boards).' };
+  const wsParam = { type: 'integer', description: 'Workspace id (find it with infinity_boards).' };
+  const boardParam = { type: 'string', description: 'Board id (find it with infinity_boards).' };
   const camposParam = {
     type: 'object',
     additionalProperties: true,
-    description: 'Campos do item por NOME (como aparecem em infinity_board_estrutura) ou id, com o valor. Etiqueta: nome da etiqueta (ou lista de nomes). Membro: nome ou e-mail. Checkbox: true/false. Texto longo: texto simples. Ex: {"Nome": "Ligar pro fornecedor", "Status": "Em andamento"}.',
+    description: 'Item fields by NAME (as they appear in infinity_board_estrutura) or id, with the value. Label: label name (or list of names). Member: name or email. Checkbox: true/false. Long text: plain text. E.g. {"Nome": "Ligar pro fornecedor", "Status": "Em andamento"}.',
   };
   return [
     {
       name: 'infinity_boards',
-      description: 'Lista os workspaces do Infinity (StartInfinity) do usuário e os boards de cada um, com os ids. Comece por aqui pra achar workspace_id e board_id.',
-      parameters: { type: 'object', properties: { workspace_id: { type: 'integer', description: 'Opcional: só os boards deste workspace.' } } },
+      description: 'Lists the user\'s Infinity (StartInfinity) workspaces and the boards of each one, with the ids. Start here to find workspace_id and board_id.',
+      parameters: { type: 'object', properties: { workspace_id: { type: 'integer', description: 'Optional: only the boards of this workspace.' } } },
       async run({ workspace_id } = {}) {
         let wss;
         if (workspace_id != null) wss = [{ id: workspace_id }];
@@ -602,7 +602,7 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_board_estrutura',
-      description: 'Mostra a estrutura de um board do Infinity: pastas (folders), campos (atributos, com tipo e as etiquetas possíveis) e membros do workspace. Use ANTES de criar ou editar item, pra usar os nomes certos de pasta, campo e etiqueta.',
+      description: 'Shows the structure of an Infinity board: folders, fields (attributes, with type and the possible labels) and workspace members. Use BEFORE creating or editing an item, to use the right folder, field and label names.',
       parameters: { type: 'object', properties: { workspace_id: wsParam, board_id: boardParam }, required: ['workspace_id', 'board_id'] },
       async run({ workspace_id, board_id }) {
         const ctx = await boardCtx(workspace_id, board_id);
@@ -616,15 +616,15 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_itens',
-      description: 'Lista itens de um board do Infinity com os campos já legíveis (nome do campo e da etiqueta, não id). Filtra por pasta (folder_id) e/ou por um texto de busca que é procurado em todos os campos. Sem busca, traz os mais recentes.',
+      description: 'Lists items of an Infinity board with the fields already readable (field and label name, not id). Filters by folder (folder_id) and/or by a search text that is looked up in all fields. Without search, brings the most recent ones.',
       parameters: {
         type: 'object',
         properties: {
           workspace_id: wsParam,
           board_id: boardParam,
-          folder_id: { type: 'string', description: 'Opcional: só itens desta pasta.' },
-          busca: { type: 'string', description: 'Opcional: texto a procurar nos campos dos itens.' },
-          max: { type: 'integer', description: 'Padrão 20 (máx 50).' },
+          folder_id: { type: 'string', description: 'Optional: only items in this folder.' },
+          busca: { type: 'string', description: 'Optional: text to look for in the item fields.' },
+          max: { type: 'integer', description: 'Default 20 (max 50).' },
         },
         required: ['workspace_id', 'board_id'],
       },
@@ -653,7 +653,7 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_item',
-      description: 'Abre um item do Infinity: todos os campos legíveis e os comentários.',
+      description: 'Opens an Infinity item: all readable fields and the comments.',
       parameters: { type: 'object', properties: { workspace_id: wsParam, board_id: boardParam, item_id: { type: 'string' } }, required: ['workspace_id', 'board_id', 'item_id'] },
       async run({ workspace_id, board_id, item_id }) {
         const ctx = await boardCtx(workspace_id, board_id);
@@ -673,10 +673,10 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_criar_item',
-      description: 'Cria um item NOVO num board do Infinity, numa pasta (folder_id, obrigatório). Rode infinity_board_estrutura antes pra saber a pasta e os nomes dos campos e etiquetas. Isso grava no board (que pode ser compartilhado com a equipe): confirme pasta e campos com o usuário ANTES.',
+      description: 'Creates a NEW item in an Infinity board, in a folder (folder_id, required). Run infinity_board_estrutura first to know the folder and the names of the fields and labels. This writes to the board (which may be shared with the team): confirm folder and fields with the user BEFORE.',
       parameters: {
         type: 'object',
-        properties: { workspace_id: wsParam, board_id: boardParam, folder_id: { type: 'string', description: 'Id da pasta onde o item entra.' }, campos: camposParam, parent_id: { type: 'string', description: 'Opcional: id do item pai, pra criar como subitem.' } },
+        properties: { workspace_id: wsParam, board_id: boardParam, folder_id: { type: 'string', description: 'Id of the folder the item goes into.' }, campos: camposParam, parent_id: { type: 'string', description: 'Optional: parent item id, to create it as a subitem.' } },
         required: ['workspace_id', 'board_id', 'folder_id', 'campos'],
       },
       async run({ workspace_id, board_id, folder_id, campos, parent_id }) {
@@ -693,10 +693,10 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_editar_item',
-      description: 'Altera campos de um item EXISTENTE do Infinity (só os campos passados) e/ou move de pasta. Isso muda o board (que pode ser compartilhado com a equipe): confirme o item e os campos com o usuário ANTES.',
+      description: 'Changes fields of an EXISTING Infinity item (only the fields passed) and/or moves it to another folder. This changes the board (which may be shared with the team): confirm the item and the fields with the user BEFORE.',
       parameters: {
         type: 'object',
-        properties: { workspace_id: wsParam, board_id: boardParam, item_id: { type: 'string' }, campos: camposParam, folder_id: { type: 'string', description: 'Opcional: mover o item pra esta pasta.' } },
+        properties: { workspace_id: wsParam, board_id: boardParam, item_id: { type: 'string' }, campos: camposParam, folder_id: { type: 'string', description: 'Optional: move the item to this folder.' } },
         required: ['workspace_id', 'board_id', 'item_id'],
       },
       async run({ workspace_id, board_id, item_id, campos = {}, folder_id }) {
@@ -714,7 +714,7 @@ export function infinityTools({ secret }) {
     },
     {
       name: 'infinity_comentar',
-      description: 'Comenta num item do Infinity em nome do usuário. O comentário fica visível pra quem tem acesso ao board: confirme o texto com o usuário ANTES.',
+      description: 'Comments on an Infinity item on behalf of the user. The comment is visible to whoever has access to the board: confirm the text with the user BEFORE.',
       parameters: { type: 'object', properties: { workspace_id: wsParam, board_id: boardParam, item_id: { type: 'string' }, texto: { type: 'string' } }, required: ['workspace_id', 'board_id', 'item_id', 'texto'] },
       async run({ workspace_id, board_id, item_id, texto }) {
         const j = await infReq(secret, `/workspaces/${encodeURIComponent(workspace_id)}/boards/${encodeURIComponent(board_id)}/items/${encodeURIComponent(item_id)}/comments`, {
@@ -1690,7 +1690,7 @@ export function asaasTools({
   return [
     {
       name: 'asaas_saldo',
-      description: 'Consulta o saldo atual da conta Asaas do usuário, em reais. Só leitura.',
+      description: 'Checks the current balance of the user\'s Asaas account, in reais. Read-only.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const j = await aReq(secret, '/v3/finance/balance');
@@ -1707,10 +1707,10 @@ export function asaasTools({
     },
     {
       name: 'asaas_receber_pix',
-      description: 'Propõe gerar um Pix copia-e-cola para RECEBER dinheiro. Se não houver chave Pix ativa, a confirmação também autoriza criar uma chave aleatória. É uma AÇÃO FINANCEIRA e nunca executa no mesmo turno, nem em automações: o usuário precisa confirmar em texto no turno seguinte. Se ele apenas perguntar como funciona, explique sem chamar esta tool.',
+      description: 'Proposes generating a Pix copia-e-cola code to RECEIVE money. If there is no active Pix key, the confirmation also authorizes creating a random key. It is a FINANCIAL ACTION and never executes in the same turn, nor in automations: the user must confirm in text in the following turn. If they only ask how it works, explain without calling this tool.',
       parameters: { type: 'object', properties: {
-        valor: { type: 'number', description: 'Valor em reais do depósito (opcional). Sem ele, o pagador escolhe o valor.' },
-        descricao: { type: 'string', description: 'Descrição que aparece pra quem paga (opcional).' },
+        valor: { type: 'number', description: 'Deposit amount in reais (optional). Without it, the payer chooses the amount.' },
+        descricao: { type: 'string', description: 'Description shown to the payer (optional).' },
       } },
       run: confirmacaoObrigatoria,
       async prepareConfirmation(args = {}) {
@@ -1753,10 +1753,10 @@ export function asaasTools({
     },
     {
       name: 'asaas_verificar_recebimento_pix',
-      description: 'Confere no EXTRATO da Asaas se um Pix recebido realmente entrou. Nunca conclua pelo saldo isolado. Sem valor, devolve candidatos recentes e exige que o usuário identifique o depósito; com valor, só confirma quando há um único lançamento PIX_TRANSACTION_CREDIT correspondente no período.',
+      description: 'Checks in the Asaas STATEMENT whether a received Pix really came in. Never conclude from the balance alone. Without an amount, returns recent candidates and requires the user to identify the deposit; with an amount, only confirms when there is a single matching PIX_TRANSACTION_CREDIT entry in the period.',
       parameters: { type: 'object', properties: {
-        valor: { type: 'number', description: 'Valor exato do depósito que o usuário diz ter feito. Sem ele, a consulta não confirma qual depósito é o dele.' },
-        desde: { type: 'string', description: 'Data inicial AAAA-MM-DD. Padrão: hoje no horário de Brasília.' },
+        valor: { type: 'number', description: 'Exact amount of the deposit the user says they made. Without it, the check does not confirm which deposit is theirs.' },
+        desde: { type: 'string', description: 'Start date YYYY-MM-DD. Default: today in Brasília time.' },
       } },
       async run({ valor, desde } = {}) {
         const inicio = String(desde || hojeBrasil()).slice(0, 10);
@@ -1796,10 +1796,10 @@ export function asaasTools({
     },
     {
       name: 'asaas_simular_conta',
-      description: 'Valida/simula o pagamento de um boleto ou conta pela linha digitável (ou código de barras), SEM pagar. Devolve o valor real, o vencimento, o beneficiário e se está vencido. Use SEMPRE antes de pagar, pra conferir valor e vencimento com o usuário.',
+      description: 'Validates/simulates the payment of a boleto or bill by its linha digitável (or barcode), WITHOUT paying. Returns the real amount, the due date, the payee and whether it is overdue. ALWAYS use it before paying, to check amount and due date with the user.',
       parameters: { type: 'object', properties: {
-        linha_digitavel: { type: 'string', description: 'Linha digitável do boleto (com ou sem espaços/pontos).' },
-        codigo_de_barras: { type: 'string', description: 'Código de barras (alternativa à linha digitável).' },
+        linha_digitavel: { type: 'string', description: 'Boleto linha digitável (with or without spaces/dots).' },
+        codigo_de_barras: { type: 'string', description: 'Barcode (alternative to the linha digitável).' },
       } },
       async run({ linha_digitavel, codigo_de_barras } = {}) {
         const body = {};
@@ -1830,8 +1830,8 @@ export function asaasTools({
     },
     {
       name: 'asaas_transferencias',
-      description: 'Lista as transferências recentes (PIX/TED) da conta Asaas, com valor, status, destino e datas. Use pra conferir se um PIX que você mandou já foi concluído.',
-      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Padrão 10 (máx 50).' } } },
+      description: 'Lists the recent transfers (PIX/TED) of the Asaas account, with amount, status, destination and dates. Use to check whether a PIX you sent has already completed.',
+      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Default 10 (max 50).' } } },
       async run({ max = 10 } = {}) {
         const j = await aReq(secret, '/v3/transfers', { query: { limit: String(Math.min(Math.max(max, 1), 50)) } });
         if (j.__notConnected) return ASAAS_SETUP();
@@ -1849,10 +1849,10 @@ export function asaasTools({
     },
     {
       name: 'asaas_obter_comprovante',
-      description: 'Recupera o comprovante OFICIAL de um Pix ou pagamento de boleto já concluído, pelo id real da operação na Asaas. É somente leitura. Se o usuário disser “o último”, liste primeiro as transferências ou pagamentos e escolha sem ambiguidade; nunca invente id nem use operação pendente.',
+      description: 'Retrieves the OFFICIAL receipt of an already completed Pix or boleto payment, by the real operation id in Asaas. It is read-only. If the user says “o último”, first list the transfers or payments and choose without ambiguity; never make up an id nor use a pending operation.',
       parameters: { type: 'object', properties: {
-        tipo: { type: 'string', enum: ['pix', 'boleto'], description: 'pix para transferência Pix; boleto para pagamento de conta.' },
-        id: { type: 'string', description: 'Id real retornado pela Asaas.' },
+        tipo: { type: 'string', enum: ['pix', 'boleto'], description: 'pix for a Pix transfer; boleto for a bill payment.' },
+        id: { type: 'string', description: 'Real id returned by Asaas.' },
       }, required: ['tipo', 'id'] },
       async run(args = {}) {
         try {
@@ -1866,11 +1866,11 @@ export function asaasTools({
     },
     {
       name: 'asaas_enviar_comprovante_email',
-      description: 'PROPÕE enviar por e-mail o comprovante oficial de um Pix ou boleto concluído. Busca novamente o status e a URL na Asaas, monta assunto e corpo determinísticos e exige confirmação textual no turno seguinte. Não use gmail_send/hotmail_send para comprovantes Asaas: use esta tool para impedir id, valor, link ou destinatário inventados.',
+      description: 'PROPOSES emailing the official receipt of a completed Pix or boleto. Fetches the status and the URL from Asaas again, builds a deterministic subject and body, and requires textual confirmation in the following turn. Do not use gmail_send/hotmail_send for Asaas receipts: use this tool to prevent a made-up id, amount, link or recipient.',
       parameters: { type: 'object', properties: {
-        tipo: { type: 'string', enum: ['pix', 'boleto'], description: 'pix para transferência Pix; boleto para pagamento de conta.' },
-        id: { type: 'string', description: 'Id real retornado pela Asaas.' },
-        para: { type: 'string', description: 'Um único endereço de e-mail do destinatário.' },
+        tipo: { type: 'string', enum: ['pix', 'boleto'], description: 'pix for a Pix transfer; boleto for a bill payment.' },
+        id: { type: 'string', description: 'Real id returned by Asaas.' },
+        para: { type: 'string', description: 'A single recipient email address.' },
       }, required: ['tipo', 'id', 'para'] },
       run: confirmacaoObrigatoria,
       async prepareConfirmation(args = {}) {
@@ -1917,8 +1917,8 @@ export function asaasTools({
     },
     {
       name: 'asaas_pagamentos_conta',
-      description: `Lista os pagamentos de contas/boletos recentes e também os agendamentos futuros mantidos pelo ${marcaDoProduto().nome}, com valor, status e datas. Use para conferir execução ou obter o id de um agendamento antes de cancelá-lo.`,
-      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Padrão 10 (máx 50).' } } },
+      description: `Lists the recent bill/boleto payments and also the future scheduled payments kept by ${marcaDoProduto().nome}, with amount, status and dates. Use to check execution or to get the id of a scheduled payment before cancelling it.`,
+      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Default 10 (max 50).' } } },
       async run({ max = 10 } = {}) {
         const out = [];
         if (typeof listarAgendamentosBoleto === 'function') {
@@ -1955,9 +1955,9 @@ export function asaasTools({
     },
     {
       name: 'asaas_cancelar_pagamento_conta',
-      description: `PROPÕE cancelar um agendamento de pagamento de conta. Agendamentos novos do ${marcaDoProduto().nome} são cancelados internamente pela conversa, sem chamar a Asaas nem pedir aprovação externa. Ids legados já criados na Asaas seguem o cancelamento do provedor. Consulte primeiro asaas_pagamentos_conta quando o usuário não informou um id inequívoco. É uma AÇÃO FINANCEIRA irreversível e exige confirmação textual no turno seguinte.`,
+      description: `PROPOSES cancelling a scheduled bill payment. New ${marcaDoProduto().nome} scheduled payments are cancelled internally through the conversation, without calling Asaas or asking for external approval. Legacy ids already created in Asaas follow the provider's cancellation. First check asaas_pagamentos_conta when the user did not give an unambiguous id. It is an irreversible FINANCIAL ACTION and requires textual confirmation in the following turn.`,
       parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'Id real do pagamento de conta retornado pela Asaas.' },
+        id: { type: 'string', description: 'Real id of the bill payment returned by Asaas.' },
       }, required: ['id'] },
       run: confirmacaoObrigatoria,
       async prepareConfirmation(args = {}) {
@@ -2104,13 +2104,13 @@ export function asaasTools({
     },
     {
       name: 'asaas_pagar_conta',
-      description: `PROPÕE pagar um boleto/conta pela conta Asaas. É uma AÇÃO FINANCEIRA: nunca executa no mesmo turno nem por automação; primeiro consulta valor, vencimento e beneficiário reais na Asaas, mostra esses dados ao usuário e exige confirmação textual no turno seguinte. Quando o usuário pedir data futura, o agendamento fica no ${marcaDoProduto().nome} e só é enviado à Asaas no dia, após nova conferência; pode ser cancelado pela conversa antes da execução.`,
+      description: `PROPOSES paying a boleto/bill through the Asaas account. It is a FINANCIAL ACTION: never executes in the same turn nor by automation; first checks the real amount, due date and payee in Asaas, shows this data to the user and requires textual confirmation in the following turn. When the user asks for a future date, the scheduled payment stays in ${marcaDoProduto().nome} and is only sent to Asaas on the day, after a new check; it can be cancelled through the conversation before execution.`,
       parameters: { type: 'object', properties: {
-        linha_digitavel: { type: 'string', description: 'Linha digitável do boleto (com ou sem espaços/pontos).' },
-        codigo_de_barras: { type: 'string', description: 'Código de barras (alternativa à linha digitável).' },
-        valor: { type: 'number', description: 'Valor a pagar. Só use quando o boleto permite alterar o valor; senão a Asaas cobra o valor do próprio boleto.' },
-        agendar_para: { type: 'string', description: 'Data de agendamento AAAA-MM-DD. SOMENTE use quando o usuário pedir explicitamente uma data futura ou pagamento no vencimento. Se ele apenas pedir para pagar, omita: o processamento é imediato.' },
-        descricao: { type: 'string', description: 'Observação do pagamento (opcional).' },
+        linha_digitavel: { type: 'string', description: 'Boleto linha digitável (with or without spaces/dots).' },
+        codigo_de_barras: { type: 'string', description: 'Barcode (alternative to the linha digitável).' },
+        valor: { type: 'number', description: 'Amount to pay. Only use it when the boleto allows changing the amount; otherwise Asaas charges the boleto\'s own amount.' },
+        agendar_para: { type: 'string', description: 'Scheduling date YYYY-MM-DD. ONLY use it when the user explicitly asks for a future date or payment on the due date. If they only ask to pay, omit it: processing is immediate.' },
+        descricao: { type: 'string', description: 'Payment note (optional).' },
       } },
       run: confirmacaoObrigatoria,
       normalizeConfirmationArgs(args = {}, { ownerText = '' } = {}) {
@@ -2182,13 +2182,13 @@ export function asaasTools({
     },
     {
       name: 'asaas_transferir_pix',
-      description: 'PROPÕE enviar dinheiro via Pix pela conta Asaas. É uma AÇÃO FINANCEIRA: nunca executa no mesmo turno nem por automação; consulta o titular real da chave, mostra valor, chave, nome e documento mascarado e exige confirmação textual no turno seguinte.',
+      description: 'PROPOSES sending money via Pix through the Asaas account. It is a FINANCIAL ACTION: never executes in the same turn nor by automation; looks up the real key holder, shows amount, key, name and masked document, and requires textual confirmation in the following turn.',
       parameters: { type: 'object', properties: {
-        valor: { type: 'number', description: 'Valor em reais a transferir.' },
-        chave_pix: { type: 'string', description: 'A chave PIX de destino.' },
-        tipo_chave: { type: 'string', description: 'Tipo da chave: CPF, CNPJ, EMAIL, PHONE (telefone com +55) ou EVP (chave aleatória).' },
-        descricao: { type: 'string', description: 'Descrição da transferência (opcional).' },
-        agendar_para: { type: 'string', description: 'Data de agendamento AAAA-MM-DD (opcional).' },
+        valor: { type: 'number', description: 'Amount in reais to transfer.' },
+        chave_pix: { type: 'string', description: 'The destination PIX key.' },
+        tipo_chave: { type: 'string', description: 'Key type: CPF, CNPJ, EMAIL, PHONE (phone with +55) or EVP (random key).' },
+        descricao: { type: 'string', description: 'Transfer description (optional).' },
+        agendar_para: { type: 'string', description: 'Scheduling date YYYY-MM-DD (optional).' },
       }, required: ['valor', 'chave_pix', 'tipo_chave'] },
       run: confirmacaoObrigatoria,
       async prepareConfirmation(args = {}) {

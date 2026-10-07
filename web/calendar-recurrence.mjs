@@ -2,12 +2,12 @@
 // Não recebe RRULE/Graph cru: campos desconhecidos nunca são descartados.
 export const recurrenceSchema = {
   type: 'object', additionalProperties: false, required: ['frequencia'],
-  description: 'OBRIGATÓRIO para pedido recorrente. Cadência baseada na primeira data/hora de início: mensal em 2026-09-14T08:30:00 = todo dia 14 às 08:30. Suporta diária, semanal no mesmo dia, mensal (dias 1–28) e anual (exceto 29/02). Para outros padrões, NÃO criar evento único: explique a limitação. Sem quantidade/ate = sem fim, mostre isso ao confirmar.',
+  description: 'REQUIRED for a recurring request. Cadence based on the first start date/time: monthly at 2026-09-14T08:30:00 = every 14th at 08:30. Supports daily, weekly on the same day, monthly (days 1–28) and yearly (except 02/29). For other patterns, do NOT create a single event: explain the limitation. No quantidade/ate = no end, show this when confirming.',
   properties: {
     frequencia: { type: 'string', enum: ['diaria', 'semanal', 'mensal', 'anual'] },
-    intervalo: { type: 'integer', minimum: 1, maximum: 99, description: 'A cada N dias/semanas/meses/anos. Padrão 1.' },
-    quantidade: { type: 'integer', minimum: 1, maximum: 10000, description: 'Total de ocorrências, incluindo a primeira; não combinar com ate.' },
-    ate: { type: 'string', description: 'Último dia permitido (inclusivo), YYYY-MM-DD, no fuso do evento. Não combinar com quantidade.' },
+    intervalo: { type: 'integer', minimum: 1, maximum: 99, description: 'Every N days/weeks/months/years. Default 1.' },
+    quantidade: { type: 'integer', minimum: 1, maximum: 10000, description: 'Total occurrences, including the first; do not combine with ate.' },
+    ate: { type: 'string', description: 'Last allowed day (inclusive), YYYY-MM-DD, in the event\'s time zone. Do not combine with quantidade.' },
   },
 };
 const CONFIG = {

@@ -74,12 +74,12 @@ export function createProductCards({ attachments, onAttachment, imageServed, pro
     render: enqueue,
     tool: {
       name: 'mostrar_produtos',
-      description: 'Mostra a seleção de produtos como cards com título, foto quando disponível e botão de compra. Passe uma única lista das ofertas que atendem às exigências do usuário. Use nome, link e imagem reais da mesma oferta. Não invente imagens. Falha de foto gera card sem foto; não reenvie o item. ' + PRODUCT_RECOMMENDATION_CONTRACT,
+      description: 'Shows the product selection as cards with title, photo when available and a buy button. Pass a single list of the offers that meet the user\'s requirements. Use the real name, link and image of the same offer. Do not invent images. A photo failure produces a card without a photo; do not resend the item. ' + PRODUCT_RECOMMENDATION_CONTRACT,
       parameters: { type: 'object', properties: { produtos: { type: 'array', maxItems: 10,
         items: { type: 'object', properties: {
-          nome: { type: 'string' }, link: { type: 'string', description: 'URL da oferta/variante exata.' },
-          imagem: { type: 'string', description: 'URL exata recebida na fonte; omita se indisponível.' },
-          detalhe: { type: 'string', description: 'Preço e loja desta oferta; somente características comprovadas.' },
+          nome: { type: 'string' }, link: { type: 'string', description: 'URL of the exact offer/variant.' },
+          imagem: { type: 'string', description: 'Exact URL received from the source; omit if unavailable.' },
+          detalhe: { type: 'string', description: 'Price and store of this offer; only proven characteristics.' },
         }, required: ['nome', 'link'] } } }, required: ['produtos'] },
       run: async ({ produtos } = {}) => {
         const result = await enqueue(produtos);

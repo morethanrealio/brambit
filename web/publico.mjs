@@ -296,11 +296,11 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
 export function ferramentasDoContato(store, contatoId) {
   return [
     { name: 'consultar_contato', readOnly: true,
-      description: 'Lê as anotações que você guardou sobre a pessoa com quem está falando (só dela).',
+      description: 'Reads the notes you saved about the person you are talking to (only theirs).',
       parameters: { type: 'object', properties: {} },
       run: async () => store.estado(contatoId) },
     { name: 'lembrar_do_contato',
-      description: `Guarda (ou apaga, com valor vazio) uma anotação curta sobre a pessoa com quem está falando, pra lembrar nas próximas conversas. Só o que ajuda no atendimento; nunca senha, cartão ou documento. Até ${ESTADO_MAX_CHAVES} anotações de ${ESTADO_MAX_VALOR} caracteres.`,
+      description: `Saves (or deletes, with an empty value) a short note about the person you are talking to, to remember in future conversations. Only what helps the service; never a password, card or ID document. Up to ${ESTADO_MAX_CHAVES} notes of ${ESTADO_MAX_VALOR} characters.`,
       parameters: { type: 'object', properties: { chave: { type: 'string' }, valor: { type: 'string' } }, required: ['chave', 'valor'] },
       run: async ({ chave, valor }) => store.lembrar(contatoId, chave, valor) },
   ];

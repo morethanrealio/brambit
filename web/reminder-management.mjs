@@ -12,8 +12,8 @@ export function selectReminder(rows, {id, descricao, data}, timeZone) {
 
 export function reminderManagementTools({userId,timeZone,list,cancel,reschedule}) {
   return [
-    {name:'cancelar_lembrete',description:'Cancela somente o lembrete escolhido. Prefira id de listar_lembretes. Descrição/data só são aceitas quando identificam UM alvo; se houver vários, pergunte qual. Cancelar uma série encerra os próximos avisos. Para "já fiz hoje" não cancele a série: esclareça se quer parar os avisos futuros.',
-      parameters:{type:'object',properties:{id:{type:'string'},descricao:{type:'string'},data:{type:'string',description:'Data local YYYY-MM-DD; não basta se houver mais de um no mesmo dia.'}}},
+    {name:'cancelar_lembrete',description:'Cancels only the chosen reminder. Prefer the id from listar_lembretes. descricao/data are only accepted when they identify ONE target; if there are several, ask which one. Canceling a series ends the upcoming notices. For "já fiz hoje" do not cancel the series: clarify whether they want to stop the future notices.',
+      parameters:{type:'object',properties:{id:{type:'string'},descricao:{type:'string'},data:{type:'string',description:'Local date YYYY-MM-DD; not enough if there is more than one on the same day.'}}},
       async run(args={}) {
         const selected=selectReminder(await list(userId),args,timeZone);
         if (!selected.ok) return JSON.stringify(selected);
@@ -21,8 +21,8 @@ export function reminderManagementTools({userId,timeZone,list,cancel,reschedule}
         const done=result===true || result?.canceled===true;
         return JSON.stringify({ok:done,id:selected.row.id,canal:selected.row.channel,inFlight:result?.inFlight===true,message:done?'Lembrete cancelado; próximos avisos interrompidos.'+(result?.inFlight?' Um envio já havia começado e ainda pode chegar.':''):'O lembrete mudou ou já foi processado. Consulte novamente; cancelamento não confirmado.'});
       }},
-    {name:'editar_lembrete',description:'Remarca APENAS o próximo aviso de um lembrete existente, sem apagar/recriar. Leia listar_lembretes e passe id e quando_atual exatos. Em uma série, as ocorrências posteriores conservam a cadência original. Para mudar a série inteira, não use esta tool como se fizesse isso. Não altera canal nem texto. Só confirme após ok:true.',
-      parameters:{type:'object',required:['id','quando_atual','quando'],properties:{id:{type:'string'},quando_atual:{type:'string',description:'Instante ISO retornado por listar_lembretes.'},quando:{type:'string',description:'Novo horário local YYYY-MM-DDTHH:mm:ss, sem offset.'},fuso:{type:'string',description:'Fuso IANA do novo horário, se diferente do usuário.'}}},
+    {name:'editar_lembrete',description:'Reschedules ONLY the next notice of an existing reminder, without deleting/recreating it. Read listar_lembretes and pass the exact id and quando_atual. In a series, later occurrences keep the original cadence. To change the whole series, do not use this tool as if it did that. Does not change channel or text. Only confirm after ok:true.',
+      parameters:{type:'object',required:['id','quando_atual','quando'],properties:{id:{type:'string'},quando_atual:{type:'string',description:'ISO instant returned by listar_lembretes.'},quando:{type:'string',description:'New local time YYYY-MM-DDTHH:mm:ss, without offset.'},fuso:{type:'string',description:'IANA time zone of the new time, if different from the user\'s.'}}},
       async run({id,quando_atual,quando,fuso}={}) {
         try {
           const runAt=localDateTimeInstant(quando,fuso || timeZone);

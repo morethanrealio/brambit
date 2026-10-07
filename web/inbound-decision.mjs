@@ -57,8 +57,8 @@ export function createRespondDecisionTool({fromUser,list,respond,owner,notifyOwn
   }
   return {
     name:'responder_decisao',
-    description:'Aceita ou recusa uma decisão pendente de outro contato, somente após confirmação explícita do dono. Use o id exibido na caixa de decisões para escolher a proposta exata, inclusive quando há várias do mesmo contato.',
-    parameters:{type:'object',properties:{id:{type:'string',description:'Identificador completo da decisão na caixa de pendências. Não invente.'},aceito:{type:'boolean',description:'true para aceitar, false para recusar.'},de:{type:'string',description:'Nome ou e-mail do contato, somente se identificar uma única proposta.'},mensagem:{type:'string',description:'Recado opcional ao contato.'}},required:['aceito']},
+    description:'Accepts or declines a pending decision from another contact, only after explicit confirmation from the owner. Use the id shown in the decisions inbox to pick the exact proposal, including when there are several from the same contact.',
+    parameters:{type:'object',properties:{id:{type:'string',description:'Full identifier of the decision in the pending inbox. Do not invent it.'},aceito:{type:'boolean',description:'true to accept, false to decline.'},de:{type:'string',description:'Name or email of the contact, only if it identifies a single proposal.'},mensagem:{type:'string',description:'Optional note to the contact.'}},required:['aceito']},
     async prepareConfirmation(args){
       if(typeof args.aceito!=='boolean')throw Error(errors.resposta_invalida);
       const selected=selectInboundDecision(await list(fromUser),args);

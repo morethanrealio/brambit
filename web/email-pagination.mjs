@@ -4,8 +4,8 @@ import { withEmailSearchCompletion } from './email-search-completion.mjs';
 import { createEmailEvidence, emailSource } from './email-evidence.mjs';
 import { emailQueryCoverage, guardEmailCoverageClaims } from './email-search-coverage.mjs';
 
-export const EMAIL_PAGINATION_RULE = 'Nas buscas de e-mail, messages contém só uma página. Se has_more=true, use next_cursor na MESMA tool/consulta para continuar quando necessário, ou declare a busca parcial. Não afirme ausência nem total exaustivo a partir de uma página; estimated_total é estimativa. Não percorra a caixa inteira automaticamente numa busca ampla; uma consulta fechada (remetente/assunto/período) deve ser paginada até o fim. Ao sintetizar, preserve qualquer aviso de busca parcial.';
-export const emailCursorSchema = { type: 'string', description: 'Copie next_cursor do retorno anterior para continuar a MESMA consulta nesta execução. Cursor temporário; não invente nem use URL.' };
+export const EMAIL_PAGINATION_RULE = 'In email searches, messages contains only one page. If has_more=true, use next_cursor on the SAME tool/query to continue when needed, or declare the search partial. Do not claim absence or an exhaustive total from a single page; estimated_total is an estimate. Do not sweep the whole mailbox automatically in a broad search; a closed query (sender/subject/period) must be paginated to the end. When synthesizing, preserve any partial-search notice.';
+export const emailCursorSchema = { type: 'string', description: 'Copy next_cursor from the previous result to continue the SAME query in this run. Temporary cursor; do not invent one or use a URL.' };
 
 // Estado efêmero por instância autenticada da tool: não compartilha cursores
 // entre contas/usuários. Sem banco. O worker de leitura tem history isolado.

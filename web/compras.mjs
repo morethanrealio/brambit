@@ -562,21 +562,21 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
   const tools = [
     {
       name:'recuperar_pix_pedido',
-      description:'Recupera e revalida o Pix já recebido de um pedido existente, pelo número. Usa registro protegido da conta e deste assistente; sobrevive a restart. NÃO cria pedido, não chama checkout, não reemite cobrança nem paga. Se não houver registro ou o Pix estiver vencido, informa a limitação sem refazer a compra. Copie o código retornado literalmente, preservando espaços.',
-      parameters:{type:'object',properties:{pedido_id:{type:'string',description:'Referência exata do pedido já criado.'}},required:['pedido_id'],additionalProperties:false},
+      description:'Recovers and revalidates the Pix already received for an existing order, by its number. Uses the protected record of the account and of this assistant; survives restarts. Does NOT create an order, does not call checkout, does not reissue a charge nor pay. If there is no record or the Pix has expired, reports the limitation without redoing the purchase. Copy the returned code literally, preserving spaces.',
+      parameters:{type:'object',properties:{pedido_id:{type:'string',description:'Exact reference of the already-created order.'}},required:['pedido_id'],additionalProperties:false},
       run:async ({pedido_id}={})=>recoverOrderPix({store:checkoutRecoveryStore,parsePix:extrairPix},recoveryScope,String(pedido_id??'').trim()),
     },
     {
       name: 'analisar_produto',
       description:
-        'LÊ A PÁGINA REAL de um produto numa loja online (a partir do LINK que o dono mandou) e devolve o que a loja diz AGORA: nome, cor, TAMANHOS/variações com ESTOQUE, preço de e por, cupom anunciado na página, frete e prazo pro CEP. '
-        + 'Use SEMPRE que o dono mandar um link de produto e falar em comprar, tamanho, preço, frete ou disponibilidade. É a primeira tool da compra: depois dela vem montar_carrinho. '
-        + 'Funciona em loja VTEX e em loja Shopify (juntas, a maior parte do varejo de moda online); se for outra, ela avisa. NÃO cria pedido, NÃO cobra nada.',
+        'READS THE REAL PAGE of a product in an online store (from the LINK the owner sent) and returns what the store says NOW: name, color, SIZES/variants with STOCK, list and sale price, coupon advertised on the page, shipping and delivery time for the CEP. '
+        + 'Use ALWAYS when the owner sends a product link and talks about buying, size, price, shipping or availability. It is the first tool of the purchase: montar_carrinho comes after it. '
+        + 'Works on VTEX stores and Shopify stores (together, most of online fashion retail); if it is another platform, it says so. Does NOT create an order, does NOT charge anything.',
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'Link da página do produto (o PDP, não a home nem a busca).' },
-          cep: { type: 'string', description: 'CEP de entrega, se souber (senão uso o do perfil salvo). Sem CEP não calculo frete.' },
+          url: { type: 'string', description: 'Product page link (the PDP, not the home page nor the search).' },
+          cep: { type: 'string', description: 'Delivery CEP, if known (otherwise the one from the saved profile is used). Without a CEP, shipping is not calculated.' },
         },
         required: ['url'],
       },
@@ -627,37 +627,37 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
     {
       name: 'montar_carrinho',
       description:
-        'MONTA O CARRINHO DE VERDADE na loja, como convidado, em nome do dono, e devolve o TOTAL FINAL com frete e um carrinho_id. '
-        + 'NÃO cria pedido e NÃO cobra: é o passo de "quanto vai ficar". Chame depois de analisar_produto, com a variação já escolhida pelo dono. '
-        + 'Em loja VTEX ela identifica o comprador, calcula o frete pro endereço e testa os CUPONS anunciados ficando com o maior desconto; depois dela dá pra chamar fechar_pedido. '
-        + 'Em loja SHOPIFY ela precifica (subtotal + frete pelo CEP) e devolve um LINK de checkout com o carrinho já montado, porque a Shopify não deixa fechar pedido por fora; aí o dono termina em 1 toque nesse link e fechar_pedido NÃO se aplica. '
-        + 'Se ele tiver perfil de compra salvo, não precisa passar `comprador`; se NÃO tiver, peça os dados a ele e passe em `comprador` (perfil salvo é opcional; na Shopify basta o CEP).',
+        'BUILDS THE REAL CART in the store, as a guest, on the owner\'s behalf, and returns the FINAL TOTAL with shipping and a carrinho_id. '
+        + 'Does NOT create an order and does NOT charge: it is the "how much will it be" step. Call it after analisar_produto, with the variant already chosen by the owner. '
+        + 'On a VTEX store it identifies the buyer, calculates shipping to the address and tests the advertised COUPONS, keeping the biggest discount; after it, fechar_pedido can be called. '
+        + 'On a SHOPIFY store it prices it (subtotal + shipping by CEP) and returns a checkout LINK with the cart already built, because Shopify does not allow closing an order from outside; the owner then finishes with 1 tap on that link and fechar_pedido does NOT apply. '
+        + 'If they have a saved purchase profile, there is no need to pass `comprador`; if they do NOT, ask them for the data and pass it in `comprador` (a saved profile is optional; on Shopify the CEP is enough).',
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'Link da página do produto.' },
-          variacao: { type: 'string', description: 'Tamanho/variação escolhida (ex: "G"), ou o sku direto. Deixe vazio se o produto só tem uma.' },
-          quantidade: { type: 'number', description: 'Quantidade (padrão 1).' },
-          cupom: { type: 'string', description: 'Cupom específico pra testar, se o dono tiver um. Os anunciados na página eu já testo sozinho.' },
-          frete: { type: 'string', description: 'Nome da opção de frete, se o dono escolheu uma (ex: "Rápida"). Sem isso pego a entrega mais barata. Retirada em loja não é suportada.' },
+          url: { type: 'string', description: 'Product page link.' },
+          variacao: { type: 'string', description: 'Chosen size/variant (e.g. "G"), or the sku directly. Leave empty if the product has only one.' },
+          quantidade: { type: 'number', description: 'Quantity (default 1).' },
+          cupom: { type: 'string', description: 'Specific coupon to test, if the owner has one. The ones advertised on the page are already tested automatically.' },
+          frete: { type: 'string', description: 'Name of the shipping option, if the owner chose one (e.g. "Rápida"). Without it, the cheapest delivery is used. In-store pickup is not supported.' },
           comprador: {
             type: 'object',
-            description: 'Dados do comprador, só se ele não tiver perfil salvo (ou pra sobrescrever). Nunca invente: pergunte ao dono.',
+            description: 'Buyer data, only if they have no saved profile (or to override it). Never invent: ask the owner.',
             properties: {
-              nome: { type: 'string', description: 'Nome completo.' },
+              nome: { type: 'string', description: 'Full name.' },
               cpf: { type: 'string' },
               email: { type: 'string' },
-              telefone: { type: 'string', description: 'Celular com DDD.' },
+              telefone: { type: 'string', description: 'Mobile phone with area code (DDD).' },
               cep: { type: 'string' },
-              numero: { type: 'string', description: 'Número do endereço.' },
+              numero: { type: 'string', description: 'Address number.' },
               complemento: { type: 'string' },
-              rua: { type: 'string', description: 'Só se o CEP não resolver sozinho.' },
+              rua: { type: 'string', description: 'Only if the CEP does not resolve on its own.' },
               bairro: { type: 'string' },
               cidade: { type: 'string' },
-              estado: { type: 'string', description: 'UF.' },
+              estado: { type: 'string', description: 'State (UF).' },
             },
           },
-          salvar_perfil: { type: 'boolean', description: 'true pra guardar esses dados no cofre do dono e não perguntar de novo. Só com o OK dele.' },
+          salvar_perfil: { type: 'boolean', description: 'true to save this data in the owner\'s vault and not ask again. Only with their OK.' },
         },
         required: ['url'],
       },
@@ -845,13 +845,13 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
     {
       name: 'fechar_pedido',
       description:
-        'FECHA O PEDIDO DE VERDADE na loja e devolve o Pix pro dono pagar. É o passo IRREVERSÍVEL: cria um pedido real, no nome dele, com cobrança real. '
-        + 'Só chame depois de montar_carrinho e depois de MOSTRAR o total ao dono. Passa por confirmação explícita dele antes de executar. '
-        + 'Não invente carrinho_id: use o que montar_carrinho devolveu, e refaça o carrinho se ele tiver expirado.',
+        'PLACES THE REAL ORDER in the store and returns the Pix for the owner to pay. It is the IRREVERSIBLE step: creates a real order, in their name, with a real charge. '
+        + 'Only call it after montar_carrinho and after SHOWING the total to the owner. Goes through their explicit confirmation before executing. '
+        + 'Do not invent carrinho_id: use the one montar_carrinho returned, and rebuild the cart if it has expired.',
       parameters: {
         type: 'object',
         properties: {
-          carrinho_id: { type: 'string', description: 'O carrinho_id que montar_carrinho devolveu.' },
+          carrinho_id: { type: 'string', description: 'The carrinho_id that montar_carrinho returned.' },
         },
         required: ['carrinho_id'],
       },
@@ -1024,15 +1024,15 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
     {
       name: 'salvar_perfil_compra',
       description:
-        'Guarda no cofre (cifrado) os dados que a loja pede pra identificar o dono numa compra: nome, CPF, e-mail, celular e endereço de entrega. OPCIONAL: serve só pra eu não perguntar de novo a cada compra. '
-        + 'Só chame com o OK explícito dele, e nunca invente dado.',
+        'Saves in the vault (encrypted) the data the store asks for to identify the owner in a purchase: name, CPF, e-mail, mobile phone and delivery address. OPTIONAL: it only serves so you do not ask again on every purchase. '
+        + 'Only call it with their explicit OK, and never invent data.',
       parameters: {
         type: 'object',
         properties: {
-          nome: { type: 'string', description: 'Nome completo, como no CPF.' },
+          nome: { type: 'string', description: 'Full name, as on the CPF.' },
           cpf: { type: 'string' },
           email: { type: 'string' },
-          telefone: { type: 'string', description: 'Celular com DDD.' },
+          telefone: { type: 'string', description: 'Mobile phone with area code (DDD).' },
           cep: { type: 'string' },
           numero: { type: 'string' },
           complemento: { type: 'string' },
@@ -1055,7 +1055,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
 
     {
       name: 'ver_perfil_compra',
-      description: 'Mostra o perfil de compra guardado do dono (CPF sempre mascarado). Use quando ele perguntar quais dados você tem, ou antes de uma compra pra confirmar o endereço.',
+      description: 'Shows the owner\'s saved purchase profile (CPF always masked). Use when they ask what data you have, or before a purchase to confirm the address.',
       parameters: { type: 'object', properties: {} },
       run: async () => {
         const p = await lerPerfil(userId).catch(() => null);

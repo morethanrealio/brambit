@@ -282,23 +282,23 @@ export function livreTools(userId, threadId, runnerBound = false, sshLivre = tru
   if (!sandboxEnabled() || !vaultEnabled()) return [];
   const soRunner = runnerBound && !sshLivre;
   const alvo = soRunner
-    ? `Terminal AO VIVO na MÁQUINA LOCAL do usuário (o computador dele, pelo ${marca().nome} Runner).`
-    : 'Terminal AO VIVO na máquina que o usuário conectou (modo avançado/livre).';
+    ? `LIVE terminal on the user's LOCAL MACHINE (their computer, via the ${marca().nome} Runner).`
+    : 'LIVE terminal on the machine the user connected (advanced/free mode).';
   const consentimento = soRunner
-    ? 'Roda DIRETO, sem pedir confirmação por comando (o dono instalou o Runner na máquina dele e amarrou VOCÊ a ele; a escrita fica confinada às pastas que ele autorizou lá).'
-    : 'Roda DIRETO, sem pedir confirmação por comando (o dono ligou o modo livre neste host, o risco é da máquina dele).';
+    ? 'Runs DIRECTLY, without asking for confirmation per command (the owner installed the Runner on their machine and bound YOU to it; writing is confined to the folders they authorized there).'
+    : 'Runs DIRECTLY, without asking for confirmation per command (the owner turned on free mode on this host, the risk is on their machine).';
   const props = {
-    comando: { type: 'string', description: 'comando shell a rodar na máquina conectada (pode ser multi-linha; pode usar cd, heredoc, pipes, &&). Prefira agrupar vários passos independentes aqui numa chamada só.' },
-    comandos: { type: 'array', items: { type: 'string' }, description: 'ALTERNATIVA a "comando": lista de comandos pra rodar em sequência na MESMA chamada (viram um script, um por linha, na mesma sessão/cwd). Use pra agrupar passos que não dependem de ler a saída um do outro. Se quiser abortar no primeiro erro, use "comando" com &&.' },
+    comando: { type: 'string', description: 'shell command to run on the connected machine (can be multi-line; can use cd, heredoc, pipes, &&). Prefer grouping several independent steps here in a single call.' },
+    comandos: { type: 'array', items: { type: 'string' }, description: 'ALTERNATIVE to "comando": list of commands to run in sequence in the SAME call (they become a script, one per line, in the same session/cwd). Use it to group steps that do not depend on reading each other\'s output. If you want to abort on the first error, use "comando" with &&.' },
   };
   if (!soRunner) {
-    props.host = { type: 'string', description: 'host da máquina (só precisa se o usuário tiver mais de uma conectada). Opcional.' };
-    props.rotulo = { type: 'string', description: 'rótulo da chave SSH a usar (o "label" que aparece no cofre). Passe isto quando você tiver mais de uma chave salva e o host não bastar pra escolher, ex: "aws-build-server". Opcional.' };
+    props.host = { type: 'string', description: 'machine host (only needed if the user has more than one connected). Optional.' };
+    props.rotulo = { type: 'string', description: 'label of the SSH key to use (the "label" shown in the vault). Pass this when you have more than one saved key and the host is not enough to choose, e.g.: "aws-build-server". Optional.' };
   }
   return [
     {
       name: 'terminal',
-      description: `${alvo} Você opera COMO SE estivesse logado nela: roda QUALQUER comando de shell (ler, editar com heredoc/sed, instalar, compilar, build, git, systemctl, subir processo) e a saída volta pra você. A sessão é PERSISTENTE: o diretório atual é mantido entre comandos (um "cd projeto" vale pros próximos), então navegue de verdade em vez de reescrever caminho absoluto a cada comando. AGRUPE passos: cada chamada desta ferramenta custa um passo inteiro do seu turno — quando os próximos comandos não dependem de você LER a saída anterior pra decidir, mande todos numa chamada só (multi-linha, ou \`a && b && c\` pra abortar no primeiro erro, ou o parâmetro \`comandos\`). Ex.: criar pasta + escrever arquivo + rodar build = UMA chamada, não três. Separe em chamadas só quando precisar da saída pra decidir o passo seguinte. ${consentimento} O usuário aqui é técnico: mostre a saída/erro reais, sem maquiar. NUNCA ecoe segredo (conteúdo de .env, chave, token). Se ficar batendo no MESMO erro 2-3 vezes, PARE e resuma em vez de disparar comando no escuro. LOGO NO COMEÇO da sessão rode \`hostname; whoami; pwd; nproc\` pra confirmar que caiu na máquina certa: se o ambiente não bater com o que o usuário descreveu (host/recursos/pasta esperada), PARE e avise, não trabalhe na máquina errada.`,
+      description: `${alvo} You operate AS IF you were logged into it: run ANY shell command (read, edit with heredoc/sed, install, compile, build, git, systemctl, start a process) and the output comes back to you. The session is PERSISTENT: the current directory is kept between commands (a "cd projeto" holds for the next ones), so really navigate instead of rewriting the absolute path on every command. GROUP steps: each call to this tool costs a whole step of your turn — when the next commands do not depend on you READING the previous output to decide, send them all in a single call (multi-line, or \`a && b && c\` to abort on the first error, or the \`comandos\` parameter). E.g.: create folder + write file + run build = ONE call, not three. Split into separate calls only when you need the output to decide the next step. ${consentimento} The user here is technical: show the real output/error, without dressing it up. NEVER echo a secret (.env contents, key, token). If you keep hitting the SAME error 2-3 times, STOP and summarize instead of firing commands blindly. RIGHT AT THE START of the session run \`hostname; whoami; pwd; nproc\` to confirm you landed on the right machine: if the environment does not match what the user described (host/resources/expected folder), STOP and warn them, do not work on the wrong machine.`,
       parameters: {
         type: 'object',
         properties: props,
@@ -350,13 +350,13 @@ export function sshTools(userId) {
   return [
     {
       name: 'gerar_chave_ssh',
-      description: 'Gera um par de chaves SSH (ed25519) para o usuário acessar um servidor dele. A chave PRIVADA fica guardada cifrada no cofre; a resposta traz a chave PÚBLICA para o usuário colar em ~/.ssh/authorized_keys do servidor. O host e o usuário são OPCIONAIS aqui: se ainda não souber o endereço, gere a chave assim mesmo; o destino é definido na hora de rodar o primeiro comando (rodar_no_servidor).',
+      description: 'Generates an SSH key pair (ed25519) for the user to access a server of theirs. The PRIVATE key is stored encrypted in the vault; the response carries the PUBLIC key for the user to paste into the server\'s ~/.ssh/authorized_keys. The host and the user are OPTIONAL here: if you do not know the address yet, generate the key anyway; the destination is set when running the first command (rodar_no_servidor).',
       parameters: {
         type: 'object',
         properties: {
-          host: { type: 'string', description: 'endereço do servidor (IP ou domínio), ex: 1.2.3.4 ou meu.servidor.com (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login no servidor, ex: ubuntu, root, ec2-user (opcional)' },
-          rotulo: { type: 'string', description: 'nome amigável pra identificar essa chave (opcional)' },
+          host: { type: 'string', description: 'server address (IP or domain), e.g.: 1.2.3.4 or meu.servidor.com (optional)' },
+          usuario: { type: 'string', description: 'login user on the server, e.g.: ubuntu, root, ec2-user (optional)' },
+          rotulo: { type: 'string', description: 'friendly name to identify this key (optional)' },
         },
         required: [],
       },
@@ -401,14 +401,14 @@ export function sshTools(userId) {
     },
     {
       name: 'rodar_no_servidor',
-      description: 'Executa um comando via SSH em um servidor do usuário, usando uma chave SSH já guardada no cofre. Só funciona depois que a chave pública foi colada no servidor (gerar_chave_ssh). Devolve a saída do comando.',
+      description: 'Runs a command via SSH on a user\'s server, using an SSH key already stored in the vault. Only works after the public key has been pasted on the server (gerar_chave_ssh). Returns the command output.',
       parameters: {
         type: 'object',
         properties: {
-          comando: { type: 'string', description: 'comando shell a rodar no servidor remoto' },
-          host: { type: 'string', description: 'host do servidor (IP ou domínio). Obrigatório se a chave foi gerada sem host, ou se o usuário tem mais de uma chave.' },
-          usuario: { type: 'string', description: 'usuário de login no servidor, ex: ubuntu, root. Use se a chave foi gerada sem usuário fixo (opcional).' },
-          rotulo: { type: 'string', description: 'rótulo da chave SSH a usar (o "label" do cofre). Passe isto quando houver mais de uma chave e o host não bastar pra escolher, ex: "aws-build-server". Opcional.' },
+          comando: { type: 'string', description: 'shell command to run on the remote server' },
+          host: { type: 'string', description: 'server host (IP or domain). Required if the key was generated without a host, or if the user has more than one key.' },
+          usuario: { type: 'string', description: 'login user on the server, e.g.: ubuntu, root. Use it if the key was generated without a fixed user (optional).' },
+          rotulo: { type: 'string', description: 'label of the SSH key to use (the vault "label"). Pass this when there is more than one key and the host is not enough to choose, e.g.: "aws-build-server". Optional.' },
         },
         required: ['comando'],
       },

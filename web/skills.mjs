@@ -23,15 +23,15 @@ export function skillsTools(userId, agentId, threadId = null) {
   return [
     {
       name: 'criar_skill',
-      description: 'Cria uma Skill: uma habilidade/procedimento em linguagem natural que fica GRAVADA e o assistente passa a carregar quando o assunto aparece (ex: "montar lista de compras a partir do cardápio da semana", "revisar um contrato jurídico", "resumir um artigo no meu estilo"). É só comportamento: não guarda dado vivo (isso é Space) nem tem site/código (isso é App). A Skill já nasce instalada NESTE assistente. Use quando o usuário quiser ensinar um jeito de fazer algo que ele vai reutilizar. Não é gated.',
+      description: 'Creates a Skill: a natural-language ability/procedure that is SAVED and that the assistant starts loading when the topic comes up (e.g. "montar lista de compras a partir do cardápio da semana", "revisar um contrato jurídico", "resumir um artigo no meu estilo"). It is behavior only: it does not store live data (that is a Space) nor has a site/code (that is an App). The Skill is born already installed in THIS assistant. Use when the user wants to teach a way of doing something they will reuse. Not gated.',
       parameters: {
         type: 'object',
         properties: {
-          nome: { type: 'string', description: 'Nome curto da Skill, ex: "lista de compras".' },
-          quando_usar: { type: 'string', description: 'Em que situação essa Skill deve ser acionada (o gatilho). Uma frase. Ajuda o assistente a saber quando puxá-la.' },
-          instrucoes: { type: 'string', description: 'O passo a passo / as instruções da Skill (o "SKILL.md"): como fazer, o que considerar, o formato de saída.' },
-          script: { type: 'string', description: 'Opcional. Um script que a Skill pode EXECUTAR no ambiente isolado (sandbox) quando acionada, ex: um Python que calcula/consulta algo. Só o autor roda o próprio script; roda gated (confirmação). Deixe vazio pra Skill só-texto.' },
-          linguagem: { type: 'string', enum: ['python', 'bash'], description: 'Obrigatório se passar script: "python" ou "bash".' },
+          nome: { type: 'string', description: 'Short Skill name, e.g. "lista de compras".' },
+          quando_usar: { type: 'string', description: 'In which situation this Skill should be triggered (the trigger). One sentence. Helps the assistant know when to pull it.' },
+          instrucoes: { type: 'string', description: 'The Skill\'s step-by-step / instructions (the "SKILL.md"): how to do it, what to consider, the output format.' },
+          script: { type: 'string', description: 'Optional. A script the Skill can EXECUTE in the isolated environment (sandbox) when triggered, e.g. a Python script that computes/looks something up. Only the author runs their own script; it runs gated (confirmation). Leave empty for a text-only Skill.' },
+          linguagem: { type: 'string', enum: ['python', 'bash'], description: 'Required if you pass a script: "python" or "bash".' },
         },
         required: ['nome', 'instrucoes'],
       },
@@ -49,7 +49,7 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'listar_skills',
-      description: 'Lista as Skills instaladas neste assistente e as que você autorou, marcando a origem de cada uma.',
+      description: 'Lists the Skills installed in this assistant and the ones you authored, marking the origin of each.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const [installed, authored] = await Promise.all([
@@ -72,12 +72,12 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'ler_skill',
-      description: 'Lê o conteúdo completo de uma Skill (as instruções). Use isto pra puxar o "SKILL.md" inteiro quando o gatilho da Skill bater, ANTES de executar o procedimento que ela descreve.',
+      description: 'Reads the full content of a Skill (the instructions). Use this to pull the whole "SKILL.md" when the Skill\'s trigger matches, BEFORE executing the procedure it describes.',
       parameters: {
         type: 'object',
         properties: {
-          skill: { type: 'string', description: 'Nome da Skill.' },
-          de: { type: 'string', description: 'Se for Skill de um contato conectado, o nome ou e-mail dele pra desambiguar. Opcional.' },
+          skill: { type: 'string', description: 'Skill name.' },
+          de: { type: 'string', description: 'If it is a connected contact\'s Skill, their name or e-mail to disambiguate. Optional.' },
         },
         required: ['skill'],
       },
@@ -112,16 +112,16 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'editar_skill',
-      description: 'Edita uma Skill SUA (muda nome, quando_usar e/ou instrucoes). Só o autor pode editar.',
+      description: 'Edits a Skill of YOURS (changes nome, quando_usar and/or instrucoes). Only the author can edit.',
       parameters: {
         type: 'object',
         properties: {
-          skill: { type: 'string', description: 'Nome da Skill a editar.' },
-          nome: { type: 'string', description: 'Novo nome. Opcional.' },
-          quando_usar: { type: 'string', description: 'Novo gatilho. Opcional.' },
-          instrucoes: { type: 'string', description: 'Novas instruções (substituem por inteiro). Opcional.' },
-          script: { type: 'string', description: 'Novo script executável. String vazia remove o script (volta a Skill só-texto). Opcional.' },
-          linguagem: { type: 'string', enum: ['python', 'bash'], description: 'Linguagem do script, se estiver mudando o script.' },
+          skill: { type: 'string', description: 'Name of the Skill to edit.' },
+          nome: { type: 'string', description: 'New name. Optional.' },
+          quando_usar: { type: 'string', description: 'New trigger. Optional.' },
+          instrucoes: { type: 'string', description: 'New instructions (replace them entirely). Optional.' },
+          script: { type: 'string', description: 'New executable script. Empty string removes the script (Skill goes back to text-only). Optional.' },
+          linguagem: { type: 'string', enum: ['python', 'bash'], description: 'Script language, if you are changing the script.' },
         },
         required: ['skill'],
       },
@@ -147,10 +147,10 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'apagar_skill',
-      description: 'Apaga DE VEZ uma Skill SUA (some pra você e pra quem a tinha instalado). Só o autor pode apagar. Não dá pra desfazer.',
+      description: 'PERMANENTLY deletes a Skill of YOURS (it disappears for you and for anyone who had installed it). Only the author can delete. Cannot be undone.',
       parameters: {
         type: 'object',
-        properties: { skill: { type: 'string', description: 'Nome da Skill a apagar.' } },
+        properties: { skill: { type: 'string', description: 'Name of the Skill to delete.' } },
         required: ['skill'],
       },
       async run({ skill }) {
@@ -165,12 +165,12 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'desinstalar_skill',
-      description: 'Tira uma Skill DESTE assistente (deixa de carregá-la). Se a Skill for sua, ela continua existindo (só não fica ativa aqui); dá pra reinstalar depois com instalar_skill.',
+      description: 'Removes a Skill from THIS assistant (stops loading it). If the Skill is yours, it keeps existing (it is just not active here); it can be reinstalled later with instalar_skill.',
       parameters: {
         type: 'object',
         properties: {
-          skill: { type: 'string', description: 'Nome da Skill.' },
-          de: { type: 'string', description: 'Se for Skill de um contato, o dono pra desambiguar. Opcional.' },
+          skill: { type: 'string', description: 'Skill name.' },
+          de: { type: 'string', description: 'If it is a contact\'s Skill, the owner to disambiguate. Optional.' },
         },
         required: ['skill'],
       },
@@ -185,11 +185,11 @@ export function skillsTools(userId, agentId, threadId = null) {
     },
     {
       name: 'ver_skills_de',
-      description: 'Lista as Skills que um contato conectado COMPARTILHOU (disponíveis pra você instalar). Use quando o usuário quiser ver/pegar uma habilidade de alguém com quem ele está conectado. Depois é só instalar_skill com o nome e o parâmetro "de".',
+      description: 'Lists the Skills a connected contact has SHARED (available for you to install). Use when the user wants to see/take an ability from someone they are connected with. Then just call instalar_skill with the name and the "de" parameter.',
       parameters: {
         type: 'object',
         properties: {
-          contato: { type: 'string', description: 'Nome ou e-mail do contato conectado.' },
+          contato: { type: 'string', description: 'Name or e-mail of the connected contact.' },
         },
         required: ['contato'],
       },
@@ -218,12 +218,12 @@ export function skillsTools(userId, agentId, threadId = null) {
 export function skillInstallTool(userId, agentId) {
   return {
     name: 'instalar_skill',
-    description: 'Instala uma Skill NESTE assistente (ela passa a ser carregada quando o gatilho aparecer). Sem "de": reinstala uma Skill sua que você tinha desinstalado. Com "de": instala uma Skill de um contato conectado (Fase 2). Ação sensível (adiciona comportamento ao assistente), então passa por confirmação.',
+    description: 'Installs a Skill in THIS assistant (it starts being loaded when the trigger comes up). Without "de": reinstalls a Skill of yours that you had uninstalled. With "de": installs a Skill from a connected contact (Phase 2). Sensitive action (adds behavior to the assistant), so it goes through confirmation.',
     parameters: {
       type: 'object',
       properties: {
-        skill: { type: 'string', description: 'Nome da Skill a instalar.' },
-        de: { type: 'string', description: 'Nome ou e-mail do contato dono da Skill, se for de outra pessoa. Opcional.' },
+        skill: { type: 'string', description: 'Name of the Skill to install.' },
+        de: { type: 'string', description: 'Name or e-mail of the contact who owns the Skill, if it belongs to someone else. Optional.' },
       },
       required: ['skill'],
     },
@@ -252,12 +252,12 @@ export function skillInstallTool(userId, agentId) {
 export function skillShareTool(userId, agentId) {
   return {
     name: 'compartilhar_skill',
-    description: 'Compartilha uma Skill SUA com um contato conectado: ela fica visível pras suas conexões e o contato é avisado que pode instalá-la no assistente dele (com um toque). Não instala nada no assistente do outro; só disponibiliza. Ação sensível (alcança outra pessoa), então passa por confirmação.',
+    description: 'Shares a Skill of YOURS with a connected contact: it becomes visible to your connections and the contact is told they can install it in their assistant (with one tap). Installs nothing in the other person\'s assistant; it only makes it available. Sensitive action (reaches another person), so it goes through confirmation.',
     parameters: {
       type: 'object',
       properties: {
-        skill: { type: 'string', description: 'Nome da sua Skill a compartilhar.' },
-        contato: { type: 'string', description: 'Nome ou e-mail do contato conectado.' },
+        skill: { type: 'string', description: 'Name of your Skill to share.' },
+        contato: { type: 'string', description: 'Name or e-mail of the connected contact.' },
       },
       required: ['skill', 'contato'],
     },
@@ -294,12 +294,12 @@ export function skillShareTool(userId, agentId) {
 export function skillRunTool(userId, agentId) {
   return {
     name: 'rodar_skill',
-    description: 'Executa o script de uma Skill SUA no ambiente isolado (sandbox) e devolve a saída. Só funciona pra Skills que você autorou E que têm um script (linguagem python/bash). Não roda script de Skill de terceiro. Ação sensível (executa código), então passa por confirmação. Use quando o procedimento da Skill exige computar/consultar algo de fato, não só descrever.',
+    description: 'Runs the script of a Skill of YOURS in the isolated environment (sandbox) and returns the output. Only works for Skills you authored AND that have a script (python/bash language). Does not run third-party Skill scripts. Sensitive action (executes code), so it goes through confirmation. Use when the Skill\'s procedure requires actually computing/looking something up, not just describing.',
     parameters: {
       type: 'object',
       properties: {
-        skill: { type: 'string', description: 'Nome da sua Skill executável.' },
-        argumento: { type: 'string', description: 'Texto opcional passado ao script como argumento (fica disponível na env SKILL_ARG e como argv[1]).' },
+        skill: { type: 'string', description: 'Name of your executable Skill.' },
+        argumento: { type: 'string', description: 'Optional text passed to the script as an argument (available in the SKILL_ARG env var and as argv[1]).' },
       },
       required: ['skill'],
     },

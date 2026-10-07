@@ -160,7 +160,7 @@ function tokensOf(usages) {
 export function listContactsTool({ fromUser }) {
   return {
     name: 'listar_contatos',
-    description: 'Lista os contatos conectados do dono (outras pessoas cujos assistentes ele pode acionar) e os convites ainda pendentes. Use SEMPRE que o dono perguntar se está conectado a alguém, quem são seus contatos, ou se tem acesso ao assistente de fulano ANTES de responder. Nunca deduza contatos da memória: consulte aqui.',
+    description: 'Lists the owner\'s connected contacts (other people whose assistants they can reach) and the invitations still pending. Use ALWAYS when the owner asks whether they are connected to someone, who their contacts are, or whether they have access to so-and-so\'s assistant, BEFORE answering. Never infer contacts from memory: check here.',
     parameters: { type: 'object', properties: {} },
     run: async () => {
       let contacts;
@@ -202,13 +202,13 @@ export function listContactsTool({ fromUser }) {
 export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, notifyOwner, originChannel }) {
   return {
     name: 'falar_com_agente',
-    description: 'Fala com o assistente de OUTRA pessoa (um contato seu já conectado) pra resolver um pedido pontual: checar disponibilidade de agenda, trocar uma informação, alinhar um detalhe. Use SOMENTE quando o dono pediu explicitamente pra falar com alguém. Informe a pessoa (nome ou e-mail do contato) e o objetivo claro e fechado. A conversa é curta e delimitada; devolve o desfecho pro dono. Não serve pra conversa aberta nem pra comprometer o dono (marcar/aceitar) sem ok dele.',
+    description: 'Talks to ANOTHER person\'s assistant (a contact of yours already connected) to handle a one-off request: check calendar availability, exchange a piece of information, align a detail. Use ONLY when the owner explicitly asked to talk to someone. Provide the person (contact name or e-mail) and a clear, closed objective. The conversation is short and bounded; it returns the outcome to the owner. Not for open-ended conversation nor for committing the owner (scheduling/accepting) without their ok.',
     parameters: {
       type: 'object',
       properties: {
-        contato: { type: 'string', description: 'Nome ou e-mail da pessoa (contato já conectado) cujo assistente você quer contatar.' },
-        objetivo: { type: 'string', description: 'O objetivo pontual e fechado do pedido, no idioma do seu dono. Ex: "descobrir 3 horários livres da Ana pra um café na próxima semana".' },
-        responder_em: { type: 'string', enum: ['telegram', 'whatsapp', 'email'], description: 'OPCIONAL. Canal onde o dono quer RECEBER a resposta quando ela voltar depois (se o contato precisar consultar o próprio dono). Por padrão volta pelo mesmo canal deste pedido. Só preencha se o dono pediu explicitamente outro canal.' },
+        contato: { type: 'string', description: 'Name or e-mail of the person (already connected contact) whose assistant you want to contact.' },
+        objetivo: { type: 'string', description: 'The specific, closed objective of the request, in your owner\'s language. E.g. "descobrir 3 horários livres da Ana pra um café na próxima semana".' },
+        responder_em: { type: 'string', enum: ['telegram', 'whatsapp', 'email'], description: 'OPTIONAL. Channel where the owner wants to RECEIVE the reply when it comes back later (if the contact needs to check with their own owner). By default it comes back through the same channel as this request. Only fill in if the owner explicitly asked for another channel.' },
       },
       required: ['contato', 'objetivo'],
     },
@@ -375,13 +375,13 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
 export function confirmAgentDecisionTool({ fromUser, fromAgent, originChannel, notifyOwner }) {
   return {
     name: 'confirmar_com_agente',
-    description: 'Formaliza pro assistente de um contato uma DECISÃO/aceite do seu dono depois de uma conversa entre assistentes (falar_com_agente). Use SOMENTE quando já houve uma proposta concreta e o dono quer aceitar/fechar (ex: aceitar um horário proposto, confirmar um combinado). Esta é uma ação real com consequência: ela PEDE a confirmação explícita do dono antes de valer, e nada é imposto ao contato sem o ok do dono dele.',
+    description: 'Formalizes to a contact\'s assistant a DECISION/acceptance by your owner after a conversation between assistants (falar_com_agente). Use ONLY when there has already been a concrete proposal and the owner wants to accept/close it (e.g. accept a proposed time, confirm an arrangement). This is a real action with consequences: it ASKS for the owner\'s explicit confirmation before taking effect, and nothing is imposed on the contact without their own owner\'s ok.',
     parameters: {
       type: 'object',
       properties: {
-        contato: { type: 'string', description: 'Nome ou e-mail da pessoa (contato já conectado) cujo assistente recebe a decisão.' },
-        decisao: { type: 'string', description: 'A decisão/aceite fechado do seu dono, no idioma dele. Ex: "aceito o café na terça às 15h no Café X".' },
-        responder_em: { type: 'string', enum: ['telegram', 'whatsapp', 'email'], description: 'OPCIONAL. Canal onde o dono quer RECEBER a resposta do contato quando ela voltar. Por padrão volta pelo mesmo canal deste pedido. Só preencha se o dono pediu outro canal.' },
+        contato: { type: 'string', description: 'Name or e-mail of the person (already connected contact) whose assistant receives the decision.' },
+        decisao: { type: 'string', description: 'Your owner\'s final decision/acceptance, in their language. E.g. "aceito o café na terça às 15h no Café X".' },
+        responder_em: { type: 'string', enum: ['telegram', 'whatsapp', 'email'], description: 'OPTIONAL. Channel where the owner wants to RECEIVE the contact\'s reply when it comes back. By default it comes back through the same channel as this request. Only fill in if the owner asked for another channel.' },
       },
       required: ['contato', 'decisao'],
     },
@@ -442,13 +442,13 @@ export function respondDecisionTool({ fromUser, notifyOwner }) {
 export function respondExternalQuestionTool({ fromUser, fromAgent, notifyOwner }) {
   return {
     name: 'responder_pergunta_externa',
-    description: 'Responde uma PERGUNTA que o assistente de um contato levantou pro seu dono e que está aguardando resposta (algo que só o seu dono saberia). Use quando o seu dono te der a resposta pra essa pergunta pendente. A resposta volta pro assistente do contato. Só repassa informação, não fecha compromisso.',
+    description: 'Answers a QUESTION that a contact\'s assistant raised for your owner and that is awaiting an answer (something only your owner would know). Use when your owner gives you the answer to that pending question. The answer goes back to the contact\'s assistant. It only relays information; it does not close a commitment.',
     parameters: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Identificador da pergunta, exatamente como aparece na caixa entre assistentes (ex.: [id: 3f2a…]). Use SEMPRE que houver mais de uma pergunta pendente: é o que garante que a resposta vai pra pergunta certa.' },
-        para: { type: 'string', description: 'Nome ou e-mail do contato cujo assistente perguntou (opcional se só houver uma pergunta pendente).' },
-        resposta: { type: 'string', description: 'A resposta do seu dono pra pergunta, no idioma dele.' },
+        id: { type: 'string', description: 'Question identifier, exactly as it appears in the inbox between assistants (e.g. [id: 3f2a…]). Use ALWAYS when there is more than one pending question: it is what guarantees the answer goes to the right question.' },
+        para: { type: 'string', description: 'Name or e-mail of the contact whose assistant asked (optional if there is only one pending question).' },
+        resposta: { type: 'string', description: 'Your owner\'s answer to the question, in their language.' },
       },
       required: ['resposta'],
     },
@@ -489,11 +489,11 @@ export function respondExternalQuestionTool({ fromUser, fromAgent, notifyOwner }
 export function acceptContactTool({ fromUser }) {
   return {
     name: 'aceitar_contato',
-    description: `Aceita um PEDIDO DE AMIZADE (conexão de contatos) que outra pessoa te mandou no ${marca().nome} e que está pendente. Use quando o seu dono disser pra aceitar o convite de alguém. Depois de aceito, os assistentes de vocês podem conversar entre si.`,
+    description: `Accepts a pending FRIEND REQUEST (contact connection) that another person sent you on ${marca().nome}. Use when your owner says to accept someone's invitation. Once accepted, your assistants can talk to each other.`,
     parameters: {
       type: 'object',
       properties: {
-        de: { type: 'string', description: 'Nome ou e-mail de quem te convidou (opcional se só houver um pedido pendente).' },
+        de: { type: 'string', description: 'Name or e-mail of who invited you (optional if there is only one pending request).' },
       },
       required: [],
     },
@@ -515,11 +515,11 @@ export function acceptContactTool({ fromUser }) {
 export function declineContactTool({ fromUser }) {
   return {
     name: 'recusar_contato',
-    description: 'Recusa um PEDIDO DE AMIZADE (conexão de contatos) pendente que outra pessoa te mandou. Use quando o seu dono disser pra recusar/ignorar o convite de alguém.',
+    description: 'Declines a pending FRIEND REQUEST (contact connection) that another person sent you. Use when your owner says to decline/ignore someone\'s invitation.',
     parameters: {
       type: 'object',
       properties: {
-        de: { type: 'string', description: 'Nome ou e-mail de quem te convidou (opcional se só houver um pedido pendente).' },
+        de: { type: 'string', description: 'Name or e-mail of who invited you (optional if there is only one pending request).' },
       },
       required: [],
     },
@@ -546,11 +546,11 @@ export function declineContactTool({ fromUser }) {
 export function inviteContactTool({ fromUser, notify }) {
   return {
     name: 'convidar_contato',
-    description: `Envia um PEDIDO DE CONEXÃO (amizade) pra outra pessoa que já tem conta no ${marca().nome}, pelo e-mail de cadastro dela. Use quando o seu dono disser que quer se conectar com alguém (ex: "conecta eu com fulano@email"). Cria um convite pendente; nada acontece até a outra pessoa aceitar (ela aceita falando com o assistente dela). Depois de aceito, os assistentes de vocês podem conversar entre si e compartilhar apps. A pessoa precisa JÁ ter conta no ${marca().nome}; se não tiver, avise o dono. Isso NÃO é convidar pra colaborar num app (isso é convidar_colaborador, e só depois de conectados).`,
+    description: `Sends a CONNECTION REQUEST (friendship) to another person who already has an account on ${marca().nome}, using their sign-up e-mail. Use when your owner says they want to connect with someone (e.g. "conecta eu com fulano@email"). Creates a pending invitation; nothing happens until the other person accepts (they accept by talking to their assistant). Once accepted, your assistants can talk to each other and share apps. The person must ALREADY have an account on ${marca().nome}; if they do not, tell the owner. This is NOT inviting someone to collaborate on an app (that is convidar_colaborador, and only after being connected).`,
     parameters: {
       type: 'object',
       properties: {
-        email: { type: 'string', description: 'E-mail de cadastro da pessoa que o dono quer conectar.' },
+        email: { type: 'string', description: 'Sign-up e-mail of the person the owner wants to connect with.' },
       },
       required: ['email'],
     },

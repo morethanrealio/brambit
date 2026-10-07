@@ -129,7 +129,7 @@ export async function mcpConnect({ url, headers = {}, label = '' }) {
   const prefix = label ? `${label}_` : '';
   const tools = mcpTools.map((t) => ({
     name: (prefix + t.name).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64),
-    description: t.description || `Ferramenta ${t.name} (via MCP${label ? ' ' + label : ''}).`,
+    description: t.description || `Tool ${t.name} (via MCP${label ? ' ' + label : ''}).`,
     parameters: t.inputSchema || { type: 'object', properties: {} },
     // Não sabemos o que uma ferramenta de servidor externo faz: ela pode gravar,
     // apagar ou enviar. Toda chamada passa pelo cartão de confirmação (gateTool).

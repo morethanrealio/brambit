@@ -974,40 +974,40 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'publicar_sistema',
       description:
-        `Publica um "sisteminha" (app web) no subdomínio do usuário, acessível em https://<subdominio>.${dominioDosApps()}/<nome_do_sistema>/. `
-        + 'Cada app roda num container isolado com limites de memória/CPU e DORME sozinho quando ocioso (acorda no 1º acesso). '
-        + 'DADO PERSISTENTE vai SEMPRE em /app/data (esse diretório é durável e reservado a dado de runtime): SQLite em /app/data/<nome>.db, uploads e arquivos gerados em /app/data/. NÃO grave dado de runtime na raiz /app nem junto do código. Motivo: só /app/data guarda o estado; o código enviado é que define o app, e quando um app é replicado por outro usuário SÓ o código viaja, o dado em /app/data NUNCA viaja. '
-        + 'Publicar de novo com o mesmo nome REESCREVE o código; o dado em /app/data é preservado. '
-        + 'COMO MONTAR O APP (importante pra app com vários arquivos): o jeito confiável é escrever cada arquivo com a tool escrever_arquivo_do_app (fica salvo num rascunho no servidor entre turnos) e DEPOIS chamar este publicar_sistema SEM o parâmetro "arquivos" (ele publica o rascunho). Você NÃO precisa reenviar todo o código numa tacada só. Para editar um app já publicado, o rascunho já começa com o código atual, então basta reescrever os arquivos que mudaram. Alternativa (app pequeno): mandar tudo de uma vez no parâmetro "arquivos". '
-        + 'JEITO CERTO DE ORGANIZAR OS ARQUIVOS (evita bug e é o preferido): '
-        + `(1) SÓ FRONTEND (site/página, sem backend): mande o HTML/CSS/JS em ARQUIVOS SEPARADOS dentro de public/ (public/index.html, public/app.js, public/style.css). NÃO precisa mandar server.js: o ${marca().nome} serve seus arquivos estáticos sozinho. `
-        + '(2) COM BACKEND: runtime "node" com um server.js que escuta em process.env.PORT (e serve os arquivos de public/ + suas rotas de API), ou runtime "flask" com app.py expondo `app` (roda com gunicorn; front em templates/ e static/). Pra COMEÇAR um app node novo com backend, chame ANTES iniciar_estrutura_do_app: ele cria o esqueleto modular pronto (server.js fino + lib/routes/ + public/) e você só preenche rotas e telas. '
-        + 'REGRA DE OURO: NUNCA monte o HTML/JS do navegador dentro de uma template string (crase) do server.js/app.py. Deixe o frontend em arquivos próprios. Colar JS de browser numa string do servidor faz o `${...}` do cliente ser avaliado pelo Node e o app crasha no boot. '
-        + 'CAMINHOS RELATIVOS: como o app roda num subcaminho (/nome_do_sistema/), todo href/src/fetch no HTML e no JS deve ser RELATIVO (style.css, app.js, api/status), nunca com barra no começo (/style.css). O publish normaliza caminho absoluto pra relativo sozinho, mas gere já relativo. '
-        + 'O publish VALIDA o boot E os assets: se o app crashar, ou se um CSS/JS referenciado no HTML não carregar, ele NÃO é publicado e você recebe o motivo pra corrigir; só diga que está no ar quando ok:true. AÇÃO CONFIRMADA antes de executar. '
-        + 'SE VOCÊ VAI GERENCIAR OS DADOS DO SISTEMA (cadastrar/editar/consultar registros pelo chat): exponha uma API de verdade no server.js/app.py (rotas GET/POST/etc. que leem e gravam no SQLite) e chame essa API com a tool chamar_sistema. Você NÃO cadastra nada "de memória": publicar a tela não cadastra dado nenhum. Se a API precisar de login, deixe uma forma de você mesmo autenticar (ex: aceitar um token que você guarda) ou uma rota interna. Depois de publicar, confirme o estado real com um GET via chamar_sistema antes de dizer o que está lá. '
-        + 'SEGREDOS (obrigatório): NUNCA escreva chave de API, senha, token ou string de conexão direto no código; o publish RECUSA se achar segredo no fonte. Guarde cada segredo com definir_segredo e no código use só process.env.NOME (Node) ou os.environ["NOME"] (Flask). Os segredos são injetados no app como variáveis de ambiente no boot. '
-        + 'ACESSO À URL — PERGUNTE ANTES (obrigatório em app NOVO): todo app nasce PRIVADO, protegido por usuário e senha pedidos no navegador. Antes do primeiro publish, pergunte ao usuário se ele quer o app PÚBLICO (qualquer pessoa com o link abre) ou PRIVADO (só quem tem a senha). '
-        + 'Se ele disser público, passe acesso:"publico". Se ele não souber, disser que é só pra ele, ou você não conseguir perguntar, deixe o padrão (privado) — é o seguro. '
-        + 'Publicando privado, a tool devolve `credenciais` (usuário e senha geradas): ENTREGUE as duas ao usuário na sua resposta, avisando que é o login pra abrir o app. Republicar NÃO muda a senha nem destranca o app. Depois, quem muda isso é a tool definir_acesso_sistema.',
+        `Publishes a "small system" (web app) on the user's subdomain, reachable at https://<subdominio>.${dominioDosApps()}/<nome_do_sistema>/. `
+        + 'Each app runs in an isolated container with memory/CPU limits and SLEEPS on its own when idle (wakes up on the 1st access). '
+        + 'PERSISTENT DATA ALWAYS goes in /app/data (this directory is durable and reserved for runtime data): SQLite in /app/data/<nome>.db, uploads and generated files in /app/data/. Do NOT write runtime data at the /app root or next to the code. Reason: only /app/data keeps state; the code you send is what defines the app, and when an app is replicated by another user ONLY the code travels, the data in /app/data NEVER travels. '
+        + 'Publishing again with the same name REWRITES the code; the data in /app/data is preserved. '
+        + 'HOW TO BUILD THE APP (important for apps with several files): the reliable way is to write each file with the escrever_arquivo_do_app tool (it stays saved in a draft on the server across turns) and THEN call this publicar_sistema WITHOUT the "arquivos" parameter (it publishes the draft). You do NOT need to resend all the code in one go. To edit an already published app, the draft already starts with the current code, so just rewrite the files that changed. Alternative (small app): send everything at once in the "arquivos" parameter. '
+        + 'RIGHT WAY TO ORGANIZE THE FILES (avoids bugs and is the preferred one): '
+        + `(1) FRONTEND ONLY (site/page, no backend): send the HTML/CSS/JS in SEPARATE FILES inside public/ (public/index.html, public/app.js, public/style.css). You do NOT need to send server.js: ${marca().nome} serves your static files on its own. `
+        + '(2) WITH BACKEND: runtime "node" with a server.js that listens on process.env.PORT (and serves the files in public/ + your API routes), or runtime "flask" with app.py exposing `app` (runs with gunicorn; front in templates/ and static/). To START a new node app with a backend, call iniciar_estrutura_do_app FIRST: it creates the ready-made modular skeleton (thin server.js + lib/routes/ + public/) and you only fill in routes and screens. '
+        + 'GOLDEN RULE: NEVER build the browser HTML/JS inside a template string (backtick) in server.js/app.py. Keep the frontend in its own files. Pasting browser JS into a server string makes the client-side `${...}` be evaluated by Node and the app crashes on boot. '
+        + 'RELATIVE PATHS: since the app runs under a subpath (/nome_do_sistema/), every href/src/fetch in the HTML and JS must be RELATIVE (style.css, app.js, api/status), never with a leading slash (/style.css). The publish normalizes absolute paths to relative on its own, but generate them relative from the start. '
+        + 'The publish VALIDATES the boot AND the assets: if the app crashes, or if a CSS/JS referenced in the HTML does not load, it is NOT published and you get the reason so you can fix it; only say it is live when ok:true. CONFIRMED ACTION before executing. '
+        + 'IF YOU ARE GOING TO MANAGE THE SYSTEM DATA (create/edit/query records through the chat): expose a real API in server.js/app.py (GET/POST/etc. routes that read and write to SQLite) and call that API with the chamar_sistema tool. You do NOT register anything "from memory": publishing the screen registers no data at all. If the API needs login, leave a way for you yourself to authenticate (e.g.: accept a token that you keep) or an internal route. After publishing, confirm the real state with a GET via chamar_sistema before saying what is there. '
+        + 'SECRETS (mandatory): NEVER write an API key, password, token or connection string directly in the code; the publish REFUSES if it finds a secret in the source. Store each secret with definir_segredo and in the code use only process.env.NOME (Node) or os.environ["NOME"] (Flask). Secrets are injected into the app as environment variables at boot. '
+        + 'URL ACCESS — ASK FIRST (mandatory for a NEW app): every app is born PRIVATE, protected by a username and password requested in the browser. Before the first publish, ask the user whether they want the app PUBLIC (anyone with the link can open it) or PRIVATE (only whoever has the password). '
+        + 'If they say public, pass acesso:"publico". If they do not know, say it is just for them, or you cannot ask, keep the default (private) — it is the safe one. '
+        + 'When publishing private, the tool returns `credenciais` (generated username and password): DELIVER both to the user in your reply, telling them it is the login to open the app. Republishing does NOT change the password nor unlock the app. Afterwards, the definir_acesso_sistema tool is what changes that.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema (letras minúsculas, números, - e _). Vira o path.' },
-          runtime: { type: 'string', enum: ['node', 'flask'], description: 'node ou flask' },
-          acesso: { type: 'string', enum: ['publico', 'privado'], description: 'OPCIONAL, só no PRIMEIRO publish. "publico" = qualquer pessoa com o link abre (só passe se o usuário PEDIU isso). Omitido = privado (padrão): o app nasce com usuário/senha e a tool devolve as credenciais pra você entregar. Em republicação é ignorado — use definir_acesso_sistema pra mudar depois.' },
-          mensagem: { type: 'string', description: 'OPCIONAL. Descrição curta da mudança desta versão (vira a mensagem do commit no histórico do app). Ex: "adiciona filtro por data".' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: nome ou e-mail do contato conectado DONO de um sistema COMPARTILHADO com você, quando quiser editar o sistema dele (mesma instância, mesmos dados). Deixe vazio pros seus próprios sistemas. Você só consegue se o dono te adicionou como colaborador.' },
-          confirmo_reducao: { type: 'string', description: 'OPCIONAL. Só use se o publish foi BLOQUEADO por redução de código E a redução é intencional (você removeu código de propósito). Escreva aqui a justificativa (ex: "removi o módulo de relatórios a pedido do usuário"). NUNCA use pra contornar o bloqueio sem ter relido os arquivos atuais.' },
-          confirmo_lint: { type: 'string', description: 'OPCIONAL. Só use se o publish foi BLOQUEADO pelo lint de consistência E você VERIFICOU que os apontamentos são falso-positivos (ex: função definida dinamicamente). Escreva a justificativa. O caminho normal é CORRIGIR o que o lint apontou, não contornar.' },
+          nome_do_sistema: { type: 'string', description: 'system slug (lowercase letters, numbers, - and _). Becomes the path.' },
+          runtime: { type: 'string', enum: ['node', 'flask'], description: 'node or flask' },
+          acesso: { type: 'string', enum: ['publico', 'privado'], description: 'OPTIONAL, only on the FIRST publish. "publico" = anyone with the link can open it (only pass it if the user ASKED for that). Omitted = private (default): the app is born with username/password and the tool returns the credentials for you to deliver. Ignored on republish — use definir_acesso_sistema to change it later.' },
+          mensagem: { type: 'string', description: 'OPTIONAL. Short description of the change in this version (becomes the commit message in the app history). E.g.: "add date filter".' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: name or e-mail of the connected contact who is the OWNER of a system SHARED with you, when you want to edit their system (same instance, same data). Leave empty for your own systems. You can only do it if the owner added you as a collaborator.' },
+          confirmo_reducao: { type: 'string', description: 'OPTIONAL. Only use it if the publish was BLOCKED for code reduction AND the reduction is intentional (you removed code on purpose). Write the justification here (e.g.: "removed the reports module at the user\'s request"). NEVER use it to bypass the block without having reread the current files.' },
+          confirmo_lint: { type: 'string', description: 'OPTIONAL. Only use it if the publish was BLOCKED by the consistency lint AND you VERIFIED that the findings are false positives (e.g.: function defined dynamically). Write the justification. The normal path is to FIX what the lint pointed out, not bypass it.' },
           arquivos: {
             type: 'array',
-            description: 'OPCIONAL se você já montou o app com escrever_arquivo_do_app (o publish lê o rascunho). Arquivos do app enviados nesta chamada (sobrepõem o rascunho): frontend estático em public/index.html (+ public/app.js, public/style.css, e pode omitir o server.js); backend em server.js (node) ou app.py (flask, + opcional requirements.txt). Para app com VÁRIOS arquivos, prefira montar aos poucos com escrever_arquivo_do_app e chamar este publish sem "arquivos".',
+            description: 'OPTIONAL if you already built the app with escrever_arquivo_do_app (the publish reads the draft). App files sent in this call (they override the draft): static frontend in public/index.html (+ public/app.js, public/style.css, and you may omit server.js); backend in server.js (node) or app.py (flask, + optional requirements.txt). For an app with SEVERAL files, prefer building it gradually with escrever_arquivo_do_app and calling this publish without "arquivos".',
             items: {
               type: 'object',
               properties: {
-                caminho: { type: 'string', description: 'caminho relativo, ex: server.js, app.py, static/index.html' },
-                conteudo: { type: 'string', description: 'conteúdo do arquivo (texto)' },
+                caminho: { type: 'string', description: 'relative path, e.g.: server.js, app.py, static/index.html' },
+                conteudo: { type: 'string', description: 'file content (text)' },
               },
               required: ['caminho', 'conteudo'],
             },
@@ -1284,7 +1284,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     // passou | quebrado | crashou | nao_subiu.
     {
       name: 'provar_app',
-      description: 'Uso interno da plataforma: sobe o rascunho do app num container descartável e relata se ele fica de pé. Não publica nada.',
+      description: 'Internal platform use: boots the app draft in a disposable container and reports whether it stays up. Publishes nothing.',
       parameters: { type: 'object', properties: { nome_do_sistema: { type: 'string' }, dono: { type: 'string' } } },
       async run({ nome_do_sistema, dono } = {}) {
         const alvo = await alvoRascunho(nome_do_sistema, dono);
@@ -1358,14 +1358,14 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'iniciar_estrutura_do_app',
       description:
-        'Cria no RASCUNHO o esqueleto modular de um app node NOVO, numa chamada só e sem você escrever código: server.js FINO (só entrada: CORS, prefixo, loop de rotas, estáticos, erro 500), lib/db.js (SQLite em /app/data), lib/helpers.js (sendJson/parseBody/serveStatic), lib/routes/exemplo.js (modelo de módulo de rota: exporta handle(ctx) e retorna true quando tratou) e public/ (index.html + core.js + style.css). O app já nasce funcional (GET api/status + página). '
-        + 'USE SEMPRE que for começar um app node com backend: partir deste esqueleto evita o monólito (arquivo gigante que depois trava cada edição). Depois é só: (1) ajustar o schema em lib/db.js; (2) uma ÁREA por arquivo em lib/routes/ (copie o formato do exemplo.js) + require no array rotas do server.js; (3) um .js por área em public/, carregado no index.html depois do core.js; (4) publicar_sistema. '
-        + 'SÓ para app novo: se o sistema já foi publicado ou já tem rascunho, a tool recusa (não sobrescreve código existente).',
+        'Creates in the DRAFT the modular skeleton of a NEW node app, in a single call and without you writing code: THIN server.js (entry point only: CORS, prefix, route loop, static files, 500 error), lib/db.js (SQLite in /app/data), lib/helpers.js (sendJson/parseBody/serveStatic), lib/routes/exemplo.js (route module template: exports handle(ctx) and returns true when it handled the request) and public/ (index.html + core.js + style.css). The app is born working (GET api/status + page). '
+        + 'ALWAYS USE IT when starting a node app with a backend: starting from this skeleton avoids the monolith (a giant file that later stalls every edit). Then just: (1) adjust the schema in lib/db.js; (2) one AREA per file in lib/routes/ (copy the format of exemplo.js) + require it in the rotas array of server.js; (3) one .js per area in public/, loaded in index.html after core.js; (4) publicar_sistema. '
+        + 'ONLY for a new app: if the system was already published or already has a draft, the tool refuses (it does not overwrite existing code).',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'Slug do sistema NOVO (minúsculas, números, - e _; até 31 chars). Vira o path do app.' },
-          titulo: { type: 'string', description: 'OPCIONAL. Título humano do app pro index.html (ex: "Controle de Pedidos"). Default: o próprio slug.' },
+          nome_do_sistema: { type: 'string', description: 'Slug of the NEW system (lowercase, numbers, - and _; up to 31 chars). Becomes the app path.' },
+          titulo: { type: 'string', description: 'OPTIONAL. Human-readable app title for index.html (e.g.: "Controle de Pedidos"). Default: the slug itself.' },
         },
         required: ['nome_do_sistema'],
       },
@@ -1402,18 +1402,18 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'escrever_arquivo_do_app',
       description:
-        'Cria ou atualiza UM arquivo do rascunho de um app, SEM publicar. É o jeito de criar um arquivo NOVO ou reescrever um arquivo por inteiro. Pra MUDANÇA pontual num arquivo que já existe, use editar_arquivo_do_app (troca só o trecho, mais barato e sem risco de cortar arquivo grande no meio). '
-        + 'Monte o app arquivo a arquivo (server.js, public/index.html, public/app.js, public/style.css, ...) e depois chame publicar_sistema pra subir tudo. O rascunho FICA SALVO no servidor entre turnos, então você NÃO precisa reenviar todo o código numa tacada só. Editando um app JÁ PUBLICADO, o rascunho começa com o código atual dele. Você NUNCA precisa de SSH nem de acesso ao servidor pra editar um app. '
-        + 'Mesmas regras do publicar_sistema: frontend em arquivos próprios dentro de public/ (NUNCA HTML/JS dentro de template string do server), caminhos relativos (style.css, app.js, api/...), dado de runtime só em /app/data (não vai no código), e nada de segredo no fonte (use definir_segredo). Escrever no rascunho NÃO altera o app no ar; só publicar_sistema publica.',
+        'Creates or updates ONE file in an app draft, WITHOUT publishing. It is the way to create a NEW file or rewrite a file entirely. For a targeted CHANGE in a file that already exists, use editar_arquivo_do_app (swaps only the snippet, cheaper and with no risk of cutting a large file in the middle). '
+        + 'Build the app file by file (server.js, public/index.html, public/app.js, public/style.css, ...) and then call publicar_sistema to push everything. The draft STAYS SAVED on the server across turns, so you do NOT need to resend all the code in one go. When editing an ALREADY PUBLISHED app, the draft starts with its current code. You NEVER need SSH or server access to edit an app. '
+        + 'Same rules as publicar_sistema: frontend in its own files inside public/ (NEVER HTML/JS inside a server template string), relative paths (style.css, app.js, api/...), runtime data only in /app/data (it does not go in the code), and no secrets in the source (use definir_segredo). Writing to the draft does NOT change the live app; only publicar_sistema publishes.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário). Passe o slug quando for outro app ou na dúvida.' },
-          caminho: { type: 'string', description: 'caminho relativo do arquivo, ex: server.js, public/index.html, public/app.js.' },
-          conteudo: { type: 'string', description: 'conteúdo do arquivo (texto).' },
-          hash_esperado: { type: 'string', description: 'OPCIONAL mas RECOMENDADO ao REESCREVER um arquivo que já existe: o "hash" que veio na sua última leitura dele (ler_arquivo_do_app/listar_arquivos_do_app). Se o arquivo mudou desde então, a escrita FALHA em vez de gravar por cima — releia e refaça. Deixe vazio pra arquivo novo.' },
-          confirmo_arquivo_grande: { type: 'string', description: 'OPCIONAL. Só use se a escrita foi BLOQUEADA por arquivo grande demais (≥800 linhas) E dividir realmente não faz sentido (ex: biblioteca de terceiros vendorizada). Escreva a justificativa. O caminho normal é DIVIDIR em módulos menores.' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: nome/e-mail do contato conectado dono de um sistema compartilhado com você.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app). Pass the slug when it is another app or when in doubt.' },
+          caminho: { type: 'string', description: 'relative file path, e.g.: server.js, public/index.html, public/app.js.' },
+          conteudo: { type: 'string', description: 'file content (text).' },
+          hash_esperado: { type: 'string', description: 'OPTIONAL but RECOMMENDED when REWRITING a file that already exists: the "hash" that came in your last read of it (ler_arquivo_do_app/listar_arquivos_do_app). If the file changed since then, the write FAILS instead of overwriting — reread and redo. Leave empty for a new file.' },
+          confirmo_arquivo_grande: { type: 'string', description: 'OPTIONAL. Only use it if the write was BLOCKED because the file is too large (≥800 lines) AND splitting really makes no sense (e.g.: vendored third-party library). Write the justification. The normal path is to SPLIT into smaller modules.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: name/e-mail of the connected contact who owns a system shared with you.' },
         },
         required: ['caminho', 'conteudo'],
       },
@@ -1477,32 +1477,32 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'editar_arquivo_do_app',
       description:
-        'EDITA um arquivo do rascunho de um app trocando TRECHOS por outros (patch), SEM reescrever o arquivo inteiro. '
-        + 'É o jeito PREFERIDO de alterar um app que já existe: em vez de reenviar o arquivo todo (caro e, em arquivo grande, pode ser cortado no meio e travar), você troca só o pedaço que muda. '
-        + 'Fluxo: leia com ler_arquivo_do_app, copie em "trecho_antigo" o texto EXATO que vai mudar (com contexto suficiente pra ser único no arquivo), ponha a nova versão em "trecho_novo", e publique com publicar_sistema. '
-        + 'Copie o trecho_antigo do arquivo: diferença pequena de espaço ou quebra de linha o host resolve sozinho, mas o trecho precisa ser inequívoco (um só lugar do arquivo). Se ficar ambíguo, ou se a troca deixar o arquivo com erro de sintaxe, nada é gravado e a tool avisa o que corrigir. '
-        + 'Pra VÁRIAS mudanças no MESMO arquivo de uma vez, passe "edicoes": uma lista de {trecho_antigo, trecho_novo} aplicada em ordem, tudo-ou-nada (se qualquer uma falhar, nenhuma é gravada). É mais barato que uma edição por chamada. '
-        + 'Use escrever_arquivo_do_app só pra arquivo NOVO ou reescrita completa. Editar o rascunho NÃO altera o app no ar; só publicar_sistema publica.',
+        'EDITS a file in an app draft by swapping SNIPPETS for others (patch), WITHOUT rewriting the whole file. '
+        + 'It is the PREFERRED way to change an app that already exists: instead of resending the whole file (expensive and, for a large file, it may get cut in the middle and stall), you swap only the piece that changes. '
+        + 'Flow: read with ler_arquivo_do_app, copy into "trecho_antigo" the EXACT text that will change (with enough context to be unique in the file), put the new version in "trecho_novo", and publish with publicar_sistema. '
+        + 'Copy trecho_antigo from the file: the host resolves small whitespace or line-break differences on its own, but the snippet must be unambiguous (a single place in the file). If it is ambiguous, or if the swap leaves the file with a syntax error, nothing is saved and the tool says what to fix. '
+        + 'For SEVERAL changes in the SAME file at once, pass "edicoes": a list of {trecho_antigo, trecho_novo} applied in order, all-or-nothing (if any one fails, none is saved). It is cheaper than one edit per call. '
+        + 'Use escrever_arquivo_do_app only for a NEW file or a complete rewrite. Editing the draft does NOT change the live app; only publicar_sistema publishes.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário). Passe o slug quando for outro app ou na dúvida.' },
-          caminho: { type: 'string', description: 'caminho relativo do arquivo a editar, ex: server.js, public/app.js, public/index.html.' },
-          trecho_antigo: { type: 'string', description: 'edição ÚNICA: o texto EXATO que já está no arquivo e vai ser trocado (copie de ler_arquivo_do_app, com contexto suficiente pra ser único). Ignore se usar "edicoes".' },
-          trecho_novo: { type: 'string', description: 'edição ÚNICA: o texto que entra no lugar do trecho_antigo. Ignore se usar "edicoes".' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app). Pass the slug when it is another app or when in doubt.' },
+          caminho: { type: 'string', description: 'relative path of the file to edit, e.g.: server.js, public/app.js, public/index.html.' },
+          trecho_antigo: { type: 'string', description: 'SINGLE edit: the EXACT text already in the file that will be replaced (copy it from ler_arquivo_do_app, with enough context to be unique). Ignore if using "edicoes".' },
+          trecho_novo: { type: 'string', description: 'SINGLE edit: the text that goes in place of trecho_antigo. Ignore if using "edicoes".' },
           edicoes: {
             type: 'array',
-            description: 'VÁRIAS edições no mesmo arquivo, aplicadas EM ORDEM e de forma atômica (tudo-ou-nada). Use no lugar de trecho_antigo/trecho_novo quando houver mais de uma mudança.',
+            description: 'SEVERAL edits in the same file, applied IN ORDER and atomically (all-or-nothing). Use instead of trecho_antigo/trecho_novo when there is more than one change.',
             items: {
               type: 'object',
               properties: {
-                trecho_antigo: { type: 'string', description: 'texto EXATO que já está no arquivo (único).' },
-                trecho_novo: { type: 'string', description: 'texto que entra no lugar.' },
+                trecho_antigo: { type: 'string', description: 'EXACT text already in the file (unique).' },
+                trecho_novo: { type: 'string', description: 'text that goes in its place.' },
               },
               required: ['trecho_antigo', 'trecho_novo'],
             },
           },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: nome/e-mail do contato conectado dono de um sistema compartilhado com você.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: name/e-mail of the connected contact who owns a system shared with you.' },
         },
         required: ['caminho'],
       },
@@ -1588,7 +1588,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name:'buscar_codigo_do_app',
       repeatRevision: args => readRevision(args),
-      description:'Busca texto LITERAL nos arquivos do rascunho (ou snapshot). Retorna arquivo, linha, hash, revisão e trechos; não executa nem modifica. Prefira buscar funções/IDs e depois ler o contexto, em vez de percorrer arquivos grandes às cegas. Continue com proximo_inicio e revisao_esperada.',
+      description:'Searches LITERAL text in the draft files (or snapshot). Returns file, line, hash, revision and snippets; does not execute or modify anything. Prefer searching for functions/IDs and then reading the context, instead of going through large files blindly. Continue with proximo_inicio and revisao_esperada.',
       parameters:{type:'object',properties:{nome_do_sistema:{type:'string'},dono:{type:'string'},texto:{type:'string',maxLength:200},caminho:{type:'string'},inicio:{type:'integer',minimum:0},limite:{type:'integer',minimum:1,maximum:50},revisao_esperada:{type:'string'}},required:['texto']},
       async run(args) {
         const alvo=await alvoLeitura(args.nome_do_sistema,args.dono);
@@ -1600,7 +1600,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name:'validar_rascunho_do_app',
       repeatRevision: args => readRevision(args),
-      description:'Valida a consistência estática do rascunho atual (ou snapshot publicado se não há rascunho), sem escrever, publicar, executar app ou fazer rede externa. Retorna revisão e diagnósticos exatos. Não prova funcionamento em navegador. Revalide após editar. Se proximo_diagnostico não for null, continue nele usando inicio_diagnostico e revisao_esperada.',
+      description:'Validates the static consistency of the current draft (or the published snapshot if there is no draft), without writing, publishing, running the app or making external network calls. Returns the revision and exact diagnostics. Does not prove it works in a browser. Revalidate after editing. If proximo_diagnostico is not null, continue from it using inicio_diagnostico and revisao_esperada.',
       parameters:{ type:'object', properties:{ nome_do_sistema:{type:'string'}, dono:{type:'string'}, inicio_diagnostico:{type:'integer',minimum:0}, revisao_esperada:{type:'string'} }, required:[] },
       async run({ nome_do_sistema, dono, inicio_diagnostico, revisao_esperada }) {
         const alvo = await alvoLeitura(nome_do_sistema, dono);
@@ -1612,12 +1612,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'listar_arquivos_do_app',
       repeatRevision: args => readRevision(args),
-      description: 'Lista os arquivos de um app, com o tamanho de cada um. Se o app JÁ está publicado, mostra o código que está NO AR (não precisa reescrever nada pra ver). Se você já começou a editar, mostra o rascunho. É o primeiro passo pra editar um app existente: liste, leia com ler_arquivo_do_app o que vai mudar, reescreva com escrever_arquivo_do_app e publique. Você NUNCA precisa de SSH nem de acesso ao servidor pra ler ou editar um app.',
+      description: 'Lists the files of an app, with the size of each one. If the app is ALREADY published, shows the code that is LIVE (no need to rewrite anything to see it). If you already started editing, shows the draft. It is the first step to edit an existing app: list, read with ler_arquivo_do_app what will change, rewrite with escrever_arquivo_do_app and publish. You NEVER need SSH or server access to read or edit an app.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário).' },
-          dono: { type: 'string', description: 'OPCIONAL. Colaboração: dono do sistema compartilhado.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app).' },
+          dono: { type: 'string', description: 'OPTIONAL. Collaboration: owner of the shared system.' },
         },
         required: [],
       },
@@ -1639,16 +1639,16 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'ler_arquivo_do_app',
       repeatRevision: args => readRevision(args, true),
-      description: 'Lê uma PÁGINA limitada de UM arquivo de app. Para arquivos grandes, avance com proximo_inicio e hash_esperado até null; nunca reescreva o arquivo inteiro com apenas uma página. Se o app já está publicado, devolve o código que está no ar (mesmo que você ainda não tenha começado a editar). Use isto pra ver o código atual ANTES de alterá-lo: liste com listar_arquivos_do_app, leia aqui o arquivo que vai mudar, edite com escrever_arquivo_do_app e publique. Nunca é preciso SSH nem acesso ao servidor pra ler o código de um app.',
+      description: 'Reads a limited PAGE of ONE app file. For large files, advance with proximo_inicio and hash_esperado until null; never rewrite the whole file with only one page. If the app is already published, returns the code that is live (even if you have not started editing yet). Use this to see the current code BEFORE changing it: list with listar_arquivos_do_app, read here the file that will change, edit with escrever_arquivo_do_app and publish. SSH or server access is never needed to read the code of an app.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário).' },
-          inicio: { type:'integer', minimum:0, description:'Offset UTF-16. Use proximo_inicio da página anterior; padrão 0.' },
-          limite: { type:'integer', minimum:1, maximum:6000, description:'Máximo de caracteres da página, padrão 6000.' },
-          hash_esperado: { type:'string', description:'Obrigatório para continuar (inicio > 0). Hash do arquivo inteiro recebido na primeira página.' },
-          caminho: { type: 'string', description: 'caminho relativo do arquivo, ex: server.js, public/index.html, public/app.js.' },
-          dono: { type: 'string', description: 'OPCIONAL. Colaboração: dono do sistema compartilhado.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app).' },
+          inicio: { type:'integer', minimum:0, description:'UTF-16 offset. Use proximo_inicio from the previous page; default 0.' },
+          limite: { type:'integer', minimum:1, maximum:6000, description:'Maximum characters per page, default 6000.' },
+          hash_esperado: { type:'string', description:'Required to continue (inicio > 0). Hash of the whole file received on the first page.' },
+          caminho: { type: 'string', description: 'relative file path, e.g.: server.js, public/index.html, public/app.js.' },
+          dono: { type: 'string', description: 'OPTIONAL. Collaboration: owner of the shared system.' },
         },
         required: ['caminho'],
       },
@@ -1672,13 +1672,13 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'remover_arquivo_do_app',
-      description: 'Remove UM arquivo do rascunho de um app (antes de publicar). Não mexe no app que está no ar.',
+      description: 'Removes ONE file from an app draft (before publishing). Does not touch the live app.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema.' },
-          caminho: { type: 'string', description: 'caminho relativo do arquivo a remover do rascunho.' },
-          dono: { type: 'string', description: 'OPCIONAL. Colaboração: dono do sistema compartilhado.' },
+          nome_do_sistema: { type: 'string', description: 'system slug.' },
+          caminho: { type: 'string', description: 'relative path of the file to remove from the draft.' },
+          dono: { type: 'string', description: 'OPTIONAL. Collaboration: owner of the shared system.' },
         },
         required: ['nome_do_sistema', 'caminho'],
       },
@@ -1697,16 +1697,16 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'definir_segredo',
       description:
-        'Guarda um SEGREDO de um sistema (chave de API, senha, token, string de conexão) num COFRE CIFRADO, pra ser injetado como variável de ambiente no app. '
-        + 'REGRA DE OURO: segredo nunca vai no código. No código do app use process.env.NOME (Node) ou os.environ["NOME"] (Flask); aqui você define o valor real. '
-        + 'A chave (nome) tem que ser MAIÚSCULAS/dígitos/_ (ex: OPENAI_API_KEY, DB_PASSWORD). Pode definir ANTES de publicar (guarda pro próximo publish) ou DEPOIS (aplica na hora, o app reinicia com o novo valor). '
-        + 'O valor fica cifrado, NUNCA aparece no fonte e NÃO viaja quando o app é replicado por outro usuário.',
+        'Stores a SECRET of a system (API key, password, token, connection string) in an ENCRYPTED VAULT, to be injected into the app as an environment variable. '
+        + 'GOLDEN RULE: a secret never goes in the code. In the app code use process.env.NOME (Node) or os.environ["NOME"] (Flask); here you set the real value. '
+        + 'The key (name) must be UPPERCASE/digits/_ (e.g.: OPENAI_API_KEY, DB_PASSWORD). You can set it BEFORE publishing (kept for the next publish) or AFTER (applied immediately, the app restarts with the new value). '
+        + 'The value stays encrypted, NEVER appears in the source and does NOT travel when the app is replicated by another user.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema (ex: "contas").' },
-          chave: { type: 'string', description: 'nome da variável de ambiente (MAIÚSCULAS, dígitos, _). Ex: OPENAI_API_KEY.' },
-          valor: { type: 'string', description: 'o valor secreto.' },
+          nome_do_sistema: { type: 'string', description: 'system slug (e.g.: "contas").' },
+          chave: { type: 'string', description: 'environment variable name (UPPERCASE, digits, _). E.g.: OPENAI_API_KEY.' },
+          valor: { type: 'string', description: 'the secret value.' },
         },
         required: ['nome_do_sistema', 'chave', 'valor'],
       },
@@ -1734,7 +1734,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'listar_segredos',
-      description: 'Lista os NOMES das variáveis de ambiente (segredos) definidas para um sistema. NÃO mostra os valores (ficam cifrados no cofre).',
+      description: 'Lists the NAMES of the environment variables (secrets) set for a system. Does NOT show the values (they stay encrypted in the vault).',
       parameters: {
         type: 'object',
         properties: { nome_do_sistema: { type: 'string' } },
@@ -1749,12 +1749,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'remover_segredo',
-      description: 'Remove um segredo (variável de ambiente) de um sistema. Se o sistema estiver publicado, o app reinicia sem essa variável.',
+      description: 'Removes a secret (environment variable) from a system. If the system is published, the app restarts without that variable.',
       parameters: {
         type: 'object',
         properties: {
           nome_do_sistema: { type: 'string' },
-          chave: { type: 'string', description: 'nome da variável a remover.' },
+          chave: { type: 'string', description: 'name of the variable to remove.' },
         },
         required: ['nome_do_sistema', 'chave'],
       },
@@ -1773,17 +1773,17 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'definir_visibilidade_sistema',
       description:
-        `Controla se um sistema publicado aparece na BIBLIOTECA PÚBLICA de apps do ${marca().nome} (${linkDaPagina('apps') ?? 'achada com buscar_apps_publicos'}), onde qualquer pessoa/agente pode COPIAR o app pro próprio espaço. `
-        + '"publico" = listado na biblioteca e copiável; "privado" (padrão) = fora da biblioteca, ninguém copia. '
-        + 'ATENÇÃO, isso é sobre CÓPIA do código, NÃO sobre acesso à URL: quem abre o app é controlado separadamente pela tool definir_acesso_sistema (todo app nasce privado, com usuário e senha). Marcar como público na biblioteca NÃO destranca a URL, e destrancar a URL não põe o app na biblioteca. '
-        + 'Na cópia SÓ o código viaja: NENHUM segredo (ficam no cofre) e NENHUM dado de runtime (fica em /app/data) vão junto. '
-        + 'Dê uma descrição boa ao listar na biblioteca (ajuda os outros a acharem). Pra ser copiável o app precisa ter sido publicado (tem snapshot de código); republique se for antigo.',
+        `Controls whether a published system appears in the PUBLIC app LIBRARY of ${marca().nome} (${linkDaPagina('apps') ?? 'achada com buscar_apps_publicos'}), where any person/agent can COPY the app into their own space. `
+        + '"publico" = listed in the library and copyable; "privado" (default) = out of the library, nobody copies it. '
+        + 'ATTENTION, this is about COPYING the code, NOT about access to the URL: who can open the app is controlled separately by the definir_acesso_sistema tool (every app is born private, with username and password). Marking it as public in the library does NOT unlock the URL, and unlocking the URL does not put the app in the library. '
+        + 'In a copy ONLY the code travels: NO secrets (they stay in the vault) and NO runtime data (it stays in /app/data) go along. '
+        + 'Give it a good description when listing it in the library (it helps others find it). To be copyable the app must have been published (it has a code snapshot); republish it if it is old.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema (ex: "contas").' },
-          visibilidade: { type: 'string', enum: ['publico', 'privado'], description: 'publico ou privado.' },
-          descricao: { type: 'string', description: 'OPCIONAL. Descrição curta do que o app faz (recomendada ao tornar público).' },
+          nome_do_sistema: { type: 'string', description: 'system slug (e.g.: "contas").' },
+          visibilidade: { type: 'string', enum: ['publico', 'privado'], description: 'publico or privado.' },
+          descricao: { type: 'string', description: 'OPTIONAL. Short description of what the app does (recommended when making it public).' },
         },
         required: ['nome_do_sistema', 'visibilidade'],
       },
@@ -1820,18 +1820,18 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'definir_acesso_sistema',
       description:
-        'Controla QUEM CONSEGUE ABRIR a URL de um app publicado. Todo app nasce PRIVADO: o navegador pede usuário e senha (portão da plataforma, verificado antes de o app nem acordar). '
-        + 'SEM o parâmetro "acesso", esta tool só CONSULTA: devolve se o app é público ou privado e, se for privado, o usuário e a senha atuais (pra você relembrar ao dono). '
-        + 'Com acesso:"privado" tranca (gera senha nova se não tinha) e com nova_senha:true troca a senha. '
-        + 'Com acesso:"publico" DESTRANCA — qualquer pessoa com o link abre. PERGUNTE E CONFIRME com o usuário antes, e só então passe confirmo_publico:true; se o app guarda dado de outras pessoas (cadastro, pedido, mensagem), diga isso a ele antes. '
-        + 'Isto é DIFERENTE de definir_visibilidade_sistema, que é sobre listar o CÓDIGO na biblioteca pra outros copiarem.',
+        'Controls WHO CAN OPEN the URL of a published app. Every app is born PRIVATE: the browser asks for username and password (platform gate, checked before the app even wakes up). '
+        + 'WITHOUT the "acesso" parameter, this tool only QUERIES: returns whether the app is public or private and, if private, the current username and password (so you can remind the owner). '
+        + 'With acesso:"privado" it locks the app (generates a new password if it had none) and with nova_senha:true it changes the password. '
+        + 'With acesso:"publico" it UNLOCKS — anyone with the link can open it. ASK AND CONFIRM with the user first, and only then pass confirmo_publico:true; if the app stores other people\'s data (sign-ups, orders, messages), tell them that first. '
+        + 'This is DIFFERENT from definir_visibilidade_sistema, which is about listing the CODE in the library for others to copy.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema (ex: "contas").' },
-          acesso: { type: 'string', enum: ['publico', 'privado'], description: 'OPCIONAL. Omita pra só consultar o estado atual. "publico" abre a URL pra qualquer pessoa (exige confirmo_publico). "privado" tranca com usuário e senha.' },
-          confirmo_publico: { type: 'boolean', description: 'Obrigatório junto de acesso:"publico". Só passe true DEPOIS de o usuário confirmar que quer o app aberto pra qualquer pessoa com o link.' },
-          nova_senha: { type: 'boolean', description: 'OPCIONAL, só com acesso:"privado". true = gera uma senha nova (invalida a antiga).' },
+          nome_do_sistema: { type: 'string', description: 'system slug (e.g.: "contas").' },
+          acesso: { type: 'string', enum: ['publico', 'privado'], description: 'OPTIONAL. Omit it to only query the current state. "publico" opens the URL to anyone (requires confirmo_publico). "privado" locks it with username and password.' },
+          confirmo_publico: { type: 'boolean', description: 'Required together with acesso:"publico". Only pass true AFTER the user confirms they want the app open to anyone with the link.' },
+          nova_senha: { type: 'boolean', description: 'OPTIONAL, only with acesso:"privado". true = generates a new password (invalidates the old one).' },
         },
         required: ['nome_do_sistema'],
       },
@@ -1884,12 +1884,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'buscar_apps_publicos',
       description:
-        `Descobre apps PÚBLICOS publicados por qualquer usuário do ${marca().nome}, que você pode REPLICAR no subdomínio do seu usuário. `
-        + 'Devolve nome, descrição, runtime, a "origem" (pra passar em replicar_sistema) e a URL pública. Use uma busca por palavra-chave pra filtrar.',
+        `Finds PUBLIC apps published by any ${marca().nome} user, which you can REPLICATE on your user's subdomain. `
+        + 'Returns name, description, runtime, the "origem" (to pass to replicar_sistema) and the public URL. Use a keyword search to filter.',
       parameters: {
         type: 'object',
         properties: {
-          busca: { type: 'string', description: 'OPCIONAL. Palavra-chave (casa em nome, descrição ou subdomínio do dono).' },
+          busca: { type: 'string', description: 'OPTIONAL. Keyword (matches name, description or the owner\'s subdomain).' },
         },
       },
       async run({ busca }) {
@@ -1917,15 +1917,15 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'replicar_sistema',
       description:
-        'Replica um app PÚBLICO (de qualquer usuário) no subdomínio do SEU usuário: copia SÓ o código do app e o publica como um sistema seu. '
-        + 'NENHUM segredo e NENHUM dado do dono original vem junto (segredos ficam no cofre dele, dado de runtime fica no /app/data dele). '
-        + 'Depois de replicar, se o app precisar de chaves/senhas, defina as SUAS com definir_segredo. '
-        + 'A "origem" vem do buscar_apps_publicos (formato "dono/nome" ou a URL pública). AÇÃO CONFIRMADA antes de executar.',
+        'Replicates a PUBLIC app (from any user) on YOUR user\'s subdomain: copies ONLY the app code and publishes it as a system of yours. '
+        + 'NO secrets and NO data from the original owner come along (secrets stay in their vault, runtime data stays in their /app/data). '
+        + 'After replicating, if the app needs keys/passwords, set YOUR OWN with definir_segredo. '
+        + 'The "origem" comes from buscar_apps_publicos (format "dono/nome" or the public URL). CONFIRMED ACTION before executing.',
       parameters: {
         type: 'object',
         properties: {
-          origem: { type: 'string', description: `app de origem: "dono/nome_do_sistema" ou a URL pública (https://dono.${dominioDosApps()}/nome/).` },
-          novo_nome: { type: 'string', description: 'OPCIONAL. Nome do sistema no seu subdomínio (padrão: o mesmo nome da origem).' },
+          origem: { type: 'string', description: `source app: "dono/nome_do_sistema" or the public URL (https://dono.${dominioDosApps()}/nome/).` },
+          novo_nome: { type: 'string', description: 'OPTIONAL. Name of the system on your subdomain (default: the same name as the source).' },
         },
         required: ['origem'],
       },
@@ -1943,16 +1943,16 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'listar_sistemas',
-      description: 'Lista os sistemas (apps) que o usuário tem publicados no subdomínio dele, com status (ligado/dormindo) e se a URL é pública ou privada (pede usuário e senha). '
-        + 'ATENÇÃO: por padrão esta tool DESENHA cada app como um card com botão "Abrir app" na tela do usuário. '
-        + 'Se você está chamando só pra VOCÊ conferir algo (achar o slug exato antes de um chamar_sistema, checar se um app existe, decidir onde guardar um dado), passe intencao:"consulta" — a lista vem igual no texto, mas sem pintar os apps dele na conversa sem ele ter pedido.',
+      description: 'Lists the systems (apps) the user has published on their subdomain, with status (on/sleeping) and whether the URL is public or private (asks for username and password). '
+        + 'ATTENTION: by default this tool DRAWS each app as a card with an "Abrir app" button on the user\'s screen. '
+        + 'If you are calling it only for YOURSELF to check something (find the exact slug before a chamar_sistema, check whether an app exists, decide where to store some data), pass intencao:"consulta" — the list comes the same in the text, but without painting their apps in the conversation without them having asked.',
       parameters: {
         type: 'object',
         properties: {
           intencao: {
             type: 'string',
             enum: ['mostrar', 'consulta'],
-            description: '"mostrar" (padrão) quando o usuário pediu pra ver/abrir os apps dele: desenha os cards. "consulta" quando a chamada é um passo interno seu: não desenha nada.',
+            description: '"mostrar" (default) when the user asked to see/open their apps: draws the cards. "consulta" when the call is an internal step of yours: draws nothing.',
           },
         },
       },
@@ -2000,24 +2000,24 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'chamar_sistema',
       description:
-        'Faz uma requisição HTTP à API de um sistema que VOCÊ publicou (o app roda no subdomínio do usuário). '
-        + 'É assim que você LÊ e ESCREVE os dados de um sistema seu: cadastrar/editar/apagar registros, consultar o que está lá, conferir totais. '
-        + 'O `caminho` é relativo à raiz do app (ex: "api/contas", "api/status") — sem barra no começo, sem domínio. '
-        + 'Use GET pra ler e POST/PUT/PATCH/DELETE pra alterar; mande o corpo como objeto JSON. '
-        + 'AUTENTICAÇÃO INTERNA (automática): pra ROTAS INTERNAS do seu PRÓPRIO app (as que o app protege com o segredo INTERNAL_API_KEY, tipicamente sob /api/internal/...), a plataforma já assina a chamada por você com o header x-internal-key — NÃO tente adivinhar nem enviar o valor do segredo, é impossível você tê-lo e não precisa. Só use `cabecalhos` pra outras autenticações que você mesmo definiu. '
-        + 'Se o app for PRIVADO (portão de usuário/senha da plataforma), a chamada também já é autenticada automaticamente — não mande Authorization à mão nem se preocupe com 401 por causa do portão. '
-        + 'REGRA DA FONTE DA VERDADE (obrigatória): o sistema/banco é a verdade, NÃO a sua memória da conversa. '
-        + 'NUNCA diga que cadastrou, editou, apagou ou que "já está lá" sem ter chamado esta tool e visto a resposta confirmar. '
-        + 'Antes de afirmar o estado de um sistema (o que está cadastrado, quanto falta, se já foi feito), CONSULTE com um GET e responda a partir do que voltou. Se a chamada falhar, diga que não conseguiu confirmar — não invente.',
+        'Makes an HTTP request to the API of a system that YOU published (the app runs on the user\'s subdomain). '
+        + 'This is how you READ and WRITE the data of a system of yours: create/edit/delete records, query what is there, check totals. '
+        + 'The `caminho` is relative to the app root (e.g.: "api/contas", "api/status") — no leading slash, no domain. '
+        + 'Use GET to read and POST/PUT/PATCH/DELETE to change; send the body as a JSON object. '
+        + 'INTERNAL AUTHENTICATION (automatic): for INTERNAL ROUTES of your OWN app (the ones the app protects with the INTERNAL_API_KEY secret, typically under /api/internal/...), the platform already signs the call for you with the x-internal-key header — do NOT try to guess or send the secret value, it is impossible for you to have it and you do not need it. Only use `cabecalhos` for other authentication that you defined yourself. '
+        + 'If the app is PRIVATE (platform username/password gate), the call is also already authenticated automatically — do not send Authorization by hand nor worry about a 401 because of the gate. '
+        + 'SOURCE OF TRUTH RULE (mandatory): the system/database is the truth, NOT your memory of the conversation. '
+        + 'NEVER say that you created, edited, deleted or that it "is already there" without having called this tool and seen the response confirm it. '
+        + 'Before stating the state of a system (what is registered, how much is left, whether it was already done), QUERY with a GET and answer from what came back. If the call fails, say you could not confirm — do not make it up.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do sistema publicado (ex: "contas").' },
-          caminho: { type: 'string', description: 'caminho relativo à raiz do app (ex: "api/contas"). Sem barra inicial nem domínio.' },
-          metodo: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'método HTTP (padrão GET).' },
-          corpo: { type: 'object', description: 'OPCIONAL. Corpo JSON da requisição (objeto) pra POST/PUT/PATCH.' },
-          cabecalhos: { type: 'object', description: 'OPCIONAL. Cabeçalhos extras (ex: {"Authorization":"Basic ..."}) quando o app exige auth.' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: nome/e-mail do contato conectado dono de um sistema compartilhado com você. Deixe vazio pros seus próprios sistemas.' },
+          nome_do_sistema: { type: 'string', description: 'slug of the published system (e.g.: "contas").' },
+          caminho: { type: 'string', description: 'path relative to the app root (e.g.: "api/contas"). No leading slash nor domain.' },
+          metodo: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'HTTP method (default GET).' },
+          corpo: { type: 'object', description: 'OPTIONAL. JSON request body (object) for POST/PUT/PATCH.' },
+          cabecalhos: { type: 'object', description: 'OPTIONAL. Extra headers (e.g.: {"Authorization":"Basic ..."}) when the app requires auth.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: name/e-mail of the connected contact who owns a system shared with you. Leave empty for your own systems.' },
         },
         required: ['nome_do_sistema', 'caminho'],
       },
@@ -2129,12 +2129,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'parar_sistema',
-      description: 'Para (coloca pra dormir) um sistema publicado. Ele volta a ligar sozinho no próximo acesso.',
+      description: 'Stops (puts to sleep) a published system. It turns back on by itself on the next access.',
       parameters: {
         type: 'object',
         properties: {
           nome_do_sistema: { type: 'string' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: ['nome_do_sistema'],
       },
@@ -2151,12 +2151,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'reiniciar_sistema',
-      description: 'Reinicia um sistema publicado (útil depois de mexer no app ou se ele travou).',
+      description: 'Restarts a published system (useful after changing the app or if it froze).',
       parameters: {
         type: 'object',
         properties: {
           nome_do_sistema: { type: 'string' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: ['nome_do_sistema'],
       },
@@ -2174,8 +2174,8 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'apagar_sistema',
       description:
-        'Apaga DE VEZ um sistema publicado: remove o container, o código, o histórico de versões E os DADOS que o app guardou (o /app/data, que não vai em snapshot nem em git). Não dá pra desfazer nem restaurar. '
-        + 'AÇÃO CONFIRMADA: antes de executar, o usuário vê quantos registros vão ser destruídos e tem que confirmar por escrito.',
+        'Deletes a published system FOR GOOD: removes the container, the code, the version history AND the DATA the app stored (the /app/data, which is not in any snapshot nor in git). It cannot be undone or restored. '
+        + 'CONFIRMED ACTION: before executing, the user sees how many records will be destroyed and must confirm in writing.',
       parameters: {
         type: 'object',
         properties: { nome_do_sistema: { type: 'string' } },
@@ -2211,13 +2211,13 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'ver_logs_sistema',
-      description: 'Mostra as últimas linhas de log de um sistema publicado (útil pra debugar quando ele não sobe ou dá erro).',
+      description: 'Shows the last log lines of a published system (useful for debugging when it does not start or throws errors).',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário).' },
-          linhas: { type: 'number', description: 'quantas linhas (padrão 100, máx 500)' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app).' },
+          linhas: { type: 'number', description: 'how many lines (default 100, max 500)' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: [],
       },
@@ -2235,14 +2235,14 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'ver_historico',
       description:
-        'Mostra o HISTÓRICO de versões de um sistema publicado. Cada publicação vira uma versão (commit) com autor, data e mensagem. '
-        + 'Use pra ver o que mudou ao longo do tempo e pegar o identificador (hash) de uma versão pra ver o diff (ver_diff) ou voltar pra ela (voltar_versao).',
+        'Shows the version HISTORY of a published system. Each publish becomes a version (commit) with author, date and message. '
+        + 'Use it to see what changed over time and get the identifier (hash) of a version to see its diff (ver_diff) or go back to it (voltar_versao).',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário).' },
-          limite: { type: 'number', description: 'quantas versões listar (padrão 20, máx 100)' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app).' },
+          limite: { type: 'number', description: 'how many versions to list (default 20, max 100)' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: [],
       },
@@ -2262,14 +2262,14 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'ver_diff',
       description:
-        'Mostra o que MUDOU numa versão de um sistema (o diff do commit): quais arquivos e linhas mudaram. '
-        + 'Passe o identificador (hash) da versão que veio de ver_historico; sem versão, mostra a última.',
+        'Shows what CHANGED in a version of a system (the commit diff): which files and lines changed. '
+        + 'Pass the identifier (hash) of the version that came from ver_historico; without a version, shows the latest.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'OPCIONAL se você já está mexendo num app nesta conversa: quando vazio, usa o app em que você mexeu por último (ou o único rascunho/app do usuário).' },
-          versao: { type: 'string', description: 'OPCIONAL. Hash da versão (de ver_historico). Padrão: a última.' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          nome_do_sistema: { type: 'string', description: 'OPTIONAL if you are already working on an app in this conversation: when empty, uses the app you worked on last (or the user\'s only draft/app).' },
+          versao: { type: 'string', description: 'OPTIONAL. Version hash (from ver_historico). Default: the latest.' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: [],
       },
@@ -2287,16 +2287,16 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'voltar_versao',
       description:
-        'Reverte um sistema publicado para uma VERSÃO anterior do código (rollback). O app volta a rodar no código daquela versão; '
-        + 'o DADO de runtime em /app/data é PRESERVADO (o rollback é só do código). '
-        + 'Isso cria uma nova versão no histórico marcando o retorno (não apaga o histórico). '
-        + 'Passe o identificador (hash) da versão que veio de ver_historico. AÇÃO CONFIRMADA antes de executar.',
+        'Reverts a published system to a previous code VERSION (rollback). The app runs again on the code of that version; '
+        + 'the runtime DATA in /app/data is PRESERVED (the rollback is code only). '
+        + 'This creates a new version in the history marking the return (it does not erase the history). '
+        + 'Pass the identifier (hash) of the version that came from ver_historico. CONFIRMED ACTION before executing.',
       parameters: {
         type: 'object',
         properties: {
           nome_do_sistema: { type: 'string' },
-          versao: { type: 'string', description: 'hash da versão pra voltar (de ver_historico).' },
-          dono: { type: 'string', description: 'OPCIONAL. Só pra COLABORAÇÃO: dono do sistema compartilhado com você. Vazio = seus sistemas.' },
+          versao: { type: 'string', description: 'hash of the version to go back to (from ver_historico).' },
+          dono: { type: 'string', description: 'OPTIONAL. Only for COLLABORATION: owner of the system shared with you. Empty = your systems.' },
         },
         required: ['nome_do_sistema', 'versao'],
       },
@@ -2337,15 +2337,15 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'convidar_colaborador',
       description:
-        'COLABORAÇÃO (Modo B): libera um sistema SEU pra um contato CONECTADO mexer na MESMA instância '
-        + '(mesmo código, MESMOS dados, mesmo container). O Bramb do colaborador passa a poder editar/publicar o código e operar os dados do sistema, passando "dono" (você) nas tools de sistema. '
-        + 'ATENÇÃO: isso dá ao colaborador ACESSO AOS DADOS deste sistema. Só convide quem você confia. O colaborador NÃO ganha uma cópia; ele opera a SUA instância (billing continua por dono). '
-        + 'Pré-requisito: já estar CONECTADO com a pessoa (Conexões › Contatos, convite aceito). AÇÃO CONFIRMADA antes de executar.',
+        'COLLABORATION (Mode B): opens a system of YOURS for a CONNECTED contact to work on the SAME instance '
+        + '(same code, SAME data, same container). The collaborator\'s Bramb becomes able to edit/publish the code and operate the system data, passing "dono" (you) in the system tools. '
+        + 'ATTENTION: this gives the collaborator ACCESS TO THE DATA of this system. Only invite people you trust. The collaborator does NOT get a copy; they operate YOUR instance (billing stays per owner). '
+        + 'Prerequisite: already being CONNECTED with the person (Conexões › Contatos, invite accepted). CONFIRMED ACTION before executing.',
       parameters: {
         type: 'object',
         properties: {
-          nome_do_sistema: { type: 'string', description: 'slug do SEU sistema a compartilhar.' },
-          contato: { type: 'string', description: 'nome ou e-mail do contato conectado que vai colaborar.' },
+          nome_do_sistema: { type: 'string', description: 'slug of YOUR system to share.' },
+          contato: { type: 'string', description: 'name or e-mail of the connected contact who will collaborate.' },
         },
         required: ['nome_do_sistema', 'contato'],
       },
@@ -2367,7 +2367,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'listar_colaboradores',
-      description: 'Lista quem tem acesso de COLABORAÇÃO (Modo B) a um sistema SEU.',
+      description: 'Lists who has COLLABORATION access (Mode B) to a system of YOURS.',
       parameters: {
         type: 'object',
         properties: { nome_do_sistema: { type: 'string' } },
@@ -2384,12 +2384,12 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'remover_colaborador',
-      description: 'Remove o acesso de COLABORAÇÃO de alguém a um sistema SEU. O colaborador deixa de poder editar/operar. Dados e código continuam seus, intactos.',
+      description: 'Removes someone\'s COLLABORATION access to a system of YOURS. The collaborator can no longer edit/operate it. Data and code remain yours, intact.',
       parameters: {
         type: 'object',
         properties: {
           nome_do_sistema: { type: 'string' },
-          contato: { type: 'string', description: 'nome ou e-mail do colaborador a remover.' },
+          contato: { type: 'string', description: 'name or e-mail of the collaborator to remove.' },
         },
         required: ['nome_do_sistema', 'contato'],
       },
@@ -2418,16 +2418,16 @@ export function hostingTools(userId, agentId, opts = {}) {
     {
       name: 'adicionar_na_home',
       description:
-        `Acrescenta um bloco de conteúdo na HOME do subdomínio do usuário (a página raiz https://<subdominio>.${dominioDosApps()}/). `
-        + 'É o "app default": o lugar onde o usuário acessa de qualquer lugar e compartilha com amigos/família. '
-        + 'tipo "texto" (parágrafo/anotação), "html" (bloco HTML pronto, ex: uma tabela ou lista formatada) ou "link".',
+        `Adds a content block to the HOME of the user's subdomain (the root page https://<subdominio>.${dominioDosApps()}/). `
+        + 'It is the "default app": the place the user accesses from anywhere and shares with friends/family. '
+        + 'tipo "texto" (paragraph/note), "html" (ready-made HTML block, e.g.: a table or formatted list) or "link".',
       parameters: {
         type: 'object',
         properties: {
           tipo: { type: 'string', enum: ['texto', 'html', 'link'] },
-          titulo: { type: 'string', description: 'título opcional do bloco' },
-          conteudo: { type: 'string', description: 'para texto/html: o conteúdo. Para link: o texto do link (opcional).' },
-          url: { type: 'string', description: 'obrigatório quando tipo=link' },
+          titulo: { type: 'string', description: 'optional block title' },
+          conteudo: { type: 'string', description: 'for texto/html: the content. For link: the link text (optional).' },
+          url: { type: 'string', description: 'required when tipo=link' },
         },
         required: ['tipo'],
       },
@@ -2445,7 +2445,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'listar_home',
-      description: 'Lista os blocos que estão na home do subdomínio do usuário (com os ids, pra poder remover).',
+      description: 'Lists the blocks on the home of the user\'s subdomain (with their ids, so they can be removed).',
       parameters: { type: 'object', properties: {} },
       async run() {
         const { label } = await resolveLabel(userId);
@@ -2462,7 +2462,7 @@ export function hostingTools(userId, agentId, opts = {}) {
     },
     {
       name: 'remover_da_home',
-      description: 'Remove um bloco da home do subdomínio pelo id (veja os ids em listar_home).',
+      description: 'Removes a block from the subdomain home by id (see the ids in listar_home).',
       parameters: {
         type: 'object',
         properties: { id: { type: 'number' } },

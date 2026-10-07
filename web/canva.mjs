@@ -134,8 +134,8 @@ export function canvaTools({ tokenFn, runSubagent }) {
     parameters: {
       type: 'object',
       properties: {
-        objetivo: { type: 'string', description: `O que fazer no Canva, com todo o contexto (o sub-agente não vê a conversa). Ex: ${exemplo}.` },
-        formato: { type: 'string', description: 'Opcional: como quer a resposta organizada.' },
+        objetivo: { type: 'string', description: `What to do in Canva, with all the context (the sub-agent does not see the conversation). E.g.: ${exemplo}.` },
+        formato: { type: 'string', description: 'Optional: how you want the answer organized.' },
       },
       required: ['objetivo'],
     },
@@ -165,8 +165,8 @@ export function canvaTools({ tokenFn, runSubagent }) {
 
   const tools = [meta({
     nome: 'canva',
-    descricao: 'Consulta o Canva do usuário: procurar designs por nome ou assunto, abrir um design e ler o conteúdo/páginas/notas do apresentador, listar pastas e itens, ver assets, ler comentários e exportar um design existente (PDF, PNG, PPTX...). Use sempre que a pessoa perguntar algo sobre os designs dela. Só LÊ, não altera nada.',
-    exemplo: '"procure os designs de posts do Instagram criados este mês e me diga o título e o link de cada um"',
+    descricao: 'Queries the user\'s Canva: search designs by name or subject, open a design and read its content/pages/presenter notes, list folders and items, view assets, read comments and export an existing design (PDF, PNG, PPTX...). Use whenever the person asks something about their designs. Only READS, changes nothing.',
+    exemplo: '"find the Instagram post designs created this month and tell me the title and link of each one"',
     grupo: 'read',
     system: SYS_READ,
   })];
@@ -174,15 +174,15 @@ export function canvaTools({ tokenFn, runSubagent }) {
   const gated = [
     meta({
       nome: 'canva_criar',
-      descricao: 'CRIA coisa nova no Canva do usuário: um design novo (a partir de uma descrição ou de um brand template), uma cópia de um design, uma pasta, um comentário, ou sobe um arquivo como asset. Descreva o objetivo inteiro num texto só; a criação acontece de uma vez. Não use para ALTERAR um design que já existe (isso é a canva_editar).',
-      exemplo: '"crie um post de Instagram quadrado anunciando a promoção de setembro, com o texto \'50% OFF até 30/09\'"',
+      descricao: 'CREATES something new in the user\'s Canva: a new design (from a description or a brand template), a copy of a design, a folder, a comment, or uploads a file as an asset. Describe the whole objective in a single text; the creation happens all at once. Do not use to MODIFY a design that already exists (that is canva_editar).',
+      exemplo: '"create a square Instagram post announcing the September sale, with the text \'50% OFF até 30/09\'"',
       grupo: 'create',
       system: SYS_CREATE,
     }),
     meta({
       nome: 'canva_editar',
-      descricao: 'ALTERA um design que já existe no Canva do usuário (trocar texto, imagem, cor, mexer em elementos de uma página). Passe o id ou o nome do design e a mudança desejada. A edição roda como transação: ou aplica tudo, ou volta atrás.',
-      exemplo: '"no design ABC123, troque o texto do título para \'Chegou a coleção nova\' e a data do rodapé para 30/09"',
+      descricao: 'MODIFIES a design that already exists in the user\'s Canva (change text, image, color, move elements on a page). Pass the design id or name and the desired change. The edit runs as a transaction: either it applies everything, or it rolls back.',
+      exemplo: '"in design ABC123, change the title text to \'Chegou a coleção nova\' and the footer date to 30/09"',
       grupo: 'edit',
       system: SYS_EDIT,
     }),

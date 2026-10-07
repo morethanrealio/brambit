@@ -69,7 +69,7 @@ export function wikiTools(userId, { fonte = {} } = {}) {
   return [
     {
       name: 'memoria_listar',
-      description: 'Lista as páginas da sua memória de longo prazo sobre o usuário (slug + título). Use pra saber o que você já anotou antes de responder.',
+      description: 'Lists the pages of your long-term memory about the user (slug + title). Use it to know what you have already noted before answering.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const pages = await listWikiPages(userId);
@@ -78,7 +78,7 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     },
     {
       name: 'memoria_ler',
-      description: 'Lê o conteúdo de uma página da memória pelo slug (obtido em memoria_listar).',
+      description: 'Reads the content of a memory page by slug (obtained from memoria_listar).',
       parameters: { type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'] },
       async run({ slug }) {
         const p = await getWikiPage(userId, slug);
@@ -88,8 +88,8 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     {
       name: 'memoria_buscar',
       description: buscaV2Ligada()
-        ? 'Busca na memória do usuário (páginas e fatos, inclusive o histórico do que deixou de valer). Aceita várias palavras, sem precisar de acento nem da forma exata; devolve as linhas mais relevantes com a página onde estão.'
-        : 'Busca por um termo nas páginas da memória do usuário. Devolve páginas com trecho de contexto.',
+        ? 'Searches the user\'s memory (pages and facts, including the history of what is no longer valid). Accepts several words, with no need for accents or the exact form; returns the most relevant lines with the page they are on.'
+        : 'Searches for a term in the user\'s memory pages. Returns pages with a context snippet.',
       parameters: { type: 'object', properties: { termo: { type: 'string' } }, required: ['termo'] },
       async run({ termo }) {
         if (buscaV2Ligada()) {
@@ -102,29 +102,29 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     },
     {
       name: 'memoria_anotar', keepsStepText: true,
-      description: 'Guarda, corrige ou remove FATOS na memória de longo prazo sobre o USUÁRIO (preferências, contexto, pessoas, decisões), um fato por operação, SEM reescrever a página. É o caminho padrão pra memória: use este pra acrescentar ou consertar o que já está anotado. NÃO use pra conversa fiada nem dado efêmero.',
+      description: 'Stores, corrects or removes FACTS in long-term memory about the USER (preferences, context, people, decisions), one fact per operation, WITHOUT rewriting the page. It is the default path for memory: use this to add to or fix what is already noted. Do NOT use it for small talk or ephemeral data.',
       parameters: {
         type: 'object',
         properties: {
           pagina: {
             type: 'string',
-            description: 'Slug da página de destino. "perfil" é o RESUMÃO (só o que define a pessoa e vale em quase toda conversa; tem teto). Detalhe vai pra página de área: '
-              + Object.keys(AREAS).join(', ') + '. Pessoa específica = uma página por pessoa, no formato "pessoa-nome" (ex: "pessoa-ana"). Padrão: "perfil".',
+            description: 'Slug of the target page. "perfil" is the BIG SUMMARY (only what defines the person and applies to almost every conversation; it has a cap). Detail goes to an area page: '
+              + Object.keys(AREAS).join(', ') + '. Specific person = one page per person, in the format "pessoa-nome" (e.g. "pessoa-ana"). Default: "perfil".',
           },
-          add: { type: 'array', items: { type: 'string' }, description: 'Fatos NOVOS, um por item, uma linha curta cada.' },
+          add: { type: 'array', items: { type: 'string' }, description: 'NEW facts, one per item, one short line each.' },
           corrigir: {
             type: 'array',
-            description: 'Correções de fato já anotado (use quando a informação nova CONTRADIZ a antiga).',
+            description: 'Corrections of an already-noted fact (use when the new information CONTRADICTS the old one).',
             items: {
               type: 'object',
               properties: {
-                ancora: { type: 'string', description: 'Trecho LITERAL de uma linha que já existe na página.' },
-                texto: { type: 'string', description: 'A linha corrigida, inteira.' },
+                ancora: { type: 'string', description: 'LITERAL excerpt of a line that already exists on the page.' },
+                texto: { type: 'string', description: 'The corrected line, in full.' },
               },
               required: ['ancora', 'texto'],
             },
           },
-          remover: { type: 'array', items: { type: 'string' }, description: 'Trecho literal das linhas a apagar (só quando o dono pedir).' },
+          remover: { type: 'array', items: { type: 'string' }, description: 'Literal excerpt of the lines to delete (only when the owner asks).' },
         },
       },
       async run({ pagina, add, corrigir, remover }) {
@@ -159,14 +159,14 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     },
     {
       name: 'memoria_atualizar',
-      description: 'Grava ou ATUALIZA um fato que tem UM valor atual e pode mudar com o tempo (onde mora, empresa, cargo, tamanho de roupa, objetivo principal, plano de saúde...), identificado por uma CHAVE estável (assunto). Se já existe fato com essa chave, o antigo sai da página e fica no histórico, em vez de os dois conviverem. Prefira este a memoria_anotar sempre que a informação nova SUBSTITUI uma antiga. Reuse EXATAMENTE a chave que já aparece na lista de fatos do contexto.',
+      description: 'Stores or UPDATES a fact that has ONE current value and can change over time (where they live, company, job title, clothing size, main goal, health plan...), identified by a stable KEY (assunto). If a fact with that key already exists, the old one leaves the page and goes to the history, instead of both coexisting. Prefer this over memoria_anotar whenever the new information REPLACES an old one. Reuse EXACTLY the key that already appears in the context\'s list of facts.',
       parameters: {
         type: 'object',
         properties: {
-          assunto: { type: 'string', description: 'Chave curta e estável do assunto, em snake_case, ex: "cidade_onde_mora", "empresa_atual", "tamanho_camisa".' },
-          valor: { type: 'string', description: 'O fato atual, uma linha curta e autoexplicativa (ex: "Mora em Curitiba").' },
-          pagina: { type: 'string', description: 'Página onde a linha fica. Padrão: a página onde o fato já está, ou "perfil".' },
-          desde: { type: 'string', description: 'Opcional, SÓ se a pessoa disse quando: AAAA-MM-DD, AAAA-MM ou AAAA.' },
+          assunto: { type: 'string', description: 'Short, stable key for the subject, in snake_case, e.g. "cidade_onde_mora", "empresa_atual", "tamanho_camisa".' },
+          valor: { type: 'string', description: 'The current fact, one short self-explanatory line (e.g. "Mora em Curitiba").' },
+          pagina: { type: 'string', description: 'Page where the line goes. Default: the page where the fact already is, or "perfil".' },
+          desde: { type: 'string', description: 'Optional, ONLY if the person said when: YYYY-MM-DD, YYYY-MM or YYYY.' },
         },
         required: ['assunto', 'valor'],
       },
@@ -183,14 +183,14 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     },
     {
       name: 'memoria_resolver_duvida',
-      description: 'Registra a resposta do DONO a uma "dúvida na memória" (assunto em que a memória tem versões que se contradizem, listadas no contexto). Use SÓ depois que o dono respondeu. Se ele confirmou uma das versões listadas, mande opcao com o id dela; se deu um valor novo, mande valor; se disse que nenhuma importa mais, descartar=true.',
+      description: 'Records the OWNER\'s answer to a "dúvida na memória" (a subject where memory has contradicting versions, listed in the context). Use ONLY after the owner has answered. If they confirmed one of the listed versions, send opcao with its id; if they gave a new value, send valor; if they said none matters anymore, descartar=true.',
       parameters: {
         type: 'object',
         properties: {
-          assunto: { type: 'string', description: 'A chave da dúvida, exatamente como aparece no contexto.' },
-          opcao: { type: 'string', description: 'Id da versão que o dono confirmou (ex: "casa:25").' },
-          valor: { type: 'string', description: 'O valor certo nas palavras do dono, uma linha curta, quando não é nenhuma das versões.' },
-          descartar: { type: 'boolean', description: 'true se o dono disse que o assunto não importa mais.' },
+          assunto: { type: 'string', description: 'The key of the open question, exactly as it appears in the context.' },
+          opcao: { type: 'string', description: 'Id of the version the owner confirmed (e.g. "casa:25").' },
+          valor: { type: 'string', description: 'The correct value in the owner\'s words, one short line, when it is none of the versions.' },
+          descartar: { type: 'boolean', description: 'true if the owner said the subject no longer matters.' },
         },
         required: ['assunto'],
       },
@@ -204,14 +204,14 @@ export function wikiTools(userId, { fonte = {} } = {}) {
     },
     {
       name: 'memoria_escrever',
-      description: 'Cria uma página NOVA da memória, ou reescreve uma existente quando o DONO pediu explicitamente pra reorganizar/refazer. Pra só acrescentar ou corrigir um fato, use memoria_anotar (não reescreva a página por causa de um fato novo).',
+      description: 'Creates a NEW memory page, or rewrites an existing one when the OWNER explicitly asked to reorganize/redo it. To just add or correct a fact, use memoria_anotar (do not rewrite the page because of a new fact).',
       parameters: {
         type: 'object',
         properties: {
-          slug: { type: 'string', description: 'Identificador curto da página, ex: "perfil", "marcas", "tamanhos".' },
-          titulo: { type: 'string', description: 'Título legível da página.' },
-          conteudo: { type: 'string', description: 'Corpo em markdown (a página inteira).' },
-          substituir: { type: 'boolean', description: 'true SÓ quando o dono pediu pra reescrever/reorganizar/apagar conteúdo desta página.' },
+          slug: { type: 'string', description: 'Short page identifier, e.g. "perfil", "marcas", "tamanhos".' },
+          titulo: { type: 'string', description: 'Human-readable page title.' },
+          conteudo: { type: 'string', description: 'Body in markdown (the whole page).' },
+          substituir: { type: 'boolean', description: 'true ONLY when the owner asked to rewrite/reorganize/delete content of this page.' },
         },
         required: ['slug', 'conteudo'],
       },

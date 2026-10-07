@@ -6,17 +6,17 @@ const types = {
   pdf: ['application/pdf'], folder: ['application/vnd.google-apps.folder'],
 };
 const quote = value => "'" + value.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
-export const DRIVE_SEARCH_RULE = 'Para localizar um arquivo, comece pelo nome (search_in=name) e pelo tipo pedido (file_type=spreadsheet para planilhas), usando termos curtos em terms como alternativas. A busca inclui Drives compartilhados acessíveis à conta. Não use sintaxe de Google/Gmail/SQL no query: filtros têm campos próprios. Se não encontrar pelo nome, procure no conteúdo mantendo o tipo. Só amplie para todos os tipos se houver motivo. complete=true conclui a consulta delimitada dentro do limite; não varra todo o Drive. Arquivo localizado não exige inventário completo. Não afirme ausência fora das consultas concluídas. Entregue nome e link reais; não abra conteúdo sensível sem necessidade para identificar o arquivo.';
+export const DRIVE_SEARCH_RULE = 'To locate a file, start with the name (search_in=name) and the requested type (file_type=spreadsheet for spreadsheets), using short terms in terms as alternatives. The search includes shared Drives accessible to the account. Do not use Google/Gmail/SQL syntax in query: filters have their own fields. If you do not find it by name, search the content while keeping the type. Only broaden to all types if there is a reason. complete=true completes the bounded query within the limit; do not sweep the whole Drive. A located file does not require a complete inventory. Do not claim absence beyond the completed queries. Deliver the real name and link; do not open sensitive content unless needed to identify the file.';
 export const driveSearchParameters = {
   type: 'object', properties: {
-    query: { type: 'string', description: 'Um termo ou nome literal, sem operadores. Omita ao usar terms ou listar por tipo.' },
-    terms: { type: 'array', maxItems: 8, items: {type:'string'}, description: 'Termos alternativos (OU), por exemplo ["férias","ferias"]. Não combinar com query.' },
-    search_in: { type:'string', enum:['name','content','name_and_content'], description:'Onde procurar. Prefira name para localizar arquivo; content para buscar assunto dentro dele.' },
-    file_type: {type:'string',enum:['any',...Object.keys(types)],description:'Filtro real de tipo. spreadsheet inclui Sheets, Excel e CSV.'},
-    folder_id: {type:'string',description:'Restringe a uma pasta cujo ID foi obtido da ferramenta.'},
-    max: {type:'integer',minimum:1,description:'Resultados por página: padrão 8, máximo 15.'},
-    complete: {type:'boolean',description:'Concluir uma consulta delimitada em até 6 páginas, preservando resultados e qualquer limite restante.'},
-    cursor: {type:'string',description:'Continuação recebida da MESMA consulta; repita todos os filtros. Não reutilize um cursor anterior ao último recebido.'},
+    query: { type: 'string', description: 'One literal term or name, without operators. Omit when using terms or listing by type.' },
+    terms: { type: 'array', maxItems: 8, items: {type:'string'}, description: 'Alternative terms (OR), for example ["férias","ferias"]. Do not combine with query.' },
+    search_in: { type:'string', enum:['name','content','name_and_content'], description:'Where to search. Prefer name to locate a file; content to search for a subject inside it.' },
+    file_type: {type:'string',enum:['any',...Object.keys(types)],description:'Real type filter. spreadsheet includes Sheets, Excel and CSV.'},
+    folder_id: {type:'string',description:'Restricts to a folder whose ID was obtained from the tool.'},
+    max: {type:'integer',minimum:1,description:'Results per page: default 8, maximum 15.'},
+    complete: {type:'boolean',description:'Complete a bounded query in up to 6 pages, preserving results and any remaining limit.'},
+    cursor: {type:'string',description:'Continuation received from the SAME query; repeat all the filters. Do not reuse a cursor older than the last one received.'},
   },
 };
 export function driveSearchQuery(args = {}) {

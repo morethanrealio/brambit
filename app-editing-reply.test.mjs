@@ -44,7 +44,7 @@ test('explicit technical review and non-app conversations keep their delivery co
  assert.equal(createAppBuildJournal().finish('Conversa comum'),'Conversa comum');const text=appTaskReceipt({...ready,modo:'revisao',parecer:[{assunto:'Referências',avaliacao:'nao_verificado',observacao:'Sem teste funcional.'}]},'pt-BR',{technicalDetails:true});assert.ok(text.includes('Revisão estática'));assert.ok(text.includes('Referências'));
 });
 test('server supplies the literal current user message to presentation selection',()=>{
- const code=fs.readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');const statement=code.match(/const appBuildJournal = createAppBuildJournal\(([^;]+)\);/)[1];assert.match(statement,/userRequest:message/);const current='Mostre os detalhes técnicos';let got;new Function('createAppBuildJournal','userLang','message','confirmedToolLog',`createAppBuildJournal(${statement});`)(x=>{got=x;},'pt-BR',current,[]);assert.equal(got.userRequest,current);assert.equal(got.failedPublication,false);
+ const code=fs.readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');const statement=code.match(/const appBuildJournal = createAppBuildJournal\(([^;]+)\);/)[1];assert.match(statement,/userRequest:message/);const current='Mostre os detalhes técnicos';let got;new Function('createAppBuildJournal','userLang','idiomaResposta','message','confirmedToolLog',`createAppBuildJournal(${statement});`)(x=>{got=x;},'pt-BR','pt-BR',current,[]);assert.equal(got.userRequest,current);assert.equal(got.failedPublication,false);
 });
 
 test('edição validada conta ao dono o que mudou e oferece publicar pra testar (caso de 25/09)', () => {

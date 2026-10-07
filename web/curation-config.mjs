@@ -3,16 +3,16 @@ import { normalizeCurationConfig } from './curation-runtime.mjs';
 export const curationToolSchema = {
  type:'object', additionalProperties:false,
  properties:{
-  source:{type:'string',enum:['web','gmail'],description:'Fonte pedida: web pública ou e-mails/newsletters do Gmail conectado. Não substituir uma pela outra.'},
+  source:{type:'string',enum:['web','gmail'],description:'Requested source: public web or emails/newsletters from the connected Gmail. Do not substitute one for the other.'},
   sections:{type:'array',minItems:1,maxItems:8,items:{type:'object',additionalProperties:false,properties:{
    id:{type:'string'},label:{type:'string'},min:{type:'integer',minimum:0,maximum:8},max:{type:'integer',minimum:1,maximum:8},maxAgeDays:{type:'integer',minimum:1,maximum:365}
-  },required:['id','label','min','max','maxAgeDays']},description:'Critérios acordados. Sem seções pedidas, use uma só. Até N significa min=0,max=N; quantidade exata significa min=max. Soma dos máximos até8; acima disso explique o limite, nunca reduza em silêncio.'},
-  summaryBullets:{type:'integer',minimum:1,maximum:3,description:'Tamanho do resumo por item acordado com o dono.'},
-  includeWhy:{type:'boolean',description:'Incluir relevância/impacto somente quando solicitado.'},
+  },required:['id','label','min','max','maxAgeDays']},description:'Agreed criteria. If no sections were requested, use just one. Up to N means min=0,max=N; an exact quantity means min=max. Sum of maximums up to 8; above that explain the limit, never reduce silently.'},
+  summaryBullets:{type:'integer',minimum:1,maximum:3,description:'Summary length per item agreed with the owner.'},
+  includeWhy:{type:'boolean',description:'Include relevance/impact only when requested.'},
   language:{type:'string',enum:['pt-BR','en','es']},
  },required:['source','sections','summaryBullets','includeWhy','language']
 };
-export const curationToolHelp = 'CURADORIAS de artigos/notícias/papers: use tipo="curadoria" e curadoria com os critérios do pedido, em QUALQUER conta. Pergunte só o que falta (fonte, quantidade/período, cadência/canal), aproveitando o contexto. Se sugerir valores, explicite-os na confirmação. Não imponha três seções nem temas fixos. Cada rotina tem uma fonte: web OU Gmail. Não prometa combinar ambas numa configuração que só aceita uma. Fonte Gmail não vira busca web. A plataforma já mantém o histórico dos links entregues e remove repetições; isso não depende da memória da conversa. Resumos de agenda/pendências, orações, preços e monitores checar_monitor NÃO são curadorias. Ao alterar conteúdo de curadoria existente, passe o pedido completo em o_que_fazer e os critérios completos atualizados; listar_rotinas mostra os atuais. Não crie outra rotina nem peça ao dono para ativar proteção/skill.';
+export const curationToolHelp = 'CURATIONS of articles/news/papers: use tipo="curadoria" and curadoria with the request\'s criteria, in ANY account. Ask only what is missing (source, quantity/period, cadence/channel), making use of the context. If you suggest values, make them explicit in the confirmation. Do not impose three sections or fixed topics. Each routine has one source: web OR Gmail. Do not promise to combine both in a configuration that only accepts one. A Gmail source does not turn into a web search. The platform already keeps the history of delivered links and removes repeats; this does not depend on the conversation\'s memory. Summaries of agenda/to-dos, prayers, prices and checar_monitor monitors are NOT curations. When changing the content of an existing curation, pass the complete request in o_que_fazer and the complete updated criteria; listar_rotinas shows the current ones. Do not create another routine nor ask the owner to turn on protection/skill.';
 export function looksLikeCuration(prompt='') {
  const s=String(prompt).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  if(/checar_monitor|triagem|pendencias|ignore newsletters|ignorar newsletters/.test(s)) return false;

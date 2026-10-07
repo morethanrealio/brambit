@@ -40,13 +40,13 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
   return [
     {
       name: 'criar_projeto',
-      description: `Cria um PROJETO de desenvolvimento de verdade: provisiona um workspace real (com Node, git e ferramentas de build) e clona um repositório do GitHub do usuário nele. Use quando o usuário quer DESENVOLVER código num repo (ex: "cria um projeto do meu repo tal", "quero mexer no meu app React"), NÃO para criar um app dentro do ${marca().nome}. Depois de criar, o projeto já fica ATIVO (as ferramentas de coding passam a operar nele).`,
+      description: `Creates a real development PROJECT: provisions a real workspace (with Node, git and build tools) and clones one of the user's GitHub repositories into it. Use when the user wants to DEVELOP code in a repo (e.g. "cria um projeto do meu repo tal", "quero mexer no meu app React"), NOT to create an app inside ${marca().nome}. After creation, the project is already ACTIVE (the coding tools start operating on it).`,
       parameters: {
         type: 'object',
         properties: {
-          nome: { type: 'string', description: 'nome curto do projeto (ex: "app-ios", "site-novo")' },
-          repo: { type: 'string', description: 'repositório a clonar: URL (https://github.com/dono/repo) ou atalho "dono/repo". Opcional (pode criar vazio).' },
-          deploy_target: { type: 'string', enum: ['own_ssh', 'dedicated'], description: 'onde vai publicar depois: "own_ssh" (servidor do próprio usuário, via SSH) ou "dedicated" (nossa infra). Padrão own_ssh.' },
+          nome: { type: 'string', description: 'short project name (e.g. "app-ios", "site-novo")' },
+          repo: { type: 'string', description: 'repository to clone: URL (https://github.com/dono/repo) or shorthand "dono/repo". Optional (can be created empty).' },
+          deploy_target: { type: 'string', enum: ['own_ssh', 'dedicated'], description: 'where it will be published later: "own_ssh" (the user\'s own server, via SSH) or "dedicated" (our infra). Default own_ssh.' },
         },
         required: ['nome'],
       },
@@ -79,7 +79,7 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
     },
     {
       name: 'listar_projetos',
-      description: 'Lista os projetos de desenvolvimento do usuário e marca qual está ativo agora.',
+      description: 'Lists the user\'s development projects and marks which one is active now.',
       parameters: { type: 'object', properties: {}, required: [] },
       async run() {
         const list = await listProjects(userId);
@@ -91,11 +91,11 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
     },
     {
       name: 'entrar_projeto',
-      description: 'Entra num projeto existente: garante que o workspace está de pé e passa a operar nele com as ferramentas de coding. Aceita o nome ou o id do projeto.',
+      description: 'Enters an existing project: makes sure the workspace is up and starts operating on it with the coding tools. Accepts the project name or id.',
       parameters: {
         type: 'object',
         properties: {
-          projeto: { type: 'string', description: 'nome ou id do projeto' },
+          projeto: { type: 'string', description: 'project name or id' },
         },
         required: ['projeto'],
       },
@@ -115,7 +115,7 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
     },
     {
       name: 'sair_projeto',
-      description: 'Sai do projeto ativo. Depois disso as ferramentas de coding voltam a exigir host explícito (servidor do usuário).',
+      description: 'Leaves the active project. After that, the coding tools again require an explicit host (the user\'s server).',
       parameters: { type: 'object', properties: {}, required: [] },
       async run() {
         const active = await getActiveProjectForAgent(agentId);
@@ -126,15 +126,15 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
     },
     {
       name: 'configurar_deploy',
-      description: 'Configura o alvo de deploy do projeto ativo: "own_ssh" (servidor do próprio usuário via SSH) ou "dedicated" (nossa infra). Opcionalmente guarda detalhes (host, branch, comando de publish) em config.',
+      description: 'Configures the deploy target of the active project: "own_ssh" (the user\'s own server via SSH) or "dedicated" (our infra). Optionally stores details (host, branch, publish command) in config.',
       parameters: {
         type: 'object',
         properties: {
-          deploy_target: { type: 'string', enum: ['own_ssh', 'dedicated'], description: 'alvo de deploy' },
-          host: { type: 'string', description: 'host do servidor do usuário (só own_ssh)' },
-          usuario: { type: 'string', description: 'usuário de login no servidor (só own_ssh)' },
-          branch: { type: 'string', description: 'branch a publicar' },
-          comando: { type: 'string', description: 'comando de publish no servidor (ex: git pull && systemctl restart app)' },
+          deploy_target: { type: 'string', enum: ['own_ssh', 'dedicated'], description: 'deploy target' },
+          host: { type: 'string', description: 'host of the user\'s server (own_ssh only)' },
+          usuario: { type: 'string', description: 'login user on the server (own_ssh only)' },
+          branch: { type: 'string', description: 'branch to publish' },
+          comando: { type: 'string', description: 'publish command on the server (e.g. git pull && systemctl restart app)' },
         },
         required: [],
       },

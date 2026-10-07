@@ -36,12 +36,12 @@ export function spacesTools(userId, agentId) {
   return [
     {
       name: 'criar_espaco',
-      description: 'Cria um Space: um assunto vivo compartilhável (ex: "plantas", "compras de casa", "viagem ao Chile") onde você e as pessoas que convidar mantêm informação junto, sem precisar de um App com site/código. Use quando o usuário quiser organizar/trocar informação sobre um tema ao longo do tempo. Não é gated (o Space nasce só seu; convidar alguém é outra ação).',
+      description: 'Creates a Space: a shareable living topic (e.g. "plantas", "compras de casa", "viagem ao Chile") where you and the people you invite keep information together, without needing an App with a site/code. Use when the user wants to organize/exchange information about a topic over time. Not gated (the Space starts out yours only; inviting someone is a separate action).',
       parameters: {
         type: 'object',
         properties: {
-          nome: { type: 'string', description: 'Nome curto do Space, ex: "plantas".' },
-          sobre: { type: 'string', description: 'Do que trata e como você deve se comportar nesse assunto (o "manual" do Space). Opcional mas recomendado.' },
+          nome: { type: 'string', description: 'Short Space name, e.g. "plantas".' },
+          sobre: { type: 'string', description: 'What it is about and how you should behave on this topic (the Space\'s "manual"). Optional but recommended.' },
         },
         required: ['nome'],
       },
@@ -54,7 +54,7 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'listar_espacos',
-      description: 'Lista os Spaces que você mantém (seus) e os que participa (de contatos que te convidaram), com um resumo de cada e quantas anotações tem.',
+      description: 'Lists the Spaces you keep (yours) and the ones you take part in (from contacts who invited you), with a summary of each and how many notes it has.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const spaces = await listSpacesForUser(userId);
@@ -70,12 +70,12 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'ler_espaco',
-      description: 'Lê um Space: o que ele trata, quem participa e as últimas anotações. Use antes de responder algo sobre o assunto do Space, pra puxar o dado vivo sob demanda.',
+      description: 'Reads a Space: what it is about, who takes part and the latest notes. Use before answering something about the Space\'s topic, to pull the live data on demand.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          dono: { type: 'string', description: 'Se for Space de um contato (não seu), o nome ou e-mail do dono pra desambiguar. Opcional.' },
+          espaco: { type: 'string', description: 'Space name.' },
+          dono: { type: 'string', description: 'If it is a contact\'s Space (not yours), the owner\'s name or e-mail to disambiguate. Optional.' },
         },
         required: ['espaco'],
       },
@@ -102,14 +102,14 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'anotar_no_espaco',
-      description: 'Grava uma anotação no dado vivo de um Space. ATENÇÃO: escrever aqui é PUBLICAR pra todos os membros do Space (é dado compartilhado, não sua memória privada). Por isso o padrão é NÃO anotar: conversar sobre o tema, discutir cuidados, tirar dúvida ou aprender sobre o assunto fica na conversa privada e NÃO entra no Space. Só use quando (a) o usuário pedir pra registrar/compartilhar, ou (b) for claramente um FATO ou ESTADO compartilhado do assunto real do Space (ex: "temos uma jiboia nova", "reguei hoje", "comprar adubo", uma decisão do casal). Nunca jogue opinião, reflexão ou papo geral aqui. Ao anotar, diga na resposta o que você anotou, pra ficar visível pro usuário. Não é gated (pra não atrapalhar), então a responsabilidade de filtrar é sua.',
+      description: 'Writes a note to a Space\'s live data. WARNING: writing here is PUBLISHING to all Space members (it is shared data, not your private memory). So the default is to NOT write: talking about the topic, discussing care, answering questions or learning about the subject stays in the private conversation and does NOT go into the Space. Only use it when (a) the user asks to record/share, or (b) it is clearly a shared FACT or STATE of the Space\'s actual topic (e.g. "temos uma jiboia nova", "reguei hoje", "comprar adubo", a decision by the couple). Never put opinion, reflection or general chat here. When you write a note, say in the reply what you noted, so it is visible to the user. Not gated (so it does not get in the way), so filtering is your responsibility.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          nota: { type: 'string', description: 'A informação a registrar, em linguagem natural.' },
-          tag: { type: 'string', description: 'Rótulo curto opcional pra agrupar (ex: "rega", "compras").' },
-          dono: { type: 'string', description: 'Se for Space de um contato, o dono pra desambiguar. Opcional.' },
+          espaco: { type: 'string', description: 'Space name.' },
+          nota: { type: 'string', description: 'The information to record, in natural language.' },
+          tag: { type: 'string', description: 'Optional short label for grouping (e.g. "rega", "compras").' },
+          dono: { type: 'string', description: 'If it is a contact\'s Space, the owner to disambiguate. Optional.' },
         },
         required: ['espaco', 'nota'],
       },
@@ -125,12 +125,12 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'configurar_espaco',
-      description: 'Ajusta o MODO de compartilhamento de um Space seu: "auto" (você, o assistente, decide o que registrar: fato/estado compartilhado ou a pedido) ou "manual" (você NUNCA anota por conta própria; só registra quando o dono pedir explicitamente "anota isso no Space"). Só o dono do Space muda o modo. Também dá pra mudar na seção Spaces (dentro da aba Conexões) da interface.',
+      description: 'Sets the sharing MODE of a Space of yours: "auto" (you, the assistant, decide what to record: shared fact/state or on request) or "manual" (you NEVER write on your own; only record when the owner explicitly asks "anota isso no Space"). Only the Space owner changes the mode. It can also be changed in the Spaces section (inside the Conexões tab) of the interface.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          modo: { type: 'string', enum: ['auto', 'manual'], description: '"auto" = o assistente decide; "manual" = só anota a pedido explícito.' },
+          espaco: { type: 'string', description: 'Space name.' },
+          modo: { type: 'string', enum: ['auto', 'manual'], description: '"auto" = the assistant decides; "manual" = only writes on explicit request.' },
         },
         required: ['espaco', 'modo'],
       },
@@ -149,15 +149,15 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'editar_nota',
-      description: 'Edita uma anotação existente de um Space (corrige o texto ou muda a tag). O nota_id vem do campo "id" que ler_espaco devolve em cada anotação. Só o autor da nota ou o dono do Space pode editar.',
+      description: 'Edits an existing note in a Space (fixes the text or changes the tag). The nota_id comes from the "id" field that ler_espaco returns for each note. Only the note\'s author or the Space owner can edit.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          nota_id: { type: 'string', description: 'O id da anotação (campo "id" retornado por ler_espaco).' },
-          nova_nota: { type: 'string', description: 'Novo texto da anotação. Opcional se só for mudar a tag.' },
-          tag: { type: 'string', description: 'Nova tag. Opcional.' },
-          dono: { type: 'string', description: 'Se for Space de um contato, o dono pra desambiguar. Opcional.' },
+          espaco: { type: 'string', description: 'Space name.' },
+          nota_id: { type: 'string', description: 'The note id ("id" field returned by ler_espaco).' },
+          nova_nota: { type: 'string', description: 'New note text. Optional if only changing the tag.' },
+          tag: { type: 'string', description: 'New tag. Optional.' },
+          dono: { type: 'string', description: 'If it is a contact\'s Space, the owner to disambiguate. Optional.' },
         },
         required: ['espaco', 'nota_id'],
       },
@@ -190,13 +190,13 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'apagar_nota',
-      description: 'Apaga uma anotação de um Space. O nota_id vem do campo "id" que ler_espaco devolve. Só o autor da nota ou o dono do Space pode apagar.',
+      description: 'Deletes a note from a Space. The nota_id comes from the "id" field that ler_espaco returns. Only the note\'s author or the Space owner can delete.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          nota_id: { type: 'string', description: 'O id da anotação (campo "id" retornado por ler_espaco).' },
-          dono: { type: 'string', description: 'Se for Space de um contato, o dono pra desambiguar. Opcional.' },
+          espaco: { type: 'string', description: 'Space name.' },
+          nota_id: { type: 'string', description: 'The note id ("id" field returned by ler_espaco).' },
+          dono: { type: 'string', description: 'If it is a contact\'s Space, the owner to disambiguate. Optional.' },
         },
         required: ['espaco', 'nota_id'],
       },
@@ -214,12 +214,12 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'sair_do_espaco',
-      description: 'Sai de um Space do qual você é MEMBRO (deixa de ver e anotar nele). O dono não pode sair do próprio Space; nesse caso o Space teria que ser apagado (não suportado ainda).',
+      description: 'Leaves a Space you are a MEMBER of (stops seeing and writing to it). The owner cannot leave their own Space; in that case the Space would have to be deleted (not supported yet).',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do Space.' },
-          dono: { type: 'string', description: 'O dono do Space, pra desambiguar (já que é um Space de outra pessoa).' },
+          espaco: { type: 'string', description: 'Space name.' },
+          dono: { type: 'string', description: 'The Space owner, to disambiguate (since it is someone else\'s Space).' },
         },
         required: ['espaco'],
       },
@@ -235,12 +235,12 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'remover_do_espaco',
-      description: 'Remove um membro de um Space SEU (ele deixa de ver e anotar). Só o dono do Space pode remover gente.',
+      description: 'Removes a member from a Space of YOURS (they stop seeing and writing). Only the Space owner can remove people.',
       parameters: {
         type: 'object',
         properties: {
-          espaco: { type: 'string', description: 'Nome do seu Space.' },
-          contato: { type: 'string', description: 'Nome ou e-mail do membro a remover.' },
+          espaco: { type: 'string', description: 'Name of your Space.' },
+          contato: { type: 'string', description: 'Name or e-mail of the member to remove.' },
         },
         required: ['espaco', 'contato'],
       },
@@ -267,12 +267,12 @@ export function spacesTools(userId, agentId) {
 export function spaceInviteTool(userId, agentId) {
   return {
     name: 'convidar_para_espaco',
-    description: 'Convida um contato conectado a participar de um Space SEU (ele passa a ver e anotar no dado vivo do Space). Precisa de conexão aceita entre vocês. Ação sensível: alcança outra pessoa, então passa por confirmação.',
+    description: 'Invites a connected contact to join a Space of YOURS (they start seeing and writing to the Space\'s live data). Requires an accepted connection between you. Sensitive action: it reaches another person, so it goes through confirmation.',
     parameters: {
       type: 'object',
       properties: {
-        espaco: { type: 'string', description: 'Nome do seu Space.' },
-        contato: { type: 'string', description: 'Nome ou e-mail do contato conectado a convidar.' },
+        espaco: { type: 'string', description: 'Name of your Space.' },
+        contato: { type: 'string', description: 'Name or e-mail of the connected contact to invite.' },
       },
       required: ['espaco', 'contato'],
     },
