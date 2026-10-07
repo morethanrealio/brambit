@@ -15,6 +15,11 @@ Changes merged since the last tag go under "Unreleased".
   English, like the main prompt. Quoted examples of what a person says,
   enum values and labels shown to people are unchanged, and the model still
   answers in the person's language.
+- The prompts of the sub-agents that run inside a turn (research, Google,
+  connectors, Nuvemshop, Canva, spreadsheet analysis and editing, coding and
+  apps), the emergency-mode note and the core recovery notes are in English.
+  Parsed markers (`EVIDENCIA:`, the clarification sentinel) and the fallback
+  texts that reach people are unchanged.
 
 ## [0.2.5] - 2026-10-07
 

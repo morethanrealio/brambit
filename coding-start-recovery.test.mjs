@@ -34,7 +34,7 @@ for (const [bad,code] of [
  const f=providerFor([{message:{tool_calls:[tc('construir_app',{},'valid'),bad]}},{message:{tool_calls:[tc()]}},{message:{content:'Rascunho pronto; publicação não executada.'}}]);
  const events=[];const r=await runAgent({provider:f.p,tools:reg,userInput,system:'fixture',maxSteps:5,onEvent:e=>events.push(e)});
  eq(runs,1);eq(f.calls,3);eq(r.usages.length,3);eq(events.find(e=>e.type==='provider_protocol_error').code,code);
- ok(f.bodies[1].messages[0].content.includes('recuperação de protocolo'));ok(f.bodies[1].messages.some(m=>m.content===userInput));
+ ok(f.bodies[1].messages[0].content.includes('protocol recovery'));ok(f.bodies[1].messages.some(m=>m.content===userInput));
  eq(r.messages.at(-1).content,r.text);ok(!r.text.includes('inválida'));
 }
 // Non-array calls and unstructured markup are typed; output length rejects the entire batch and permits one bounded core repair.
@@ -56,7 +56,7 @@ for (const account of ['fixture-account-A','fixture-account-B']) {
  let runs=0;const reg=new ToolRegistry().add({name:'construir_app',parameters:{type:'object'},run:async args=>{runs++;ok(args.objetivo.includes('coop'));ok(args.objetivo.includes('pontos individuais'));return 'Rascunho feito; nada publicado.';}});
  const f=providerFor([{message:{content:promise}},{message:{tool_calls:[tc()]}},{message:{content:'Lobby no rascunho, solo preservado. Posso publicar?'}}]);const events=[];
  const r=await runAgent({provider:f.p,tools:reg,userInput,system:account,onEvent:e=>events.push(e)});
- eq(runs,1);eq(f.calls,3);ok(f.bodies[1].messages[0].content.includes('resposta ainda NÃO enviada'));ok(f.bodies[1].messages.some(m=>m.content===userInput));
+ eq(runs,1);eq(f.calls,3);ok(f.bodies[1].messages[0].content.includes('answer NOT sent yet'));ok(f.bodies[1].messages.some(m=>m.content===userInput));
  eq(events.filter(e=>e.type==='coding_promise_blocked').length,1);ok(!events.some(e=>['end','assistant'].includes(e.type)&&e.text===promise));ok(!r.messages.some(m=>m.content===promise));eq(r.messages.at(-1).content,r.text);
 }
 // Failed repair cannot create infinite promises; no fake background job.

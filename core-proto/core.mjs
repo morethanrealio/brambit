@@ -291,7 +291,7 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   let unsafeToolAttempted = initialToolLog.some(c => tools.providerFallbackSafe?.(c.name) !== true);
   let creditFailovers = 0;
   const MAX_CREDIT_FAILOVERS = 2; // primary -> Gemini -> OpenAI
-  const ANSWER_ONLY = '\n\n[RECUPERAÇÃO DE PROVEDOR] Uma chamada anterior falhou depois que uma ferramenta potencialmente modificadora já foi tentada. Responda ao usuário usando apenas o histórico e os resultados registrados. NÃO chame ferramentas, NÃO repita ações e NÃO afirme que uma ação ocorreu sem um comprovante no histórico.';
+  const ANSWER_ONLY = '\n\n[PROVIDER RECOVERY] An earlier call failed after a tool that may change something had already been attempted. Answer the user using only the history and the recorded results. Do NOT call tools, do NOT repeat actions and do NOT claim an action happened without proof in the history.';
   // Tool turns are provider-specific. In particular, Gemini 3 rejects a
   // functionCall produced by another model because it has no Gemini
   // thoughtSignature. At a cross-provider boundary, flatten each completed
