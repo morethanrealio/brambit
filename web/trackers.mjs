@@ -114,15 +114,15 @@ export function trackersTools(userId, agentId) {
   return [
     {
       name: 'registrar_evento',
-      description: 'Registra um evento datado num "tracker" (um registro contável que o usuário mantém: dias que comeu açúcar, treinos, peso, gasto, cigarros, etc.). USE ISTO, e não a memória em texto, sempre que o usuário pedir pra anotar/marcar/registrar algo que depois ele vai querer CONTAR ou somar por período. Cada chamada grava UMA ocorrência (append-only, não sobrescreve nada). O tracker é criado automaticamente no primeiro registro. IMPORTANTE: só confirme pro usuário ("anotei") DEPOIS de receber o retorno desta tool; nunca diga que anotou sem chamá-la. ATENÇÃO: se o dado parece pertencer a um APP/planilha que o usuário já construiu (ex: ele diz "anota na minha planilha de custos" e existe um app dele de contas/custos), NÃO force um tracker: grave no app ou pergunte a ele qual é. Na dúvida entre um app existente e um acompanhamento novo, pergunte antes de gravar.',
+      description: 'Records a dated event in a "tracker" (a countable log the user keeps: days they ate sugar, workouts, weight, spending, cigarettes, etc.). USE THIS, and not text memory, whenever the user asks to note/mark/record something they will later want to COUNT or sum by period. Each call stores ONE occurrence (append-only, overwrites nothing). The tracker is created automatically on the first record. IMPORTANT: only confirm to the user ("anotei") AFTER receiving this tool\'s result; never say you noted it without calling it. WARNING: if the data seems to belong to an APP/spreadsheet the user already built (e.g. they say "anota na minha planilha de custos" and they have a bills/costs app), do NOT force a tracker: write to the app or ask them which one. When in doubt between an existing app and a new tracker, ask before writing.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', description: 'Nome do registro, ex: "açúcar", "treino", "gasto". Se não existir, é criado.' },
-          data: { type: 'string', description: 'Data do evento. Aceita "YYYY-MM-DD", "hoje", "ontem", "anteontem" ou "dd/mm". Omita para hoje. Resolva relativos ("sexta") para a data ISO você mesmo, usando a data de hoje do contexto.' },
-          valor: { type: 'number', description: 'Quantidade, quando fizer sentido (ex: 40 de gasto, 72.5 de peso, 3 cigarros). Omita para contar 1 ocorrência.' },
-          nota: { type: 'string', description: 'Observação curta opcional (ex: "bombom depois do almoço").' },
-          confirmar_novo: { type: 'boolean', description: 'Use true APENAS depois que o usuário confirmar que é pra criar um acompanhamento NOVO, separado de um app/planilha existente dele. Pula a checagem de colisão com apps e cria o tracker. Não use na primeira tentativa.' },
+          tracker: { type: 'string', description: 'Tracker name, e.g. "açúcar", "treino", "gasto". Created if it does not exist.' },
+          data: { type: 'string', description: 'Event date. Accepts "YYYY-MM-DD", "hoje", "ontem", "anteontem" or "dd/mm". Omit for today. Resolve relative dates ("sexta") to the ISO date yourself, using today\'s date from the context.' },
+          valor: { type: 'number', description: 'Amount, when it makes sense (e.g. 40 of spending, 72.5 of weight, 3 cigarettes). Omit to count 1 occurrence.' },
+          nota: { type: 'string', description: 'Optional short note (e.g. "bombom depois do almoço").' },
+          confirmar_novo: { type: 'boolean', description: 'Use true ONLY after the user confirms they want a NEW tracker, separate from an existing app/spreadsheet of theirs. Skips the collision check with apps and creates the tracker. Do not use on the first attempt.' },
         },
         required: ['tracker'],
       },
@@ -158,15 +158,15 @@ export function trackersTools(userId, agentId) {
     },
     {
       name: 'consultar_evento',
-      description: 'Consulta um tracker e devolve a CONTAGEM pronta (feita em SQL, não estime). Retorna: dias = quantas datas DISTINTAS tiveram evento (use isto pra "quantos dias comeu açúcar"), eventos = nº de ocorrências, soma = total do valor (use pra gasto/quantidade). Passe um "periodo" nomeado OU um intervalo de/até. Use antes de responder qualquer pergunta de contagem sobre um registro do usuário.',
+      description: 'Queries a tracker and returns the ready-made COUNT (done in SQL, do not estimate). Returns: dias = how many DISTINCT dates had an event (use this for "quantos dias comeu açúcar"), eventos = number of occurrences, soma = total of the value (use for spending/amount). Pass a named "periodo" OR a de/ate range. Use before answering any counting question about a user\'s tracker.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', description: 'Nome do registro a consultar.' },
-          periodo: { type: 'string', enum: ['hoje', 'semana', '7dias', '30dias', 'mes', 'tudo'], description: '"semana" = de segunda desta semana até hoje. "mes" = do dia 1 até hoje. Omita ou "tudo" = sem limite.' },
-          de: { type: 'string', description: 'Início do intervalo (YYYY-MM-DD). Ignora "periodo" se usado com "ate".' },
-          ate: { type: 'string', description: 'Fim do intervalo (YYYY-MM-DD).' },
-          detalhar: { type: 'boolean', description: 'Se true, inclui a quebra por dia (quais dias e quanto).' },
+          tracker: { type: 'string', description: 'Name of the tracker to query.' },
+          periodo: { type: 'string', enum: ['hoje', 'semana', '7dias', '30dias', 'mes', 'tudo'], description: '"semana" = from Monday of this week through today. "mes" = from day 1 through today. Omit or "tudo" = no limit.' },
+          de: { type: 'string', description: 'Start of the range (YYYY-MM-DD). Ignores "periodo" if used with "ate".' },
+          ate: { type: 'string', description: 'End of the range (YYYY-MM-DD).' },
+          detalhar: { type: 'boolean', description: 'If true, includes the per-day breakdown (which days and how much).' },
         },
         required: ['tracker'],
       },
@@ -190,7 +190,7 @@ export function trackersTools(userId, agentId) {
     },
     {
       name: 'listar_trackers',
-      description: 'Lista os trackers (registros contáveis) que o usuário mantém, com quantas ocorrências cada um tem e a data do último. Use quando ele perguntar "o que eu registro/acompanho" ou pra saber que registros existem antes de consultar.',
+      description: 'Lists the trackers (countable logs) the user keeps, with how many occurrences each has and the date of the latest. Use when they ask "o que eu registro/acompanho" or to know which trackers exist before querying.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const list = await listTrackers(userId);
@@ -202,12 +202,12 @@ export function trackersTools(userId, agentId) {
     },
     {
       name: 'remover_evento',
-      description: 'Remove ocorrências de um tracker: por uma data específica (apaga o que foi registrado naquele dia) ou por id. Use pra corrigir um lançamento errado ("apaga o açúcar de ontem", "eu não comi na terça"). Não reescreve o resto do histórico.',
+      description: 'Removes occurrences from a tracker: by a specific date (deletes what was recorded that day) or by id. Use to fix a wrong entry ("apaga o açúcar de ontem", "eu não comi na terça"). Does not rewrite the rest of the history.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', description: 'Nome do registro.' },
-          data: { type: 'string', description: 'Data a remover (YYYY-MM-DD, "hoje", "ontem"). Apaga todas as ocorrências desse dia.' },
+          tracker: { type: 'string', description: 'Tracker name.' },
+          data: { type: 'string', description: 'Date to remove (YYYY-MM-DD, "hoje", "ontem"). Deletes all occurrences of that day.' },
         },
         required: ['tracker', 'data'],
       },
@@ -227,11 +227,11 @@ export function trackersTools(userId, agentId) {
     },
     {
       name: 'remover_tracker',
-      description: 'Desativa um tracker inteiro (some da lista; o histórico não é apagado). Use quando o usuário quiser parar de acompanhar um registro.',
+      description: 'Deactivates an entire tracker (it disappears from the list; the history is not deleted). Use when the user wants to stop tracking something.',
       parameters: {
         type: 'object',
         properties: {
-          tracker: { type: 'string', description: 'Nome do registro a desativar.' },
+          tracker: { type: 'string', description: 'Name of the tracker to deactivate.' },
         },
         required: ['tracker'],
       },

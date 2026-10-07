@@ -51,8 +51,8 @@ export function githubTools({ token }) {
   return [
     {
       name: 'github_list_repos',
-      description: 'Lista os repositórios do próprio usuário no GitHub, INCLUINDO os privados e os das organizações dele. Use isto (não a busca) quando ele pedir "meus repositórios" ou quiser ver o que ele tem. Ordena pelos atualizados mais recentemente.',
-      parameters: { type: 'object', properties: { visibility: { type: 'string', description: 'all (padrão), public ou private.' }, max: { type: 'integer', description: 'Padrão 30.' } } },
+      description: 'Lists the user\'s own GitHub repositories, INCLUDING the private ones and those of their organizations. Use this (not search) when they ask for "meus repositórios" or want to see what they have. Sorted by most recently updated.',
+      parameters: { type: 'object', properties: { visibility: { type: 'string', description: 'all (default), public or private.' }, max: { type: 'integer', description: 'Default 30.' } } },
       async run({ visibility = 'all', max = 30 } = {}) {
         const j = await ghReq(token, `/user/repos?visibility=${encodeURIComponent(visibility)}&affiliation=owner,collaborator,organization_member&sort=updated&per_page=${Math.min(max, 100)}`);
         const out = (Array.isArray(j) ? j : []).map((r) => ({ full_name: r.full_name, private: r.private, description: r.description, language: r.language, default_branch: r.default_branch, updated_at: r.updated_at, url: r.html_url }));
@@ -61,8 +61,8 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_read_path',
-      description: 'Lê o conteúdo de um repositório (público ou privado) no caminho dado: se for arquivo, devolve o texto; se for pasta (ou path vazio), lista o que tem dentro. Use pra navegar e ler o código dos repositórios do usuário.',
-      parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string', description: 'Caminho dentro do repo. Vazio = raiz.' }, ref: { type: 'string', description: 'Branch/tag/commit (opcional).' } }, required: ['owner', 'repo'] },
+      description: 'Reads the content of a repository (public or private) at the given path: if it is a file, returns the text; if it is a folder (or empty path), lists what is inside. Use to browse and read the code of the user\'s repositories.',
+      parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string', description: 'Path inside the repo. Empty = root.' }, ref: { type: 'string', description: 'Branch/tag/commit (optional).' } }, required: ['owner', 'repo'] },
       async run({ owner, repo, path = '', ref }) {
         const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
         const j = await ghReq(token, `/repos/${owner}/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}${q}`);
@@ -83,7 +83,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_search_repos',
-      description: 'Busca repositórios no GitHub usando sintaxe de busca. Devolve items com os dados e links. ' + SEARCH_PAGINATION_RULE,
+      description: 'Searches GitHub repositories using search syntax. Returns items with the data and links. ' + SEARCH_PAGINATION_RULE,
       parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1 }, cursor: searchCursorSchema }, required: ['query'] },
       async run({ query, max, cursor } = {}) {
         const page = repoPages.request(query,max,cursor);
@@ -95,7 +95,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_search_issues',
-      description: 'Busca issues e pull requests no GitHub usando sintaxe de busca. Devolve items com os dados e links. ' + SEARCH_PAGINATION_RULE,
+      description: 'Searches GitHub issues and pull requests using search syntax. Returns items with the data and links. ' + SEARCH_PAGINATION_RULE,
       parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1 }, cursor: searchCursorSchema }, required: ['query'] },
       async run({ query, max, cursor } = {}) {
         const page = issuePages.request(query,max,cursor);
@@ -107,7 +107,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_list_issues',
-      description: 'Lista as issues de um repositório. state: open (padrão), closed ou all.',
+      description: 'Lists the issues of a repository. state: open (default), closed or all.',
       parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, state: { type: 'string' }, max: { type: 'integer' } }, required: ['owner', 'repo'] },
       async run({ owner, repo, state = 'open', max = 15 }) {
         const j = await ghReq(token, `/repos/${owner}/${repo}/issues?state=${state}&per_page=${Math.min(max, 30)}`);
@@ -117,7 +117,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_read_issue',
-      description: 'Lê uma issue ou PR pelo número, com corpo e comentários.',
+      description: 'Reads an issue or PR by number, with body and comments.',
       parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' } }, required: ['owner', 'repo', 'number'] },
       async run({ owner, repo, number }) {
         const i = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}`);
@@ -148,7 +148,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_create_issue',
-      description: 'Abre uma issue num repositório. SEMPRE confirme repositório, título e corpo com o usuário ANTES de criar; não crie sem o ok explícito dele.',
+      description: 'Opens an issue in a repository. ALWAYS confirm repository, title and body with the user BEFORE creating; do not create without their explicit ok.',
       parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, labels: { type: 'array', items: { type: 'string' } } }, required: ['owner', 'repo', 'title'] },
       async run({ owner, repo, title, body, labels }) {
         const payload = { title };
@@ -160,7 +160,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_comment_issue',
-      description: 'Comenta numa issue ou PR. SEMPRE confirme o texto com o usuário ANTES de comentar; não comente sem o ok explícito dele.',
+      description: 'Comments on an issue or PR. ALWAYS confirm the text with the user BEFORE commenting; do not comment without their explicit ok.',
       parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' }, body: { type: 'string' } }, required: ['owner', 'repo', 'number', 'body'] },
       async run({ owner, repo, number, body }) {
         const c = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}/comments`, { method: 'POST', body: { body } });
@@ -195,8 +195,8 @@ export function slackTools({ token }) {
   return [
     {
       name: 'slack_search',
-      description: 'Busca mensagens no Slack (ex: from:@joao in:#geral fatura). Devolve items com texto, autor, canal e link; texto longo sinaliza text_truncated. ' + SEARCH_PAGINATION_RULE,
-      parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1, description: 'Página: padrão 10, máximo 20.' }, cursor: searchCursorSchema }, required: ['query'] },
+      description: 'Searches Slack messages (e.g. from:@joao in:#geral fatura). Returns items with text, author, channel and link; long text flags text_truncated. ' + SEARCH_PAGINATION_RULE,
+      parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1, description: 'Page: default 10, maximum 20.' }, cursor: searchCursorSchema }, required: ['query'] },
       async run({ query, max, cursor } = {}) {
         const page = pages.request(query,max,cursor);
         const j = await slReq(token, 'search.messages', { query, count: page.pageSize, page: page.page });
@@ -207,8 +207,8 @@ export function slackTools({ token }) {
     },
     {
       name: 'slack_list_channels',
-      description: 'Lista os canais do Slack (públicos e privados) que o usuário pode ver. Devolve nome e id de cada canal.',
-      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Padrão 50.' } } },
+      description: 'Lists the Slack channels (public and private) the user can see. Returns the name and id of each channel.',
+      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Default 50.' } } },
       async run({ max = 50 }) {
         const j = await slReq(token, 'conversations.list', { types: 'public_channel,private_channel', limit: Math.min(max, 200), exclude_archived: 'true' });
         const out = (j.channels || []).map((c) => ({ id: c.id, name: c.name, is_private: c.is_private, members: c.num_members }));
@@ -217,8 +217,8 @@ export function slackTools({ token }) {
     },
     {
       name: 'slack_history',
-      description: 'Lê as mensagens recentes de um canal do Slack pelo id (use o slack_list_channels pra achar o id).',
-      parameters: { type: 'object', properties: { channel: { type: 'string', description: 'Id do canal (ex: C012AB3CD).' }, max: { type: 'integer', description: 'Padrão 15.' } }, required: ['channel'] },
+      description: 'Reads the recent messages of a Slack channel by id (use slack_list_channels to find the id).',
+      parameters: { type: 'object', properties: { channel: { type: 'string', description: 'Channel id (e.g. C012AB3CD).' }, max: { type: 'integer', description: 'Default 15.' } }, required: ['channel'] },
       async run({ channel, max = 15 }) {
         const j = await slReq(token, 'conversations.history', { channel, limit: Math.min(max, 50) });
         const out = (j.messages || []).map((m) => ({ user: m.user, text: (m.text || '').slice(0, 800), ts: m.ts })).reverse();
@@ -227,8 +227,8 @@ export function slackTools({ token }) {
     },
     {
       name: 'slack_list_users',
-      description: 'Lista os membros do workspace do Slack (nome e id), pra resolver quem é quem nas mensagens.',
-      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Padrão 100.' } } },
+      description: 'Lists the members of the Slack workspace (name and id), to resolve who is who in the messages.',
+      parameters: { type: 'object', properties: { max: { type: 'integer', description: 'Default 100.' } } },
       async run({ max = 100 }) {
         const j = await slReq(token, 'users.list', { limit: Math.min(max, 200) });
         const out = (j.members || []).filter((u) => !u.deleted && !u.is_bot).map((u) => ({ id: u.id, name: u.real_name || u.name, handle: u.name }));
@@ -237,8 +237,8 @@ export function slackTools({ token }) {
     },
     {
       name: 'slack_post_message',
-      description: 'Envia uma mensagem num canal ou DM do Slack, em nome do usuário. Para um CANAL, passe o id do canal (C..., veja slack_list_channels). Para uma DM, passe o id do USUÁRIO (U..., veja slack_list_users) — a tool abre a DM sozinha. Para você mesmo, passe channel="me". NUNCA invente um id de canal/DM. SEMPRE confirme o destino e o texto com o usuário ANTES de enviar; não envie sem o ok explícito dele.',
-      parameters: { type: 'object', properties: { channel: { type: 'string', description: 'Id do canal (C...), id do usuário pra DM (U...), ou "me" pra si mesmo. Nunca inventar.' }, text: { type: 'string' } }, required: ['channel', 'text'] },
+      description: 'Sends a message to a Slack channel or DM, on behalf of the user. For a CHANNEL, pass the channel id (C..., see slack_list_channels). For a DM, pass the USER id (U..., see slack_list_users) — the tool opens the DM by itself. For yourself, pass channel="me". NEVER make up a channel/DM id. ALWAYS confirm the destination and the text with the user BEFORE sending; do not send without their explicit ok.',
+      parameters: { type: 'object', properties: { channel: { type: 'string', description: 'Channel id (C...), user id for a DM (U...), or "me" for oneself. Never make one up.' }, text: { type: 'string' } }, required: ['channel', 'text'] },
       async run({ channel, text }) {
         let ch = String(channel || '').trim();
         // "me"/"eu"/"self" -> resolve o próprio usuário (dono do token).
@@ -475,8 +475,8 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
   return [
     {
       name: 'hotmail_search',
-      description: 'Busca e-mails na conta Hotmail/Outlook do usuário. Com "q" busca por texto (assunto/corpo/remetente); sem "q" traz os mais recentes da caixa de entrada. Devolve messages (id, assunto, remetente, data, prévia), has_more e next_cursor. ' + EMAIL_PAGINATION_RULE,
-      parameters: { type: 'object', properties: { q: { type: 'string', description: 'Texto a buscar (opcional).' }, max: { type: 'integer', minimum: 1, description: 'Tamanho da página: padrão 15, limitado a 30.' }, cursor: emailCursorSchema } },
+      description: 'Searches emails in the user\'s Hotmail/Outlook account. With "q" it searches by text (subject/body/sender); without "q" it brings the most recent ones from the inbox. Returns messages (id, subject, sender, date, preview), has_more and next_cursor. ' + EMAIL_PAGINATION_RULE,
+      parameters: { type: 'object', properties: { q: { type: 'string', description: 'Text to search for (optional).' }, max: { type: 'integer', minimum: 1, description: 'Page size: default 15, capped at 30.' }, cursor: emailCursorSchema } },
       async run({ q = '', max, cursor } = {}) {
         const page = pages.request(q, max, cursor);
         const top = page.pageSize;
@@ -500,7 +500,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'hotmail_read',
-      description: 'Lê um e-mail do Hotmail/Outlook pelo id (use o hotmail_search pra achar o id). Devolve assunto, remetente, destinatários e o corpo do e-mail.',
+      description: 'Reads a Hotmail/Outlook email by id (use hotmail_search to find the id). Returns subject, sender, recipients and the email body.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         const select = 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,webLink';
@@ -523,8 +523,8 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'hotmail_send',
-      description: 'Envia um e-mail pela conta Hotmail/Outlook do usuário. SEMPRE confirme destinatário, assunto e corpo com o usuário ANTES de enviar; não envie sem o ok explícito dele.',
-      parameters: { type: 'object', properties: { to: { type: 'string', description: 'Destinatário(s), separados por vírgula.' }, subject: { type: 'string' }, body: { type: 'string' }, cc: { type: 'string', description: 'Cópia (opcional), separados por vírgula.' } }, required: ['to', 'subject', 'body'] },
+      description: 'Sends an email through the user\'s Hotmail/Outlook account. ALWAYS confirm recipient, subject and body with the user BEFORE sending; do not send without their explicit ok.',
+      parameters: { type: 'object', properties: { to: { type: 'string', description: 'Recipient(s), comma-separated.' }, subject: { type: 'string' }, body: { type: 'string' }, cc: { type: 'string', description: 'CC (optional), comma-separated.' } }, required: ['to', 'subject', 'body'] },
       async run({ to, subject, body, cc }) {
         const rec = (s) => (s || '').split(',').map((x) => x.trim()).filter(Boolean).map((address) => ({ emailAddress: { address } }));
         const message = { subject, body: { contentType: 'Text', content: body }, toRecipients: rec(to) };
@@ -537,8 +537,8 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'outlook_calendar_list',
-      description: 'Lista os eventos das agendas do Outlook do usuário num período. Sem datas, traz os próximos 7 dias. Por padrão lê TODAS as agendas da caixa dele (pessoal, trabalho), não só a padrão; cada evento vem com o campo `agenda` dizendo de qual veio. Passe `agenda` pra restringir a uma só. Devolve id, título, início, fim, local, organizador e convidados. Use pra ver a agenda, achar horário livre ou pegar o id de um evento pra editar/apagar.',
-      parameters: { type: 'object', properties: { inicio: { type: 'string', description: 'Início da janela, ISO (ex 2026-08-12T00:00:00). Padrão: agora.' }, fim: { type: 'string', description: 'Fim da janela, ISO. Padrão: 7 dias à frente.' }, fuso: { type: 'string', description: `Fuso IANA (padrão ${DEFAULT_TZ}).` }, max: { type: 'integer', description: 'Máx de eventos (padrão 25, teto 50).' }, agenda: { type: 'string', description: 'OPCIONAL. Nome de UMA agenda, quando o dono pediu só ela. Omita pra ler todas (o normal).' } } },
+      description: 'Lists the events of the user\'s Outlook calendars in a period. Without dates, brings the next 7 days. By default it reads ALL the calendars in their mailbox (personal, work), not only the default one; each event comes with the `agenda` field saying which one it came from. Pass `agenda` to restrict to a single one. Returns id, title, start, end, location, organizer and attendees. Use to see the calendar, find a free slot or get an event id to edit/delete.',
+      parameters: { type: 'object', properties: { inicio: { type: 'string', description: 'Start of the window, ISO (e.g. 2026-08-12T00:00:00). Default: now.' }, fim: { type: 'string', description: 'End of the window, ISO. Default: 7 days ahead.' }, fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` }, max: { type: 'integer', description: 'Max number of events (default 25, cap 50).' }, agenda: { type: 'string', description: 'OPTIONAL. Name of ONE calendar, when the owner asked only for it. Omit to read all (the normal case).' } } },
       async run({ inicio, fim, fuso, max = 25, agenda } = {}) {
         const tz = fuso || DEFAULT_TZ;
         const {from:startISO,to:endISO}=calendarWindow({inicio,fim,fuso:tz,days:7});
@@ -599,18 +599,18 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'outlook_calendar_create',
-      description: 'Para pedido recorrente, preencha recorrencia e confirme a cadência e o término; nunca substitua por evento único silenciosamente. Cria um evento na agenda do Outlook do usuário. Informe título, início e fim (ISO, ex 2026-08-12T15:00:00). Confirme os detalhes com o usuário ANTES de criar. Pode adicionar local, descrição e convidados; convidados recebem convite da Microsoft.',
+      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Outlook calendar. Provide title, start and end (ISO, e.g. 2026-08-12T15:00:00). Confirm the details with the user BEFORE creating. You can add location, description and attendees; attendees receive an invitation from Microsoft.',
       parameters: { type: 'object', properties: {
         recorrencia: recurrenceSchema,
         titulo: { type: 'string' },
-        inicio: { type: 'string', description: 'Início ISO (ex 2026-08-12T15:00:00).' },
-        fim: { type: 'string', description: 'Fim ISO. Se omitido, 1 hora após o início.' },
-        fuso: { type: 'string', description: `Fuso IANA (padrão ${DEFAULT_TZ}).` },
+        inicio: { type: 'string', description: 'Start ISO (e.g. 2026-08-12T15:00:00).' },
+        fim: { type: 'string', description: 'End ISO. If omitted, 1 hour after the start.' },
+        fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` },
         local: { type: 'string' },
         descricao: { type: 'string' },
-        convidados: { type: 'string', description: 'E-mails separados por vírgula (opcional).' },
-        online: { type: 'boolean', description: 'Se true, cria reunião online (Teams).' },
-        agenda: { type: 'string', description: 'OPCIONAL. Nome da agenda onde criar, quando não for a padrão (use o nome que veio no outlook_calendar_list).' },
+        convidados: { type: 'string', description: 'Comma-separated emails (optional).' },
+        online: { type: 'boolean', description: 'If true, creates an online meeting (Teams).' },
+        agenda: { type: 'string', description: 'OPTIONAL. Name of the calendar to create it in, when it is not the default one (use the name that came in outlook_calendar_list).' },
       }, required: ['titulo', 'inicio'] },
       async run({ titulo, inicio, fim, fuso, local, descricao, convidados, online, agenda, recorrencia }) {
         let repeat;
@@ -641,16 +641,16 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'outlook_calendar_update',
-      description: 'Edita um evento existente da agenda do Outlook (pelo id, obtido no outlook_calendar_list). Só mande os campos que quer mudar. Confirme com o usuário ANTES de editar.',
+      description: 'Edits an existing Outlook calendar event (by id, obtained from outlook_calendar_list). Only send the fields you want to change. Confirm with the user BEFORE editing.',
       parameters: { type: 'object', properties: {
         id: { type: 'string' },
         titulo: { type: 'string' },
-        inicio: { type: 'string', description: 'Novo início ISO.' },
-        fim: { type: 'string', description: 'Novo fim ISO.' },
-        fuso: { type: 'string', description: `Fuso IANA (padrão ${DEFAULT_TZ}).` },
+        inicio: { type: 'string', description: 'New start ISO.' },
+        fim: { type: 'string', description: 'New end ISO.' },
+        fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` },
         local: { type: 'string' },
         descricao: { type: 'string' },
-        convidados: { type: 'string', description: 'Substitui a lista de convidados (e-mails por vírgula).' },
+        convidados: { type: 'string', description: 'Replaces the attendee list (comma-separated emails).' },
       }, required: ['id'] },
       async run({ id, titulo, inicio, fim, fuso, local, descricao, convidados }) {
         const tz = fuso || DEFAULT_TZ;
@@ -668,7 +668,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'outlook_calendar_delete',
-      description: 'Apaga um evento da agenda do Outlook pelo id (obtido no outlook_calendar_list). Ação IRREVERSÍVEL: confirme com o usuário ANTES de apagar. Se o evento tem convidados, eles podem receber o cancelamento.',
+      description: 'Deletes an Outlook calendar event by id (obtained from outlook_calendar_list). IRREVERSIBLE action: confirm with the user BEFORE deleting. If the event has attendees, they may receive the cancellation.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         await msReq(token, `/me/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -677,8 +677,8 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'onedrive_search',
-      description: 'Busca arquivos/pastas no OneDrive por nome/conteúdo. Sem query, lista a raiz. Devolve items com id, nome, tipo, tamanho, data e link; use onedrive_read para ler. ' + SEARCH_PAGINATION_RULE,
-      parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1, description: 'Página: padrão 10, máximo 25.' }, cursor: searchCursorSchema } },
+      description: 'Searches files/folders in OneDrive by name/content. Without query, lists the root. Returns items with id, name, type, size, date and link; use onedrive_read to read. ' + SEARCH_PAGINATION_RULE,
+      parameters: { type: 'object', properties: { query: { type: 'string' }, max: { type: 'integer', minimum: 1, description: 'Page: default 10, maximum 25.' }, cursor: searchCursorSchema } },
       async run({ query = '', max, cursor } = {}) {
         if (semArquivos()) return RECONECTAR_MSG;
         const page = drivePages.request(query,max,cursor);
@@ -693,7 +693,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'onedrive_read',
-      description: 'Lê o conteúdo de um arquivo do OneDrive pelo id (obtido no onedrive_search): PDF, Word (.docx), PowerPoint (.pptx), imagem (extrai o texto) e arquivos de texto/JSON/Markdown. PLANILHA (Excel ou CSV) é aberta no ambiente de análise e volta só a estrutura (abas, colunas, linhas), nunca as células: para qualquer pergunta sobre os dados use analisar_planilha. Para outros formatos binários devolve só os metadados.',
+      description: 'Reads the content of a OneDrive file by id (obtained from onedrive_search): PDF, Word (.docx), PowerPoint (.pptx), image (extracts the text) and text/JSON/Markdown files. A SPREADSHEET (Excel or CSV) is opened in the analysis environment and only the structure comes back (sheets, columns, rows), never the cells: for any question about the data use analisar_planilha. For other binary formats it returns only the metadata.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         if (semArquivos()) return RECONECTAR_MSG;
@@ -744,11 +744,11 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'onedrive_upload',
-      description: `Cria ou atualiza um arquivo de TEXTO (txt, md, csv, json, html) no OneDrive do usuário, sempre dentro da pasta do assistente ("${folderName}") na raiz. Para arquivo BINÁRIO (PDF, imagem, planilha) use onedrive_upload_arquivo. ATUALIZAR NO MESMO LINK: repetir o nome de um arquivo que já está na pasta reescreve o conteúdo dele e o link continua o mesmo; só mude o nome quando o usuário quiser mesmo um arquivo separado. Confirme nome e conteúdo antes.`,
+      description: `Creates or updates a TEXT file (txt, md, csv, json, html) in the user's OneDrive, always inside the assistant's folder ("${folderName}") at the root. For a BINARY file (PDF, image, spreadsheet) use onedrive_upload_arquivo. UPDATE AT THE SAME LINK: repeating the name of a file that is already in the folder rewrites its content and the link stays the same; only change the name when the user really wants a separate file. Confirm name and content first.`,
       parameters: { type: 'object', properties: {
-        nome: { type: 'string', description: 'Nome do arquivo (ex: notas.txt).' },
-        conteudo: { type: 'string', description: 'Conteúdo em texto.' },
-        mimeType: { type: 'string', description: 'MIME do arquivo (padrão text/plain).' },
+        nome: { type: 'string', description: 'File name (e.g. notas.txt).' },
+        conteudo: { type: 'string', description: 'Text content.' },
+        mimeType: { type: 'string', description: 'File MIME type (default text/plain).' },
       }, required: ['nome', 'conteudo'] },
       async run({ nome, conteudo, mimeType = 'text/plain' }) {
         if (semArquivos()) return JSON.stringify({ ok: false, error: RECONECTAR_MSG });
@@ -855,7 +855,7 @@ export function nuvemshopTools({ token, storeId }) {
   return [
     {
       name: 'nuvemshop_loja',
-      description: 'Mostra os dados da loja Nuvemshop conectada (nome, e-mail, moeda, plano, país).',
+      description: 'Shows the data of the connected Nuvemshop store (name, email, currency, plan, country).',
       parameters: { type: 'object', properties: {} },
       async run() {
         const s = await nuvReq(storeId, token, '/store');
@@ -867,8 +867,8 @@ export function nuvemshopTools({ token, storeId }) {
     },
     {
       name: 'nuvemshop_produtos',
-      description: 'Lista os produtos do catálogo da loja, com preço e estoque de cada variante. Use pra ver o catálogo e a situação de estoque. Aceita busca por texto (q).',
-      parameters: { type: 'object', properties: { q: { type: 'string', description: 'Filtrar por nome (opcional).' }, max: { type: 'integer', description: 'Padrão 30 (máx 200).' } } },
+      description: 'Lists the products in the store catalog, with price and stock of each variant. Use to see the catalog and the stock situation. Accepts text search (q).',
+      parameters: { type: 'object', properties: { q: { type: 'string', description: 'Filter by name (optional).' }, max: { type: 'integer', description: 'Default 30 (max 200).' } } },
       async run({ q, max = 30 } = {}) {
         const params = new URLSearchParams({ per_page: String(Math.min(max, 200)), page: '1', fields: 'id,name,published,variants,canonical_url,permalink' });
         if (q) params.set('q', q);
@@ -879,8 +879,8 @@ export function nuvemshopTools({ token, storeId }) {
     },
     {
       name: 'nuvemshop_produto',
-      description: 'Detalha um produto específico da loja pelo id, com todas as variantes, preços e estoque. Use pra conferir o estoque de um item.',
-      parameters: { type: 'object', properties: { id: { type: 'integer', description: 'Id do produto.' } }, required: ['id'] },
+      description: 'Details a specific store product by id, with all variants, prices and stock. Use to check the stock of an item.',
+      parameters: { type: 'object', properties: { id: { type: 'integer', description: 'Product id.' } }, required: ['id'] },
       async run({ id }) {
         const p = await nuvReq(storeId, token, `/products/${id}`);
         return JSON.stringify({ ...productBrief(p), descricao: (nameOf(p.description) || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800) });
@@ -888,8 +888,8 @@ export function nuvemshopTools({ token, storeId }) {
     },
     {
       name: 'nuvemshop_pedidos',
-      description: 'LISTA pedidos da loja (vendas), do mais recente pro mais antigo, com status de pagamento/envio e valor. Use pra VER pedidos recentes ou individuais. Filtra por status (open, closed, cancelled), pagamento (paid, pending...) e data (desde/ate, ISO AAAA-MM-DD). NÃO use pra somar total/faturamento de um período: esta lista é parcial (só os mais recentes) e somar dá número errado; pra isso use nuvemshop_resumo_vendas.',
-      parameters: { type: 'object', properties: { status: { type: 'string' }, payment_status: { type: 'string' }, desde: { type: 'string', description: 'Data mínima de criação, ISO (ex 2026-07-01).' }, ate: { type: 'string', description: 'Data máxima de criação, ISO (inclui o dia inteiro).' }, max: { type: 'integer', description: 'Padrão 30 (máx 200).' } } },
+      description: 'LISTS the store orders (sales), from most recent to oldest, with payment/shipping status and amount. Use to SEE recent or individual orders. Filters by status (open, closed, cancelled), payment (paid, pending...) and date (desde/ate, ISO YYYY-MM-DD). Do NOT use it to sum the total/revenue of a period: this list is partial (only the most recent ones) and summing gives a wrong number; for that use nuvemshop_resumo_vendas.',
+      parameters: { type: 'object', properties: { status: { type: 'string' }, payment_status: { type: 'string' }, desde: { type: 'string', description: 'Minimum creation date, ISO (e.g. 2026-07-01).' }, ate: { type: 'string', description: 'Maximum creation date, ISO (includes the whole day).' }, max: { type: 'integer', description: 'Default 30 (max 200).' } } },
       async run({ status, payment_status, desde, ate, max = 30 } = {}) {
         const per = Math.min(max, 200);
         const params = new URLSearchParams({ per_page: String(per), page: '1', sort_by: 'created-at-descending' });
@@ -912,11 +912,11 @@ export function nuvemshopTools({ token, storeId }) {
     },
     {
       name: 'nuvemshop_resumo_vendas',
-      description: 'RESUMO de VENDAS da loja num período, com os números somados NO CÓDIGO (determinístico, o modelo não soma nada). Pagina TODOS os pedidos do período (não trunca) e devolve faturamento, nº de pedidos, ticket médio, quebra por status de pagamento e por dia. Use SEMPRE que o pedido for um total/relatório de vendas por período (ex: "quanto vendi em agosto", "faturamento da semana", "vendas por dia no mês"). desde/ate em ISO AAAA-MM-DD (ate inclui o dia inteiro).',
+      description: 'Store SALES SUMMARY for a period, with the numbers summed IN CODE (deterministic, the model sums nothing). Pages through ALL the orders in the period (does not truncate) and returns revenue, number of orders, average ticket, breakdown by payment status and by day. ALWAYS use it when the request is a sales total/report for a period (e.g. "quanto vendi em agosto", "faturamento da semana", "vendas por dia no mês"). desde/ate in ISO YYYY-MM-DD (ate includes the whole day).',
       parameters: { type: 'object', properties: {
-        desde: { type: 'string', description: 'Data inicial ISO AAAA-MM-DD (inclusive).' },
-        ate: { type: 'string', description: 'Data final ISO AAAA-MM-DD (inclusive). Padrão: hoje.' },
-        payment_status: { type: 'string', description: 'Opcional: restringe a um status de pagamento (paid, pending...).' },
+        desde: { type: 'string', description: 'Start date ISO YYYY-MM-DD (inclusive).' },
+        ate: { type: 'string', description: 'End date ISO YYYY-MM-DD (inclusive). Default: today.' },
+        payment_status: { type: 'string', description: 'Optional: restricts to one payment status (paid, pending...).' },
       }, required: ['desde'] },
       async run({ desde, ate, payment_status } = {}) {
         const hoje = new Date().toISOString().slice(0, 10);
@@ -972,8 +972,8 @@ export function nuvemshopTools({ token, storeId }) {
     },
     {
       name: 'nuvemshop_pedido',
-      description: 'Detalha um pedido específico pelo id, com itens comprados, cliente, endereço de entrega e valores.',
-      parameters: { type: 'object', properties: { id: { type: 'integer', description: 'Id do pedido.' } }, required: ['id'] },
+      description: 'Details a specific order by id, with purchased items, customer, shipping address and amounts.',
+      parameters: { type: 'object', properties: { id: { type: 'integer', description: 'Order id.' } }, required: ['id'] },
       async run({ id }) {
         const o = await nuvReq(storeId, token, `/orders/${id}`);
         return JSON.stringify({
@@ -1029,7 +1029,7 @@ export function linkedinTools({ token, memberUrn }) {
   return [
     {
       name: 'linkedin_me',
-      description: 'Confirma a conexão do LinkedIn e devolve seu nome e id de membro (author URN). Use pra checar que a conexão está de pé antes de postar.',
+      description: 'Confirms the LinkedIn connection and returns your name and member id (author URN). Use to check that the connection is up before posting.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const who = await linkedinIdentity(await token());
@@ -1039,8 +1039,8 @@ export function linkedinTools({ token, memberUrn }) {
     },
     {
       name: 'linkedin_post',
-      description: 'Publica um post de texto no seu perfil do LinkedIn (opcionalmente com um link). SEMPRE confirme o texto exato com o usuário ANTES de publicar; não poste sem o ok explícito dele. Devolve o id/URN do post criado.',
-      parameters: { type: 'object', properties: { text: { type: 'string', description: 'Texto do post.' }, link: { type: 'string', description: 'URL opcional pra anexar ao post.' }, visibility: { type: 'string', description: 'PUBLIC (padrão) ou CONNECTIONS.' } }, required: ['text'] },
+      description: 'Publishes a text post on your LinkedIn profile (optionally with a link). ALWAYS confirm the exact text with the user BEFORE publishing; do not post without their explicit ok. Returns the id/URN of the created post.',
+      parameters: { type: 'object', properties: { text: { type: 'string', description: 'Post text.' }, link: { type: 'string', description: 'Optional URL to attach to the post.' }, visibility: { type: 'string', description: 'PUBLIC (default) or CONNECTIONS.' } }, required: ['text'] },
       async run({ text, link, visibility = 'PUBLIC' }) {
         const vis = visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
         const share = { shareCommentary: { text }, shareMediaCategory: 'NONE' };

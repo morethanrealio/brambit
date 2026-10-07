@@ -150,23 +150,23 @@ export function createCreditSpend(pool, { unidade = 'creditos' } = {}) {
 // price, so it's the same on the iOS app. By default the assistant gives only
 // the total; per-category split only on request (29/09).
 const O_QUE_MOSTRA = {
-  creditos: 'Mostra quantos créditos foram gastos',
-  usd: 'Mostra quanto foi gasto em US$ (custo real dos modelos e serviços usados)',
+  creditos: 'Shows how many credits were spent',
+  usd: 'Shows how much was spent in US$ (actual cost of the models and services used)',
 };
 const NUMEROS = {
-  creditos: 'Os números são o crédito cobrado de verdade: responda com eles, sem arredondar pra cima nem estimar.',
-  usd: 'Os números são o custo gravado de verdade, em US$: responda com eles, sem arredondar pra cima nem estimar.',
+  creditos: 'The numbers are the credit actually charged: answer with them, without rounding up or estimating.',
+  usd: 'The numbers are the actual recorded cost, in US$: answer with them, without rounding up or estimating.',
 };
 export function ferramentaConsultarGasto({ spend, unidade = 'creditos', userId, agentId, turnId }) {
   return {
     name: 'consultar_gasto',
-    description: `${O_QUE_MOSTRA[unidade]}, com o total e a divisão por categoria (conversa, buscas na web, pesquisas, imagens, rotinas...). Use quando a pessoa perguntar quanto gastou ou quanto custou algo. Por padrão responda SÓ o total; a divisão por categoria é detalhe e só entra se a pessoa perguntar em que foi gasto ou pedir o detalhamento. Dois modos: (1) por período, passando de/ate em AAAA-MM-DD no fuso de Brasília (hoje = de e ate iguais à data de hoje; "ontem", "dia 15", "semana passada" você converte em datas); o total é da conta inteira, somando todos os assistentes; (2) por resposta, passando ultimas_respostas = N pra ver o custo das N últimas respostas SUAS (1 = a resposta anterior a esta, que é o caso de "quanto custou essa busca que você fez"). ${NUMEROS[unidade]}`,
+    description: `${O_QUE_MOSTRA[unidade]}, with the total and the breakdown by category (conversation, web searches, research, images, routines...). Use when the person asks how much they spent or how much something cost. By default answer ONLY the total; the breakdown by category is detail and only comes in if the person asks what it was spent on or asks for the breakdown. Two modes: (1) by period, passing de/ate as YYYY-MM-DD in the Brasília time zone (today = de and ate both equal to today's date; "ontem", "dia 15", "semana passada" you convert into dates); the total is for the whole account, adding up all assistants; (2) by response, passing ultimas_respostas = N to see the cost of YOUR last N responses (1 = the response before this one, which is the case of "quanto custou essa busca que você fez"). ${NUMEROS[unidade]}`,
     parameters: {
       type: 'object',
       properties: {
-        de: { type: 'string', description: 'Data inicial AAAA-MM-DD (modo período).' },
-        ate: { type: 'string', description: 'Data final AAAA-MM-DD, inclusiva (modo período).' },
-        ultimas_respostas: { type: 'integer', minimum: 1, maximum: 20, description: 'Quantas das suas últimas respostas detalhar (modo resposta).' },
+        de: { type: 'string', description: 'Start date YYYY-MM-DD (period mode).' },
+        ate: { type: 'string', description: 'End date YYYY-MM-DD, inclusive (period mode).' },
+        ultimas_respostas: { type: 'integer', minimum: 1, maximum: 20, description: 'How many of your last responses to detail (response mode).' },
       },
       additionalProperties: false,
     },

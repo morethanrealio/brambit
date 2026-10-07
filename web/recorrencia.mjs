@@ -35,14 +35,14 @@ const FREQS = ['diaria', 'semanal', 'mensal', 'anual'];
 // o modelo veja exatamente a mesma forma nos dois conectores.
 export const REPETIR_SCHEMA = {
   type: 'object',
-  description: 'OPCIONAL. Preencha SÓ quando o evento SE REPETE ("toda segunda", "todo dia 14", "todo mês", "a cada 15 dias"). Se o usuário pediu repetição e você NÃO passar este campo, será criado um evento único e o pedido dele não terá sido atendido.',
+  description: 'OPTIONAL. Fill in ONLY when the event REPEATS ("toda segunda", "todo dia 14", "todo mês", "a cada 15 dias"). If the user asked for repetition and you do NOT pass this field, a single event will be created and their request will not have been fulfilled.',
   properties: {
-    frequencia: { type: 'string', enum: FREQS, description: 'diaria, semanal, mensal ou anual.' },
-    intervalo: { type: 'integer', description: 'A cada quantos períodos (padrão 1). Ex: frequencia=semanal + intervalo=2 = a cada duas semanas; frequencia=diaria + intervalo=15 = a cada 15 dias.' },
-    dias_da_semana: { type: 'array', items: { type: 'string', enum: Object.keys(DIAS) }, description: 'Só pra frequencia=semanal. Ex ["seg","qua"]. Se omitido, repete no mesmo dia da semana da data de início.' },
-    dia_do_mes: { type: 'integer', description: 'Só pra frequencia=mensal. Ex 14 = todo dia 14. Se omitido, usa o dia da data de início.' },
-    ate: { type: 'string', description: 'OPCIONAL. Data em que a repetição termina (AAAA-MM-DD). Sem "ate" e sem "ocorrencias", repete sem data final.' },
-    ocorrencias: { type: 'integer', description: 'OPCIONAL. Número total de repetições (alternativa a "ate"). Não use os dois juntos.' },
+    frequencia: { type: 'string', enum: FREQS, description: 'diaria, semanal, mensal or anual.' },
+    intervalo: { type: 'integer', description: 'Every how many periods (default 1). E.g.: frequencia=semanal + intervalo=2 = every two weeks; frequencia=diaria + intervalo=15 = every 15 days.' },
+    dias_da_semana: { type: 'array', items: { type: 'string', enum: Object.keys(DIAS) }, description: 'Only for frequencia=semanal. E.g. ["seg","qua"]. If omitted, repeats on the same weekday as the start date.' },
+    dia_do_mes: { type: 'integer', description: 'Only for frequencia=mensal. E.g. 14 = every 14th. If omitted, uses the day of the start date.' },
+    ate: { type: 'string', description: 'OPTIONAL. Date on which the repetition ends (YYYY-MM-DD). Without "ate" and without "ocorrencias", repeats with no end date.' },
+    ocorrencias: { type: 'integer', description: 'OPTIONAL. Total number of repetitions (alternative to "ate"). Do not use both together.' },
   },
   required: ['frequencia'],
 };

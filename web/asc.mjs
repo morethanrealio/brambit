@@ -123,10 +123,10 @@ export function ascTools({ cred }) {
   return [
     {
       name: 'listar_crashes_testflight',
-      description: 'Lista os crashes do TestFlight (feedback de crash dos testers) do app do usuário no App Store Connect. Só leitura. Use quando o dono perguntar se há crashes. Devolve cada crash com um id, a data, o comentário do tester, device, versão do iOS e build. NÃO baixa o log ainda — o dono escolhe quais processar e aí você usa baixar_crash_testflight. Fluxo sob demanda; nunca processe crash sem o dono pedir.',
+      description: 'Lists the TestFlight crashes (testers\' crash feedback) of the user\'s app in App Store Connect. Read-only. Use when the owner asks whether there are crashes. Returns each crash with an id, the date, the tester\'s comment, device, iOS version and build. Does NOT download the log yet — the owner chooses which ones to process and then you use baixar_crash_testflight. On-demand flow; never process a crash without the owner asking.',
       parameters: { type: 'object', properties: {
-        app: { type: 'string', description: 'Opcional. Nome ou bundle id do app, se a conta tiver mais de um app.' },
-        limite: { type: 'number', description: 'Quantos crashes listar (padrão 20, máx 100), do mais recente pro mais antigo.' },
+        app: { type: 'string', description: 'Optional. App name or bundle id, if the account has more than one app.' },
+        limite: { type: 'number', description: 'How many crashes to list (default 20, max 100), from newest to oldest.' },
       } },
       async run({ app, limite } = {}) {
         const r = await resolveApp(cred, app);
@@ -145,9 +145,9 @@ export function ascTools({ cred }) {
     },
     {
       name: 'baixar_crash_testflight',
-      description: 'Baixa o log completo (simbolicado pela Apple) de um ou mais crashes do TestFlight, pelos ids obtidos em listar_crashes_testflight. Só leitura. Use só nos crashes que o dono escolher. Cada log é grande; baixe no máximo 3 por vez. Retorna o crash log inteiro pra você investigar a causa.',
+      description: 'Downloads the full log (symbolicated by Apple) of one or more TestFlight crashes, by the ids obtained from listar_crashes_testflight. Read-only. Use only on the crashes the owner chooses. Each log is large; download at most 3 at a time. Returns the entire crash log for you to investigate the cause.',
       parameters: { type: 'object', properties: {
-        ids: { type: 'array', items: { type: 'string' }, description: 'Os ids dos crashes a baixar (os que o dono escolheu na lista).' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'The ids of the crashes to download (the ones the owner chose from the list).' },
       }, required: ['ids'] },
       async run({ ids } = {}) {
         const list = (Array.isArray(ids) ? ids : [ids]).map((s) => String(s || '').trim()).filter(Boolean);

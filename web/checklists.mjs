@@ -147,9 +147,9 @@ export function checklistTools({ store, userId, requestId, findExisting = async 
     catch (e) { return JSON.stringify(error('NOT_SAVED', e.message)); }
   };
   return [
-    { name: 'consultar_listas', description: 'Consulta as listas pessoais e seu estado persistente. Sem lista, traz nomes/ids; com nome EXATO ou id, traz itens, quantidades e versão atual. Lista não encontrada não significa lista vazia: confira a fonte antiga indicada na memória antes de criar outra. Listas finalizadas aparecem à parte (finalizadas_recentes) e só recebem itens se reabertas a pedido.',
+    { name: 'consultar_listas', description: 'Queries the personal lists and their persistent state. Without lista, returns names/ids; with EXACT name or id, returns items, quantities and current version. A list not found does not mean an empty list: check the old source indicated in memory before creating another. Finalized lists appear separately (finalizadas_recentes) and only receive items if reopened on request.',
       parameters: { type: 'object', properties: { lista: { type: 'string' } } }, run: wrap(({ lista }) => store.list(userId, lista)) },
-    { name: 'criar_lista', description: 'Cria uma lista pessoal simples, apenas quando solicitada e não houver fonte existente. Para lista que já existe em app/planilha/memória, continue na fonte original. Nunca cria app nem apaga itens de lista existente. Lista finalizada não conta como existente: a compra seguinte ganha lista nova, mesmo com o mesmo nome.',
+    { name: 'criar_lista', description: 'Creates a simple personal list, only when requested and there is no existing source. For a list that already exists in an app/spreadsheet/memory, continue in the original source. Never creates an app nor deletes items from an existing list. A finalized list does not count as existing: the next shopping trip gets a new list, even with the same name.',
       parameters: { type: 'object', properties: { nome: { type: 'string' } }, required: ['nome'] },
       run: wrap(async ({ nome }) => {
         text(nome, 'Nome da lista');
@@ -159,7 +159,7 @@ export function checklistTools({ store, userId, requestId, findExisting = async 
         if (collision) return error('EXISTING_SOURCE', 'Há uma fonte existente. Consulte-a antes de criar uma lista separada.', { fonte: collision });
         return store.create(userId, nome);
       }) },
-    { name: 'editar_lista', description: 'Altera atomicamente UMA lista lida em consultar_listas. Passe id/nome exato, versão e alterações. Adicionar não soma nem duplica item já existente. Atualizar usa id do item e quantidade TOTAL (não incremento); concluido=true dá baixa e false reabre. Para compra parcial, ajuste a quantidade restante. Zerar afeta só a lista explicitamente escolhida; desfazer recupera sua última alteração. Finalizar encerra a lista quando a pessoa diz que terminou (ela sai das listas ativas e o nome fica livre para a próxima); reabrir só a pedido. Nunca adivinhe o alvo, nunca confirme sucesso sem ok:true.',
+    { name: 'editar_lista', description: 'Atomically changes ONE list read in consultar_listas. Pass exact id/name, version and changes. adicionar does not add to or duplicate an already existing item. atualizar uses the item id and the TOTAL quantity (not an increment); concluido=true checks it off and false reopens it. For a partial purchase, adjust the remaining quantity. zerar affects only the explicitly chosen list; desfazer restores your last change. finalizar closes the list when the person says they are done (it leaves the active lists and the name becomes free for the next one); reabrir only on request. Never guess the target, never confirm success without ok:true.',
       parameters: { type: 'object', additionalProperties: false, required: ['lista','versao','acao'], properties: {
         lista: { type: 'string' }, versao: { type: 'integer', minimum: 0 }, acao: { type: 'string', enum: ['itens','zerar','desfazer','finalizar','reabrir'] },
         operacoes: { type: 'array', maxItems: 100, items: { type: 'object', additionalProperties: false, required: ['tipo'], properties: {

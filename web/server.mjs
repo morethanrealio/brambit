@@ -929,25 +929,25 @@ const CONNECTOR_DOMAINS = [
   {
     tool: 'microsoft', label: 'Microsoft (Hotmail/Outlook)',
     reads: new Set(['hotmail_search', 'hotmail_read', 'outlook_calendar_list', 'onedrive_search', 'onedrive_read']),
-    description: 'Consulta a conta MICROSOFT (Hotmail/Outlook) do usuário pra LER e-mails, a AGENDA do Outlook e os ARQUIVOS do OneDrive. Delega a um sub-agente que tem as tools de leitura e devolve só a resposta sintetizada. Use pra CONSULTAS de e-mail ("tenho e-mail novo do fulano no Hotmail?", "resume o último e-mail da X"), de agenda ("o que tenho na agenda do Outlook amanhã?", "tenho horário livre quinta de tarde?") e de arquivo ("acha o contrato no meu OneDrive e resume", "o que tem na planilha de custos do OneDrive?"). NÃO use pra ENVIAR e-mail, CRIAR/EDITAR/APAGAR evento nem SUBIR arquivo (têm tools próprias no agente principal). O sub-agente NÃO vê a conversa: descreva o objetivo com contexto (nomes, datas, o que procurar).',
+    description: 'Queries the user\'s MICROSOFT account (Hotmail/Outlook) to READ emails, the Outlook CALENDAR and OneDrive FILES. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for email QUERIES ("tenho e-mail novo do fulano no Hotmail?", "resume o último e-mail da X"), calendar queries ("o que tenho na agenda do Outlook amanhã?", "tenho horário livre quinta de tarde?") and file queries ("acha o contrato no meu OneDrive e resume", "o que tem na planilha de custos do OneDrive?"). Do NOT use it to SEND email, CREATE/EDIT/DELETE an event or UPLOAD a file (those have their own tools in the main agent). The sub-agent does NOT see the conversation: describe the goal with context (names, dates, what to look for).',
     ex: '"vê na agenda do Outlook os eventos de amanhã e resume horário e título" ou "procura no OneDrive o arquivo de proposta mais recente e resume o conteúdo"',
   },
   {
     tool: 'github', label: 'GitHub',
     reads: new Set(['github_list_repos', 'github_read_path', 'github_search_repos', 'github_search_issues', 'github_list_issues', 'github_read_issue']),
-    description: 'Consulta o GITHUB do usuário pra LER/buscar repositórios, arquivos e issues. Delega a um sub-agente que tem as tools de leitura e devolve só a resposta sintetizada. Use pra CONSULTAS ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). NÃO use pra CRIAR ou COMENTAR issue (tem tool própria no agente principal). O sub-agente NÃO vê a conversa: descreva o objetivo com contexto.',
+    description: 'Queries the user\'s GITHUB to READ/search repositories, files and issues. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). Do NOT use it to CREATE or COMMENT on an issue (that has its own tool in the main agent). The sub-agent does NOT see the conversation: describe the goal with context.',
     ex: '"lista as issues abertas do repo octocat/hello-world com número e título"',
   },
   {
     tool: 'slack', label: 'Slack',
     reads: new Set(['slack_search', 'slack_list_channels', 'slack_history', 'slack_list_users']),
-    description: 'Consulta o SLACK do usuário pra LER/buscar mensagens, canais e pessoas. Delega a um sub-agente que tem as tools de leitura e devolve só a resposta sintetizada. Use pra CONSULTAS ("o que falaram no canal X hoje", "acha mensagens sobre Y", "quem é o fulano"). NÃO use pra POSTAR mensagem (tem tool própria no agente principal). O sub-agente NÃO vê a conversa: descreva o objetivo com contexto.',
+    description: 'Queries the user\'s SLACK to READ/search messages, channels and people. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("o que falaram no canal X hoje", "acha mensagens sobre Y", "quem é o fulano"). Do NOT use it to POST a message (that has its own tool in the main agent). The sub-agent does NOT see the conversation: describe the goal with context.',
     ex: '"traz as últimas 20 mensagens do canal #geral e resume os assuntos"',
   },
   {
     tool: 'nuvemshop', label: 'Nuvemshop (loja)',
     reads: new Set(['nuvemshop_loja', 'nuvemshop_produtos', 'nuvemshop_produto', 'nuvemshop_pedidos', 'nuvemshop_pedido', 'nuvemshop_resumo_vendas']),
-    description: 'Consulta a LOJA Nuvemshop do usuário pra LER dados da loja, catálogo/produtos/estoque e pedidos/vendas. Delega a um sub-agente que tem as tools de leitura e devolve só a resposta sintetizada. Use pra CONSULTAS ("meus produtos com estoque baixo", "últimos pedidos", "quanto vendi em agosto", "faturamento da semana com quebra por dia"). O sub-agente NÃO vê a conversa: descreva o objetivo com contexto (período, o que buscar).',
+    description: 'Queries the user\'s Nuvemshop STORE to READ store data, catalog/products/stock and orders/sales. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("meus produtos com estoque baixo", "últimos pedidos", "quanto vendi em agosto", "faturamento da semana com quebra por dia"). The sub-agent does NOT see the conversation: describe the goal with context (period, what to look for).',
     ex: '"faturamento e nº de pedidos de agosto/2026, com quebra por dia" ou "produtos com estoque abaixo de 5 unidades"',
     // Sistema especializado: força o caminho DETERMINÍSTICO pra relatório de
     // vendas (o resumo pagina tudo e soma no código), evitando o bug de somar
@@ -1746,11 +1746,11 @@ function vaultSaveTool(userId) {
   if (!vaultEnabled()) return [];
   return [{
     name: 'salvar_credencial',
-    description: 'Guarda (ou troca) com segurança uma API key/token no Cofre de credenciais do usuário quando ele JÁ colou a chave no chat por conta própria. NUNCA peça uma chave no chat: segredo em conversa fica gravado no histórico; troca de credencial se orienta pela tela *Conexões › Cofre de credenciais* (ou pelo botão de conectar, quando o serviço tem OAuth). Esta tool existe só pra não deixar solta uma chave que o usuário já mandou: ela cifra no cofre e você avisa pra ele apagar a mensagem. NUNCA repita a chave no chat. Serviços por API key hoje: notion, splitwise, infinity, asaas. Passa por confirmação do usuário antes de gravar.',
+    description: 'Securely stores (or replaces) an API key/token in the user\'s credential Vault when they have ALREADY pasted the key in the chat on their own. NEVER ask for a key in the chat: a secret in a conversation stays recorded in the history; replacing a credential is done through the *Conexões › Cofre de credenciais* screen (or the connect button, when the service has OAuth). This tool exists only so a key the user already sent is not left lying around: it encrypts it in the vault and you tell them to delete the message. NEVER repeat the key in the chat. Services by API key today: notion, splitwise, infinity, asaas. Goes through user confirmation before saving.',
     parameters: { type: 'object', properties: {
-      servico: { type: 'string', description: 'Nome do serviço, ex: "splitwise", "notion", "asaas".' },
-      chave: { type: 'string', description: 'A API key/token que o usuário forneceu.' },
-      tipo: { type: 'string', description: 'Tipo da credencial: "apikey" (padrão), "token" ou "basic".' },
+      servico: { type: 'string', description: 'Service name, e.g. "splitwise", "notion", "asaas".' },
+      chave: { type: 'string', description: 'The API key/token the user provided.' },
+      tipo: { type: 'string', description: 'Credential type: "apikey" (default), "token" or "basic".' },
     }, required: ['servico', 'chave'] },
     async run({ servico, chave, tipo = 'apikey' } = {}) {
       const provider = String(servico || '').trim().toLowerCase();
@@ -3019,15 +3019,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }
   const confirmationSession = currentConfirmationSession(thread.id);
   if (confirmationSession) confirmationSession.context = { ...confirmationSession.context, googleEmail:gEmail, country:userCountry, timeZone:userTz, agentName:agent.name || null, authorizations:await getConfirmationAuthorizationContext(userId) };
-  registry.add({name:'consultar_programacao',description:'Consulta o andamento real da tarefa de programação desta conversa sem interromper o trabalho.',parameters:{type:'object',properties:{}},run:()=>codingJobs.status(codingIdentity)});
+  registry.add({name:'consultar_programacao',description:'Checks the real progress of this conversation\'s programming task without interrupting the work.',parameters:{type:'object',properties:{}},run:()=>codingJobs.status(codingIdentity)});
   if (discovery.participant || opts.confirmationRestore?.name?.startsWith('jornada_')) {
     const journeyTools = conversationTools(discoveryStore, {user:userId, agent:agent.id, message, thread:thread.id, channel:kind==='telegram'?'telegram':kind==='whatsapp'?'whatsapp':'app', validateChannel:validateDiscoveryChannel});
     for (const tool of journeyTools.direct) registry.add(tool);
     addGated(registry, journeyTools.gated, thread.id);
   }
   if(discovery.source) {
-    registry.add({name:'jornada_anotar',description:'Guarda até três anotações ancoradas em trecho literal da mensagem atual. O dono pode compartilhar informações pessoais sobre si, inclusive saúde, emoções e finanças; marque sensitive=true quando se aplicar, sem exigir autorização separada. Nunca guarde senhas, documentos identificadores, dados íntimos de terceiros ou inferências sensíveis. Use hypothesis para interpretação não afirmada pelo dono.',parameters:{type:'object',properties:{kind:{type:'string',enum:['context','preference','commitment','concern','opportunity','hypothesis']},text:{type:'string'},quote:{type:'string'},sensitive:{type:'boolean'}},required:['kind','text','quote','sensitive']},run:args=>discoveryStore.remember(userId,agent.id,discovery.source,args)});
-    registry.add({name:'jornada_resultado',description:'Registra aceite, recusa ou utilidade relatada da ajuda proposta, somente quando a mensagem atual contém evidência literal. Não confundir sua promessa com resultado, nem aceite com execução.',parameters:{type:'object',properties:{outcome:{type:'string',enum:['accepted','declined','useful_reported']},quote:{type:'string'}},required:['outcome','quote']},run:args=>discoveryStore.outcome(userId,agent.id,discovery.source,args)});
+    registry.add({name:'jornada_anotar',description:'Stores up to three notes anchored in a literal excerpt of the current message. The owner may share personal information about themselves, including health, emotions and finances; mark sensitive=true when it applies, without requiring separate authorization. Never store passwords, identity documents, intimate data about third parties or sensitive inferences. Use hypothesis for an interpretation the owner did not state.',parameters:{type:'object',properties:{kind:{type:'string',enum:['context','preference','commitment','concern','opportunity','hypothesis']},text:{type:'string'},quote:{type:'string'},sensitive:{type:'boolean'}},required:['kind','text','quote','sensitive']},run:args=>discoveryStore.remember(userId,agent.id,discovery.source,args)});
+    registry.add({name:'jornada_resultado',description:'Records acceptance, refusal or reported usefulness of the proposed help, only when the current message contains literal evidence. Do not confuse your promise with a result, nor acceptance with execution.',parameters:{type:'object',properties:{outcome:{type:'string',enum:['accepted','declined','useful_reported']},quote:{type:'string'}},required:['outcome','quote']},run:args=>discoveryStore.outcome(userId,agent.id,discovery.source,args)});
   }
 
   // NATIVE ACTION on the device channel (an OS/desktop client), chat-first. When
@@ -3040,12 +3040,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (kind === 'device') {
     registry.add({
       name: 'os_action',
-      description: `AÇÃO NATIVA do ${marca().nome} OS (aparelho Android do usuário). Use SEMPRE que o usuário pedir pra ABRIR, MOSTRAR ou INSTALAR aplicativos do celular. O aparelho é quem executa de verdade — você NÃO consegue abrir/instalar direto, então nesses casos CHAME esta tool em vez de dizer que abriu/instalou. Tipos: "launch_app" (abrir um app instalado, ex.: "abre o WhatsApp"), "list_apps" (mostrar a tela de apps instalados, ex.: "deixa eu ver meus apps"), "install_app" (instalar da Play Store, ex.: "instala o Uber pra mim"). Depois de chamar, escreva uma resposta curta e natural confirmando ("Abrindo o WhatsApp.", "Aqui estão seus apps.", "Vou abrir o Uber na Play Store pra você confirmar a instalação."). Só use pra comandos de app; conversa normal responde sem a tool.`,
+      description: `NATIVE ACTION of ${marca().nome} OS (the user's Android device). Use it ALWAYS when the user asks to OPEN, SHOW or INSTALL phone apps. The device is what actually executes it; you CANNOT open/install directly, so in these cases CALL this tool instead of saying you opened/installed it. Types: "launch_app" (open an installed app, e.g.: "abre o WhatsApp"), "list_apps" (show the installed apps screen, e.g.: "deixa eu ver meus apps"), "install_app" (install from the Play Store, e.g.: "instala o Uber pra mim"). After calling, write a short, natural reply confirming it ("Abrindo o WhatsApp.", "Aqui estão seus apps.", "Vou abrir o Uber na Play Store pra você confirmar a instalação."). Use it only for app commands; normal conversation is answered without the tool.`,
       parameters: {
         type: 'object',
         properties: {
-          type: { type: 'string', enum: ['launch_app', 'list_apps', 'install_app'], description: 'O tipo de ação nativa.' },
-          query: { type: 'string', description: 'Nome do app dito pelo usuário (ex.: "whatsapp", "uber", "instagram"). Deixe vazio em list_apps. O aparelho resolve o nome pro pacote.' },
+          type: { type: 'string', enum: ['launch_app', 'list_apps', 'install_app'], description: 'The native action type.' },
+          query: { type: 'string', description: 'App name as said by the user (e.g.: "whatsapp", "uber", "instagram"). Leave empty for list_apps. The device resolves the name to the package.' },
         },
         required: ['type'],
       },
@@ -3096,11 +3096,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (gAccounts.length) {
     registry.add({
       name: 'google',
-      description: `Consulta Gmail, Drive, Agenda e Docs. Só leitura. Descreva o objetivo com contexto. Para consultar contas específicas, passe seus e-mails em contas; para duas/todas, inclua cada uma UMA VEZ na mesma chamada. Isso não altera a conta padrão e não exige nova autorização quando o usuário já pediu a consulta. Contas disponíveis: ${gAccounts.map(a=>a.google_email).join(', ')}. Conta atual: ${gEmail}. Não use usar_conta_google para uma pesquisa temporária.`,
+      description: `Queries Gmail, Drive, Calendar and Docs. Read only. Describe the goal with context. To query specific accounts, pass their emails in contas; for two/all, include each one ONCE in the same call. This does not change the default account and does not require new authorization when the user already asked for the query. Available accounts: ${gAccounts.map(a=>a.google_email).join(', ')}. Current account: ${gEmail}. Do not use usar_conta_google for a temporary search.`,
       parameters: { type:'object', properties: {
-        objetivo: { type:'string', description:'O que consultar, com nomes, datas e contexto; o módulo de busca não vê a conversa.' },
-        formato: { type:'string', description:'Formato desejado para o resultado.' },
-        contas: { type:'array', minItems:1, uniqueItems:true, items:{type:'string'}, description:'E-mails exatos das contas conectadas que devem ser consultadas. Se a pessoa não sabe se está na conta pessoal ou de trabalho, inclua ambas. Inclua a conta atual quando o usuário não escolher outra.' },
+        objetivo: { type:'string', description:'What to query, with names, dates and context; the search module does not see the conversation.' },
+        formato: { type:'string', description:'Desired format for the result.' },
+        contas: { type:'array', minItems:1, uniqueItems:true, items:{type:'string'}, description:'Exact emails of the connected accounts that should be queried. If the person does not know whether it is in the personal or work account, include both. Include the current account when the user does not choose another.' },
       }, required:['objetivo','contas'] },
       run: async ({ objetivo, formato, contas }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
@@ -3155,8 +3155,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       parameters: {
         type: 'object',
         properties: {
-          objetivo: { type: 'string', description: `O que consultar no ${d.label}, com contexto (o sub-agente não vê a conversa). Ex: ${d.ex}.` },
-          formato: { type: 'string', description: 'Opcional: como quer a resposta organizada.' },
+          objetivo: { type: 'string', description: `What to query in ${d.label}, with context (the sub-agent does not see the conversation). E.g.: ${d.ex}.` },
+          formato: { type: 'string', description: 'Optional: how you want the answer organized.' },
         },
         required: ['objetivo'],
       },
@@ -3183,11 +3183,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const odFolder = agent?.name || marca().nome;
     addGated(registry, [{
       name: 'onedrive_upload_arquivo',
-      description: `Sobe pro OneDrive do usuário um ARQUIVO que você gerou no sandbox (PDF, imagem, planilha, qualquer binário). O arquivo vai sempre pra pasta do assistente ("${odFolder}") na raiz do OneDrive. Passe o caminho no sandbox (ex: /workspace/relatorio.pdf) e o nome que ele terá lá. Use isto (não a onedrive_upload, que é de texto) para arquivos binários. Repetir o nome de um arquivo que já está na pasta ATUALIZA aquele arquivo, mantendo o mesmo link. Confirme o nome antes.`,
+      description: `Uploads to the user's OneDrive a FILE you generated in the sandbox (PDF, image, spreadsheet, any binary). The file always goes to the assistant's folder ("${odFolder}") at the OneDrive root. Pass the path in the sandbox (e.g.: /workspace/relatorio.pdf) and the name it will have there. Use this (not onedrive_upload, which is for text) for binary files. Repeating the name of a file already in the folder UPDATES that file, keeping the same link. Confirm the name first.`,
       parameters: { type: 'object', properties: {
-        caminho: { type: 'string', description: 'Caminho do arquivo no sandbox (ex: /workspace/relatorio.pdf).' },
-        nome: { type: 'string', description: 'Nome do arquivo no OneDrive (ex: Relatório.pdf).' },
-        mimeType: { type: 'string', description: 'MIME do arquivo (ex: application/pdf). Opcional, inferido do nome se omitido.' },
+        caminho: { type: 'string', description: 'File path in the sandbox (e.g.: /workspace/relatorio.pdf).' },
+        nome: { type: 'string', description: 'File name on OneDrive (e.g.: Relatório.pdf).' },
+        mimeType: { type: 'string', description: 'File MIME type (e.g.: application/pdf). Optional, inferred from the name if omitted.' },
       }, required: ['caminho', 'nome'] },
       async run({ caminho, nome, mimeType }) {
         // Mesma checagem determinística das tools do OneDrive: conexão antiga não
@@ -3271,7 +3271,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (gAccounts.some((a) => serviceCaps(a.scope).calendar?.read) || temOutlookAgenda) {
     registry.add({
       name: 'aviso_mudanca_agenda',
-      description: `Aviso automático de mudança na agenda, LIGADO POR PADRÃO pra todo mundo com agenda conectada: quando alguém REMARCA, MUDA O LOCAL ou CANCELA um evento dos próximos ${AGENDA_JANELA_DIAS} dias em que a pessoa é convidada, você avisa sozinho no canal dela (Telegram ou WhatsApp). Não avisa o que a própria pessoa (ou você, a pedido dela) mudou. Cobre todas as contas de agenda conectadas. Use acao=desativar só quando ela pedir pra parar de receber esses avisos; acao=ativar só quando ela pedir pra voltar a receber; acao=status pra conferir se está ligado. Nunca desligue por conta própria.`,
+      description: `Automatic calendar-change notice, ON BY DEFAULT for everyone with a connected calendar: when someone RESCHEDULES, CHANGES THE LOCATION of or CANCELS an event in the next ${AGENDA_JANELA_DIAS} days to which the person is invited, you notify them on your own in their channel (Telegram or WhatsApp). It does not notify what the person themselves (or you, at their request) changed. Covers all connected calendar accounts. Use acao=desativar only when they ask to stop receiving these notices; acao=ativar only when they ask to receive them again; acao=status to check whether it is on. Never turn it off on your own.`,
       parameters: { type: 'object', properties: {
         acao: { type: 'string', enum: ['ativar', 'desativar', 'status'] },
       }, required: ['acao'], additionalProperties: false },
@@ -3327,8 +3327,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       // Brasil ele não pode anunciar conta de pagamento, Pix nem boleto: o
       // grupo carrega, mas essas tools não estão lá dentro.
       label: brasilOuDesconhecido(userCountry)
-        ? contaPagamento.rotuloDoCofre('Cofre de credenciais e conectores por token (Notion, Splitwise, Infinity, Asaas, App Store Connect): ler/criar página, lançar despesa, ver/criar/editar itens de board do Infinity, consultar saldo/pagar boleto/enviar PIX pela conta Asaas, listar e baixar crashes do TestFlight (App Store Connect), salvar credencial', { brasil: true })
-        : 'Cofre de credenciais e conectores por token (Notion, Splitwise, Infinity, App Store Connect): ler/criar página, lançar despesa, ver/criar/editar itens de board do Infinity, listar e baixar crashes do TestFlight, salvar credencial',
+        ? contaPagamento.rotuloDoCofre('Credential vault and token-based connectors (Notion, Splitwise, Infinity, Asaas, App Store Connect): read/create page, log expense, view/create/edit Infinity board items, check balance/pay boleto/send PIX through the Asaas account, list and download TestFlight crashes (App Store Connect), save credential', { brasil: true })
+        : 'Credential vault and token-based connectors (Notion, Splitwise, Infinity, App Store Connect): read/create page, log expense, view/create/edit Infinity board items, list and download TestFlight crashes, save credential',
       populate: () => {
         const vaultTools = vaultConnectorTools(userId, {
           country: userCountry,
@@ -3351,14 +3351,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     },
     espacos: {
-      label: 'Espaços: assuntos vivos compartilhados (criar/listar/ler/anotar/convidar)',
+      label: 'Espaços: live shared topics (create/list/read/annotate/invite)',
       populate: () => {
         for (const t of spacesTools(userId, agent.id)) registry.add(t);
         addGated(registry, [spaceInviteTool(userId, agent.id)], thread.id);
       },
     },
     skills: {
-      label: 'Skills: habilidades/procedimentos autorados (criar/listar/ler/editar/instalar/compartilhar)',
+      label: 'Skills: authored abilities/procedures (create/list/read/edit/install/share)',
       populate: () => {
         for (const t of skillsTools(userId, agent.id, thread.id)) registry.add(t);
         addGated(registry, [skillInstallTool(userId, agent.id), skillShareTool(userId, agent.id)], thread.id);
@@ -3366,18 +3366,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     },
     codigo: {
-      label: 'código e apps: CONSTRUIR/EDITAR um app (ler/escrever/editar arquivo, publicar, blocos da home), ADMIN de app (segredos, versões/diff/voltar, parar/reiniciar/apagar/logs, colaboradores, replicar, visibilidade), sandbox (rodar código; instalar e rodar programas, CLIs, repositórios do GitHub e servidores MCP de terceiros, buscar dados com eles, sem depender da máquina do usuário), servidor/terminal (SSH, coding estilo Agent SDK), projetos de dev e modos de permissão. (Descobrir e ABRIR apps que já existem — listar_sistemas/chamar_sistema — já está SEMPRE ativo, não precisa abrir.)',
+      label: 'code and apps: BUILD/EDIT an app (read/write/edit file, publish, home blocks), app ADMIN (secrets, versions/diff/revert, stop/restart/delete/logs, collaborators, replicate, visibility), sandbox (run code; install and run third-party programs, CLIs, GitHub repositories and MCP servers, fetch data with them, without depending on the user\'s machine), server/terminal (SSH, Agent SDK-style coding), dev projects and permission modes. (Discovering and OPENING apps that already exist, listar_sistemas/chamar_sistema, is ALWAYS active already, no need to open it.)',
       populate: () => { if (populateCodeTools) populateCodeTools(); },
     },
   };
   if (!CODE_DEFER) delete deferredGroups.codigo;
   registry.add({
     name: 'abrir_ferramentas',
-    description: 'Carrega SOB DEMANDA um grupo de ferramentas avançadas que não ficam sempre ativas (pra economizar contexto). Chame ANTES de mexer na área e as ferramentas do grupo ficam disponíveis já no próximo passo, aí você usa a que precisa. Grupos: ' +
+    description: 'Loads ON DEMAND a group of advanced tools that are not always active (to save context). Call it BEFORE working in the area and the group\'s tools become available in the very next step, then you use the one you need. Groups: ' +
       Object.entries(deferredGroups).map(([k, g]) => `"${k}" = ${g.label}`).join('; ') + '.',
     parameters: {
       type: 'object',
-      properties: { grupo: { type: 'string', enum: Object.keys(deferredGroups), description: 'Qual grupo de ferramentas abrir.' } },
+      properties: { grupo: { type: 'string', enum: Object.keys(deferredGroups), description: 'Which tool group to open.' } },
       required: ['grupo'],
     },
     run: async ({ grupo }) => {
@@ -3398,11 +3398,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (webhook?.ctl) {
     registry.add({
       name: 'concluir_skill_webhook',
-      description: 'Encerra a execução da skill acionada por webhook. Chame SÓ quando o procedimento da skill estiver 100% concluído. Passe um resumo curto do resultado (o sistema externo recebe isso).',
+      description: 'Ends the execution of the skill triggered by webhook. Call it ONLY when the skill\'s procedure is 100% complete. Pass a short summary of the result (the external system receives it).',
       parameters: {
         type: 'object',
         properties: {
-          resultado: { type: 'string', description: 'Resumo curto do que foi feito/entregue.' },
+          resultado: { type: 'string', description: 'Short summary of what was done/delivered.' },
         },
         required: ['resultado'],
       },
@@ -3419,10 +3419,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // é o que fica VISÍVEL pra ele. Use com parcimônia, só o que vale destacar.
   registry.add({
     name: 'lembrar',
-    description: 'Registra um fato curto e relevante na lista "Para lembrar" da tela inicial do usuário (algo que você descobriu e vale destacar pra ele: um compromisso, uma pendência, uma preferência). Use só para fatos concretos e úteis, uma frase curta.',
+    description: 'Records a short, relevant fact in the "Para lembrar" list on the user\'s home screen (something you found out that is worth highlighting for them: an appointment, a pending item, a preference). Use it only for concrete, useful facts, one short sentence.',
     parameters: {
       type: 'object',
-      properties: { texto: { type: 'string', description: `O fato a lembrar, uma frase curta em ${tagLang}.` } },
+      properties: { texto: { type: 'string', description: `The fact to remember, one short sentence in ${tagLang}.` } },
       required: ['texto'],
     },
     run: async ({ texto }) => {
@@ -3437,10 +3437,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // só grava uma preferência do próprio dono, baixo risco.
   registry.add({
     name: 'definir_meu_fuso',
-    description: 'Salva o fuso horário do usuário para interpretar "hoje/amanhã" e marcar eventos na hora local dele. Use quando ele disser onde está ou em que fuso vive (ex: "estou morando em Portugal", "mudei pra Basileia", "meu fuso é GMT+2"). Passe SEMPRE um identificador IANA válido (ex: "America/Sao_Paulo", "Europe/Lisbon", "Europe/Zurich", "America/New_York"), nunca "GMT+2".',
+    description: 'Saves the user\'s time zone to interpret "hoje/amanhã" and schedule events in their local time. Use it when they say where they are or which time zone they live in (e.g.: "estou morando em Portugal", "mudei pra Basileia", "meu fuso é GMT+2"). ALWAYS pass a valid IANA identifier (e.g.: "America/Sao_Paulo", "Europe/Lisbon", "Europe/Zurich", "America/New_York"), never "GMT+2".',
     parameters: {
       type: 'object',
-      properties: { timezone: { type: 'string', description: 'Fuso IANA, ex: "Europe/Lisbon".' } },
+      properties: { timezone: { type: 'string', description: 'IANA time zone, e.g.: "Europe/Lisbon".' } },
       required: ['timezone'],
     },
     run: async ({ timezone }) => {
@@ -3461,10 +3461,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // the person can't undo by talking, and then it isn't acceptable.
   registry.add({
     name: 'definir_meu_idioma',
-    description: `Salva o idioma em que o usuário quer ser atendido. Use quando ele pedir pra você falar outra língua (ex: "fala comigo em inglês", "responde en español", "volta pro português"). Idiomas atendidos: ${IDIOMAS_OK.join(', ')}. Vale a partir da PRÓXIMA mensagem (o idioma é lido no começo do turno), então responda esta confirmação já na língua nova. Não chame por conta própria só porque o usuário escreveu numa língua diferente: uma mensagem em outro idioma não é pedido pra trocar a preferência.`,
+    description: `Saves the language in which the user wants to be served. Use it when they ask you to speak another language (e.g.: "fala comigo em inglês", "responde en español", "volta pro português"). Supported languages: ${IDIOMAS_OK.join(', ')}. It applies from the NEXT message on (the language is read at the start of the turn), so reply to this confirmation already in the new language. Do not call it on your own just because the user wrote in a different language: a message in another language is not a request to change the preference.`,
     parameters: {
       type: 'object',
-      properties: { idioma: { type: 'string', description: `Um de: ${IDIOMAS_OK.join(', ')}.` } },
+      properties: { idioma: { type: 'string', description: `One of: ${IDIOMAS_OK.join(', ')}.` } },
       required: ['idioma'],
     },
     run: async ({ idioma }) => {
@@ -3483,10 +3483,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // autorização; passa a valer da PRÓXIMA mensagem (o system é lido no início).
   registry.add({
     name: 'ajustar_meu_estilo',
-    description: 'Ajusta o TOM/VOZ/JEITO de VOCÊ escrever e se portar (só deste assistente, não afeta os outros do usuário). Use quando o dono pedir pra mudar seu estilo (ex: "seja mais formal", "responde curtinho", "sem emoji", "me chama de você", "fala mais solto"). Passe o texto CONSOLIDADO do estilo: mantenha o que já valia e altere só o que ele pediu (leia com listar_permissoes/o estilo atual antes se precisar). Vale a partir da PRÓXIMA mensagem. NÃO use pra fatos sobre o usuário (isso é memoria_escrever) nem chame por conta própria.',
+    description: 'Adjusts the TONE/VOICE/MANNER in which YOU write and behave (this assistant only, it does not affect the user\'s other assistants). Use it when the owner asks you to change your style (e.g.: "seja mais formal", "responde curtinho", "sem emoji", "me chama de você", "fala mais solto"). Pass the CONSOLIDATED style text: keep what already applied and change only what they asked (read listar_permissoes/the current style first if you need to). It applies from the NEXT message on. Do NOT use it for facts about the user (that is memoria_escrever) and do not call it on your own.',
     parameters: {
       type: 'object',
-      properties: { estilo: { type: 'string', description: `O estilo/tom consolidado, em ${tagLang}. Frases curtas de como este assistente deve escrever e se portar.` } },
+      properties: { estilo: { type: 'string', description: `The consolidated style/tone, in ${tagLang}. Short sentences on how this assistant should write and behave.` } },
       required: ['estilo'],
     },
     run: async ({ estilo }) => {
@@ -3507,14 +3507,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
     registry.add({
       name: 'buscar_conversas',
-      description: 'Lista as SUAS conversas anteriores com este mesmo usuário em OUTROS canais/threads (Telegram, WhatsApp, Extensão do Chrome, web), pra você resgatar algo dito fora desta conversa. Use quando o dono pedir "aquela conversa de ontem", "o que a gente falou na extensão", "no WhatsApp semana passada", etc. Devolve título, quando foi e um trecho de cada thread — NÃO o conteúdo inteiro; depois chame ler_conversa no thread certo. Filtros são opcionais: sem nenhum, traz as mais recentes.',
+      description: 'Lists YOUR previous conversations with this same user in OTHER channels/threads (Telegram, WhatsApp, Chrome Extension, web), so you can retrieve something said outside this conversation. Use it when the owner asks for "aquela conversa de ontem", "o que a gente falou na extensão", "no WhatsApp semana passada", etc. Returns the title, when it was and an excerpt of each thread, NOT the whole content; then call ler_conversa on the right thread. Filters are optional: with none, it brings the most recent ones.',
       parameters: {
         type: 'object',
         properties: {
-          busca: { type: 'string', description: 'Palavra/assunto pra filtrar (casa em título, resumo e conteúdo das mensagens).' },
-          canal: { type: 'string', description: 'Canal pra restringir: "extensão"/"chrome", "whatsapp", "telegram". Deixe vazio pra buscar em todos.' },
-          desde: { type: 'string', description: 'Data/hora ISO (limite inferior por atualização da conversa), ex: 2026-07-27.' },
-          ate: { type: 'string', description: 'Data/hora ISO (limite superior).' },
+          busca: { type: 'string', description: 'Word/topic to filter by (matches title, summary and message content).' },
+          canal: { type: 'string', description: 'Channel to restrict to: "extensão"/"chrome", "whatsapp", "telegram". Leave empty to search all of them.' },
+          desde: { type: 'string', description: 'ISO date/time (lower bound on the conversation\'s last update), e.g.: 2026-07-27.' },
+          ate: { type: 'string', description: 'ISO date/time (upper bound).' },
         },
       },
       run: async ({ busca, canal, desde, ate }) => {
@@ -3529,13 +3529,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     registry.add({
       name: 'ler_conversa',
-      description: 'Abre e lê o conteúdo de UMA das suas conversas anteriores com este usuário (a que buscar_conversas listou). Passe o `id` do thread, OU um `canal` ("extensão"/"whatsapp"/"telegram"), OU uma `busca` — eu resolvo a conversa mais recente que casa. Devolve o resumo + as mensagens (as que casam com a busca, ou as últimas). Use pra responder o que foi dito naquela conversa.',
+      description: 'Opens and reads the content of ONE of your previous conversations with this user (the one buscar_conversas listed). Pass the thread `id`, OR a `canal` ("extensão"/"whatsapp"/"telegram"), OR a `busca`; I resolve the most recent conversation that matches. Returns the summary + the messages (the ones matching the search, or the latest). Use it to answer what was said in that conversation.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'id do thread (o que apareceu em buscar_conversas). Preferível quando você já sabe qual é.' },
-          canal: { type: 'string', description: 'Canal, se não tiver o id: "extensão"/"chrome", "whatsapp", "telegram".' },
-          busca: { type: 'string', description: 'Palavra/assunto pra achar a conversa (se não tiver id) e/ou pra filtrar as mensagens devolvidas.' },
+          id: { type: 'string', description: 'Thread id (the one that appeared in buscar_conversas). Preferable when you already know which one it is.' },
+          canal: { type: 'string', description: 'Channel, if you do not have the id: "extensão"/"chrome", "whatsapp", "telegram".' },
+          busca: { type: 'string', description: 'Word/topic to find the conversation (if you have no id) and/or to filter the returned messages.' },
         },
       },
       run: async ({ id, canal, busca }) => {
@@ -3555,11 +3555,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // pro "não acho / deve ter sido em outra conversa" sobre algo feito aqui mesmo.
     registry.add({
       name: 'reler_esta_conversa',
-      description: 'Relê o histórico DESTA MESMA conversa direto do banco. Use quando o papo ficou longo e você não lembra mais o que foi dito, ou o que VOCÊ fez/gerou aqui atrás (o contexto pode ter sido compactado e saído da sua janela). Passe uma `busca` (palavra/assunto) pra achar o trecho, ou deixe vazio pras últimas mensagens. IMPORTANTE: SEMPRE chame isto ANTES de dizer que "não encontra", que "não tem acesso" ou que "foi em outra conversa / com outro assistente" algo que o usuário diz ter feito COM VOCÊ — o que ele fez com você está aqui, não em outro canal.',
+      description: 'Re-reads the history of THIS SAME conversation straight from the database. Use it when the chat got long and you no longer remember what was said, or what YOU did/generated earlier here (the context may have been compacted and left your window). Pass a `busca` (word/topic) to find the excerpt, or leave it empty for the latest messages. IMPORTANT: ALWAYS call this BEFORE saying that you "cannot find", that you "have no access" or that "it was in another conversation / with another assistant" something the user says they did WITH YOU; what they did with you is here, not in another channel.',
       parameters: {
         type: 'object',
         properties: {
-          busca: { type: 'string', description: 'Palavra/assunto pra filtrar as mensagens desta conversa (ex: "redesign home", "casos de uso"). Vazio = últimas mensagens.' },
+          busca: { type: 'string', description: 'Word/topic to filter this conversation\'s messages (e.g.: "redesign home", "casos de uso"). Empty = latest messages.' },
         },
       },
       run: async ({ busca } = {}) => {
@@ -3579,7 +3579,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // the server). Not gated: it reads the owner's own data.
     registry.add({
       name: 'meu_convite',
-      description: `Mostra o CÓDIGO DE CONVITE do próprio dono desta conversa pra ele convidar alguém pro ${marca().nome}, junto de quantos convites ainda restam. Use quando ele perguntar "qual meu código de convite", "como convido uma pessoa", "código pra chamar alguém pro ${marca().nome}" e afins. Só devolve dados do próprio dono. Explique também COMO a pessoa convidada usa o código.`,
+      description: `Shows the INVITE CODE of this conversation's owner so they can invite someone to ${marca().nome}, along with how many invites are left. Use it when they ask "qual meu código de convite", "como convido uma pessoa", "código pra chamar alguém pro ${marca().nome}" and the like. Only returns the owner's own data. Also explain HOW the invited person uses the code.`,
       parameters: { type: 'object', properties: {} },
       run: async () => {
         const inv = await getOrMintReferral(userId);
@@ -3610,17 +3610,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // no horário. Não-gated: só manda mensagem pro próprio dono, baixo risco.
   registry.add({
     name: 'criar_lembrete',
-    description: 'Agenda um lembrete pra ser enviado ao próprio usuário num momento futuro, pelo canal que ele pedir. Serve pra disparo ÚNICO ("me lembra amanhã 14h de X") E pra RECORRENTE de mensagem fixa ("me avise de hora em hora pra beber água", "de 5 em 5 min me lembra de X até as 18h"). Resolva a data/hora pra ISO 8601 na hora de parede LOCAL do usuário (ex: 2026-07-09T14:00:00), usando o "Agora" informado no fim da mensagem como referência; `quando` é o PRIMEIRO disparo. Canais HOJE: telegram, email, whatsapp. Sem canal explícito, use o desta conversa somente se ele tiver entrega disponível. Chat/app/device/slack ainda não entregam lembretes: NÃO troque "aqui"/"neste canal" por Telegram nem outro destino. A ferramenta informa os canais realmente conectados; peça ao usuário que escolha um e só então agende. Passe `fuso` (IANA) só se o usuário estiver num fuso diferente do "Agora". RECORRÊNCIA: para diária/semanal/mensal/anual em hora local, prefira `recorrencia` (ex: mensal todo dia 14 ou diária intervalo 2 para dia sim/dia não). Mostre próximas ocorrências. Não simule mensal com 30 dias nem dia sim/dia não com dias ímpares. Quinto dia útil/feriados não são suportados: explique antes de propor alternativa. Não combine recorrencia com repetir_cada_min/repetir_ate. Para intervalos de duração fixa, passe `repetir_cada_min` (de quantos em quantos MINUTOS: 5 = de 5 em 5 min, 60 = de hora em hora, 1440 = todo dia). NUNCA empilhe vários criar_lembrete pra simular recorrência — use este parâmetro, que cria UMA linha que se reagenda sozinha. REGRA IMPORTANTE: se a recorrência for MENOR que 1 dia (repetir_cada_min < 1440), você DEVE perguntar ao usuário POR QUANTO TEMPO ele quer ANTES de agendar (ex: "por quanto tempo? 2 dias? até as 18h?") e passar o fim em `repetir_ate`; se for >= 1 dia (diário/semanal), pode deixar sem `repetir_ate` (roda até ele mandar parar). Este lembrete manda uma MENSAGEM FIXA; se o que se repete precisa GERAR conteúdo novo a cada vez (resumo da agenda, olhar e-mails), use criar_rotina.',
+    description: 'Schedules a reminder to be sent to the user themselves at a future moment, through the channel they ask for. It serves for a ONE-TIME trigger ("me lembra amanhã 14h de X") AND for a RECURRING fixed message ("me avise de hora em hora pra beber água", "de 5 em 5 min me lembra de X até as 18h"). Resolve the date/time to ISO 8601 in the user\'s LOCAL wall-clock time (e.g.: 2026-07-09T14:00:00), using the current time given at the end of the message ("it is now") as reference; `quando` is the FIRST trigger. Channels TODAY: telegram, email, whatsapp. Without an explicit channel, use this conversation\'s only if it has delivery available. Chat/app/device/slack do not deliver reminders yet: do NOT swap "aqui"/"neste canal" for Telegram or another destination. The tool reports the channels actually connected; ask the user to choose one and only then schedule. Pass `fuso` (IANA) only if the user is in a time zone different from the one of the current time ("it is now"). RECURRENCE: for daily/weekly/monthly/yearly at a local time, prefer `recorrencia` (e.g.: monthly every day 14, or daily interval 2 for every other day). Show the next occurrences. Do not simulate monthly with 30 days nor every other day with odd days. Fifth business day/holidays are not supported: explain before proposing an alternative. Do not combine recorrencia with repetir_cada_min/repetir_ate. For fixed-duration intervals, pass `repetir_cada_min` (every how many MINUTES: 5 = every 5 min, 60 = every hour, 1440 = every day). NEVER stack several criar_lembrete calls to simulate recurrence; use this parameter, which creates ONE row that reschedules itself. IMPORTANT RULE: if the recurrence is SHORTER than 1 day (repetir_cada_min < 1440), you MUST ask the user FOR HOW LONG they want it BEFORE scheduling (e.g.: "por quanto tempo? 2 dias? até as 18h?") and pass the end in `repetir_ate`; if it is >= 1 day (daily/weekly), you may leave it without `repetir_ate` (it runs until they tell you to stop). This reminder sends a FIXED MESSAGE; if what repeats needs to GENERATE new content each time (calendar summary, checking emails), use criar_rotina.',
     parameters: {
       type: 'object',
       properties: {
-        quando: { type: 'string', description: 'Data/hora do PRIMEIRO disparo em ISO 8601 na hora local do usuário, ex: 2026-07-09T14:00:00.' },
-        mensagem: { type: 'string', description: 'O texto do lembrete, como você quer que chegue pro usuário (1ª ou 2ª pessoa, curto e claro).' },
-        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'slack'], description: 'Canal de entrega.' },
-        fuso: { type: 'string', description: 'Fuso IANA deste lembrete, ex: "Europe/Zurich". Omita para usar o fuso do usuário. Não altera o fuso do perfil.' },
-        repetir_cada_min: { type: 'integer', minimum: 1, description: 'OPCIONAL. Repetir de quantos em quantos MINUTOS (5=de 5 em 5 min, 60=de hora em hora, 1440=todo dia, 10080=toda semana). Omita pra disparo único.' },
+        quando: { type: 'string', description: 'Date/time of the FIRST trigger in ISO 8601 in the user\'s local time, e.g.: 2026-07-09T14:00:00.' },
+        mensagem: { type: 'string', description: 'The reminder text, as you want it to reach the user (1st or 2nd person, short and clear).' },
+        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'slack'], description: 'Delivery channel.' },
+        fuso: { type: 'string', description: 'IANA time zone for this reminder, e.g.: "Europe/Zurich". Omit it to use the user\'s time zone. Does not change the profile\'s time zone.' },
+        repetir_cada_min: { type: 'integer', minimum: 1, description: 'OPTIONAL. Repeat every how many MINUTES (5=every 5 min, 60=every hour, 1440=every day, 10080=every week). Omit it for a one-time trigger.' },
         recorrencia: recurrenceSchema,
-        repetir_ate: { type: 'string', description: 'OPCIONAL. Até quando repetir, em ISO 8601 na hora local (ex: 2026-08-19T18:00:00). OBRIGATÓRIO quando repetir_cada_min < 1440 (sub-diário): pergunte antes ao usuário por quanto tempo. Pra recorrência >= 1 dia, omita (fica aberta até ele mandar parar).' },
+        repetir_ate: { type: 'string', description: 'OPTIONAL. Until when to repeat, in ISO 8601 in local time (e.g.: 2026-08-19T18:00:00). REQUIRED when repetir_cada_min < 1440 (sub-daily): ask the user beforehand for how long. For recurrence >= 1 day, omit it (it stays open until they tell you to stop).' },
       },
       required: ['quando', 'mensagem'],
     },
@@ -3740,13 +3740,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // pede "me manda isso no WhatsApp agora". Não-gated: só manda pro próprio dono.
   registry.add({
     name: 'enviar_mensagem',
-    description: 'Envia AGORA uma mensagem pro PRÓPRIO usuário (só pra ele mesmo) num canal conectado dele (telegram, email ou whatsapp), a partir de qualquer conversa. Use quando ele pedir pra você mandar/encaminhar algo NA HORA para outro canal DELE ("me manda no WhatsApp agora", "manda isso no meu e-mail", "me avisa no Telegram"). NÃO serve pra mandar mensagem pra OUTRA PESSOA: não existe envio de WhatsApp/Telegram pra terceiro nesta plataforma, nem pelo número do usuário. Se ele pedir pra avisar alguém, diga isso honestamente em vez de tentar. Para AGENDAR pro futuro use criar_lembrete. Escreva a mensagem pronta, como você quer que chegue. (slack ainda não está liberado.)',
+    description: 'Sends a message NOW to the user THEMSELVES (only to them) on one of their connected channels (telegram, email or whatsapp), from any conversation. Use it when they ask you to send/forward something RIGHT AWAY to another channel OF THEIRS ("me manda no WhatsApp agora", "manda isso no meu e-mail", "me avisa no Telegram"). It does NOT serve to send a message to ANOTHER PERSON: there is no WhatsApp/Telegram sending to third parties on this platform, not even through the user\'s number. If they ask you to notify someone, say so honestly instead of trying. To SCHEDULE for the future use criar_lembrete. Write the message ready, as you want it to arrive. (slack is not enabled yet.)',
     parameters: {
       type: 'object',
       properties: {
-        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp'], description: 'Canal de entrega. Se o usuário não disser, use o canal desta conversa quando for telegram/email/whatsapp, senão telegram.' },
-        mensagem: { type: 'string', description: 'O texto a enviar, pronto (curto e claro).' },
-        para: { type: 'string', description: 'NÃO USE. Existe só pra você declarar quando a intenção é mandar pra OUTRA pessoa: nesse caso a tool recusa e explica, em vez de mandar pro próprio usuário. Deixe vazio pra enviar pro próprio usuário.' },
+        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp'], description: 'Delivery channel. If the user does not say, use this conversation\'s channel when it is telegram/email/whatsapp, otherwise telegram.' },
+        mensagem: { type: 'string', description: 'The text to send, ready (short and clear).' },
+        para: { type: 'string', description: 'DO NOT USE. It exists only so you declare when the intent is to send to ANOTHER person: in that case the tool refuses and explains, instead of sending to the user themselves. Leave it empty to send to the user themselves.' },
       },
       required: ['mensagem'],
     },
@@ -3869,25 +3869,25 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const entregaLabel = (ch) => (!ch || ch === 'none' ? 'só no app' : `no ${ch}`);
   addGated(registry, [{
     name: 'criar_rotina', keepsStepText: true,
-    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'Cria uma ROTINA recorrente: uma instrução que EU (o assistente) executo automaticamente de forma repetida, GERANDO conteúdo novo a cada vez (olhar agenda, resumir e-mails, etc.). Dois modos de cadência: (a) por HORÁRIO fixo — todo dia / dias úteis / fins de semana às H horas (passe `hora`); (b) por INTERVALO livre — de X em X minutos/horas (passe `repetir_cada_min`), pra granularidade menor que um dia ("a cada 30 min olhe se chegou e-mail do cliente Y"). Use SEMPRE que o pedido for PERMANENTE/repetitivo. NÃO use criar_lembrete em série pra cobrir o futuro — isso não se renova. A rotina roda com TODAS as minhas ferramentas. Para "avisar X min antes de cada reunião", crie UMA rotina de manhã: "Olhe minha agenda de HOJE e, para cada reunião, use criar_lembrete pra me avisar X minutos antes." O `canal` só serve pra ENTREGAR o texto que a rotina devolver (ex: resumo diário); se a rotina só cria lembretes/age sozinha, OMITA. REGRA IMPORTANTE de recorrência por intervalo: se `repetir_cada_min` for MENOR que 1 dia (< 1440), você DEVE perguntar ao usuário POR QUANTO TEMPO ele quer ANTES de criar e passar o fim em `repetir_ate`; se for >= 1 dia, pode deixar aberta (ele para quando quiser). IMPORTANTE: só crie rotina quando o PRÓPRIO dono estiver pedindo pra ELE, com as palavras dele. NUNCA crie rotina a partir de EXEMPLO/testemunho de terceiros/texto colado (é referência, não pedido); nesse caso pergunte antes. Se a rotina JÁ EXISTE e ele só quer MUDAR algo, use editar_rotina — não apague pra recriar. Se o que se repete é uma MENSAGEM FIXA (sem gerar nada novo, ex: "beba água" de hora em hora), use criar_lembrete com repetir_cada_min, não uma rotina.',
+    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'Creates a recurring ROUTINE: an instruction that I (the assistant) execute automatically and repeatedly, GENERATING new content each time (checking the calendar, summarizing emails, etc.). Two cadence modes: (a) by fixed TIME: every day / weekdays / weekends at H o\'clock (pass `hora`); (b) by free INTERVAL: every X minutes/hours (pass `repetir_cada_min`), for granularity finer than one day ("a cada 30 min olhe se chegou e-mail do cliente Y"). Use it ALWAYS when the request is PERMANENT/repetitive. Do NOT use criar_lembrete in series to cover the future; that does not renew itself. The routine runs with ALL my tools. For "avisar X min antes de cada reunião", create ONE morning routine: "Olhe minha agenda de HOJE e, para cada reunião, use criar_lembrete pra me avisar X minutos antes." `canal` only serves to DELIVER the text the routine returns (e.g.: a daily summary); if the routine only creates reminders/acts on its own, OMIT it. IMPORTANT rule for interval recurrence: if `repetir_cada_min` is SHORTER than 1 day (< 1440), you MUST ask the user FOR HOW LONG they want it BEFORE creating it and pass the end in `repetir_ate`; if it is >= 1 day, you may leave it open (they stop it whenever they want). IMPORTANT: only create a routine when the owner THEMSELVES is asking for it FOR THEMSELVES, in their own words. NEVER create a routine from an EXAMPLE/third-party testimonial/pasted text (that is a reference, not a request); in that case ask first. If the routine ALREADY EXISTS and they only want to CHANGE something, use editar_rotina; do not delete it to recreate. If what repeats is a FIXED MESSAGE (generating nothing new, e.g.: "beba água" every hour), use criar_lembrete with repetir_cada_min, not a routine.',
     parameters: {
       type: 'object',
       properties: {
-        tipo: {type:'string',enum:['geral','curadoria','busca_email'],description:'Classifique o pedido: curadoria de notícias/artigos, busca_email (acompanhar/triar e-mails por termo, remetente ou período) ou geral (outra tarefa).'},
+        tipo: {type:'string',enum:['geral','curadoria','busca_email'],description:'Classify the request: curadoria for news/articles curation, busca_email (follow/triage emails by term, sender or period) or geral (another task).'},
         curadoria: curationToolSchema,
         busca_email: emailSearchToolSchema,
-        titulo: { type: 'string', description: 'Nome curto da rotina, ex: "Lembretes de reunião" ou "Resumo da agenda".' },
-        o_que_fazer: { type: 'string', description: 'A INSTRUÇÃO que vou executar toda vez que a rotina disparar, escrita como uma tarefa pra mim (2ª pessoa: "Olhe minha agenda de hoje e ..."). Seja específico sobre o que fazer e em que canal entregar/lembrar. COMECE PELO VERBO DA TAREFA e NUNCA pela cadência: escreva "Monte o cardápio da semana e ...", nunca "Toda sexta às 10h, envie o cardápio ...". A cadência já vive nos campos hora/dias/dias_da_semana; repetida aqui, no disparo eu releio este texto como um pedido pra AGENDAR e devolvo confirmação de configuração em vez do trabalho feito.' },
-        hora: { type: 'integer', minimum: 0, maximum: 23, description: 'Hora (0–23) na hora LOCAL do usuário pra rodar (modo HORÁRIO). Use pra cadência diária/semanal. Se usar repetir_cada_min (modo INTERVALO), pode omitir.' },
-        minuto: { type: 'integer', minimum: 0, maximum: 59, description: 'Minuto do horário (0–59), junto com `hora`: "22h30" → hora 22 + minuto 30. Omita pra hora cheia. NUNCA arredonde o horário que o dono pediu.' },
-        dias: { type: 'string', enum: ['daily', 'weekdays', 'weekends'], description: 'Quais dias (modo HORÁRIO), quando a cadência é um bloco inteiro: daily (todo dia), weekdays (seg–sex), weekends (sáb–dom). Default daily. Se o dono pediu um dia ESPECÍFICO da semana, NÃO use este campo (weekends inclui sábado E domingo) — use dias_da_semana.' },
-        dias_da_semana: { type: 'array', items: { type: 'string', enum: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'] }, description: 'Dias ESPECÍFICOS da semana. Use sempre que o dono nomear o dia: "todo domingo" → ["dom"]; "segunda e quinta" → ["seg","qui"]. Prevalece sobre `dias`.' },
-        dias_do_mes: { type: 'array', items: { type: 'integer' }, description: 'Cadência MENSAL por dia do mês: "todo dia 5" → [5]; "dia 1 e 15" → [1,15]; "no último dia do mês" → [-1]. Prevalece sobre dias_da_semana.' },
-        semana_do_mes: { type: 'integer', description: 'Cadência MENSAL pela Nª ocorrência de um dia da semana. Use JUNTO com dias_da_semana (um dia só): "a 2ª segunda do mês" → semana_do_mes 2 + dias_da_semana ["seg"]; "a última sexta do mês" → -1 + ["sex"]. NUNCA escreva a condição de data dentro de o_que_fazer: a rotina dispararia em dia errado.' },
-        fuso: { type: 'string', description: 'Fuso IANA do usuário (ex: "America/Sao_Paulo"). Omita pra usar o fuso salvo dele.' },
-        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'app'], description: 'OPCIONAL. Onde ENTREGAR o texto que a rotina devolve. telegram/email/whatsapp empurram a mensagem pro dono. "app" = não empurra em canal nenhum: o resultado só fica salvo no app (use quando ele disser "não me manda no WhatsApp", "só quero ver no app"). Se a rotina só cria lembretes/age sozinha, OMITA — equivale a "app".' },
-        repetir_cada_min: { type: 'integer', minimum: 1, description: 'OPCIONAL (modo INTERVALO). Rodar de quantos em quantos MINUTOS (30=de 30 em 30 min, 60=de hora em hora). Quando presente, a cadência é por intervalo (ignora hora/dias). Pra < 1440 (sub-diário), pergunte antes por quanto tempo e passe repetir_ate.' },
-        repetir_ate: { type: 'string', description: 'OPCIONAL. Até quando repetir, ISO 8601 na hora local (ex: 2026-08-19T18:00:00). Vale nos DOIS modos. OBRIGATÓRIO quando repetir_cada_min < 1440. No modo HORÁRIO, passe sempre que o pedido tiver um FIM natural ("todo dia às 5h durante a Quaresma", "toda sexta até dezembro") — assim a rotina se desliga sozinha no fim da janela em vez de o dono ter que cancelar. Sem fim natural, omita (fica aberta até mandar parar).' },
+        titulo: { type: 'string', description: 'Short name of the routine, e.g.: "Lembretes de reunião" or "Resumo da agenda".' },
+        o_que_fazer: { type: 'string', description: 'The INSTRUCTION I will execute every time the routine fires, written as a task for me (2nd person: "Olhe minha agenda de hoje e ..."). Be specific about what to do and in which channel to deliver/remind. START WITH THE TASK\'S VERB and NEVER with the cadence: write "Monte o cardápio da semana e ...", never "Toda sexta às 10h, envie o cardápio ...". The cadence already lives in the hora/dias/dias_da_semana fields; if repeated here, when it fires I re-read this text as a request to SCHEDULE and return a setup confirmation instead of the work done.' },
+        hora: { type: 'integer', minimum: 0, maximum: 23, description: 'Hour (0–23) in the user\'s LOCAL time to run (TIME mode). Use it for daily/weekly cadence. If you use repetir_cada_min (INTERVAL mode), you may omit it.' },
+        minuto: { type: 'integer', minimum: 0, maximum: 59, description: 'Minute of the time (0–59), together with `hora`: "22h30" → hora 22 + minuto 30. Omit it for the top of the hour. NEVER round the time the owner asked for.' },
+        dias: { type: 'string', enum: ['daily', 'weekdays', 'weekends'], description: 'Which days (TIME mode), when the cadence is a whole block: daily (every day), weekdays (Mon–Fri), weekends (Sat–Sun). Default daily. If the owner asked for a SPECIFIC day of the week, do NOT use this field (weekends includes Saturday AND Sunday); use dias_da_semana.' },
+        dias_da_semana: { type: 'array', items: { type: 'string', enum: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'] }, description: 'SPECIFIC days of the week. Use it whenever the owner names the day: "todo domingo" → ["dom"]; "segunda e quinta" → ["seg","qui"]. Takes precedence over `dias`.' },
+        dias_do_mes: { type: 'array', items: { type: 'integer' }, description: 'MONTHLY cadence by day of the month: "todo dia 5" → [5]; "dia 1 e 15" → [1,15]; "no último dia do mês" → [-1]. Takes precedence over dias_da_semana.' },
+        semana_do_mes: { type: 'integer', description: 'MONTHLY cadence by the Nth occurrence of a weekday. Use it TOGETHER with dias_da_semana (a single day): "a 2ª segunda do mês" → semana_do_mes 2 + dias_da_semana ["seg"]; "a última sexta do mês" → -1 + ["sex"]. NEVER write the date condition inside o_que_fazer: the routine would fire on the wrong day.' },
+        fuso: { type: 'string', description: 'The user\'s IANA time zone (e.g.: "America/Sao_Paulo"). Omit it to use their saved time zone.' },
+        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'app'], description: 'OPTIONAL. Where to DELIVER the text the routine returns. telegram/email/whatsapp push the message to the owner. "app" = does not push on any channel: the result is only saved in the app (use it when they say "não me manda no WhatsApp", "só quero ver no app"). If the routine only creates reminders/acts on its own, OMIT it; that is equivalent to "app".' },
+        repetir_cada_min: { type: 'integer', minimum: 1, description: 'OPTIONAL (INTERVAL mode). Run every how many MINUTES (30=every 30 min, 60=every hour). When present, the cadence is by interval (ignores hora/dias). For < 1440 (sub-daily), ask beforehand for how long and pass repetir_ate.' },
+        repetir_ate: { type: 'string', description: 'OPTIONAL. Until when to repeat, ISO 8601 in local time (e.g.: 2026-08-19T18:00:00). Applies to BOTH modes. REQUIRED when repetir_cada_min < 1440. In TIME mode, pass it whenever the request has a natural END ("todo dia às 5h durante a Quaresma", "toda sexta até dezembro"), so the routine turns itself off at the end of the window instead of the owner having to cancel it. With no natural end, omit it (it stays open until told to stop).' },
       },
       required: ['titulo', 'o_que_fazer','tipo'],
     },
@@ -4035,7 +4035,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   registry.add({
     name: 'listar_rotinas',
     readOnly: true,
-    description: `Lista as rotinas recorrentes do usuário (as tarefas automáticas por horário que ele tem configuradas). O canal de uma rotina é uma entrega feita PELA PLATAFORMA ${marca().nome.toUpperCase()}: canal email nunca usa o Gmail do usuário, nunca depende da permissão configurar_envio_email e nunca cria rascunho. Use quando ele perguntar "quais rotinas eu tenho", "o que você faz sozinho todo dia", ou antes de cancelar/ajustar/executar uma. Cada linha vem com um CÓDIGO (#xxxx): é identificador interno, pra VOCÊ usar em cancelar_rotina/editar_rotina/executar_rotina_agora. NÃO mostre o código pro dono ao listar as rotinas dele (é ruído); só exponha se ele tiver duas rotinas parecidas e precisar escolher qual.`,
+    description: `Lists the user's recurring routines (the scheduled automatic tasks they have set up). A routine's channel is a delivery made BY THE ${marca().nome.toUpperCase()} PLATFORM: the email channel never uses the user's Gmail, never depends on the configurar_envio_email permission and never creates a draft. Use it when they ask "quais rotinas eu tenho", "o que você faz sozinho todo dia", or before cancelling/adjusting/running one. Each line comes with a CODE (#xxxx): it is an internal identifier, for YOU to use in cancelar_rotina/editar_rotina/executar_rotina_agora. Do NOT show the code to the owner when listing their routines (it is noise); only expose it if they have two similar routines and need to choose which one.`,
     parameters: { type: 'object', properties: {} },
     run: async () => {
       const rows = await listRoutinesForUser(userId);
@@ -4056,12 +4056,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // existia no registry e o assistente era obrigado a dizer que não conseguia.
   registry.add({
     name: 'executar_rotina_agora',
-    description: 'Executa AGORA uma rotina já existente do próprio usuário e faz a entrega REAL no canal configurado. Use somente quando o dono pedir explicitamente "rode agora", "execute agora" ou "teste minha rotina". Localize pelo título ou pelo código retornado por listar_rotinas. Não crie outra rotina e não imite a tarefa manualmente: esta tool usa o mesmo executor e a mesma entrega do agendador. A execução manual conta como a execução do dia, então o horário automático não dispara a mesma rotina de novo hoje. Se falhar ou ficar incerta, NÃO repita automaticamente: informe o estado e peça para conferir antes de uma nova tentativa.',
+    description: 'Runs NOW an existing routine of the user themselves and makes the REAL delivery on the configured channel. Use it only when the owner explicitly asks "rode agora", "execute agora" or "teste minha rotina". Locate it by the title or by the code returned by listar_rotinas. Do not create another routine and do not imitate the task manually: this tool uses the same executor and the same delivery as the scheduler. The manual run counts as the day\'s run, so the automatic time does not fire the same routine again today. If it fails or ends up uncertain, do NOT retry automatically: report the state and ask them to check before a new attempt.',
     parameters: {
       type: 'object',
       properties: {
-        titulo: { type: 'string', description: 'Título (ou parte) da rotina a executar agora.' },
-        id: { type: 'string', description: 'OPCIONAL. Código #xxxx de listar_rotinas; use quando o título for ambíguo.' },
+        titulo: { type: 'string', description: 'Title (or part of it) of the routine to run now.' },
+        id: { type: 'string', description: 'OPTIONAL. #xxxx code from listar_rotinas; use it when the title is ambiguous.' },
       },
       required: [],
     },
@@ -4108,11 +4108,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // no canal já configurado, sem tocar na cadência normal.
   registry.add({
     name:'agendar_execucao_rotina',
-    description:'Agenda UMA execução EXTRA, futura, de uma rotina recorrente já existente, sem alterar os dias/horário normais dela. Use quando o dono pedir "rode esta rotina hoje às 14h10", "agende um teste extra" ou equivalente. Esta tool executa a rotina de verdade no horário e entrega no canal que ela já tem configurado. NUNCA use criar_lembrete para disparar uma rotina: lembrete só envia texto fixo e não executa nada. Para agora, use executar_rotina_agora. Para mudar a cadência normal, use editar_rotina.',
+    description:'Schedules ONE EXTRA, future run of an existing recurring routine, without changing its normal days/time. Use it when the owner asks "rode esta rotina hoje às 14h10", "agende um teste extra" or equivalent. This tool really runs the routine at the time and delivers on the channel it already has configured. NEVER use criar_lembrete to fire a routine: a reminder only sends fixed text and runs nothing. For right now, use executar_rotina_agora. To change the normal cadence, use editar_rotina.',
     parameters:{type:'object',properties:{
-      titulo:{type:'string',description:'Título (ou parte) da rotina existente.'},
-      id:{type:'string',description:'OPCIONAL. Código #xxxx retornado por listar_rotinas.'},
-      quando:{type:'string',description:'Data/hora da execução extra em ISO 8601 na hora local da rotina, ex: 2026-09-14T14:10:00.'},
+      titulo:{type:'string',description:'Title (or part of it) of the existing routine.'},
+      id:{type:'string',description:'OPTIONAL. #xxxx code returned by listar_rotinas.'},
+      quando:{type:'string',description:'Date/time of the extra run in ISO 8601 in the routine\'s local time, e.g.: 2026-09-14T14:10:00.'},
     },required:['quando']},
     run:async({titulo,id,quando}={})=>{
       const rows=await listRoutinesForUser(userId);
@@ -4139,12 +4139,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Cancela (apaga) uma rotina, por título ou por código.
   registry.add({
     name: 'cancelar_rotina',
-    description: 'Cancela (remove) uma rotina recorrente do usuário. Passe o título da rotina (ou parte dele) que ele quer parar, OU o `id` (o código #xxxx que aparece no listar_rotinas) quando o título não distingue. Use SÓ quando ele quiser PARAR DE VEZ uma rotina ("para de fazer X todo dia", "cancela a rotina de reuniões"). Se ele quer apenas MUDAR/REFORMATAR uma rotina que já existe (trocar canal, horário, dias, texto ou formato), NÃO cancele pra recriar — use editar_rotina, que altera no lugar sem deixar o dono sem rotina. Se o título bater com mais de uma rotina, a ferramenta devolve os candidatos com código e cadência: mostre pro dono e chame de novo com `id`.',
+    description: 'Cancels (removes) one of the user\'s recurring routines. Pass the title of the routine (or part of it) they want to stop, OR the `id` (the #xxxx code that appears in listar_rotinas) when the title does not distinguish it. Use it ONLY when they want to STOP a routine FOR GOOD ("para de fazer X todo dia", "cancela a rotina de reuniões"). If they only want to CHANGE/REFORMAT an existing routine (switch channel, time, days, text or format), do NOT cancel it to recreate; use editar_rotina, which changes it in place without leaving the owner without the routine. If the title matches more than one routine, the tool returns the candidates with code and cadence: show them to the owner and call again with `id`.',
     parameters: {
       type: 'object',
       properties: {
-        titulo: { type: 'string', description: 'Título (ou parte) da rotina a cancelar.' },
-        id: { type: 'string', description: 'OPCIONAL. Código da rotina (o #xxxx do listar_rotinas). Use quando duas rotinas têm títulos iguais ou parecidos: é o que identifica sem ambiguidade.' },
+        titulo: { type: 'string', description: 'Title (or part of it) of the routine to cancel.' },
+        id: { type: 'string', description: 'OPTIONAL. Routine code (the #xxxx from listar_rotinas). Use it when two routines have the same or similar titles: it is what identifies it without ambiguity.' },
       },
       required: [],
     },
@@ -4166,27 +4166,27 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Passa só os campos que mudam.
   addGated(registry, [{
     name: 'editar_rotina',
-    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'ALTERA no lugar uma rotina recorrente que JÁ EXISTE (sem apagar e recriar). Use SEMPRE que o dono quiser MUDAR algo numa rotina existente: trocar o canal de entrega (ex: "manda no WhatsApp em vez do e-mail"), mudar o horário, os dias, renomear, ou mudar o texto/formato do que a rotina faz (ex: "reformata o resumo pro WhatsApp"). NUNCA use cancelar_rotina + criar_rotina pra isso. Uma PAUSA simples (ativa:false, sem outra mudança) acontece direto e devolve o recibo real; não peça uma segunda confirmação. Retomar ou mudar qualquer outra coisa continua aguardando confirmação. Passe SÓ os campos que mudam; o resto fica como está. Se não souber o título exato, use listar_rotinas antes. Quando o dono pedir alterar E testar, use testar_agora=true: a mesma confirmação autoriza aplicar a edição e só então testar a versão salva, com entrega real. Edição sozinha nunca dispara teste. Não chame executar_rotina_agora enquanto a edição estiver pendente.',
+    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) happens right away and returns the real receipt; do not ask for a second confirmation. Resuming or changing anything else still waits for confirmation. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same confirmation authorizes applying the edit and only then testing the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
     parameters: {
       type: 'object',
       properties: {
-        testar_agora: {type:'boolean',description:'Somente se o dono pedir também um teste agora. Após confirmar, aplica a edição e testa a versão salva com entrega real no canal configurado.'},
+        testar_agora: {type:'boolean',description:'Only if the owner also asks for a test now. After confirmation, applies the edit and tests the saved version with real delivery on the configured channel.'},
         curadoria: curationToolSchema,
         busca_email: emailSearchToolSchema,
-        ativa:{type:'boolean',description:'false para PAUSAR, true para RETOMAR a mesma rotina, sem apagar histórico.'},
-        titulo: { type: 'string', description: 'Título (ou parte) da rotina que existe HOJE, pra localizar qual alterar.' },
-        id: { type: 'string', description: 'OPCIONAL. Código da rotina (o #xxxx do listar_rotinas). Use quando duas rotinas têm títulos iguais ou parecidos: é o que identifica sem ambiguidade.' },
-        novo_titulo: { type: 'string', description: 'OPCIONAL. Novo nome da rotina, se for renomear.' },
-        o_que_fazer: { type: 'string', description: 'OPCIONAL. Nova instrução (o que a rotina faz / em que formato). Passe se o dono quiser mudar o conteúdo ou o formato (ex: adaptar o resumo pro WhatsApp). Escreva COMEÇANDO PELO VERBO DA TAREFA, nunca pela cadência ("Monte o cardápio ..." e não "Toda sexta às 10h, envie ..."): a cadência vive nos campos hora/dias, e repetida no texto faz o disparo virar confirmação de configuração em vez de trabalho feito.' },
-        hora: { type: 'integer', minimum: 0, maximum: 23, description: 'OPCIONAL. Nova hora (0–23, hora local). Sem `minuto`, vira hora cheia.' },
-        minuto: { type: 'integer', minimum: 0, maximum: 59, description: 'OPCIONAL. Minuto do novo horário: "22h30" → hora 22 + minuto 30. Sozinho, mantém a hora atual.' },
-        dias: { type: 'string', enum: ['daily', 'weekdays', 'weekends'], description: 'OPCIONAL. Nova cadência em bloco: daily, weekdays (seg–sex) ou weekends (sáb–dom). Pra um dia específico use dias_da_semana.' },
-        dias_da_semana: { type: 'array', items: { type: 'string', enum: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'] }, description: 'OPCIONAL. Novos dias ESPECÍFICOS da semana ("só domingo" → ["dom"]). Prevalece sobre `dias`.' },
-        dias_do_mes: { type: 'array', items: { type: 'integer' }, description: 'OPCIONAL. Nova cadência mensal por dia do mês ([5] = todo dia 5; [-1] = último dia do mês).' },
-        semana_do_mes: { type: 'integer', description: 'OPCIONAL. Nova cadência mensal pela Nª ocorrência do dia da semana; use junto com dias_da_semana (2 + ["seg"] = 2ª segunda do mês; -1 = última).' },
-        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'app'], description: 'OPCIONAL. Novo canal de entrega do texto que a rotina devolve. Passe "app" pra PARAR de empurrar a mensagem e deixar o resultado só salvo no app: é o que responde a "não me manda mais no WhatsApp", "para de me mandar isso no Telegram", "só quero ver no app". Nunca escreva esse pedido dentro de o_que_fazer: lá vira texto, aqui vira configuração.' },
-        fuso: { type: 'string', description: 'OPCIONAL. Novo fuso IANA (ex: "America/Sao_Paulo").' },
-        repetir_ate: { type: 'string', description: 'OPCIONAL. Nova data de FIM da rotina, ISO 8601 na hora local (ex: 2026-09-29T23:59:00). Passe quando o dono disser até quando quer ("só até o fim do mês"): a rotina se desliga sozinha nesse dia. Passe a palavra "sempre" pra TIRAR o fim e deixar a rotina aberta.' },
+        ativa:{type:'boolean',description:'false to PAUSE, true to RESUME the same routine, without deleting history.'},
+        titulo: { type: 'string', description: 'Title (or part of it) of the routine that exists TODAY, to locate which one to change.' },
+        id: { type: 'string', description: 'OPTIONAL. Routine code (the #xxxx from listar_rotinas). Use it when two routines have the same or similar titles: it is what identifies it without ambiguity.' },
+        novo_titulo: { type: 'string', description: 'OPTIONAL. New name of the routine, if renaming.' },
+        o_que_fazer: { type: 'string', description: 'OPTIONAL. New instruction (what the routine does / in which format). Pass it if the owner wants to change the content or the format (e.g.: adapt the summary for WhatsApp). Write it STARTING WITH THE TASK\'S VERB, never with the cadence ("Monte o cardápio ..." and not "Toda sexta às 10h, envie ..."): the cadence lives in the hora/dias fields, and repeating it in the text turns the run into a setup confirmation instead of work done.' },
+        hora: { type: 'integer', minimum: 0, maximum: 23, description: 'OPTIONAL. New hour (0–23, local time). Without `minuto`, it becomes the top of the hour.' },
+        minuto: { type: 'integer', minimum: 0, maximum: 59, description: 'OPTIONAL. Minute of the new time: "22h30" → hora 22 + minuto 30. On its own, it keeps the current hour.' },
+        dias: { type: 'string', enum: ['daily', 'weekdays', 'weekends'], description: 'OPTIONAL. New block cadence: daily, weekdays (Mon–Fri) or weekends (Sat–Sun). For a specific day use dias_da_semana.' },
+        dias_da_semana: { type: 'array', items: { type: 'string', enum: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'] }, description: 'OPTIONAL. New SPECIFIC days of the week ("só domingo" → ["dom"]). Takes precedence over `dias`.' },
+        dias_do_mes: { type: 'array', items: { type: 'integer' }, description: 'OPTIONAL. New monthly cadence by day of the month ([5] = every day 5; [-1] = last day of the month).' },
+        semana_do_mes: { type: 'integer', description: 'OPTIONAL. New monthly cadence by the Nth occurrence of the weekday; use it together with dias_da_semana (2 + ["seg"] = 2nd Monday of the month; -1 = last).' },
+        canal: { type: 'string', enum: ['telegram', 'email', 'whatsapp', 'app'], description: 'OPTIONAL. New delivery channel for the text the routine returns. Pass "app" to STOP pushing the message and leave the result only saved in the app: that is what answers "não me manda mais no WhatsApp", "para de me mandar isso no Telegram", "só quero ver no app". Never write that request inside o_que_fazer: there it becomes text, here it becomes configuration.' },
+        fuso: { type: 'string', description: 'OPTIONAL. New IANA time zone (e.g.: "America/Sao_Paulo").' },
+        repetir_ate: { type: 'string', description: 'OPTIONAL. New END date of the routine, ISO 8601 in local time (e.g.: 2026-09-29T23:59:00). Pass it when the owner says until when they want it ("só até o fim do mês"): the routine turns itself off on that day. Pass the word "sempre" to REMOVE the end and leave the routine open.' },
       },
       required: [],
     },
@@ -4319,12 +4319,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // que cria rotina de verdade (criar_rotina) esse sim é gated.
   registry.add({
     name: 'oferecer_rotina', keepsStepText: true,
-    description: 'Registra que você vai SUGERIR ao dono deixar algo rodando sozinho (uma rotina/lembrete recorrente), e só então você faz o convite com as suas palavras. É a ÚNICA forma de oferecer um agendamento: nunca sugira rotina sem chamar isto antes, porque é o que impede o time de oferecer a mesma coisa de novo dois dias depois. Chame quando o assunto de AGORA abrir a deixa: ele repetiu um pedido, disse "todo dia"/"toda semana", ou está tratando de algo que dá pra deixar rodando (inclusive o padrão que o seu contexto interno indicar). Nunca do nada nem mudando de assunto. Se a ferramenta responder que não pode, NÃO ofereça e siga a conversa normalmente. Isto NÃO cria a rotina; se ele topar, aí sim use criar_rotina.',
+    description: 'Records that you are going to SUGGEST to the owner leaving something running on its own (a recurring routine/reminder), and only then do you make the invitation in your own words. It is the ONLY way to offer a schedule: never suggest a routine without calling this first, because it is what keeps the team from offering the same thing again two days later. Call it when the CURRENT topic opens the door: they repeated a request, said "todo dia"/"toda semana", or are dealing with something that could be left running (including the pattern your internal context indicates). Never out of nowhere nor changing the subject. If the tool answers that you cannot, do NOT offer and carry on the conversation normally. This does NOT create the routine; if they agree, then use criar_rotina.',
     parameters: {
       type: 'object',
       properties: {
-        padrao: { type: 'string', enum: CATALOGO_ROTINA.map((p) => p.id), description: 'Que tipo de agendamento você vai oferecer.' },
-        titulo: { type: 'string', description: 'Em uma linha, o que você vai propor deixar rodando (ex: "resumo da agenda às 7h todo dia útil").' },
+        padrao: { type: 'string', enum: CATALOGO_ROTINA.map((p) => p.id), description: 'What kind of schedule you are going to offer.' },
+        titulo: { type: 'string', description: 'In one line, what you are going to propose leaving running (e.g.: "resumo da agenda às 7h todo dia útil").' },
       },
       required: ['padrao', 'titulo'],
     },
@@ -4345,12 +4345,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // pedido dele sendo cumprido na hora, não uma ação sobre o mundo dele.
   registry.add({
     name: 'dispensar_oferta_de_rotina',
-    description: 'Marca que o dono NÃO quer que sugiram deixar coisas rodando sozinhas. Chame quando ele disser isso de forma clara ("não me ofereça rotina", "para de sugerir automação", "não quero nada automático"). Depois disto ninguém volta a oferecer, nem você nem o time. Se ele dispensou só um TIPO ("não quero resumo de agenda, mas o resto pode"), passe o padrao correspondente; sem padrao, vale pra tudo. Não use por dúvida ou por ele só ter deixado passar: só na recusa explícita.',
+    description: 'Marks that the owner does NOT want to be offered leaving things running on their own. Call it when they say so clearly ("não me ofereça rotina", "para de sugerir automação", "não quero nada automático"). After this nobody offers again, neither you nor the team. If they declined only one TYPE ("não quero resumo de agenda, mas o resto pode"), pass the corresponding padrao; without padrao, it applies to everything. Do not use it out of doubt or because they just let it pass: only on an explicit refusal.',
     parameters: {
       type: 'object',
       properties: {
-        motivo: { type: 'string', description: 'Em poucas palavras, o que ele disse (fica registrado pro time).' },
-        padrao: { type: 'string', enum: CATALOGO_ROTINA.map((p) => p.id), description: 'OPCIONAL. Só se ele dispensou um tipo específico; omita pra dispensar todas as ofertas.' },
+        motivo: { type: 'string', description: 'In a few words, what they said (it is recorded for the team).' },
+        padrao: { type: 'string', enum: CATALOGO_ROTINA.map((p) => p.id), description: 'OPTIONAL. Only if they declined a specific type; omit it to decline all offers.' },
       },
       required: ['motivo'],
     },
@@ -4369,9 +4369,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // verdade do banco. Assim, se algo mudou por fora, eu vejo ao consultar.
   registry.add({
     name: 'listar_lembretes',
-    description: 'Consulta os lembretes do usuário, únicos ou recorrentes, com a próxima data e o último resultado de envio. Use SEMPRE antes de cancelar/criar vários e quando ele perguntar quais lembretes tem. Para saber se um lembrete foi enviado ou falhou, passe incluir_historico=true: inclui os processados e cancelados dos últimos 30 dias (até 200 registros). Aceito pelo canal NÃO comprova entrega nem leitura. Resultado incerto NÃO autoriza reenviar automaticamente. Esta é a fonte da verdade; não confie só na memória da conversa.',
+    description: 'Looks up the user\'s reminders, one-time or recurring, with the next date and the last delivery result. Use it ALWAYS before cancelling/creating several and when they ask which reminders they have. To know whether a reminder was sent or failed, pass incluir_historico=true: it includes the processed and cancelled ones from the last 30 days (up to 200 records). Accepted by the channel does NOT prove delivery or reading. An uncertain result does NOT authorize resending automatically. This is the source of truth; do not rely only on the conversation\'s memory.',
     parameters: { type: 'object', properties: {
-      incluir_historico: { type: 'boolean', description: 'Inclui lembretes já processados ou cancelados dos últimos 30 dias. Use ao verificar o resultado de um envio passado.' },
+      incluir_historico: { type: 'boolean', description: 'Includes reminders already processed or cancelled in the last 30 days. Use it when checking the result of a past delivery.' },
     } },
     run: async ({ incluir_historico = false } = {}) => {
       const includeRecent = incluir_historico === true;
@@ -4386,11 +4386,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // uma linha de "alias" no prompt pra ele não se confundir com o histórico.
   registry.add({
     name: 'renomear_assistente',
-    description: 'Muda o SEU próprio nome (o nome deste assistente) para o que o usuário pedir. Use SÓ quando ele pedir explicitamente pra você mudar de nome ("muda seu nome pra X", "quero te chamar de Y", "seu nome agora é Z"). A troca vale a partir da próxima mensagem: o sistema passa a te apresentar com o novo nome e guarda o antigo pra você se reconhecer no histórico. NÃO chame por conta própria nem sugira trocar de nome; só quando ele pedir. Depois de trocar, confirme pro usuário o novo nome.',
+    description: 'Changes YOUR own name (this assistant\'s name) to whatever the user asks. Use it ONLY when they explicitly ask you to change your name ("muda seu nome pra X", "quero te chamar de Y", "seu nome agora é Z"). The change applies from the next message on: the system starts presenting you with the new name and keeps the old one so you recognize yourself in the history. Do NOT call it on your own nor suggest changing your name; only when they ask. After changing, confirm the new name to the user.',
     parameters: {
       type: 'object',
       properties: {
-        novo_nome: { type: 'string', description: 'O novo nome do assistente, só o nome (ex: "Nina", "Alex", "Bento").' },
+        novo_nome: { type: 'string', description: 'The assistant\'s new name, just the name (e.g.: "Nina", "Alex", "Bento").' },
       },
       required: ['novo_nome'],
     },
@@ -4407,11 +4407,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // atuais deste assistente pelas novas (não acumula).
   registry.add({
     name: 'atualizar_sugestoes',
-    description: 'Reescreve o box "Sugestões" da tela inicial do usuário com sugestões novas, concretas e acionáveis. Use quando o usuário pedir pra atualizar/renovar as sugestões, ou quando você tiver base (e-mails, agenda, conversa) pra propor algo mais útil que o que está lá. Substitui as sugestões atuais (não acumula). Passe de 2 a 4 sugestões curtas, cada uma uma ação clara que ele possa tocar (ex: "Responder o e-mail do fornecedor sobre a reunião de quinta").',
+    description: 'Rewrites the "Sugestões" box on the user\'s home screen with new, concrete, actionable suggestions. Use it when the user asks to update/refresh the suggestions, or when you have grounds (emails, calendar, conversation) to propose something more useful than what is there. Replaces the current suggestions (does not accumulate). Pass 2 to 4 short suggestions, each a clear action they can act on (e.g.: "Responder o e-mail do fornecedor sobre a reunião de quinta").',
     parameters: {
       type: 'object',
       properties: {
-        sugestoes: { type: 'array', items: { type: 'string' }, description: `Lista de 2 a 4 sugestões curtas em ${tagLang}, cada uma acionável.` },
+        sugestoes: { type: 'array', items: { type: 'string' }, description: `List of 2 to 4 short suggestions in ${tagLang}, each one actionable.` },
       },
       required: ['sugestoes'],
     },
@@ -4432,7 +4432,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // conversa. Não-gated: só lê o estado da própria conta do dono.
   registry.add({
     name: 'status_conta',
-    description: `Mostra o que está conectado e ligado na conta do usuário: serviços Google (Gmail/Agenda/Drive/Docs) e a permissão de envio AVULSO pelo Gmail do usuário, Microsoft (Hotmail/Outlook: e-mail + agenda), GitHub, Slack, conectores MCP, Telegram, WhatsApp, preferências de mídia e fuso horário. Esta tool NÃO informa nem controla a entrega automática de rotinas por e-mail, que é feita separadamente pela plataforma ${marca().nome} e não usa o Gmail do usuário. Use SEMPRE que o usuário perguntar o que tem conectado/ligado ("meu Gmail tá conectado?", "posso enviar pelo meu Gmail?", "meu Slack tá conectado?", "o que eu já conectei?", "minhas configurações").`,
+    description: `Shows what is connected and turned on in the user's account: Google services (Gmail/Calendar/Drive/Docs) and the permission for AD-HOC sending through the user's Gmail, Microsoft (Hotmail/Outlook: email + calendar), GitHub, Slack, MCP connectors, Telegram, WhatsApp, media preferences and time zone. This tool does NOT report nor control the automatic email delivery of routines, which is done separately by the ${marca().nome} platform and does not use the user's Gmail. Use it ALWAYS when the user asks what they have connected/turned on ("meu Gmail tá conectado?", "posso enviar pelo meu Gmail?", "meu Slack tá conectado?", "o que eu já conectei?", "minhas configurações").`,
     parameters: { type: 'object', properties: {} },
     run: async () => {
       const lines = [];
@@ -4532,9 +4532,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (gAccounts.length > 1) {
     registry.add({
       name: 'usar_conta_google',
-      description: `Escolhe em qual das contas Google do usuário ESTE assistente trabalha (Gmail, Agenda, Drive, Docs). Use SOMENTE quando ele pedir para mudar a conta padrão para as próximas conversas. Para olhar e-mail/agenda/Drive de outra conta uma vez, use google com contas, sem alterar esta preferência. Contas conectadas hoje: ${gAccounts.map((a) => a.google_email).join(', ')}. A escolha fica salva no assistente e vale também nas próximas conversas.`,
+      description: `Chooses which of the user's Google accounts THIS assistant works in (Gmail, Calendar, Drive, Docs). Use it ONLY when they ask to change the default account for the next conversations. To look at another account's email/calendar/Drive once, use google with contas, without changing this preference. Accounts connected today: ${gAccounts.map((a) => a.google_email).join(', ')}. The choice is saved in the assistant and also applies in the next conversations.`,
       parameters: { type: 'object', properties: {
-        email: { type: 'string', description: 'E-mail da conta Google a usar, exatamente como aparece na lista de contas conectadas.' },
+        email: { type: 'string', description: 'Email of the Google account to use, exactly as it appears in the list of connected accounts.' },
       }, required: ['email'] },
       run: async ({ email } = {}) => {
         const alvo = String(email || '').trim().toLowerCase();
@@ -4561,10 +4561,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // de confirmação). Requer o Google conectado com escopo de escrita.
   registry.add({
     name: 'configurar_envio_email',
-    description: `Liga ou desliga SOMENTE a permissão de o assistente enviar e-mails AVULSOS pelo Gmail do usuário. Nunca use para criar, consertar ou executar uma rotina: o canal email das rotinas é entregue pela plataforma ${marca().nome}, não usa Gmail, não depende desta permissão e não cria rascunho. Mesmo ligado, cada envio avulso ainda é confirmado antes de sair. Use apenas quando o usuário pedir explicitamente para ligar/desligar envios pelo Gmail dele. Ligar exige o Google conectado com escopo de escrita.`,
+    description: `Turns on or off ONLY the permission for the assistant to send AD-HOC emails through the user's Gmail. Never use it to create, fix or run a routine: the routines' email channel is delivered by the ${marca().nome} platform, does not use Gmail, does not depend on this permission and does not create a draft. Even when on, each ad-hoc send is still confirmed before it goes out. Use it only when the user explicitly asks to turn on/off sending through their Gmail. Turning it on requires Google connected with write scope.`,
     parameters: {
       type: 'object',
-      properties: { ligado: { type: 'boolean', description: 'true pra ligar, false pra desligar.' } },
+      properties: { ligado: { type: 'boolean', description: 'true to turn on, false to turn off.' } },
       required: ['ligado'],
     },
     run: async ({ ligado }) => {
@@ -4582,12 +4582,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // partir do PRÓXIMO turno (as prefs são lidas no início da conversa).
   registry.add({
     name: 'configurar_midia',
-    description: 'Liga ou desliga uma preferência de mídia do usuário: "imagem" (gerar imagens), "visao" (ler/entender imagens que ele manda), "audio" (transcrever áudios recebidos), "voz" (responder com áudio de voz). Use quando ele pedir pra ligar/desligar uma dessas. Passa a valer no próximo turno.',
+    description: 'Turns one of the user\'s media preferences on or off: "imagem" (generate images), "visao" (read/understand images they send), "audio" (transcribe received audio), "voz" (reply with voice audio). Use it when they ask to turn one of these on/off. Takes effect on the next turn.',
     parameters: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['imagem', 'visao', 'audio', 'voz'], description: 'Qual preferência.' },
-        ligado: { type: 'boolean', description: 'true pra ligar, false pra desligar.' },
+        tipo: { type: 'string', enum: ['imagem', 'visao', 'audio', 'voz'], description: 'Which preference.' },
+        ligado: { type: 'boolean', description: 'true to turn on, false to turn off.' },
       },
       required: ['tipo', 'ligado'],
     },
@@ -4644,12 +4644,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
-      description: 'Lê e analisa PLANILHAS (Excel .xlsx/.xlsm/.xls, CSV ou TSV) processando os dados por CÓDIGO (Python/pandas) num ambiente isolado — funciona pra QUALQUER tamanho, sem truncar. É o ÚNICO jeito de ver o conteúdo de uma planilha: quando uma planilha chega (anexo, Drive, OneDrive, e-mail, biblioteca), você recebe só a estrutura dela (abas, linhas, colunas), nunca as células. Use SEMPRE que a pergunta for sobre os dados: buscar ou conferir um valor, listar, contar, somar, médias, filtros, cruzamentos, agrupamentos, ranking, comparação ou resumo. Delega a um sub-agente que lê o arquivo inteiro e devolve só o resultado. O sub-agente NÃO vê a conversa: descreva o objetivo com todo o contexto (qual coluna, período, o que calcular).',
+      description: 'Reads and analyzes SPREADSHEETS (Excel .xlsx/.xlsm/.xls, CSV or TSV) by processing the data with CODE (Python/pandas) in an isolated environment; works for ANY size, without truncating. It is the ONLY way to see a spreadsheet\'s content: when a spreadsheet arrives (attachment, Drive, OneDrive, email, library), you only receive its structure (sheets, rows, columns), never the cells. Use it ALWAYS when the question is about the data: finding or checking a value, listing, counting, summing, averages, filters, cross-references, groupings, ranking, comparison or summary. Delegates to a sub-agent that reads the whole file and returns only the result. The sub-agent does NOT see the conversation: describe the goal with all the context (which column, period, what to calculate).',
       parameters: {
         type: 'object',
         properties: {
-          objetivo: { type: 'string', description: 'O que analisar/calcular, com contexto (o sub-agente não vê a conversa). Ex: "some a coluna Valor por sócio e diga o total de cada um", "quantas linhas têm status Pago em 2026 e qual a soma".' },
-          formato: { type: 'string', description: 'Opcional: como quer a resposta (ex: "tabela sócio × total", "só o número final").' },
+          objetivo: { type: 'string', description: 'What to analyze/calculate, with context (the sub-agent does not see the conversation). E.g.: "some a coluna Valor por sócio e diga o total de cada um", "quantas linhas têm status Pago em 2026 e qual a soma".' },
+          formato: { type: 'string', description: 'Optional: how you want the answer (e.g.: "tabela sócio × total", "só o número final").' },
         },
         required: ['objetivo'],
       },
@@ -4674,12 +4674,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (sandboxEnabled() && s3Enabled()) {
     registry.add({
       name: 'editar_planilha',
-      description: 'ALTERA uma planilha .xlsx que JÁ EXISTE (que você gerou antes ou que o usuário enviou) e entrega a versão nova no chat. Use SEMPRE que o pedido for mudar uma planilha existente: acrescentar/remover linhas, corrigir uma célula, renomear coluna, criar aba, reordenar, preencher o que faltou. NUNCA regere a planilha inteira com gerar_documento pra aplicar uma mudança: a tabela grande não caberia na chamada e a planilha PERDE linhas. O sub-agente abre o arquivo por código (openpyxl), aplica a mudança NO LUGAR (o que você não pediu fica intacto) e devolve só um resumo — você não vê o conteúdo da planilha, e não precisa. A versão anterior continua na biblioteca como histórico. O sub-agente NÃO vê a conversa: diga exatamente o que mudar, em qual aba/linha/coluna, com os valores. Ex: "na aba Artigos, acrescente estas 4 linhas: ..." ou "corrija o ano do ART-07 para 2019".',
+      description: 'CHANGES an .xlsx spreadsheet that ALREADY EXISTS (one you generated before or that the user sent) and delivers the new version in the chat. Use it ALWAYS when the request is to change an existing spreadsheet: add/remove rows, fix a cell, rename a column, create a sheet, reorder, fill in what was missing. NEVER regenerate the whole spreadsheet with gerar_documento to apply a change: the large table would not fit in the call and the spreadsheet LOSES rows. The sub-agent opens the file by code (openpyxl), applies the change IN PLACE (what you did not ask for stays intact) and returns only a summary; you do not see the spreadsheet\'s content, and you do not need to. The previous version stays in the library as history. The sub-agent does NOT see the conversation: say exactly what to change, in which sheet/row/column, with the values. E.g.: "na aba Artigos, acrescente estas 4 linhas: ..." or "corrija o ano do ART-07 para 2019".',
       parameters: {
         type: 'object',
         properties: {
-          objetivo: { type: 'string', description: 'A mudança a aplicar, com TODO o contexto e os valores concretos (o sub-agente não vê a conversa). Ex: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
-          arquivo_id: { type: 'string', description: 'Opcional: id do arquivo na biblioteca (listar_arquivos). Sem isso, edita a planilha MAIS RECENTE — que é a versão válida; as anteriores são histórico.' },
+          objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
+          arquivo_id: { type: 'string', description: 'Optional: id of the file in the library (listar_arquivos). Without it, edits the MOST RECENT spreadsheet, which is the valid version; the previous ones are history.' },
         },
         required: ['objetivo'],
       },
@@ -4878,7 +4878,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // dono (não só pra código): tem que aparecer na descrição, senão o
         // principal não a enxerga como caminho pra "olha meu desktop".
         extra: runnerForThisAgent && !activeProject
-          ? `IMPORTANTE: esta tool também é o caminho pra MÁQUINA PESSOAL do seu dono (${marca().nome} Runner ativo agora). Use pra QUALQUER coisa na máquina dele, não só programação: listar/ler arquivos, ver a área de trabalho, procurar um documento, rodar um comando local. Diga no objetivo que é "na máquina local do dono, pelo Runner". Leitura é livre; escrita só nas pastas autorizadas.`
+          ? `IMPORTANT: this tool is also the way into your owner's PERSONAL MACHINE (${marca().nome} Runner active now). Use it for ANYTHING on their machine, not just programming: list/read files, look at the desktop, find a document, run a local command. Say in the goal that it is "on the owner's local machine, via the Runner". Reading is free; writing only in the authorized folders.`
           : undefined,
         sessionKey: `${userId}:${agent.id}:${thread.id}`,
         dispatch:['chat','telegram','whatsapp'].includes(kind)?args=>codingJobs.submit(codingIdentity,{kind:'advanced',args,userRequest:message,channel:kind,policy:codingPolicySnapshot(agent),
@@ -4928,7 +4928,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (sandboxEnabled() && vaultEnabled()) {
       registry.add({
         name: 'definir_modo_permissao',
-        description: 'Define o modo de permissão do assistente para tarefas de código/servidor. Modos: "padrao" (toda escrita/edição/comando pede sua confirmação, o mais seguro), "aceitar_edicoes" (editar/escrever arquivo e rodar comando rodam direto, sem parar pra confirmar, use quando estiver codando de verdade), "plano" (só leitura; nada é alterado, o assistente só propõe). O terminal ao vivo (antigo "livre") virou a categoria de agente "super", configurável só pelo dono na tela do assistente. Vale a partir da próxima mensagem.',
+        description: 'Sets the assistant\'s permission mode for code/server tasks. Modes: "padrao" (every write/edit/command asks for your confirmation, the safest), "aceitar_edicoes" (editing/writing a file and running a command run directly, without stopping to confirm; use it when actually coding), "plano" (read only; nothing is changed, the assistant only proposes). The live terminal (formerly "livre") became the "super" agent category, configurable only by the owner on the assistant\'s screen. Takes effect from the next message on.',
         parameters: { type: 'object', properties: {
           modo: { type: 'string', enum: ['padrao', 'aceitar_edicoes', 'plano'], description: 'padrao | aceitar_edicoes | plano' },
         }, required: ['modo'] },
@@ -4941,9 +4941,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       });
       registry.add({
         name: 'permitir_comando',
-        description: 'Pré-autoriza um PREFIXO de comando a rodar sem pedir confirmação (ex: "git status", "npm test", "node --check"). O comando casa se for exatamente o prefixo ou começar com "<prefixo> ". Use quando o usuário disser que pode rodar certo comando sem perguntar toda vez. Vale a partir da próxima mensagem.',
+        description: 'Pre-authorizes a command PREFIX to run without asking for confirmation (e.g.: "git status", "npm test", "node --check"). The command matches if it is exactly the prefix or starts with "<prefixo> ". Use it when the user says a certain command can run without asking every time. Takes effect from the next message on.',
         parameters: { type: 'object', properties: {
-          prefixo: { type: 'string', description: 'prefixo do comando a liberar, ex: "git status", "npm test"' },
+          prefixo: { type: 'string', description: 'prefix of the command to allow, e.g.: "git status", "npm test"' },
         }, required: ['prefixo'] },
         async run({ prefixo }) {
           const r = await addAgentAllowlist(agent.id, userId, prefixo);
@@ -4953,9 +4953,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       });
       registry.add({
         name: 'revogar_comando',
-        description: 'Remove um prefixo de comando da lista de pré-autorizados (volta a pedir confirmação pra ele).',
+        description: 'Removes a command prefix from the pre-authorized list (it goes back to asking for confirmation for it).',
         parameters: { type: 'object', properties: {
-          prefixo: { type: 'string', description: 'prefixo a revogar (igual ao que foi liberado)' },
+          prefixo: { type: 'string', description: 'prefix to revoke (same as the one that was allowed)' },
         }, required: ['prefixo'] },
         async run({ prefixo }) {
           const r = await removeAgentAllowlist(agent.id, userId, prefixo);
@@ -4964,7 +4964,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       });
       registry.add({
         name: 'listar_permissoes',
-        description: 'Mostra o modo de permissão atual do assistente e a lista de comandos pré-autorizados a rodar sem confirmação.',
+        description: 'Shows the assistant\'s current permission mode and the list of commands pre-authorized to run without confirmation.',
         parameters: { type: 'object', properties: {}, required: [] },
         async run() {
           const allow = await getAgentAllowlist(agent.id, userId);
@@ -5048,11 +5048,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (caps.drive?.write && sandboxEnabled()) {
     addGated(registry, [{
       name: 'drive_upload_arquivo',
-      description: `Sobe pro Google Drive do usuário um ARQUIVO que você gerou no sandbox (PDF, imagem, planilha, qualquer binário). O arquivo vai sempre pra pasta do assistente ("${agent?.name || marca().nome}") na raiz; não dá pra escolher outra pasta. Passe o caminho no sandbox (ex: /workspace/relatorio.pdf) e o nome que ele terá no Drive. Use isto (não o drive_upload de texto) para arquivos binários. Confirme nome antes.`,
+      description: `Uploads to the user's Google Drive a FILE you generated in the sandbox (PDF, image, spreadsheet, any binary). The file always goes to the assistant's folder ("${agent?.name || marca().nome}") at the root; another folder cannot be chosen. Pass the path in the sandbox (e.g.: /workspace/relatorio.pdf) and the name it will have in Drive. Use this (not the text drive_upload) for binary files. Confirm the name first.`,
       parameters: { type: 'object', properties: {
-        caminho: { type: 'string', description: 'Caminho do arquivo no sandbox (ex: /workspace/relatorio.pdf).' },
-        nome: { type: 'string', description: 'Nome do arquivo no Drive (ex: Relatório.pdf).' },
-        mimeType: { type: 'string', description: 'MIME do arquivo (ex: application/pdf). Opcional, inferido do nome se omitido.' },
+        caminho: { type: 'string', description: 'File path in the sandbox (e.g.: /workspace/relatorio.pdf).' },
+        nome: { type: 'string', description: 'File name in Drive (e.g.: Relatório.pdf).' },
+        mimeType: { type: 'string', description: 'File MIME type (e.g.: application/pdf). Optional, inferred from the name if omitted.' },
       }, required: ['caminho', 'nome'] },
       async run({ caminho, nome, mimeType }) {
         const b = await sandboxReadBytes(userId, caminho);
@@ -5079,10 +5079,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (caps.drive?.write && s3Enabled()) {
     addGated(registry, [{
       name: 'enviar_para_drive',
-      description: `Sobe pro Google Drive do usuário uma cópia de um arquivo que JÁ está na biblioteca privada dele (um documento que você gerou com gerar_documento, ou uma mídia recebida). O arquivo vai pra pasta do assistente ("${agent?.name || marca().nome}") no Drive. Use SÓ quando o usuário pedir explicitamente pra salvar/mandar o arquivo no Google Drive dele ("salva isso no meu Drive", "manda pro Drive também"). Se você acabou de gerar o documento, é só chamar sem id (pega o mais recente). Não use isto pra entregar o arquivo no chat (gerar_documento já entrega); isto é só a cópia no Drive. ATUALIZAR NO MESMO LINK: se já existe na pasta um arquivo com o MESMO nome, esta tool reescreve o conteúdo dele e devolve o mesmo link de sempre (atualizado:true). Então, quando o usuário quiser manter UM arquivo vivo ("atualiza a planilha", "usa o mesmo link"), reuse exatamente o mesmo nome; só mude o nome quando ele quiser de fato um arquivo separado.`,
+      description: `Uploads to the user's Google Drive a copy of a file that is ALREADY in their private library (a document you generated with gerar_documento, or received media). The file goes to the assistant's folder ("${agent?.name || marca().nome}") in Drive. Use it ONLY when the user explicitly asks to save/send the file to their Google Drive ("salva isso no meu Drive", "manda pro Drive também"). If you just generated the document, simply call it without id (it takes the most recent one). Do not use this to deliver the file in the chat (gerar_documento already delivers it); this is only the copy in Drive. UPDATE AT THE SAME LINK: if a file with the SAME name already exists in the folder, this tool rewrites its content and returns the usual same link (atualizado:true). So, when the user wants to keep ONE living file ("atualiza a planilha", "usa o mesmo link"), reuse exactly the same name; only change the name when they really want a separate file.`,
       parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'id do arquivo na biblioteca (de listar_midia). Omita pra usar o mais recente.' },
-        nome: { type: 'string', description: 'Nome do arquivo no Drive. Repetir o nome de um arquivo que já está na pasta ATUALIZA aquele arquivo (mesmo link). Padrão: o nome que ele já tem.' },
+        id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to use the most recent one.' },
+        nome: { type: 'string', description: 'File name in Drive. Repeating the name of a file that is already in the folder UPDATES that file (same link). Default: the name it already has.' },
       }, required: [] },
       async normalizeConfirmationArgs(args = {}) {
         const asset = args.id != null ? await getMediaAsset(userId,args.id) : (await listMediaAssets(userId,{limit:1}))[0];
@@ -5464,26 +5464,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   registry.add({
     name: 'gerar_documento',
     description:
-      'Gera um arquivo (.xlsx PLANILHA, .docx, .pdf, .md, .txt ou .html) a partir de texto e ENTREGA direto pro usuário no chat. '
-      + 'PLANILHA: use formato "xlsx" SEMPRE que pedirem planilha, tabela, Excel, controle de gastos, orçamento, extrato organizado, '
-      + 'lista de itens ou qualquer coisa em linhas e colunas — e passe o conteudo como TABELA de markdown (| col | col |, com a linha '
-      + '|---|---| depois do cabeçalho). Cada tabela vira uma aba; um "# Título" antes da tabela vira o nome da aba. Escreva os valores '
-      + 'do jeito natural ("R$ 1.234,56", "12/03/2026", "15%"): viram número, data e percentual de verdade, então a planilha soma e ordena. '
-      + 'NUNCA responda uma planilha só como texto no chat quando a pessoa pediu planilha, e NUNCA gere CSV a menos que ela peça CSV com essas letras. '
-      + 'Use SEMPRE que pedirem pra "gerar/criar/montar/exportar um .doc, Word, PDF, documento" a partir de um conteúdo '
-      + '(inclusive quando o conteúdo veio de um PDF que você leu, ou de um Google Doc). NÃO depende de Google Drive: '
-      + 'funciona pra qualquer usuário. O arquivo é salvo na biblioteca do usuário e enviado automaticamente; na resposta '
-      + 'só comente em uma frase curta, sem colar o conteúdo de novo nem pedir pra "colar à mão". Passe o conteúdo em '
-      + 'markdown simples (# título, ## seção, - lista, **negrito**) que a formatação é aplicada. '
-      + 'PRA DOCUMENTO COM IMAGENS (apresentação, catálogo, relatório visual): use formato "html" e inclua as imagens '
-      + 'por URL (markdown ![legenda](https://...) ou <img src="https://...">); as imagens são BAIXADAS e embutidas no '
-      + 'arquivo, que fica self-contained e não quebra se o link de origem sair do ar. docx/pdf ainda são só texto.',
+      'Generates a file (.xlsx SPREADSHEET, .docx, .pdf, .md, .txt or .html) from text and DELIVERS it straight to the user in the chat. '
+      + 'SPREADSHEET: use the "xlsx" format ALWAYS when they ask for a spreadsheet, table, Excel, expense tracker, budget, organized statement, '
+      + 'list of items or anything in rows and columns, and pass the conteudo as a markdown TABLE (| col | col |, with the '
+      + '|---|---| row after the header). Each table becomes a sheet; a "# Title" before the table becomes the sheet name. Write the values '
+      + 'the natural way ("R$ 1.234,56", "12/03/2026", "15%"): they become real numbers, dates and percentages, so the spreadsheet sums and sorts. '
+      + 'NEVER answer a spreadsheet only as text in the chat when the person asked for a spreadsheet, and NEVER generate CSV unless they ask for CSV in those letters. '
+      + 'Use it ALWAYS when they ask to "gerar/criar/montar/exportar um .doc, Word, PDF, documento" from some content '
+      + '(including when the content came from a PDF you read, or from a Google Doc). It does NOT depend on Google Drive: '
+      + 'it works for any user. The file is saved in the user\'s library and sent automatically; in the reply '
+      + 'only comment in one short sentence, without pasting the content again nor asking them to "colar à mão". Pass the content in '
+      + 'simple markdown (# title, ## section, - list, **bold**) and the formatting is applied. '
+      + 'FOR A DOCUMENT WITH IMAGES (presentation, catalog, visual report): use the "html" format and include the images '
+      + 'by URL (markdown ![caption](https://...) or <img src="https://...">); the images are DOWNLOADED and embedded in the '
+      + 'file, which becomes self-contained and does not break if the source link goes offline. docx/pdf are still text only.',
     parameters: {
       type: 'object',
       properties: {
-        nome: { type: 'string', description: 'Nome do arquivo (sem extensão), ex "Relatório de vendas".' },
-        formato: { type: 'string', enum: SUPPORTED_FORMATS, description: 'xlsx (PLANILHA Excel: use sempre que o pedido for planilha/tabela/controle/orçamento), docx (Word editável, padrão pra texto), pdf, md, txt, html (use html quando tiver IMAGENS a embutir). csv SÓ se a pessoa pedir CSV explicitamente.' },
-        conteudo: { type: 'string', description: 'O conteúdo do arquivo, em markdown simples. Pra xlsx, use TABELAS de markdown (uma tabela por aba, cabeçalho + linha |---|). Pra imagens use html + ![](url) ou <img src="url">.' },
+        nome: { type: 'string', description: 'File name (without extension), e.g. "Relatório de vendas".' },
+        formato: { type: 'string', enum: SUPPORTED_FORMATS, description: 'xlsx (Excel SPREADSHEET: use it whenever the request is a spreadsheet/table/tracker/budget), docx (editable Word, default for text), pdf, md, txt, html (use html when there are IMAGES to embed). csv ONLY if the person explicitly asks for CSV.' },
+        conteudo: { type: 'string', description: 'The file content, in simple markdown. For xlsx, use markdown TABLES (one table per sheet, header + |---| row). For images use html + ![](url) or <img src="url">.' },
       },
       required: ['nome', 'conteudo'],
     },
@@ -5527,15 +5527,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (runnerForThisAgent) registry.add({
     name: 'pegar_arquivo_da_maquina',
     description:
-      `Traz UM arquivo da máquina do usuário (${marca().nome} Runner) pra dentro do ${marca().nome} e já entrega como anexo no chat. `
-      + 'Use sempre que precisar do ARQUIVO em si (foto, PDF, planilha, zip, binário) e não do texto dele: pra ver a imagem, '
-      + 'anexar num e-mail, mandar pro Drive. Pra ler texto/código continue usando o terminal. '
-      + 'NUNCA improvise transferência por fora (host de arquivo, paste, bucket de terceiro): este é o único caminho autorizado. '
-      + 'Você recebe de volta só nome, tamanho e tipo — o conteúdo não vem pra você.',
+      `Brings ONE file from the user's machine (${marca().nome} Runner) into ${marca().nome} and delivers it right away as an attachment in the chat. `
+      + 'Use it whenever you need the FILE itself (photo, PDF, spreadsheet, zip, binary) and not its text: to see the image, '
+      + 'attach it to an email, send it to Drive. To read text/code keep using the terminal. '
+      + 'NEVER improvise an outside transfer (file host, paste, third-party bucket): this is the only authorized path. '
+      + 'You only get back the name, size and type; the content does not come to you.',
     parameters: {
       type: 'object',
       properties: {
-        caminho: { type: 'string', description: 'Caminho do arquivo NA MÁQUINA do usuário, ex "~/Desktop/passaporte.jpg". Se não souber o caminho exato, ache antes com o terminal.' },
+        caminho: { type: 'string', description: 'File path ON THE user\'s MACHINE, e.g. "~/Desktop/passaporte.jpg". If you do not know the exact path, find it first with the terminal.' },
       },
       required: ['caminho'],
     },
@@ -5573,24 +5573,24 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (!videoEmRevisao()) registry.add({
     name: 'gerar_video',
     description:
-      'Gera um VÍDEO curto (até ' + MAX_VIDEO_SECONDS + 's) DA PRÓPRIA PESSOA (o usuário) falando/agindo numa cena. '
-      + 'A imagem da pessoa vem da identidade verificada dela (não precisa e não aceita foto enviada na hora). Use quando o usuário '
-      + 'pedir pra "fazer/gerar um vídeo meu", "me põe falando tal coisa", etc. É ASSÍNCRONO: leva alguns minutos; você cria o pedido '
-      + 'e avisa que vai mandar quando ficar pronto (não fica esperando). SEPARE cena e fala: `cena` descreve só o cenário/ação (NÃO '
-      + 'coloque a fala aqui); `fala` são as palavras EXATAS que a pessoa diz. Há DUAS formas de dar voz ao vídeo: '
-      + '(1) `fala` (texto): a voz sai clonada da voz de referência que o usuário gravou no app (aba Configurações, "Voz de referência"); '
-      + '(2) `usar_audio_gravado=true`: o vídeo fala EXATAMENTE o áudio que o usuário gravou/subiu no app (aba Configurações, "Áudio pra falar"), '
-      + 'com as próprias palavras e entonação dele (nesse caso NÃO precisa de `fala`). Se a pessoa quer falar (texto) mas ainda não gravou a voz '
-      + 'de referência, ou quer usar o áudio gravado mas ainda não gravou nenhum, avise que ela precisa gravar em Configurações antes (nunca peça '
-      + 'áudio pelo chat). Sem `fala` e sem `usar_audio_gravado`, sai um vídeo dela só na cena, sem falar. '
-      + 'Se o pedido tiver conteúdo proibido (sexual, violência, sangue, nudez, menores) ele é recusado automaticamente.',
+      'Generates a short VIDEO (up to ' + MAX_VIDEO_SECONDS + 's) OF THE PERSON THEMSELVES (the user) speaking/acting in a scene. '
+      + 'The person\'s image comes from their verified identity (it does not need and does not accept a photo sent on the spot). Use it when the user '
+      + 'asks to "fazer/gerar um vídeo meu", "me põe falando tal coisa", etc. It is ASYNCHRONOUS: it takes a few minutes; you create the request '
+      + 'and say you will send it when it is ready (do not keep waiting). SEPARATE scene and speech: `cena` describes only the setting/action (do NOT '
+      + 'put the speech here); `fala` is the EXACT words the person says. There are TWO ways to give the video a voice: '
+      + '(1) `fala` (text): the voice comes out cloned from the reference voice the user recorded in the app (Configurações tab, "Voz de referência"); '
+      + '(2) `usar_audio_gravado=true`: the video speaks EXACTLY the audio the user recorded/uploaded in the app (Configurações tab, "Áudio pra falar"), '
+      + 'with their own words and intonation (in this case `fala` is NOT needed). If the person wants to speak (text) but has not yet recorded the reference '
+      + 'voice, or wants to use the recorded audio but has not recorded any yet, tell them they need to record it in Configurações first (never ask for '
+      + 'audio through the chat). Without `fala` and without `usar_audio_gravado`, the result is a video of them just in the scene, not speaking. '
+      + 'If the request has prohibited content (sexual, violence, blood, nudity, minors) it is refused automatically.',
     parameters: {
       type: 'object',
       properties: {
-        cena: { type: 'string', description: 'SÓ a cena/ação/cenário, em pt-BR, SEM a fala. Ex: "num escritório claro, sorrindo pra câmera, estilo vlog casual".' },
-        fala: { type: 'string', description: 'As palavras EXATAS que a pessoa diz no vídeo (pt-BR), faladas na voz clonada dela. Opcional. Ex: "Bom dia, time, bora fechar o mês". Não use junto com usar_audio_gravado.' },
-        usar_audio_gravado: { type: 'boolean', description: 'true quando o usuário quer que o vídeo fale EXATAMENTE o áudio que ele mesmo gravou/subiu no app (aba Configurações, "Áudio pra falar"). Nesse modo as palavras vêm do áudio; ignore `fala`.' },
-        duracao_segundos: { type: 'number', description: `Só usado quando NÃO há fala nem áudio gravado (vídeo mudo): duração em segundos (1 a ${MAX_VIDEO_SECONDS}, padrão 8). Com fala/áudio, a duração é definida automaticamente.` },
+        cena: { type: 'string', description: 'ONLY the scene/action/setting, in pt-BR, WITHOUT the speech. E.g.: "num escritório claro, sorrindo pra câmera, estilo vlog casual".' },
+        fala: { type: 'string', description: 'The EXACT words the person says in the video (pt-BR), spoken in their cloned voice. Optional. E.g.: "Bom dia, time, bora fechar o mês". Do not use together with usar_audio_gravado.' },
+        usar_audio_gravado: { type: 'boolean', description: 'true when the user wants the video to speak EXACTLY the audio they themselves recorded/uploaded in the app (Configurações tab, "Áudio pra falar"). In this mode the words come from the audio; ignore `fala`.' },
+        duracao_segundos: { type: 'number', description: `Only used when there is NO speech nor recorded audio (silent video): duration in seconds (1 to ${MAX_VIDEO_SECONDS}, default 8). With speech/audio, the duration is set automatically.` },
       },
       required: ['cena'],
     },
@@ -5703,8 +5703,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (mediaLibrary) {
     registry.add({
       name: 'listar_midia',
-      description: 'Lista os ARQUIVOS da biblioteca do usuário — imagens, áudios E documentos/planilhas (.xlsx/.docx/.pdf/.md/.txt que VOCÊ gerou com gerar_documento) — da mais recente pra mais antiga, cada um com id, tipo, quando e uma DESCRIÇÃO/nome. Use SEMPRE que ele se referir a algo de antes ("aquela imagem", "o .doc que você fez", "cadê o arquivo do plano", "o PDF de ontem"): ache pelo nome/legenda nesta lista, sem reabrir nada. Pra reenviar um documento no chat use reenviar_arquivo com o id daqui.',
-      parameters: { type: 'object', properties: { limite: { type: 'number', description: 'Quantos itens listar (padrão 20, máx 50).' } } },
+      description: 'Lists the FILES in the user\'s library (images, audio AND documents/spreadsheets: .xlsx/.docx/.pdf/.md/.txt that YOU generated with gerar_documento), from most recent to oldest, each with id, type, when and a DESCRIPTION/name. Use it ALWAYS when they refer to something from before ("aquela imagem", "o .doc que você fez", "cadê o arquivo do plano", "o PDF de ontem"): find it by the name/caption in this list, without reopening anything. To resend a document in the chat use reenviar_arquivo with the id from here.',
+      parameters: { type: 'object', properties: { limite: { type: 'number', description: 'How many items to list (default 20, max 50).' } } },
       run: async ({ limite } = {}) => {
         const rows = await listMediaAssets(userId, { limit: Math.min(Math.max(1, limite || 20), 50) });
         if (!rows.length) return 'Nenhuma mídia guardada ainda.';
@@ -5725,8 +5725,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // reenvia. Não-gated: só devolve pro próprio dono um arquivo que já é dele.
     registry.add({
       name: 'reenviar_arquivo',
-      description: 'Reenvia pro chat um arquivo que JÁ existe na biblioteca do usuário (um documento .docx/.pdf que você gerou antes, ou uma mídia), sem gerar de novo. Use quando ele pedir de volta algo que você já criou ("me manda de novo aquele .doc", "cadê o arquivo que você fez", "reenvia o PDF"): ache o id com listar_midia e reenvie. Sem id, reenvia o mais recente da biblioteca.',
-      parameters: { type: 'object', properties: { id: { type: 'string', description: 'id do arquivo na biblioteca (de listar_midia). Omita pra reenviar o mais recente.' } } },
+      description: 'Resends to the chat a file that ALREADY exists in the user\'s library (a .docx/.pdf document you generated before, or a media item), without generating it again. Use it when they ask back for something you already created ("me manda de novo aquele .doc", "cadê o arquivo que você fez", "reenvia o PDF"): find the id with listar_midia and resend it. Without id, resends the most recent one in the library.',
+      parameters: { type: 'object', properties: { id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to resend the most recent one.' } } },
       run: async ({ id } = {}) => {
         let asset;
         if (id != null) asset = await getMediaAsset(userId, id);
@@ -5753,13 +5753,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (caps.gmail?.read) {
       registry.add({
         name: 'salvar_anexo_email',
-        description: 'Salva o ANEXO de um e-mail como ARQUIVO na biblioteca do usuário e já entrega no chat. Use quando ele pedir o arquivo em si ("baixa o PDF do e-mail", "me manda o anexo", "salva esse contrato", "sobe o anexo no meu Drive") — gmail_read_attachment só lê o TEXTO do anexo e não serve pra isso. Precisa do id do e-mail e do attachmentId, os dois vêm da tool `google` (gmail_search + gmail_read); se não tiver os ids, chame `google` antes pedindo o id do e-mail e o attachmentId do anexo. Pra também deixar uma cópia no Google Drive, chame enviar_para_drive depois (ele pega o mais recente da biblioteca).',
+        description: 'Saves an email ATTACHMENT as a FILE in the user\'s library and delivers it right away in the chat. Use it when they ask for the file itself ("baixa o PDF do e-mail", "me manda o anexo", "salva esse contrato", "sobe o anexo no meu Drive"); gmail_read_attachment only reads the attachment\'s TEXT and does not serve for this. It needs the email id and the attachmentId, both come from the `google` tool (gmail_search + gmail_read); if you do not have the ids, call `google` first asking for the email id and the attachment\'s attachmentId. To also leave a copy in Google Drive, call enviar_para_drive afterwards (it takes the most recent one in the library).',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'id do e-mail (do gmail_search/gmail_read).' },
-            attachmentId: { type: 'string', description: 'attachmentId do anexo (da lista de anexos do gmail_read).' },
-            nome: { type: 'string', description: 'Nome opcional pro arquivo. Padrão: o nome que ele tem no e-mail.' },
+            id: { type: 'string', description: 'Email id (from gmail_search/gmail_read).' },
+            attachmentId: { type: 'string', description: 'The attachment\'s attachmentId (from gmail_read\'s attachment list).' },
+            nome: { type: 'string', description: 'Optional name for the file. Default: the name it has in the email.' },
           },
           required: ['id', 'attachmentId'],
         },
@@ -5797,12 +5797,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     }
     registry.add({
       name: 'ver_midia',
-      description: 'ABRE uma imagem e OLHA de verdade pra ela, respondendo a pergunta que você fizer. Use SEMPRE que a resposta depender de algo VISUAL de uma foto que não está na sua frente neste turno (a legenda no histórico é uma descrição textual feita por outro modelo, NÃO é a imagem: ela não serve pra ler um valor, contar itens, comparar, avaliar cor/detalhe ou responder qualquer coisa que ela mesma não diga). Sem id, resolve uma única imagem do turno atual ou do último turno com foto NESTA conversa. Se houver várias ou faltar referência, pede identificação; nunca escolhe a última foto da biblioteca inteira. Passe id explícito para foto específica/antiga.',
+      description: 'OPENS an image and actually LOOKS at it, answering the question you ask. Use it ALWAYS when the answer depends on something VISUAL in a photo that is not in front of you this turn (the caption in the history is a textual description made by another model, it is NOT the image: it does not serve to read a value, count items, compare, assess color/detail or answer anything it does not itself say). Without id, it resolves a single image from the current turn or from the last turn with a photo IN THIS conversation. If there are several or a reference is missing, it asks for identification; it never picks the latest photo of the whole library. Pass an explicit id for a specific/old photo.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Opcional: ID da imagem desta conversa ou de listar_midia. Sem ID, só usa uma imagem inequívoca do contexto; múltiplas fotos exigem ID.' },
-          pergunta: { type: 'string', description: 'Opcional: o que você quer saber sobre a imagem.' },
+          id: { type: 'string', description: 'Optional: ID of the image from this conversation or from listar_midia. Without ID, it only uses an unambiguous image from the context; multiple photos require an ID.' },
+          pergunta: { type: 'string', description: 'Optional: what you want to know about the image.' },
         },
       },
       run: async ({ id, pergunta } = {}) => readContextImage({
@@ -5823,18 +5823,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       registry.add({
         name: 'buscar_produto_por_imagem',
         description:
-          'BUSCA REVERSA POR IMAGEM: a partir de uma FOTO que o usuário mandou (ou uma imagem da biblioteca), '
-          + 'acha o MESMO produto e produtos visualmente PARECIDOS à venda, priorizando lojas BRASILEIRAS. Use '
-          + 'quando o usuário manda uma foto de um produto (vaso, roupa, tênis, móvel, objeto de decoração) e quer '
-          + '"achar igual/parecido", "onde comprar", "quanto custa", "acha mais barato". É DIFERENTE de descrever a '
-          + 'foto e buscar por texto: aqui a busca é PELA imagem em si, então acha o item real. Devolve título, loja, '
-          + 'link e imagem de cada resultado. Depois VOCÊ cura os melhores (mesmo produto ou mais parecido, de '
-          + 'preferência lojas BR) e mostra com mostrar_produtos (vira card com foto e botão "Ver produto"). Sem id, '
-          + 'usa a foto que veio NESTA mensagem; se não veio foto nesta mensagem, ela recusa e você deve pedir a foto.',
+          'REVERSE IMAGE SEARCH: from a PHOTO the user sent (or an image from the library), '
+          + 'finds the SAME product and visually SIMILAR products for sale, prioritizing BRAZILIAN stores. Use it '
+          + 'when the user sends a photo of a product (vase, clothing, sneakers, furniture, decor object) and wants to '
+          + '"achar igual/parecido", "onde comprar", "quanto custa", "acha mais barato". It is DIFFERENT from describing the '
+          + 'photo and searching by text: here the search is BY the image itself, so it finds the real item. Returns title, store, '
+          + 'link and image of each result. Then YOU curate the best ones (same product or most similar, preferably '
+          + 'BR stores) and show them with mostrar_produtos (it becomes a card with a photo and a "Ver produto" button). Without id, '
+          + 'it uses the photo that came IN THIS message; if no photo came in this message, it refuses and you must ask for the photo.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'Opcional: id da imagem na biblioteca (de listar_midia), só quando o usuário apontar uma foto antiga específica. Omita pra usar a foto que ele acabou de mandar.' },
+            id: { type: 'string', description: 'Optional: id of the image in the library (from listar_midia), only when the user points to a specific old photo. Omit it to use the photo they just sent.' },
           },
         },
         run: async ({ id } = {}) => {
@@ -5880,16 +5880,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       registry.add({
         name: 'buscar_produtos',
         description:
-          'BUSCA ESTRUTURADA DE PRODUTOS (Google Shopping): a partir de um TEXTO (ex.: "tênis nike air force branco", "vaso de cerâmica bege", "vestido de festa longo"), '
-          + 'devolve produtos reais à venda com nome, PREÇO, loja, link da página do produto e IMAGEM, tudo JUNTO e da MESMA fonte, priorizando lojas BRASILEIRAS. '
-          + 'USE ESTA TOOL como PRIMEIRA opção sempre que o usuário quiser COMPRAR / achar preço / recomendação de produto por descrição em texto. '
-          + 'É melhor que pesquisar na web e montar o produto na mão: aqui o preço e a IMAGEM vêm prontos e corretos da busca, então VOCÊ NUNCA precisa inventar/adivinhar URL de imagem. '
-          + 'Depois CURE os melhores e mostre com mostrar_produtos, passando nome, link e a imagem QUE VEIO NESTE resultado (campo imagem). '
-          + '(Para busca a partir de uma FOTO, use buscar_produto_por_imagem.)',
+          'STRUCTURED PRODUCT SEARCH (Google Shopping): from a TEXT (e.g.: "tênis nike air force branco", "vaso de cerâmica bege", "vestido de festa longo"), '
+          + 'returns real products for sale with name, PRICE, store, product page link and IMAGE, all TOGETHER and from the SAME source, prioritizing BRAZILIAN stores. '
+          + 'USE THIS TOOL as the FIRST option whenever the user wants to BUY / find a price / get a product recommendation from a text description. '
+          + 'It is better than searching the web and assembling the product by hand: here the price and the IMAGE come ready and correct from the search, so YOU NEVER need to invent/guess an image URL. '
+          + 'Then CURATE the best ones and show them with mostrar_produtos, passing name, link and the image THAT CAME IN THIS result (imagem field). '
+          + '(For a search from a PHOTO, use buscar_produto_por_imagem.)',
         parameters: {
           type: 'object',
           properties: {
-            consulta: { type: 'string', description: 'O que buscar, em texto livre (marca, tipo, cor, característica). Ex.: "cafeteira italiana inox 6 xícaras".' },
+            consulta: { type: 'string', description: 'What to search for, in free text (brand, type, color, feature). E.g.: "cafeteira italiana inox 6 xícaras".' },
           },
           required: ['consulta'],
         },
@@ -5921,11 +5921,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // STORED, então o texto sai sem lib de zip). Fecha o "não consigo abrir o arquivo".
     registry.add({
       name: 'ler_arquivo',
-      description: 'Lê e devolve o TEXTO de um DOCUMENTO da biblioteca do usuário (um .xlsx/.docx/.pdf/.md/.txt/.html que VOCÊ gerou ou que ele enviou), pelo id de listar_midia. Use quando ele pedir pra "abrir/ler/retomar" um arquivo, ou quando precisar do conteúdo de um documento que já existe pra continuar de onde parou. PLANILHA (.xlsx/.xls/.csv) é diferente: esta tool a abre no ambiente de análise e devolve só a estrutura (abas, linhas, colunas); o conteúdo se consulta com analisar_planilha e a mudança se faz com editar_planilha. NUNCA peça pro usuário te reenviar o arquivo pra você poder ler: leia direto com esta tool. (Pra imagem, use ver_midia.) Sem id, lê o documento mais recente da biblioteca.',
+      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia. Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id, reads the most recent document in the library.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'id do arquivo na biblioteca (de listar_midia). Omita pra ler o documento mais recente.' },
+          id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to read the most recent document.' },
         },
       },
       run: async ({ id } = {}) => {
@@ -5968,12 +5968,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     registry.add({
       name: 'anotar_midia',
-      description: 'Salva uma descrição/legenda curta numa mídia (pelo id) pra você reconhecê-la depois sem precisar reabrir. Use pra anotar do que se trata uma imagem que o usuário mandou (ex: "print do boleto da luz", "foto do tênis que ele quer").',
+      description: 'Saves a short description/caption on a media item (by id) so you recognize it later without having to reopen it. Use it to note what an image the user sent is about (e.g.: "print do boleto da luz", "foto do tênis que ele quer").',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'O id da mídia (de listar_midia).' },
-          nota: { type: 'string', description: `Descrição curta em ${tagLang}.` },
+          id: { type: 'string', description: 'The media id (from listar_midia).' },
+          nota: { type: 'string', description: `Short description in ${tagLang}.` },
         },
         required: ['id', 'nota'],
       },
@@ -5991,16 +5991,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (hostingEnabled()) {
       registry.add({
         name: 'enviar_midia_para_sistema',
-        description: 'Envia uma imagem/mídia que o usuário mandou (ou que você gerou) DIRETO pra um sistema que você publicou no subdomínio dele, sem baixar arquivo nem mexer em S3/AWS. Você indica o sistema, a rota do endpoint que recebe a mídia, o id da mídia (de listar_midia) e o nome do campo onde a imagem entra como data URL base64; pode mandar campos extras (nome, descrição, etc.) no "extra". O backend busca os bytes e faz o POST pra você. Use SEMPRE esta tool pra colocar uma foto/mídia do usuário num app que você publicou.',
+        description: 'Sends an image/media item the user sent (or that you generated) STRAIGHT to a system you published on their subdomain, without downloading a file or touching S3/AWS. You indicate the system, the route of the endpoint that receives the media, the media id (from listar_midia) and the name of the field where the image goes as a base64 data URL; you can send extra fields (name, description, etc.) in "extra". The backend fetches the bytes and does the POST for you. ALWAYS use this tool to put a user\'s photo/media into an app you published.',
         parameters: {
           type: 'object',
           properties: {
-            nome_do_sistema: { type: 'string', description: 'slug do sistema publicado (ex: minhas-plantas).' },
-            rota: { type: 'string', description: 'rota do endpoint que recebe a mídia, começando com / (ex: /api/plants).' },
-            id_midia: { type: 'string', description: 'id da mídia (de listar_midia) a enviar.' },
-            campo: { type: 'string', description: 'nome do campo JSON onde a imagem entra como data URL base64 (padrão "photo").' },
-            extra: { type: 'object', description: 'campos JSON adicionais do corpo (ex: {"name":"Aralia","scientificName":"..."}).' },
-            metodo: { type: 'string', enum: ['POST', 'PUT'], description: 'método HTTP (padrão POST).' },
+            nome_do_sistema: { type: 'string', description: 'slug of the published system (e.g.: minhas-plantas).' },
+            rota: { type: 'string', description: 'route of the endpoint that receives the media, starting with / (e.g.: /api/plants).' },
+            id_midia: { type: 'string', description: 'id of the media (from listar_midia) to send.' },
+            campo: { type: 'string', description: 'name of the JSON field where the image goes as a base64 data URL (default "photo").' },
+            extra: { type: 'object', description: 'additional JSON fields of the body (e.g.: {"name":"Aralia","scientificName":"..."}).' },
+            metodo: { type: 'string', enum: ['POST', 'PUT'], description: 'HTTP method (default POST).' },
           },
           required: ['nome_do_sistema', 'rota', 'id_midia'],
         },
@@ -6066,12 +6066,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // agente isolado que devolve só a síntese — mantém o contexto do principal leve.
     registry.add({
       name: 'pesquisar',
-      description: 'Delega uma PESQUISA mais pesada (que exige várias buscas na web e cruzar informação) a um sub-agente especializado, que investiga sozinho e devolve SÓ a resposta final sintetizada. Use para tarefas de pesquisa/levantamento com várias partes — ex: "monte um roteiro de 3 dias em Floripa com lugares reais", "compare os planos de 4 operadoras", "levante as melhores opções de X com preço". Para um fato pontual/rápido, use buscar_web direto (é mais barato). O sub-agente NÃO vê a conversa, então passe um objetivo bem completo.',
+      description: 'Delegates a heavier RESEARCH task (one that requires several web searches and cross-referencing information) to a specialized sub-agent, which investigates on its own and returns ONLY the final synthesized answer. Use it for research/survey tasks with several parts, e.g.: "monte um roteiro de 3 dias em Floripa com lugares reais", "compare os planos de 4 operadoras", "levante as melhores opções de X com preço". For a one-off/quick fact, use buscar_web directly (it is cheaper). The sub-agent does NOT see the conversation, so pass a very complete goal.',
       parameters: {
         type: 'object',
         properties: {
-          objetivo: { type: 'string', description: 'O que pesquisar, com o MÁXIMO de contexto (o sub-agente não vê a conversa). Ex: "roteiro gastronômico de 3 dias em Florianópolis, foco em frutos do mar, com nomes de restaurantes e bairros".' },
-          formato: { type: 'string', description: 'Opcional: como quer a resposta organizada (ex: "lista por dia", "tabela comparativa", "3 opções com prós e contras").' },
+          objetivo: { type: 'string', description: 'What to research, with the MAXIMUM context (the sub-agent does not see the conversation). E.g.: "roteiro gastronômico de 3 dias em Florianópolis, foco em frutos do mar, com nomes de restaurantes e bairros".' },
+          formato: { type: 'string', description: 'Optional: how you want the answer organized (e.g.: "lista por dia", "tabela comparativa", "3 opções com prós e contras").' },
         },
         required: ['objetivo'],
       },

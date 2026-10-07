@@ -16,24 +16,24 @@ export function monitorsTools(userId, agentId) {
   return [
     {
       name: 'checar_monitor',
-      description: 'Motor determinístico de um monitoramento (ex: novidades de uma marca). CHAME dentro da rotina de monitoramento: depois de LER as fontes validadas e extrair os itens (cada um com uma chave ESTÁVEL = a URL do artigo), passe a lista aqui. A tool grava os itens e devolve SÓ os que são GENUINAMENTE NOVOS (o dedup é feito em SQL, não na sua memória): você avisa o usuário apenas sobre esses. A 1ª chamada de um monitor é BASELINE (registra o estado atual e retorna 0 novidades: NÃO avise nada nessa rodada). O monitor é criado no primeiro uso se não existir (passe alvo/fontes/canal). Nunca invente itens; passe só o que você leu de verdade nas fontes.',
+      description: 'Deterministic engine for a monitor (e.g. news from a brand). CALL it inside the monitoring routine: after READING the validated sources and extracting the items (each with a STABLE key = the article URL), pass the list here. The tool stores the items and returns ONLY the ones that are GENUINELY NEW (dedup is done in SQL, not in your memory): you notify the user only about those. The 1st call for a monitor is the BASELINE (records the current state and returns 0 new items: do NOT notify anything in that round). The monitor is created on first use if it does not exist (pass alvo/fontes/canal). Never invent items; pass only what you actually read in the sources.',
       parameters: {
         type: 'object',
         properties: {
-          monitor: { type: 'string', description: 'Nome do monitoramento, ex: "Zara Japão". Se não existir, é criado.' },
-          alvo: { type: 'string', description: 'O que + mercado (ex: "Zara, mercado Japão/internacional"). Usado só na criação.' },
-          fontes: { type: 'array', description: 'Fontes validadas [{url,label}], usado só na criação.', items: { type: 'object', properties: { url: { type: 'string' }, label: { type: 'string' } } } },
-          canal: { type: 'string', description: 'Canal de aviso (whatsapp/email/telegram), usado só na criação.' },
+          monitor: { type: 'string', description: 'Monitor name, e.g. "Zara Japão". Created if it does not exist.' },
+          alvo: { type: 'string', description: 'What + market (e.g. "Zara, mercado Japão/internacional"). Used only on creation.' },
+          fontes: { type: 'array', description: 'Validated sources [{url,label}], used only on creation.', items: { type: 'object', properties: { url: { type: 'string' }, label: { type: 'string' } } } },
+          canal: { type: 'string', description: 'Notification channel (whatsapp/email/telegram), used only on creation.' },
           itens: {
             type: 'array',
-            description: 'Itens lidos das fontes NESTA rodada. Cada item: chave (URL estável do artigo, obrigatória p/ dedup), data (texto como aparece), titulo, url.',
+            description: 'Items read from the sources in THIS round. Each item: chave (stable article URL, required for dedup), data (text as it appears), titulo, url.',
             items: {
               type: 'object',
               properties: {
-                chave: { type: 'string', description: 'Chave estável de dedup, use a URL do artigo.' },
-                data: { type: 'string', description: 'Data do item como aparece na fonte.' },
-                titulo: { type: 'string', description: 'Título/resumo curto do item.' },
-                url: { type: 'string', description: 'Link do item.' },
+                chave: { type: 'string', description: 'Stable dedup key; use the article URL.' },
+                data: { type: 'string', description: 'Item date as it appears in the source.' },
+                titulo: { type: 'string', description: 'Short title/summary of the item.' },
+                url: { type: 'string', description: 'Item link.' },
               },
               required: ['chave'],
             },
@@ -71,7 +71,7 @@ export function monitorsTools(userId, agentId) {
     },
     {
       name: 'listar_monitores',
-      description: 'Lista os monitoramentos ativos do usuário (alvo, canal, quantos itens já vistos, último). Use pra saber o que já está sendo monitorado antes de criar outro.',
+      description: 'Lists the user\'s active monitors (target, channel, how many items already seen, latest). Use it to know what is already being monitored before creating another one.',
       parameters: { type: 'object', properties: {} },
       async run() {
         const list = await listMonitors(userId);
@@ -85,10 +85,10 @@ export function monitorsTools(userId, agentId) {
     },
     {
       name: 'remover_monitor',
-      description: 'Desativa um monitoramento inteiro (para de checar; o histórico de itens fica guardado). Use quando o usuário pedir pra parar de monitorar algo.',
+      description: 'Deactivates an entire monitor (stops checking; the item history is kept). Use when the user asks to stop monitoring something.',
       parameters: {
         type: 'object',
-        properties: { monitor: { type: 'string', description: 'Nome do monitoramento a desativar.' } },
+        properties: { monitor: { type: 'string', description: 'Name of the monitor to deactivate.' } },
         required: ['monitor'],
       },
       async run({ monitor }) {

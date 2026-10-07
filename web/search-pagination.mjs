@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 
-export const SEARCH_PAGINATION_RULE = 'Nas buscas de arquivos, mensagens Slack e GitHub, items contém só uma página. has_more indica continuação; partial também cobre limites ou busca incompleta do provedor, mesmo sem next_cursor. Continue com next_cursor na MESMA tool/consulta quando necessário ou declare a limitação. Não percorra todas as páginas automaticamente. reported_total é informado pelo provedor, não um inventário completo da conta. Preserve avisos de busca parcial ao sintetizar.';
-export const searchCursorSchema = { type: 'string', description: 'Copie next_cursor para continuar a mesma busca nesta execução. Cursor temporário e exclusivo desta tool/conta; não invente nem passe URL.' };
+export const SEARCH_PAGINATION_RULE = 'In searches of files, Slack messages and GitHub, items contains only one page. has_more indicates continuation; partial also covers limits or an incomplete search by the provider, even without next_cursor. Continue with next_cursor on the SAME tool/query when needed or declare the limitation. Do not go through all pages automatically. reported_total is reported by the provider, not a complete inventory of the account. Preserve partial-search notices when synthesizing.';
+export const searchCursorSchema = { type: 'string', description: 'Copy next_cursor to continue the same search in this run. Temporary cursor, exclusive to this tool/account; do not invent one or pass a URL.' };
 const invalid = () => { throw new Error('Resposta de busca/paginação inválida; não conclua ausência nem busca completa.'); };
 const nat = n => Number.isSafeInteger(n) && n >= 0;
 

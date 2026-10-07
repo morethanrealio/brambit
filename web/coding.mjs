@@ -70,15 +70,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     // ---------- LEITURA (inline, sem confirmação) ----------
     {
       name: 'ler_arquivo',
-      description: 'Lê um arquivo de texto num servidor do usuário (via SSH). Devolve o conteúdo com número de linha. Use ANTES de editar. Leitura é livre, não precisa de confirmação.',
+      description: 'Reads a text file on a user\'s server (via SSH). Returns the content with line numbers. Use it BEFORE editing. Reading is free, no confirmation needed.',
       parameters: {
         type: 'object',
         properties: {
-          caminho: { type: 'string', description: 'caminho absoluto do arquivo no servidor (ex: /home/ubuntu/app/server.js)' },
-          inicio: { type: 'number', description: 'linha inicial (padrão 1)' },
-          linhas: { type: 'number', description: 'quantas linhas ler (padrão 400, máx 2000)' },
-          host: { type: 'string', description: 'host do servidor (IP/domínio). Opcional se só há uma chave.' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          caminho: { type: 'string', description: 'absolute path of the file on the server (e.g.: /home/ubuntu/app/server.js)' },
+          inicio: { type: 'number', description: 'starting line (default 1)' },
+          linhas: { type: 'number', description: 'how many lines to read (default 400, max 2000)' },
+          host: { type: 'string', description: 'server host (IP/domain). Optional if there is only one key.' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['caminho'],
       },
@@ -95,14 +95,14 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'listar_arquivos',
-      description: 'Lista arquivos/pastas num servidor do usuário (via SSH). Sem padrão: mostra o conteúdo da pasta (ls -la). Com padrão: busca por nome (find). Leitura livre, sem confirmação.',
+      description: 'Lists files/folders on a user\'s server (via SSH). Without a pattern: shows the folder contents (ls -la). With a pattern: searches by name (find). Free read, no confirmation.',
       parameters: {
         type: 'object',
         properties: {
-          caminho: { type: 'string', description: 'pasta a listar/buscar (ex: /home/ubuntu/app)' },
-          padrao: { type: 'string', description: 'padrão de nome pra buscar recursivamente (ex: *.js). Opcional.' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          caminho: { type: 'string', description: 'folder to list/search (e.g.: /home/ubuntu/app)' },
+          padrao: { type: 'string', description: 'name pattern to search recursively (e.g.: *.js). Optional.' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['caminho'],
       },
@@ -117,15 +117,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'buscar_no_codigo',
-      description: 'Busca um texto/padrão dentro dos arquivos de um servidor do usuário (grep recursivo, ignora node_modules e .git). Devolve arquivo:linha:trecho. Leitura livre, sem confirmação.',
+      description: 'Searches for a text/pattern inside the files of a user\'s server (recursive grep, ignores node_modules and .git). Returns file:line:snippet. Free read, no confirmation.',
       parameters: {
         type: 'object',
         properties: {
-          padrao: { type: 'string', description: 'texto ou regex a procurar' },
-          caminho: { type: 'string', description: 'pasta onde buscar (padrão: pasta atual do login)' },
-          tipo: { type: 'string', description: 'extensão pra filtrar, ex: js, py, mjs (opcional)' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          padrao: { type: 'string', description: 'text or regex to search for' },
+          caminho: { type: 'string', description: 'folder to search in (default: the login\'s current folder)' },
+          tipo: { type: 'string', description: 'extension to filter by, e.g.: js, py, mjs (optional)' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['padrao'],
       },
@@ -139,13 +139,13 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'rodar_leitura',
-      description: 'Inspeção livre usando um único utilitário: pwd, ls, cat, head, tail, wc, du, df, uname ou stat, com argumentos literais (aspas aceitas). Para ler arquivos/listar/buscar, prefira as tools dedicadas. Outros comandos, git, testes, scripts, pipelines e expansões usam rodar_comando com confirmação.',
+      description: 'Free inspection using a single utility: pwd, ls, cat, head, tail, wc, du, df, uname or stat, with literal arguments (quotes accepted). To read files/list/search, prefer the dedicated tools. Other commands, git, tests, scripts, pipelines and expansions use rodar_comando with confirmation.',
       parameters: {
         type: 'object',
         properties: {
-          comando: { type: 'string', description: 'comando shell de leitura a rodar no servidor' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          comando: { type: 'string', description: 'read-only shell command to run on the server' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['comando'],
       },
@@ -168,15 +168,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     // ---------- ESCRITA (GATED — confirm.mjs) ----------
     {
       name: 'editar_arquivo',
-      description: 'Edita um arquivo num servidor do usuário trocando um trecho EXATO por outro (como o Edit do Claude Code). O trecho "busca" tem que existir e ser ÚNICO no arquivo (inclua contexto suficiente). Leia o arquivo antes (ler_arquivo). AÇÃO DE ESCRITA: só executa após o usuário confirmar.',
+      description: 'Edits a file on a user\'s server by replacing an EXACT snippet with another (like Claude Code\'s Edit). The "busca" snippet must exist and be UNIQUE in the file (include enough context). Read the file first (ler_arquivo). WRITE ACTION: only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          caminho: { type: 'string', description: 'caminho absoluto do arquivo' },
-          busca: { type: 'string', description: 'o trecho exato a ser substituído (único no arquivo)' },
-          troca: { type: 'string', description: 'o texto que entra no lugar' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          caminho: { type: 'string', description: 'absolute file path' },
+          busca: { type: 'string', description: 'the exact snippet to be replaced (unique in the file)' },
+          troca: { type: 'string', description: 'the text that goes in its place' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['caminho', 'busca', 'troca'],
       },
@@ -202,14 +202,14 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'escrever_arquivo',
-      description: 'Cria ou SOBRESCREVE um arquivo inteiro num servidor do usuário (como o Write do Claude Code). Cria as pastas se não existirem. Para mudar só um trecho, prefira editar_arquivo. AÇÃO DE ESCRITA: só executa após o usuário confirmar.',
+      description: 'Creates or OVERWRITES an entire file on a user\'s server (like Claude Code\'s Write). Creates the folders if they do not exist. To change only a snippet, prefer editar_arquivo. WRITE ACTION: only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          caminho: { type: 'string', description: 'caminho absoluto do arquivo' },
-          conteudo: { type: 'string', description: 'conteúdo completo do arquivo' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          caminho: { type: 'string', description: 'absolute file path' },
+          conteudo: { type: 'string', description: 'complete file content' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['caminho', 'conteudo'],
       },
@@ -230,13 +230,13 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'rodar_comando',
-      description: 'Executa um comando shell que ALTERA algo num servidor do usuário (instalar, build, restart de serviço, git commit/push, apagar, mover, etc.) via SSH. Para só ler/inspecionar use rodar_leitura (não pede confirmação). AÇÃO DE ESCRITA: só executa após o usuário confirmar. Nunca apaga nada sem o ok explícito.',
+      description: 'Runs a shell command that CHANGES something on a user\'s server (install, build, service restart, git commit/push, delete, move, etc.) via SSH. To only read/inspect use rodar_leitura (does not ask for confirmation). WRITE ACTION: only runs after the user confirms. Never deletes anything without explicit ok.',
       parameters: {
         type: 'object',
         properties: {
-          comando: { type: 'string', description: 'comando shell a rodar no servidor' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          comando: { type: 'string', description: 'shell command to run on the server' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['comando'],
       },
@@ -258,15 +258,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     // continua livre por rodar_leitura. Todas rodam via git -C <diretorio>.
     {
       name: 'git_commit',
-      description: 'Faz um commit no repositório git de um diretório (via SSH). Por padrão dá "git add -A" antes (adicionar_tudo=false para commitar só o que já está no stage). AÇÃO DE ESCRITA: só executa após o usuário confirmar.',
+      description: 'Makes a commit in the git repository of a directory (via SSH). By default runs "git add -A" first (adicionar_tudo=false to commit only what is already staged). WRITE ACTION: only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          diretorio: { type: 'string', description: 'caminho do repositório (raiz ou subpasta do git)' },
-          mensagem: { type: 'string', description: 'mensagem do commit' },
-          adicionar_tudo: { type: 'boolean', description: 'dar git add -A antes do commit (padrão true)' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          diretorio: { type: 'string', description: 'repository path (git root or subfolder)' },
+          mensagem: { type: 'string', description: 'commit message' },
+          adicionar_tudo: { type: 'boolean', description: 'run git add -A before the commit (default true)' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['mensagem'],
       },
@@ -284,16 +284,16 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'git_push',
-      description: 'Envia commits para o remote (git push). Sem branch, empurra a branch atual. AÇÃO DE ESCRITA que sai pro remote: só executa após o usuário confirmar.',
+      description: 'Sends commits to the remote (git push). Without a branch, pushes the current branch. WRITE ACTION that goes out to the remote: only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          diretorio: { type: 'string', description: 'caminho do repositório' },
-          branch: { type: 'string', description: 'branch a empurrar (opcional; padrão = branch atual)' },
-          remote: { type: 'string', description: 'nome do remote (padrão origin)' },
-          set_upstream: { type: 'boolean', description: 'usar -u para setar upstream (útil no 1º push da branch)' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          diretorio: { type: 'string', description: 'repository path' },
+          branch: { type: 'string', description: 'branch to push (optional; default = current branch)' },
+          remote: { type: 'string', description: 'remote name (default origin)' },
+          set_upstream: { type: 'boolean', description: 'use -u to set upstream (useful on the branch\'s 1st push)' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: [],
       },
@@ -314,15 +314,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'git_branch',
-      description: 'Cria uma nova branch e já muda pra ela (git checkout -b). AÇÃO DE ESCRITA: só executa após o usuário confirmar.',
+      description: 'Creates a new branch and switches to it right away (git checkout -b). WRITE ACTION: only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          diretorio: { type: 'string', description: 'caminho do repositório' },
-          nome: { type: 'string', description: 'nome da nova branch' },
-          base: { type: 'string', description: 'ref base pra criar a branch (opcional; padrão = HEAD atual)' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          diretorio: { type: 'string', description: 'repository path' },
+          nome: { type: 'string', description: 'name of the new branch' },
+          base: { type: 'string', description: 'base ref to create the branch from (optional; default = current HEAD)' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['nome'],
       },
@@ -336,14 +336,14 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
     {
       name: 'git_checkout',
-      description: 'Muda pra uma branch/commit/tag existente (git checkout <ref>). Para CRIAR branch nova use git_branch. AÇÃO DE ESCRITA (mexe na working tree): só executa após o usuário confirmar.',
+      description: 'Switches to an existing branch/commit/tag (git checkout <ref>). To CREATE a new branch use git_branch. WRITE ACTION (touches the working tree): only runs after the user confirms.',
       parameters: {
         type: 'object',
         properties: {
-          diretorio: { type: 'string', description: 'caminho do repositório' },
-          ref: { type: 'string', description: 'branch, commit ou tag pra qual mudar' },
-          host: { type: 'string', description: 'host do servidor (opcional)' },
-          usuario: { type: 'string', description: 'usuário de login (opcional)' },
+          diretorio: { type: 'string', description: 'repository path' },
+          ref: { type: 'string', description: 'branch, commit or tag to switch to' },
+          host: { type: 'string', description: 'server host (optional)' },
+          usuario: { type: 'string', description: 'login user (optional)' },
         },
         required: ['ref'],
       },

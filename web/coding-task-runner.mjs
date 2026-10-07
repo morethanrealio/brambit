@@ -47,13 +47,13 @@ export async function runCodingTask({store,scope,executionId,target,objetivo,too
       return tool.run(args);
     }});
     const artifactScope=ref=>JSON.stringify(['coding-artifact',scope,task.id,ref]);
-    registry.add({name:'ler_resultado_de_programacao',description:'Recupera uma página de um resultado anterior desta tarefa, pelo ID fornecido no histórico. Sem repetir o comando original.',parameters:{type:'object',properties:{ref:{type:'string'},inicio:{type:'integer',minimum:0}},required:['ref']},run:async({ref,inicio=0})=>{
+    registry.add({name:'ler_resultado_de_programacao',description:'Retrieves a page of a previous result of this task, by the ID given in the history. Without repeating the original command.',parameters:{type:'object',properties:{ref:{type:'string'},inicio:{type:'integer',minimum:0}},required:['ref']},run:async({ref,inicio=0})=>{
       if(!await authorize())return {ok:false,error:'Acesso revogado.'};
       if(!/^[a-zA-Z0-9_-]{1,150}$/.test(ref||'')||!Number.isSafeInteger(inicio)||inicio<0)return {ok:false,error:'Referência/página inválida.'};
       const value=await store.read(artifactScope(ref));if(!value)return {ok:false,error:'Resultado não encontrado nesta tarefa.'};
       const fim=Math.min(inicio+12_000,value.text.length);return {ok:true,ref,inicio,fim,total:value.text.length,text:value.text.slice(inicio,fim),proxima_pagina:fim<value.text.length?fim:null};
     }});
-    registry.add({name:'recuperar_contexto_de_codigo',description:'Recupera um resultado histórico recolhido desta tarefa pelo ref; sem ref lista referências por cursor. Para páginas extensas use inicio/proximo_inicio. Não executa comandos nem prova estado atual.',parameters:{type:'object',properties:{ref:{type:'string'},cursor:{type:'integer',minimum:0},inicio:{type:'integer',minimum:0}}},run:context.recover});
+    registry.add({name:'recuperar_contexto_de_codigo',description:'Retrieves a collapsed historical result of this task by ref; without ref lists references by cursor. For long pages use inicio/proximo_inicio. Does not run commands nor prove current state.',parameters:{type:'object',properties:{ref:{type:'string'},cursor:{type:'integer',minimum:0},inicio:{type:'integer',minimum:0}}},run:context.recover});
     const wrapped={name:provider.name,complete:(input,kind='subagent')=>calls.complete(input,kind)};
     async function finishCompaction(){
       const summary=await wrapped.complete(task.modelCall.input,'compact');

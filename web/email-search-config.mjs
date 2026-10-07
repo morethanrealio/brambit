@@ -15,19 +15,19 @@ const MAX_TERM = 80;
 
 export const emailSearchToolSchema = {
   type: 'object',
-  description: 'Busca de e-mail estruturada. Só com tipo="busca_email". A plataforma roda a consulta exata e entrega a lista ao assistente; o_que_fazer descreve só o que fazer com os e-mails encontrados.',
+  description: 'Structured email search. Only with tipo="busca_email". The platform runs the exact query and hands the list to the assistant; o_que_fazer describes only what to do with the emails found.',
   properties: {
-    provider: { type: 'string', enum: EMAIL_SEARCH_PROVIDERS, description: 'gmail (padrão) ou outlook.' },
-    account: { type: 'string', description: 'E-mail da conta a consultar (só se o usuário tiver mais de uma conectada; senão omita).' },
-    terms: { type: 'array', items: { type: 'string' }, description: 'Termos/frases a procurar (qualquer um deles). Ex.: ["quintoandar","quinto andar"]. Vazio = todos os e-mails do período.' },
-    senders: { type: 'array', items: { type: 'string' }, description: 'Remetentes (e-mail ou domínio), qualquer um deles. Ex.: ["quintoandar.com.br"].' },
-    days: { type: 'integer', minimum: 1, maximum: EMAIL_SEARCH_MAX_DAYS, description: `Janela em dias contando de agora (1-${EMAIL_SEARCH_MAX_DAYS}). Padrão ${EMAIL_SEARCH_DEFAULT_DAYS}. Rotina diária = 1 ou 2.` },
-    unreadOnly: { type: 'boolean', description: 'Só não lidos.' },
-    withAttachment: { type: 'boolean', description: 'Só com anexo.' },
+    provider: { type: 'string', enum: EMAIL_SEARCH_PROVIDERS, description: 'gmail (default) or outlook.' },
+    account: { type: 'string', description: 'Email address of the account to query (only if the user has more than one connected; otherwise omit).' },
+    terms: { type: 'array', items: { type: 'string' }, description: 'Terms/phrases to search for (any of them). E.g.: ["quintoandar","quinto andar"]. Empty = all emails in the period.' },
+    senders: { type: 'array', items: { type: 'string' }, description: 'Senders (email address or domain), any of them. E.g.: ["quintoandar.com.br"].' },
+    days: { type: 'integer', minimum: 1, maximum: EMAIL_SEARCH_MAX_DAYS, description: `Window in days counting from now (1-${EMAIL_SEARCH_MAX_DAYS}). Default ${EMAIL_SEARCH_DEFAULT_DAYS}. Daily routine = 1 or 2.` },
+    unreadOnly: { type: 'boolean', description: 'Unread only.' },
+    withAttachment: { type: 'boolean', description: 'With attachment only.' },
   },
 };
 
-export const emailSearchToolHelp = 'Pedido de acompanhar/buscar/triar E-MAILS (Gmail/Outlook) por assunto, remetente ou período = tipo "busca_email" + busca_email (terms/senders/days). A plataforma executa a consulta exata e pagina até o fim; o assistente só resume. Não use tipo "geral" pra isso.';
+export const emailSearchToolHelp = 'A request to follow/search/triage EMAILS (Gmail/Outlook) by subject, sender or period = tipo "busca_email" + busca_email (terms/senders/days). The platform runs the exact query and paginates to the end; the assistant only summarizes. Do not use tipo "geral" for this.';
 
 const clean = (s) => String(s ?? '').replace(/[\u0000-\u001f"()]/g, ' ').replace(/\s+/g, ' ').trim();
 

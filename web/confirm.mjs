@@ -972,7 +972,7 @@ export function gateTool(tool, threadId, opts = {}) {
     name: tool.name,
     description:
       tool.description +
-      ' [IMPORTANTE: esta é uma ação REAL que altera o mundo do usuário. CHAMAR esta tool JÁ É o jeito de propor a ação; NÃO peça permissão em texto antes de chamá-la. Ao chamá-la, ela normalmente NÃO executa na hora: o sistema registra o pedido e só executa depois que o usuário confirmar explicitamente no turno seguinte. Descreva junto o que será feito. (Exceção: se o usuário ativou o modo "aceitar edições" ou pré-autorizou o comando, ela roda direto e você recebe o resultado na hora.)]',
+      ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. When called, it normally does NOT execute right away: the system records the request and only executes it after the user explicitly confirms in the next turn. Describe alongside what will be done. (Exception: if the user turned on the "aceitar edições" (accept edits) mode or pre-authorized the command, it runs directly and you get the result right away.)]',
     parameters: tool.parameters,
     async run(args) {
       // Todo gate guarda seu próprio retrato dos argumentos, não só as tools

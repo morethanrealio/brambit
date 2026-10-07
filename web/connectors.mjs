@@ -325,7 +325,7 @@ export function calendarWritesPorConta(tools, { contas = [], padrao = '', constr
     return {
       ...tool,
       parameters: { ...tool.parameters, properties: { ...tool.parameters.properties,
-        conta: { type: 'string', description: `OPCIONAL. Conta Google da agenda, quando não for a padrão (${padrao}). Use o \`conta\` que veio no calendar_list do evento. Disponíveis: ${[padrao, ...outras].filter(Boolean).join(', ')}.` } } },
+        conta: { type: 'string', description: `OPTIONAL. Google account of the calendar, when it is not the default (${padrao}). Use the \`conta\` that came with the event in calendar_list. Available: ${[padrao, ...outras].filter(Boolean).join(', ')}.` } } },
       run: async (a = {}) => { let r; try { r = alvo(a); } catch (e) { return JSON.stringify({ ok: false, error: e.message }); } return r.t.run(r.args); },
       ...(tool.prepareConfirmation ? {
         prepareConfirmation: async (a = {}) => { const r = alvo(a); return r.t.prepareConfirmation(r.args); },
@@ -524,8 +524,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     const accountPages = new Map();
     tools.push({
       name: 'gmail_search',
-      description: 'Busca e-mails na caixa do usuário usando a sintaxe de busca do Gmail (ex: "from:fulano fatura newer_than:30d"). Devolve messages (remetente, assunto, data, trecho, id), has_more e next_cursor. ' + EMAIL_PAGINATION_RULE,
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Consulta no formato de busca do Gmail.' }, max: { type: 'integer', minimum: 1, description: 'Tamanho da página (padrão 5; limitado a 10).' }, cursor: emailCursorSchema }, required: ['query'] },
+      description: 'Searches emails in the user\'s mailbox using Gmail search syntax (e.g. "from:fulano fatura newer_than:30d"). Returns messages (sender, subject, date, snippet, id), has_more and next_cursor. ' + EMAIL_PAGINATION_RULE,
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Query in Gmail search format.' }, max: { type: 'integer', minimum: 1, description: 'Page size (default 5; capped at 10).' }, cursor: emailCursorSchema }, required: ['query'] },
       async run({ query, max, cursor }) {
         const currentAccount = typeof account === 'function' ? await account() : account;
         if (!accountPages.has(currentAccount)) accountPages.set(currentAccount,emailPagination({ defaultMax: 5, cap: 10 }));
@@ -546,7 +546,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_read',
-      description: 'Lê o texto útil de um e-mail pelo id obtido no gmail_search, removendo HTML/CSS antes do limite. Devolve links dos botões e avisa se o conteúdo ainda ficou cortado. Também lista os anexos (com attachmentId, nome e tipo); pra ler o conteúdo de um anexo use gmail_read_attachment.',
+      description: 'Reads the useful text of an email by the id obtained from gmail_search, stripping HTML/CSS before the limit. Returns the button links and warns if the content was still cut off. Also lists the attachments (with attachmentId, name and type); to read an attachment\'s content use gmail_read_attachment.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         const currentAccount = typeof account === 'function' ? await account() : account;
@@ -562,8 +562,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_read_attachment',
-      description: 'Lê o CONTEÚDO (texto) de um anexo de e-mail: PDF (extrai o texto), texto/JSON. PLANILHA (Excel/CSV) não volta como texto: é aberta no ambiente de análise e o resultado traz só a estrutura no campo "analise"; o conteúdo se consulta com analisar_planilha. Passe o id do e-mail (do gmail_search) e o attachmentId (que aparece na lista de anexos do gmail_read). Para outros formatos binários devolve só os metadados. Isto NÃO salva o arquivo: pra entregar o anexo como ARQUIVO pro usuário (chat/Drive) existe a tool salvar_anexo_email no agente principal.',
-      parameters: { type: 'object', properties: { id: { type: 'string', description: 'id do e-mail' }, attachmentId: { type: 'string', description: 'attachmentId do anexo (vem do gmail_read)' } }, required: ['id', 'attachmentId'] },
+      description: 'Reads the CONTENT (text) of an email attachment: PDF (extracts the text), text/JSON. A SPREADSHEET (Excel/CSV) does not come back as text: it is opened in the analysis environment and the result carries only the structure in the "analise" field; the content is queried with analisar_planilha. Pass the email id (from gmail_search) and the attachmentId (shown in the attachment list from gmail_read). For other binary formats it returns only the metadata. This does NOT save the file: to deliver the attachment as a FILE to the user (chat/Drive) there is the salvar_anexo_email tool in the main agent.',
+      parameters: { type: 'object', properties: { id: { type: 'string', description: 'email id' }, attachmentId: { type: 'string', description: 'attachmentId of the attachment (comes from gmail_read)' } }, required: ['id', 'attachmentId'] },
       async run({ id, attachmentId }) {
         audit('gmail_read_attachment', 'gmail', `msg=${id} att=${attachmentId}`);
         // Baixa os bytes e resolve nome/tipo (mensagem → thread → magic bytes).
@@ -589,7 +589,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_labels',
-      description: 'Lista os MARCADORES (labels/pastas) que existem na conta Gmail do usuário: os de sistema (INBOX, IMPORTANT, etc.) e os criados por ele, com id, nome e quantos e-mails têm. Use ANTES de organizar a inbox ou criar filtro, pra saber os marcadores que já existem e reaproveitar (não duplicar).',
+      description: 'Lists the LABELS (labels/folders) that exist in the user\'s Gmail account: the system ones (INBOX, IMPORTANT, etc.) and the ones they created, with id, name and how many emails each has. Use BEFORE organizing the inbox or creating a filter, to know which labels already exist and reuse them (do not duplicate).',
       parameters: { type: 'object', properties: {} },
       async run() {
         audit('gmail_labels', 'gmail', 'list');
@@ -606,9 +606,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('gmail', 'manage')) {
     tools.push({
       name: 'gmail_label_create',
-      description: 'Cria um novo MARCADOR (label/pasta) no Gmail do usuário. Passe o nome; pra criar aninhado use "Pai/Filho" (ex: "Trabalho/Faturas"). Cheque antes com gmail_labels pra não duplicar. Ação reversível.',
+      description: 'Creates a new LABEL (label/folder) in the user\'s Gmail. Pass the name; to create a nested one use "Parent/Child" (e.g. "Trabalho/Faturas"). Check gmail_labels first to avoid duplicates. Reversible action.',
       parameters: { type: 'object', properties: {
-        nome: { type: 'string', description: 'Nome do marcador (use "Pai/Filho" pra aninhar).' },
+        nome: { type: 'string', description: 'Label name (use "Parent/Child" to nest).' },
       }, required: ['nome'] },
       async run({ nome }) {
         audit('gmail_label_create', 'gmail', `name=${String(nome).slice(0, 60)}`);
@@ -622,10 +622,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_label_update',
-      description: 'Renomeia um marcador existente do Gmail. Passe o nome atual (ou o id) e o novo nome. Só marcadores do usuário (os de sistema não podem ser renomeados).',
+      description: 'Renames an existing Gmail label. Pass the current name (or the id) and the new name. Only the user\'s labels (system ones cannot be renamed).',
       parameters: { type: 'object', properties: {
-        marcador: { type: 'string', description: 'Nome atual do marcador (ou o id dele).' },
-        novo_nome: { type: 'string', description: 'Novo nome.' },
+        marcador: { type: 'string', description: 'Current label name (or its id).' },
+        novo_nome: { type: 'string', description: 'New name.' },
       }, required: ['marcador', 'novo_nome'] },
       async run({ marcador, novo_nome }) {
         audit('gmail_label_update', 'gmail', `${String(marcador).slice(0, 40)}→${String(novo_nome).slice(0, 40)}`);
@@ -638,9 +638,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_label_delete',
-      description: 'APAGA um marcador do Gmail do usuário. Os e-mails NÃO são apagados, só perdem esse marcador. Não dá pra desfazer o marcador em si. Só marcadores do usuário.',
+      description: 'DELETES a label from the user\'s Gmail. The emails are NOT deleted, they only lose that label. Deleting the label itself cannot be undone. Only the user\'s labels.',
       parameters: { type: 'object', properties: {
-        marcador: { type: 'string', description: 'Nome (ou id) do marcador a apagar.' },
+        marcador: { type: 'string', description: 'Name (or id) of the label to delete.' },
       }, required: ['marcador'] },
       async run({ marcador }) {
         audit('gmail_label_delete', 'gmail', String(marcador).slice(0, 60));
@@ -658,7 +658,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('gmail', 'settings')) {
     tools.push({
       name: 'gmail_filters_list',
-      description: 'Lista as REGRAS de roteamento (filtros) do Gmail do usuário: por qual critério (remetente/assunto/etc.) e o que fazem (marcador, arquivar). Use pra ver o que já existe antes de criar outra.',
+      description: 'Lists the user\'s Gmail routing RULES (filters): by which criterion (sender/subject/etc.) and what they do (label, archive). Use to see what already exists before creating another one.',
       parameters: { type: 'object', properties: {} },
       async run() {
         audit('gmail_filters_list', 'gmail', 'filters');
@@ -677,15 +677,15 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_filter_create',
-      description: 'Cria uma REGRA de roteamento (filtro) no Gmail: e-mails que casam com o critério recebem uma ação automaticamente, daqui pra frente. Critério: de (remetente), para, assunto, contem (texto/consulta no formato de busca do Gmail), tem_anexo. Ação: marcador (por nome, precisa existir), pular_caixa_entrada, marcar_lido, marcar_importante. Ex: tudo de "news@zara.com" → marcador "Newsletters" e pular a inbox.',
+      description: 'Creates a routing RULE (filter) in Gmail: emails that match the criterion get an action automatically, from now on. Criterion: de (sender), para, assunto, contem (text/query in Gmail search format), tem_anexo. Action: marcador (by name, must exist), pular_caixa_entrada, marcar_lido, marcar_importante. E.g.: everything from "news@zara.com" → label "Newsletters" and skip the inbox.',
       parameters: { type: 'object', properties: {
-        de: { type: 'string', description: 'Remetente (from).' },
-        para: { type: 'string', description: 'Destinatário (to).' },
-        assunto: { type: 'string', description: 'Texto no assunto.' },
-        contem: { type: 'string', description: 'Consulta livre (sintaxe de busca do Gmail).' },
+        de: { type: 'string', description: 'Sender (from).' },
+        para: { type: 'string', description: 'Recipient (to).' },
+        assunto: { type: 'string', description: 'Text in the subject.' },
+        contem: { type: 'string', description: 'Free-form query (Gmail search syntax).' },
         tem_anexo: { type: 'boolean' },
-        marcador: { type: 'string', description: 'Marcador a aplicar (por nome; precisa existir — crie antes).' },
-        pular_caixa_entrada: { type: 'boolean', description: 'true = arquiva direto (remove INBOX).' },
+        marcador: { type: 'string', description: 'Label to apply (by name; must exist — create it first).' },
+        pular_caixa_entrada: { type: 'boolean', description: 'true = archive directly (removes INBOX).' },
         marcar_lido: { type: 'boolean' },
         marcar_importante: { type: 'boolean' },
       } },
@@ -715,7 +715,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
     tools.push({
       name: 'gmail_filter_delete',
-      description: 'Apaga uma REGRA de roteamento (filtro) do Gmail pelo id (obtido no gmail_filters_list).',
+      description: 'Deletes a Gmail routing RULE (filter) by id (obtained from gmail_filters_list).',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         audit('gmail_filter_delete', 'gmail', String(id));
@@ -729,7 +729,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     const drivePages = searchPagination({ defaultMax: 8, cap: 15 });
     tools.push({
       name: 'drive_search',
-      description: 'Busca arquivos no Drive pessoal e nos Drives compartilhados acessíveis. Devolve nomes, IDs e links reais. ' + DRIVE_SEARCH_RULE,
+      description: 'Searches files in the personal Drive and in the accessible shared Drives. Returns real names, IDs and links. ' + DRIVE_SEARCH_RULE,
       parameters: driveSearchParameters,
       run: completeDriveSearch(async (args = {}) => {
         const q = driveSearchQuery(args);
@@ -754,7 +754,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     };
     tools.push({
       name: 'drive_read',
-      description: 'Lê o conteúdo de um arquivo do Drive pelo id: Google Docs, Apresentações (Slides), PDF e arquivos de texto/JSON. PLANILHA (Google Sheets, Excel, CSV) não volta como texto: é aberta no ambiente de análise e o resultado traz só a estrutura no campo "analise"; o conteúdo se consulta com analisar_planilha. Para outros formatos binários devolve só os metadados.',
+      description: 'Reads the content of a Drive file by id: Google Docs, Presentations (Slides), PDF and text/JSON files. A SPREADSHEET (Google Sheets, Excel, CSV) does not come back as text: it is opened in the analysis environment and the result carries only the structure in the "analise" field; the content is queried with analisar_planilha. For other binary formats it returns only the metadata.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
       async run({ id }) {
         audit('drive_read', 'drive', `file=${id}`);
@@ -813,8 +813,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('calendar', 'read')) {
     tools.push({
       name: 'calendar_list',
-      description: 'Lista os eventos do Google Calendar do usuário numa janela de dias. Por padrão lê TODAS as agendas que ele tem (a dele, as de trabalho, as que outras pessoas compartilharam com ele), não só a principal; cada evento vem com o campo `agenda` dizendo de qual veio. Passe `agenda` pra restringir a uma só, ou "todas" pra incluir também os feeds de feriado/aniversário, que ficam de fora por padrão. Pra saber SE/QUANDO algo está marcado, liste o período e LEIA os eventos: NÃO confie só em `query` (o título real pode ser diferente do termo do pedido, ex. pedido "revisão do carro" x evento "Revisão Jeep Alphaville"). O `query` é só um filtro local best-effort; se não casar nada, a tool devolve a agenda inteira do período mesmo assim. Só leitura.',
-      parameters: { type: 'object', properties: { inicio: { type:'string', description:'Início da janela, inclusive; ISO ou YYYY-MM-DD. Use para datas passadas ou futuras específicas.' }, fim: { type:'string', description:'Fim da janela, exclusivo; ISO ou YYYY-MM-DD.' }, fuso: { type:'string', description:'Fuso IANA para datas/horas locais.' }, days: { type: 'integer', description: 'Janela em dias a partir de inicio ou agora (padrão 30; máximo 366).' }, query: { type: 'string', description: 'Filtro OPCIONAL por texto do evento (aplicado localmente, sem esconder a agenda). Prefira NÃO usar e ler a lista.' }, max: { type: 'integer', description: 'Máximo de eventos (padrão 50).' }, agenda: { type: 'string', description: 'OPCIONAL. Nome ou id de UMA agenda, quando o dono pediu só ela. Omita pra ler todas (o normal). Use "todas" pra incluir feriados/aniversários.' } } },
+      description: 'Lists the user\'s Google Calendar events in a window of days. By default it reads ALL the calendars they have (their own, work ones, the ones other people shared with them), not only the primary; each event comes with the `agenda` field saying which one it came from. Pass `agenda` to restrict to a single one, or "todas" to also include the holiday/birthday feeds, which are left out by default. To know IF/WHEN something is scheduled, list the period and READ the events: do NOT rely only on `query` (the real title may differ from the term in the request, e.g. request "revisão do carro" vs event "Revisão Jeep Alphaville"). `query` is only a best-effort local filter; if nothing matches, the tool still returns the whole calendar for the period. Read-only.',
+      parameters: { type: 'object', properties: { inicio: { type:'string', description:'Start of the window, inclusive; ISO or YYYY-MM-DD. Use for specific past or future dates.' }, fim: { type:'string', description:'End of the window, exclusive; ISO or YYYY-MM-DD.' }, fuso: { type:'string', description:'IANA timezone for local dates/times.' }, days: { type: 'integer', description: 'Window in days from inicio or from now (default 30; maximum 366).' }, query: { type: 'string', description: 'OPTIONAL filter by event text (applied locally, without hiding the calendar). Prefer NOT to use it and read the list.' }, max: { type: 'integer', description: 'Maximum number of events (default 50).' }, agenda: { type: 'string', description: 'OPTIONAL. Name or id of ONE calendar, when the owner asked only for it. Omit to read all (the normal case). Use "todas" to include holidays/birthdays.' } } },
       async run({ days = 30, query, max = 50, agenda, inicio, fim, fuso }) {
         const {from:timeMin,to:timeMax}=calendarWindow({inicio,fim,fuso,days});
         if (!Number.isSafeInteger(max) || max<1) throw Error('max deve ser um inteiro positivo.');
@@ -884,7 +884,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('docs', 'read')) {
     tools.push({
       name: 'docs_read',
-      description: 'Lê Google Docs incluindo tabelas e abas. Se has_more, continue com next_offset e revision até terminar; partial/warnings indicam limites de leitura.',
+      description: 'Reads Google Docs including tables and tabs. If has_more, continue with next_offset and revision until done; partial/warnings indicate read limits.',
       parameters: { type: 'object', properties: { id: { type: 'string' }, offset: { type: 'integer', minimum: 0 }, max_chars: { type: 'integer', minimum: 1, maximum: 16000 }, revision: { type: 'string' } }, required: ['id'] },
       async run({ id, offset = 0, max_chars = 8000, revision = null }) {
         if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(max_chars) || max_chars < 1 || max_chars > 16000) throw new Error('Paginação inválida');
@@ -901,12 +901,12 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('gmail', 'write')) {
     tools.push({
       name: 'gmail_create_draft',
-      description: 'Cria um RASCUNHO de e-mail na conta Gmail do usuário (NÃO envia; fica salvo nos Rascunhos pra ele revisar e disparar). Use sempre que ele pedir pra "escrever/preparar um e-mail". Mostre o conteúdo na conversa.',
+      description: 'Creates an email DRAFT in the user\'s Gmail account (does NOT send; it stays saved in Drafts for them to review and send). Use whenever they ask to "escrever/preparar um e-mail". Show the content in the conversation.',
       parameters: { type: 'object', properties: {
-        to: { type: 'string', description: 'Destinatário(s), separados por vírgula.' },
+        to: { type: 'string', description: 'Recipient(s), comma-separated.' },
         subject: { type: 'string' },
-        body: { type: 'string', description: 'Corpo do e-mail em texto puro.' },
-        cc: { type: 'string', description: 'CC opcional, separado por vírgula.' },
+        body: { type: 'string', description: 'Email body in plain text.' },
+        cc: { type: 'string', description: 'Optional CC, comma-separated.' },
       }, required: ['to', 'subject', 'body'] },
       async run({ to, subject, body, cc }) {
         const raw = buildRawEmail({ to, subject, body, cc });
@@ -921,12 +921,12 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('gmail', 'send')) {
     tools.push({
       name: 'gmail_send',
-      description: 'Envia um e-mail em nome do usuário. SEMPRE confirme com o usuário o destinatário, assunto e corpo ANTES de enviar; não envie sem o ok explícito dele.',
+      description: 'Sends an email on behalf of the user. ALWAYS confirm the recipient, subject and body with the user BEFORE sending; do not send without their explicit ok.',
       parameters: { type: 'object', properties: {
-        to: { type: 'string', description: 'Destinatário(s), separados por vírgula.' },
+        to: { type: 'string', description: 'Recipient(s), comma-separated.' },
         subject: { type: 'string' },
-        body: { type: 'string', description: 'Corpo do e-mail em texto puro.' },
-        cc: { type: 'string', description: 'CC opcional, separado por vírgula.' },
+        body: { type: 'string', description: 'Email body in plain text.' },
+        cc: { type: 'string', description: 'Optional CC, comma-separated.' },
       }, required: ['to', 'subject', 'body'] },
       async run({ to, subject, body, cc }) {
         const raw = buildRawEmail({ to, subject, body, cc });
@@ -939,17 +939,17 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('calendar', 'write')) {
     tools.push({
       name: 'calendar_create',
-      description: 'Para pedido recorrente, preencha recorrencia e confirme a cadência e o término; nunca substitua por evento único silenciosamente. Cria um evento no Google Calendar do usuário. Vai na agenda principal, a não ser que você passe `agenda` (nome de uma das agendas que apareceram no calendar_list). SEMPRE confirme título, data/hora e convidados ANTES de criar; não crie sem o ok explícito do usuário. Passe `timezone` com o fuso REAL do usuário (IANA, ex America/Zurich pra quem está em Basileia, America/Sao_Paulo no Brasil); o `start`/`end` devem ser a hora de parede local (ex 2026-07-09T11:30:00) SEM offset. Não embuta offset no ISO nem converta a hora você mesmo.',
+      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Google Calendar. It goes on the primary calendar, unless you pass `agenda` (name of one of the calendars that showed up in calendar_list). ALWAYS confirm title, date/time and attendees BEFORE creating; do not create without the user\'s explicit ok. Pass `timezone` with the user\'s REAL timezone (IANA, e.g. America/Zurich for someone in Basel, America/Sao_Paulo in Brazil); `start`/`end` must be the local wall-clock time (e.g. 2026-07-09T11:30:00) WITHOUT offset. Do not embed an offset in the ISO nor convert the time yourself.',
       parameters: { type: 'object', properties: {
         recorrencia: recurrenceSchema,
         title: { type: 'string' },
-        start: { type: 'string', description: 'Início. Hora de parede local ISO SEM offset (ex 2026-07-09T11:30:00) pra evento com horário, ou só data (2026-07-09) pra dia inteiro.' },
-        end: { type: 'string', description: 'Fim, mesmo formato do start. Se omitido num evento com hora, assume 1h.' },
-        timezone: { type: 'string', description: 'Fuso IANA do usuário (ex America/Zurich, Europe/Lisbon, America/Sao_Paulo). Default America/Sao_Paulo se omitido.' },
+        start: { type: 'string', description: 'Start. Local wall-clock ISO time WITHOUT offset (e.g. 2026-07-09T11:30:00) for a timed event, or just a date (2026-07-09) for an all-day event.' },
+        end: { type: 'string', description: 'End, same format as start. If omitted on a timed event, assumes 1h.' },
+        timezone: { type: 'string', description: 'User\'s IANA timezone (e.g. America/Zurich, Europe/Lisbon, America/Sao_Paulo). Defaults to America/Sao_Paulo if omitted.' },
         description: { type: 'string' },
         location: { type: 'string' },
-        attendees: { type: 'array', items: { type: 'string' }, description: 'E-mails dos convidados.' },
-        agenda: { type: 'string', description: 'OPCIONAL. Nome da agenda onde criar, quando não for a principal (use o nome que veio no campo `agenda` do calendar_list).' },
+        attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee emails.' },
+        agenda: { type: 'string', description: 'OPTIONAL. Name of the calendar to create it in, when it is not the primary (use the name that came in the `agenda` field of calendar_list).' },
       }, required: ['title', 'start'] },
       async run({ title, start, end, description, location, attendees, timezone, agenda, recorrencia }) {
         let repeat;
@@ -972,17 +972,17 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
 
     tools.push({
       name: 'calendar_update',
-      description: 'EDITA um evento que já existe numa agenda do usuário (Google Calendar). Use pra remarcar horário, mudar título, local, descrição ou convidados de um evento EXISTENTE (nunca crie um novo pra "editar"). Primeiro use calendar_list pra achar o evento e pegar o `id`. Se o evento veio de uma agenda que não é a principal, passe o mesmo `agenda` que veio no calendar_list. Passe SÓ os campos que mudam. SEMPRE confirme a mudança com o usuário antes. Pra horário, use `timezone` com o fuso REAL do usuário (IANA) e `start`/`end` como hora de parede local ISO SEM offset.',
+      description: 'EDITS an event that already exists in one of the user\'s calendars (Google Calendar). Use to reschedule, change the title, location, description or attendees of an EXISTING event (never create a new one to "edit"). First use calendar_list to find the event and get its `id`. If the event came from a calendar that is not the primary, pass the same `agenda` that came in calendar_list. Pass ONLY the fields that change. ALWAYS confirm the change with the user first. For the time, use `timezone` with the user\'s REAL timezone (IANA) and `start`/`end` as local wall-clock ISO time WITHOUT offset.',
       parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'Id do evento a editar (venha do calendar_list).' },
-        title: { type: 'string', description: 'Novo título (só se mudar).' },
-        start: { type: 'string', description: 'Novo início. Hora de parede local ISO SEM offset (ex 2026-07-09T11:30:00) ou só data (dia inteiro). Só se mudar.' },
-        end: { type: 'string', description: 'Novo fim, mesmo formato do start. Só se mudar.' },
-        timezone: { type: 'string', description: 'Fuso IANA do usuário (ex America/Sao_Paulo, America/Zurich). Use quando mexer no horário.' },
-        description: { type: 'string', description: 'Nova descrição (só se mudar).' },
-        location: { type: 'string', description: 'Novo local (só se mudar).' },
-        attendees: { type: 'array', items: { type: 'string' }, description: 'Lista COMPLETA de e-mails dos convidados (substitui a atual). Só se mudar.' },
-        agenda: { type: 'string', description: 'OPCIONAL. Agenda do evento, quando não for a principal (use o `agenda` que veio no calendar_list).' },
+        id: { type: 'string', description: 'Id of the event to edit (from calendar_list).' },
+        title: { type: 'string', description: 'New title (only if it changes).' },
+        start: { type: 'string', description: 'New start. Local wall-clock ISO time WITHOUT offset (e.g. 2026-07-09T11:30:00) or just a date (all day). Only if it changes.' },
+        end: { type: 'string', description: 'New end, same format as start. Only if it changes.' },
+        timezone: { type: 'string', description: 'User\'s IANA timezone (e.g. America/Sao_Paulo, America/Zurich). Use when changing the time.' },
+        description: { type: 'string', description: 'New description (only if it changes).' },
+        location: { type: 'string', description: 'New location (only if it changes).' },
+        attendees: { type: 'array', items: { type: 'string' }, description: 'COMPLETE list of attendee emails (replaces the current one). Only if it changes.' },
+        agenda: { type: 'string', description: 'OPTIONAL. Calendar of the event, when it is not the primary (use the `agenda` that came in calendar_list).' },
       }, required: ['id'] },
       async run({ id, title, start, end, timezone, description, location, attendees, agenda, _confirmationEtag }) {
         if (!id) return JSON.stringify({ ok: false, error: 'Preciso do id do evento (use calendar_list pra achar).' });
@@ -1012,10 +1012,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
 
     tools.push({
       name: 'calendar_delete',
-      description: 'APAGA um evento de uma agenda do usuário (Google Calendar). Use calendar_list pra achar o `id` primeiro; se o evento veio de uma agenda que não é a principal, passe o mesmo `agenda` que veio de lá. SEMPRE confirme com o usuário antes de apagar; ação irreversível.',
+      description: 'DELETES an event from one of the user\'s calendars (Google Calendar). Use calendar_list to find the `id` first; if the event came from a calendar that is not the primary, pass the same `agenda` that came from there. ALWAYS confirm with the user before deleting; irreversible action.',
       parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'Id do evento a apagar (venha do calendar_list).' },
-        agenda: { type: 'string', description: 'OPCIONAL. Agenda do evento, quando não for a principal (use o `agenda` que veio no calendar_list).' },
+        id: { type: 'string', description: 'Id of the event to delete (from calendar_list).' },
+        agenda: { type: 'string', description: 'OPTIONAL. Calendar of the event, when it is not the primary (use the `agenda` that came in calendar_list).' },
       }, required: ['id'] },
       async run({ id, agenda, _confirmationEtag }) {
         if (!id) return JSON.stringify({ ok: false, error: 'Preciso do id do evento (use calendar_list pra achar).' });
@@ -1036,11 +1036,11 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('drive', 'write')) {
     tools.push({
       name: 'drive_upload',
-      description: `Cria um arquivo de texto no Google Drive do usuário, sempre dentro da pasta do assistente ("${folderName}") na raiz. Não dá pra escolher outra pasta nem salvar solto na raiz (o app só mexe na própria pasta). Confirme nome e conteúdo antes.`,
+      description: `Creates a text file in the user's Google Drive, always inside the assistant's folder ("${folderName}") at the root. You cannot choose another folder or save it loose at the root (the app only touches its own folder). Confirm name and content first.`,
       parameters: { type: 'object', properties: {
-        name: { type: 'string', description: 'Nome do arquivo (ex: notas.txt).' },
-        content: { type: 'string', description: 'Conteúdo em texto.' },
-        mimeType: { type: 'string', description: 'MIME do arquivo (padrão text/plain).' },
+        name: { type: 'string', description: 'File name (e.g. notas.txt).' },
+        content: { type: 'string', description: 'Text content.' },
+        mimeType: { type: 'string', description: 'File MIME type (default text/plain).' },
       }, required: ['name', 'content'] },
       async run({ name, content, mimeType = 'text/plain' }) {
         // GUARD anti "undefined": se o conteúdo não veio (arg truncado numa geração
@@ -1074,11 +1074,11 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     // Docs e pode ser exportado pra PDF depois. Escopo drive.file cobre a criação.
     tools.push({
       name: 'docs_create',
-      description: 'Cria um Google Doc NATIVO (documento do Google, não um .txt) a partir de texto, dentro da pasta do assistente no Drive. Use quando o usuário pedir pra "montar/criar um Google Doc". Aceita HTML simples no conteúdo pra ter layout (títulos <h1>, negrito <b>, listas <ul>) — passe html=true nesse caso. Devolve o link do documento. Confirme nome e conteúdo antes.',
+      description: 'Creates a NATIVE Google Doc (a Google document, not a .txt) from text, inside the assistant\'s folder in Drive. Use when the user asks to "montar/criar um Google Doc". Accepts simple HTML in the content for layout (headings <h1>, bold <b>, lists <ul>) — pass html=true in that case. Returns the document link. Confirm name and content first.',
       parameters: { type: 'object', properties: {
-        name: { type: 'string', description: 'Título do documento.' },
-        content: { type: 'string', description: 'Conteúdo (texto puro, ou HTML simples se html=true).' },
-        html: { type: 'boolean', description: 'true se content for HTML (pra ter layout). Padrão false = texto puro.' },
+        name: { type: 'string', description: 'Document title.' },
+        content: { type: 'string', description: 'Content (plain text, or simple HTML if html=true).' },
+        html: { type: 'boolean', description: 'true if content is HTML (for layout). Default false = plain text.' },
       }, required: ['name', 'content'] },
       async run({ name, content, html = false }) {
         if (content == null || String(content).trim() === '' || String(content).trim() === 'undefined') {
@@ -1110,10 +1110,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     // não exporta.
     tools.push({
       name: 'drive_export_pdf',
-      description: 'Transforma um Google Doc (ou Planilha/Apresentação) num PDF: exporta o arquivo pra PDF e salva na pasta do assistente no Drive, devolvendo o link do PDF. Passe o id do arquivo (vem do drive_search/google). Use quando o usuário pedir "gera um PDF desse Google Doc / transforma em PDF". Para juntar conteúdo novo e virar PDF, crie o Google Doc antes com docs_create e depois exporte o id dele aqui.',
+      description: 'Turns a Google Doc (or Sheet/Presentation) into a PDF: exports the file to PDF and saves it in the assistant\'s folder in Drive, returning the PDF link. Pass the file id (comes from drive_search/google). Use when the user asks "gera um PDF desse Google Doc / transforma em PDF". To combine new content and turn it into a PDF, create the Google Doc first with docs_create and then export its id here.',
       parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'id do Google Doc/Sheet/Slides a exportar.' },
-        name: { type: 'string', description: 'Nome opcional do PDF (padrão: nome do arquivo + .pdf).' },
+        id: { type: 'string', description: 'id of the Google Doc/Sheet/Slides to export.' },
+        name: { type: 'string', description: 'Optional PDF name (default: file name + .pdf).' },
       }, required: ['id'] },
       async run({ id, name }) {
         audit('drive_export_pdf', 'drive', `file=${id}`);

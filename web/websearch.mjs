@@ -318,13 +318,13 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
   const useTavily = tavilyEnabled();
   return {
     name: 'buscar_web',
-    description: 'Busca informação ATUAL na web (preço, horário, notícia, disponibilidade, endereço, evento, lugares, produtos, qualquer dado de tempo real ou que você não tenha certeza). Uma única busca já devolve VÁRIOS resultados concretos (nomes, endereços, fontes). Use SEMPRE que precisar de um fato factual/atual em vez de responder de memória. EFICIÊNCIA IMPORTA: busque de forma AMPLA, por categoria/região (ex: "melhores casas de jazz em São Paulo endereço programação"), NUNCA uma busca separada por cada item/lugar/produto (isso deixa a resposta lenta demais). Para um roteiro/lista, 1 a 3 buscas amplas bastam; só busque de novo se faltar um dado específico. Não responda no genérico se ainda não buscou o suficiente, mas também não fique buscando item por item. Monte a consulta SIMPLES, poucas palavras em pt-BR: NÃO use aspas de frase exata nem o operador site: com domínio chutado (zeram os resultados). Se o usuário mandar "vá no site de X", ache o site oficial e ABRA com abrir_link em vez de caçar o fato por palavra-chave. NUNCA conclua que algo "não existe" só porque uma busca voltou vazia.',
+    description: 'Searches for CURRENT information on the web (price, opening hours, news, availability, address, event, places, products, any real-time data or anything you are not sure about). A single search already returns SEVERAL concrete results (names, addresses, sources). Use ALWAYS when you need a factual/current fact instead of answering from memory. EFFICIENCY MATTERS: search BROADLY, by category/region (e.g.: "melhores casas de jazz em São Paulo endereço programação"), NEVER a separate search for each item/place/product (that makes the response far too slow). For an itinerary/list, 1 to 3 broad searches are enough; only search again if a specific piece of data is missing. Do not answer generically if you have not searched enough yet, but also do not keep searching item by item. Build a SIMPLE query, a few words in pt-BR: do NOT use exact-phrase quotes or the site: operator with a guessed domain (they zero out the results). If the user says "vá no site de X", find the official site and OPEN it with abrir_link instead of hunting for the fact by keyword. NEVER conclude that something "não existe" just because a search came back empty.',
     parameters: {
       type: 'object',
       properties: {
-        consulta: { type: 'string', description: 'O que buscar, em linguagem natural (pt-BR). Ex: "preço passagem São Paulo Paraty ônibus hoje".' },
-        data_inicio: { type: 'string', format: 'date', description: 'Opcional: limite inicial YYYY-MM-DD da janela pedida. Use com data_fim em buscas de notícias/curadoria com período definido. O buscador filtra pela estimativa de publicação ou atualização e pode retornar candidatos sem data no índice; confira a data original na página.' },
-        data_fim: { type: 'string', format: 'date', description: 'Opcional: limite final YYYY-MM-DD da janela pedida. Não amplie a janela para preencher resultados. Sem provedor com suporte, a ferramenta informa que não conseguiu aplicar o filtro.' },
+        consulta: { type: 'string', description: 'What to search for, in natural language (pt-BR). E.g.: "preço passagem São Paulo Paraty ônibus hoje".' },
+        data_inicio: { type: 'string', format: 'date', description: 'Optional: start bound YYYY-MM-DD of the requested window. Use with data_fim in news/curation searches with a defined period. The search engine filters by the estimated publication or update date and may return candidates with no date in the index; check the original date on the page.' },
+        data_fim: { type: 'string', format: 'date', description: 'Optional: end bound YYYY-MM-DD of the requested window. Do not widen the window to fill in results. Without a provider that supports it, the tool reports that it could not apply the filter.' },
       },
       required: ['consulta'],
     },
@@ -532,11 +532,11 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
   };
   return {
     name: 'abrir_link',
-    description: 'Abre uma URL e lê o conteúdo REAL da página ou documento (título, texto, no caso de produto o nome/preço; e se o link for um PDF, o texto do PDF). Se o link for uma PLANILHA (Google Sheets, .xlsx, .csv), ela é aberta no ambiente de análise e volta só a estrutura (abas, colunas, linhas), nunca as células: para qualquer pergunta sobre os dados use analisar_planilha. Use SEMPRE que o usuário mandar um LINK e você precisar saber o que é aquilo — NUNCA deduza pela conversa anterior nem busque por palavra-chave num link solto (isso confunde e traz o produto/página errado). Depois de abrir e identificar, aí sim use buscar_web se precisar comparar preços em outros sites.',
+    description: 'Opens a URL and reads the REAL content of the page or document (title, text, for a product the name/price; and if the link is a PDF, the PDF text). If the link is a SPREADSHEET (Google Sheets, .xlsx, .csv), it is opened in the analysis environment and only the structure comes back (sheets, columns, rows), never the cells: for any question about the data use analisar_planilha. Use ALWAYS when the user sends a LINK and you need to know what it is — NEVER deduce it from the earlier conversation nor search by keyword for a loose link (that confuses things and brings up the wrong product/page). After opening and identifying it, then use buscar_web if you need to compare prices on other sites.',
     parameters: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'A URL completa a abrir (ex: o link que o usuário mandou).' },
+        url: { type: 'string', description: 'The full URL to open (e.g.: the link the user sent).' },
       },
       required: ['url'],
     },

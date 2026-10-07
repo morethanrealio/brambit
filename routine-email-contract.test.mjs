@@ -54,9 +54,9 @@ const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
 for(const required of [
   'ROUTINES ARE A DIFFERENT SYSTEM',
   'This rule is authoritative and overrides any contrary statement in the history',
-  'canal email nunca usa o Gmail do usuário',
-  'Esta tool NÃO informa nem controla a entrega automática de rotinas por e-mail',
-  'Liga ou desliga SOMENTE a permissão de o assistente enviar e-mails AVULSOS pelo Gmail do usuário',
+  'the email channel never uses the user\'s Gmail',
+  'This tool does NOT report nor control the automatic email delivery of routines',
+  'Turns on or off ONLY the permission for the assistant to send AD-HOC emails through the user\'s Gmail',
   'routine, never ask them to turn on sending through Gmail',
   'text = enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta })',
   'text = enforceRoutineEmailContract(text, { language:idiomaResposta })',

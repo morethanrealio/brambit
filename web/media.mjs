@@ -506,12 +506,12 @@ export function mediaTools(userId, { onUsage = () => {}, onAttachment = () => {}
 
   if (image && imageEnabled()) tools.push({
     name: 'gerar_imagem',
-    description: 'DESENHA uma imagem nova a partir de uma descrição em texto (prompt). Use quando o usuário pedir para criar/desenhar/ilustrar. A imagem é mostrada automaticamente ao usuário; na sua resposta NÃO descreva a imagem em detalhe, só comente brevemente. LIMITES, respeite: ela INVENTA tudo que desenha, então (a) NÃO serve pra pôr o logo/marca/foto real de alguém (sai um logo parecido, não o dele) e (b) erra letras e acentos quando se pede texto dentro da arte. Quando a imagem tiver que conter logo ou palavras corretas, gere aqui só o FUNDO (sem texto, sem marca) e depois chame compor_imagem, que cola o arquivo original e escreve o texto com fonte de verdade.',
+    description: 'DRAWS a new image from a text description (prompt). Use when the user asks to create/draw/illustrate. The image is shown to the user automatically; in your reply do NOT describe the image in detail, just comment briefly. LIMITS, respect them: it INVENTS everything it draws, so (a) it is NOT suitable for placing someone\'s real logo/brand/photo (it comes out as a similar logo, not theirs) and (b) it gets letters and accents wrong when text is requested inside the artwork. When the image must contain a logo or correct words, generate only the BACKGROUND here (no text, no brand) and then call compor_imagem, which pastes the original file and writes the text with a real font.',
     parameters: {
       type: 'object',
       properties: {
-        prompt: { type: 'string', description: 'Descrição detalhada da imagem desejada (em inglês costuma render melhor, mas pt-BR funciona). NÃO peça texto escrito dentro da imagem: o modelo erra letra e acento. Texto e logo entram depois, com compor_imagem.' },
-        proporcao: { type: 'string', enum: PROPORCOES_IMAGEM, description: 'Formato da imagem. Sem isto o modelo escolhe sozinho (costuma sair 16:9). Use 1:1 pra WhatsApp/Instagram, 9:16 pra story, 16:9 pra capa.' },
+        prompt: { type: 'string', description: 'Detailed description of the desired image (English usually renders better, but pt-BR works). Do NOT ask for text written inside the image: the model gets letters and accents wrong. Text and logo come in later, with compor_imagem.' },
+        proporcao: { type: 'string', enum: PROPORCOES_IMAGEM, description: 'Image format. Without this the model chooses on its own (it usually comes out 16:9). Use 1:1 for WhatsApp/Instagram, 9:16 for a story, 16:9 for a cover.' },
       },
       required: ['prompt'],
     },
@@ -533,11 +533,11 @@ export function mediaTools(userId, { onUsage = () => {}, onAttachment = () => {}
   if (audio && ttsEnabled()) {
     tools.push({
       name: 'gerar_audio',
-      description: 'Converte um texto em fala (mensagem de voz). Use SÓ quando o usuário pedir para você responder/falar em áudio ou ler algo em voz alta, nesta mensagem ou num pedido que ele deixou valendo. O áudio é enviado automaticamente ao usuário.',
+      description: 'Converts a text into speech (voice message). Use ONLY when the user asks you to reply/speak in audio or read something aloud, in this message or in a standing request they left in place. The audio is sent to the user automatically.',
       parameters: {
         type: 'object',
         properties: {
-          texto: { type: 'string', description: 'O texto que deve ser falado, no idioma em que deve soar (padrão português do Brasil; ex.: inglês num treino de inglês).' },
+          texto: { type: 'string', description: 'The text to be spoken, in the language it should sound in (default Brazilian Portuguese; e.g.: English in an English practice session).' },
         },
         required: ['texto'],
       },

@@ -111,12 +111,12 @@ export function sandboxTools(userId) {
   return [
     {
       name: 'sandbox_shell',
-      description: 'Roda um comando shell (bash) no ambiente isolado do usuário (Linux, com python3, node, git, pip). Tem internet pra baixar pacotes/fazer scrape. Arquivos ficam em /workspace e persistem entre chamadas; a home ($HOME) é o próprio /workspace. Use pra instalar libs, rodar scripts, processar dados, instalar e rodar programas/CLIs/servidores MCP de terceiros (npx, pip, git clone), etc. Cada comando tem no máximo 120s; processo deixado em segundo plano (nohup ... &) continua vivo entre chamadas. Login OAuth que devolve o navegador para localhost: o navegador do usuário não alcança a sandbox; deixe o programa esperando em segundo plano, peça pro usuário autorizar e colar aqui o endereço completo da página que não carregou, e entregue esse endereço ao programa com curl dentro da sandbox. Nunca repita no chat o código, token ou segredo que vier nele.',
+      description: 'Runs a shell (bash) command in the user\'s isolated environment (Linux, with python3, node, git, pip). Has internet to download packages/scrape. Files live in /workspace and persist across calls; the home ($HOME) is /workspace itself. Use it to install libs, run scripts, process data, install and run third-party programs/CLIs/MCP servers (npx, pip, git clone), etc. Each command has at most 120s; a process left in the background (nohup ... &) stays alive across calls. OAuth login that sends the browser back to localhost: the user\'s browser cannot reach the sandbox; leave the program waiting in the background, ask the user to authorize and paste here the full address of the page that did not load, and hand that address to the program with curl inside the sandbox. Never repeat in the chat the code, token or secret that comes in it.',
       parameters: {
         type: 'object',
         properties: {
-          command: { type: 'string', description: 'comando bash a executar' },
-          timeout_s: { type: 'number', description: 'tempo máximo em segundos (padrão 60, máx 120)' },
+          command: { type: 'string', description: 'bash command to run' },
+          timeout_s: { type: 'number', description: 'maximum time in seconds (default 60, max 120)' },
         },
         required: ['command'],
       },
@@ -127,12 +127,12 @@ export function sandboxTools(userId) {
     },
     {
       name: 'sandbox_python',
-      description: 'Roda um trecho de código Python no ambiente isolado do usuário (tem requests, beautifulsoup4, lxml, httpx, pandas pré-instalados; pip disponível). Tem internet. Devolve stdout/stderr. Use print() pra ver resultados.',
+      description: 'Runs a Python code snippet in the user\'s isolated environment (has requests, beautifulsoup4, lxml, httpx, pandas pre-installed; pip available). Has internet. Returns stdout/stderr. Use print() to see results.',
       parameters: {
         type: 'object',
         properties: {
-          code: { type: 'string', description: 'código Python' },
-          timeout_s: { type: 'number', description: 'tempo máximo em segundos (padrão 60, máx 120)' },
+          code: { type: 'string', description: 'Python code' },
+          timeout_s: { type: 'number', description: 'maximum time in seconds (default 60, max 120)' },
         },
         required: ['code'],
       },
@@ -145,12 +145,12 @@ export function sandboxTools(userId) {
     },
     {
       name: 'sandbox_write_file',
-      description: 'Escreve um arquivo no /workspace do ambiente isolado do usuário (cria pastas se preciso). Caminhos relativos vão pra /workspace.',
+      description: 'Writes a file to the /workspace of the user\'s isolated environment (creates folders if needed). Relative paths go to /workspace.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'caminho do arquivo (ex: dados.csv ou /workspace/x/y.txt)' },
-          content: { type: 'string', description: 'conteúdo do arquivo' },
+          path: { type: 'string', description: 'file path (e.g.: dados.csv or /workspace/x/y.txt)' },
+          content: { type: 'string', description: 'file content' },
         },
         required: ['path', 'content'],
       },
@@ -161,10 +161,10 @@ export function sandboxTools(userId) {
     },
     {
       name: 'sandbox_read_file',
-      description: 'Lê um arquivo do /workspace do ambiente isolado do usuário. Planilha (.xlsx/.xls/.csv/.tsv) não é lida por aqui: use analisar_planilha ou pandas no sandbox_python.',
+      description: 'Reads a file from the /workspace of the user\'s isolated environment. A spreadsheet (.xlsx/.xls/.csv/.tsv) is not read here: use analisar_planilha or pandas in sandbox_python.',
       parameters: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'caminho do arquivo' } },
+        properties: { path: { type: 'string', description: 'file path' } },
         required: ['path'],
       },
       async run({ path }) {
