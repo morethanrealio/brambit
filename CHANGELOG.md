@@ -10,6 +10,10 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Added
+- `TODO.md`: open work grouped by area, with items tagged for first-time
+  contributors. CONTRIBUTING points to it.
+
 ### Changed
 - Tool descriptions and parameter descriptions the model reads are in
   English, like the main prompt. Quoted examples of what a person says,
