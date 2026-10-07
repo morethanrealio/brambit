@@ -40,7 +40,7 @@ import {createEventos,criadorDeConta} from './eventos.mjs';
 import {createRotas} from './rotas.mjs';
 import {createMidiaPublica} from './midia-publica.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp} from './plugins.mjs';
-import {createPermissoesSimples} from './permissoes.mjs';
+import {createPermissoesDoAmbiente} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
 import {createContaPagadoraSimples} from './conta-pagadora.mjs';
 import {createFerramentasSimples} from './ferramentas.mjs';
 import {createContaPagamentoSimples} from './conta-pagamento.mjs';
@@ -52,7 +52,7 @@ import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
 const plugins=await carregarPlugins();
 const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
-const permissoes=pecas.permissoes??createPermissoesSimples(); // Porta 2 (permissoes.mjs): apps, disco e fila do cadastro.
+const permissoes=pecas.permissoes??createPermissoesDoAmbiente(); // Porta 2 (permissoes.mjs): apps, disco e fila do cadastro (BRAMBIT_CADASTRO).
 configurarPermissoes(permissoes);
 configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Porta da conta pagadora (conta-pagadora.mjs): quem paga o consumo de cada um.
 if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Conta empresarial (empresa.mjs): plano pago, pacotes, reembolso e cancelamento na entrada e na criação.
@@ -8679,7 +8679,7 @@ const server = http.createServer((req, res) => {
 });
 
 async function atenderRequest(req, res) {
-  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+  prepararResposta(req, res, SECURITY_HEADERS); // cookie-local.mjs: no mesmo computador o cookie sai sem Secure (Safari)
   // Content-Type padrão para respostas que não o definem explicitamente (404, erros de
   // assinatura de webhook, "ok", etc.). Cada writeHead posterior com content-type próprio
   // (JSON via send(), HTML, mídia) sobrescreve este default. Fecha o achado "Content-Type

@@ -18,8 +18,6 @@ import { carregarModelos, descreverModelos, tabelaModelos } from '../core-proto/
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = path.join(root, '.local');
-const pgdata = path.join(local, 'pgdata');
-const pwfile = path.join(local, 'pg-password');
 const DB_USER = 'brambs';
 export const TEST_ACCOUNT = { name: 'Conta de Teste', email: 'teste@example.com', password: 'brambs-local-teste' };
 
@@ -33,22 +31,24 @@ export function postgresBin() {
 // Ordem cronológica: os nomes misturam 2026-09-12 e 20260910.
 export const migrationOrder = (names) => [...names].sort((a, b) => a.replace(/-/g, '').localeCompare(b.replace(/-/g, '')));
 
-function readDotEnv() {
+export function readDotEnv() {
   const file = path.join(root, '.env');
   return existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {};
 }
 
-const freePort = () => new Promise((resolve, reject) => {
+export const freePort = () => new Promise((resolve, reject) => {
   const s = net.createServer().once('error', reject);
   s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
 });
 
 // Conexão TCP só em 127.0.0.1 (socket Unix não existe no Windows), com senha: no
 // Windows e num computador dividido, outro usuário da máquina alcança 127.0.0.1.
-// A senha é gerada na primeira vez e fica em .local/pg-password.
-async function startPostgres(bin) {
-  const exe = (name) => path.join(bin, process.platform === 'win32' ? `${name}.exe` : name);
-  mkdirSync(local, { recursive: true });
+// A senha é gerada na primeira vez e fica em <dir>/pg-password.
+const exeOf = (bin) => (name) => path.join(bin, process.platform === 'win32' ? `${name}.exe` : name);
+export const pararPostgres = (bin, dir = local) => { try { execFileSync(exeOf(bin)('pg_ctl'), ['-D', path.join(dir, 'pgdata'), '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
+export async function startPostgres(bin, dir = local) {
+  const exe = exeOf(bin), pgdata = path.join(dir, 'pgdata'), pwfile = path.join(dir, 'pg-password');
+  mkdirSync(dir, { recursive: true });
   const novo = !existsSync(path.join(pgdata, 'PG_VERSION'));
   // .local/ de antes desta versão foi criado sem senha (só socket): ganha uma agora.
   const semSenha = !novo && !existsSync(pwfile);
@@ -60,8 +60,8 @@ async function startPostgres(bin) {
   const conf = path.join(pgdata, 'postgresql.conf');
   if (!readFileSync(conf, 'utf8').includes("include_if_exists = 'brambit.conf'")) appendFileSync(conf, "\ninclude_if_exists = 'brambit.conf'\n");
   writeFileSync(path.join(pgdata, 'brambit.conf'), `listen_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = ''\n`);
-  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(local, 'postgres.log'), 'start'], { stdio: 'ignore' });
-  const stop = () => { try { execFileSync(exe('pg_ctl'), ['-D', pgdata, '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
+  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(dir, 'postgres.log'), 'start'], { stdio: 'ignore' });
+  const stop = () => pararPostgres(bin, dir);
   const conn = { host: '127.0.0.1', port, user: DB_USER, password, database: 'postgres' };
   if (semSenha) {
     const c = new pg.Client(conn); await c.connect();
@@ -72,7 +72,7 @@ async function startPostgres(bin) {
   return { stop, conn };
 }
 
-const dbEnvOf = (conn) => ({ PGHOST: conn.host, PGPORT: String(conn.port), PGUSER: conn.user, PGPASSWORD: conn.password, PGDATABASE: conn.database });
+export const dbEnvOf = (conn) => ({ PGHOST: conn.host, PGPORT: String(conn.port), PGUSER: conn.user, PGPASSWORD: conn.password, PGDATABASE: conn.database });
 
 async function migrate(conn) {
   const client = new pg.Client(conn);
@@ -97,7 +97,15 @@ function initDb(env) {
     "const m=await import('./web/db.mjs');const p=await import('./web/plugins.mjs');const l=await p.carregarPlugins();await m.initDb(...l.map((x)=>x.esquema).filter(Boolean));process.exit(0)"], { cwd: root, env, stdio: ['ignore', 'ignore', 'inherit'] });
 }
 
-async function waitReady(base, child) {
+// Esquema, tabelas do boot e migrações: tudo que o servidor precisa achar pronto.
+export async function prepararBanco(conn, env) {
+  const admin = new pg.Client(conn);
+  await admin.connect(); await admin.query('CREATE SCHEMA IF NOT EXISTS mtr_harness'); await admin.end();
+  initDb(env);
+  await migrate(conn);
+}
+
+export async function waitReady(base, child) {
   for (let i = 0; i < 120; i++) {
     if (child.exitCode !== null) throw new Error('o servidor parou durante o boot (veja o log acima)');
     try { if ((await fetch(`${base}/api/config`)).ok) return; } catch {}
@@ -139,10 +147,7 @@ async function main() {
   } else if (!['TOGETHER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY'].some((k) => env[k])) {
     console.warn('[local] nenhuma chave de modelo no .env: o servidor sobe, mas o chat vai responder "serviço indisponível". Veja o Quick start no README.');
   }
-  const admin = new pg.Client(conn);
-  await admin.connect(); await admin.query('CREATE SCHEMA IF NOT EXISTS mtr_harness'); await admin.end();
-  initDb(env);
-  await migrate(conn);
+  await prepararBanco(conn, env);
 
   const base = `http://127.0.0.1:${env.PORT}`;
   const server = spawn(process.execPath, ['server.mjs'], { cwd: path.join(root, 'web'), env, stdio: 'inherit' });

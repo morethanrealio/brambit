@@ -1,5 +1,6 @@
 # Rede de proteção do repositório.
-# sistemas: sobe de verdade em Windows, macOS e Linux (npm run local -- --check).
+# sistemas: sobe de verdade em Windows, macOS e Linux (npm run local -- --check) e o
+#           instalador de ponta a ponta (instalador/conferir.mjs).
 # rapido: sintaxe, nome usado sem existir (eslint no-undef), artefatos gerados em dia, trava de crescimento de server.mjs/db.mjs,
 #         trava de teste novo que lê o texto do código, .env.example em dia, núcleo sobe
 #         sozinho e
@@ -121,6 +122,8 @@ jobs:
       - run: npm ci
       - name: Sobe, cadastra e entra
         run: node dev/local.mjs --check
+      - name: Instalador (configura, cadastro fechado, religa)
+        run: node instalador/conferir.mjs
       - name: Log do Postgres (se falhou)
         if: failure()
         shell: bash

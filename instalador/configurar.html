@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brambit</title>
+<style nonce="__CSP_NONCE__">
+  :root { color-scheme: light dark; --borda: #8884; --destaque: #2f6fed; }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; display: flex; justify-content: center; }
+  main { width: 100%; max-width: 520px; padding: 32px 20px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p.sub, small { opacity: .75; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  input[type=text], input[type=email], input[type=password], input[type=url] { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; background: transparent; color: inherit; }
+  .ias { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ias label { font-weight: 400; margin: 0; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 8px; cursor: pointer; }
+  .ias label:has(input:checked) { border-color: var(--destaque); outline: 1px solid var(--destaque); }
+  button { margin-top: 24px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--destaque); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .erro { color: #d33; margin-top: 12px; }
+  .estado { margin-top: 16px; }
+  [hidden] { display: none !important; }
+  a { color: var(--destaque); }
+</style>
+</head>
+<body>
+<main>
+  <h1 data-t="titulo"></h1>
+  <p class="sub" data-t="sub"></p>
+  <p class="erro" id="sem-codigo" hidden data-t="sem_codigo"></p>
+  <form id="form" novalidate>
+    <h2 data-t="voce"></h2>
+    <label for="nome" data-t="nome"></label>
+    <input id="nome" type="text" autocomplete="name" required>
+    <label for="email" data-t="email"></label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="senha" data-t="senha"></label>
+    <input id="senha" type="password" autocomplete="new-password" minlength="12" required>
+    <small data-t="senha_dica"></small>
+    <label for="senha2" data-t="senha2"></label>
+    <input id="senha2" type="password" autocomplete="new-password" required>
+
+    <h2 data-t="ia"></h2>
+    <small data-t="ia_dica"></small>
+    <div class="ias">
+      <label><input type="radio" name="provedor" value="together" checked> Together</label>
+      <label><input type="radio" name="provedor" value="openai"> OpenAI</label>
+      <label><input type="radio" name="provedor" value="gemini"> Google Gemini</label>
+      <label><input type="radio" name="provedor" value="outro"> <span data-t="outro"></span></label>
+    </div>
+    <div id="campos-outro" hidden>
+      <label for="endereco" data-t="endereco"></label>
+      <input id="endereco" type="url" placeholder="http://localhost:11434/v1">
+      <label for="modelo" data-t="modelo"></label>
+      <input id="modelo" type="text">
+    </div>
+    <label for="chave" data-t="chave"></label>
+    <input id="chave" type="password" autocomplete="off">
+    <small><a id="onde-chave" target="_blank" rel="noopener noreferrer" data-t="onde_chave"></a><span id="chave-opcional" hidden data-t="chave_opcional"></span></small>
+
+    <button id="enviar" type="submit" data-t="enviar"></button>
+    <p class="erro" id="erro" hidden></p>
+  </form>
+  <p class="estado" id="estado" hidden></p>
+</main>
+<script nonce="__CSP_NONCE__">
+const TEXTOS = {
+  pt: {
+    titulo: 'Bem-vindo ao Brambit', sub: 'Falta só configurar. Isto aparece uma vez e fica tudo neste computador.',
+    sem_codigo: 'Esta página precisa do endereço completo que apareceu na janela do Brambit. Feche e abra o Brambit de novo.',
+    voce: '1. Sua conta', nome: 'Seu nome', email: 'Seu e-mail', senha: 'Crie uma senha', senha_dica: 'Pelo menos 12 caracteres.', senha2: 'Repita a senha',
+    ia: '2. Qual inteligência artificial usar', ia_dica: 'O Brambit usa a IA que você escolher, com a sua chave. O custo do uso é cobrado por ela, direto na sua conta.',
+    outro: 'Outra (compatível com OpenAI)', endereco: 'Endereço da API', modelo: 'Nome do modelo', chave: 'Chave da API',
+    onde_chave: 'Onde pegar a chave', chave_opcional: 'Pode ficar vazia se o serviço não pede chave (ex.: Ollama no seu computador).',
+    enviar: 'Concluir', testando: 'Testando a chave...', ligando: 'Tudo certo. Ligando o Brambit...', entrando: 'Criando sua conta...',
+    e_nome: 'Preencha seu nome.', e_email: 'Confira o e-mail.', e_senha: 'A senha precisa de pelo menos 12 caracteres.', e_senha2: 'As duas senhas estão diferentes.',
+    falta_chave: 'Cole a chave da API.', endereco_invalido: 'Confira o endereço da API (começa com http:// ou https://).', falta_modelo: 'Escreva o nome do modelo.',
+    chave_recusada: 'A IA recusou essa chave. Confira se copiou inteira.', modelo_ausente: 'A chave funciona, mas esse modelo não aparece na sua conta da IA.',
+    sem_conexao: 'Não consegui falar com a IA. Confira a internet (ou o endereço).', provedor_erro: 'A IA respondeu com erro. Tente de novo daqui a pouco.',
+    codigo: 'Esta página expirou. Feche e abra o Brambit de novo.', codigo_esgotado: 'Esta página expirou. Feche e abra o Brambit de novo.',
+    demorou: 'O Brambit não ligou. Veja a mensagem na janela dele.', conta: 'A configuração foi salva, mas a conta não foi criada: ', generico: 'Algo deu errado. Tente de novo.',
+  },
+  en: {
+    titulo: 'Welcome to Brambit', sub: 'Just one setup step. You only see this once, and everything stays on this computer.',
+    sem_codigo: 'This page needs the full address shown in the Brambit window. Close Brambit and open it again.',
+    voce: '1. Your account', nome: 'Your name', email: 'Your email', senha: 'Create a password', senha_dica: 'At least 12 characters.', senha2: 'Repeat the password',
+    ia: '2. Which AI to use', ia_dica: 'Brambit uses the AI you choose, with your own key. Usage is billed by that AI, straight to your account.',
+    outro: 'Other (OpenAI-compatible)', endereco: 'API address', modelo: 'Model name', chave: 'API key',
+    onde_chave: 'Where to get the key', chave_opcional: 'Can be empty if the service needs no key (e.g. Ollama on your computer).',
+    enviar: 'Finish', testando: 'Testing the key...', ligando: 'All set. Starting Brambit...', entrando: 'Creating your account...',
+    e_nome: 'Fill in your name.', e_email: 'Check the email.', e_senha: 'The password needs at least 12 characters.', e_senha2: 'The two passwords differ.',
+    falta_chave: 'Paste the API key.', endereco_invalido: 'Check the API address (starts with http:// or https://).', falta_modelo: 'Type the model name.',
+    chave_recusada: 'The AI refused this key. Check you copied all of it.', modelo_ausente: 'The key works, but this model is not available on your AI account.',
+    sem_conexao: "Couldn't reach the AI. Check the internet (or the address).", provedor_erro: 'The AI answered with an error. Try again in a moment.',
+    codigo: 'This page expired. Close Brambit and open it again.', codigo_esgotado: 'This page expired. Close Brambit and open it again.',
+    demorou: "Brambit didn't start. See the message in its window.", conta: 'Setup was saved, but the account was not created: ', generico: 'Something went wrong. Try again.',
+  },
+  es: {
+    titulo: 'Bienvenido a Brambit', sub: 'Solo falta configurar. Esto aparece una vez y todo queda en esta computadora.',
+    sem_codigo: 'Esta página necesita la dirección completa que apareció en la ventana de Brambit. Cierra Brambit y ábrelo de nuevo.',
+    voce: '1. Tu cuenta', nome: 'Tu nombre', email: 'Tu correo', senha: 'Crea una contraseña', senha_dica: 'Al menos 12 caracteres.', senha2: 'Repite la contraseña',
+    ia: '2. Qué inteligencia artificial usar', ia_dica: 'Brambit usa la IA que elijas, con tu propia clave. El uso lo cobra esa IA, directo en tu cuenta.',
+    outro: 'Otra (compatible con OpenAI)', endereco: 'Dirección de la API', modelo: 'Nombre del modelo', chave: 'Clave de la API',
+    onde_chave: 'Dónde conseguir la clave', chave_opcional: 'Puede quedar vacía si el servicio no pide clave (ej.: Ollama en tu computadora).',
+    enviar: 'Terminar', testando: 'Probando la clave...', ligando: 'Todo listo. Encendiendo Brambit...', entrando: 'Creando tu cuenta...',
+    e_nome: 'Escribe tu nombre.', e_email: 'Revisa el correo.', e_senha: 'La contraseña necesita al menos 12 caracteres.', e_senha2: 'Las dos contraseñas son distintas.',
+    falta_chave: 'Pega la clave de la API.', endereco_invalido: 'Revisa la dirección de la API (empieza con http:// o https://).', falta_modelo: 'Escribe el nombre del modelo.',
+    chave_recusada: 'La IA rechazó esta clave. Revisa que la copiaste completa.', modelo_ausente: 'La clave funciona, pero ese modelo no aparece en tu cuenta de la IA.',
+    sem_conexao: 'No pude hablar con la IA. Revisa internet (o la dirección).', provedor_erro: 'La IA respondió con un error. Intenta de nuevo en un rato.',
+    codigo: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.', codigo_esgotado: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.',
+    demorou: 'Brambit no encendió. Mira el mensaje en su ventana.', conta: 'La configuración se guardó, pero la cuenta no se creó: ', generico: 'Algo salió mal. Intenta de nuevo.',
+  },
+};
+const ONDE_CHAVE = {
+  together: 'https://api.together.ai/settings/api-keys',
+  openai: 'https://platform.openai.com/api-keys',
+  gemini: 'https://aistudio.google.com/apikey',
+};
+const idioma = (navigator.languages || [navigator.language || 'pt']).map((l) => l.slice(0, 2)).find((l) => TEXTOS[l]) || 'pt';
+const t = (k) => TEXTOS[idioma][k] || TEXTOS.pt[k] || k;
+document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[idioma];
+for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+
+const $ = (id) => document.getElementById(id);
+// O código sai do endereço assim que é lido: não fica no histórico do navegador.
+const codigo = new URLSearchParams(location.hash.slice(1)).get('codigo') || '';
+history.replaceState(null, '', '/');
+if (!codigo) { $('sem-codigo').hidden = false; $('form').hidden = true; }
+
+const provedor = () => document.querySelector('input[name=provedor]:checked').value;
+function trocarProvedor() {
+  const p = provedor();
+  $('campos-outro').hidden = p !== 'outro';
+  $('onde-chave').hidden = p === 'outro';
+  $('chave-opcional').hidden = p !== 'outro';
+  if (ONDE_CHAVE[p]) $('onde-chave').href = ONDE_CHAVE[p];
+}
+for (const r of document.querySelectorAll('input[name=provedor]')) r.addEventListener('change', trocarProvedor);
+trocarProvedor();
+
+const mostrarErro = (msg) => { $('erro').textContent = msg; $('erro').hidden = !msg; };
+const estado = (msg) => { $('estado').textContent = msg; $('estado').hidden = !msg; };
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+const postar = (url, corpo) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo), credentials: 'same-origin' });
+
+$('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  mostrarErro('');
+  const nome = $('nome').value.trim(), email = $('email').value.trim(), senha = $('senha').value;
+  if (!nome) return mostrarErro(t('e_nome'));
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return mostrarErro(t('e_email'));
+  if (senha.length < 12) return mostrarErro(t('e_senha'));
+  if (senha !== $('senha2').value) return mostrarErro(t('e_senha2'));
+  $('enviar').disabled = true;
+  estado(t('testando'));
+  try {
+    const r = await postar('/instalar', { codigo, nome, email, provedor: provedor(), chave: $('chave').value, endereco: $('endereco').value, modelo: $('modelo').value });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { estado(''); $('enviar').disabled = false; return mostrarErro(t(j.erro) === j.erro ? t('generico') : t(j.erro)); }
+  } catch { estado(''); $('enviar').disabled = false; return mostrarErro(t('generico')); }
+
+  // A configuração está salva e o Brambit está trocando esta página pelo servidor de verdade.
+  $('form').hidden = true;
+  estado(t('ligando'));
+  let ligado = false;
+  for (let i = 0; i < 180 && !ligado; i++) {
+    await espera(1000);
+    try { ligado = (await fetch('/api/config', { cache: 'no-store' })).ok; } catch {}
+  }
+  if (!ligado) return estado(t('demorou'));
+  estado(t('entrando'));
+  let r = await postar('/api/signup', { name: nome, email, password: senha });
+  if (r.status === 409) r = await postar('/api/login', { email, password: senha });
+  if (r.ok) return location.replace('/');
+  const j = await r.json().catch(() => ({}));
+  estado(t('conta') + (j.error || r.status));
+});
+</script>
+</body>
+</html>
