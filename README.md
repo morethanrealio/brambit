@@ -7,6 +7,21 @@ criam e hospedam pequenos apps e executam rotinas agendadas. O modelo de IA é
 escolha de quem instala: qualquer provedor compatível com a API da OpenAI, ou o
 Gemini, com a sua chave.
 
+## Usar no seu computador
+
+Pra usar o Brambit (não pra desenvolver): Node.js 24 em Windows, macOS ou Linux.
+
+```bash
+npm ci
+npm run brambit
+```
+
+Na primeira vez abre no navegador uma página de configuração: sua conta (você vira
+a dona ou o dono da instalação), qual IA usar e a chave dela, testada antes de
+salvar. Depois disso o cadastro fica fechado: os outros entram com o seu convite.
+Os dados ficam em `~/.brambit` (ou em `BRAMBIT_DADOS`), fora da pasta do
+programa, e tudo escuta só em `127.0.0.1`.
+
 ## Quick start
 
 Requisitos: Node.js 24 (a versão do CI) em Linux ou macOS. O banco vem junto
@@ -123,6 +138,7 @@ cada porta tem um padrão que deixa a instância inteira funcionando.
 - `ops/apps-host/` — plano de controle dos apps hospedados (`ctl.py`, `router.py`).
 - `ops/tenancy-*.mjs` — provas de isolamento entre contas, rodadas pela suíte.
 - `dev/` — `npm run local` e `npm run modelos`.
+- `instalador/` — `npm run brambit` (uso no próprio computador) e a prova de ponta a ponta dele.
 - `test-support/` — apoio da suíte de testes.
 
 ## Desenvolvimento e validação

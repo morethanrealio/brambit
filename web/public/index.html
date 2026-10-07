@@ -568,15 +568,6 @@
   .connect-footer :focus-visible { outline:3px solid #914221; outline-offset:3px; }
   .connect-actions :focus-visible { outline:3px solid #914221; outline-offset:3px; }
 </style>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-D83NWWETWF"></script>
-<script nonce="__CSP_NONCE__">
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag("js", new Date());
-  gtag("config", "G-D83NWWETWF");
-  gtag("config", "AW-18423630060"); // Google Ads: conversão de cadastro (ver marcarCadastro)
-</script>
 <!-- Atribuição de primeiro toque (gclid/utm). Mesma origem: dispensa nonce. -->
 <script src="/atribuicao.js"></script>
 <link rel="stylesheet" href="/routines.css">
@@ -1651,9 +1642,9 @@ function showAuthCard(which) { // 'login' | 'forgot' | 'reset' | 'logged'
 }
 // Encaixes do app: plugin com tela própria traz pedaços desta página (pasta app/,
 // ver web/app-encaixes.mjs), que entram nos marcadores encaixe:*. O script dele cai
-// logo abaixo e se pendura aqui: rotas da aba, o que roda ao entrar no app e a
-// cada troca de aba.
-const ganchosDoApp = { rotas: {}, aoEntrar: [], aoTrocarAba: [] };
+// logo abaixo e se pendura aqui: rotas da aba, o que roda ao entrar no app, a
+// cada troca de aba e quando a conta é criada (marcarCadastro).
+const ganchosDoApp = { rotas: {}, aoEntrar: [], aoTrocarAba: [], aoCadastrar: [] };
 /*encaixe:script*/
 // Menu minimizável (barrinha só de ícones). Estado persistido em localStorage.
 function applyNavMini(on) {
@@ -1717,23 +1708,6 @@ E('pwToggle').onclick = () => {
   E('pwToggle').textContent = show ? 'Ocultar' : 'Mostrar';
   E('pwToggle').setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
 };
-// ── Conversão de CADASTRO (Google Ads, medida via GA4) ──
-// Dispara quando a conta EXISTE, nunca no clique do botão: no clique conta quem
-// desistiu no meio, e no botão do Google contaria também quem só está entrando
-// numa conta antiga. O Ads usa essas conversões pra otimizar campanha, então
-// número inflado sai caro. Vai direto pro Google Ads, uma AÇÃO de conversão por
-// caminho (o Ads separa por ação, não por parâmetro), e também como evento GA4,
-// que é o que rende relatório do lado do Analytics (02/09).
-const ADS_ID = 'AW-18423630060';
-// Both paths point to the SAME "Sign-up" action (decided 03/09): for Ads what
-// matters is "the ad brought a sign-up", and it optimizes better with one
-// action getting the whole signal than with two half actions. The split by
-// path (Google x e-mail) comes from the GA4 events below, which carry
-// `method`. If we ever want separate actions, just change this label.
-const ADS_CONV = {
-  email: 'UyEeCLuu7OwcEOyRidFE',  // ação "Sign-up"
-  google: 'UyEeCLuu7OwcEOyRidFE', // mesma ação, de propósito
-};
 // ── De onde a pessoa VEIO (atribuição) ──
 // A CAPTURA mora em /atribuicao.js, incluído em todas as páginas públicas, porque
 // qualquer uma delas pode ser a landing de um anúncio (motivo completo no arquivo).
@@ -1754,17 +1728,12 @@ function marcarOrigem() {
     }).catch(() => {});
   } catch (e) {}
 }
+// Conta CRIADA (nunca o clique do botão: no clique conta quem desistiu no meio,
+// e no botão do Google também quem só está entrando numa conta antiga). Além da
+// origem, avisa os plugins (ganchosDoApp.aoCadastrar), ex.: tag de conversão.
 function marcarCadastro(metodo) {
-  marcarOrigem(); // não depende do gtag ter carregado
-  try {
-    if (typeof gtag !== 'function') return;
-    if (localStorage.getItem('brambs_conv_cadastro')) return; // no máximo 1 por navegador
-    localStorage.setItem('brambs_conv_cadastro', metodo);
-    const label = ADS_CONV[metodo];
-    if (label) gtag('event', 'conversion', { send_to: ADS_ID + '/' + label });
-    gtag('event', metodo === 'google' ? 'cadastro_google' : 'cadastro_email', { method: metodo });
-    gtag('event', 'sign_up', { method: metodo }); // evento padrão do GA4, pros relatórios de lá
-  } catch (e) { /* medição nunca pode quebrar o cadastro */ }
+  marcarOrigem();
+  ganchosDoApp.aoCadastrar.forEach((f) => { try { f(metodo); } catch (e) { /* plugin nunca quebra o cadastro */ } });
 }
 // Marca a IDA pro consentimento do Google. sessionStorage sobrevive ao redirect
 // (mesma aba, mesma origem); na volta, essa marca + conta ainda sem assistente

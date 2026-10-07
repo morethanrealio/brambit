@@ -7,7 +7,8 @@
 // some sem deixar linha. A troca acontece antes do nonce e da tradução, então
 // os pedaços ganham as duas coisas como o resto da página.
 // O script do plugin se pendura em `ganchosDoApp` (declarado no index.html):
-// rotas da aba, o que roda ao entrar no app e a cada troca de aba.
+// rotas da aba, o que roda ao entrar no app, a cada troca de aba e quando a
+// conta é criada (aoCadastrar, com o método: email ou google).
 import fs from 'node:fs';
 import path from 'node:path';
 
