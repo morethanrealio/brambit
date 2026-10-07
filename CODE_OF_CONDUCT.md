@@ -1,8 +1,8 @@
-# Código de conduta
+# Code of conduct
 
-O Brambit adota o *Contributor Covenant 2.1*, reproduzido abaixo no texto oficial em
-inglês. Vale em todo espaço do projeto: issues, PRs, discussões e qualquer canal
-oficial. Relatos vão para oi@brambs.com.br e são tratados com sigilo.
+Brambit adopts the *Contributor Covenant 2.1*, reproduced below. It applies in every
+project space: issues, PRs, discussions and any official channel. Reports go to
+oi@brambs.com.br and are handled confidentially.
 
 ---
 

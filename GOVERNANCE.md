@@ -1,37 +1,37 @@
-# Governança
+# Governance
 
-O Brambit é mantido pela STEM Tecnologia e Desenvolvimento de Software LTDA, que
-também opera o Brambs, serviço hospedado construído sobre ele, em brambs.com.br.
+Brambit is maintained by STEM Tecnologia e Desenvolvimento de Software LTDA, which
+also runs Brambs, a hosted service built on it, at brambs.com.br.
 
-## Papéis
+## Roles
 
-- *Contribuidor:* qualquer pessoa que abre issue ou PR.
-- *Mantenedor:* revisa e faz merge na sua área. Lista em [MAINTAINERS.md](MAINTAINERS.md).
-- *Responsável pelo projeto:* decide o roteiro, a licença e quem é mantenedor, e
-  desempata quando os mantenedores não chegam a acordo.
+- *Contributor:* anyone who opens an issue or PR.
+- *Maintainer:* reviews and merges in their area. Listed in [MAINTAINERS.md](MAINTAINERS.md).
+- *Project lead:* decides the roadmap, the license and who is a maintainer, and
+  breaks ties when maintainers don't agree.
 
-## Como as decisões são tomadas
+## How decisions are made
 
-- Mudança comum: um mantenedor da área aprova.
-- Área sensível (login, separação entre contas, cobrança, execução de código, banco,
-  CI): mantenedor da área *e* de segurança.
-- Mudança de rumo (arquitetura, licença, dependência grande): issue aberta para
-  discussão antes de qualquer PR; quem decide é o responsável pelo projeto.
+- Regular change: one maintainer of the area approves.
+- Sensitive area (login, account isolation, billing, code execution, database, CI):
+  the area's maintainer *and* security.
+- Change of direction (architecture, license, large dependency): an issue open for
+  discussion before any PR; the project lead decides.
 
-## Núcleo aberto e serviço hospedado
+## Open core and hosted service
 
-Este repositório é o núcleo: tudo que alguém precisa pra rodar o assistente com a
-própria chave de LLM. A operação do serviço brambs.com.br (planos, cobrança,
-comunicação com usuários, métricas de negócio) fica fora dele e se conecta por pontos
-de extensão. Correção ou recurso de interesse geral entra primeiro aqui.
+This repository is the core: everything someone needs to run the assistant with
+their own LLM key. Running the brambs.com.br service (plans, billing, user
+communication, business metrics) lives outside it and plugs in through extension
+points. Fixes and features of general interest land here first.
 
-## Marca
+## Trademark
 
-O código é AGPL-3.0; os nomes "Brambit" e "Brambs", os logos e os mascotes não. Uma
-versão modificada pode citar que é baseada no Brambit, mas não pode se apresentar
-como o Brambit nem como o Brambs.
+The code is AGPL-3.0; the names "Brambit" and "Brambs", the logos and the mascots
+are not. A modified version may say it is based on Brambit, but may not present
+itself as Brambit or as Brambs.
 
-## Tornar-se mantenedor
+## Becoming a maintainer
 
-Quem contribui com regularidade e qualidade numa área pode ser convidado. O convite
-é decidido pelo responsável pelo projeto, ouvindo os mantenedores atuais.
+People who contribute regularly and well in an area may be invited. The project lead
+decides, after hearing the current maintainers.

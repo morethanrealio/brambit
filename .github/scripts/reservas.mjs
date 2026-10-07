@@ -1,14 +1,14 @@
-// Libera issue reservada cujo prazo venceu (CONTRIBUTING.md, "Fluxo", passo 2).
-// Prazo = rótulo `prazo: N dia(s)` da issue; sem rótulo, PRAZO_PADRAO dias. Conta a
-// partir da atribuição ou do último comentário de quem reservou, o que for mais novo.
-// Não vence: quem tem PR aberto ligado à issue, nem quem é do time (escrita no repo).
-// Rodado pelo workflow reservas.yml; RESERVAS_SIMULAR=1 só lista, não muda nada.
+// Frees a reserved issue whose deadline expired (CONTRIBUTING.md, "Workflow", step 2).
+// Deadline = the issue label `deadline: N day(s)`; without it, PRAZO_PADRAO days. Counted
+// from the assignment or the assignee last comment, whichever is newer.
+// Never expires: an assignee with an open PR linked to the issue, or a team member
+// (write access). Run by reservas.yml; RESERVAS_SIMULAR=1 only lists, changes nothing.
 const PRAZO_PADRAO = 7;
 const DIA = 86_400_000;
 const repo = process.env.GITHUB_REPOSITORY;
 const token = process.env.GH_TOKEN;
 const simular = process.env.RESERVAS_SIMULAR === '1';
-if (!repo || !token) throw new Error('Faltam GITHUB_REPOSITORY e GH_TOKEN.');
+if (!repo || !token) throw new Error('GITHUB_REPOSITORY and GH_TOKEN are required.');
 
 async function gh(caminho, { method = 'GET', body } = {}) {
   const r = await fetch(caminho.startsWith('https://') ? caminho : `https://api.github.com${caminho}`, {
@@ -27,12 +27,12 @@ async function todas(caminho) {
 
 export function prazoDias(rotulos) {
   for (const { name } of rotulos) {
-    const m = /^prazo:\s*(\d+)\s*dias?$/i.exec(name);
+    const m = /^deadline:\s*(\d+)\s*days?$/i.exec(name);
     if (m && Number(m[1]) > 0) return Number(m[1]);
   }
   return PRAZO_PADRAO;
 }
-// Último sinal de vida de `login` na issue, ou null se tem PR aberto dele ligado a ela.
+// Last sign of life from `login` on the issue, or null if they have an open PR linked to it.
 export function ultimaNovidade(linhaDoTempo, login) {
   let ultima = 0;
   for (const e of linhaDoTempo) {
@@ -63,11 +63,11 @@ async function main() {
         if (await doTime(login)) continue;
         const ultima = ultimaNovidade(linha, login);
         if (ultima === null || Date.now() - ultima < dias * DIA) continue;
-        console.log(`#${issue.number}: reserva de @${login} venceu (${dias} dia(s) sem novidade)${simular ? ' [simulação]' : ''}`);
+        console.log(`#${issue.number}: reservation by @${login} expired (${dias} day(s) with no news)${simular ? ' [dry run]' : ''}`);
         if (simular) continue;
         await gh(`/repos/${repo}/issues/${issue.number}/assignees`, { method: 'DELETE', body: { assignees: [login] } });
         await gh(`/repos/${repo}/issues/${issue.number}/comments`, { method: 'POST', body: {
-          body: `@${login}, o prazo da reserva (${dias} dia(s) sem novidade) venceu e a issue ficou livre de novo. Se ainda estiver trabalhando nela, comente aqui.`,
+          body: `@${login}, the reservation expired (${dias} day(s) with no news) and this issue is free again. If you are still working on it, leave a comment here.`,
         } });
       }
     } catch (e) {
@@ -75,7 +75,7 @@ async function main() {
       console.error(`::error::#${issue.number}: ${e.message}`);
     }
   }
-  console.log(`${issues.length} issue(s) reservada(s) conferida(s).`);
+  console.log(`${issues.length} reserved issue(s) checked.`);
   if (erros) process.exitCode = 1;
 }
 

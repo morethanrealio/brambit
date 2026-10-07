@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Vulnerabilidade de segurança
+  - name: Security vulnerability
     url: https://github.com/morethanrealio/Brambit/security/advisories/new
-    about: Relate em privado; não abra issue pública.
+    about: Report it privately; don't open a public issue.

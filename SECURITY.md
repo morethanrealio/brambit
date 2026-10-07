@@ -1,29 +1,28 @@
-# Política de segurança
+# Security policy
 
-## Como relatar uma vulnerabilidade
+## Reporting a vulnerability
 
-*Não abra issue, PR ou discussão pública.* Use o relato privado do GitHub: aba
-*Security* do repositório → *Report a vulnerability*. Só os mantenedores veem o
-relato.
+*Do not open a public issue, PR or discussion.* Use GitHub's private reporting: the
+repository's *Security* tab → *Report a vulnerability*. Only maintainers see the
+report.
 
-Inclua, se puder: o que é afetado, como reproduzir, o impacto que você enxerga e a
-versão ou commit testado.
+If you can, include: what is affected, how to reproduce it, the impact you see and
+the version or commit you tested.
 
-## O que acontece depois
+## What happens next
 
-- Confirmamos o recebimento em até 3 dias úteis.
-- Avaliamos e respondemos com o diagnóstico em até 10 dias úteis.
-- Corrigimos em até 90 dias a partir do relato. Se a correção depender de terceiros
-  ou for grande, avisamos antes do prazo e combinamos um novo.
-- Combinamos com você a data de divulgação. Quem relatar é creditado, se quiser.
+- We acknowledge the report within 3 business days.
+- We assess it and reply with our diagnosis within 10 business days.
+- We fix it within 90 days of the report. If the fix depends on third parties or is
+  large, we tell you before the deadline and agree on a new one.
+- We agree with you on the disclosure date. Reporters are credited if they wish.
 
-## Escopo
+## Scope
 
-Vale para o código deste repositório. O serviço hospedado em brambs.com.br também
-aceita relatos pelo mesmo canal; não faça teste que afete dados ou contas de outras
-pessoas, nem teste de carga.
+This covers the code in this repository. The hosted service at brambs.com.br also
+accepts reports through the same channel; do not run tests that affect other
+people's data or accounts, and no load testing.
 
-## Versões com correção
+## Supported versions
 
-Correções de segurança saem na versão mais recente. Versões antigas não recebem
-correção.
+Security fixes ship in the latest version. Older versions don't receive fixes.

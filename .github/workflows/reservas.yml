@@ -1,6 +1,6 @@
-# Uma vez por dia, tira a atribuição de issue cuja reserva venceu (CONTRIBUTING.md,
-# "Fluxo", passo 2). Só mexe em issue: não lê segredo, não roda código de PR.
-name: Reservas de issue
+# Once a day, unassigns issues whose reservation expired (CONTRIBUTING.md,
+# "Workflow", step 2). Only touches issues: reads no secret, runs no PR code.
+name: Issue reservations
 
 on:
   schedule:
@@ -11,7 +11,7 @@ permissions: {}
 
 jobs:
   liberar:
-    name: Liberar reservas vencidas
+    name: Free expired reservations
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Liberar
+      - name: Free
         env:
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/reservas.mjs
