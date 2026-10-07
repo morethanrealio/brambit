@@ -21,6 +21,9 @@ produção.
 
 ## Fluxo
 
+Procurando por onde começar? O [TODO.md](TODO.md) lista o trabalho em aberto por
+área, com os itens bons pra uma primeira contribuição marcados.
+
 1. Para mudança maior que uma correção pequena, abra antes uma issue explicando o
    problema e a proposta. Assim ninguém perde trabalho com algo que não vai entrar.
 2. Quer pegar uma issue? Comente nela; um mantenedor atribui a issue a você. A
