@@ -28,15 +28,14 @@ import { encMaybe, decMaybe, encryptSecret, decryptSecret, vaultEnabled } from '
 import { IDIOMAS_OK, IDIOMA_PADRAO, normalizaIdioma, normalizaPais } from './locale.mjs';
 import { matchingWikiLineSnippet, wikiSearchTerms } from './wiki-disclosure.mjs';
 
-export const pool = new pg.Pool({
+export const pgConfig = {
   host: process.env.PGHOST || 'localhost',
   port: Number(process.env.PGPORT || 5432),
   database: process.env.PGDATABASE || 'mara',
   user: process.env.PGUSER || 'mtragents',
   password: process.env.PGPASSWORD, // setado no .env (nunca no repo)
-  max: 4,
-  idleTimeoutMillis: 30000,
-});
+};
+export const pool = new pg.Pool({ ...pgConfig, max: 4, idleTimeoutMillis: 30000 });
 
 // SEM ISSO O PROCESSO INTEIRO MORRE. O pg emite 'error' no POOL quando o Postgres
 // derruba uma conexão OCIOSA (a manutenção do banco manda `terminating connection

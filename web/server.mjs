@@ -80,10 +80,10 @@ const creditReplyGuard = createRepeatPushGuard({ windowMs: CREDIT_REPLY_WINDOW_M
 import {rememberSettledUsage,isSettledUsage} from './execution-credit-receipt.mjs';
 import { makeAppTaskControlTool } from './app-task-runner.mjs';
 import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega } from './video-poll-decisao.mjs';
-const appTaskStore = createAppTaskStore({root: process.env.APP_TASK_STORE_DIR || new URL('../.brambs-coding-tasks/', import.meta.url).pathname, seal:sealAppTask, open:openAppTask});
+const appTaskStore = createAppTaskStore({root: process.env.APP_TASK_STORE_DIR || fileURLToPath(new URL('../.brambs-coding-tasks/', import.meta.url)), seal:sealAppTask, open:openAppTask, acquire:pgTaskLock(pgConfig)});
 import { encryptSecret as sealAppTask, decryptSecret as openAppTask, vaultEnabled, vaultConfigured, encryptSecret, decryptSecret, initVaultNoBoot, nomeDaChaveExterna } from './vault.mjs';
-import { createAppTaskStore } from './app-task-store.mjs';
-import { onboardingStore, taskMetrics, creditSpend, calendarWatchDb } from './db.mjs';
+import { createAppTaskStore, pgTaskLock } from './app-task-store.mjs';
+import { onboardingStore, taskMetrics, creditSpend, calendarWatchDb, pgConfig } from './db.mjs';
 import { createCalendarWatch, JANELA_DIAS as AGENDA_JANELA_DIAS } from './calendar-watch.mjs';
 import {programmingMeasurement, measuredActionState} from './task-metrics.mjs';
 import { publicState, starterPrompt, OnboardingError, id as onboardingId } from './onboarding-store.mjs';
@@ -2294,7 +2294,7 @@ const APP_SUB_TOOLS = new Set([...APP_BUILD_TOOLS, 'listar_sistemas', 'chamar_si
 // (já com o resultado do turno anterior) — sem isso, serializar não adiantaria.
 // A durable programming worker owns execution; chat owns intent and presentation.
 // Neither raw provider credentials nor live request/response objects are persisted.
-const codingJobStore=createAppTaskStore({root:process.env.CODING_JOB_STORE_DIR||new URL('../.brambs-programming-jobs/',import.meta.url).pathname,seal:sealAppTask,open:openAppTask});
+const codingJobStore=createAppTaskStore({root:process.env.CODING_JOB_STORE_DIR||fileURLToPath(new URL('../.brambs-programming-jobs/',import.meta.url)),seal:sealAppTask,open:openAppTask,acquire:pgTaskLock(pgConfig)});
 const programmingRuntime=createProgrammingRuntime({confirmationStore,getAgentOwned,getThreadOwned,getUserLocale,hasProviderExecution,withProviderExecution,gasto,DEEPSEEK_AGENT_MODEL,isDeepSeekTurn,withDeepSeek,makeOfficialDeepSeek,GEMINI_COMPARISON_ID,isGeminiComparison,withGeminiComparison,recordUsages,makeHeavyProvider,primaryIsGeminiOverride,makeGeminiPrimary,makePrimaryProvider,hostingTools,APP_SUB_TOOLS,appTaskStore,getProject,userHasSshKey,runnerOnline,runnerBoundAgentId,livreTools,sshTools,codingTools,validProviderToken});
 const codingJobs=createCodingJobs({store:codingJobStore,execute:programmingRuntime.execute,
   onSnapshot:job=>taskMetrics.record(programmingMeasurement(job)),

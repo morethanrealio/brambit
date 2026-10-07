@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // Sobe o Brambit na sua máquina: Postgres 14 descartável (mesma versão do prod),
 // schema, migrações, uma conta de teste e o servidor. Nada sai daqui: o banco
-// escuta só num socket local e os dados ficam em .local/ (apague pra recomeçar).
+// escuta só em 127.0.0.1, com senha, e os dados ficam em .local/ (apague pra recomeçar).
+// Roda em Linux, macOS e Windows.
 //
 // Uso: npm run local        (lê o .env e o modelos.yaml da raiz; precisa de uma chave de modelo)
+//      npm run local -- --check   sobe, confere cadastro e login e sai (o CI usa)
 import { spawn, execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
-import os from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
@@ -17,13 +19,13 @@ import { carregarModelos, descreverModelos, tabelaModelos } from '../core-proto/
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = path.join(root, '.local');
 const pgdata = path.join(local, 'pgdata');
-// Socket Unix tem limite de ~100 caracteres no caminho: fica no tmp, não no repo.
-const sock = path.join(os.tmpdir(), `brambs-pg-${createHash('sha1').update(root).digest('hex').slice(0, 8)}`);
+const pwfile = path.join(local, 'pg-password');
 const DB_USER = 'brambs';
 export const TEST_ACCOUNT = { name: 'Conta de Teste', email: 'teste@example.com', password: 'brambs-local-teste' };
 
 export function postgresBin() {
-  const pkg = `@embedded-postgres/${process.platform}-${process.arch}`;
+  // O pacote do Windows se chama windows-x64, não win32-x64.
+  const pkg = `@embedded-postgres/${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`;
   try { return path.resolve(path.dirname(fileURLToPath(import.meta.resolve(pkg))), '..', 'native', 'bin'); }
   catch { throw new Error(`Postgres embutido não instalado pra ${process.platform}-${process.arch}. Rode npm install.`); }
 }
@@ -36,21 +38,44 @@ function readDotEnv() {
   return existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {};
 }
 
-function startPostgres(bin) {
-  mkdirSync(sock, { recursive: true });
-  if (!existsSync(path.join(pgdata, 'PG_VERSION'))) {
-    mkdirSync(local, { recursive: true });
-    execFileSync(path.join(bin, 'initdb'), ['-D', pgdata, '-U', DB_USER, '--auth=trust', '--no-locale', '--encoding=UTF8'], { stdio: 'ignore' });
+const freePort = () => new Promise((resolve, reject) => {
+  const s = net.createServer().once('error', reject);
+  s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
+});
+
+// Conexão TCP só em 127.0.0.1 (socket Unix não existe no Windows), com senha: no
+// Windows e num computador dividido, outro usuário da máquina alcança 127.0.0.1.
+// A senha é gerada na primeira vez e fica em .local/pg-password.
+async function startPostgres(bin) {
+  const exe = (name) => path.join(bin, process.platform === 'win32' ? `${name}.exe` : name);
+  mkdirSync(local, { recursive: true });
+  const novo = !existsSync(path.join(pgdata, 'PG_VERSION'));
+  // .local/ de antes desta versão foi criado sem senha (só socket): ganha uma agora.
+  const semSenha = !novo && !existsSync(pwfile);
+  if (!existsSync(pwfile)) writeFileSync(pwfile, randomBytes(24).toString('hex'), { mode: 0o600 });
+  const password = readFileSync(pwfile, 'utf8').trim();
+  if (novo) execFileSync(exe('initdb'), ['-D', pgdata, '-U', DB_USER, '--auth=scram-sha-256', `--pwfile=${pwfile}`, '--no-locale', '--encoding=UTF8'], { stdio: 'ignore' });
+  const port = await freePort();
+  // Num arquivo, não em pg_ctl -o: no Windows as aspas de '' chegam literais.
+  const conf = path.join(pgdata, 'postgresql.conf');
+  if (!readFileSync(conf, 'utf8').includes("include_if_exists = 'brambit.conf'")) appendFileSync(conf, "\ninclude_if_exists = 'brambit.conf'\n");
+  writeFileSync(path.join(pgdata, 'brambit.conf'), `listen_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = ''\n`);
+  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(local, 'postgres.log'), 'start'], { stdio: 'ignore' });
+  const stop = () => { try { execFileSync(exe('pg_ctl'), ['-D', pgdata, '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
+  const conn = { host: '127.0.0.1', port, user: DB_USER, password, database: 'postgres' };
+  if (semSenha) {
+    const c = new pg.Client(conn); await c.connect();
+    await c.query(`ALTER ROLE ${DB_USER} PASSWORD '${password}'`);
+    writeFileSync(path.join(pgdata, 'pg_hba.conf'), 'host all all 127.0.0.1/32 scram-sha-256\nhost all all ::1/128 scram-sha-256\n');
+    await c.query('SELECT pg_reload_conf()'); await c.end();
   }
-  execFileSync(path.join(bin, 'pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(local, 'postgres.log'),
-    '-o', `-c listen_addresses='' -c unix_socket_directories='${sock}'`, 'start'], { stdio: 'ignore' });
-  return () => { try { execFileSync(path.join(bin, 'pg_ctl'), ['-D', pgdata, '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
+  return { stop, conn };
 }
 
-const dbEnv = { PGHOST: sock, PGPORT: '5432', PGUSER: DB_USER, PGPASSWORD: '', PGDATABASE: 'postgres' };
+const dbEnvOf = (conn) => ({ PGHOST: conn.host, PGPORT: String(conn.port), PGUSER: conn.user, PGPASSWORD: conn.password, PGDATABASE: conn.database });
 
-async function migrate() {
-  const client = new pg.Client({ host: sock, user: DB_USER, database: 'postgres' });
+async function migrate(conn) {
+  const client = new pg.Client(conn);
   await client.connect();
   try {
     await client.query('CREATE TABLE IF NOT EXISTS public.local_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
@@ -87,10 +112,19 @@ async function ensureTestAccount(base) {
   console.warn(`[local] não consegui criar a conta de teste (${res.status}): ${(await res.text()).slice(0, 200)}`);
 }
 
+async function checkLogin(base) {
+  const res = await fetch(`${base}/api/login`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify({ email: TEST_ACCOUNT.email, password: TEST_ACCOUNT.password }) });
+  if (!res.ok) throw new Error(`login da conta de teste falhou (${res.status}): ${(await res.text()).slice(0, 200)}`);
+}
+
 async function main() {
+  const check = process.argv.includes('--check');
   const fileEnv = readDotEnv();
+  const { stop, conn } = await startPostgres(postgresBin());
+  process.on('exit', stop);
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
   const env = {
-    ...fileEnv, ...process.env, ...dbEnv,
+    ...fileEnv, ...process.env, ...dbEnvOf(conn),
     HOST: '127.0.0.1', PORT: process.env.PORT || fileEnv.PORT || '8080', BRAMBS_LOCAL: '1',
     APP_TASK_STORE_DIR: path.join(local, 'app-tasks'),
     CODING_JOB_STORE_DIR: path.join(local, 'coding-jobs'),
@@ -105,13 +139,10 @@ async function main() {
   } else if (!['TOGETHER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY'].some((k) => env[k])) {
     console.warn('[local] nenhuma chave de modelo no .env: o servidor sobe, mas o chat vai responder "serviço indisponível". Veja o Quick start no README.');
   }
-  const stop = startPostgres(postgresBin());
-  process.on('exit', stop);
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
-  const admin = new pg.Client({ host: sock, user: DB_USER, database: 'postgres' });
+  const admin = new pg.Client(conn);
   await admin.connect(); await admin.query('CREATE SCHEMA IF NOT EXISTS mtr_harness'); await admin.end();
   initDb(env);
-  await migrate();
+  await migrate(conn);
 
   const base = `http://127.0.0.1:${env.PORT}`;
   const server = spawn(process.execPath, ['server.mjs'], { cwd: path.join(root, 'web'), env, stdio: 'inherit' });
@@ -119,6 +150,7 @@ async function main() {
   server.on('exit', (code) => process.exit(code ?? 0));
   await waitReady(base, server);
   await ensureTestAccount(base);
+  if (check) { await checkLogin(base); console.log(`[local] ok: sobe, cadastra e entra (${process.platform}-${process.arch})`); process.exit(0); }
   console.log(`\n[local] pronto: ${base}\n[local] login: ${TEST_ACCOUNT.email} / ${TEST_ACCOUNT.password}\n[local] Ctrl+C para parar (o banco fica em .local/)\n`);
 }
 

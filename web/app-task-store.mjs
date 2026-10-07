@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import pg from 'pg';
 // Kernel-owned lock, released even when the server dies. The static child exits
 // when its parent's pipe closes; no user text becomes a command or argv fragment.
 export async function acquireTaskLock(file) {
@@ -23,6 +24,20 @@ export async function acquireTaskLock(file) {
     });
   }catch(e){child.stdin.destroy();child.kill();await exited;throw e;}
   return async()=>{if(released)return;released=true;child.stdin.end();await exited;};
+}
+// Same guarantee without flock (Linux only): a Postgres session lock, released by
+// the database when the connection closes, including when the server dies. Works
+// on Windows and macOS. One dedicated connection per held lock, outside the pool.
+export function pgTaskLock(config) {
+  return async(file)=>{
+    const [hi,lo]=[0,4].map(i=>createHash('sha256').update(path.resolve(file)).digest().readInt32BE(i));
+    const client=new pg.Client(config);client.on('error',()=>{});
+    try{await client.connect();}catch{await client.end().catch(()=>{});throw Object.assign(new Error('Task lock unavailable'),{code:'TASK_LOCK_UNAVAILABLE'});}
+    let ok;try{ok=(await client.query('SELECT pg_try_advisory_lock($1,$2) AS ok',[hi,lo])).rows[0].ok;}catch{ok=null;}
+    if(!ok){await client.end().catch(()=>{});throw Object.assign(new Error('Outra execução possui a tarefa ou o lock está indisponível.'),{code:ok===false?'TASK_LOCK_BUSY':'TASK_LOCK_UNAVAILABLE'});}
+    let released=false;
+    return async()=>{if(released)return;released=true;await client.end().catch(()=>{});};
+  };
 }
 // Private encrypted task checkpoints. Single-host store; a live lock is never stolen.
 // The owner/agent/thread/app scope is also inside authenticated ciphertext.
