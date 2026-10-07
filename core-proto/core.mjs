@@ -200,6 +200,10 @@ export class ToolRegistry {
   // trusted server code. Missing metadata is deliberately unsafe (fail closed):
   // neither the model nor tool arguments can opt an operation into replay.
   providerFallbackSafe(name) { return this.map.get(name)?.readOnly === true; }
+  // Text written in the SAME step as a tool flagged keepsStepText (record something,
+  // propose an action for confirmation) is part of the answer: the core delivers it
+  // before the final text instead of dropping it.
+  keepsStepText(name) { const t = this.map.get(name); return t?.keepsStepText === true || t?.confirmationTool?.keepsStepText === true; }
   revisionAware(name) { return REVISION_READS.has(name) && typeof this.map.get(name)?.repeatRevision === 'function'; }
   async repetitionKey(name, args) {
     if (!this.revisionAware(name)) return null;
@@ -258,6 +262,18 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   let turnStart = messages.length; // só blobs GERADOS neste turno são colapsados
   let consumedUpTo = messages.length; // quantas mensagens o modelo já viu (ver pruneTurnBlobs)
   const sigCounts = new Map(); // freio anti-loop: contagem de chamadas idênticas
+  // Answer text written alongside keepsStepText tools. Without this it was lost,
+  // because only the last step's text becomes the reply.
+  let carriedText = '';
+  const withCarried = (text) => {
+    const final = String(text || '').trim();
+    if (!carriedText) return text;
+    if (!final) return carriedText;
+    const norm = (x) => x.replace(/\s+/g, ' ').trim();
+    if (norm(final).includes(norm(carriedText).slice(0, 200))) return text;
+    if (norm(carriedText).includes(norm(final))) return carriedText;
+    return `${carriedText}\n\n${final}`;
+  };
   let emptyEnd = false; // fim SEM texto (seco ou truncado no teto de saída) -> vai pro salvage, nunca devolve branco
   let loopBreak = false; // cortado pelo freio anti-loop -> motivo certo na nota de estado
   const turnLog = initialToolLog.map(c => ({ name:c.name, hint:c.hint || c.name, falhou:!!c.falhou })); // toda tool executada neste turno (nome + args-chave) -> nota de estado se o turno for cortado
@@ -472,12 +488,18 @@ export async function runAgent({ provider, tools, system, userInput, images, his
         if (typeof answer?.text === 'string') res = {...res,text:answer.text};
         messages.push({ role: 'assistant', content: sanitizeText(res.text) });
         onEvent({ type: 'assistant', text: res.text });
-        onEvent({ type: 'end', text: res.text });
-        return { text: res.text, messages, usages, sources, termination:'completed' };
+        const delivered = withCarried(res.text);
+        onEvent({ type: 'end', text: delivered });
+        return { text: delivered, messages, usages, sources, termination:'completed' };
       }
       // Fim SEM texto: o modelo encerrou seco OU a geração foi CORTADA no teto de
       // saída (res.truncated) antes de emitir a resposta. Nunca devolver branco
       // pro usuário: sai do loop e cai no salvage abaixo pra arrancar uma resposta.
+      if (carriedText && !res.truncated) {
+        messages.push({ role: 'assistant', content: sanitizeText(carriedText) });
+        onEvent({ type: 'end', text: carriedText });
+        return { text: carriedText, messages, usages, sources, termination:'completed' };
+      }
       onEvent({ type: 'empty_end', step, truncated: !!res.truncated });
       emptyEnd = true;
       break;
@@ -517,6 +539,8 @@ export async function runAgent({ provider, tools, system, userInput, images, his
       break;
     }
     if (res.text) onEvent({ type: 'assistant', text: res.text });
+    if (res.text?.trim() && calls.length && calls.every(c => tools.keepsStepText?.(c.name) === true))
+      carriedText = carriedText ? `${carriedText}\n\n${res.text.trim()}` : res.text.trim();
     messages.push({ role: 'assistant', content: sanitizeText(res.text || ''), toolCalls: calls });
     for (const [callIndex, call] of calls.entries()) {
       let readState = null;

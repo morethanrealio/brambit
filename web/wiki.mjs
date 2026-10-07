@@ -101,7 +101,7 @@ export function wikiTools(userId, { fonte = {} } = {}) {
       },
     },
     {
-      name: 'memoria_anotar',
+      name: 'memoria_anotar', keepsStepText: true,
       description: 'Guarda, corrige ou remove FATOS na memória de longo prazo sobre o USUÁRIO (preferências, contexto, pessoas, decisões), um fato por operação, SEM reescrever a página. É o caminho padrão pra memória: use este pra acrescentar ou consertar o que já está anotado. NÃO use pra conversa fiada nem dado efêmero.',
       parameters: {
         type: 'object',
