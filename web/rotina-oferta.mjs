@@ -154,7 +154,7 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
     // saíram 3 ofertas em 433 turnos elegíveis (medido 10/09).
     L.push(`O que mais faz sentido oferecer pra esta pessoa (já escolhido a partir do que ela conversa e do que ela tem conectado, não é chute): ${alvo.o}. Ao chamar a tool, use padrao="${alvo.padrao}".`);
     L.push(`Lastro: ${alvo.evidencia}.`);
-    L.push('DEIXA: basta a conversa ENCOSTAR nesse assunto, não precisa vir um "todo dia". Aí, no fim da sua resposta normal, emende a oferta em uma ou duas linhas, chamando antes a tool oferecer_rotina. Se surgir outra coisa repetitiva antes disso, ofereça essa outra.');
+    L.push('DEIXA: basta a conversa ENCOSTAR nesse assunto, não precisa vir um "todo dia". Aí chame a tool oferecer_rotina ANTES de escrever a resposta e, depois do retorno dela, escreva a sua resposta normal completa com a oferta emendada no fim, em uma ou duas linhas. Se surgir outra coisa repetitiva antes disso, ofereça essa outra.');
   } else {
     L.push('Se, no que ele está pedindo AGORA, aparecer algo que se repete (ele já pediu a mesma coisa antes, ou disse "todo dia"/"toda semana"/"sempre que"), ofereça deixar isso rodando sozinho, usando a tool oferecer_rotina.');
   }
@@ -166,9 +166,21 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
 // Texto que a tool devolve depois de registrar a oferta. O convite em si é
 // escrito pelo assistente, na voz dele; aqui só ficam os limites de copy, os
 // mesmos do convite do painel.
+// oferecer_rotina é keepsStepText: o texto escrito no mesmo passo da chamada é
+// entregue antes do texto final. Até 06/10/2026 ele era descartado e o retorno
+// pedia só "faça o convite", então a resposta ao pedido sumia e só o convite
+// chegava (3 casos entre 03 e 05/10). Os retornos avisam que esse texto já vai
+// e pedem a resposta completa só se ela ainda não foi escrita.
+const JA_ESCRITO = 'O texto que você escreveu junto desta chamada já vai ser entregue a ele, antes do que você escrever agora: não repita nada dele.';
+
 export function ofertaRegistrada(titulo) {
-  return `Oferta registrada ("${titulo}"). Agora faça o convite VOCÊ, com as suas palavras, em no máximo 2 linhas: `
+  return `Oferta registrada ("${titulo}"). ${JA_ESCRITO} `
+    + 'Se a sua resposta ao que ele pediu ainda não está escrita, escreva-a agora COMPLETA. No fim, faça o convite VOCÊ, com as suas palavras, em no máximo 2 linhas: '
     + 'diga concretamente o que você passaria a fazer e quando, e pergunte se pode deixar rodando. '
     + 'NÃO crie a rotina agora (espere ele topar), NÃO diga que já está feito, NÃO mencione meta, campanha, teste ou plataforma, '
     + 'e emende no assunto que ele trouxe em vez de abrir um bloco novo.';
+}
+
+export function ofertaNaoFeita(motivo) {
+  return `Não ofereça agora: ${motivo}. ${JA_ESCRITO} Se ainda não respondeu ao que ele pediu, responda agora COMPLETO, sem tocar no assunto de rotina.`;
 }
