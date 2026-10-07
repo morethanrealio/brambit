@@ -59,8 +59,8 @@ for(const kind of ['chat','telegram','routine'])for(const completed of [false,tr
 for(const text of ['Nenhuma novidade.',`Texto ${ROUTINE_NO_NEWS}`,`${ROUTINE_NO_NEWS} texto`,'Preço alterou.',''])eq(routineFinalText(text,{kind:'routine',completed:true}),text);
 for(const language of ['en','es','pt-BR'])ok(routineFinalText(ROUTINE_NO_NEWS,{kind:'routine',language}).length>30);
 for(const channel of ['whatsapp','telegram','email','none']){
- const frame=routineExecutionFrame({kind:'routine',channel});ok(frame.includes(ROUTINE_NO_NEWS));ok(frame.includes('explicitamente'));ok(frame.includes('busca parcial'));
- if(channel==='none'){ok(!frame.includes('ENTREGA AUTOMÁTICA'));ok(frame.includes('Não há entrega automática'));}else ok(frame.includes('Não crie rascunhos'));
+ const frame=routineExecutionFrame({kind:'routine',channel});ok(frame.includes(ROUTINE_NO_NEWS));ok(frame.includes('explicitly'));ok(frame.includes('partial search'));
+ if(channel==='none'){ok(!frame.includes('ENTREGA AUTOMÁTICA'));ok(frame.includes('There is no automatic delivery'));}else ok(frame.includes('Do not create drafts'));
 }
 // Real core returns the protocol; no salvage/extra call; real deliverRoutine sends nothing.
 let step=0;const reg=new ToolRegistry().add({name:'consultar',parameters:{type:'object',properties:{}},run:async()=>'{"items":[],"partial":false}'});

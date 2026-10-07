@@ -203,29 +203,29 @@ export async function executeEmailSearch(c, deps = {}) {
 
 // Bloco que entra no frame da rotina. O modelo só trabalha com isto.
 export function emailSearchPromptBlock(c, r, { language = 'pt-BR' } = {}) {
-  const conta = r.account ? ` (conta ${r.account})` : '';
+  const conta = r.account ? ` (account ${r.account})` : '';
   const prov = r.provider === 'outlook' ? 'Outlook' : 'Gmail';
   const lines = [];
   lines.push('[BUSCA DE E-MAIL EXECUTADA PELA PLATAFORMA]');
-  lines.push(`A plataforma já consultou o ${prov}${conta} com a consulta exata: ${r.query}`);
-  lines.push(`Janela: últimos ${r.days} dia${r.days === 1 ? '' : 's'}. Resultado: ${r.total} e-mail${r.total === 1 ? '' : 's'}${r.truncated ? ` (lista cortada no teto de ${EMAIL_SEARCH_CAP}; os mais recentes estão aqui)` : ' (lista completa, paginada até o fim)'}.`);
-  if (r.errors.length) lines.push(`${r.errors.length} mensagem(ns) não abriram e ficaram de fora.`);
-  lines.push('Regras: NÃO refaça a busca, NÃO use ferramenta de e-mail e NÃO diga que vai buscar; trabalhe SOMENTE com a lista abaixo. Cumpra o que a rotina pede usando esses e-mails. Cite remetente, assunto e data quando relevante. Não invente conteúdo que não esteja no trecho/corpo.');
+  lines.push(`The platform already queried ${prov}${conta} with the exact query: ${r.query}`);
+  lines.push(`Window: last ${r.days} day${r.days === 1 ? '' : 's'}. Result: ${r.total} email${r.total === 1 ? '' : 's'}${r.truncated ? ` (list cut at the cap of ${EMAIL_SEARCH_CAP}; the most recent ones are here)` : ' (complete list, paginated to the end)'}.`);
+  if (r.errors.length) lines.push(`${r.errors.length} message(s) did not open and were left out.`);
+  lines.push('Rules: do NOT redo the search, do NOT use an email tool and do NOT say you are going to search; work ONLY with the list below. Do what the routine asks using these emails. Cite sender, subject and date when relevant. Do not make up content that is not in the snippet/body.');
   // Product decision (13/09): a search routine ALWAYS shows signs of life. Silence looks like failure
   // ("it broke, the assistant didn't do the job"). Empty = one sentence saying what it searched and found nothing.
-  if (r.total === 0) lines.push(`A lista está VAZIA. Responda em UMA frase que a busca foi feita (${prov}, últimos ${r.days} dia${r.days === 1 ? '' : 's'}) e não encontrou nenhum e-mail sobre o assunto. NUNCA responda [ROTINA_SEM_NOVIDADES] nem fique em silêncio, mesmo que a rotina peça isso: sem mensagem, a pessoa acha que a rotina falhou.`);
-  else lines.push('Se nenhum e-mail da lista for relevante pro que a rotina pede, diga isso em UMA frase (o que foi buscado e que não chegou nada relevante). NUNCA responda [ROTINA_SEM_NOVIDADES] nem fique em silêncio, mesmo que a rotina peça isso.');
-  lines.push('--- E-MAILS (mais recentes primeiro) ---');
+  if (r.total === 0) lines.push(`The list is EMPTY. Reply in ONE sentence that the search was done (${prov}, last ${r.days} day${r.days === 1 ? '' : 's'}) and found no email on the subject. NEVER reply [ROTINA_SEM_NOVIDADES] nor stay silent, even if the routine asks for it: with no message, the person thinks the routine failed.`);
+  else lines.push('If no email in the list is relevant to what the routine asks, say so in ONE sentence (what was searched and that nothing relevant arrived). NEVER reply [ROTINA_SEM_NOVIDADES] nor stay silent, even if the routine asks for it.');
+  lines.push('--- E-MAILS (most recent first) ---');
   r.items.forEach((m, i) => {
-    lines.push(`${i + 1}. De: ${m.from || '?'} | Assunto: ${m.subject || '(sem assunto)'} | Data: ${m.date || '?'}${m.unread ? ' | não lido' : ''}${m.attachments.length ? ` | anexos: ${m.attachments.join(', ')}` : ''}`);
+    lines.push(`${i + 1}. From: ${m.from || '?'} | Subject: ${m.subject || '(no subject)'} | Date: ${m.date || '?'}${m.unread ? ' | unread' : ''}${m.attachments.length ? ` | attachments: ${m.attachments.join(', ')}` : ''}`);
     if (m.link) lines.push(`   Link: ${m.link}`);
-    if (m.snippet) lines.push(`   Trecho: ${m.snippet}`);
-    if (m.truncated) lines.push('   Leitura parcial: o corpo não foi disponibilizado integralmente; não conclua ausência de dados no restante.');
-    if (m.links?.length) lines.push('   Links presentes no e-mail (não acessados): '+JSON.stringify(m.links));
-    if (m.links_truncated) lines.push('   A lista de links também foi limitada.');
-    if (m.body) lines.push(`   Corpo: ${m.body.replace(/\n/g, '\n   ')}`);
+    if (m.snippet) lines.push(`   Snippet: ${m.snippet}`);
+    if (m.truncated) lines.push('   Partial read: the body was not made available in full; do not conclude that data is absent from the rest.');
+    if (m.links?.length) lines.push('   Links present in the email (not visited): '+JSON.stringify(m.links));
+    if (m.links_truncated) lines.push('   The list of links was also limited.');
+    if (m.body) lines.push(`   Body: ${m.body.replace(/\n/g, '\n   ')}`);
   });
-  if (!r.items.length) lines.push('(nenhum)');
+  if (!r.items.length) lines.push('(none)');
   lines.push('--- FIM DOS E-MAILS ---');
   return lines.join('\n');
 }
@@ -235,8 +235,8 @@ export function emailSearchFailureBlock(c, err) {
   const prov = c.provider === 'outlook' ? 'Outlook' : 'Gmail';
   return [
     '[BUSCA DE E-MAIL FALHOU]',
-    `A plataforma tentou consultar o ${prov}${c.account ? ` (conta ${c.account})` : ''} e a API não respondeu: ${String(err?.message || err).slice(0, 200)}`,
-    'Não tente buscar por conta própria. Diga em uma ou duas frases que a busca de e-mails desta rotina não pôde ser feita agora e, se o erro for de conexão da conta (Google/Microsoft não conectado ou expirado), oriente a reconectar em Conexões.',
+    `The platform tried to query ${prov}${c.account ? ` (account ${c.account})` : ''} and the API did not respond: ${String(err?.message || err).slice(0, 200)}`,
+    'Do not try to search on your own. Say in one or two sentences that this routine\'s email search could not be done right now and, if the error is about the account connection (Google/Microsoft not connected or expired), tell the person to reconnect it under Connections (Conexões).',
   ].join('\n');
 }
 

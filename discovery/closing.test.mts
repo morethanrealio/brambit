@@ -311,7 +311,7 @@ test('report validation rejects fabricated evidence, sensitive credentials and u
     const c = reportContext({ from: new Date('2026-09-01'), through: new Date('2026-09-21'), messages: [{ id: 1, day: '2026-09-20', ts: '2026-09-20', content: 'Organizar as compras da semana com uma lista por seção.' }], notes: [], totalMessages: 1, totalNotes: 0, activeDays: 1, routines: [] });
     const valid = parseReport(report(c), c);
     assert.match(renderReport(valid, c), /Nenhuma rotina foi ativada/);
-    assert.match(reportPrompt(c), /Não recrie rotinas já ativas/);
+    assert.match(reportPrompt(c), /Do not recreate routines that are already active/);
     const bad = JSON.parse(report(c)); bad.suggestions[0].evidence[0].quote = 'Invented source quote';
     assert.throws(() => parseReport(JSON.stringify(bad), c));
     bad.suggestions[0].evidence[0].quote = c.evidence[0].text.slice(0, 30); bad.suggestions[0].kind = 'send_money';
@@ -354,7 +354,7 @@ test('cosmetic field overruns fit the total report; excessive fields have safe s
     assert.throws(() => parseReport(JSON.stringify(raw), c), /report_field_too_long:why/);
     assert.equal(reportFailure(Error('report_field_too_long:why')), 'report_field_too_long:why');
     assert.equal(reportFailure(Error('report_field_too_long:PRIVATE')), 'generation_failed');
-    assert.match(reportPrompt(c, 'report_field_too_long:why'), /O campo why ficou excessivamente longo/);
+    assert.match(reportPrompt(c, 'report_field_too_long:why'), /The field why came out far too long/);
 });
 
 test('requested completion delivers in its exact conversation outside scheduled slots and quiet periods', async () => {
@@ -394,7 +394,7 @@ test('invalid evidence drives a targeted next attempt and only validated output 
     await runner.tick(); await runner.stop();
     state = await store.closing.owned(u, a);
     assert.equal(state.state, 'ready'); assert.match(state.body, /Lista de compras/);
-    assert.deepEqual(attempts, [1, 2]); assert.match(prompts[1], /CORREÇÃO NECESSÁRIA.*fontes inválidas/);
+    assert.deepEqual(attempts, [1, 2]); assert.match(prompts[1], /REQUIRED FIX.*cited invalid sources/);
     assert.equal(state.coverage.journeyStartedAt, new Date((await store.get(u))!.started_at!).toISOString());
 });
 

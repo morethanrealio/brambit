@@ -634,11 +634,11 @@ export async function resolverDuvida(userId, id, { opcao = null, valor = null, d
 const palavrasDe = (s) => new Set(String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   .split(/[^a-z0-9]+/).filter((w) => w.length >= 3 || /\d/.test(w)));
 
-const SYS_PERDEDORA = `Uma linha da memória de uma pessoa contradiz a versão CERTA de um assunto. Troque SÓ o pedaço que contradiz: o resto da linha são outros dados, verdadeiros, e têm que ficar.
-Devolva SÓ JSON {"trecho_errado":"cópia EXATA, caractere por caractere, do MENOR pedaço da linha que contradiz a versão certa","trecho_certo":"o que entra no lugar, no mesmo estilo, usando só o que a versão certa diz"}.
-O trecho errado leva SÓ as palavras que a versão certa desmente. Detalhe que ela não menciona (cor de fundo, lugar, outra pessoa, outra data) não é conflito e fica.
-Se a linha não contradiz a versão certa (as duas podem ser verdade juntas), devolva {"manter":true}.
-Só se a linha inteira disser a mesma coisa que a versão certa, sem nenhum dado a mais, devolva {"apagar":true}.`;
+const SYS_PERDEDORA = `A line in a person's memory contradicts the CORRECT version of a subject. Replace ONLY the piece that contradicts it: the rest of the line is other data, true, and must stay.
+Return ONLY JSON {"trecho_errado":"EXACT copy, character by character, of the SMALLEST piece of the line that contradicts the correct version","trecho_certo":"what goes in its place, in the same style and language as the line, using only what the correct version says"}.
+The wrong piece holds ONLY the words the correct version refutes. A detail it does not mention (background color, place, another person, another date) is not a conflict and stays.
+If the line does not contradict the correct version (both can be true together), return {"manter":true}.
+Only if the whole line says the same thing as the correct version, with no extra data at all, return {"apagar":true}.`;
 
 // Fixes ONE losing line by swapping only the conflicting excerpt ("nothing may
 // be lost"; before, the whole line was swapped and took true facts with it, e.g.
@@ -648,7 +648,7 @@ Só se a linha inteira disser a mesma coisa que a versão certa, sem nenhum dado
 async function corrigirPerdedora(assunto, velha, vencedora) {
   const r = await makeMemoriaModel().forBillingPhase({ kind: 'housekeeping' }).complete({
     system: SYS_PERDEDORA, tools: [],
-    messages: [{ role: 'user', content: `Assunto: ${assunto}\nVersão CERTA: ${vencedora}\nLinha a corrigir: ${velha}` }],
+    messages: [{ role: 'user', content: `Subject: ${assunto}\nCORRECT version: ${vencedora}\nLine to fix: ${velha}` }],
   });
   let j = null;
   try { j = JSON.parse(String(r.text || '').match(/\{[\s\S]*\}/)?.[0] || 'null'); } catch { j = null; }
@@ -1046,51 +1046,51 @@ export function valoresSemBase(texto, fonte) {
   return falta;
 }
 
-// Virou função por causa do idioma: a memória é DADO DURÁVEL, fica gravada e
-// volta pro prompt em todo turno futuro. Deixar a língua dela na sorte de uma
-// diretriz mole significaria memória em português na conta de quem não fala
-// português, pra sempre. Em pt-BR a tag rende 'pt-BR' e o texto sai byte a byte
-// igual ao de antes.
+// A function because of language: memory is DURABLE DATA, it is stored and comes
+// back into the prompt on every future turn. Leaving its language to a soft
+// guideline would mean memory in Portuguese for an account that does not speak
+// Portuguese, forever. The tag (pt-BR, en, es) sets the language the lines are
+// written in; the prompt itself is in English.
 const sysPatch = (language) => [
-  'Você mantém a MEMÓRIA de longo prazo de um usuário de assistente pessoal.',
-  'Recebe a memória atual e a última troca de mensagens. Devolve APENAS operações de escrita, em JSON.',
+  'You maintain the long-term MEMORY of a user of a personal assistant.',
+  'You receive the current memory and the latest exchange of messages. Return ONLY write operations, in JSON.',
   '',
-  'Formato (JSON puro, sem markdown, sem comentários):',
-  '{"ops":[{"op":"definir","pagina":"perfil","assunto":"cidade_onde_mora","valor":"Mora em Curitiba","desde":"2026-09"},{"op":"add","pagina":"preferencias","texto":"..."},{"op":"fix","pagina":"perfil","ancora":"trecho literal da linha que está errada","texto":"linha corrigida inteira"}]}',
-  'Se não há nada durável pra guardar (o caso MAIS COMUM), devolva {"ops":[]}.',
+  'Format (pure JSON, no markdown, no comments):',
+  `{"ops":[{"op":"definir","pagina":"perfil","assunto":"cidade_onde_mora","valor":"<full line in ${tagIdioma(language)}, e.g. Lives in Curitiba>","desde":"2026-09"},{"op":"add","pagina":"preferencias","texto":"..."},{"op":"fix","pagina":"perfil","ancora":"literal excerpt of the line that is wrong","texto":"whole corrected line"}]}`,
+  'If there is nothing durable to store (the MOST COMMON case), return {"ops":[]}.',
   '',
-  'Regras:',
-  '- Guarde só fato DURÁVEL e útil: preferências, contexto (profissão, rotina), objetivos recorrentes, restrições, tamanhos/marcas, decisões tomadas.',
-  '- NUNCA guarde conversa fiada, pergunta pontual, resultado de uma tarefa, nem nada efêmero.',
-  '- NUNCA inclua instruções de TOM/VOZ/ESTILO/FORMATAÇÃO do assistente (ex: "seja formal", "responde curto"). Isso é por-assistente e vazaria pros outros assistentes da pessoa. A memória é só sobre QUEM o usuário é.',
-  '- Fato que tem UM valor atual e pode mudar (onde mora, empresa, cargo, tamanho, objetivo principal, plano/assinatura) = "definir", com uma chave curta e estável em snake_case (assunto). Se o assunto JÁ está na lista de fatos com chave, reuse EXATAMENTE aquela chave: o servidor troca a linha antiga sozinho.',
-  '- "desde" só quando a conversa diz quando começou (AAAA-MM-DD, AAAA-MM ou AAAA). Nunca invente data; sem data, omita o campo.',
-  '- Fato que só se acumula (gosta de X, já viajou pra Y) = "add".',
-  '- Use "fix" só quando a troca CONTRADIZ uma linha já anotada que NÃO está na lista de fatos com chave. A âncora tem que ser um trecho literal de UMA linha existente.',
-  '- Registro contável e datado (comi, treinei, gastei), plano/jornada em andamento e dado de app NÃO são memória: não guarde.',
-  '- Nunca reescreva a página inteira e nunca resuma o que já está lá. Uma operação = um fato.',
-  '- Todo link, e-mail, telefone, código ou número que você gravar tem que estar ESCRITO na troca ou na memória atual. Se a pessoa disse que algo mudou mas não disse o valor novo (ex: "mudei o link" sem o link), não grave nada: nunca complete com um valor provável.',
-  `- Uma linha por fato, curta, em ${tagIdioma(language)}. No máximo 3 operações.`,
+  'Rules:',
+  '- Store only DURABLE, useful facts: preferences, context (profession, routine), recurring goals, restrictions, sizes/brands, decisions made.',
+  '- NEVER store small talk, one-off questions, the result of a task, or anything ephemeral.',
+  '- NEVER include TONE/VOICE/STYLE/FORMATTING instructions for the assistant (e.g. "be formal", "keep answers short"). Those are per-assistant and would leak into the person\'s other assistants. Memory is only about WHO the user is.',
+  '- A fact that has ONE current value and can change (where they live, company, job title, size, main goal, plan/subscription) = "definir", with a short, stable snake_case key (assunto). If the subject is ALREADY in the list of keyed facts, reuse EXACTLY that key: the server replaces the old line on its own.',
+  '- "desde" only when the conversation says when it started (YYYY-MM-DD, YYYY-MM or YYYY). Never invent a date; without a date, omit the field.',
+  '- A fact that only accumulates (likes X, has traveled to Y) = "add".',
+  '- Use "fix" only when the exchange CONTRADICTS a line already noted that is NOT in the list of keyed facts. The anchor must be a literal excerpt of ONE existing line.',
+  '- Countable, dated logs (ate, trained, spent), an ongoing plan/journey, and app data are NOT memory: do not store them.',
+  '- Never rewrite the whole page and never summarize what is already there. One operation = one fact.',
+  '- Every link, e-mail, phone number, code or number you store must be WRITTEN in the exchange or in the current memory. If the person said something changed but did not give the new value (e.g. "I changed the link" without the link), store nothing: never fill in a likely value.',
+  `- One line per fact, short, in ${tagIdioma(language)}. At most 3 operations.`,
   '',
-  'Onde guardar:',
-  `- "perfil" é o RESUMÃO: só o que define a pessoa e serve em quase toda conversa (no máximo ~${PERFIL_MAX} fatos).`,
-  `- Detalhe vai pra página de área: ${Object.keys(AREAS).join(', ')}.`,
-  '- Fato sobre uma PESSOA específica vai numa página por pessoa, no formato "pessoa-nome" (ex: "pessoa-ana").',
-  '- Se o perfil já estiver no teto, o servidor manda o fato pra "notas" sozinho; prefira já escolher a página certa.',
+  'Where to store:',
+  `- "perfil" is the BIG SUMMARY: only what defines the person and is useful in almost every conversation (at most ~${PERFIL_MAX} facts).`,
+  `- Detail goes to an area page: ${Object.keys(AREAS).join(', ')}.`,
+  '- A fact about a specific PERSON goes to one page per person, in the format "pessoa-nome" (e.g. "pessoa-ana").',
+  '- If the profile is already at its cap, the server sends the fact to "notas" on its own; prefer choosing the right page from the start.',
 ].join('\n');
 
-// Manutenção da memória por PATCH (padrão). Devolve {usage, ops, feitas, puladas}.
-// `dryRun` roda tudo menos a gravação (usado nos evals de memória, read-only).
+// Memory maintenance by PATCH (default). Returns {usage, ops, feitas, puladas}.
+// `dryRun` runs everything except the write (used in the memory evals, read-only).
 export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun = false, language = null, fonte = {} } = {}) {
   const todas = await listWikiPages(userId);
   const perfilBody = (await getWikiPage(userId, PERFIL))?.body || '';
   const outras = todas.filter((p) => p.slug !== PERFIL).map((p) => p.slug);
   const fatos = await listCurrentFacts(userId, { limit: MAX_FATOS_PROMPT });
   const prompt = [
-    `Memória atual (página "perfil"):\n${perfilBody.trim() || '(vazia)'}`,
-    outras.length ? `\nOutras páginas existentes (destinos válidos): ${outras.join(', ')}` : '',
-    fatos.length ? `\nFatos com chave (assunto [página]: valor atual):\n${fatos.map((f) => `- ${f.assunto} [${f.pagina}]: ${String(f.valor).slice(0, 120)}`).join('\n')}` : '',
-    `\nÚltima troca:\nUsuário: ${userMsg}\nAgente: ${assistantMsg}`,
+    `Current memory ("perfil" page):\n${perfilBody.trim() || '(empty)'}`,
+    outras.length ? `\nOther existing pages (valid destinations): ${outras.join(', ')}` : '',
+    fatos.length ? `\nKeyed facts (subject [page]: current value):\n${fatos.map((f) => `- ${f.assunto} [${f.pagina}]: ${String(f.valor).slice(0, 120)}`).join('\n')}` : '',
+    `\nLatest exchange:\nUser: ${userMsg}\nAgent: ${assistantMsg}`,
   ].join('\n');
   const r = await makeMemoriaModel().forBillingPhase({kind:'housekeeping'}).complete({
     system: sysPatch(language), messages: [{ role: 'user', content: prompt }], tools: [],
@@ -1162,13 +1162,13 @@ export async function updateUserProfile(userId, userMsg, assistantMsg, { languag
   }
   const atual = (await getWikiPage(userId, PERFIL))?.body || '';
   const sys = [
-    'Você mantém um PERFIL curto e estável do usuário de um assistente pessoal.',
-    'Guarde só fatos duradouros e úteis: preferências, contexto (profissão, família, rotina), objetivos recorrentes, restrições, tamanhos/marcas e decisões tomadas.',
-    `NÃO guarde conversa fiada, perguntas pontuais nem nada efêmero. Máximo ~12 linhas, bullets curtos, em ${tagIdioma(language)}.`,
-    'NÃO inclua instruções de TOM/VOZ/ESTILO/FORMATAÇÃO de como o assistente deve escrever ou se portar (ex: "seja formal", "responde curto", "sem emoji"). Isso é configurado por-assistente em outro lugar e vazaria pros outros assistentes do usuário se entrasse aqui. Este perfil é só sobre QUEM o usuário é.',
-    'Devolva o perfil ATUALIZADO inteiro (perfil atual + o que aprendeu agora, sem duplicar). Só o perfil, sem comentários.',
+    'You maintain a short, stable PROFILE of the user of a personal assistant.',
+    'Store only lasting, useful facts: preferences, context (profession, family, routine), recurring goals, restrictions, sizes/brands and decisions made.',
+    `Do NOT store small talk, one-off questions or anything ephemeral. At most ~12 lines, short bullets, in ${tagIdioma(language)}.`,
+    'Do NOT include TONE/VOICE/STYLE/FORMATTING instructions about how the assistant should write or behave (e.g. "be formal", "keep answers short", "no emoji"). That is configured per-assistant elsewhere and would leak into the user\'s other assistants if it went in here. This profile is only about WHO the user is.',
+    'Return the whole UPDATED profile (current profile + what you learned now, without duplicating). Only the profile, no comments.',
   ].join('\n');
-  const prompt = `Perfil atual:\n${atual.trim() || '(vazio)'}\n\nNova troca:\nUsuário: ${userMsg}\nAgente: ${assistantMsg}`;
+  const prompt = `Current profile:\n${atual.trim() || '(empty)'}\n\nNew exchange:\nUser: ${userMsg}\nAgent: ${assistantMsg}`;
   try {
     // Housekeeping: extração de fatos não precisa de raciocínio caro -> zera
     // o pensamento (que dominava o custo desta chamada por turno).

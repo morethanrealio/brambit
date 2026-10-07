@@ -15,7 +15,7 @@ test('Microsoft tools and source context respect partial consent',()=>{
  assert.deepEqual(microsoftContextServices('openid User.Read'),[]);assert.deepEqual(microsoftContextServices('https://graph.microsoft.com/Calendars.ReadWrite'),['calendar']);
  assert.equal(microsoftToolAllowed('hotmail_search','Calendars.ReadWrite'),false);assert.equal(microsoftToolAllowed('hotmail_send','Mail.Read'),false);assert.equal(microsoftToolAllowed('outlook_calendar_list','Calendars.Read'),true);assert.equal(microsoftToolAllowed('outlook_calendar_create','Calendars.Read'),false);
  assert.equal(microsoftToolAllowed('hotmail_read',null),true);
- const prompt=onboardingSources(['calendar'],[]);assert.match(prompt,/Google: calendar\. Microsoft: nenhuma/);assert.match(prompt,/Não crie/);assert.match(prompt,/agenda estiver vazia/);
+ const prompt=onboardingSources(['calendar'],[]);assert.match(prompt,/Google: calendar\. Microsoft: none/);assert.match(prompt,/Do not create/);assert.match(prompt,/calendar is empty/);
 });
 test('Microsoft token refresh does not silently request mail/files',async()=>{
  const original=globalThis.fetch;let body:URLSearchParams|undefined;

@@ -53,11 +53,11 @@ export function resultInput(x, mode) {
         throw new OnboardingError(422, 'A análise não retornou um resultado completo.');
     return { welcome, suggestions, notes };
 }
-export const STARTER_TASKS = { plan: 'Organize as prioridades em um plano de ação curto e concreto, usando apenas o contexto informado.', decision: 'Compare as opções apresentadas, explique os critérios e proponha um próximo passo. Separe fatos de suposições.', draft: 'Escreva um rascunho útil da mensagem solicitada, sem enviá-la. Use somente as informações fornecidas.' };
+export const STARTER_TASKS = { plan: 'Organize the priorities into a short, concrete action plan, using only the context provided.', decision: 'Compare the options presented, explain the criteria and propose a next step. Separate facts from assumptions.', draft: 'Write a useful draft of the requested message, without sending it. Use only the information provided.' };
 export function starterPrompt(task, context, language) {
     if (typeof task !== 'string' || !Object.hasOwn(STARTER_TASKS, task) || typeof context !== 'string' || context.trim().length < 10 || context.length > 2000)
         throw new OnboardingError(400, 'Escolha uma tarefa e conte um pouco do contexto (10 a 2.000 caracteres).');
-    return `Responda em ${language}. ${STARTER_TASKS[task]} Esta é uma primeira tarefa sem acesso a ferramentas, contas, e-mail ou agenda. Não afirme ter acessado essas fontes nem ter executado ações externas. Entregue o resultado diretamente, de forma breve e prática.\nContexto fornecido pela pessoa:\n${context.trim()}`;
+    return `Answer in ${language}. ${STARTER_TASKS[task]} This is a first task with no access to tools, accounts, e-mail or calendar. Do not claim to have accessed those sources or to have taken external actions. Deliver the result directly, briefly and practically.\nContext provided by the person:\n${context.trim()}`;
 }
 export function createOnboardingStore(pool, workerId = randomUUID()) {
     async function tx(fn) { const db = await pool.connect(); try {

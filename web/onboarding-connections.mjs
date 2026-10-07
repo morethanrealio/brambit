@@ -3,6 +3,6 @@
 // @ts-expect-error runtime ESM legacy without declarations
 export { microsoftOnboardingScope, microsoftContextServices, microsoftToolAllowed } from '../web/microsoft-scopes.mjs';
 export function onboardingSources(google, microsoft) {
-    const describe = (services) => services.filter(s => ['calendar', 'gmail', 'docs', 'drive'].includes(s)).join(', ') || 'nenhuma';
-    return `FONTES AUTORIZADAS: Google: ${describe(google)}. Microsoft: ${describe(microsoft)}. calendar = agenda; gmail = e-mail. Consulte SOMENTE as fontes listadas. Priorize os próximos compromissos da agenda; e-mail é opcional, não tente lê-lo sem permissão. Não crie, edite, envie nem exclua eventos, mensagens ou arquivos nesta análise. Se a agenda estiver vazia, diga isso e ofereça ajuda para planejar o dia, sem inventar compromissos.`;
+    const describe = (services) => services.filter(s => ['calendar', 'gmail', 'docs', 'drive'].includes(s)).join(', ') || 'none';
+    return `AUTHORIZED SOURCES: Google: ${describe(google)}. Microsoft: ${describe(microsoft)}. calendar means the calendar; gmail means e-mail. Consult ONLY the sources listed. Prioritize the upcoming calendar events; e-mail is optional, do not try to read it without permission. Do not create, edit, send or delete events, messages or files in this analysis. If the calendar is empty, say so and offer help planning the day, without inventing events.`;
 }

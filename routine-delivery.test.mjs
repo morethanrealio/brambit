@@ -35,7 +35,7 @@ function reminder({kind='routine',channel='whatsapp',tz='America/Sao_Paulo',stor
  return new Function(...Object.keys(deps),'return '+literal)(...Object.values(deps));
 }
 for(const channel of ['whatsapp','telegram','email']){
- const frame=routineExecutionFrame({kind:'routine',title:'Teste',channel});ok(frame.includes('ENTREGA AUTOMÁTICA'));ok(frame.includes('Não diga'));ok(frame.includes('próximos dias/horários'));ok(frame.includes('criar_lembrete'));ok(frame.includes('boa noite depois')&&frame.includes('nunca a de entregas anteriores'));
+ const frame=routineExecutionFrame({kind:'routine',title:'Teste',channel});ok(frame.includes('ENTREGA AUTOMÁTICA'));ok(frame.includes('Do not say'));ok(frame.includes('next configured days/times'));ok(frame.includes('criar_lembrete'));ok(frame.includes('good evening after that')&&frame.includes('never the one from earlier deliveries'));
  const conflict=delay=>routineReminderDeliveryConflict({kind:'routine',channel,reminderChannel:channel,whenMs:clock+delay});
  for(const delay of [-60000,0,1000,45000,60000])eq(conflict(delay),true);
  for(const delay of [-60001,60001,3600000,86400000])eq(conflict(delay),false);

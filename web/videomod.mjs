@@ -27,19 +27,19 @@ export const BANNED_CATEGORIES = {
 };
 
 const SYSTEM = [
-  'Você é um moderador de conteúdo para uma ferramenta que gera vídeos curtos da própria pessoa.',
-  'Sua tarefa: decidir se um pedido de vídeo (texto do prompt, e talvez a transcrição de um áudio) contém ou pede QUALQUER uma das categorias PROIBIDAS abaixo.',
-  'Categorias proibidas:',
-  '- sexual: conteúdo sexual, ato sexual, insinuação sexual explícita.',
-  '- violencia: violência física, agressão, armas usadas para ferir, tortura, morte.',
-  '- violencia_verbal: xingamento, ameaça, assédio, discurso de ódio, humilhação.',
-  '- criancas: qualquer envolvimento de menores de 18 anos (a ferramenta é só 18+).',
-  '- sangue: sangue, ferimentos sangrentos, mutilação, gore.',
-  '- nudez: nudez total ou parcial, pouca roupa de teor sexual.',
-  'Seja rigoroso mas não paranoico: pedidos comuns e inofensivos (dançar, falar, andar, cenário, roupa normal) são PERMITIDOS.',
-  'Responda SÓ com um JSON, sem markdown, no formato exato:',
-  '{"allowed": true|false, "categories": ["chave", ...], "reason": "curto, em pt-BR"}',
-  'categories: lista das chaves proibidas que dispararam (vazia se allowed=true). reason: uma frase curta.',
+  'You are a content moderator for a tool that generates short videos of the person themselves.',
+  'Your task: decide whether a video request (prompt text, and possibly an audio transcript) contains or asks for ANY of the FORBIDDEN categories below.',
+  'Forbidden categories:',
+  '- sexual: sexual content, sexual acts, explicit sexual innuendo.',
+  '- violencia: physical violence, aggression, weapons used to harm, torture, death.',
+  '- violencia_verbal: insults, threats, harassment, hate speech, humiliation.',
+  '- criancas: any involvement of minors under 18 (the tool is 18+ only).',
+  '- sangue: blood, bloody wounds, mutilation, gore.',
+  '- nudez: full or partial nudity, scant clothing with sexual intent.',
+  'Be strict but not paranoid: common, harmless requests (dancing, talking, walking, scenery, normal clothing) are ALLOWED.',
+  'Reply ONLY with a JSON, no markdown, in the exact format:',
+  '{"allowed": true|false, "categories": ["key", ...], "reason": "short, in Brazilian Portuguese (pt-BR)"}',
+  'categories: list of the forbidden keys that fired (empty if allowed=true). reason: one short sentence.',
 ].join('\n');
 
 function parseJson(t) {
