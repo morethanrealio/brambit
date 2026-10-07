@@ -8,7 +8,7 @@
 //      npm run local -- --check   sobe, confere cadastro e login e sai (o CI usa)
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,8 +56,11 @@ async function startPostgres(bin) {
   const password = readFileSync(pwfile, 'utf8').trim();
   if (novo) execFileSync(exe('initdb'), ['-D', pgdata, '-U', DB_USER, '--auth=scram-sha-256', `--pwfile=${pwfile}`, '--no-locale', '--encoding=UTF8'], { stdio: 'ignore' });
   const port = await freePort();
-  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(local, 'postgres.log'),
-    '-o', `-c listen_addresses=127.0.0.1 -c port=${port} -c unix_socket_directories=''`, 'start'], { stdio: 'ignore' });
+  // Num arquivo, não em pg_ctl -o: no Windows as aspas de '' chegam literais.
+  const conf = path.join(pgdata, 'postgresql.conf');
+  if (!readFileSync(conf, 'utf8').includes("include_if_exists = 'brambit.conf'")) appendFileSync(conf, "\ninclude_if_exists = 'brambit.conf'\n");
+  writeFileSync(path.join(pgdata, 'brambit.conf'), `listen_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = ''\n`);
+  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(local, 'postgres.log'), 'start'], { stdio: 'ignore' });
   const stop = () => { try { execFileSync(exe('pg_ctl'), ['-D', pgdata, '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
   const conn = { host: '127.0.0.1', port, user: DB_USER, password, database: 'postgres' };
   if (semSenha) {
