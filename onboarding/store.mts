@@ -51,10 +51,10 @@ export function resultInput(x:WowResult,mode:Mode):WowResult {
  if(welcome.length<10||welcome.length>16000||(mode==='connected'&&!suggestions.length))throw new OnboardingError(422,'A análise não retornou um resultado completo.');
  return {welcome,suggestions,notes};
 }
-export const STARTER_TASKS={plan:'Organize as prioridades em um plano de ação curto e concreto, usando apenas o contexto informado.',decision:'Compare as opções apresentadas, explique os critérios e proponha um próximo passo. Separe fatos de suposições.',draft:'Escreva um rascunho útil da mensagem solicitada, sem enviá-la. Use somente as informações fornecidas.'} as const;
+export const STARTER_TASKS={plan:'Organize the priorities into a short, concrete action plan, using only the context provided.',decision:'Compare the options presented, explain the criteria and propose a next step. Separate facts from assumptions.',draft:'Write a useful draft of the requested message, without sending it. Use only the information provided.'} as const;
 export function starterPrompt(task:unknown,context:unknown,language:string):string {
  if(typeof task!=='string'||!Object.hasOwn(STARTER_TASKS,task)||typeof context!=='string'||context.trim().length<10||context.length>2000)throw new OnboardingError(400,'Escolha uma tarefa e conte um pouco do contexto (10 a 2.000 caracteres).');
- return `Responda em ${language}. ${STARTER_TASKS[task as keyof typeof STARTER_TASKS]} Esta é uma primeira tarefa sem acesso a ferramentas, contas, e-mail ou agenda. Não afirme ter acessado essas fontes nem ter executado ações externas. Entregue o resultado diretamente, de forma breve e prática.\nContexto fornecido pela pessoa:\n${context.trim()}`;
+ return `Answer in ${language}. ${STARTER_TASKS[task as keyof typeof STARTER_TASKS]} This is a first task with no access to tools, accounts, e-mail or calendar. Do not claim to have accessed those sources or to have taken external actions. Deliver the result directly, briefly and practically.\nContext provided by the person:\n${context.trim()}`;
 }
 export function createOnboardingStore(pool:Pool,workerId=randomUUID()) {
  async function tx<T>(fn:(db:Db)=>Promise<T>):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='10s'");const r=await fn(db);await db.query('COMMIT');return r}catch(e){await db.query('ROLLBACK');throw e}finally{db.release()}}

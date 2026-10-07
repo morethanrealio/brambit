@@ -107,5 +107,5 @@ test('rotina tipada usa texto normalizado e sinaliza corte do corpo separadament
   assert.ok(emailSearchPromptBlock(c,r).includes(orderUrl));
   const cut=await executeEmailSearch(c,{fetchImpl,token:async()=> 'fixture',bodyChars:10});
   assert.equal(cut.truncated,false);assert.equal(cut.partial,true);assert.equal(cut.items[0].truncated,true);
-  assert.ok(emailSearchPromptBlock(c,cut).includes('Leitura parcial:'));
+  assert.ok(emailSearchPromptBlock(c,cut).includes('Partial read:'));
 });

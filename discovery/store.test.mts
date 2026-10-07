@@ -127,8 +127,8 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     const notice = await store.claim(u, `${day(t3)}:notice`, t3);
     assert.ok(notice);
     const noticePrompt = prompt(notice!, [], `${day(t3)}:notice`);
-    assert.match(noticePrompt, /pausa curta/);
-    assert.match(noticePrompt, /Não faça nenhuma pergunta/);
+    assert.match(noticePrompt, /short-pause notice/);
+    assert.match(noticePrompt, /Do not ask any question/);
     assert.ok(noticePrompt.includes(CLOSING.notice));
     await store.finish(notice!, 'accepted', 'receipt-notice');
     let state = (await store.get(u))!;
@@ -152,9 +152,9 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     const invite = await store.claim(u, `${day(t6)}:reengage`, t6);
     assert.ok(invite);
     const invitePrompt = prompt(invite!, [], `${day(t6)}:reengage`);
-    assert.match(invitePrompt, /como a vida dela tem sido/);
+    assert.match(invitePrompt, /how their life has been/);
     assert.ok(invitePrompt.includes(CLOSING.reengage));
-    assert.match(prompt(invite!, [], `${day(t6)}:lunch`), /almoço/);
+    assert.match(prompt(invite!, [], `${day(t6)}:lunch`), /lunch: invite/);
     await store.finish(invite!, 'accepted', 'receipt-reengage');
     state = (await store.get(u))!;
     assert.equal(state.silence_stage, 'reengaged');
@@ -244,7 +244,7 @@ test('runner real store, mocked provider/transport: no tools, receipt != deliver
     const slot = now.toISOString().slice(0, 10) + ':lunch';
     let sends = 0, persists = 0;
     const scoped = { ...store, due: async () => [{ p, slot }], claim: (user: string, s: string) => store.claim(user, s, now) };
-    const runner = createDiscoveryRunner(scoped, { prepare: async () => { }, generate: async (_p, prompt) => { assert.match(prompt, /Nenhuma ferramenta/); return 'Como foi sua manhã?'; }, send: async () => { sends++; return { ok: true, id: 'test-only' }; }, persist: async () => { persists++; } });
+    const runner = createDiscoveryRunner(scoped, { prepare: async () => { }, generate: async (_p, prompt) => { assert.match(prompt, /No tools/); return 'Como foi sua manhã?'; }, send: async () => { sends++; return { ok: true, id: 'test-only' }; }, persist: async () => { persists++; } });
     await runner.tick();
     await runner.tick();
     assert.equal(sends, 1);

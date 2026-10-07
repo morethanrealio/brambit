@@ -77,21 +77,21 @@ assert.equal(emails.length, 0); assert.equal(wa.length, 1); n++;
 const pedidos = [];
 let resposta = 'O futuro do trabalho com a IA.';
 const comAgente = createScheduledDelivery({ ...deps, runAgentMessageDraft: async (target, task) => {
-  if (task.includes('vai ser entregue por e-mail')) return task.split('\n\n---\n')[1]; // nada a adaptar
+  if (task.includes('it will be delivered by email')) return task.split('\n\n---\n')[1]; // nada a adaptar
   pedidos.push({ target, task }); return resposta;
 } });
 fechada(); reset();
 rec = await comAgente.deliverRoutine(rotina(), longa);
 assert.equal(pedidos.length, 1); assert.deepEqual(pedidos[0].target, { agent_id: 'a1', user_id: 'u1' });
 assert.ok(pedidos[0].task.includes('Question 3: what would you change?')); n++;
-assert.ok(pedidos[0].task.includes('"O conteúdo de hoje é sobre ___."') && pedidos[0].task.includes('no máximo 8')); n++;
+assert.ok(pedidos[0].task.includes('"O conteúdo de hoje é sobre ___."') && pedidos[0].task.includes('at most 8')); n++;
 assert.equal(wa[0].template.components[0].parameters[0].text, `O conteúdo de hoje é sobre o futuro do trabalho com a IA. ${J}`); n++;
 assert.equal(emails.length, 1); assert.equal(rec.fullContent, 'email'); n++;
 assert.ok(threads[0].body.startsWith(`O conteúdo de hoje é sobre o futuro do trabalho com a IA. ${J}\n\nConteúdo completo`)); n++;
 // Nome próprio/sigla no começo do tema não vira minúscula; a frase segue o idioma da pessoa.
 resposta = 'IA nos call centres'; fechada(); reset();
 await comAgente.deliverRoutine(rotina({ user_language: 'en' }), longa);
-assert.ok(pedidos.at(-1).task.includes("Today's content is about ___.") && pedidos.at(-1).task.includes('em English'));
+assert.ok(pedidos.at(-1).task.includes("Today's content is about ___.") && pedidos.at(-1).task.includes('in English'));
 assert.ok(wa[0].template.components[0].parameters[0].text.startsWith("Today's content is about IA nos call centres. Since WhatsApp")); n++;
 
 // 6) Tema inutilizável: a frase telegráfica do teste de 02/10, longo demais, com
@@ -112,7 +112,7 @@ const chat = 'Hoje: BBC 6 Minute English\nhttps://www.bbc.co.uk/learningenglish/
 const viaWa = chat.replace('em áudio por aqui', 'em áudio lá no WhatsApp');
 let adapta = async () => viaWa;
 const adaptando = createScheduledDelivery({ ...deps, runAgentMessageDraft: async (_t, task) =>
-  task.includes('vai ser entregue por e-mail') ? adapta(task) : 'IA nos call centres' });
+  task.includes('it will be delivered by email') ? adapta(task) : 'IA nos call centres' });
 fechada(); reset();
 await adaptando.deliverRoutine(rotina(), chat);
 assert.ok(emails[0].text.includes('em áudio lá no WhatsApp') && !emails[0].text.includes('por aqui')); n++;

@@ -67,22 +67,22 @@ export function trocarTrecho(linha, de, para) {
   return nova === linha ? null : nova;
 }
 
-const SYS = `Você cuida da memória de longo prazo de uma pessoa. Chegou uma informação NOVA pra gravar. Abaixo estão linhas que JÁ estão na memória e podem falar do mesmo assunto. Decida uma "acao":
-- "nada": uma das linhas JÁ diz a informação nova (mesmo sentido e mesmo valor, mesmo com outras palavras). Informe qual em "na_linha".
-- "atualizar": uma linha fala do MESMO assunto com um valor que a informação nova SUBSTITUI (mudou ou foi corrigido). Essa é a "principal".
-- "novo": nenhuma linha diz isso nem é substituída. Inclui quando só falam de coisa parecida ou quando as duas podem ser verdade juntas (gosta de A e também de B; teve um cachorro e agora tem outro).
-Em "outras", liste as linhas (fora a principal) que continuam afirmando como ATUAL o valor que a informação nova desmente. Linha que só menciona o assunto sem afirmar o valor antigo NÃO entra.
-Pra principal e cada outra: "de" = cópia EXATA, caractere por caractere, do MENOR pedaço da linha que fica errado; "para" = o que entra no lugar, no mesmo estilo da linha. O resto da linha são outros dados verdadeiros e fica como está.
-Na dúvida entre "atualizar" e "novo", escolha "novo": nunca troque uma linha que pode continuar verdadeira.
-Devolva SÓ JSON: {"acao":"nada|atualizar|novo","assunto":"chave_curta_em_snake_case","na_linha":N,"principal":{"id":N,"de":"...","para":"..."},"outras":[{"id":N,"de":"...","para":"..."}]}`;
+const SYS = `You look after a person's long-term memory. A NEW piece of information has arrived to be stored. Below are lines that are ALREADY in memory and may talk about the same subject. Decide an "acao":
+- "nada": one of the lines ALREADY says the new information (same meaning and same value, even in other words). Say which one in "na_linha".
+- "atualizar": a line talks about the SAME subject with a value that the new information REPLACES (it changed or was corrected). That one is the "principal".
+- "novo": no line says this or is replaced. This includes when they only talk about something similar or when both can be true together (likes A and also B; had one dog and now has another).
+In "outras", list the lines (other than the principal) that still state as CURRENT the value the new information refutes. A line that only mentions the subject without stating the old value does NOT go in.
+For the principal and each of the others: "de" = EXACT copy, character by character, of the SMALLEST piece of the line that becomes wrong; "para" = what goes in its place, in the same style and language as the line. The rest of the line is other true data and stays as it is.
+When in doubt between "atualizar" and "novo", choose "novo": never replace a line that may still be true.
+Return ONLY JSON: {"acao":"nada|atualizar|novo","assunto":"short_snake_case_key","na_linha":N,"principal":{"id":N,"de":"...","para":"..."},"outras":[{"id":N,"de":"...","para":"..."}]}`;
 
 async function decidir(novaInfo, cands, { soOutras = false } = {}) {
   const r = await makeMemoriaModel().forBillingPhase({ kind: 'housekeeping' }).complete({
     system: SYS, tools: [],
     messages: [{ role: 'user', content: [
-      `Informação nova: ${novaInfo}`,
-      soOutras ? 'Essa informação já tem uma linha própria que o sistema troca sozinho: responda acao "novo" e preencha só "outras".' : '',
-      'Linhas da memória:',
+      `New information: ${novaInfo}`,
+      soOutras ? 'This information already has its own line that the system replaces on its own: answer acao "novo" and fill in only "outras".' : '',
+      'Memory lines:',
       ...cands.map((c, i) => `[${i}] (${c.pagina}) ${c.linha}`),
     ].filter(Boolean).join('\n') }],
   });
@@ -101,7 +101,7 @@ export async function planejarOp(op, paginas, { linhaPropria = '', valorAntigo =
   const cands = candidatas(paginas, `${assuntoTxt} ${texto} ${valorAntigo}`, { excluir: linhaPropria ? [linhaPropria] : [] });
   if (!cands.length) return { acao: 'novo', outras: [] };
   const info = tipo === 'definir'
-    ? `${assuntoTxt}: ${texto}${valorAntigo ? ` (antes era: ${valorAntigo})` : ''}`
+    ? `${assuntoTxt}: ${texto}${valorAntigo ? ` (previously: ${valorAntigo})` : ''}`
     : texto;
   const j = await decidir(info, cands, { soOutras: !!linhaPropria });
   if (!j) return { acao: 'novo', outras: [], erro: 'json_invalido' };

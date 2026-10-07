@@ -53,17 +53,17 @@ const primeiroNome = n => (n || '').split(' ')[0] || '';
 // e cai em `prontoHoje`.
 export const TEMA_MAX_PALAVRAS = 8;
 const TEMA_MAX_CHARS = 80; // 8 palavras normais cabem; palavra-lixo gigante não
-const MOLDE_TEMA = { 'pt-BR': ['português', 'O conteúdo de hoje é sobre ___.', 'o futuro do trabalho com a IA'],
+const MOLDE_TEMA = { 'pt-BR': ['Brazilian Portuguese', 'O conteúdo de hoje é sobre ___.', 'o futuro do trabalho com a IA'],
   en: ['English', "Today's content is about ___.", 'the future of work with AI'],
-  es: ['español', 'El contenido de hoy trata sobre ___.', 'el futuro del trabajo con la IA'] };
+  es: ['Spanish', 'El contenido de hoy trata sobre ___.', 'el futuro del trabajo con la IA'] };
 export function pedidoTemaAviso(titulo, body, idioma) {
   const [lingua, molde, exemplo] = MOLDE_TEMA[tagIdioma(idioma)] || MOLDE_TEMA['pt-BR'];
-  return `RASCUNHO (não envie nada, não use nenhuma ferramenta): a sua rotina "${titulo}" de hoje ` +
-    `foi inteira para o e-mail do seu dono, e no WhatsApp vai só um aviso curto com a frase "${molde}". ` +
-    `Complete SÓ o espaço ___ com o tema do conteúdo de HOJE, em ${lingua}: no máximo ${TEMA_MAX_PALAVRAS} ` +
-    `palavras, palavras simples do dia a dia, sem termo técnico nem expressão copiada do material, sem ` +
-    `dois-pontos, sem lista, sem link. Exemplo de resposta: ${exemplo}. Não invente nada que não esteja ` +
-    `no conteúdo. Responda APENAS com o tema, sem aspas e sem ponto final.` +
+  return `DRAFT (do not send anything, do not use any tool): your routine "${titulo}" for today ` +
+    `went entirely to your owner's email, and WhatsApp only gets a short notice with the sentence "${molde}". ` +
+    `Fill in ONLY the blank ___ with the topic of TODAY's content, in ${lingua}: at most ${TEMA_MAX_PALAVRAS} ` +
+    `words, simple everyday words, no technical term or expression copied from the material, no ` +
+    `colon, no list, no link. Example answer: ${exemplo}. Do not make up anything that is not ` +
+    `in the content. Reply ONLY with the topic, without quotes and without a final period.` +
     `\n\n---\n${body}`;
 }
 const SAUDACAO = /^(oi|olá|ola|bom dia|boa tarde|boa noite|e a[ií]|hi|hello|hey|good (morning|afternoon|evening)|hola|buen[oa]s)\b/i;
@@ -82,11 +82,11 @@ export function temaAvisoValido(out) {
 // igual. Validação: mesmas linhas, poucas mudadas, nenhum link perdido. Se não
 // passar, null (cai na nota fixa no topo do e-mail).
 export function pedidoAdaptarEmail(canal, body) {
-  return `RASCUNHO (não envie nada, não use nenhuma ferramenta): o texto abaixo foi escrito para o ${canal}, ` +
-    `mas vai ser entregue por e-mail. Reescreva SÓ as frases que se referem ao canal como se a pessoa estivesse ` +
-    `nele ("por aqui", "aqui", "responde aqui", "manda aqui"...) para deixar claro que as respostas e os áudios ` +
-    `são no ${canal}. Todo o resto fica IDÊNTICO, palavra por palavra, mesmas linhas e mesma formatação. Se ` +
-    `nenhuma frase precisar mudar, devolva o texto igual. Responda APENAS com o texto completo, sem comentários.` +
+  return `DRAFT (do not send anything, do not use any tool): the text below was written for ${canal}, ` +
+    `but it will be delivered by email. Rewrite ONLY the sentences that refer to the channel as if the person were ` +
+    `in it ("por aqui", "aqui", "responde aqui", "manda aqui", "reply here"...) to make it clear that answers and voice messages ` +
+    `go on ${canal}. Everything else stays IDENTICAL, word for word, same lines, same formatting and same language as the text. If ` +
+    `no sentence needs to change, return the text unchanged. Reply ONLY with the complete text, no comments.` +
     `\n\n---\n${body}`;
 }
 const urls = t => t.match(/https?:\/\/\S+/g) || [];

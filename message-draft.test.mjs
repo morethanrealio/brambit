@@ -97,7 +97,7 @@ eq(await api.whatsappProse(target,original),original,'crédito bloqueado preserv
 await rejects(()=>api.runAgentMessageDraft(target,'Mensagem para revisão'));eq(providerCalls,0,'preview bloqueado é erro, não texto de cobrança');
 credit={over:false};reads=[];
 eq(await api.whatsappProse(target,original),'Parágrafo reformulado');eq(providerCalls,1);eq(input.tools,[]);eq(input.messages.length,1);ok(input.messages[0].content.includes(original));
-ok(input.system.includes('Preferência sintética'));ok(input.system.includes('MODO RASCUNHO INTERNO'));eq(ledger.length,1);eq(ledger[0][1].threadId,null);eq(ledger[0][1].kind,'broadcast');
+ok(input.system.includes('Preferência sintética'));ok(input.system.includes('INTERNAL DRAFT MODE'));eq(ledger.length,1);eq(ledger[0][1].threadId,null);eq(ledger[0][1].kind,'broadcast');
 ok(!JSON.stringify(ledger).includes('RASCUNHO'),'ledger não recebe prompt/texto');eq(reads.map(r=>r[0]),['agent','credit','wiki']);
 for (const invalid of [{stop:'end',text:''},{stop:'end',text:'cobrança sintética',unavailable:true},{stop:'tool',toolCalls:[{name:'voltar_versao'}]}, {stop:'end',text:'feito',toolCalls:[{name:'enviar_mensagem'}]}]) {
  response=invalid;eq(await api.whatsappProse(target,original),original,'erro/ação não vira conteúdo de entrega');

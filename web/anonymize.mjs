@@ -57,28 +57,28 @@ function buildPrompt(textFiles) {
     const snippet = content.length > MAX_FILE_CHARS ? content.slice(0, MAX_FILE_CHARS) : content;
     if (total + snippet.length > MAX_TOTAL_CHARS) break;
     total += snippet.length;
-    blocks.push(`### ARQUIVO: ${rel}\n${snippet}`);
+    blocks.push(`### FILE: ${rel}\n${snippet}`);
   }
   return [
-    'Este é o CÓDIGO-FONTE de um app que vai ser publicado numa biblioteca pública, onde outras pessoas vão COPIAR o app pro próprio espaço.',
-    'A cópia não pode carregar nada identificável ou pessoal do dono original. Seu trabalho é achar, no fonte, o conteúdo que precisa virar genérico/de exemplo:',
+    'This is the SOURCE CODE of an app that will be published in a public library, where other people will COPY the app into their own space.',
+    'The copy must not carry anything identifiable or personal from the original owner. Your job is to find, in the source, the content that needs to become generic/example content:',
     '',
-    'TROCAR (identificável ou dado real do dono):',
-    '• nomes de pessoas reais (dono, clientes, membros, jogadores) → nomes genéricos ("Jogador 1", "Cliente exemplo") ou vazio quando é assinatura/branding pessoal;',
-    '• cidade/bairro/endereço/telefone/e-mail/CPF/OAB/@ pessoais → genérico ou vazio;',
-    '• nome próprio de negócio/marca do dono em título, cabeçalho, rodapé → um rótulo genérico do TIPO do app (ex: "Ateliê de Cerâmica", "Lista de Presença");',
-    '• seed/exemplos com registros REAIS (uma lista de nomes reais, peças reais, contas reais) → exemplos genéricos e plausíveis, MESMO formato e quantidade parecida ("Item de exemplo", "Conta de exemplo").',
+    'REPLACE (identifiable or real owner data):',
+    '• names of real people (owner, clients, members, players) → generic names in the same language as the surrounding text (e.g. "Jogador 1", "Cliente exemplo" in a Portuguese app) or empty when it is a personal signature/branding;',
+    '• personal city/neighborhood/address/phone/e-mail/CPF/OAB/@ handle → generic or empty;',
+    '• the owner\'s own business/brand name in title, header, footer → a generic label for the app\'s TYPE (e.g. "Ateliê de Cerâmica", "Lista de Presença");',
+    '• seed/examples with REAL records (a list of real names, real items, real accounts) → generic, plausible examples, SAME format and similar quantity ("Item de exemplo", "Conta de exemplo").',
     '',
-    'NÃO TOCAR (é estrutura de código, tem que continuar funcionando):',
-    '• nomes de variáveis, funções, tabelas, colunas, rotas/paths de API, chaves de JSON, imports, seletores CSS/HTML (id/class), nomes de arquivo;',
-    '• textos genéricos de interface ("Salvar", "Adicionar", "Nome", "Categoria"), comentários técnicos;',
+    'DO NOT TOUCH (it is code structure, it has to keep working):',
+    '• names of variables, functions, tables, columns, API routes/paths, JSON keys, imports, CSS/HTML selectors (id/class), file names;',
+    '• generic interface text ("Salvar", "Adicionar", "Nome", "Categoria"), technical comments;',
     '• process.env / os.environ / placeholders.',
     '',
-    'Responda SÓ com um array JSON de objetos {"file","find","replace"}, onde:',
-    '• "file" = o caminho exato do arquivo (como no cabeçalho ARQUIVO acima);',
-    '• "find" = a substring EXATA e literal que está no arquivo (copie idêntica, com acentos e pontuação);',
-    '• "replace" = o texto genérico que entra no lugar (pode ser "" pra remover).',
-    'Cada "find" tem que existir literalmente no arquivo. Não invente. Se não houver nada pra trocar, responda [].',
+    'Reply ONLY with a JSON array of objects {"file","find","replace"}, where:',
+    '• "file" = the exact file path (as in the FILE header above);',
+    '• "find" = the EXACT, literal substring that is in the file (copy it identically, with accents and punctuation);',
+    '• "replace" = the generic text that goes in its place (can be "" to remove).',
+    'Every "find" must exist literally in the file. Do not make anything up. If there is nothing to replace, reply [].',
     '',
     blocks.join('\n\n'),
   ].join('\n');
@@ -108,7 +108,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   try {
     const r = await (modeloPara('classificacao', { maxTokens: 4096 }) || makeGemini({ model: CHEAP_MODEL, thinkingBudget: 0, maxOutputTokens: 4096 }))
       .complete({
-        system: 'Você anonimiza código pra publicação pública. Responde só com JSON válido, sem comentários.',
+        system: 'You anonymize code for public publication. You reply only with valid JSON, no comments.',
         messages: [{ role: 'user', content: buildPrompt(textFiles) }],
         tools: [],
       });

@@ -20,6 +20,12 @@ Changes merged since the last tag go under "Unreleased".
   apps), the emergency-mode note and the core recovery notes are in English.
   Parsed markers (`EVIDENCIA:`, the clarification sentinel) and the fallback
   texts that reach people are unchanged.
+- The prompts of background jobs are in English: memory and wiki upkeep,
+  conversation summaries, agent-to-agent talks, anonymization, video
+  moderation, routines, curation, e-mail search and review, onboarding and
+  check-in reports. Parsed markers and JSON keys are unchanged. Conversation
+  summaries are now written in the conversation's language instead of always
+  in Portuguese.
 
 ## [0.2.5] - 2026-10-07
 

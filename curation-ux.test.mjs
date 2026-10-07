@@ -37,7 +37,7 @@ eq(changed.other,42);eq(changed.curation.excludeUrls,current.config.curation.exc
 assert.throws(()=>prepareCurationChange(current,{prompt:'Outra tarefa'}));n++;
 assert.throws(()=>prepareCurationChange(current,{tipo:'geral'}));n++;
 assert.throws(()=>prepareCurationChange({...current,config:{flight_monitor:{}}},{curadoria:cfg,prompt,channel:'email'}));n++;
-ok(describeCuration(changed.curation).includes('0–2'));ok(curationPrompt({...cfg,version:2},[]).includes('1 resumos'));
+ok(describeCuration(changed.curation).includes('0–2'));ok(curationPrompt({...cfg,version:2},[]).includes('1 summaries'));
 const pg=new PGlite();await pg.exec(`CREATE SCHEMA mtr_harness;
  CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY);
  CREATE TABLE mtr_harness.routines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid REFERENCES mtr_harness.users,agent_id uuid,title text,prompt text,hour int,minute int NOT NULL DEFAULT 0,days text,tz text,channel text,enabled boolean DEFAULT true,repeat_every_min int,repeat_until timestamptz,next_run timestamptz,config jsonb DEFAULT '{}');

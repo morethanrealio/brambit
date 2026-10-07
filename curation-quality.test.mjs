@@ -127,7 +127,7 @@ test('real-run quote concatenation requests the existing repair, without accepti
  const bad=await finalize([concatenated],{}, {sourceEvidence:evidence});
  assert.deepEqual(bad.urls,[]);assert.equal(bad.repairable,true);assert.equal(bad.failureCode,'evidence_format');
  assert.match(curationRepairPrompt(config,bad.diagnostic),/item1:summary_quote_not_observed/);
- assert.match(curationRepairPrompt(config,bad.diagnostic),/CONTÍGUO/);
+ assert.match(curationRepairPrompt(config,bad.diagnostic),/CONTIGUOUS/);
  const repaired=await finalize([item],{}, {sourceEvidence:evidence});
  assert.deepEqual(repaired.urls,[url]);assert.equal(repaired.repairable,false);
  const missing=await finalize([{...item,sourceQuotes:undefined}],{}, {sourceEvidence:evidence});assert.equal(missing.repairable,true);
@@ -140,7 +140,7 @@ test('absolute publication intervals match date filtering and stay scoped to web
  const p=curationPrompt({...config,sections:[{id:'market',label:'Mercado',min:1,max:1,maxAgeDays:30},{id:'papers',label:'Papers',min:1,max:1,maxAgeDays:14}]},[],'2026-09-22T23:59:59Z');
  assert.match(p,/"section":"market","data_inicio":"2026-08-24","data_fim":"2026-09-22"/);
  assert.match(p,/"section":"papers","data_inicio":"2026-09-09","data_fim":"2026-09-22"/);
- assert.match(p,/artigo\/post\/abstract individual/);assert.match(p,/antes de abrir/);
+ assert.match(p,/individual article\/post\/abstract/);assert.match(p,/before opening/);
  assert.doesNotMatch(curationPrompt({...config,source:'gmail'},[],'2026-09-22'),/PLANO DE SELEÇÃO|data_inicio/);
  assert.throws(()=>curationPrompt(config,[],'invalid'),/Relógio/);
 });

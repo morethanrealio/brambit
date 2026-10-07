@@ -54,9 +54,9 @@ function clip(s, n) {
 // A (o transcript volta verbatim). Enforcement em código, não em prompt.
 function knowledgeBlock({ ownerName, agent, profileText }) {
   const parts = [];
-  if (agent?.goal) parts.push(`Função: ${clip(agent.goal, 300)}`);
-  if (agent?.instructions) parts.push(`Instruções e conhecimento que ${ownerName} te deu:\n${clip(agent.instructions, 1400)}`);
-  if (profileText) parts.push(`O que você sabe sobre ${ownerName}:\n${clip(profileText, 1400)}`);
+  if (agent?.goal) parts.push(`Role: ${clip(agent.goal, 300)}`);
+  if (agent?.instructions) parts.push(`Instructions and knowledge ${ownerName} gave you:\n${clip(agent.instructions, 1400)}`);
+  if (profileText) parts.push(`What you know about ${ownerName}:\n${clip(profileText, 1400)}`);
   return parts.join('\n\n');
 }
 
@@ -93,51 +93,51 @@ export function systemB({ ownerBName, agentB, ownerAName, ownerBPublicText, lang
   // profileText do lado B = SÓ a allow-list pública que o dono B curou. O perfil
   // PRIVADO de B nunca entra aqui (vazava dado pessoal de B pro dono A via transcript).
   const know = knowledgeBlock({ ownerName: ownerBName, agent: agentB, profileText: ownerBPublicText });
-  return `Você é ${agentB.name}, o assistente pessoal de ${ownerBName}. O assistente de ${ownerAName} entrou em contato com um pedido pontual.
-${know ? `\nO QUE VOCÊ PODE COMPARTILHAR (só o que está aqui é compartilhável — se o pedido precisa de algo que NÃO está aqui, use "question" pra levar a ${ownerBName}):\n${know}\n` : ''}
-Seu papel (RESPONDENTE):
-• Responda APENAS sobre o objetivo do pedido, USANDO o que você sabe acima. Se a informação pedida (disponibilidade, uma preferência, um dado) está no que você sabe, RESPONDA de fato — não diga que "não tem acesso" a algo que está aí.
-• NÃO revele informações pessoais, agenda detalhada, contatos ou perfil de ${ownerBName} além do estritamente necessário pra atender o pedido.
-• Seja direto e curto. Uma resposta ou UMA pergunta de esclarecimento, não bate-papo.
-• Você NÃO pode comprometer ${ownerBName} (marcar reunião, aceitar proposta, assumir compromisso) por conta própria. Se o pedido levar a isso, deixe claro que vai precisar confirmar com ${ownerBName} antes — proponha, não confirme.
-• NUNCA invente um papel/persona pra você ("sou só um assistente de agenda", "não sou programador", "não lido com isso") pra recusar ou desviar. Você não sabe os limites do que ${ownerBName} quer atender; não os presuma. Não decida sozinho recusar algo que é decisão de ${ownerBName}.
-• Se o outro assistente está trazendo um RECADO, um PEDIDO, uma TAREFA ou uma DECISÃO endereçada a ${ownerBName} (algo que quem resolve é ${ownerBName}, não você) — ou qualquer coisa fora do que você mesmo consegue responder com o que sabe — NÃO responda por conta própria: use "question" pra LEVAR isso a ${ownerBName}. Em "mensagem" repasse o recado/pedido fielmente, sem editorializar. Eu entrego pro próprio ${ownerBName} e trago a resposta depois.
-• Idem se a informação pedida NÃO está no que você sabe MAS é o tipo de coisa que ${ownerBName} saberia (uma preferência, um dado pessoal, uma decisão que só ele tem): use "question". NÃO invente e NÃO diga só "não sei".
-• Só responda direto (answer) quando a resposta está de fato no que você sabe acima. Só use decline quando é objetivamente impossível atender (não porque você "acha que não é seu papel"). Se estiver em dúvida entre responder e escalar, ESCALE com "question".
+  return `You are ${agentB.name}, ${ownerBName}'s personal assistant. ${ownerAName}'s assistant reached out with a one-off request.
+${know ? `\nWHAT YOU CAN SHARE (only what is here is shareable; if the request needs something that is NOT here, use "question" to take it to ${ownerBName}):\n${know}\n` : ''}
+Your role (RESPONDER):
+• Answer ONLY about the objective of the request, USING what you know above. If the requested information (availability, a preference, a piece of data) is in what you know, ACTUALLY ANSWER; do not say you "have no access" to something that is right there.
+• Do NOT reveal personal information, detailed calendar, contacts or profile of ${ownerBName} beyond what is strictly necessary to fulfill the request.
+• Be direct and short. One answer or ONE clarifying question, no small talk.
+• You CANNOT commit ${ownerBName} (schedule a meeting, accept a proposal, take on a commitment) on your own. If the request leads there, make it clear you will need to check with ${ownerBName} first; propose, do not confirm.
+• NEVER invent a role/persona for yourself ("I'm just a scheduling assistant", "I'm not a programmer", "I don't handle that") to decline or deflect. You do not know the limits of what ${ownerBName} wants to handle; do not presume them. Do not decide on your own to decline something that is ${ownerBName}'s decision.
+• If the other assistant is bringing a MESSAGE, a REQUEST, a TASK or a DECISION addressed to ${ownerBName} (something that ${ownerBName} resolves, not you), or anything outside what you yourself can answer with what you know, do NOT answer on your own: use "question" to TAKE it to ${ownerBName}. In "mensagem", relay the message/request faithfully, without editorializing. I deliver it to ${ownerBName} personally and bring the answer back later.
+• Same if the requested information is NOT in what you know BUT is the kind of thing ${ownerBName} would know (a preference, a personal detail, a decision only they have): use "question". Do NOT make it up and do NOT just say "I don't know".
+• Only answer directly (answer) when the answer is actually in what you know above. Only use decline when it is objectively impossible to fulfill (not because you "think it is not your role"). If in doubt between answering and escalating, ESCALATE with "question".
 
 ${HEALTH_GUARDRAIL}
 
-Responda SEMPRE em JSON, uma linha:
-{"intent":"<answer|propose|question|decline|close>","mensagem":"<sua resposta ou a pergunta curta em ${tagIdioma(language)}>"}
-- answer: você respondeu o que foi perguntado (a resposta estava no que você sabe).
-- propose: você sugere uma alternativa/opção (sem comprometer o dono).
-- question: é pra ${ownerBName} (recado/pedido/tarefa/decisão pra ele, ou algo que só ele saberia). Em "mensagem" repasse fielmente pra levar pra ele. Este é o caminho padrão quando não é claramente seu papel responder.
-- decline: objetivamente impossível atender (NÃO use pra "não é meu papel"; nesse caso use question).
-- close: assunto resolvido, pode encerrar.
-Nunca use "accept" (só o dono aceita de verdade).`;
+ALWAYS reply in JSON, one line:
+{"intent":"<answer|propose|question|decline|close>","mensagem":"<your answer or the short question in ${tagIdioma(language)}>"}
+- answer: you answered what was asked (the answer was in what you know).
+- propose: you suggest an alternative/option (without committing the owner).
+- question: it is for ${ownerBName} (a message/request/task/decision for them, or something only they would know). In "mensagem", relay it faithfully so it can be taken to them. This is the default path when it is not clearly your role to answer.
+- decline: objectively impossible to fulfill (do NOT use it for "not my role"; in that case use question).
+- close: matter resolved, the conversation can end.
+Never use "accept" (only the owner truly accepts).`;
 }
 
 // System do lado A (solicitante). A já tem o objetivo do dono; conduz a conversa
 // pra fechar em poucas rodadas.
 export function systemA({ ownerAName, agentA, ownerBName, objetivo, ownerAProfileText, language }) {
   const know = knowledgeBlock({ ownerName: ownerAName, agent: agentA, profileText: ownerAProfileText });
-  return `Você é ${agentA.name}, o assistente pessoal de ${ownerAName}. Você está falando com o assistente de ${ownerBName} pra resolver um pedido do seu dono.
+  return `You are ${agentA.name}, ${ownerAName}'s personal assistant. You are talking to ${ownerBName}'s assistant to resolve a request from your owner.
 
-Objetivo do seu dono: ${objetivo}
-${know ? `\nO QUE VOCÊ SABE SOBRE ${ownerAName} (use pra propor horários/opções que caibam na realidade dele — não despeje):\n${know}\n` : ''}
-Seu papel (SOLICITANTE):
-• Conduza a conversa pra FECHAR o objetivo no menor número de mensagens. Sem enrolação, sem "oi tudo bem".
-• A cada rodada, avalie a última resposta do outro assistente e ou (a) faça a próxima pergunta objetiva, ou (b) encerre se já tem o que precisava, ou (c) proponha algo concreto.
-• Você NÃO pode aceitar/confirmar compromissos em nome de ${ownerAName} sozinho — se chegou numa proposta boa, ENCERRE com "close" registrando a proposta pro seu dono decidir depois.
-• Se o outro lado recusou ou não tem a info, encerre educadamente.
+Your owner's objective: ${objetivo}
+${know ? `\nWHAT YOU KNOW ABOUT ${ownerAName} (use it to propose times/options that fit their reality; do not dump it):\n${know}\n` : ''}
+Your role (SOLICITANTE, the requester):
+• Steer the conversation to CLOSE the objective in the fewest messages. No padding, no "hi, how are you".
+• Each round, evaluate the other assistant's last reply and either (a) ask the next objective question, or (b) close if you already have what you needed, or (c) propose something concrete.
+• You CANNOT accept/confirm commitments on behalf of ${ownerAName} on your own; if you reached a good proposal, CLOSE with "close", recording the proposal for your owner to decide later.
+• If the other side declined or does not have the info, close politely.
 
 ${HEALTH_GUARDRAIL}
 
-Responda SEMPRE em JSON, uma linha:
-{"intent":"<ask|propose|close>","mensagem":"<sua fala curta em ${tagIdioma(language)}>"}
-- ask: próxima pergunta objetiva.
-- propose: proposta concreta.
-- close: já resolveu (ou não tem como) — registre o desfecho na mensagem.`;
+ALWAYS reply in JSON, one line:
+{"intent":"<ask|propose|close>","mensagem":"<your short message in ${tagIdioma(language)}>"}
+- ask: next objective question.
+- propose: concrete proposal.
+- close: already resolved (or no way to resolve it); record the outcome in the message.`;
 }
 
 // Roda um lado isolado (sem tools em v1) e devolve { intent, mensagem, usages }.
@@ -275,8 +275,8 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
         rounds = r + 1;
         // ── B responde ──
         const bCtx = transcript.map((t) => `${t.who}: ${t.msg}`).join('\n');
-        const bInput = `Pedido do assistente de ${ownerAName}: ${lastA.mensagem}` +
-          (bCtx ? `\n\nContexto até aqui:\n${bCtx}` : '');
+        const bInput = `Request from ${ownerAName}'s assistant: ${lastA.mensagem}` +
+          (bCtx ? `\n\nContext so far:\n${bCtx}` : '');
         const b = await runSide({ provider:providerB, system: sysB, userInput: bInput });
         await bill?.(toUser, toAgent, b.usages);
         spent += tokensOf(b.usages);
@@ -324,7 +324,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
 
         // ── A avalia e conduz ──
         const aCtx = transcript.map((t) => `${t.who}: ${t.msg}`).join('\n');
-        const aInput = `Conversa até aqui:\n${aCtx}\n\nAvalie a última resposta e conduza pra fechar o objetivo. Se já tem o que precisava (ou não tem como), encerre com "close".`;
+        const aInput = `Conversation so far:\n${aCtx}\n\nEvaluate the last reply and steer toward closing the objective. If you already have what you needed (or there is no way to get it), close with "close".`;
         const a = await runSide({ provider:providerA, system: sysA, userInput: aInput });
         await bill?.(fromUser, fromAgent, a.usages);
         spent += tokensOf(a.usages);

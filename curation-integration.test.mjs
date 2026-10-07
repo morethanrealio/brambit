@@ -70,8 +70,8 @@ result=await finalize(manifest,{}, {checkLinks:async()=>({checados:3,quebrados:[
 result=await finalize(manifest,{}, {checkLinks:async()=>({checados:4,quebrados:[url(1)],indefinidos:[url(3)],naoChecados:[]})});eq(result.urls,[url(2),url(4)]);eq(result.coverageSatisfied,false);ok(!result.text.includes(url(1)));
 result=await finalize(JSON.stringify({items,checks:[]}));eq(result.coverageSatisfied,false);ok(result.audit.acceptedBySection.every(s=>s.searchStatus==='missing'));ok(!result.text.includes('não confirmada'));
 result=await finalize(JSON.stringify({items,checks:[...checks,checks[0]]}));eq(result.urls.length,4);eq(result.coverageSatisfied,false);eq(result.executionStatus,'partial');ok(result.diagnostic.includes('estrutura inválida'));
-ok(curationPrompt(cfg,[]).includes('SOMENTE um objeto JSON'));ok(curationPrompt(cfg,[]).includes('NUNCA responda [ROTINA_SEM_NOVIDADES]'));ok(curationPrompt(cfg,[{url:url(1)}]).includes(url(1)));
-ok(curationRepairPrompt(cfg).includes('Sem fazer novas buscas'));ok(curationRepairPrompt(cfg).includes('NUNCA responda [ROTINA_SEM_NOVIDADES]'));
+ok(curationPrompt(cfg,[]).includes('ONLY a JSON object'));ok(curationPrompt(cfg,[]).includes('NEVER reply [ROTINA_SEM_NOVIDADES]'));ok(curationPrompt(cfg,[{url:url(1)}]).includes(url(1)));
+ok(curationRepairPrompt(cfg).includes('Without running new searches'));ok(curationRepairPrompt(cfg).includes('NEVER reply [ROTINA_SEM_NOVIDADES]'));
 result=await finalize('[ROTINA_SEM_NOVIDADES]');eq(result.urls,[]);eq(result.executionStatus,'failed');eq(result.failureCode,'unexpected_no_news_signal');eq(result.repairable,true);ok(result.text.includes('exige um relatório mesmo sem itens'));
 result=await finalize('not json');eq(result.executionStatus,'failed');eq(result.failureCode,'invalid_manifest');eq(result.repairable,true);
 result=await finalize(JSON.stringify({items:[],checks}));eq(result.executionStatus,'partial');eq(result.repairable,false);ok(/nenhum conteúdo novo qualificado/i.test(result.text));ok(!result.text.includes('Faltam'));
@@ -134,5 +134,5 @@ ok(server.includes('text = curationResult ? text : searchCoverage.finish(text, u
 ok(server.includes('audit:curationResult.audit'));
 const exclusionConfig={...cfg,excludeUrls:[url(1)+'?utm_source=old']};
 const excluded=await finalizeCuration({text:manifest,config:exclusionConfig,...scope,history:[],now:'2026-09-11T15:00:00Z'},{checkLinks});eq(excluded.urls.includes(url(1)),false);eq(excluded.coverageSatisfied,false);eq(excluded.audit.discarded.windowSectionOrExclusion,1);ok(!excluded.text.includes('exclusão manual'));
-eq(normalizeCurationConfig(exclusionConfig).excludeUrls,[url(1)]);ok(curationPrompt(exclusionConfig,[]).includes('não provam entrega'));
+eq(normalizeCurationConfig(exclusionConfig).excludeUrls,[url(1)]);ok(curationPrompt(exclusionConfig,[]).includes('do not prove delivery'));
 await pg.close();console.log(`OK: ${count} verificações de curadoria integrada; SQL PostgreSQL local, runner/render/entrega reais isolados; zero I/O real.`);

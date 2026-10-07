@@ -15,8 +15,8 @@ test('pt-BR: corpo dos prompts de A e B igual com e sem idioma', () => {
     const b = systemB({ ...baseB, language });
     assert.equal(a, systemA(baseA));
     assert.equal(b, systemB(baseB));
-    assert.match(a, /"mensagem":"<sua fala curta em pt-BR>"/);
-    assert.match(b, /pergunta curta em pt-BR>"/);
+    assert.match(a, /"mensagem":"<your short message in pt-BR>"/);
+    assert.match(b, /short question in pt-BR>"/);
   }
 });
 
@@ -24,8 +24,8 @@ test('en/es: o JSON pede o idioma do dono e a diretriz entra no fim', () => {
   for (const language of ['en', 'es']) {
     const a = comIdioma(systemA({ ...baseA, language }), language);
     const b = comIdioma(systemB({ ...baseB, language }), language);
-    assert.match(a, new RegExp(`sua fala curta em ${language}>`));
-    assert.match(b, new RegExp(`pergunta curta em ${language}>`));
+    assert.match(a, new RegExp(`your short message in ${language}>`));
+    assert.match(b, new RegExp(`short question in ${language}>`));
     assert.ok(a.startsWith(systemA({ ...baseA, language })) && a.length > systemA({ ...baseA, language }).length);
     assert.ok(b.length > systemB({ ...baseB, language }).length);
   }

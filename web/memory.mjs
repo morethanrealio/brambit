@@ -98,9 +98,9 @@ function renderMsg(m) {
   if (m.role === 'tool') return `[tool:${m.name}] ${m.content || ''}`;
   if (m.role === 'assistant' && m.toolCalls?.length) {
     const calls = m.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args || {})})`).join(', ');
-    return `Assistente (chamou tools): ${calls}${m.content ? `\n${m.content}` : ''}`;
+    return `Assistant (called tools): ${calls}${m.content ? `\n${m.content}` : ''}`;
   }
-  const who = m.role === 'assistant' ? 'Assistente' : m.role === 'user' ? 'Usuário' : m.role;
+  const who = m.role === 'assistant' ? 'Assistant' : m.role === 'user' ? 'User' : m.role;
   return `${who}: ${m.content || ''}`;
 }
 
@@ -184,15 +184,15 @@ function splitIndex(messages, lowTokens) {
 async function summarize(prevSummary, oldMessages, onUsage) {
   const { prose: prevProse, ledger: prevLedger } = splitSummary(prevSummary);
   const sys = [
-    'Você mantém o RESUMO ROLANTE de uma conversa entre um usuário e seu assistente pessoal.',
-    'Objetivo: preservar continuidade pra conversa seguir sem os turnos crus.',
-    'Guarde: decisões tomadas, tarefas/threads em aberto, o que estava sendo feito, pedidos pendentes e fatos mencionados que ainda importam.',
-    'CRÍTICO: preserve VERBATIM todo dado concreto que o usuário forneceu — datas, horários, endereços, preços, nomes próprios (lugares/pessoas/produtos), links e ESCOLHAS/seleções que ele fez (ex "quero o restaurante X na quarta"). NUNCA generalize esses dados em frases vagas nem os descarte. Se ele montou uma grade/itinerário/lista, mantenha cada item com seu dia/hora.',
-    'NÃO repita o que já está em perfil de longo prazo; foque na "cola" da conversa.',
-    `Seja conciso, em pt-BR, no máximo ~${SUMMARY_CAP / 4 | 0} palavras. Devolva só o resumo atualizado.`,
+    'You maintain the ROLLING SUMMARY of a conversation between a user and their personal assistant.',
+    'Goal: preserve continuity so the conversation can go on without the raw turns.',
+    'Keep: decisions made, open tasks/threads, what was being done, pending requests and mentioned facts that still matter.',
+    'CRITICAL: preserve VERBATIM every concrete piece of data the user provided — dates, times, addresses, prices, proper names (places/people/products), links and CHOICES/selections they made (e.g. "quero o restaurante X na quarta"). NEVER generalize this data into vague sentences or drop it. If they built a schedule/itinerary/list, keep each item with its day/time.',
+    'Do NOT repeat what is already in the long-term profile; focus on the "glue" of the conversation.',
+    `Be concise, in the language the conversation is written in, at most ~${SUMMARY_CAP / 4 | 0} words. Return only the updated summary.`,
   ].join('\n');
   const body = oldMessages.map(renderMsg).join('\n');
-  const prompt = `Resumo anterior:\n${prevProse || '(vazio)'}\n\nNovos turnos a incorporar:\n${body}`;
+  const prompt = `Previous summary:\n${prevProse || '(empty)'}\n\nNew turns to incorporate:\n${body}`;
   const selected=selectedDeepSeek();
   const summarizer=selected?.forBillingPhase?.({kind:'compact',noBill:true}) || selected || makeMemoriaModel();
   const r = await (summarizer.forBillingPhase?.({kind:'compact',noBill:true})||summarizer).complete({
