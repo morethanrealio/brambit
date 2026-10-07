@@ -20,6 +20,12 @@ Changes merged since the last tag go under "Unreleased".
   values the code sends or stores (env vars, headers, paths, keys) are
   unchanged.
 
+### Fixed
+- Text the model writes in the same step as a tool that records something
+  or proposes an action is delivered before the final text instead of being
+  dropped. Tools opt in with `keepsStepText` (or on their `confirmationTool`);
+  `criar_rotina`, `oferecer_rotina` and `memoria_anotar` do (#23).
+
 ## [0.2.4] - 2026-10-06
 
 ### Changed
