@@ -22,6 +22,10 @@ salvar. Depois disso o cadastro fica fechado: os outros entram com o seu convite
 Os dados ficam em `~/.brambit` (ou em `BRAMBIT_DADOS`), fora da pasta do
 programa, e tudo escuta só em `127.0.0.1`.
 
+Rodar `npm run brambit` de novo com ele ligado só abre o navegador. Pra desligar:
+`npm run brambit -- parar` (ou o botão em Configurações > Este computador, onde
+também dá pra trocar a IA); `npm run brambit -- status` diz se está ligado.
+
 ## Quick start
 
 Requisitos: Node.js 24 (a versão do CI) em Linux ou macOS. O banco vem junto

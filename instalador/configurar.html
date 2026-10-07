@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-modo="__MODO__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,6 +17,7 @@
   .ias label { font-weight: 400; margin: 0; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 8px; cursor: pointer; }
   .ias label:has(input:checked) { border-color: var(--destaque); outline: 1px solid var(--destaque); }
   button { margin-top: 24px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--destaque); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secundario { margin-top: 8px; background: transparent; color: inherit; border: 1px solid var(--borda); }
   button:disabled { opacity: .6; cursor: default; }
   .erro { color: #d33; margin-top: 12px; }
   .estado { margin-top: 16px; }
@@ -30,6 +31,7 @@
   <p class="sub" data-t="sub"></p>
   <p class="erro" id="sem-codigo" hidden data-t="sem_codigo"></p>
   <form id="form" novalidate>
+    <div id="conta">
     <h2 data-t="voce"></h2>
     <label for="nome" data-t="nome"></label>
     <input id="nome" type="text" autocomplete="name" required>
@@ -40,8 +42,9 @@
     <small data-t="senha_dica"></small>
     <label for="senha2" data-t="senha2"></label>
     <input id="senha2" type="password" autocomplete="new-password" required>
+    </div>
 
-    <h2 data-t="ia"></h2>
+    <h2 id="titulo-ia" data-t="ia"></h2>
     <small data-t="ia_dica"></small>
     <div class="ias">
       <label><input type="radio" name="provedor" value="together" checked> Together</label>
@@ -60,6 +63,7 @@
     <small><a id="onde-chave" target="_blank" rel="noopener noreferrer" data-t="onde_chave"></a><span id="chave-opcional" hidden data-t="chave_opcional"></span></small>
 
     <button id="enviar" type="submit" data-t="enviar"></button>
+    <button id="cancelar" class="secundario" type="button" hidden data-t="cancelar"></button>
     <p class="erro" id="erro" hidden></p>
   </form>
   <p class="estado" id="estado" hidden></p>
@@ -79,6 +83,8 @@ const TEXTOS = {
     chave_recusada: 'A IA recusou essa chave. Confira se copiou inteira.', modelo_ausente: 'A chave funciona, mas esse modelo não aparece na sua conta da IA.',
     sem_conexao: 'Não consegui falar com a IA. Confira a internet (ou o endereço).', provedor_erro: 'A IA respondeu com erro. Tente de novo daqui a pouco.',
     codigo: 'Esta página expirou. Feche e abra o Brambit de novo.', codigo_esgotado: 'Esta página expirou. Feche e abra o Brambit de novo.',
+    titulo_trocar: 'Trocar a inteligência artificial', sub_trocar: 'O assistente fica parado até você salvar ou cancelar. A chave nova é testada antes de valer.',
+    ia_trocar: 'Qual inteligência artificial usar', salvar: 'Salvar', cancelar: 'Cancelar e manter a de antes', voltando: 'Religando o Brambit...',
     demorou: 'O Brambit não ligou. Veja a mensagem na janela dele.', conta: 'A configuração foi salva, mas a conta não foi criada: ', generico: 'Algo deu errado. Tente de novo.',
   },
   en: {
@@ -94,6 +100,8 @@ const TEXTOS = {
     chave_recusada: 'The AI refused this key. Check you copied all of it.', modelo_ausente: 'The key works, but this model is not available on your AI account.',
     sem_conexao: "Couldn't reach the AI. Check the internet (or the address).", provedor_erro: 'The AI answered with an error. Try again in a moment.',
     codigo: 'This page expired. Close Brambit and open it again.', codigo_esgotado: 'This page expired. Close Brambit and open it again.',
+    titulo_trocar: 'Change the AI', sub_trocar: 'The assistant is paused until you save or cancel. The new key is tested before it takes effect.',
+    ia_trocar: 'Which AI to use', salvar: 'Save', cancelar: 'Cancel and keep the current one', voltando: 'Restarting Brambit...',
     demorou: "Brambit didn't start. See the message in its window.", conta: 'Setup was saved, but the account was not created: ', generico: 'Something went wrong. Try again.',
   },
   es: {
@@ -109,6 +117,8 @@ const TEXTOS = {
     chave_recusada: 'La IA rechazó esta clave. Revisa que la copiaste completa.', modelo_ausente: 'La clave funciona, pero ese modelo no aparece en tu cuenta de la IA.',
     sem_conexao: 'No pude hablar con la IA. Revisa internet (o la dirección).', provedor_erro: 'La IA respondió con un error. Intenta de nuevo en un rato.',
     codigo: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.', codigo_esgotado: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.',
+    titulo_trocar: 'Cambiar la inteligencia artificial', sub_trocar: 'El asistente queda en pausa hasta que guardes o canceles. La clave nueva se prueba antes de valer.',
+    ia_trocar: 'Qué inteligencia artificial usar', salvar: 'Guardar', cancelar: 'Cancelar y mantener la actual', voltando: 'Reiniciando Brambit...',
     demorou: 'Brambit no encendió. Mira el mensaje en su ventana.', conta: 'La configuración se guardó, pero la cuenta no se creó: ', generico: 'Algo salió mal. Intenta de nuevo.',
   },
 };
@@ -120,6 +130,13 @@ const ONDE_CHAVE = {
 const idioma = (navigator.languages || [navigator.language || 'pt']).map((l) => l.slice(0, 2)).find((l) => TEXTOS[l]) || 'pt';
 const t = (k) => TEXTOS[idioma][k] || TEXTOS.pt[k] || k;
 document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[idioma];
+// Trocar a IA (botão nas Configurações): a conta já existe, só a parte da IA aparece.
+const trocando = document.documentElement.dataset.modo === 'trocar';
+if (trocando) {
+  for (const [sel, k] of [['h1', 'titulo_trocar'], ['p.sub', 'sub_trocar'], ['#titulo-ia', 'ia_trocar'], ['#enviar', 'salvar']]) document.querySelector(sel).dataset.t = k;
+  document.getElementById('conta').hidden = true;
+  document.getElementById('cancelar').hidden = false;
+}
 for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
 
 const $ = (id) => document.getElementById(id);
@@ -138,20 +155,48 @@ function trocarProvedor() {
 }
 for (const r of document.querySelectorAll('input[name=provedor]')) r.addEventListener('change', trocarProvedor);
 trocarProvedor();
+// Já vem marcada a IA de agora (a chave não vem: pra trocar, cola de novo).
+if (trocando) fetch('/atual').then((r) => (r.ok ? r.json() : null)).then((a) => {
+  const r = a && document.querySelector(`input[name=provedor][value="${a.provedor}"]`);
+  if (!r) return;
+  r.checked = true;
+  if (a.provedor === 'outro') { $('endereco').value = a.endereco || ''; $('modelo').value = a.modelo || ''; }
+  trocarProvedor();
+}).catch(() => {});
 
 const mostrarErro = (msg) => { $('erro').textContent = msg; $('erro').hidden = !msg; };
 const estado = (msg) => { $('estado').textContent = msg; $('estado').hidden = !msg; };
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const postar = (url, corpo) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo), credentials: 'same-origin' });
+// Esta página sai do ar e o servidor de verdade volta no mesmo endereço.
+async function esperarLigar(msg) {
+  $('form').hidden = true;
+  estado(msg);
+  for (let i = 0; i < 180; i++) {
+    await espera(1000);
+    try { if ((await fetch('/api/config', { cache: 'no-store' })).ok) return true; } catch {}
+  }
+  estado(t('demorou'));
+  return false;
+}
+
+$('cancelar').addEventListener('click', async () => {
+  $('cancelar').disabled = true;
+  try { if (!(await postar('/cancelar', { codigo })).ok) throw 0; }
+  catch { $('cancelar').disabled = false; return mostrarErro(t('codigo')); }
+  if (await esperarLigar(t('voltando'))) location.replace('/');
+});
 
 $('form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   mostrarErro('');
   const nome = $('nome').value.trim(), email = $('email').value.trim(), senha = $('senha').value;
-  if (!nome) return mostrarErro(t('e_nome'));
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return mostrarErro(t('e_email'));
-  if (senha.length < 12) return mostrarErro(t('e_senha'));
-  if (senha !== $('senha2').value) return mostrarErro(t('e_senha2'));
+  if (!trocando) {
+    if (!nome) return mostrarErro(t('e_nome'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return mostrarErro(t('e_email'));
+    if (senha.length < 12) return mostrarErro(t('e_senha'));
+    if (senha !== $('senha2').value) return mostrarErro(t('e_senha2'));
+  }
   $('enviar').disabled = true;
   estado(t('testando'));
   try {
@@ -161,14 +206,9 @@ $('form').addEventListener('submit', async (ev) => {
   } catch { estado(''); $('enviar').disabled = false; return mostrarErro(t('generico')); }
 
   // A configuração está salva e o Brambit está trocando esta página pelo servidor de verdade.
-  $('form').hidden = true;
-  estado(t('ligando'));
-  let ligado = false;
-  for (let i = 0; i < 180 && !ligado; i++) {
-    await espera(1000);
-    try { ligado = (await fetch('/api/config', { cache: 'no-store' })).ok; } catch {}
-  }
-  if (!ligado) return estado(t('demorou'));
+  if (!(await esperarLigar(t(trocando ? 'voltando' : 'ligando')))) return;
+  // Trocando a IA, a sessão de antes continua valendo.
+  if (trocando) return location.replace('/');
   estado(t('entrando'));
   let r = await postar('/api/signup', { name: nome, email, password: senha });
   if (r.status === 409) r = await postar('/api/login', { email, password: senha });

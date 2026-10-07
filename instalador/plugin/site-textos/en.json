@@ -1,0 +1,19 @@
+{
+ "Este computador": "This computer",
+ "O Brambit está ligado neste computador. Só você, que é dono dele, vê esta parte.": "Brambit is running on this computer. Only you, its owner, see this part.",
+ "Endereço": "Address",
+ "Inteligência artificial": "Artificial intelligence",
+ "Pasta dos dados": "Data folder",
+ "Versão": "Version",
+ "Trocar a IA": "Change the AI",
+ "Desligar o Brambit": "Turn Brambit off",
+ "O Brambit vai parar um instante pra você escolher a IA e colar a chave nova. As conversas e os dados continuam aqui.": "Brambit will pause for a moment so you can choose the AI and paste the new key. Your conversations and data stay here.",
+ "Continuar": "Continue",
+ "Abrindo a configuração da IA...": "Opening the AI setup...",
+ "Não deu certo. Tente de novo.": "That didn't work. Try again.",
+ "A configuração não abriu. Veja a mensagem na janela do Brambit.": "The setup didn't open. See the message in the Brambit window.",
+ "O assistente para de responder, inclusive no Telegram e no WhatsApp, até você ligar de novo.": "The assistant stops answering, on Telegram and WhatsApp too, until you turn it on again.",
+ "Desligar": "Turn off",
+ "O Brambit foi desligado": "Brambit is off",
+ "Pra ligar de novo, abra o Brambit pelo atalho ou rode o comando brambit.": "To turn it on again, open Brambit from its shortcut or run the brambit command."
+}

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Prova de ponta a ponta do instalador, do jeito que a pessoa usa (o CI roda em
 // Windows, macOS e Linux): primeira vez com a página de configuração, conta do
-// dono, cadastro fechado pros outros, chave fora do disco em texto e, ligando de
-// novo, o dono entra. A "IA" é um servidor falso em 127.0.0.1: nada sai da máquina.
+// dono, cadastro fechado pros outros, chave fora do disco em texto; ligando de
+// novo, o dono entra; uma segunda cópia só aponta pra que já está ligada; o dono
+// vê "Este computador" nas Configurações e troca a IA por ali; `brambit parar` desliga. A "IA" é um servidor falso em 127.0.0.1: nada sai da máquina.
 //
 // Uso: node instalador/conferir.mjs
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,8 +32,8 @@ const enderecoIa = `http://127.0.0.1:${ia.address().port}/v1`;
 const porta = await freePort();
 
 // Liga o instalador e espera a linha do log que interessa.
-function ligar(espera) {
-  const filho = spawn(process.execPath, [path.join(root, 'instalador', 'brambit.mjs'), '--sem-navegador'], {
+function ligar(espera, comando = []) {
+  const filho = spawn(process.execPath, [path.join(root, 'instalador', 'brambit.mjs'), ...comando, '--sem-navegador'], {
     env: { ...process.env, BRAMBIT_DADOS: dados, BRAMBIT_PORTA: String(porta) }, stdio: ['ignore', 'pipe', 'inherit'],
   });
   const achou = new Promise((resolve, reject) => {
@@ -59,7 +60,16 @@ function desligar(filho) {
 }
 
 const base = `http://127.0.0.1:${porta}`;
-const post = (url, corpo, origin = base) => fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(corpo) });
+const post = (url, corpo, origin = base, cookie = '') => fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'application/json', origin, cookie }, body: JSON.stringify(corpo) });
+const cookieDe = (res) => res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+// Roda um comando do lançador até o fim: {codigo, saida}.
+function rodar(comando) {
+  const { filho, achou } = ligar(/$^/, comando);
+  achou.catch(() => {});
+  let saida = '';
+  filho.stdout.on('data', (b) => { saida += b; });
+  return new Promise((r) => filho.on('exit', (codigo) => r({ codigo, saida })));
+}
 async function esperarServidor() {
   for (let i = 0; i < 240; i++) {
     try { if ((await fetch(`${base}/api/config`)).ok) return; } catch {}
@@ -104,7 +114,50 @@ try {
   await atual.achou;
   const entrar = await post('/api/login', { email: DONO.email, password: DONO.senha });
   if (entrar.status !== 200) falha(`login do dono depois de religar: ${entrar.status} ${await entrar.text()}`);
-  log('religou e o dono entrou: tudo certo');
+  const sessao = cookieDe(entrar);
+  log('religou e o dono entrou');
+
+  // 4) Abrir de novo com ele ligado só aponta pra cópia que já está rodando.
+  const segunda = await rodar([]);
+  if (segunda.codigo !== 0 || !/já está ligado/.test(segunda.saida)) falha(`segunda cópia: código ${segunda.codigo}, ${segunda.saida}`);
+  const st = await rodar(['status']);
+  if (st.codigo !== 0 || !st.saida.includes(`ligado: ${base}`)) falha(`status: código ${st.codigo}, ${st.saida}`);
+  log('segunda cópia não liga outra; status diz ligado');
+
+  // 5) "Este computador" nas Configurações: só o dono vê.
+  if ((await fetch(`${base}/api/instalacao`)).status !== 404) falha('/api/instalacao sem sessão devia ser 404');
+  const info = await fetch(`${base}/api/instalacao`, { headers: { cookie: sessao } });
+  const j = await info.json().catch(() => ({}));
+  if (info.status !== 200 || j.ia?.modelo !== 'modelo-de-teste' || j.dados !== dados) falha(`/api/instalacao do dono: ${info.status} ${JSON.stringify(j)}`);
+  const semSessao = await post('/api/instalacao/trocar-ia', {}, base);
+  if (semSessao.ok || 'codigo' in (await semSessao.json().catch(() => ({})))) falha(`trocar a IA sem sessão passou: ${semSessao.status}`);
+
+  // 6) Trocar a IA: o servidor dá lugar à página de configuração e volta com a escolha nova.
+  const pedidoTroca = await post('/api/instalacao/trocar-ia', {}, base, sessao);
+  const { codigo: codigoTroca } = await pedidoTroca.json().catch(() => ({}));
+  if (pedidoTroca.status !== 200 || !codigoTroca) falha(`trocar a IA: ${pedidoTroca.status}`);
+  let naConfiguracao = false;
+  for (let i = 0; i < 120 && !naConfiguracao; i++) {
+    try { naConfiguracao = (await fetch(`${base}/?ia`)).headers.get('x-brambit-configuracao') === '1'; } catch {}
+    if (!naConfiguracao) await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!naConfiguracao) falha('a página de trocar a IA não abriu');
+  const atualIa = await (await fetch(`${base}/atual`)).json();
+  if (atualIa.modelo !== 'modelo-de-teste' || 'chave' in atualIa) falha(`/atual: ${JSON.stringify(atualIa)}`);
+  const trocou = await post('/instalar', { codigo: codigoTroca, provedor: 'outro', endereco: enderecoIa, modelo: 'modelo-de-teste', chave: CHAVE });
+  if (trocou.status !== 200) falha(`trocar a IA: ${trocou.status} ${await trocou.text()}`);
+  await esperarServidor();
+  const cfg = JSON.parse(readFileSync(path.join(dados, 'instalacao.json'), 'utf8'));
+  if (cfg.dono.email !== DONO.email || !cfg.trocadoEm) falha('trocar a IA mexeu no dono ou não gravou');
+  if ((await fetch(`${base}/api/instalacao`, { headers: { cookie: sessao } })).status !== 200) falha('a sessão do dono não sobreviveu à troca da IA');
+  log('trocou a IA e o dono continua dentro');
+
+  // 7) brambit parar desliga tudo.
+  const parou = await rodar(['parar']);
+  if (!/desligado/.test(parou.saida)) falha(`parar: ${parou.saida}`);
+  if (atual.filho.exitCode === null) await Promise.race([new Promise((r) => atual.filho.once('exit', r)), new Promise((_, rej) => setTimeout(() => rej(new Error('o Brambit não desligou')), 10_000))]);
+  if (existsSync(path.join(dados, 'ligado.json'))) falha('ligado.json ficou pra trás');
+  log('brambit parar desligou: tudo certo');
 } catch (e) {
   process.exitCode = 1;
   console.error(`[conferir] FALHOU: ${e.message}`);
