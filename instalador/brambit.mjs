@@ -50,8 +50,9 @@ const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || ''));
 // Página de configuração. Só abre com o código de uso único que vai no endereço
 // (depois do #, então não aparece em log nem em histórico de servidor); confere
 // o Host (outro site apontando um domínio pro 127.0.0.1 não entra) e a Origin.
-// Resolve com a configuração quando a chave da IA foi testada e salva.
-function servirConfiguracao(porta, codigo) {
+// Resolve com a configuração quando a chave da IA foi testada e salva; aoOuvir
+// roda quando a porta já atende (antes disso o navegador abriria numa página de erro).
+function servirConfiguracao(porta, codigo, aoOuvir) {
   const pagina = readFileSync(path.join(root, 'instalador', 'configurar.html'), 'utf8');
   const hosts = new Set([`127.0.0.1:${porta}`, `localhost:${porta}`]);
   let tentativas = 0;
@@ -94,7 +95,7 @@ function servirConfiguracao(porta, codigo) {
       json(200, { ok: true });
     });
     server.once('error', reject);
-    server.listen(porta, '127.0.0.1');
+    server.listen(porta, '127.0.0.1', aoOuvir);
   });
 }
 
@@ -121,10 +122,11 @@ async function main() {
   const primeiraVez = !cfg;
   if (primeiraVez) {
     const codigo = randomBytes(18).toString('base64url');
-    const pronto = servirConfiguracao(porta, codigo);
     const url = `${base}/#codigo=${codigo}`;
-    log(`configure o Brambit no navegador: ${url}`);
-    if (!semNavegador) abrirNavegador(url);
+    const pronto = servirConfiguracao(porta, codigo, () => {
+      log(`configure o Brambit no navegador: ${url}`);
+      if (!semNavegador) abrirNavegador(url);
+    });
     cfg = await pronto;
     log('configuração salva');
   }
