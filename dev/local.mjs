@@ -24,7 +24,8 @@ const DB_USER = 'brambs';
 export const TEST_ACCOUNT = { name: 'Conta de Teste', email: 'teste@example.com', password: 'brambs-local-teste' };
 
 export function postgresBin() {
-  const pkg = `@embedded-postgres/${process.platform}-${process.arch}`;
+  // O pacote do Windows se chama windows-x64, não win32-x64.
+  const pkg = `@embedded-postgres/${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`;
   try { return path.resolve(path.dirname(fileURLToPath(import.meta.resolve(pkg))), '..', 'native', 'bin'); }
   catch { throw new Error(`Postgres embutido não instalado pra ${process.platform}-${process.arch}. Rode npm install.`); }
 }
