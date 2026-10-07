@@ -10,6 +10,34 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-10-07
+
+### Added
+- `npm run brambit`: Brambit on your own computer, for people who are not
+  technical. The first run opens a setup page in the browser (owner, AI
+  provider and its key, tested before saving and stored encrypted); the
+  owner's account is created there and sign-up closes for everyone else.
+  Data lives outside the program folder (`~/.brambit` or `BRAMBIT_DADOS`)
+  and everything listens on 127.0.0.1 only.
+- `BRAMBIT_CADASTRO=fechado`: closed sign-up without a plugin; only
+  `ADMIN_EMAIL` can create an account.
+- Plugin field `csp`: extra https origins a plugin's pages load (analytics,
+  a conversion tag), only in script-src, img-src, connect-src and frame-src.
+- `ganchosDoApp.aoCadastrar`: app hook that runs when an account is created.
+
+### Changed
+- Runs on Windows and macOS as well as Linux: Postgres over TCP on
+  127.0.0.1 with a password, a portable task lock, and CI that boots, signs
+  up and logs in on the three systems.
+- On a local install opened in a browser on the same computer, cookies go
+  without `Secure` so login sticks in Safari (WebKit drops Secure cookies on
+  http://localhost). Anything that arrives over a network keeps `Secure`.
+
+### Removed
+- The core no longer loads Google Analytics or Google Ads: its CSP has no
+  external origin. A deployment that wants them adds the tag and the
+  origins in its own plugin.
+
 ## [0.2.6] - 2026-10-07
 
 ### Added
@@ -131,7 +159,8 @@ service built on it.
 - Guards and the test suite run from the directory they are called from, so
   an app that installs Brambit can run them on its own repo.
 
-[Unreleased]: https://github.com/morethanrealio/Brambit/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/morethanrealio/Brambit/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/morethanrealio/Brambit/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/morethanrealio/Brambit/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/morethanrealio/Brambit/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/morethanrealio/Brambit/compare/v0.2.3...v0.2.4
