@@ -39,7 +39,7 @@ import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution}
 import {createEventos,criadorDeConta} from './eventos.mjs';
 import {createRotas} from './rotas.mjs';
 import {createMidiaPublica} from './midia-publica.mjs';
-import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp} from './plugins.mjs';
+import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissoesDoAmbiente} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
 import {createContaPagadoraSimples} from './conta-pagadora.mjs';
 import {createFerramentasSimples} from './ferramentas.mjs';
@@ -8563,56 +8563,8 @@ const MIME = {
   '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg',
 };
 
-// Monta o Content-Security-Policy. Sem nonce (respostas NÃO-HTML: JSON, JS, CSS,
-// mídia) fica estrito, sem inline nenhum. Com nonce (páginas HTML) libera SÓ o
-// <script>/<style> inline carimbado com o nonce daquele request — nunca
-// 'unsafe-inline' em script. Injeção de <script>/<style> fica fechada.
-// style-src-attr mantém 'unsafe-inline' porque o front usa muitos style="..."
-// como atributo (vetor não-explorável; nonce não cobre atributo); o style-src
-// plano é só fallback pra browsers sem CSP3 (-elem/-attr), que os modernos
-// ignoram quando as diretivas específicas existem.
-// Origens do Google Analytics 4 (gtag.js). É a ÚNICA exceção externa do CSP: o
-// gtag.js vem do googletagmanager e a coleta sai por beacon/XHR pros hosts de
-// analytics (o img-src cobre o fallback em pixel de browsers antigos). Lista
-// deliberadamente enxuta: sem doubleclick, ou seja, sem Google Signals/audiência
-// de anúncio. Se um dia ligarem Signals no painel do GA, a coleta de audiência
-// cai em CSP e é preciso ampliar aqui de propósito.
-const GA_SCRIPT_SRC = 'https://www.googletagmanager.com';
-const GA_TRANSPORT_SRC =
-  'https://www.google-analytics.com https://*.google-analytics.com '
-  + 'https://*.analytics.google.com https://*.googletagmanager.com';
-// Google Ads: SIGN-UP conversion (02/09, CSP widened on purpose).
-// Hosts recommended by Google itself at
-// developers.google.com/tag-platform/security/guides/csp; their `<TLD>` is
-// google.com.br in our case (CSP doesn't accept a wildcard right of the host).
-// This puts doubleclick into the CSP, where it was kept out on purpose: the
-// reach is only the tag's conversion ping (no remarketing/Signals enabled).
-// If Ads ever goes, remove both constants along with the AW- gtag.
-const ADS_SCRIPT_SRC = 'https://www.googleadservices.com https://www.google.com '
-  + 'https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net';
-const ADS_PIXEL_SRC = 'https://www.googleadservices.com https://www.google.com '
-  + 'https://www.google.com.br https://googleads.g.doubleclick.net '
-  + 'https://ad.doubleclick.net https://pagead2.googlesyndication.com';
-
-function buildCsp(nonce) {
-  const n = nonce ? ` 'nonce-${nonce}'` : '';
-  return [
-    "default-src 'self'",
-    `script-src 'self'${n} ${GA_SCRIPT_SRC} ${ADS_SCRIPT_SRC}`,
-    `style-src-elem 'self'${n}`,
-    "style-src-attr 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: ${GA_TRANSPORT_SRC} ${ADS_PIXEL_SRC}`,
-    "font-src 'self' data:",
-    `connect-src 'self' ${GA_TRANSPORT_SRC} ${ADS_PIXEL_SRC}`,
-    // O tag do Ads usa iframe no googletagmanager; sem isso o default-src barra.
-    "frame-src 'self' https://*.googletagmanager.com",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-  ].join('; ');
-}
+// CSP (csp.mjs): estrito; só um plugin amplia, de propósito, com o campo csp.
+const buildCsp=criarCsp(cspDosPlugins(plugins));
 
 // Cabeçalhos de segurança aplicados a TODA resposta (ASVS L1 / CASA). Setados via
 // setHeader antes do roteamento; cada writeHead posterior só acrescenta os seus, sem

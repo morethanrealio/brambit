@@ -37,15 +37,19 @@
 //   onde a conferência dos catálogos e o mensagens-i18n-pendentes tiram as chaves.
 //  app: pastas com pedaços de tela do app logado (estilo, menu, painéis,
 //   script), um arquivo por encaixe do index.html (ver app-encaixes.mjs).
+//  csp: origens externas que as páginas do plugin carregam (analytics, tag de
+//   conversão), {diretiva: [https://host, ...]}; só script-src, img-src,
+//   connect-src e frame-src (csp.mjs). O núcleo sozinho não carrega nada de fora.
 // Duas peças pra mesma porta, porta desconhecida ou plugin sem nome falham no
 // boot, e não no primeiro uso.
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {leitorDePagina} from './app-encaixes.mjs';
+import {conferirCsp} from './csp.mjs';
 
 export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico'];
-const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app'];
+const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','csp'];
 
 export function conferirPlugin(p){
  if(!p||typeof p!=='object')throw Error('Plugin precisa ser um objeto');
@@ -53,6 +57,7 @@ export function conferirPlugin(p){
  for(const k of Object.keys(p))if(!CAMPOS.includes(k))throw Error(`Plugin ${p.nome}: campo desconhecido ${k}`);
  for(const k of ['esquema','portas','ligar'])if(p[k]!=null&&typeof p[k]!=='function')throw Error(`Plugin ${p.nome}: ${k} precisa ser função`);
  for(const k of ['publico','siteTextos','textosServidor','fontesMensagens','app'])if(p[k]!=null&&!(Array.isArray(p[k])&&p[k].every(c=>typeof c==='string'&&path.isAbsolute(c))))throw Error(`Plugin ${p.nome}: ${k} precisa ser lista de caminhos absolutos`);
+ if(p.csp!=null)conferirCsp(p.csp,`Plugin ${p.nome}: csp`);
  if(p.semCsrf!=null&&!(Array.isArray(p.semCsrf)&&p.semCsrf.every(c=>typeof c==='string'&&c.startsWith('/'))))throw Error(`Plugin ${p.nome}: semCsrf precisa ser lista de caminhos`);
  return p;
 }
@@ -111,6 +116,13 @@ export function textosDoSite(plugins){
 
 export function textosDoServidor(plugins){
  return plugins.flatMap(p=>p.textosServidor||[]);
+}
+
+// Origens do csp de todos os plugins, por diretiva.
+export function cspDosPlugins(plugins){
+ const r={};
+ for(const p of plugins)for(const [k,v] of Object.entries(p.csp||{}))(r[k]||=[]).push(...v);
+ return r;
 }
 
 export function pastasDoApp(plugins){
