@@ -27,8 +27,9 @@ same team.
 The big tech companies are launching personal assistants that act for you: they
 remember you, use your apps, work in the background and talk to you where you
 already are. Brambit gives you the same kinds of features in an environment you
-control: it runs on your own server, with the model you choose, and the data stays
-with you.
+control: it runs on your own server, with the model you choose, and the data is
+stored with you. Only the context of each call goes to the model provider; with a local
+model (Ollama, for example), not even that leaves your machine.
 
 Open-source personal agents such as OpenClaw, NanoClaw and Hermes Agent are made for
 developers: you set them up in a terminal and config files, and you are usually the

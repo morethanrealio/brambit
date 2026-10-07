@@ -27,8 +27,9 @@ mantido pelo mesmo time.
 As big techs estão lançando assistentes pessoais que agem por você: lembram de
 você, usam os seus apps, trabalham em segundo plano e conversam onde você já está.
 O Brambit traz os mesmos tipos de funcionalidade num ambiente que você controla:
-roda no seu próprio servidor, com o modelo que você escolher, e os dados ficam com
-você.
+roda no seu próprio servidor, com o modelo que você escolher, e os dados ficam
+guardados com você. Para o provedor do modelo vai só o contexto de cada chamada; com
+um modelo local (Ollama, por exemplo), nem isso sai da sua máquina.
 
 Agentes pessoais open source como OpenClaw, NanoClaw e Hermes Agent são feitos para
 desenvolvedores: você configura pelo terminal e por arquivos de configuração, e em
