@@ -502,7 +502,7 @@ test('pipeline real do servidor mantém cartão de app após journals e vincula 
   const start = serverSource.indexOf('  const deterministicConfirmation = confirmationSession');
   const end = serverSource.indexOf('  if (selo)', start);
   assert.ok(start >= 0 && end > start);
-  const finish = new Function('inventoryCalculation', 'thread', 'peekPending', 'appBuildJournal', 'enforceRoutineEmailContract', 'enforceFreshCheckClaims', 'renderCompletedActions', `const diag = {removidas:[], corte(){}}; const confirmationSession = null; const actionJournal = {entries:[], finish:t=>t}; const termination = null; const routineNoNews = false; const searchCoverage = {emailSourceLinks:()=>new Set(), finishEmail:t=>t}; let text = 'Resumo do modelo'; const userLang = 'pt-BR'; const toolCounts = {}; ${serverSource.slice(start, end)} return text;`);
+  const finish = new Function('inventoryCalculation', 'thread', 'peekPending', 'appBuildJournal', 'enforceRoutineEmailContract', 'enforceFreshCheckClaims', 'renderCompletedActions', `const diag = {removidas:[], corte(){}}; const confirmationSession = null; const actionJournal = {entries:[], finish:t=>t}; const termination = null; const routineNoNews = false; const searchCoverage = {emailSourceLinks:()=>new Set(), finishEmail:t=>t}; let text = 'Resumo do modelo'; const userLang = 'pt-BR'; const idiomaResposta = userLang; const toolCounts = {}; ${serverSource.slice(start, end)} return text;`);
   const text = finish(createInventoryCalculationSession({enabled:false}), { id: thread }, peekPending, journal, enforceRoutineEmailContract, enforceFreshCheckClaims, renderCompletedActions);
   assert.equal(text, `Resumo do modelo\n\n${card}`);
   const result = withConfirmationReceipt(thread, { text });

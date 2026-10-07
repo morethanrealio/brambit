@@ -78,7 +78,7 @@ test('real push function only counts actual Expo acceptance tickets', async () =
   ]) {
     const scope = {
       listPushTokensForUserDb: async () => [{ token: 'ExponentPushToken[synthetic]' }],
-      removePushTokensDb: async () => {}, console: { error() {} },
+      removePushTokensDb: async () => {}, console: { error() {} }, marca: () => ({ nome: 'Synthetic' }),
       fetch: async () => ({ ok: response.ok, json: async () => ({ data: response.data }) }),
     };
     vm.runInNewContext(fn + '\nthis.probe = sendPush;', scope);

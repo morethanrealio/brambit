@@ -46,7 +46,7 @@ async function pipeline(text, {kind = 'routine', completed = true, failed = fals
   }
   const messages = [{role:'assistant',content:text}];
   const deps = {
-    text,messages,kind,routineCheck:{completed,failed},userLang:language,
+    text,messages,kind,routineCheck:{completed,failed},userLang:language,idiomaResposta:language,
     inventoryCalculation:createInventoryCalculationSession({enabled:false,language}),
     routineFinalText,ROUTINE_NO_NEWS,curationResult:null,searchCoverage,
     actionJournal:journal,termination,confirmationSession:null,
