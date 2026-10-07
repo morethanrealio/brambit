@@ -24,11 +24,15 @@ same team.
 
 ## Why Brambit
 
+The big tech companies are launching personal assistants that act for you: they
+remember you, use your apps, work in the background and talk to you where you
+already are. Brambit gives you the same kinds of features in an environment you
+control: it runs on your own server, with the model you choose, and the data stays
+with you.
+
 Open-source personal agents such as OpenClaw, NanoClaw and Hermes Agent are made for
 developers: you set them up in a terminal and config files, and you are usually the
 only person using them. Brambit is made for the people who will never open a terminal.
-The features people find today in closed, hosted assistant products, in an engine you
-run yourself.
 
 - *Built for people who don't code.* Whoever installs Brambit gives everyone else a
   web app: they sign in, a first-run guide sets up their assistant, and connectors link

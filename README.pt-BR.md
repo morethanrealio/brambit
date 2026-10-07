@@ -24,11 +24,16 @@ mantido pelo mesmo time.
 
 ## Por que o Brambit
 
+As big techs estão lançando assistentes pessoais que agem por você: lembram de
+você, usam os seus apps, trabalham em segundo plano e conversam onde você já está.
+O Brambit traz os mesmos tipos de funcionalidade num ambiente que você controla:
+roda no seu próprio servidor, com o modelo que você escolher, e os dados ficam com
+você.
+
 Agentes pessoais open source como OpenClaw, NanoClaw e Hermes Agent são feitos para
 desenvolvedores: você configura pelo terminal e por arquivos de configuração, e em
 geral é a única pessoa que usa. O Brambit é feito para quem nunca vai abrir um
-terminal. São as funcionalidades que hoje se encontram em produtos de assistente
-fechados e hospedados, num motor que você mesmo roda.
+terminal.
 
 - *Feito para quem não programa.* Quem instala o Brambit entrega a todo mundo um app
   web: a pessoa entra, um guia de primeiro acesso monta o assistente dela e os
