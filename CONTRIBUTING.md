@@ -1,55 +1,54 @@
-# Como contribuir
+# Contributing
 
-Obrigado pelo interesse no Brambit. Este guia mostra o caminho de uma contribuição,
-da ideia ao merge.
+Thanks for your interest in Brambit. This guide walks a contribution from idea to
+merge.
 
-## Antes de começar
+## Before you start
 
-- *Licença:* o projeto é AGPL-3.0 ([LICENSE](LICENSE)). Ao contribuir, o seu código
-  entra sob essa licença.
-- *CLA:* no primeiro pull request, você aceita o [Acordo de Licença de
-  Contribuidor](CLA.md). Sem ele o PR não é mergeado.
-- *Conduta:* vale o [código de conduta](CODE_OF_CONDUCT.md).
-- *Vulnerabilidade:* não abra issue pública. Siga o [SECURITY.md](SECURITY.md).
+- *License:* the project is AGPL-3.0 ([LICENSE](LICENSE)). Your contribution is
+  released under that license.
+- *CLA:* on your first pull request you accept the [Contributor License
+  Agreement](CLA.md). PRs without it are not merged.
+- *Conduct:* the [code of conduct](CODE_OF_CONDUCT.md) applies.
+- *Vulnerabilities:* do not open a public issue. Follow [SECURITY.md](SECURITY.md).
 
-## Rodar na sua máquina
+## Run it on your machine
 
-O passo a passo está no [README](README.md#quick-start): `npm ci`, copiar
-`.env.example` e `modelos.example.yaml`, pôr a chave do seu provedor de LLM e rodar
-`npm run local`. Não precisa de nenhuma credencial do projeto nem de acesso à
-produção.
+The steps are in the [README](README.md#quick-start): `npm ci`, copy
+`.env.example` and `modelos.example.yaml`, add the key for your LLM provider and run
+`npm run local`. You don't need any project credential or access to production.
 
-## Fluxo
+## Workflow
 
-Procurando por onde começar? O [TODO.md](TODO.md) lista o trabalho em aberto por
-área, com os itens bons pra uma primeira contribuição marcados.
+Looking for a place to start? [TODO.md](TODO.md) lists open work by area, with the
+items that make a good first contribution marked.
 
-1. Para mudança maior que uma correção pequena, abra antes uma issue explicando o
-   problema e a proposta. Assim ninguém perde trabalho com algo que não vai entrar.
-2. Quer pegar uma issue? Comente nela; um mantenedor atribui a issue a você. A
-   reserva vale 7 dias, ou o prazo do rótulo da issue (`prazo: 1 dia`,
-   `prazo: 3 dias`, `prazo: 30 dias`). Comentário seu na issue renova o prazo, e
-   enquanto houver PR seu aberto ligado a ela a reserva não vence. Venceu sem
-   novidade, um robô tira a atribuição e a issue fica livre para outra pessoa.
-3. Crie uma branch a partir de `main` e abra o PR contra ela.
-4. Rode os testes da área que você mexeu (`node --test arquivo.test.mjs` ou o
-   `npm run <area>:test` correspondente no `package.json`). O CI roda a checagem
-   rápida em todo PR.
-5. Um mantenedor da área revisa (ver [MAINTAINERS.md](MAINTAINERS.md) e
+1. For anything bigger than a small fix, open an issue first describing the problem
+   and your proposal, so nobody spends time on something that won't be merged.
+2. Want to take an issue? Comment on it and a maintainer will assign it to you. The
+   reservation lasts 7 days, or the deadline set by the issue's label
+   (`deadline: 1 day`, `deadline: 3 days`, `deadline: 30 days`). A comment from you
+   on the issue renews it, and it doesn't expire while you have an open PR linked to
+   the issue. Once it expires with no news, a bot removes the assignment and the
+   issue is free for someone else.
+3. Create a branch from `main` and open the PR against it.
+4. Run the tests for the area you changed (`node --test file.test.mjs` or the matching
+   `npm run <area>:test` in `package.json`). CI runs the quick checks on every PR.
+5. A maintainer of the area reviews it (see [MAINTAINERS.md](MAINTAINERS.md) and
    `.github/CODEOWNERS`).
 
-## O que um bom PR tem
+## What a good PR has
 
-- Um assunto por PR, com a descrição do problema, do que mudou e de como você testou.
-- Teste quando a mudança pode quebrar sem ninguém perceber. Teste que só repete o
-  código não ajuda.
-- Nada de segredo, chave, dado real de usuário, IP ou host interno, nem no código
-  nem nos testes. O CI barra segredo (gitleaks) e workflow perigoso (zizmor).
-- Texto para o usuário em português, inglês e espanhol, quando a área já tiver os
-  três idiomas.
+- One subject per PR, describing the problem, what changed and how you tested it.
+- A test when the change could break without anyone noticing. A test that only
+  restates the code doesn't help.
+- No secrets, keys, real user data, IPs or internal hosts, in code or in tests. CI
+  blocks secrets (gitleaks) and unsafe workflows (zizmor).
+- User-facing text in Portuguese, English and Spanish, when the area already has
+  all three languages.
 
-## Áreas sensíveis
+## Sensitive areas
 
-Mudança em login, separação entre contas, cobrança e crédito, execução de código,
-esquema do banco ou CI precisa da revisão de quem cuida da área *e* de quem cuida de
-segurança. Espere uma revisão mais longa nesses casos.
+Changes to login, account isolation, billing and credits, code execution, database
+schema or CI need a review from the area's maintainer *and* from security. Expect a
+longer review for these.

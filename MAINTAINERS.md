@@ -1,10 +1,10 @@
-# Mantenedores
+# Maintainers
 
-| Área | Responsável | Suplente |
+| Area | Lead | Backup |
 | --- | --- | --- |
-| Projeto (roteiro, licença, desempate) | Marcos Trinca (@marcostrinca) | a definir |
-| Segurança (relatos de vulnerabilidade) | Marcos Trinca (@marcostrinca) | a definir |
+| Project (roadmap, license, tie-breaks) | Marcos Trinca (@marcostrinca) | to be defined |
+| Security (vulnerability reports) | Marcos Trinca (@marcostrinca) | to be defined |
 
-As demais áreas (motor do agente, canais, conectores, memória, banco, CI) entram
-nesta tabela conforme novos mantenedores forem definidos. Enquanto isso, o dono de
-cada pasta está no `.github/CODEOWNERS`.
+Other areas (agent engine, channels, connectors, memory, database, CI) join this
+table as new maintainers are named. Until then, the owner of each folder is in
+`.github/CODEOWNERS`.

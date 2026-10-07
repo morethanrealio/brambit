@@ -149,5 +149,5 @@ Essa proteção não deve ser presumida para qualquer script de eval do reposit�
 ## Licença e contribuição
 
 O código é [AGPL-3.0](LICENSE). Nomes, logos e mascotes ficam fora da licença
-(ver [GOVERNANCE.md](GOVERNANCE.md#marca)). Para contribuir, leia o
+(ver [GOVERNANCE.md](GOVERNANCE.md#trademark)). Para contribuir, leia o
 [CONTRIBUTING.md](CONTRIBUTING.md); vulnerabilidades vão pelo [SECURITY.md](SECURITY.md).
