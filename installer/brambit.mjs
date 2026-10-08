@@ -16,11 +16,15 @@
 // for "shutdown" and "change the AI" (buttons in Settings, plugin installer/plugin)
 // over the message channel (IPC) this process opens when starting it.
 //
-// Usage: node installer/brambit.mjs [start | stop | status] [--no-browser]
+// `start` runs in this window; `open` (what the shortcuts and starting with the
+// computer run) starts it in the background if needed, with the log in
+// brambit.log in the data folder, and opens the browser once it answers.
+//
+// Usage: node installer/brambit.mjs [start | open | stop | status | uninstall] [--no-browser]
 // status exits with 0 when running and 3 when not (like systemctl).
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
@@ -158,6 +162,50 @@ async function stop() {
   process.exitCode = 1;
 }
 
+// Starts in the background (no window) when it is not running, waits for the
+// setup page or the server and opens the browser there.
+async function open(noBrowser) {
+  let live = await instance();
+  const logFile = path.join(dataDir, 'brambit.log');
+  if (!live) {
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    try { if (statSync(logFile).size > 5_000_000) unlinkSync(logFile); } catch {}
+    const out = openSync(logFile, 'a');
+    spawn(process.execPath, [fileURLToPath(import.meta.url), 'start', '--no-browser'], { detached: true, windowsHide: true, stdio: ['ignore', out, out] }).unref();
+    log('starting...');
+  }
+  for (let i = 0; i < 360 && live?.phase !== 'running' && live?.phase !== 'setup'; i++) {
+    await sleep(500);
+    live = await instance();
+  }
+  if (live?.phase !== 'running' && live?.phase !== 'setup') {
+    log(`Brambit did not start: see ${logFile}`);
+    process.exitCode = 1;
+    return;
+  }
+  log(live.phase === 'setup' ? 'set up Brambit in your browser' : `running: ${new URL(live.url).origin}`);
+  if (!noBrowser) openBrowser(live.url);
+}
+
+// Takes the shortcuts, the `brambit` command and the program away. The data folder stays.
+async function uninstall() {
+  const desktop = await import('./desktop.mjs');
+  if (!desktop.installed()) {
+    log('this copy was not installed by install.ps1 or install.sh: nothing to uninstall');
+    process.exitCode = 1;
+    return;
+  }
+  if (await instance()) await stop();
+  desktop.uninstall();
+  // Windows does not delete the folder of a program still running: a separate
+  // command waits for this one to exit first.
+  if (process.platform === 'win32') {
+    spawn('cmd.exe', ['/d', '/c', `ping -n 3 127.0.0.1 >nul & rmdir /s /q "${desktop.home}"`], { detached: true, windowsHide: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
+  } else rmSync(desktop.home, { recursive: true, force: true });
+  log('Brambit was uninstalled');
+  log(`your data is still in ${dataDir}; delete that folder to remove it too`);
+}
+
 async function start(noBrowser) {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const live = await instance();
@@ -207,7 +255,7 @@ async function start(noBrowser) {
     const ai = cfg.ai, keyVar = PROVIDERS[ai.provider].keyVar;
     writeFileSync(path.join(dataDir, 'modelos.yaml'), modelsYaml({ ...ai, key: Boolean(cfg.key) }));
     const s = spawn(process.execPath, ['server.mjs'], {
-      cwd: path.join(root, 'web'), stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+      cwd: path.join(root, 'web'), stdio: ['inherit', 'inherit', 'inherit', 'ipc'], windowsHide: true,
       env: {
         ...env, ADMIN_EMAIL: cfg.owner.email, BRAMBIT_SIGNUP: 'closed',
         MODELOS_ARQUIVO: path.join(dataDir, 'modelos.yaml'),
@@ -295,7 +343,9 @@ async function main() {
   if (command === 'status') return status();
   if (command === 'stop') return stop();
   if (command === 'start') return start(args.includes('--no-browser'));
-  console.error('usage: brambit [start | stop | status] [--no-browser]');
+  if (command === 'open') return open(args.includes('--no-browser'));
+  if (command === 'uninstall') return uninstall();
+  console.error('usage: brambit [start | open | stop | status | uninstall] [--no-browser]');
   process.exitCode = 2;
 }
 

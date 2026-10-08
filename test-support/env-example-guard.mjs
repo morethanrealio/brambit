@@ -23,6 +23,10 @@ export const IGNORE = new Map([
   ['NOME', 'texto de instrução pro modelo ("use process.env.NOME")'],
   ['NAME', 'texto de instrução pro modelo ("use process.env.NAME")'],
   ['X', 'texto de comentário ("process.env.X")'],
+  ['BRAMBIT_HOME', 'program folder of an installed copy, read by the installer check (installer/install-check.mjs)'],
+  ['PATH', 'the system PATH the installer edits (installer/desktop.mjs)'],
+  ['XDG_CONFIG_HOME', 'where Linux keeps autostart entries (installer/desktop.mjs)'],
+  ['XDG_DATA_HOME', 'where Linux keeps app menu entries (installer/desktop.mjs)'],
 ]);
 
 // Código de produção: fica de fora teste, apoio de teste, scripts de operação (ops/),

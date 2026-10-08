@@ -1,173 +1,247 @@
-# Brambit
+<!-- Logo goes here (light and dark versions in .github/images). -->
 
-Motor aberto de assistentes de IA: cada pessoa tem assistentes próprios que
-conversam pela web, WhatsApp, Telegram, e-mail e Slack, lembram do que importa,
-usam conectores (Google, Microsoft, GitHub, MCP), rodam código num sandbox,
-criam e hospedam pequenos apps e executam rotinas agendadas. O modelo de IA é
-escolha de quem instala: qualquer provedor compatível com a API da OpenAI, ou o
-Gemini, com a sua chave.
+<h1 align="center">Brambit</h1>
 
-## Usar no seu computador
+<h3 align="center">The open-source engine for personal AI assistants anyone can use.</h3>
 
-Pra usar o Brambit (não pra desenvolver): Node.js 24 em Windows, macOS ou Linux.
+<p align="center">
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
+  <a href="https://github.com/morethanrealio/Brambit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/morethanrealio/Brambit/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/morethanrealio/Brambit/tags"><img alt="Version" src="https://img.shields.io/github/v/tag/morethanrealio/Brambit?label=version"></a>
+  <img alt="Node.js 24" src="https://img.shields.io/badge/node-24-339933">
+</p>
 
-```bash
-npm ci
-npm run brambit
+<p align="center"><a href="README.pt-BR.md">Leia em português</a></p>
+
+Brambit gives every person their own AI assistants. They chat on the web, WhatsApp,
+Telegram, email and Slack, remember what matters, use connectors (Google, Microsoft,
+GitHub, MCP), run code in a sandbox, build and host small apps, and run scheduled
+routines. You pick the model: any provider compatible with the OpenAI API, or
+Gemini, with your own key.
+
+Brambit is the core of [Brambs](https://brambs.com.br), a hosted service run by the
+same team.
+
+## Why Brambit
+
+The big tech companies are launching personal assistants that act for you: they
+remember you, use your apps, work in the background and talk to you where you
+already are. Brambit gives you the same kinds of features in an environment you
+control: it runs on your own server, with the model you choose, and the data is
+stored with you. Only the context of each call goes to the model provider; with a local
+model (Ollama, for example), not even that leaves your machine.
+
+Open-source personal agents such as OpenClaw, NanoClaw and Hermes Agent are made for
+developers: you set them up in a terminal and config files, and you are usually the
+only person using them. Brambit is made for the people who will never open a terminal.
+
+- *Built for people who don't code.* Whoever installs Brambit gives everyone else a
+  web app: they sign in, a first-run guide sets up their assistant, and connectors link
+  with a button. Nobody edits a config file to use it.
+- *Many people, one install.* Each account is isolated from the others (the test suite
+  carries isolation proofs), so a family, a team or a company can share one instance.
+- *Asks before it acts.* Actions that write or send ask for confirmation first, and the
+  confirmation is stored and checked again before anything happens. Code runs in a
+  sandbox on a separate host; the Runner can run commands on the user's own machine
+  with kernel-level confinement.
+- *Where people already are.* One assistant answers on the web app, WhatsApp,
+  Telegram, email and Slack, and can look back across its own channels.
+- *Your model, your key.* Choose a provider and a model for each job (chat, images,
+  research, coding, memory) in one commented YAML file, with an optional fallback.
+- *Extensible without forking.* Plugins add branding, pages, screens, messages and
+  answers to the questions the core asks the installer (spending limits, app and disk
+  quotas, who pays for an account). Without plugins, every one of those has a working
+  default.
+
+## Install on your computer
+
+To use Brambit, not to develop it. No administrator rights and nothing to install
+first: the installer brings its own Node.js.
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.ps1 | iex
 ```
 
-Na primeira vez abre no navegador uma página de configuração: sua conta (você vira
-a dona ou o dono da instalação), qual IA usar e a chave dela, testada antes de
-salvar. Depois disso o cadastro fica fechado: os outros entram com o seu convite.
-Os dados ficam em `~/.brambit` (ou em `BRAMBIT_DATA_DIR`), fora da pasta do
-programa, e tudo escuta só em `127.0.0.1`.
+macOS and Linux:
 
-Rodar `npm run brambit` de novo com ele ligado só abre o navegador. Pra desligar:
-`npm run brambit -- stop` (ou o botão em Configurações > Este computador, onde
-também dá pra trocar a IA); `npm run brambit -- status` diz se está ligado.
+```bash
+curl -fsSL https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.sh | bash
+```
+
+It installs Brambit for your user, adds a Brambit shortcut (Start menu and desktop
+on Windows, Applications on macOS, the app menu on Linux), starts it with the
+computer and opens the setup page in your browser: your account (you become the
+owner of the installation), which AI to use and its key, tested before it is saved.
+After that, sign-up is closed: everyone else joins with your invite. Your data lives
+in `~/.brambit` (or `BRAMBIT_DATA_DIR`), outside the program folder, so running the
+installer again updates Brambit and keeps it. Everything listens on `127.0.0.1` only.
+
+The `brambit` command, in a new terminal:
+
+- `brambit open` starts it in the background if needed and opens the browser (the
+  shortcut does the same).
+- `brambit stop` turns it off; so does the button in Settings > This computer,
+  where you can also change the AI.
+- `brambit status` says whether it is running.
+- `brambit uninstall` removes the program, the shortcuts and starting with the
+  computer, and keeps your data.
+
+From a clone of this repository, `npm ci` and then `npm run brambit` run the same
+thing in the terminal window (`npm run brambit -- stop`, `npm run brambit -- status`).
 
 ## Quick start
 
-Requisitos: Node.js 24 (a versão do CI) em Linux ou macOS. O banco vem junto
-(Postgres 14 pelo npm); não precisa instalar mais nada.
+To develop Brambit. Requirements: Node.js 24 (the CI version) on Windows, macOS or Linux. The database comes
+with it (Postgres 14 from npm); nothing else to install.
 
 ```bash
 npm ci
 cp .env.example .env
-cp modelos.example.yaml modelos.yaml   # escolha provedores e modelos (explicado no arquivo)
-# cole no .env a chave de cada provedor que o modelos.yaml usa
-npm run modelos                        # confere: função → modelo, e avisa chave faltando
+cp modelos.example.yaml modelos.yaml   # pick providers and models (explained in the file)
+# add to .env the key of each provider modelos.yaml uses
+npm run modelos                        # checks: job → model, and warns about missing keys
 npm run local
 ```
 
-O `npm run local` sobe um banco descartável em `.local/` (só num socket local),
-aplica schema e migrações, cria uma conta de teste e abre o servidor. Quando
-aparecer `[local] ready: http://127.0.0.1:8080`, entre com `test@example.com` /
-`brambit-local-test`. Pra recomeçar do zero, pare (Ctrl+C) e apague `.local/`.
+`npm run local` starts a throwaway database in `.local/` (listening on `127.0.0.1` only, with a password),
+applies the schema and migrations, creates a test account and starts the server.
+When you see `[local] ready: http://127.0.0.1:8080`, sign in with
+`test@example.com` / `brambit-local-test`. To start over, stop it (Ctrl+C) and
+delete `.local/`.
 
-Pra o assistente rodar código (python, shell), suba o sandbox num outro
-terminal: `ops/sandbox-host/local.sh` (Linux com Docker; pede `sudo` pro
-firewall). Ele imprime as duas linhas `SANDBOX_*` pro `.env`. Detalhe em
+For the assistant to run code (Python, shell), start the sandbox in another
+terminal: `ops/sandbox-host/local.sh` (Linux with Docker; asks for `sudo` for the
+firewall). It prints the two `SANDBOX_*` lines for `.env`. Details in
 [`ops/sandbox-host/README.md`](ops/sandbox-host/README.md).
 
-### Provedores e modelos
+## Providers and models
 
-O Brambit não traz modelo próprio: você escolhe o provedor e usa a sua chave. A
-escolha fica no `modelos.yaml`, um arquivo comentado com três seções:
+Brambit ships no model of its own. The choice lives in `modelos.yaml`, a commented
+file with three sections:
 
-- `provedores`: apelido, endereço da API e o *nome* da variável do `.env` com a
-  chave. Qualquer serviço compatível com a API da OpenAI entra sem código
-  (Together, OpenAI, OpenRouter, Groq, DeepSeek, Ollama local...); o Gemini entra
-  com `tipo: gemini`.
-- `funcoes`: o modelo de cada função (conversa, imagem, pesquisa, programação,
-  memória, classificação...), com um modelo `reserva` opcional que entra se o
-  principal cair. Função sem linha herda do `padrao`, então uma linha basta.
-- `precos`: preço de modelo novo, pra o registro de gasto sair certo.
+- `provedores` (providers): a nickname, the API address and the *name* of the
+  `.env` variable holding the key. Any OpenAI-compatible service works without code
+  (Together, OpenAI, OpenRouter, Groq, DeepSeek, local Ollama...); Gemini uses
+  `tipo: gemini`.
+- `funcoes` (jobs): the model for each job (chat, images, research, coding, memory,
+  classification...), with an optional `reserva` (fallback) model used if the main
+  one fails. A job with no line inherits `padrao` (default), so one line is enough.
+- `precos` (prices): the price of a new model, so spend is recorded correctly.
 
-Sem `modelos.yaml`, vale o roteamento embutido, e basta uma destas chaves no `.env`:
+Without `modelos.yaml`, the built-in routing applies and one of these keys in `.env`
+is enough:
 
-| Provedor | Variável | Modelo de texto usado |
+| Provider | Variable | Text model used |
 | --- | --- | --- |
-| Together (recomendado) | `TOGETHER_API_KEY` | DeepSeek V4.1 Flash |
+| Together (recommended) | `TOGETHER_API_KEY` | DeepSeek V4.1 Flash |
 | OpenAI | `OPENAI_API_KEY` | gpt-5.4-mini |
-| Google Gemini | `GEMINI_API_KEY` | roteador do Gemini (3.5 Flash / 3.1 Pro) |
+| Google Gemini | `GEMINI_API_KEY` | Gemini router (3.5 Flash / 3.1 Pro) |
 
-Nos dois caminhos, gerar imagem, falar em voz e transcrever áudio usam o Gemini:
-sem `GEMINI_API_KEY` esses três ficam desligados. O resto (WhatsApp, Slack,
-conectores, e-mail) desliga sozinho enquanto a configuração dele estiver vazia
-no `.env`; cada bloco está explicado no [.env.example](.env.example).
+Either way, image generation, text-to-speech and audio transcription use Gemini:
+without `GEMINI_API_KEY` those three are off. Everything else (WhatsApp, Slack,
+connectors, email) switches itself off while its settings in `.env` are empty; each
+block is explained in [.env.example](.env.example).
 
-## Arquitetura e fluxo de uma tarefa
+## Architecture
 
-O backend é um monólito Node.js modular: `web/server.mjs` integra HTTP, canais,
-conversas e workers no mesmo serviço. PostgreSQL guarda contas, conversas,
-propostas e registros de execução; checkpoints privados de programação e chamadas
-de modelo também ficam em filesystem cifrado. Os apps dos usuários e o sandbox
-executam em hosts separados; o Runner pode executar na máquina do próprio usuário.
+The backend is a modular Node.js monolith: `web/server.mjs` brings HTTP, channels,
+conversations and workers together in one service. PostgreSQL stores accounts,
+conversations, proposals and execution records; private coding checkpoints and model
+calls are also kept on an encrypted filesystem. User apps and the sandbox run on
+separate hosts; the Runner can run on the user's own machine.
 
 ```mermaid
 flowchart LR
-  U[Web, app e canais] --> S[Servidor: autenticação e conversa]
-  S --> C[Confirmações persistentes]
-  S --> L[Loop do agente e providers]
-  C --> T[Ferramentas e conectores]
+  U[Web, app and channels] --> S[Server: auth and conversation]
+  S --> C[Persistent confirmations]
+  S --> L[Agent loop and providers]
+  C --> T[Tools and connectors]
   L --> T
-  S --> W[Workers e scheduler]
+  S --> W[Workers and scheduler]
   W --> T
   S <--> P[(PostgreSQL)]
   C <--> P
   W <--> P
-  W <--> F[(Checkpoints cifrados)]
-  T --> E[APIs externas, apps, sandbox e Runner]
-  T --> R[Recibos e resultados]
+  W <--> F[(Encrypted checkpoints)]
+  T --> E[External APIs, apps, sandbox and Runner]
+  T --> R[Receipts and results]
   R --> P
   R --> U
 ```
 
-A entrada resolve dono/assistente/conversa e aplica os controles do canal. No
-wrapper conversacional, confirmações e controles determinísticos são tratados
-antes de chamar o modelo. Ferramentas nativas sujeitas a confirmação persistem a
-proposta; a resposta humana revalida alvo e autorização antes do efeito. Isso não
-significa que toda ferramenta externa MCP já esteja protegida por esse gate.
+The entry point resolves owner, assistant and conversation and applies the
+channel's controls. In the conversational wrapper, confirmations and deterministic
+controls are handled before the model is called. Native tools that need confirmation
+store the proposal; the human answer re-checks target and authorization before the
+effect. This does not mean every external MCP tool is behind that gate yet.
 
-O loop escolhe ferramentas e chama providers com contabilização de uso. Trabalhos
-de programação continuam em worker durável, com checkpoints e locks de kernel;
-lembretes têm uma ocorrência por disparo e recibos por parte no WhatsApp. Uma
-resposta gerada, uma ação aceita e uma entrega confirmada são estados diferentes.
+The loop picks tools and calls providers with usage accounting. Coding jobs continue
+in a durable worker, with checkpoints and kernel locks; reminders have one occurrence
+per firing and per-part receipts on WhatsApp. A generated answer, an accepted action
+and a confirmed delivery are different states.
 
-O desenho de programação é de um único host; locks locais não são uma fila
-distribuída. Reservas SQL protegem confirmações, rotinas e ocorrências, mas não
-tornam todo o serviço apto a múltiplas réplicas.
+Coding is designed for a single host; local locks are not a distributed queue. SQL
+reservations protect confirmations, routines and occurrences, but they don't make the
+whole service safe to run as multiple replicas.
 
-### Plugins e portas
+### Plugins and ports
 
-Quem instala o Brambit estende o motor por plugins (`web/plugins.mjs`), sem mexer
-no núcleo: marca (nome, site, logo), páginas, telas, catálogo de mensagens e as
-*portas*, pontos onde o núcleo pergunta algo a quem instalou (quanto a pessoa
-pode gastar, que limites de apps e disco valem, quem paga uma conta). Sem plugin,
-cada porta tem um padrão que deixa a instância inteira funcionando.
+Whoever installs Brambit extends the engine with plugins (`web/plugins.mjs`) without
+touching the core: branding (name, site, logo), pages, screens, the message catalog
+and the *ports*, points where the core asks the installer something (how much a
+person may spend, which app and disk limits apply, who pays for an account). Without
+a plugin, each port has a default that keeps the whole instance working.
 
-## Estrutura
+## Repository layout
 
-- `web/` — servidor (HTTP, canais, persistência, ferramentas). Começar por
-  `server.mjs`, `db.mjs` (Postgres, schema `mtr_harness`) e `auth.mjs`.
-- `core-proto/` — loop de agente model-agnostic (`core.mjs`), contrato comum de
-  provider (`provider.mjs`) e os adapters em `providers/`.
-- `onboarding/`, `routines/`, `discovery/`, `deepseek/`, `billing/` — fontes
-  TypeScript de subsistemas; os builds geram módulos runtime versionados em `web/`.
-- `migrations/` — SQL de migração; o `npm run local` aplica em ordem.
-- `runner-go/` — o Runner: executa comandos na máquina do próprio usuário, com
-  confinamento no kernel.
-- `ops/sandbox-host/` — sandbox de código (máquina dedicada ou modo local).
-- `ops/apps-host/` — plano de controle dos apps hospedados (`ctl.py`, `router.py`).
-- `ops/tenancy-*.mjs` — provas de isolamento entre contas, rodadas pela suíte.
-- `dev/` — `npm run local` e `npm run modelos`.
-- `installer/` — `npm run brambit` (uso no próprio computador) e a prova de ponta a ponta dele.
-- `test-support/` — apoio da suíte de testes.
+- `web/`: the server (HTTP, channels, persistence, tools). Start with `server.mjs`,
+  `db.mjs` (Postgres, schema `mtr_harness`) and `auth.mjs`.
+- `core-proto/`: the model-agnostic agent loop (`core.mjs`), the common provider
+  contract (`provider.mjs`) and the adapters in `providers/`.
+- `onboarding/`, `routines/`, `discovery/`, `deepseek/`, `billing/`: TypeScript
+  sources of subsystems; builds generate versioned runtime modules in `web/`.
+- `migrations/`: SQL migrations; `npm run local` applies them in order.
+- `runner-go/`: the Runner, which runs commands on the user's own machine with
+  kernel-level confinement.
+- `ops/sandbox-host/`: the code sandbox (dedicated machine or local mode).
+- `ops/apps-host/`: control plane for hosted apps (`ctl.py`, `router.py`).
+- `ops/tenancy-*.mjs`: account-isolation proofs, run by the test suite.
+- `dev/`: `npm run local` and `npm run modelos`.
+- `installer/`: the one-line installers' helpers, `npm run brambit` (Brambit on your own
+  computer) and their end-to-end checks.
+- `test-support/`: test suite helpers.
 
-## Desenvolvimento e validação
+## Development and testing
 
-Pra rodar na sua máquina, use o [Quick start](#quick-start). Nunca reutilize o
-`.env` de uma instância em produção para testes: o boot aplica schema e inicia
-as integrações configuradas. O `.env` não é versionado. Fora do `npm run local`,
-o entrypoint é `node web/server.mjs`, por padrão em `127.0.0.1:8090`.
+To run it on your machine, use the [Quick start](#quick-start). Never reuse the
+`.env` of a production instance for tests: boot applies the schema and starts the
+configured integrations. `.env` is not versioned. Outside `npm run local`, the entry
+point is `node web/server.mjs`, on `127.0.0.1:8090` by default.
 
-Na rotina, rode só os testes da área que mudou (`node --test arquivo.test.mjs` ou
-o script da área); `npm test` roda a suíte inteira. Testes de navegador exigem
-Chromium/Chrome via `CHROMIUM_PATH` quando necessário; testes de armazenamento de
-programação precisam de `flock`. Os testes com banco usam o mesmo Postgres 14
-embutido:
+Day to day, run only the tests for the area you changed (`node --test file.test.mjs`
+or the area's script); `npm test` runs the whole suite. Browser tests need
+Chromium/Chrome via `CHROMIUM_PATH` when required; coding storage tests need `flock`.
+Database tests use the same embedded Postgres 14:
 
 ```bash
 export TEST_POSTGRES_BIN="$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")"
 node --test server-boot.test.mjs
 ```
 
-Esse teste cria seu próprio banco, isola credenciais e bloqueia acessos externos.
-Essa proteção não deve ser presumida para qualquer script de eval do repositório.
+That test creates its own database, isolates credentials and blocks outside access.
+Don't assume the same protection for every eval script in the repository.
 
-## Licença e contribuição
+## Resources
 
-O código é [AGPL-3.0](LICENSE). Nomes, logos e mascotes ficam fora da licença
-(ver [GOVERNANCE.md](GOVERNANCE.md#trademark)). Para contribuir, leia o
-[CONTRIBUTING.md](CONTRIBUTING.md); vulnerabilidades vão pelo [SECURITY.md](SECURITY.md).
+- [Contributing guide](CONTRIBUTING.md) and [open work](TODO.md)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Governance](GOVERNANCE.md) and [maintainers](MAINTAINERS.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+
+## License
+
+The code is [AGPL-3.0](LICENSE). Names, logos and mascots are not covered by the
+license (see [GOVERNANCE.md](GOVERNANCE.md#trademark)).
