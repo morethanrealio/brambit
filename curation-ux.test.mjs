@@ -52,7 +52,7 @@ function extractSync(source,name,deps={}){const a=source.indexOf('function '+nam
 const prepareRoutineChange=extractSync(server,'prepareRoutineChange',{prepareCurationChange,prepareEmailSearchChange});
 const composeRoutineConfig=extractSync(db,'composeRoutineConfig',{prepareCurationChange,prepareEmailSearchChange});
 const emailSearchTipo=extractSync(db,'emailSearchTipo');
-const crud={};for(const name of ['createRoutine','updateRoutine','deleteRoutine'])crud[name]=new Function('pool','S','composeRoutineConfig','emailSearchTipo',extract(db,name)+';return '+name)(pool,'mtr_harness',composeRoutineConfig,emailSearchTipo);
+const crud={};for(const name of ['createRoutine','updateRoutine','deleteRoutine'])crud[name]=new Function('pool','S','composeRoutineConfig','emailSearchTipo','defaultTimezone',extract(db,name)+';return '+name)(pool,'mtr_harness',composeRoutineConfig,emailSearchTipo,()=>'America/Sao_Paulo');
 const store=createCurationStore(pool);
 function routineTool(name,user,extra={}){
  const a=server.indexOf("    name: '"+name+"',"),start=server.lastIndexOf('addGated(registry, [{',a),end=server.indexOf('}], thread.id);',a)+'}], thread.id);'.length;let raw;

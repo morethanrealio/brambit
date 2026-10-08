@@ -6,6 +6,7 @@
 // (append-only), consultar = SQL aggregation (ready-made number, the model never
 // counts), event_date separate from created_at. See projetos/tracker-primitiva.md.
 
+import { defaultTimezone } from './locale.mjs';
 import {
   resolveOrCreateTracker, resolveTracker, listTrackers, addTrackerEvent,
   aggregateTrackerEvents, listTrackerEventsByDay, removeTrackerEvent,
@@ -14,7 +15,7 @@ import {
 
 // "Today" in the user's local time, as 'YYYY-MM-DD' (locale sv = ISO).
 function todayISO(tz) {
-  return new Date().toLocaleDateString('sv', { timeZone: tz || 'America/Sao_Paulo' });
+  return new Date().toLocaleDateString('sv', { timeZone: tz || defaultTimezone() });
 }
 
 // Date-only arithmetic (no timezone): adds `days` to a 'YYYY-MM-DD'. Uses UTC
@@ -127,7 +128,7 @@ export function trackersTools(userId, agentId) {
         required: ['tracker'],
       },
       async run({ tracker, data, valor, nota, confirmar_novo }) {
-        const tz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
+        const tz = (await getUserTimezone(userId)) || defaultTimezone();
         const eventDate = resolveEventDate(data, tz);
         if (!eventDate) return `Não entendi a data "${data}". Me diga como YYYY-MM-DD (ex: ${todayISO(tz)}), ou "hoje"/"ontem".`;
         // Level 2: if it was going to CREATE a new tracker and the name collides with a
@@ -171,7 +172,7 @@ export function trackersTools(userId, agentId) {
         required: ['tracker'],
       },
       async run({ tracker, periodo, de, ate, detalhar }) {
-        const tz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
+        const tz = (await getUserTimezone(userId)) || defaultTimezone();
         const res = await resolveTracker(userId, tracker);
         if (res.error === 'nao_encontrado') return `Você ainda não tem um registro "${tracker}". Quando você mandar anotar algo nele, eu crio.`;
         if (res.error === 'ambiguo') return `Tenho mais de um registro parecido: ${res.options.join(', ')}. Qual deles?`;
@@ -212,7 +213,7 @@ export function trackersTools(userId, agentId) {
         required: ['tracker', 'data'],
       },
       async run({ tracker, data }) {
-        const tz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
+        const tz = (await getUserTimezone(userId)) || defaultTimezone();
         const res = await resolveTracker(userId, tracker);
         if (res.error === 'nao_encontrado') return `Não achei um registro "${tracker}".`;
         if (res.error === 'ambiguo') return `Tenho mais de um registro parecido: ${res.options.join(', ')}. Qual deles?`;

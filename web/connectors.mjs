@@ -1,3 +1,4 @@
+import { defaultTimezone } from './locale.mjs';
 import { driveSearchQuery, driveSearchParameters, DRIVE_SEARCH_RULE, completeDriveSearch } from './drive-search.mjs';
 import { readGoogleDocument } from './document-read.mjs';
 import { recortar } from './recorte.mjs';
@@ -140,7 +141,7 @@ const rfc3339Local = (v) => {
 // The tz (IANA) sets the event's timezone; default São Paulo, but the agent
 // should pass the user's real timezone (e.g. America/Zurich for someone in Basel).
 const calTime = (v, tz) =>
-  /T\d/.test(v || '') ? { dateTime: rfc3339Local(v), timeZone: tz || 'America/Sao_Paulo' } : { date: v };
+  /T\d/.test(v || '') ? { dateTime: rfc3339Local(v), timeZone: tz || defaultTimezone() } : { date: v };
 
 // ── Google calendars (calendarList) ──────────────────────────────────────────
 // The product only read and wrote to `primary`. Whoever organizes their life
@@ -240,7 +241,7 @@ function calendarWriteConfirmation(tool, token, account) {
     description:event.description || '',
     location:event.location || '',attendees:(event.attendees || []).map(a => a.email).sort(),
     recurrence:event.recurrence || [],status:event.status || ''});
-  const when = (value, language, timezone = 'America/Sao_Paulo') => {
+  const when = (value, language, timezone = defaultTimezone()) => {
     const s = String(value || ''), m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
     if (!m) return s;
     if (m[4] && /(?:Z|[+-]\d\d:\d\d)$/.test(s)) return new Intl.DateTimeFormat(language,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:timezone}).format(new Date(s));
@@ -255,7 +256,7 @@ function calendarWriteConfirmation(tool, token, account) {
     const end = args.end ?? event?.end?.dateTime ?? event?.end?.date
       ?? (/T\d/.test(start || '') ? recurrenceDefaultEnd(String(start).replace(/(?:Z|[+-]\d\d:\d\d)$/,'')) : start);
     const guests = args.attendees ?? event?.attendees ?? [];
-    const tz = args.timezone || event?.start?.timeZone || 'America/Sao_Paulo';
+    const tz = args.timezone || event?.start?.timeZone || defaultTimezone();
     const action = tool.name === 'calendar_create' ? { 'pt-BR':'Criar',en:'Create',es:'Crear'}
       : tool.name === 'calendar_delete' ? {'pt-BR':'Excluir',en:'Delete',es:'Eliminar'} : {'pt-BR':'Atualizar',en:'Update',es:'Actualizar'};
     const destination = lang === 'en' ? 'Calendar' : lang === 'es' ? 'Calendario' : 'Agenda';
@@ -291,7 +292,7 @@ function calendarWriteConfirmation(tool, token, account) {
     return {descriptor,labels:labels(args,descriptor),run:async () => {
       if (await currentAccount() !== descriptor.account) throw Error('A conta Google mudou.');
       return tool.run({...args,agenda:descriptor.calendar.id,
-        timezone:args.timezone || descriptor.event?.start?.timeZone || 'America/Sao_Paulo',
+        timezone:args.timezone || descriptor.event?.start?.timeZone || defaultTimezone(),
         _confirmationEtag:descriptor.event?.etag || null});
     }};
   }
@@ -954,7 +955,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         title: { type: 'string' },
         start: { type: 'string', description: 'Start. Local wall-clock ISO time WITHOUT offset (e.g. 2026-07-09T11:30:00) for a timed event, or just a date (2026-07-09) for an all-day event.' },
         end: { type: 'string', description: 'End, same format as start. If omitted on a timed event, assumes 1h.' },
-        timezone: { type: 'string', description: 'User\'s IANA timezone (e.g. America/Zurich, Europe/Lisbon, America/Sao_Paulo). Defaults to America/Sao_Paulo if omitted.' },
+        timezone: { type: 'string', description: 'User\'s IANA timezone (e.g. America/Zurich, Europe/Lisbon, America/Sao_Paulo). Defaults to the instance time zone if omitted.' },
         description: { type: 'string' },
         location: { type: 'string' },
         attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee emails.' },

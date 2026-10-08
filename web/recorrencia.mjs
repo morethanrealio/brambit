@@ -18,6 +18,7 @@
 //   • Microsoft Graph -> {pattern, range} object
 // and a `descricao` in Portuguese that goes back to the model in the tool result, so
 // it can confirm to the user what was actually created, not what they asked for.
+import { defaultTimezone } from './locale.mjs';
 
 const DIAS = {
   dom: { i: 0, rrule: 'SU', graph: 'sunday', nome: 'domingo' },
@@ -135,7 +136,7 @@ function untilUtc(ate, tz) {
   const chute = Date.UTC(y, m - 1, d, 23, 59, 59);
   let off = 0;
   try {
-    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz || 'America/Sao_Paulo', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz || defaultTimezone(), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const p = Object.fromEntries(f.formatToParts(new Date(chute)).map((x) => [x.type, x.value]));
     const comoLocal = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
     off = comoLocal - chute; // how far the timezone is ahead of UTC, in ms
@@ -166,7 +167,7 @@ export function paraGraph(n, tz) {
     const [y, m, d] = n.inicio.split('-').map(Number);
     pattern.dayOfMonth = d; pattern.month = m; void y;
   }
-  const range = { startDate: n.inicio, recurrenceTimeZone: tz || 'America/Sao_Paulo' };
+  const range = { startDate: n.inicio, recurrenceTimeZone: tz || defaultTimezone() };
   if (n.ocorrencias) { range.type = 'numbered'; range.numberOfOccurrences = n.ocorrencias; }
   else if (n.ate) { range.type = 'endDate'; range.endDate = n.ate; }
   else range.type = 'noEnd';

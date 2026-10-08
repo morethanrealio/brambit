@@ -25,7 +25,7 @@ import { createCurationStore } from './curation-store.mjs';
 import pg from 'pg';
 import { createHash } from 'node:crypto';
 import { encMaybe, decMaybe, encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
-import { IDIOMAS_OK, defaultLanguage, normalizaIdioma, normalizaPais } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, defaultTimezone, normalizaIdioma, normalizaPais } from './locale.mjs';
 import { matchingWikiLineSnippet, wikiSearchTerms } from './wiki-disclosure.mjs';
 
 export const pgConfig = {
@@ -4738,7 +4738,7 @@ export async function createRoutine({ userId, agentId, title, prompt, hour, minu
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING id, agent_id, title, prompt, hour, minute, days, tz, channel, enabled, repeat_every_min, repeat_until, next_run, config`,
     [userId, agentId, title, prompt, Number(hour ?? 7), days || 'daily',
-     tz || 'America/Sao_Paulo', channel || 'email',
+     tz || defaultTimezone(), channel || 'email',
      repeatEveryMin ?? null, repeatUntil ?? null, nextRun ?? null, JSON.stringify(config), Number(minute ?? 0)],
   );
   return rows[0];

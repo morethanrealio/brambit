@@ -1,5 +1,6 @@
 // Common, strict contract: a cadence anchored on the FIRST local start.
 // Does not accept raw RRULE/Graph: unknown fields are never discarded.
+import { defaultTimezone } from './locale.mjs';
 export const recurrenceSchema = {
   type: 'object', additionalProperties: false, required: ['frequencia'],
   description: 'REQUIRED for a recurring request. Cadence based on the first start date/time: monthly at 2026-09-14T08:30:00 = every 14th at 08:30. Supports daily, weekly on the same day, monthly (days 1–28) and yearly (except 02/29). For other patterns, do NOT create a single event: explain the limitation. No quantidade/ate = no end, show this when confirming.',
@@ -20,7 +21,7 @@ function validDate(s) {
   const d = new Date(s + 'T00:00:00Z');
   return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
-export function normalizeRecurrence(value, start, timezone = 'America/Sao_Paulo') {
+export function normalizeRecurrence(value, start, timezone = defaultTimezone()) {
   if (value === undefined) return null; // missing field: preserves single events
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('recorrencia deve ser um objeto válido, não criar evento único.');
   if (Object.keys(value).some(k => !Object.hasOwn(recurrenceSchema.properties, k))) throw new Error('Campo/padrão de recorrência não suportado. Não criar evento único.');
@@ -96,7 +97,7 @@ export function recurrenceDefaultEnd(localStart) {
 
 // Wall-clock time -> instant, without depending on the process's TZ. Rejects the
 // nonexistent time of entering daylight saving time. On the repeated hour, uses the first.
-export function localDateTimeInstant(local, timezone = 'America/Sao_Paulo') {
+export function localDateTimeInstant(local, timezone = defaultTimezone()) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(String(local)) || !validDate(local.slice(0,10))) throw Error('Data/hora local inválida.');
   const wall = local.length === 16 ? local + ':00' : local;
   const target = Date.parse(wall+'Z');
@@ -113,7 +114,7 @@ export function localDateTimeInstant(local, timezone = 'America/Sao_Paulo') {
   return new Date(Math.min(...candidates)).toISOString();
 }
 
-export function recurrenceOccurrences(value, start, timezone = 'America/Sao_Paulo', {after = null, limit = 3} = {}) {
+export function recurrenceOccurrences(value, start, timezone = defaultTimezone(), {after = null, limit = 3} = {}) {
   const r=normalizeRecurrence(value,start,timezone); if (!r) return [];
   localDateTimeInstant(start,timezone); // also validates the first occurrence
   const first=Date.parse(start+'Z'), out=[];
@@ -144,7 +145,7 @@ export function recurrenceOccurrences(value, start, timezone = 'America/Sao_Paul
   return out;
 }
 
-export function calendarWindow({inicio,fim,fuso='America/Sao_Paulo',days=30,now=new Date()}={}) {
+export function calendarWindow({inicio,fim,fuso=defaultTimezone(),days=30,now=new Date()}={}) {
   const parse=value=> /(?:Z|[+-]\d{2}:\d{2})$/i.test(String(value)) ? new Date(value).toISOString() : localDateTimeInstant(/^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? value+'T00:00:00' : value,fuso);
   new Intl.DateTimeFormat('en',{timeZone:fuso}).format();
   const from=inicio ? parse(inicio) : new Date(now).toISOString();

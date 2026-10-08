@@ -1044,7 +1044,7 @@ import {
   setRoutineOfferOptOut, clearRoutineOfferOptOut,
   closeUserAccount, listUsersPurgeDue, collectUserAssetKeys, hardDeleteUser,
 } from './db.mjs';
-import { IDIOMAS_OK, defaultLanguage, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, defaultTimezone, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
 import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
 import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
@@ -1890,13 +1890,13 @@ function guessMime(name = '') {
 // the current assistant has a sense of the surrounding context (e.g. asking on WhatsApp
 // about something they said on the web). One line per recent thread. Empty if there's
 // nothing. Each thread's history stays isolated; this is just an overview.
-async function crossChannelDigest(userId, currentThreadId) {
+async function crossChannelDigest(userId, currentThreadId, timeZone = defaultTimezone()) {
   try {
     const rows = await recentCrossChannelThreads(userId, currentThreadId, 6);
     if (!rows.length) return '';
     const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
     const lines = rows.map((r) => {
-      const when = new Date(r.updated_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const when = new Date(r.updated_at).toLocaleString('pt-BR', { timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const title = clip(r.title, 60) || '(sem título)';
       const gist = clip(r.summary || r.last_user_msg, 160);
       return `- "${title}" (com ${r.agent_name}, ${when})${gist ? ': ' + gist : ''}`;
@@ -2565,7 +2565,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // User's timezone (IANA). null = not set → falls back to the São Paulo default. Used
   // to interpret "today/tomorrow" and for the agent to mark events at their own
   // local wall-clock time (avoids the bug of confirming in one timezone and the event landing in another).
-  const userTz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
+  const userTz = (await getUserTimezone(userId)) || defaultTimezone();
   // User's language and country. The language drives this turn's system prompt and the
   // sub-agents'; the country decides what's offered only in Brazil (Asaas account).
   // getUserLocale already falls back to pt-BR when no one chose anything; country comes as
@@ -3503,7 +3503,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // this assistant sees this assistant's threads (no mixing with others).
   // Not gated: it's reading the owner's own data, same as reading memory.
   {
-    const fmtWhen = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const fmtWhen = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: userTz, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
     const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
     registry.add({
       name: 'buscar_conversas',
@@ -5709,7 +5709,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const rows = await listMediaAssets(userId, { limit: Math.min(Math.max(1, limite || 20), 50) });
         if (!rows.length) return 'Nenhuma mídia guardada ainda.';
         return rows.map((r) => {
-          const when = new Date(r.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+          const when = new Date(r.created_at).toLocaleString('pt-BR', { timeZone: userTz, dateStyle: 'short', timeStyle: 'short' });
           const orig = r.source === 'upload' ? 'enviada pelo usuário' : (r.source === 'generated' ? 'gerada por você' : '');
           // Here the caption is only to FIND the file by name/subject, not to
           // answer about it: truncated to 200 characters so the list of up to 50
@@ -6190,7 +6190,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const subdomain = await ensureUserSubdomain(userId).then((r) => r.label).catch(() => null);
   // Overview of what's going on in the user's OTHER conversations/channels (the
   // history stays isolated per thread; this only gives a sense of the surrounding context).
-  const crossChannel = ephemeral ? '' : await crossChannelDigest(userId, thread.id);
+  const crossChannel = ephemeral ? '' : await crossChannelDigest(userId, thread.id, userTz);
   // Compact index of the user's spaces (shared live subjects). The
   // notes do NOT go in here; they load on demand via ler_espaco (progressive
   // disclosure). Only in a non-ephemeral turn, like the other volatile blocks.

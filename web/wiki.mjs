@@ -4,9 +4,9 @@
 // loose file). Exposes file-like tools in the tool loop + injects an index + the
 // `perfil` page into the system prompt. See projetos/arquitetura-memoria.md.
 
-import { listWikiPages, listWikiPagesFull, getWikiPage, upsertWikiPage, searchWikiPages, normWikiSlug, listCurrentFacts, listAllFacts, setFact, closeFact, updateFactLine, addHistorico, listMemoryAmbiguities, getMemoryAmbiguity, closeMemoryAmbiguity, reopenMemoryAmbiguity, revertFactSwap } from './db.mjs';
+import { listWikiPages, listWikiPagesFull, getWikiPage, upsertWikiPage, searchWikiPages, normWikiSlug, listCurrentFacts, listAllFacts, setFact, closeFact, updateFactLine, addHistorico, listMemoryAmbiguities, getMemoryAmbiguity, closeMemoryAmbiguity, reopenMemoryAmbiguity, revertFactSwap, getUserTimezone } from './db.mjs';
 import { makeMemoriaModel } from './memoria-modelo.mjs';
-import { tagIdioma } from './locale.mjs';
+import { tagIdioma, defaultTimezone } from './locale.mjs';
 import { buscaV2Ligada, buscarNaMemoria, formatarAchados } from './memoria-busca.mjs';
 import { reconciliarLigado, planejarOp } from './wiki-reconciliar.mjs';
 
@@ -993,8 +993,9 @@ export async function sincronizarLinks(userId) {
 export async function registrarAtualizacao(userId, mudancas, origem = '') {
   const lista = (Array.isArray(mudancas) ? mudancas : []).filter((m) => m?.pagina);
   if (!lista.length) return false;
+  const timeZone = (await getUserTimezone(userId).catch(() => null)) || defaultTimezone();
   const quando = new Date().toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   });
   const porPagina = new Map();
   for (const m of lista) porPagina.set(m.pagina, (porPagina.get(m.pagina) || 0) + 1);

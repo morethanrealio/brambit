@@ -8,6 +8,7 @@
 // queue that was waiting on another long routine or a short service restart.
 // No external cron: just Node.
 
+import { defaultTimezone } from './locale.mjs';
 import { routineMinuteOfDay } from './routine-time.mjs';
 
 export const ROUTINE_LATE_GRACE_MIN = 180;
@@ -24,7 +25,7 @@ export function isPauseOnlyRoutineChange(args = {}) {
 // Local day (YYYY-MM-DD) and local hour/minute for an IANA timezone.
 export function localParts(tz, at = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz || 'America/Sao_Paulo',
+    timeZone: tz || defaultTimezone(),
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false,
   });

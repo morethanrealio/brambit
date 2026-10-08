@@ -1,3 +1,4 @@
+import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
 import {recoverOrderPix} from './checkout-recovery.mjs';
 import { paymentRequest, checkoutFailure, pixCodeDiagnostic } from './checkout-payment.mjs';
@@ -30,7 +31,7 @@ import { paymentRequest, checkoutFailure, pixCodeDiagnostic } from './checkout-p
 // the data on the spot and the model passes it in `comprador`. Saving just
 // avoids asking for the CPF on every purchase.
 
-import { addConnection, getConnectionByProvider, updateConnectionSecret, checkoutRecoveryStore } from './db.mjs';
+import { addConnection, getConnectionByProvider, getUserTimezone, updateConnectionSecret, checkoutRecoveryStore } from './db.mjs';
 import { encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
 
 const PROVIDER = 'perfil_compra';
@@ -437,11 +438,11 @@ function pixComCrcInvalido(s) {
 // The store sends the expiration in ISO UTC. Dumping that raw into the chat
 // ("2026-09-10T14:26:28Z") says nothing to whoever is going to pay: what matters is the
 // time here.
-function ateQueHoras(v) {
+function ateQueHoras(v, timeZone = defaultTimezone()) {
   if (!v) return null;
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' });
 }
 
 // Connector payload: sometimes a URL of its page, sometimes JSON with the code
@@ -984,7 +985,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           const pix = extrairPix(pay.json, cb.json);
 
           if (pix?.tipo === 'copia-e-cola') {
-            const hora = ateQueHoras(pix.expira);
+            const hora = ateQueHoras(pix.expira, (await getUserTimezone(userId).catch(() => null)) || undefined);
             // The code goes ALONE on a line, with no backtick fence: in a channel that
             // doesn't render markdown the backtick gets copied along and the bank rejects the
             // code. A clean line works on every channel.
