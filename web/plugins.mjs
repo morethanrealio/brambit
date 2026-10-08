@@ -18,7 +18,9 @@
 //   feedback (discovery/report-instructions.mts), and chaveDeepSeek() → key for the official
 //   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and
 //   atendimentoPublico → hooks for the public-support script
-//   (publico.mjs: antesDoModelo, depoisDoModelo). Runs at the start of boot; the core brings only
+//   (publico.mjs: antesDoModelo, depoisDoModelo), and systemNote({language}) → a
+//   stable note about the installation added to the assistant's instructions
+//   (before the language directive), or null. Runs at the start of boot; the core brings only
 //   what already exists at that time (publicBase, notifyOwner).
 //  ligar(servidor): routes (rotas.mjs), subscriptions and tasks (eventos.mjs) and
 //   published media (midia-publica.mjs). Runs with the server mounted; the server
@@ -51,7 +53,7 @@ import {leitorDePagina} from './app-encaixes.mjs';
 import {conferirCsp} from './csp.mjs';
 import {useLocalePlugins} from './i18n.mjs';
 
-export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico'];
+export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico','systemNote'];
 const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','locales','csp'];
 
 export function conferirPlugin(p){

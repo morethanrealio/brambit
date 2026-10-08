@@ -10,7 +10,18 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Added
+- The setup page lists the chat models the key can use, with the recommended
+  one selected, and lets the person pick another. When the provider publishes
+  the model's price (Together does), it goes to `modelos.yaml` so the spend
+  shown is the real one; otherwise the core's own table or estimate is used.
+- The assistant knows which model it runs on and that the owner changes it in
+  Settings › This computer. Plugins can add a stable note like this to the
+  assistant's instructions through the new `systemNote` port.
+
 ### Changed
+- "Change the AI" in Settings › This computer is now "Change the AI or the
+  model", and the saved key is kept when the provider stays the same.
 - Tests moved from the repository root to `tests/`, and the ones with
   Portuguese file names got English names (run them with
   `node --test tests/<file>.test.mjs`).
