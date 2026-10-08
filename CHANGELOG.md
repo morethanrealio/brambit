@@ -45,9 +45,10 @@ Changes merged since the last tag go under "Unreleased".
   Store Connect, WhatsApp, Telegram, Runner), contacts, Spaces, Skills, the
   skill library, the home greeting and date, the assistant and app lists, the
   chat list, the Files screen, the memory and assistant prompt settings, the
-  webhook, identity photo and voice, the business account, the web address
-  and the credits, plan, model and media cost screen are done; the rest still use the old
-  Portuguese-keyed catalogs for now.
+  webhook, identity photo and voice, the business account, the web address,
+  the credits, plan, model and media cost screen, the assistant templates,
+  chat, Slack, the browser extension and the sign-in, billing and connection
+  notices are done.
 
 ### Changed
 - Server error and status messages come from the catalogs (`server.*` in
@@ -94,6 +95,9 @@ Changes merged since the last tag go under "Unreleased".
   you", vote counts, Rename, Style, Favorite, Archive, Images, Documents, the
   home date...) are translated, and a Space owner's name with `&` or
   `<` no longer shows escaped twice.
+- In English and Spanish the Slack pairing instruction said `connect CODE` /
+  `conectes CODE`, which Slack does not recognize; it shows `conectar CODE`,
+  the command the bot reads, in every language.
 - The webhook status and its Reactivate button are translated, and the call
   count has a proper singular instead of "call(s)".
 - The confirmation card says what was done after removing an app file or

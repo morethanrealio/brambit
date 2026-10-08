@@ -1375,7 +1375,17 @@
       "default_doc_name": "document",
       "view_product": "View product",
       "image_from_assistant": "Image sent by the assistant",
-      "open_attachment": "open attachment"
+      "open_attachment": "open attachment",
+      "typing": "typing...",
+      "default_title": "Conversation",
+      "still_working": "I am still working on this, I will reply soon.",
+      "reply_not_delivered": "Your connection glitched and the reply did not make it here. It is not lost: just reopen this chat in a bit and it shows up.",
+      "reply_failed": "I could not reply right now. Try again in a moment.",
+      "send_unconfirmed": "I could not finish sending. Check this conversation before trying again.",
+      "create_assistant_first": "Create an assistant first (Assistants tab).",
+      "write_request": "Write what you want to solve.",
+      "open_failed": "I could not open the conversation.",
+      "start_failed": "I could not start the conversation. Check the list before trying again."
     },
     "auth": {
       "create_account": "Create account",
@@ -1398,7 +1408,9 @@
       "enter_email_password": "Fill in email and password.",
       "accept_terms": "You need to accept the Terms of Use and the Privacy Policy.",
       "waitlist_title": "You’re on the waitlist 🎉",
-      "waitlist_text": "As soon as {brand} opens new spots, we’ll let you know by email."
+      "waitlist_text": "As soon as {brand} opens new spots, we’ll let you know by email.",
+      "google_failed": "I could not log in with Google. Try again.",
+      "beta_full": "The Open Beta spots are sold out at the moment. Create your account with email and password right here to join the line: we let you know as soon as new spots open."
     },
     "connections": {
       "google_connected": "Connected: {services} (read-only). Your agents can already use it.",
@@ -1425,7 +1437,19 @@
       "notion_desc": "read and write in the pages you allow",
       "canva_desc": "search, create and edit your designs",
       "choose_assistant": "Pick an assistant…",
-      "google_calendar": "Calendar"
+      "google_calendar": "Calendar",
+      "connecting": "Connecting...",
+      "pick_assistant": "Pick which assistant will answer.",
+      "generating": "Generating...",
+      "generate_code": "Generate connection code",
+      "slack_code_for": "Code for {name} (valid for {count} min):",
+      "slack_send": "On Slack, in the channel or DM where you want this assistant, send: {command}",
+      "extension_saved": "Done, the extension will reply with this assistant.",
+      "oauth_connected": "{provider} connected. Your assistants can already use it.",
+      "oauth_failed": "I could not complete the connection with {provider}. This usually happens when the authorization takes too long or is opened in another browser. Click connect and finish in the same window.",
+      "domain_refused": "This {provider} account was not connected: the company only allows accounts from the domains {domains}. Connect the {provider} account with your company email.",
+      "domain_refused_named": "This {provider} account was not connected: the company {company} only allows accounts from the domains {domains}. Connect the {provider} account with your company email.",
+      "allowed_domains": "allowed"
     },
     "contacts": {
       "someone": "someone",
@@ -1502,7 +1526,14 @@
       "send_now": "Send a message now",
       "greeting_named": "Hi {name}!",
       "greeting": "Hi!",
-      "connect_prompt": "Connect your number to talk to your assistants on WhatsApp. Switch assistant with \"@name\" or \"menu\"."
+      "connect_prompt": "Connect your number to talk to your assistants on WhatsApp. Switch assistant with \"@name\" or \"menu\".",
+      "consent_required": "Check the consent box to activate WhatsApp.",
+      "number_required": "Enter the number with country and area code (e.g. 5511999998888).",
+      "pick_assistant": "Pick which assistant will answer on WhatsApp.",
+      "connect": "Connect WhatsApp",
+      "confirm_number": "You still need to confirm that the number {phone} is yours: send the code {code} from your WhatsApp to the {brand} number{expiry}. As soon as the message arrives, the number is connected.",
+      "code_expiry": " (valid for {count} min)",
+      "disconnect_confirm": "Disconnect WhatsApp?"
     },
     "common": {
       "remove": "Remove",
@@ -1527,11 +1558,17 @@
       "to_activate": "{link} to activate it",
       "connected_count_one": "1 agent connected on Telegram.",
       "connected_count_other": "{count} agents connected on Telegram.",
-      "prompt": "Create a bot on Telegram (takes 1 min) and talk to your agent there, with the name and photo you choose."
+      "prompt": "Create a bot on Telegram (takes 1 min) and talk to your agent there, with the name and photo you choose.",
+      "paste_token": "Paste the token BotFather gave you.",
+      "create_agent_first": "Create an agent first to connect it to Telegram.",
+      "connect_agent": "Connect agent",
+      "disconnect_confirm": "Disconnect @{username}? This bot will stop replying."
     },
     "runner": {
       "connected": "Runner connected{host}. Choose the assistant that works on this machine.",
-      "offline": "Runner offline. Open {brand} Runner on your machine to choose the assistant."
+      "offline": "Runner offline. Open {brand} Runner on your machine to choose the assistant.",
+      "pick_assistant": "Pick which assistant will use the Runner.",
+      "saved": "Done, this assistant operates the Runner."
     },
     "home": {
       "good_morning": "Good morning",
@@ -1590,7 +1627,10 @@
       "delete_title": "Delete \"{name}\"?",
       "delete_text": "It disappears from your lists and can no longer be used. The chat history stays saved in your account.",
       "delete_confirm": "Delete assistant",
-      "delete_last_warning": "It is your only assistant. Without one, you will need to create a new one to use {brand}."
+      "delete_last_warning": "It is your only assistant. Without one, you will need to create a new one to use {brand}.",
+      "name_required": "Give the assistant a name.",
+      "creating": "Creating...",
+      "create": "Create assistant"
     },
     "apps": {
       "default_name": "app",
@@ -1810,7 +1850,10 @@
       "checkout_error": "Failed to open the checkout.",
       "portal_failed": "Could not open the portal.",
       "portal_error": "Failed to open the portal.",
-      "ladder_you": "you: {n}"
+      "ladder_you": "you: {n}",
+      "flash_paid": "Payment confirmed! Your plan will be updated in a moment.",
+      "flash_pack_paid": "Purchase confirmed! The extra credits will show up in your balance in a moment.",
+      "flash_canceled": "Checkout canceled. No charge was made."
     },
     "models": {
       "variable_cost": "variable usage",
@@ -1841,6 +1884,28 @@
       "tts_desc": "Let the assistant reply with an audio message.",
       "tts_unit": "per reply",
       "one_credit": "{n} credit"
+    },
+    "templates": {
+      "shopper_label": "Shopper",
+      "shopper_goal": "shop better: fair price, coupon and wishlist",
+      "shopper_instructions": "You are a personal shopper. You help the person buy better: you give a fair-price verdict, find coupons that really work, watch the wishlist and price drops, compare stores and track orders. You find REAL products for sale on the web; for each recommendation bring the name, approximate price (R$), the store and the direct link. You prioritize real savings, you never push a purchase.",
+      "work_label": "Work",
+      "work_goal": "organize your day: calendar, emails and tasks",
+      "work_instructions": "You are a work assistant with a chief of staff streak: organized, proactive and a good writer. You do the daily briefing (calendar + emails + deadlines), inbox triage with draft replies, meeting prep, to-do and follow-up management, and summaries of documents and threads.",
+      "health_label": "Health",
+      "health_goal": "your well-being: food, workouts and routine",
+      "health_instructions": "You are a well-being partner: warm and motivating. You help with meal plans and recipes based on what the person has at home, workout reminders and check-ins, organizing appointments and exams, and an anti-stress routine. IMPORTANT: you take care of WELL-BEING, you do not give a diagnosis or medical advice; at any warning sign, guide them to look for a health professional. Treat health data as sensitive and confidential.",
+      "coder_label": "Coder",
+      "coder_goal": "code partner: review, debug, architect",
+      "coder_instructions": "You are a pair programming partner: direct, pragmatic and you show the trade-off. You write, review and debug code, explain snippets, suggest architecture with pros and cons and draft docs. You answer with objective code, no walls of text.",
+      "generic_label": "Full assistant",
+      "generic_goal": "does it all: your complete personal assistant",
+      "generic_instructions": "You are the person’s complete personal assistant, a do-it-all. You take care of emails, calendar, documents and files, web research, shopping and day-to-day organization. Use all the connected tools according to what each request needs. Be proactive, organized and direct; when there are choices, show the options and the main trade-off. Adapt the tone to what the person needs at each moment.",
+      "does_it_all": "• does it all"
+    },
+    "onboarding": {
+      "load_failed": "I could not open the initial step. Your setup has not been marked complete.",
+      "reload": "Reload to resume"
     }
   }
 }
