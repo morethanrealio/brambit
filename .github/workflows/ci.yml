@@ -7,10 +7,8 @@
 #        the source as text, .env.example up to date, the core boots on its own, install
 #        scripts on the package.json version, secret scan (gitleaks) and unsafe workflow
 #        guard (zizmor).
-# tests: OFF on pull requests until the code opens (decision of 2026-10-01): today
-#        whoever opens a PR runs the tests of the area on their own machine. When it
-#        opens, set the `if:` below back to `github.event_name != 'push'` (on a PR it
-#        runs only the tests that reach what changed, test-support/affected.mjs).
+# tests: on a pull request, runs only the tests that reach what changed
+#        (test-support/affected.mjs).
 #        The full suite does NOT run on its own: only with the "Run workflow" button
 #        (Actions > CI) or with `npm test` on anyone's machine.
 name: CI
@@ -167,7 +165,7 @@ jobs:
   tests:
     name: ${{ github.event_name == 'pull_request' && 'Area tests' || 'Full suite' }}
     needs: quick
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
