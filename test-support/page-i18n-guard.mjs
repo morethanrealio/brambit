@@ -4,8 +4,9 @@
 //    that English does not have;
 //  - has a catalog text, in any language, that names a child tag the element
 //    does not have ("<2>" where there are two children);
-//  - shows a text that is not marked and not in the list of texts still on the
-//    old Portuguese-keyed catalogs (test-support/legacy-page-texts.json).
+//  - shows a text that is not marked, not inside translate="no" and not in the
+//    list of texts still on the old Portuguese-keyed catalogs
+//    (test-support/legacy-page-texts.json).
 //
 // That list only exists while the pages move to data-i18n: it may only shrink.
 // A text of a migrated page has to leave it (the check fails while it is there),
@@ -30,7 +31,47 @@ const LEGACY = 'test-support/legacy-page-texts.json';
 const BLANK = { t: () => '', keys: () => [], has: () => true };
 
 export function unmarkedTexts(html) {
-  return extraiTextos(fillPage(html, SOURCE_LANGUAGE, { i18n: BLANK })).map((x) => x.texto);
+  return extraiTextos(withoutNoTranslate(fillPage(html, SOURCE_LANGUAGE, { i18n: BLANK }))).map((x) => x.texto);
+}
+
+// translate="no" (the HTML attribute) marks names that stay as they are in every
+// language: the brand, a language's own name, a service. Those elements, with
+// their attributes and children, are not text to translate.
+const TAG = /<(\/?)([a-zA-Z][\w:-]*)((?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*(\/?)>/g;
+const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+const NO_TRANSLATE = /\stranslate\s*=\s*(?:"no"|'no'|no\b)/i;
+
+export function withoutNoTranslate(html) {
+  let out = '';
+  let last = 0;
+  TAG.lastIndex = 0;
+  for (let m; (m = TAG.exec(html));) {
+    const [, closing, name, attrs, selfClosing] = m;
+    const lower = name.toLowerCase();
+    if (closing) continue;
+    if (NO_TRANSLATE.test(attrs)) {
+      const end = selfClosing || VOID.has(lower) ? TAG.lastIndex : endOf(html, TAG.lastIndex, lower);
+      out += html.slice(last, m.index);
+      last = end;
+      TAG.lastIndex = end;
+    } else if ((lower === 'script' || lower === 'style') && !selfClosing) {
+      const close = html.slice(TAG.lastIndex).search(new RegExp(`</\\s*${lower}\\s*>`, 'i'));
+      if (close >= 0) TAG.lastIndex += close;
+    }
+  }
+  return out + html.slice(last);
+}
+
+// Index just past the end tag of the <name> element whose content starts at `from`.
+function endOf(html, from, name) {
+  const tag = new RegExp(`<(/?)${name}\\b[^>]*>`, 'gi');
+  tag.lastIndex = from;
+  let depth = 1;
+  for (let m; (m = tag.exec(html));) {
+    depth += m[1] ? -1 : 1;
+    if (!depth) return tag.lastIndex;
+  }
+  return html.length;
 }
 
 export function checkPage(name, html, { i18n, legacy = [] }) {

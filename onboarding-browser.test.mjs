@@ -1,5 +1,5 @@
 // Browser with real HTML/module and simulated API: no real Harness server, account, or LLM.
-import {traduzPagina,carregaCatalogos} from './web/site-i18n.mjs';
+import {translatePage,carregaCatalogos} from './web/page-i18n.mjs';
 import {marcaNaPagina} from './web/marca.mjs';import {screenTexts} from './web/screen-texts.mjs';import {leitorDoApp} from './web/plugins.mjs';
 import {chromium} from 'playwright-core';import {readFileSync,existsSync,mkdirSync,writeFileSync} from 'node:fs';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';
 const root=resolve('web/public'),source=leitorDoApp([],root+'/index.html')(root+'/index.html'),html=source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
@@ -37,7 +37,7 @@ async function fixture({me=structuredClone(meBase),state=structuredClone(ready),
    return answer({});
   }
   const p=resolve(root,'.'+url.pathname);if(p.startsWith(root+'/')&&existsSync(p)&&url.pathname!='/inicio'){const type={'.mjs':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'}[extname(p)]||'application/octet-stream';return route.fulfill({status:200,contentType:type,body:readFileSync(p)})}
-  return route.fulfill({status:200,contentType:'text/html',body:marcaNaPagina(traduzPagina(html,language,catalogos))});
+  return route.fulfill({status:200,contentType:'text/html',body:marcaNaPagina(translatePage(html,language,catalogos,{vars:{brand:'__MARCA__'}}))});
  });
  await page.goto('http://onboarding.test/inicio');await page.evaluate(({local})=>{document.body.classList.remove('booting');if(local)localStorage.setItem('mtr_wiz',JSON.stringify(local))}, {local});
  const mount=()=>page.evaluate(async()=>{document.body.classList.remove('booting');const {mountWizard}=await import('/onboarding.mjs');window.wizard=mountWizard({generic:{id:'geral',name:'Brambs',goal:'Assistente completo',instructions:'Ajude a pessoa',connect:['gmail','calendar','docs','drive'],tasks:[]},config:()=>({microsoft:true}),showApp:on=>document.getElementById('app').classList.toggle('hidden',!on),enterHome:(me,task)=>{window.entered={me,task};document.getElementById('app').classList.remove('hidden')}})});
