@@ -249,6 +249,7 @@ async function start(noBrowser) {
     APP_TASK_STORE_DIR: path.join(dataDir, 'app-tasks'),
     CODING_JOB_STORE_DIR: path.join(dataDir, 'coding-jobs'),
     CREDIT_CALL_STORE_DIR: path.join(dataDir, 'credit-calls'),
+    BRAMBIT_LOCALES_DIR: path.join(dataDir, 'locales'),
   };
 
   function startServer() {

@@ -11,6 +11,10 @@ Changes merged since the last tag go under "Unreleased".
 ## [Unreleased]
 
 ### Added
+- Translation catalogs (`web/locales/<tag>.json`, contract in `docs/i18n.md`):
+  plugins bring their own in a `locales` field, and an instance can adjust
+  wording in `BRAMBIT_LOCALES_DIR` (`<data folder>/locales` with
+  `npm run brambit`). Nothing uses them yet; areas move over one at a time.
 - `npm run brambit -- start | stop | status`: one copy per data folder;
   running it again while it runs only opens the browser. The owner gets a
   "This computer" section in Settings (address, data folder, AI, version)

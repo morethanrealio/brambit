@@ -79,6 +79,8 @@ jobs:
         run: node test-support/env-example-guard.mjs
       - name: Core boots on its own
         run: node test-support/nucleo-guard.mjs
+      - name: Translation catalogs match English
+        run: node test-support/i18n-guard.mjs
       # The scripts download the release tag they name: one left behind would install
       # the previous version.
       - name: Install scripts on the package.json version

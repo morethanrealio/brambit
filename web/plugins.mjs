@@ -37,6 +37,8 @@
 //   which the catalog check and mensagens-i18n-pendentes pull the keys.
 //  app: folders with pieces of the logged-in app's screen (style, menu, panels,
 //   script), one file per index.html slot (see app-encaixes.mjs).
+//  locales: folders with the plugin's translation catalogs (<tag>.json, see
+//   docs/i18n.md and i18n.mjs); they sit above the core's and the instance's.
 //  csp: external origins the plugin's pages load (analytics, conversion tag),
 //   {diretiva: [https://host, ...]}; only script-src, img-src,
 //   connect-src and frame-src (csp.mjs). The core alone loads nothing from outside.
@@ -49,14 +51,14 @@ import {leitorDePagina} from './app-encaixes.mjs';
 import {conferirCsp} from './csp.mjs';
 
 export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico'];
-const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','csp'];
+const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','locales','csp'];
 
 export function conferirPlugin(p){
  if(!p||typeof p!=='object')throw Error('Plugin precisa ser um objeto');
  if(typeof p.nome!=='string'||!p.nome)throw Error('Plugin sem nome');
  for(const k of Object.keys(p))if(!CAMPOS.includes(k))throw Error(`Plugin ${p.nome}: campo desconhecido ${k}`);
  for(const k of ['esquema','portas','ligar'])if(p[k]!=null&&typeof p[k]!=='function')throw Error(`Plugin ${p.nome}: ${k} precisa ser função`);
- for(const k of ['publico','siteTextos','textosServidor','fontesMensagens','app'])if(p[k]!=null&&!(Array.isArray(p[k])&&p[k].every(c=>typeof c==='string'&&path.isAbsolute(c))))throw Error(`Plugin ${p.nome}: ${k} precisa ser lista de caminhos absolutos`);
+ for(const k of ['publico','siteTextos','textosServidor','fontesMensagens','app','locales'])if(p[k]!=null&&!(Array.isArray(p[k])&&p[k].every(c=>typeof c==='string'&&path.isAbsolute(c))))throw Error(`Plugin ${p.nome}: ${k} precisa ser lista de caminhos absolutos`);
  if(p.csp!=null)conferirCsp(p.csp,`Plugin ${p.nome}: csp`);
  if(p.semCsrf!=null&&!(Array.isArray(p.semCsrf)&&p.semCsrf.every(c=>typeof c==='string'&&c.startsWith('/'))))throw Error(`Plugin ${p.nome}: semCsrf precisa ser lista de caminhos`);
  return p;
