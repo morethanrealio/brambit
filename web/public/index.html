@@ -3894,7 +3894,7 @@ function renderCreditsBar(c) {
     E('sideUso').classList.toggle('hidden', !(c.limitUsd > 0));
     if (!(c.limitUsd > 0)) return;
     const pt = pctTeto(c);
-    E('suPlan').textContent = 'Uso do mês';
+    E('suPlan').textContent = tx('billing.month_usage');
     E('suNums').textContent = usd(c.usedUsd) + ' / ' + usd(c.limitUsd);
     const bf = E('suFill'); bf.style.width = Math.min(100, pt) + '%'; bf.className = 'barfill ' + fillClass(pt);
     return;
@@ -3904,7 +3904,7 @@ function renderCreditsBar(c) {
   E('sideUso').classList.remove('hidden');
   // Company member: the balance is the company's, so the little bar carries its name.
   const emp = contaEmpresa(c);
-  E('suPlan').textContent = emp ? (emp.nome || 'Empresa') : c.planName;
+  E('suPlan').textContent = emp ? (emp.nome || tx('billing.company')) : c.planName;
   // Same pattern as the "Month's usage" box: total = allowance + purchased credits;
   // bar = month's consumption over that total.
   const pct = (c.pctTotal != null ? c.pctTotal : c.pct);
@@ -3957,8 +3957,8 @@ function campoCorp(pl, id, valor, mensal, onChange) {
   const atualiza = () => {
     const n = Number(inp.value);
     const ok = corpValido(pl, n);
-    preco.textContent = ok ? 'R$ ' + brl(precoCorpBrl(pl, n, mensal)) + (mensal ? '/mês' : '') : '';
-    aviso.textContent = ok ? '' : 'Use múltiplos de ' + nf(pl.unidade) + ', de ' + nf(pl.minimo) + ' a ' + nf(pl.maximo) + ' créditos.';
+    preco.textContent = ok ? 'R$ ' + brl(precoCorpBrl(pl, n, mensal)) + (mensal ? tx('billing.per_month') : '') : '';
+    aviso.textContent = ok ? '' : tx('billing.corp_multiples', { unit: nf(pl.unidade), min: nf(pl.minimo), max: nf(pl.maximo) });
     onChange(ok ? n : null);
   };
   inp.addEventListener('input', atualiza);
@@ -3982,14 +3982,14 @@ function renderPlanoEmpresa(c, adminEmp) {
   const atual = document.createElement('div');
   atual.className = 'plancard cur';
   let h = '<div class="pname">' + esc(pl.rotulo) + '</div>' +
-    '<div class="pcred">' + (corp ? 'R$ ' + brl(pl.precoMensalBrl) + '/mês' : 'grátis') + '</div>';
+    '<div class="pcred">' + (corp ? 'R$ ' + brl(pl.precoMensalBrl) + txHtml('billing.per_month') : txHtml('billing.free')) + '</div>';
   if (pl.proximo && pl.proximo.creditos) {
-    h += '<div class="corpalert">A partir de ' + esc(diaMesBR(pl.proximo.em)) + ': ' + nf(pl.proximo.creditos) + ' créditos/mês</div>';
+    h += '<div class="corpalert">' + txHtml('billing.corp_next', { date: esc(diaMesBR(pl.proximo.em)), n: nf(pl.proximo.creditos) }) + '</div>';
   }
   if (pl.cancelaEm) {
-    h += '<div class="corpalert">Plano cancelado: vale até ' + esc(diaMesBR(pl.cancelaEm)) + ', depois a empresa volta pro Free.</div>';
+    h += '<div class="corpalert">' + txHtml('billing.corp_canceled', { date: esc(diaMesBR(pl.cancelaEm)) }) + '</div>';
   }
-  h += '<span class="ptag">plano atual</span>';
+  h += '<span class="ptag">' + txHtml('billing.current_plan_tag') + '</span>';
   atual.innerHTML = h;
   box.appendChild(atual);
   if (!pode || !rotaPlano) return;
@@ -4000,7 +4000,7 @@ function renderPlanoEmpresa(c, adminEmp) {
   const inicial = corp ? pl.creditos : pl.minimo;
   const btn = document.createElement('button');
   btn.className = 'pbtn'; btn.id = 'corpPlanoBtn';
-  btn.textContent = corp ? 'Alterar volume' : 'Assinar';
+  btn.textContent = corp ? tx('billing.change_volume') : tx('billing.subscribe');
   let escolhido = null;
   const campo = campoCorp(pl, 'corpCreditos', inicial, true, (n) => {
     escolhido = n;
@@ -4008,10 +4008,9 @@ function renderPlanoEmpresa(c, adminEmp) {
   });
   const lbl = document.createElement('label');
   lbl.className = 'pname'; lbl.htmlFor = 'corpCreditos';
-  lbl.textContent = corp ? 'Mudar o volume (créditos por mês)' : 'Plano corporativo (créditos por mês)';
+  lbl.textContent = corp ? tx('billing.corp_change_label') : tx('billing.corp_plan_label');
   const nota = document.createElement('div'); nota.className = 'corpnote';
-  nota.textContent = 'Aumento vale na hora: a empresa paga só o proporcional até a renovação e já ganha a diferença. ' +
-    'Redução vale na renovação. Crédito não usado não acumula.';
+  nota.textContent = tx('billing.corp_note');
   card.append(lbl, campo.inp, campo.preco, campo.aviso, nota, btn);
   box.appendChild(card);
   campo.atualiza();
@@ -4020,10 +4019,10 @@ function renderPlanoEmpresa(c, adminEmp) {
   if (corp && rotaCancelar) {
     const cx = document.createElement('button');
     cx.className = 'ghostbtn'; cx.id = 'corpCancelarBtn';
-    cx.textContent = pl.cancelaEm ? 'Manter plano' : 'Cancelar plano';
+    cx.textContent = pl.cancelaEm ? tx('billing.keep_plan') : tx('billing.cancel_plan');
     cx.addEventListener('click', () => {
       if (pl.cancelaEm) return cobrancaEmpresa(rotaCancelar, { desfazer: true }, cx);
-      if (!confirm('Cancelar o plano corporativo? A empresa continua com ele até o fim do período atual e depois volta pro Free. Crédito não usado não acumula.')) return;
+      if (!confirm(tx('billing.cancel_confirm'))) return;
       cobrancaEmpresa(rotaCancelar, {}, cx);
     });
     atual.appendChild(cx);
@@ -4033,15 +4032,15 @@ function renderPlanoEmpresa(c, adminEmp) {
   const form = E('avulsoEmpresaForm');
   if (av && form && rotaAvulso) {
     av.hidden = false; form.innerHTML = '';
-    E('avulsoEmpresaSub').textContent = 'Crédito extra pra empresa toda, sem mudar o plano. Soma ao saldo da empresa e vale por ' + (c.extraTtlDays || 90) + ' dias.';
+    E('avulsoEmpresaSub').textContent = tx('billing.corp_extra_sub', { count: c.extraTtlDays || 90 });
     const ac = document.createElement('div');
     ac.className = 'plancard';
     const ab = document.createElement('button');
-    ab.className = 'pbtn'; ab.id = 'corpAvulsoBtn'; ab.textContent = 'Comprar créditos avulsos';
+    ab.className = 'pbtn'; ab.id = 'corpAvulsoBtn'; ab.textContent = tx('billing.buy_extra');
     let qtd = null;
     const ca = campoCorp(pl, 'corpAvulso', pl.minimo, false, (n) => { qtd = n; ab.disabled = n == null; });
     const al = document.createElement('label');
-    al.className = 'pname'; al.htmlFor = 'corpAvulso'; al.textContent = 'Créditos avulsos';
+    al.className = 'pname'; al.htmlFor = 'corpAvulso'; al.textContent = tx('billing.extra_credits');
     ac.append(al, ca.inp, ca.preco, ca.aviso, ab);
     form.appendChild(ac);
     ca.atualiza();
@@ -4054,15 +4053,15 @@ function renderPlanoEmpresa(c, adminEmp) {
 function renderGastoSimples(c) {
   const teto = c.limitUsd > 0;
   const pt = pctTeto(c);
-  E('usoPlan').textContent = teto ? 'Limite de uso deste mês: ' + usd(c.limitUsd) + '.' : 'Sem limite de uso nesta instalação.';
+  E('usoPlan').textContent = teto ? tx('billing.simple_limit', { limit: usd(c.limitUsd) }) : tx('billing.simple_no_limit');
   const f = E('usoFill'); f.style.width = Math.min(100, pt) + '%'; f.className = 'barfill ' + fillClass(pt);
   f.parentElement.hidden = !teto;
   E('usoUsed').textContent = usd(c.usedUsd);
   E('usoLimit').textContent = usd(c.limitUsd);
-  E('usoUnid').textContent = 'usados';
+  E('usoUnid').textContent = tx('billing.used');
   E('usoPctTxt').textContent = '(' + pt + '%)';
   E('usoUsed').parentElement.hidden = !teto;
-  E('usoReset').textContent = teto ? 'O limite volta no começo do mês.' : '';
+  E('usoReset').textContent = teto ? tx('billing.simple_reset') : '';
   ['usoExtraFill', 'usoEmpresa', 'usoExtra', 'promoBox', 'planEmpresa', 'planCorp', 'planSection', 'packSection', 'avulsoEmpresa'].forEach(id => { const el = E(id); if (el) el.hidden = true; });
   E('manageBilling').classList.add('hidden');
   renderModels(c);
@@ -4081,10 +4080,10 @@ function renderCreditsPanel(c) {
     // créditos/mês" or "Plano Free: 1.500 créditos/mês"). Price only for the admin.
     const pl = planoEmpresa(c);
     const rot = pl ? pl.rotulo : c.planName;
-    E('usoPlan').innerHTML = 'Saldo da empresa <b>' + esc(emp.nome) + '</b>, dividido entre os membros. ' +
-      '<b>' + esc(rot) + '</b>' + (adminEmp && pl && pl.precoMensalBrl ? ', R$ ' + brl(pl.precoMensalBrl) + '/mês.' : '.');
+    E('usoPlan').innerHTML = txHtml('billing.company_balance', { company: '<b>' + esc(emp.nome) + '</b>' }) +
+      ' <b>' + esc(rot) + '</b>' + (adminEmp && pl && pl.precoMensalBrl ? ', R$ ' + brl(pl.precoMensalBrl) + txHtml('billing.per_month') + '.' : '.');
   } else {
-    E('usoPlan').innerHTML = 'Plano atual: <b>' + esc(c.planName) + '</b>' + (c.price ? ' — R$ ' + brl(c.price) + '/mês' : ' — grátis');
+    E('usoPlan').innerHTML = txHtml('billing.current_plan', { plan: '<b>' + esc(c.planName) + '</b>' }) + ' — ' + (c.price ? 'R$ ' + brl(c.price) + txHtml('billing.per_month') : txHtml('billing.free'));
   }
   // COMBINED bar: month's allowance + purchased credits. capacity = total the
   // person has; usedTotal = how much of that total has already been consumed.
@@ -4101,8 +4100,7 @@ function renderCreditsPanel(c) {
   if (ue) {
     if (emp) {
       ue.hidden = false;
-      ue.innerHTML = 'Esse número é o total da empresa. Neste ciclo, <b>você usou ' + nf(emp.voceUsou || 0) +
-        '</b> de ' + nf(cap) + ' créditos da empresa.';
+      ue.innerHTML = txHtml('billing.company_you_used', { you_used: '<b>' + txHtml('billing.you_used', { n: nf(emp.voceUsou || 0) }) + '</b>', total: nf(cap) });
     } else ue.hidden = true;
   }
   // Extra credits: the box is "month's usage", so it shows only what impacts the
@@ -4118,32 +4116,32 @@ function renderCreditsPanel(c) {
         const pc = p.credits > 0 ? Math.min(100, Math.round((p.used / p.credits) * 100)) : 0;
         const bar = '<div class="minibar"><div class="minifill ' + fillClass(pc) + '" style="width:' + pc + '%"></div></div>';
         if (p.kind === 'remnant') {
-          return '<li>Remanescentes do mês anterior: <b>' + nf(p.credits) + '</b>' +
-            ' <span class="soft">(usados ' + nf(p.used) + ', restam ' + nf(p.remaining) + ')</span>' + bar + '</li>';
+          return '<li>' + txHtml('billing.extra_remnant', { n: '<b>' + nf(p.credits) + '</b>' }) +
+            ' <span class="soft">(' + txHtml('billing.extra_used_left', { used: nf(p.used), left: nf(p.remaining) }) + ')</span>' + bar + '</li>';
         }
-        const label = p.source === 'compra' ? 'Comprados em'
-          : (p.source === 'indicacao' ? 'Bônus de indicação em'
-          : (p.source === 'sobra-plano' ? 'Sobra do plano anterior em' : 'Concedidos em'));
         const dt = p.ts ? new Date(p.ts).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '';
-        const exp = p.expiresAt ? ' · <span class="soft">vence ' +
-          new Date(p.expiresAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' }) + '</span>' : '';
-        return '<li>' + label + ' ' + dt + ': <b>' + nf(p.credits) + '</b>' +
-          ' <span class="soft">(usados ' + nf(p.used) + ', restam ' + nf(p.remaining) + ')</span>' + exp + bar + '</li>';
+        const lv = { date: dt, n: '<b>' + nf(p.credits) + '</b>' };
+        const label = p.source === 'compra' ? txHtml('billing.extra_bought', lv)
+          : (p.source === 'indicacao' ? txHtml('billing.extra_referral', lv)
+          : (p.source === 'sobra-plano' ? txHtml('billing.extra_plan_leftover', lv) : txHtml('billing.extra_granted', lv)));
+        const exp = p.expiresAt ? ' · <span class="soft">' +
+          txHtml('billing.extra_expires', { date: new Date(p.expiresAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' }) }) + '</span>' : '';
+        return '<li>' + label +
+          ' <span class="soft">(' + txHtml('billing.extra_used_left', { used: nf(p.used), left: nf(p.remaining) }) + ')</span>' + exp + bar + '</li>';
       }).join('');
       const ttl = c.extraTtlDays || 90;
-      ex.innerHTML = '➕ <b>Créditos extras</b> <span class="soft">(somam ao plano; valem por ' + ttl + ' dias)</span>' +
+      ex.innerHTML = '➕ <b>' + txHtml('billing.extras_title') + '</b> <span class="soft">(' + txHtml('billing.extras_note', { count: ttl }) + ')</span>' +
         '<ul class="extralist">' + rows + '</ul>';
     } else ex.hidden = true;
   }
   if (c.periodEnd) {
     const d = new Date(c.periodEnd);
-    let txt = 'A franquia renova em ' + d.toLocaleDateString('pt-BR', { day:'2-digit', month:'long' }) + '.';
+    let txt = tx('billing.renews_on', { date: d.toLocaleDateString('pt-BR', { day:'2-digit', month:'long' }) });
     // First free month: the date is the SAME, but what happens on it is different
     // (either subscribe, or drop to Free), so the text needs to say that.
     if (c.trialEndsAt) {
       const t = new Date(c.trialEndsAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'long' });
-      txt = 'Seu primeiro mês é por nossa conta: você está no ' + (c.planName || 'Básico') +
-            ' até ' + t + '. Depois dessa data, é só assinar pra continuar; sem assinatura, a conta passa pro plano grátis.';
+      txt = tx('billing.trial', { plan: c.planName || tx('billing.basic_plan'), date: t });
     }
     E('usoReset').textContent = txt;
   }
@@ -4161,9 +4159,10 @@ function renderCreditsPanel(c) {
     if (promo) {
       pbox.hidden = false;
       pbox.innerHTML =
-        '<b>' + esc(promo.label || 'Promoção') + ': ' + nf(promo.percentOff) + '% de desconto</b> em qualquer plano pago e nos pacotes de crédito. ' +
-        'Use o cupom <span class="promocode">' + esc(promo.code) + '</span> na hora do pagamento' +
-        (promo.endsAt ? ', até ' + esc(dmy(promo.endsAt)) : '') + '.';
+        '<b>' + txHtml('billing.promo_off', { label: esc(promo.label || tx('billing.promo')), pct: nf(promo.percentOff) }) + '</b> ' + txHtml('billing.promo_scope') + ' ' +
+        (promo.endsAt
+          ? txHtml('billing.promo_code_until', { code: '<span class="promocode">' + esc(promo.code) + '</span>', date: esc(dmy(promo.endsAt)) })
+          : txHtml('billing.promo_code', { code: '<span class="promocode">' + esc(promo.code) + '</span>' }));
     } else pbox.hidden = true;
   }
   const pe = E('planEmpresa');
@@ -4173,12 +4172,11 @@ function renderCreditsPanel(c) {
       pe.hidden = false;
       const pl = planoEmpresa(c);
       pe.innerHTML = (pl ? '<b>' + esc(pl.rotulo) + '</b>. ' : '') +
-        'Quem muda o plano e compra créditos pra empresa é o admin' +
-        (adm.length ? ' (<b>' + adm.map(esc).join('</b>, <b>') + '</b>)' : '') +
-        '. Precisa de mais crédito? Fale com o admin da empresa.';
+        (adm.length ? txHtml('billing.member_admins', { admins: '<b>' + adm.map(esc).join('</b>, <b>') + '</b>' }) : txHtml('billing.member_admin')) +
+        ' ' + txHtml('billing.member_more');
     } else if (adminEmp) {
       pe.hidden = false;
-      pe.innerHTML = 'Você é admin da empresa <b>' + esc(emp.nome) + '</b>. O plano corporativo e os créditos avulsos que você comprar aqui são da empresa e valem pra todos os membros.';
+      pe.innerHTML = txHtml('billing.admin_note', { company: '<b>' + esc(emp.nome) + '</b>' });
     } else pe.hidden = true;
   }
   renderPlanoEmpresa(c, adminEmp);
@@ -4190,21 +4188,21 @@ function renderCreditsPanel(c) {
     // price_promo is only filled in when there's a promotion and the plan is paid.
     const hasPromo = p.price_promo != null && p.price_promo < p.price_brl;
     const priceHtml = !p.price_brl ? '' :
-      (hasPromo ? '<span class="pfull">de R$ ' + brl(p.price_brl) + '</span>' : '') +
-      '<div class="pprice">R$ ' + brl(hasPromo ? p.price_promo : p.price_brl) + '/mês</div>' +
-      (hasPromo ? '<div class="poff">com o cupom ' + esc(promo.code) + '</div>' : '');
+      (hasPromo ? '<span class="pfull">' + txHtml('billing.price_was', { price: 'R$ ' + brl(p.price_brl) }) + '</span>' : '') +
+      '<div class="pprice">R$ ' + brl(hasPromo ? p.price_promo : p.price_brl) + txHtml('billing.per_month') + '</div>' +
+      (hasPromo ? '<div class="poff">' + txHtml('billing.with_coupon', { code: esc(promo.code) }) + '</div>' : '');
     let action = '';
-    if (cur) action = '<span class="ptag">plano atual</span>';
+    if (cur) action = '<span class="ptag">' + txHtml('billing.current_plan_tag') + '</span>';
     else if (p.price_brl > 0 && APP_CFG.stripe) {
       const up = p.credits > (c.limit || 0);
-      action = '<button class="pbtn" data-plan="' + p.id + '">' + (up ? 'Assinar' : 'Mudar para este') + '</button>';
+      action = '<button class="pbtn" data-plan="' + p.id + '">' + (up ? txHtml('billing.subscribe') : txHtml('billing.switch_to')) + '</button>';
     // Without Stripe there's no button. Only the free plan needs a label here: the price
     // for the paid ones already came out in priceHtml (repeating it would show the full price under the promo one).
-    } else action = p.price_brl ? '' : '<span class="pprice">grátis</span>';
+    } else action = p.price_brl ? '' : '<span class="pprice">' + txHtml('billing.free') + '</span>';
     div.innerHTML =
       '<div class="pgrow"><div class="pname">' + esc(p.name) + '</div>' +
       (p.tagline ? '<div class="ptagline">' + esc(p.tagline) + '</div>' : '') +
-      '<div class="pcred">' + nf(planCredits(p)) + ' créditos/mês</div></div>' +
+      '<div class="pcred">' + txHtml('billing.credits_per_month', { n: nf(planCredits(p)) }) + '</div></div>' +
       priceHtml + action;
     list.appendChild(div);
   });
@@ -4224,11 +4222,11 @@ function renderCreditsPanel(c) {
         // pays with the coupon, and the full price is struck through above it.
         const packPromo = promo && p.price_promo != null && p.price_promo < p.price_brl;
         div.innerHTML =
-          '<div class="pname">' + nf(p.credits) + ' créditos</div>' +
-          (packPromo ? '<span class="pfull">de R$ ' + brl(p.price_brl) + '</span>' : '') +
+          '<div class="pname">' + txHtml('billing.credits_n', { n: nf(p.credits) }) + '</div>' +
+          (packPromo ? '<span class="pfull">' + txHtml('billing.price_was', { price: 'R$ ' + brl(p.price_brl) }) + '</span>' : '') +
           '<div class="pprice">R$ ' + brl(packPromo ? p.price_promo : p.price_brl) + '</div>' +
-          (packPromo ? '<div class="poff">com o cupom ' + esc(promo.code) + '</div>' : '') +
-          '<button class="pbtn" data-pack="' + p.id + '">Comprar</button>';
+          (packPromo ? '<div class="poff">' + txHtml('billing.with_coupon', { code: esc(promo.code) }) + '</div>' : '') +
+          '<button class="pbtn" data-pack="' + p.id + '">' + txHtml('billing.buy') + '</button>';
         plist.appendChild(div);
       });
       const rotaPacote = rotaCobranca(c, 'pacote', 'api/billing/checkout-pack');
@@ -4249,12 +4247,12 @@ function renderCreditsPanel(c) {
 // Shows the relative cost in "bars" (1x = 1 bar filled out of 8). Friendly,
 // without exposing token/dollar. 'auto' = variable.
 function costPips(rel) {
-  if (rel == null) return '<span class="msoft">consumo variável</span>';
+  if (rel == null) return '<span class="msoft">' + txHtml('models.variable_cost') + '</span>';
   const max = 8, n = Math.max(1, Math.min(max, Math.round(rel)));
   let s = '';
   for (let i = 0; i < max; i++) s += '<span class="pip' + (i < n ? ' on' : '') + '"></span>';
-  return '<span class="pips" title="' + rel + '× o mais econômico">' + s + '</span>'
-    + '<span class="msoft">' + (rel === 1 ? 'mais econômico' : rel + '× o econômico') + '</span>';
+  return '<span class="pips" title="' + txHtml('models.times_cheapest', { n: rel }) + '">' + s + '</span>'
+    + '<span class="msoft">' + (rel === 1 ? txHtml('models.cheapest') : txHtml('models.times_cheap', { n: rel })) + '</span>';
 }
 
 function renderModels(c) {
@@ -4266,7 +4264,7 @@ function renderModels(c) {
   arow.className = 'mediarow';
   arow.innerHTML =
     '<input type="checkbox" id="modelAutoChk"' + (auto ? ' checked' : '') + ' />'
-    + '<span class="mr-body"><b>Automático</b><span class="mr-desc">Deixa o __MARCA__ escolher o modelo mais econômico que dá conta de cada pergunta. Conversa simples gasta menos; pedido de pesquisa, preço ou análise usa um modelo mais forte. Quando ligado, a escolha manual abaixo fica em pausa.</span></span>';
+    + '<span class="mr-body"><b>' + txHtml('models.auto') + '</b><span class="mr-desc">' + txHtml('models.auto_desc') + '</span></span>';
   wrap.appendChild(arow);
   arow.querySelector('#modelAutoChk').onchange = (e) => toggleModelAuto(e.target);
   // Manual-choice cards: stay paused (grayed out) when Automatic is on.
@@ -4280,8 +4278,8 @@ function renderModels(c) {
     div.dataset.model = m.id;
     div.innerHTML =
       '<div class="mhead"><b>' + esc(m.label) + '</b>'
-        + (m.recommended ? '<span class="mtag">recomendado</span>' : '')
-        + (cur ? '<span class="mcheck">✓ em uso</span>' : '') + '</div>'
+        + (m.recommended ? '<span class="mtag">' + txHtml('models.recommended') + '</span>' : '')
+        + (cur ? '<span class="mcheck">' + txHtml('models.in_use') + '</span>' : '') + '</div>'
       + '<div class="mdesc">' + esc(m.desc) + '</div>'
       + '<div class="mcost">' + costPips(m.costRel) + '</div>';
     if (!cur) div.onclick = () => pickModel(m.id, div);
@@ -4311,15 +4309,15 @@ function renderIdioma(me) {
   let salvo = sel.value;
   sel.onchange = async () => {
     const hint = document.getElementById('idiomaHint');
-    if (hint) hint.textContent = 'Salvando…';
+    if (hint) hint.textContent = tx('common.saving');
     const r = await api('api/prefs/idioma', { language: sel.value });
     if (r && r.language) {
       salvo = r.language;
       if (me && me.locale) me.locale.language = r.language;
-      if (hint) hint.textContent = 'Idioma salvo.';
+      if (hint) hint.textContent = tx('language.saved');
     } else {
       sel.value = salvo;
-      if (hint) hint.textContent = (r && r.error) || 'Não consegui salvar o idioma.';
+      if (hint) hint.textContent = (r && r.error) || tx('language.save_failed');
     }
   };
 }
@@ -4361,16 +4359,16 @@ function renderMedia(media, costs, emUsd) {
   const wrap = E('mediaList'); if (!wrap) return;
   media = media || {}; costs = costs || {};
   const items = [
-    { k:'image',  label:'Gerar imagens',     desc:'Criar imagens a partir de um pedido seu.',                unit:'por imagem',       cost:costs.image },
-    { k:'vision', label:'Ler imagens',       desc:'Entender e extrair informações de imagens que você enviar.', unit:'por imagem lida', cost:costs.vision },
-    { k:'stt',    label:'Transcrever áudios',desc:'Transformar áudios que você manda em texto.',             unit:'por áudio',        cost:costs.stt },
-    { k:'tts',    label:'Responder em voz',  desc:'Deixar o assistente responder com um áudio.',             unit:'por resposta',     cost:costs.tts },
+    { k:'image',  label:txHtml('media.image_label'),  desc:txHtml('media.image_desc'),  unit:txHtml('media.image_unit'),  cost:costs.image },
+    { k:'vision', label:txHtml('media.vision_label'), desc:txHtml('media.vision_desc'), unit:txHtml('media.vision_unit'), cost:costs.vision },
+    { k:'stt',    label:txHtml('media.stt_label'),    desc:txHtml('media.stt_desc'),    unit:txHtml('media.stt_unit'),    cost:costs.stt },
+    { k:'tts',    label:txHtml('media.tts_label'),    desc:txHtml('media.tts_desc'),    unit:txHtml('media.tts_unit'),    cost:costs.tts },
   ];
   wrap.innerHTML = '';
   items.forEach(it => {
     const on = media[it.k] !== false;
     const qtd = c => emUsd ? 'US$ ' + Number(c).toLocaleString('pt-BR', { maximumSignificantDigits: 2 })
-      : nf(c) + ' ' + (c === 1 ? 'crédito' : 'créditos');
+      : (c === 1 ? txHtml('media.one_credit', { n: nf(c) }) : txHtml('billing.credits_n', { n: nf(c) }));
     const costTxt = it.cost != null
       ? '~' + qtd(it.cost) + '<br><span class="msoft">' + it.unit + '</span>'
       : '—';
@@ -4399,7 +4397,7 @@ async function pickModel(id, card) {
   try {
     const r = await api('api/prefs/model', { model: id });
     if (r && r.model) { if (CREDITS) CREDITS.model = r.model; renderModels(CREDITS); }
-    else { alert(r && r.error ? r.error : 'Não consegui trocar o modelo.'); wrap.querySelectorAll('.modelcard').forEach(c => c.style.opacity = '1'); }
+    else { alert(r && r.error ? r.error : tx('models.switch_failed')); wrap.querySelectorAll('.modelcard').forEach(c => c.style.opacity = '1'); }
   } catch (e) { wrap.querySelectorAll('.modelcard').forEach(c => c.style.opacity = '1'); }
 }
 
@@ -4408,11 +4406,11 @@ async function pickModel(id, card) {
 // checkout; without a url, it shows the message the server returned and reloads the balance.
 async function cobrancaEmpresa(rota, body, btn) {
   const old = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Aguarde…'; }
+  if (btn) { btn.disabled = true; btn.textContent = tx('billing.wait'); }
   let r = null;
-  try { r = await api(rota, body); } catch { r = { error: 'Não consegui confirmar o resultado. Confira em Gerenciar assinatura antes de tentar novamente.' }; }
+  try { r = await api(rota, body); } catch { r = { error: tx('billing.unconfirmed') }; }
   if (r && r.url) { window.location = r.url; return; }
-  billingFlash = r && (r.error || r.mensagem) ? String(r.error || r.mensagem) : 'Não consegui concluir. Tenta de novo.';
+  billingFlash = r && (r.error || r.mensagem) ? String(r.error || r.mensagem) : tx('billing.action_failed');
   if (btn) { btn.disabled = false; btn.textContent = old; }
   if (r && !r.error) await loadCredits();
   else { const fl = E('billingFlash'); if (fl) { fl.textContent = billingFlash; fl.classList.remove('hidden'); } }
@@ -4421,7 +4419,7 @@ async function cobrancaEmpresa(rota, body, btn) {
 // route = personal by default; the company admin passes the company's route.
 async function startCheckout(plan, btn, rota) {
   const old = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Abrindo…'; }
+  if (btn) { btn.disabled = true; btn.textContent = tx('billing.opening'); }
   try {
     const { showPlanSwitch, clearPlanSwitch } = await import('/billing-result.mjs');
     billingFlash = '';
@@ -4435,30 +4433,30 @@ async function startCheckout(plan, btn, rota) {
       if (r.switched) await loadCredits();
       return;
     }
-    alert(r && r.error ? r.error : 'Não consegui abrir o checkout. Tenta de novo.');
-  } catch { alert('Não consegui confirmar o resultado. Confira em Gerenciar assinatura antes de tentar novamente.'); }
+    alert(r && r.error ? r.error : tx('billing.checkout_failed'));
+  } catch { alert(tx('billing.unconfirmed')); }
   finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
 }
 
 async function startPackCheckout(pack, btn, rota) {
   const old = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Abrindo…'; }
+  if (btn) { btn.disabled = true; btn.textContent = tx('billing.opening'); }
   try {
     const r = await api(rota || 'api/billing/checkout-pack', { pack });
     if (r && r.url) { window.location = r.url; return; }
-    alert(r && r.error ? r.error : 'Não consegui abrir o checkout. Tenta de novo.');
-  } catch { alert('Falha ao abrir o checkout.'); }
+    alert(r && r.error ? r.error : tx('billing.checkout_failed'));
+  } catch { alert(tx('billing.checkout_error')); }
   if (btn) { btn.disabled = false; btn.textContent = old; }
 }
 
 async function openPortal(btn, rota) {
   const old = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Abrindo…'; }
+  if (btn) { btn.disabled = true; btn.textContent = tx('billing.opening'); }
   try {
     const r = await api(rota || 'api/billing/portal', {});
     if (r && r.url) { window.location = r.url; return; }
-    alert(r && r.error ? r.error : 'Não consegui abrir o portal.');
-  } catch { alert('Falha ao abrir o portal.'); }
+    alert(r && r.error ? r.error : tx('billing.portal_failed'));
+  } catch { alert(tx('billing.portal_error')); }
   if (btn) { btn.disabled = false; btn.textContent = old; }
 }
 
@@ -4506,7 +4504,7 @@ function renderLadder(c) {
     seg.className = 'lseg' + (p.id === c.plan ? ' cur' : '');
     seg.style.width = (vw[i] * 100) + '%';
     seg.style.background = COLORS[i % COLORS.length];
-    seg.title = p.name + ': ' + nf(planCredits(p)) + ' créditos/mês';
+    seg.title = p.name + ': ' + tx('billing.credits_per_month', { n: nf(planCredits(p)) });
     seg.innerHTML = '<span class="lname">' + esc(p.name) + '</span>' +
                     '<span class="lcred">' + nf(planCredits(p)) + '</span>';
     bar.appendChild(seg);
@@ -4520,9 +4518,9 @@ function renderLadder(c) {
   const tagStyle = x < 14 ? 'left:0;transform:translateX(-2px)'
                  : x > 86 ? 'right:0;transform:translateX(2px)'
                  : 'left:50%;transform:translateX(-50%)';
-  mark.innerHTML = '<span class="ltag" style="' + tagStyle + '">você: ' + nf(c.used) + '</span>';
+  mark.innerHTML = '<span class="ltag" style="' + tagStyle + '">' + txHtml('billing.ladder_you', { n: nf(c.used) }) + '</span>';
   box.appendChild(mark);
-  E('ladderMax').textContent = nf(maxCred) + ' créditos';
+  E('ladderMax').textContent = tx('billing.credits_n', { n: nf(maxCred) });
 }
 
 let CREDITS = null;
