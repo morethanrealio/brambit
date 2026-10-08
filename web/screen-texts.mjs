@@ -5,7 +5,7 @@
 import { defaultLanguage } from './locale.mjs';
 import { matchLanguage, productI18n } from './i18n.mjs';
 
-export const SCREEN_AREAS = ['onboarding'];
+export const SCREEN_AREAS = ['onboarding', 'routines'];
 
 export function screenTexts(area, language, i18n = productI18n()) {
   const prefix = `${area}.`;

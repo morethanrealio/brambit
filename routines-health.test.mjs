@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { routineHealth } from './.routines-build/ui.mjs';
+import { screenTexts } from './web/screen-texts.mjs';
 
 test('secondary notice failures remain visible and actionable after accepted email', () => {
   for (const locale of ['pt-BR', 'en', 'es']) {
@@ -9,14 +10,14 @@ test('secondary notice failures remain visible and actionable after accepted ema
       const health = routineHealth({ config: { execution: { status: 'completed',
         content: { status: 'complete' }, delivery: { status: 'accepted', channel: 'email',
           notification: { channel: 'whatsapp', status, error: 'private diagnostic' } },
-      } } }, locale);
+      } } }, screenTexts('routines', locale));
       assert.equal(health.needsReview, true);
       assert.match(health.label, /email/);
       assert.match(health.label, /whatsapp/);
       assert.doesNotMatch(health.label, /private diagnostic/);
       const withoutNotice = routineHealth({ config: { execution: { status: 'completed',
         content: { status: 'complete' }, delivery: { status: 'accepted', channel: 'email' },
-      } } }, locale);
+      } } }, screenTexts('routines', locale));
       assert.equal(withoutNotice.needsReview, false);
     }
   }
