@@ -20,7 +20,7 @@
   $ProgressPreference = 'SilentlyContinue'
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-  $brambitVersion = '0.2.7'
+  $brambitVersion = '0.2.8'
   $nodeVersion = '24.21.0'
   # Node.js for Windows x64 (it also runs on Windows on ARM).
   $nodeSha = '158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541'
