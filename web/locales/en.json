@@ -990,7 +990,7 @@
     "network_error": "Network error.",
     "copied": "Copied."
   },
-  "atendimento_page": {
+  "public_service_page": {
     "page_title": "Public service · {brand}",
     "back": "back to the app",
     "title": "Public service",
@@ -1035,7 +1035,7 @@
       "name": "Your name",
       "e_g_ana": "e.g. Ana",
       "email": "Email",
-      "voce_email_com": "you@email.com",
+      "email_placeholder": "you@email.com",
       "password": "Password",
       "min_12_characters": "min. 12 characters",
       "show": "Show",
@@ -1066,7 +1066,7 @@
       "reset_password": "Reset password",
       "enter_email_we_will": "Enter your email and we will send you a link to create a new password.",
       "email": "Email",
-      "voce_email_com": "you@email.com",
+      "email_placeholder": "you@email.com",
       "send_link": "Send link",
       "back_login": "Back to login"
     },
@@ -1169,7 +1169,7 @@
     "home": {
       "open_contacts": "Open Contacts",
       "dismiss": "Dismiss",
-      "ver_convite": "View invite",
+      "view_invite": "View invite",
       "write_here_what_need": "Write here what you need your assistant to do…",
       "start": "Start →",
       "chats": "Chats"
@@ -1255,16 +1255,16 @@
       "which_assistant_replies_extension": "Which assistant replies in the extension?",
       "save": "Save",
       "which_assistant_uses_runner": "Which assistant uses the Runner?",
-      "atendimento_ao_publico": "Public service",
-      "um_assistente_seu_responde": "One of your assistants replies to anyone who writes to this installation's WhatsApp number without an account. Set it up, see the chats, and block or delete contacts.",
-      "abrir_atendimento": "Open public service",
+      "public_service": "Public service",
+      "public_service_lead": "One of your assistants replies to anyone who writes to this installation's WhatsApp number without an account. Set it up, see the chats, and block or delete contacts.",
+      "open_public_service": "Open public service",
       "number_with_country_area": "Your number (with country and area code)",
       "e_g_5511999998888": "e.g. 5511999998888",
       "which_assistant_answers_whatsapp": "Which assistant answers on WhatsApp?",
       "i_want_exchange_messages": "I want to exchange messages with my assistant on WhatsApp.",
       "connect_whatsapp": "Connect WhatsApp",
-      "confirmar_no_whatsapp": "💬 Confirm on WhatsApp",
-      "usar_outro_numero": "Use another number",
+      "confirm_on_whatsapp": "💬 Confirm on WhatsApp",
+      "use_another_number": "Use another number",
       "send_message_now": "💬 Send a message now",
       "disconnect": "Disconnect",
       "credentials_vault": "Credentials vault",
@@ -1338,7 +1338,7 @@
       "use_my_data": "Use of my data",
       "do_not_use_my": "<0>Do not use</0> my chats and files to improve {brand}.",
       "applies_from_now_while": "It applies from now on and while it stays on: the content created in that period is left out forever, even if you turn it off later. Details in the <0>Privacy Policy</0>.",
-      "empresa": "Company"
+      "company": "Company"
     },
     "credits": {
       "usage_this_month": "Usage this month",
@@ -1362,6 +1362,147 @@
     },
     "app": {
       "remember": "To remember"
+    }
+  },
+  "index_script": {
+    "net": {
+      "connection_dropped": "Looks like the internet glitched over here. Try again in a moment.",
+      "images_too_large": "The images turned out too big to send. Try sending one at a time.",
+      "server_problem": "I had a problem on the server ({status}). Try again."
+    },
+    "chat": {
+      "default_pdf_name": "document.pdf",
+      "default_doc_name": "document",
+      "view_product": "View product",
+      "image_from_assistant": "Image sent by the assistant",
+      "open_attachment": "open attachment"
+    },
+    "auth": {
+      "create_account": "Create account",
+      "log_in": "Log in",
+      "signup_lead": "Create your account to get started.",
+      "login_lead": "Log in to your account to talk to your assistants.",
+      "have_account": "Already have an account?",
+      "no_account": "No account yet?",
+      "enter_email": "Enter your email.",
+      "reset_link_sent": "If an account with that email exists, we sent a link to reset the password.",
+      "hide": "Hide",
+      "show": "Show",
+      "password_too_short": "The password must have at least 12 characters.",
+      "invalid_reset_link": "Invalid link. Ask for a new one in \"I forgot my password\".",
+      "password_reset": "Password reset.",
+      "redirecting_to_login": "Redirecting to login...",
+      "hide_password": "Hide password",
+      "show_password": "Show password",
+      "enter_name": "Enter your name.",
+      "enter_email_password": "Fill in email and password.",
+      "accept_terms": "You need to accept the Terms of Use and the Privacy Policy.",
+      "waitlist_title": "You’re on the waitlist 🎉",
+      "waitlist_text": "As soon as {brand} opens new spots, we’ll let you know by email."
+    },
+    "connections": {
+      "google_connected": "Connected: {services} (read-only). Your agents can already use it.",
+      "reconnect_review": "Reconnect / review access",
+      "google_prompt": "Connect your Google account to give your agents access to Gmail, Calendar, Drive and Docs (read-only).",
+      "connect_google": "Connect Google",
+      "primary_tag": "(primary)",
+      "no_data_access": "no data access",
+      "make_primary": "Make primary",
+      "make_primary_hint": "Account used by default by the assistants that do not have their own account chosen",
+      "reconnect": "Reconnect",
+      "reconnect_hint": "Review/renew this account access",
+      "remove": "Remove",
+      "remove_google_confirm": "Remove access to {email}? The agents tied to this account are left without an account until you choose another one.",
+      "add_google_account": "Add another Google account",
+      "connected": "connected",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "github_desc": "repositories, issues and pull requests",
+      "slack_desc": "channels and messages",
+      "nuvemshop_desc": "sales, orders, catalog and stock",
+      "microsoft_desc": "email, Outlook calendar and OneDrive files",
+      "linkedin_desc": "publish posts on your profile (text/link)",
+      "notion_desc": "read and write in the pages you allow",
+      "canva_desc": "search, create and edit your designs",
+      "choose_assistant": "Pick an assistant…",
+      "google_calendar": "Calendar"
+    },
+    "contacts": {
+      "someone": "someone",
+      "people": "{count} people",
+      "wants_to_connect_one": "{who} wants to connect the assistant with you.",
+      "wants_to_connect_other": "{who} want to connect the assistant with you.",
+      "empty": "No contacts yet. Invite someone with the email below.",
+      "contact": "contact",
+      "connected": "connected",
+      "receives_via": "Receives through:",
+      "choose_assistant": "(choose an assistant)",
+      "invite_sent": "invite sent",
+      "invited_you": "invited you",
+      "accept": "Accept",
+      "decline": "Decline",
+      "declined": "declined",
+      "enter_email": "Enter the person’s email."
+    },
+    "spaces": {
+      "empty": "No Spaces yet. Ask your assistant to create one (e.g.: \"create a Space for plants\").",
+      "yours": "yours",
+      "owned_by": "by {owner}",
+      "counts": "{members} member(s) · {notes} notes",
+      "what_goes_in": "What goes into the space:",
+      "mode_auto": "the assistant decides",
+      "mode_manual": "only what I send",
+      "mode_manual_owner": "only what the owner sends",
+      "mode_line": "Mode: {mode} (set by the owner)"
+    },
+    "skills": {
+      "verified": "verified",
+      "shared": "shared",
+      "empty": "No Skills yet. Ask your assistant to create one (e.g. \"create a shopping list skill\").",
+      "yours": "Your Skills",
+      "installs": "{installs} install(s)",
+      "mark_verified": "mark as verified",
+      "when_to_use": "when to use:",
+      "installed_from_contacts": "Installed from contacts",
+      "by_owner": "by {owner}",
+      "star_of_5": "{star} of 5",
+      "no_ratings": "No ratings yet",
+      "votes_one": "{count} vote",
+      "votes_other": "{count} votes"
+    },
+    "library": {
+      "no_results": "No skills found for this search.",
+      "empty": "No skills in the library yet.",
+      "category_general": "General",
+      "installed_count": "{installs} install(s)",
+      "installed": "Already installed",
+      "install": "Install",
+      "installing": "Installing..."
+    },
+    "vault": {
+      "kind_apikey": "API key",
+      "kind_token": "Token",
+      "kind_basic": "Username:password",
+      "kind_ssh_key": "SSH key",
+      "empty": "No credentials saved yet.",
+      "remove": "Remove",
+      "enter_service": "Enter the service.",
+      "paste_secret": "Paste the credential."
+    },
+    "asc": {
+      "not_connected": "Not connected.",
+      "connected": "Connected",
+      "enter_ids": "Enter the Issuer ID and the Key ID.",
+      "select_p8": "Select the .p8 file.",
+      "read_p8_failed": "I could not read the .p8 file.",
+      "invalid_p8": "The file does not look like a valid .p8 key."
+    },
+    "whatsapp": {
+      "linked": "Number {phone} connected. Tap {button} and send the first message to activate the chat. (Later, send \"menu\" on WhatsApp to switch assistants.)",
+      "send_now": "Send a message now",
+      "greeting_named": "Hi {name}!",
+      "greeting": "Hi!",
+      "connect_prompt": "Connect your number to talk to your assistants on WhatsApp. Switch assistant with \"@name\" or \"menu\"."
     }
   }
 }

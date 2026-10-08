@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title data-i18n="atendimento_page.page_title">Public service · __MARCA__</title>
+<title data-i18n="public_service_page.page_title">Public service · __MARCA__</title>
 <style nonce="__CSP_NONCE__">
   :root{--bg:#f4eee4;--card:#fffdf8;--line:#e5ddcd;--line2:#efe7d8;--accent:#c97a52;--accent2:#dd9568;--txt:#2b2723;--mut:#736c5f;--mut2:#a39b89;--ok:#3d7a4e;--err:#b25438;}
   *{box-sizing:border-box;}
@@ -59,50 +59,50 @@
 <body>
 <div class="top"><div class="in">
   <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
-  <a class="back" href="/inicio" data-i18n="atendimento_page.back">back to the app</a>
+  <a class="back" href="/inicio" data-i18n="public_service_page.back">back to the app</a>
 </div></div>
 
 <div class="wrap">
-  <h1 data-i18n="atendimento_page.title">Public service</h1>
-  <p class="lead" data-i18n="atendimento_page.lead">One of your assistants answers whoever writes to this installation's WhatsApp number without having an account. In this mode it only uses the instructions below and the conversation with each contact: it does not see your memory, your e-mails, your calendar or your files.</p>
+  <h1 data-i18n="public_service_page.title">Public service</h1>
+  <p class="lead" data-i18n="public_service_page.lead">One of your assistants answers whoever writes to this installation's WhatsApp number without having an account. In this mode it only uses the instructions below and the conversation with each contact: it does not see your memory, your e-mails, your calendar or your files.</p>
 
   <div class="card">
-    <label for="agente" data-i18n="atendimento_page.assistant">Assistant</label>
+    <label for="agente" data-i18n="public_service_page.assistant">Assistant</label>
     <select id="agente"></select>
-    <div id="semAgente" class="vazio espaco hidden" data-i18n="atendimento_page.no_assistants">You do not have any assistants yet.</div>
+    <div id="semAgente" class="vazio espaco hidden" data-i18n="public_service_page.no_assistants">You do not have any assistants yet.</div>
   </div>
 
   <div class="card hidden" id="cfgCard">
-    <h2 data-i18n="atendimento_page.settings">Settings</h2>
-    <div id="avisoNumero" class="warn hidden" data-i18n="atendimento_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
-    <label class="check" data-i18n="atendimento_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
-    <label for="instrucoes" data-i18n="atendimento_page.instructions">Service instructions (what it does, tone, what it must not do)</label>
+    <h2 data-i18n="public_service_page.settings">Settings</h2>
+    <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
+    <label class="check" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
+    <label for="instrucoes" data-i18n="public_service_page.instructions">Service instructions (what it does, tone, what it must not do)</label>
     <textarea id="instrucoes" maxlength="20000"></textarea>
     <div class="row">
-      <div><label for="retencao" data-i18n="atendimento_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
-      <div><label for="limite" data-i18n="atendimento_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
-      <div><label for="teto" data-i18n="atendimento_page.daily_cap">Daily spending cap (US$, empty = no cap)</label><input type="number" id="teto" min="0" step="0.01"/></div>
+      <div><label for="retencao" data-i18n="public_service_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
+      <div><label for="limite" data-i18n="public_service_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
+      <div><label for="teto" data-i18n="public_service_page.daily_cap">Daily spending cap (US$, empty = no cap)</label><input type="number" id="teto" min="0" step="0.01"/></div>
     </div>
-    <div class="acoes"><button class="btn primary" id="salvar" data-i18n="atendimento_page.save">Save</button></div>
+    <div class="acoes"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
     <div id="cfgMsg" class="msg"></div>
   </div>
 
   <div class="grid hidden" id="atendGrid">
     <div class="card">
-      <h2 data-i18n="atendimento_page.contacts">Contacts</h2>
+      <h2 data-i18n="public_service_page.contacts">Contacts</h2>
       <div id="contatos" class="contatos"></div>
-      <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="atendimento_page.load_more">Load more</button></div>
+      <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="public_service_page.load_more">Load more</button></div>
     </div>
     <div class="card">
-      <h2 id="convTitulo" data-i18n="atendimento_page.conversation">Conversation</h2>
-      <div id="convVazia" class="vazio" data-i18n="atendimento_page.pick_contact">Pick a contact to see the conversation.</div>
+      <h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2>
+      <div id="convVazia" class="vazio" data-i18n="public_service_page.pick_contact">Pick a contact to see the conversation.</div>
       <div id="convBox" class="hidden">
-        <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="atendimento_page.earlier">Earlier messages</button></div>
+        <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
         <div id="conversa" class="conversa"></div>
         <div class="acoes">
           <button class="btn ghost" id="bloquear"></button>
-          <a class="btn ghost" id="exportar" href="#" download data-i18n="atendimento_page.export">Export data</a>
-          <button class="btn danger" id="apagar" data-i18n="atendimento_page.delete">Delete contact</button>
+          <a class="btn ghost" id="exportar" href="#" download data-i18n="public_service_page.export">Export data</a>
+          <button class="btn danger" id="apagar" data-i18n="public_service_page.delete">Delete contact</button>
         </div>
         <div id="convMsg" class="msg"></div>
       </div>
@@ -110,7 +110,7 @@
   </div>
 </div>
 
-<script type="application/json" data-i18n-texts="atendimento_page"></script>
+<script type="application/json" data-i18n-texts="public_service_page"></script>
 <script src="/page-texts.js"></script>
 <script nonce="__CSP_NONCE__">
 (function(){
