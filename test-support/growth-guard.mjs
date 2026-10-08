@@ -58,6 +58,6 @@ export function run({ baseSha, cwd = process.cwd(), allow = false, log = console
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const baseSha = process.argv[2];
-  if (!baseSha) { console.error('uso: node test-support/growth-guard.mjs <sha-base>'); process.exit(2); }
+  if (!baseSha) { console.error('usage: node test-support/growth-guard.mjs <sha-base>'); process.exit(2); }
   process.exit(run({ baseSha, allow: process.env.GROWTH_GUARD_ALLOW === '1' }));
 }

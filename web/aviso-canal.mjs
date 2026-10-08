@@ -49,7 +49,7 @@ export async function comReenvio(enviar, { esperas = esperasDeReenvio(), rotulo 
   for (let i = 0; ; i++) {
     try { return await enviar(); } catch (e) {
       if (e?.definitive === true || i >= esperas.length) throw e;
-      console.warn(`[${rotulo}] envio falhou, tentando de novo:`, e?.message ?? e);
+      console.warn(`[${rotulo}] send failed, retrying:`, e?.message ?? e);
       await new Promise(r => setTimeout(r, esperas[i]));
     }
   }
@@ -68,11 +68,11 @@ export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
     let recusado = false;
     try { await enviar(text); } catch (e) {
       recusado = e?.definitive === true;
-      console.error(`[${rotulo}] aviso de erro não entregue:`, e?.message ?? e);
+      console.error(`[${rotulo}] error notice not delivered:`, e?.message ?? e);
     }
     if (recusado || !registrar) return;
     try { await registrar({ agent, userId, text, pergunta: tipo === 'turno' ? mensagem : null }); } catch (e) {
-      console.error(`[${rotulo}] aviso de erro fora do histórico:`, e?.message ?? e);
+      console.error(`[${rotulo}] error notice outside history:`, e?.message ?? e);
     }
   };
 }

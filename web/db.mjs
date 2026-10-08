@@ -45,7 +45,7 @@ export const pool = new pg.Pool({ ...pgConfig, max: 4, idleTimeoutMillis: 30000 
 // turn, routine, delivery). Here we just log it: the broken client was already
 // discarded by the pool itself and the next query opens a new connection.
 pool.on('error', (err) => {
-  console.error('[db] conexão ociosa derrubada pelo Postgres (pool segue vivo):', err?.message ?? err);
+  console.error('[db] idle connection dropped by Postgres (pool stays alive):', err?.message ?? err);
 });
 
 export const pendingUsageWrites=createPendingUsageWrites();
@@ -1855,7 +1855,7 @@ export async function logSensitiveAccess({ userId, tool, resource = null, detail
       [String(userId), String(tool), resource == null ? null : String(resource).slice(0, 300), detail == null ? null : String(detail).slice(0, 500)],
     );
   } catch (e) {
-    console.error('[audit] logSensitiveAccess falhou:', e?.message ?? e);
+    console.error('[audit] logSensitiveAccess failed:', e?.message ?? e);
   }
 }
 
@@ -3098,7 +3098,7 @@ export async function bumpSkillUse(skillId, userId) {
       [skillId, userId],
     );
   } catch (e) {
-    console.error('[skill] bumpSkillUse falhou:', e?.message ?? e);
+    console.error('[skill] bumpSkillUse failed:', e?.message ?? e);
   }
 }
 
@@ -3121,7 +3121,7 @@ export async function activateSkillInThread(threadId, skillId) {
       [threadId, skillId],
     );
   } catch (e) {
-    console.error('[skill] activateSkillInThread falhou:', e?.message ?? e);
+    console.error('[skill] activateSkillInThread failed:', e?.message ?? e);
   }
 }
 
@@ -3144,7 +3144,7 @@ export async function listActiveSkills(threadId, agentId) {
     );
     return rows;
   } catch (e) {
-    console.error('[skill] listActiveSkills falhou:', e?.message ?? e);
+    console.error('[skill] listActiveSkills failed:', e?.message ?? e);
     return [];
   }
 }
@@ -5582,7 +5582,7 @@ function tgRows(rows) {
   const out = [];
   for (const r of rows) {
     try { out.push(tgRow(r)); }
-    catch (e) { console.error('[telegram] token ilegível no banco:', r?.token_hash, e?.message ?? e); }
+    catch (e) { console.error('[telegram] unreadable token in db:', r?.token_hash, e?.message ?? e); }
   }
   return out;
 }

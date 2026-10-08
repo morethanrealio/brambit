@@ -448,7 +448,7 @@ export async function fetchGmailAttachment({ token, messageId, attachmentId }) {
         const hit = collectAttachments(msg.payload).find((a) => a.attachmentId === attachmentId);
         if (hit) { att = hit; break; }
       }
-    } catch (e) { console.error('[gmail] varredura da thread pelo anexo falhou:', e?.message ?? e); }
+    } catch (e) { console.error('[gmail] thread scan by attachment failed:', e?.message ?? e); }
   }
   const data = await gget(token, `${GMAIL}/messages/${messageId}/attachments/${attachmentId}`);
   const buffer = b64urlBytes(data.data);
@@ -476,7 +476,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
       if (usage) onUsage({ usage, kind: 'vision' });
       if (text) return JSON.stringify({ name, mimeType: mime, ocr: true, text });
     } catch (e) {
-      console.error('[connectors] ocrPdf falhou:', e?.message ?? e);
+      console.error('[connectors] ocrPdf failed:', e?.message ?? e);
     }
     return null;
   };
@@ -487,7 +487,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
       if (usage) onUsage({ usage, kind: 'vision' });
       if (text) return JSON.stringify({ name, mimeType: mime, ocr: true, text });
     } catch (e) {
-      console.error('[connectors] describeImage falhou:', e?.message ?? e);
+      console.error('[connectors] describeImage failed:', e?.message ?? e);
     }
     return null;
   };
@@ -499,7 +499,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   const readPdfBuf = async (buf, name, mime) => {
     let text = '', pages, truncated;
     try { ({ text, pages, truncated } = await extractPdfText(buf, { maxChars: 20000 })); }
-    catch (e) { console.error('[connectors] extractPdfText erro:', e?.message ?? e); }
+    catch (e) { console.error('[connectors] extractPdfText error:', e?.message ?? e); }
     if (text) return JSON.stringify({ name, mimeType: mime, pages, truncated, text });
     const ocr = await ocrPdfFallback(buf, name, mime);
     return ocr || JSON.stringify({ name, mimeType: mime, note: 'PDF sem texto extraível (escaneado); OCR também não conseguiu ler.' });

@@ -33,7 +33,7 @@ const idiomas = process.argv[2] ? [process.argv[2]] : Object.keys(catalogos);
 for (const idioma of idiomas) {
   const cat = catalogos[idioma] || {};
   const faltam = mensagens.filter((m) => !cat[m]);
-  console.log(`\n── ${idioma}: ${mensagens.length - faltam.length} traduzidas, ${faltam.length} sem tradução (de ${mensagens.length})`);
+  console.log(`\n── ${idioma}: ${mensagens.length - faltam.length} translated, ${faltam.length} untranslated (of ${mensagens.length})`);
   for (const m of faltam) console.log(`  ${JSON.stringify(m.slice(0, 110))}`);
 }
 
@@ -50,7 +50,7 @@ for (const { nome, js } of fontes) for (const p of fatiaJs(js)) {
   templates.push({ onde: `${nome}:${js.slice(0, p.ini).split('\n').length}`, texto: js.slice(p.ini, p.fim) });
 }
 
-console.log(`\n── sem chave possível: ${templates.length} mensagem(ns) montada(s) com template`);
+console.log(`\n── no key possible: ${templates.length} message(s) built with a template`);
 for (const tpl of templates) console.log(`  ${tpl.onde}  ${tpl.texto.slice(0, 110)}`);
 
-console.log('\nSem tradução não é bug por si: nome de campo, código de erro e e-mail ficam iguais mesmo.');
+console.log('\nUntranslated is not a bug by itself: field names, error codes and e-mail addresses stay the same anyway.');

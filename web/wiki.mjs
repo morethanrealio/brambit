@@ -978,7 +978,7 @@ export async function sincronizarLinks(userId) {
   if (!antes.trim() && !outras.length) return false;
   const body = montarPerfilComLinks(antes, outras);
   if (body === null) {
-    console.error(`[memoria links] u=${String(userId).slice(0, 8)} abortado: a sincronização perderia linha do perfil`);
+    console.error(`[memoria links] u=${String(userId).slice(0, 8)} aborted: the sync would lose a profile line`);
     return false;
   }
   if (body.trim() === antes.trim()) return false;

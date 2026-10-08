@@ -242,8 +242,8 @@ function noteTavilyFailure(err, onUsage, planoB = 'fallback Gemini (lento)') {
   const bug = isBugInterno(err);
   const quota = !bug && /\b(432|429)\b|usage limit|exceeds your plan/i.test(msg);
   _tavilyFails += 1;
-  if (bug) console.error(`[websearch] BUG INTERNO na busca (não é a Tavily) fails=${_tavilyFails} -> ${planoB}. ${err?.stack?.split('\n').slice(0, 2).join(' | ') || msg.slice(0, 200)}`);
-  else console.error(`[websearch] TAVILY CAIU (${quota ? 'COTA/PLANO' : 'transitório'}) fails=${_tavilyFails} -> ${planoB}. ${msg.slice(0, 200)}`);
+  if (bug) console.error(`[websearch] INTERNAL BUG in the search (not Tavily) fails=${_tavilyFails} -> ${planoB}. ${err?.stack?.split('\n').slice(0, 2).join(' | ') || msg.slice(0, 200)}`);
+  else console.error(`[websearch] TAVILY DOWN (${quota ? 'COTA/PLANO' : 'transitório'}) fails=${_tavilyFails} -> ${planoB}. ${msg.slice(0, 200)}`);
   try {
     onUsage?.({
       usage: { model: bug ? 'websearch-bug' : quota ? 'tavily-quota' : 'tavily-erro', in: 0, cached: 0, out: 0, think: 0, total: 0 },
@@ -332,8 +332,8 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
       if (!args?.consulta || !String(args.consulta).trim()) return 'ERRO: consulta vazia.';
       if (!budget) return buscar(args);
       const r = await budget.run(searchKey(args.consulta, args.data_inicio, args.data_fim), () => buscar(args));
-      if (r.cached) console.log(`[websearch] busca repetida no turno, devolvida do cache q="${String(args.consulta).slice(0, 60)}"`);
-      if (r.limited) console.log(`[websearch] teto de ${budget.max} buscas no turno, bloqueada q="${String(args.consulta).slice(0, 60)}"`);
+      if (r.cached) console.log(`[websearch] repeated search this turn, returned from cache q="${String(args.consulta).slice(0, 60)}"`);
+      if (r.limited) console.log(`[websearch] cap of ${budget.max} searches this turn reached, blocked q="${String(args.consulta).slice(0, 60)}"`);
       return r.cached ? `(mesma busca já feita neste turno; resultado reaproveitado, não repita)\n${r.text}` : r.text;
     },
   };
@@ -448,14 +448,14 @@ async function abrirPlanilhaGoogle(sheet, onSheetLoad) {
   try {
     res = await safeFetch(sheet.url, { headers: { 'user-agent': uaBot({ comSite: false }) } });
   } catch (e) {
-    console.error('[abrir_link] export do Sheets:', e?.message ?? e);
+    console.error('[abrir_link] Sheets export:', e?.message ?? e);
     return `ERRO: não consegui baixar a planilha do Google Sheets (${e?.message ?? e}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`;
   }
   const ct = res.headers.get('content-type') || '';
   // A private spreadsheet doesn't error out: Google redirects to the login screen (HTML).
   if (!res.ok || !/spreadsheetml/i.test(ct)) {
     try { await res.body?.cancel?.(); } catch { /* noop */ }
-    console.warn(`[abrir_link] Sheets ${sheet.id} sem acesso público status=${res.status} ct=${ct.slice(0, 60)}`);
+    console.warn(`[abrir_link] Sheets ${sheet.id} has no public access status=${res.status} ct=${ct.slice(0, 60)}`);
     return `Essa planilha do Google Sheets não está aberta ao público (o link pede login), então NÃO li nada dela. Não descreva, cite nem suponha o conteúdo. Se o Google do usuário estiver conectado, abra pelo Google Drive dele (id do arquivo: ${sheet.id}); senão peça pra ele compartilhar como "qualquer pessoa com o link" ou mandar o arquivo aqui.`;
   }
   const buf = Buffer.from(await res.arrayBuffer());
@@ -576,7 +576,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
         // not a PDF nor a spreadsheet: discards the body so as not to download a big HTML for nothing.
         try { await res.body?.cancel?.(); } catch { /* noop */ }
       } catch (e) {
-        console.error('[abrir_link] pré-check:', e?.message ?? e);
+        console.error('[abrir_link] pre-check:', e?.message ?? e);
         // A link that is clearly a spreadsheet file doesn't fall back to Tavily's text.
         if (tipoPlanilha(nomeDoPath(u), '')) return `ERRO: não consegui baixar a planilha desse link (${e?.message ?? e}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`;
         // falls through to Tavily as a fallback
@@ -593,7 +593,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
           const partial = !pageContentQuality(texto, finalUrl).sufficient;
           return `Conteúdo de ${finalUrl}${titulo ? ` (título: ${titulo})` : ''}${ref(finalUrl, titulo)}${corte}:\n\n${partial ? PARTIAL_PAGE_MARKER+'\n\n' : ''}${corpo}`;
         } catch (e2) {
-          console.error(`[abrir_link] leitura direta falhou (após ${motivo}): ${e2?.message ?? e2}`);
+          console.error(`[abrir_link] direct read failed (after ${motivo}): ${e2?.message ?? e2}`);
           return `ERRO ao abrir o link: ${e2?.message ?? e2}`;
         }
       };

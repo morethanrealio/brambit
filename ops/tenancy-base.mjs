@@ -24,7 +24,7 @@ export function resolveBase(env = process.env) {
 export function baseOrExit(env = process.env) {
   try {
     const r = resolveBase(env);
-    console.log(`Alvo: ${r.base}${r.remote ? '  (REMOTO, ALLOW_REMOTE=1)' : ''}`);
+    console.log(`Target: ${r.base}${r.remote ? '  (REMOTO, ALLOW_REMOTE=1)' : ''}`);
     return r.base;
   } catch (e) {
     console.error(e.message);

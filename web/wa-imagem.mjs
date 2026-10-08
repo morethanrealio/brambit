@@ -61,7 +61,7 @@ export async function imagemParaWa(url, subir) {
   try { return { id: await c.id }; }
   catch (e) {
     if (cache.get(url) === c) cache.delete(url);
-    console.warn(`[whatsapp] imagem vai por link, preparo falhou: ${e?.message ?? e}`);
+    console.warn(`[whatsapp] image will go via link, prep failed: ${e?.message ?? e}`);
     return { link: url };
   }
 }

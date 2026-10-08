@@ -88,7 +88,7 @@ async function conectar(token) {
   }
   if (grupos.desconhecidas.length && !jaLogou) {
     jaLogou = true;
-    console.warn(`[canva] tools não classificadas (não expostas ao modelo): ${grupos.desconhecidas.join(', ')}`);
+    console.warn(`[canva] unclassified tools (not exposed to the model): ${grupos.desconhecidas.join(', ')}`);
   }
   return grupos;
 }

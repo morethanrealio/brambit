@@ -189,13 +189,13 @@ const WRITE_SURFACE = [
 
 async function run() {
   console.log(`Base: ${BASE}`);
-  console.log(`Sessões: A=${short(SID.A)}  B=${short(SID.B)}\n`);
+  console.log(`Sessions: A=${short(SID.A)}  B=${short(SID.B)}\n`);
 
   const invA = await discover('A');
   const invB = await discover('B');
   for (const inv of [invA, invB]) {
-    if (inv.error) { console.error(`Conta ${inv.who}: ${inv.error}`); process.exit(2); }
-    console.log(`Conta ${inv.who} = ${inv.nome} / ${inv.subdomain} (userId ${inv.userId || 'não descoberto'})`);
+    if (inv.error) { console.error(`Account ${inv.who}: ${inv.error}`); process.exit(2); }
+    console.log(`Account ${inv.who} = ${inv.nome} / ${inv.subdomain} (userId ${inv.userId || 'não descoberto'})`);
     console.log(`  threads=${inv.threads.length} mídia=${inv.mediaKeys.length} agentes=${inv.agents.length} ` +
       `páginas=${inv.pages.length} spaces=${inv.spaces.length} rotinas=${inv.routines.length} ` +
       `tarefas=${inv.tasks.length} devices=${inv.devices.length} conexões=${inv.connections.length} ` +
@@ -280,8 +280,8 @@ async function run() {
   const falhas = results.filter((r) => r.ok === false);
   const passes = results.filter((r) => r.ok === true);
   const skips = results.filter((r) => r.ok === null);
-  console.log(`\nResumo: ${passes.length} passaram, ${falhas.length} falharam, ${skips.length} pulados.`);
-  console.log(`Superfície de ESCRITA não coberta nesta rodada (${WRITE_SURFACE.length} endpoints):`);
+  console.log(`\nSummary: ${passes.length} passed, ${falhas.length} failed, ${skips.length} skipped.`);
+  console.log(`WRITE surface not covered in this round (${WRITE_SURFACE.length} endpoints):`);
   for (const w of WRITE_SURFACE) console.log(`  · ${w}`);
   if (process.env.JSON === '1') console.log('\n' + JSON.stringify({ results, writeSurface: WRITE_SURFACE }, null, 2));
   process.exit(falhas.length ? 1 : 0);

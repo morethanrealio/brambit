@@ -144,7 +144,7 @@ export function installEgress() {
   if (installed) return;
   const orig = globalThis.fetch;
   if (typeof orig !== 'function') {
-    console.error('[egress] fetch global ausente; ponto de saída NÃO instalado');
+    console.error('[egress] global fetch missing; egress point NOT installed');
     return;
   }
   installed = true;
@@ -181,7 +181,7 @@ export function installEgress() {
         const now = Date.now();
         if (now - s.lastWarn > 60_000) {
           s.lastWarn = now;
-          console.warn(`[egress] FORA DO INVENTARIO host=${host}${port} via=${via} calls=${s.calls} mode=${MODE}`);
+          console.warn(`[egress] OUT OF INVENTORY host=${host}${port} via=${via} calls=${s.calls} mode=${MODE}`);
         }
         if (MODE === 'block') {
           return Promise.reject(new Error(`[egress] host bloqueado: ${host} (via ${via}). Entre no inventário antes.`));
@@ -195,7 +195,7 @@ export function installEgress() {
     return orig.call(this, input, init);
   };
 
-  console.log(`[egress] ponto de saída instalado (mode=${MODE}, ${hostsPermitidos().length} hosts no inventário)`);
+  console.log(`[egress] egress point installed (mode=${MODE}, ${hostsPermitidos().length} hosts in inventory)`);
 }
 
 installEgress();

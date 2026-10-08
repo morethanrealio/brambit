@@ -31,13 +31,13 @@ export async function jevChoice({ state, instructions, criteria, trava = '' }) {
       body: JSON.stringify({ state: String(state || '').slice(0, 1400), model: process.env.JEV_MODEL || 'jev-latest',
         questions: { q: { type: 'choice', instructions, criteria } } }),
     });
-    if (!r.ok) { console.warn(`[jev] ${trava} HTTP ${r.status}: segue a regra fixa`); return null; }
+    if (!r.ok) { console.warn(`[jev] ${trava} HTTP ${r.status}: falling back to the fixed rule`); return null; }
     const choice = (await r.json())?.answers?.q?.choice;
     if (!Object.hasOwn(criteria, choice)) return null;
     console.log(`[jev] ${trava} -> ${choice} (${Date.now() - t0}ms)`);
     return choice;
   } catch (e) {
-    console.warn(`[jev] ${trava} ${e?.name === 'AbortError' ? 'timeout' : 'erro'}: segue a regra fixa`);
+    console.warn(`[jev] ${trava} ${e?.name === 'AbortError' ? 'timeout' : 'erro'}: falling back to the fixed rule`);
     return null;
   } finally { clearTimeout(timer); }
 }

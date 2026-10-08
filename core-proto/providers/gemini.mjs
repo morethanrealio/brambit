@@ -39,13 +39,13 @@ async function fetchRetry(url, init, tag = 'gemini', spec = null) {
         res=Response.json(data);
       }else res = await fetch(url, init);
       if (res.ok || !RETRY_STATUS.has(res.status) || i >= RETRY_DELAYS.length) return res;
-      console.warn(`[${tag}] ${res.status} transitório, tentativa ${i + 1}/${RETRY_DELAYS.length}`);
+      console.warn(`[${tag}] ${res.status} transient, attempt ${i + 1}/${RETRY_DELAYS.length}`);
     } catch (e) {
       throwIfAttemptControl(e);
       if(e.httpStatus&&!RETRY_STATUS.has(e.httpStatus))throw e;
       // Network failure (socket/DNS/timeout): same retry policy.
       if (i >= RETRY_DELAYS.length) throw e;
-      console.warn(`[${tag}] falha de rede (${e?.message ?? e}), tentativa ${i + 1}/${RETRY_DELAYS.length}`);
+      console.warn(`[${tag}] network failure (${e?.message ?? e}), attempt ${i + 1}/${RETRY_DELAYS.length}`);
     }
     await sleep(RETRY_DELAYS[i] + Math.floor(Math.random() * 400));
   }
@@ -175,7 +175,7 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
           if (r.ok) hit.expireAt = Date.now() + TTL_SEC * 1000;
           else console.log(`[gemini cache] refresh ${r.status}: ${(await r.text()).slice(0, 120)}`);
         } catch (e) {
-          console.log(`[gemini cache] refresh erro: ${e?.message ?? e}`);
+          console.log(`[gemini cache] refresh error: ${e?.message ?? e}`);
         }
         hit.refreshing = false;
       }
@@ -192,7 +192,7 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
       // system interleaving). Recreates; with too many misses, gives up on the history
       // for a while (otherwise it would become a recreation on every step, at full price).
       hit.missCount = (hit.missCount || 0) + 1;
-      console.log(`[gemini cache] prefixo divergiu (len=${pl}, misses=${hit.missCount}) — recriando`);
+      console.log(`[gemini cache] prefix diverged (len=${pl}, misses=${hit.missCount}) — recreating`);
       if (hit.missCount >= HIST_MISS_LIMIT) {
         hit.histSkipUntil = now + HIST_SKIP_MS;
         cutoff = 0;
@@ -246,10 +246,10 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
       // up to the limit and would recreate the cache at full price forever.
       histSkipUntil: hit?.histSkipUntil, missCount: hit?.missCount || 0,
     });
-    console.log(`[gemini cache] criado ${data.name} (~${data.usageMetadata?.totalTokenCount ?? '?'} tok, hist=${cut} msgs)`);
+    console.log(`[gemini cache] created ${data.name} (~${data.usageMetadata?.totalTokenCount ?? '?'} tok, hist=${cut} msgs)`);
     return { name: data.name, prefixLen: cut };
   } catch (e) {
-    console.log(`[gemini cache] erro: ${e?.message ?? e}`);
+    console.log(`[gemini cache] error: ${e?.message ?? e}`);
     if (validOld) { hit.growSkipUntil = now + 60000; return validOld; }
     caches.set(ck, { skipUntil: now + 60000, histSkipUntil: hit?.histSkipUntil });
     return undefined;

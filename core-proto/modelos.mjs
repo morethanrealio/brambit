@@ -123,7 +123,7 @@ function juntarSimples(principal, reserva, tag) {
         catch (e) {
           throwIfAttemptControl(e);
           usePrincipal = false;
-          console.error(`[${tag}] ${principal.name} caiu, usando a reserva ${reserva.name}: ${e?.message ?? e}`);
+          console.error(`[${tag}] ${principal.name} failed, falling back to ${reserva.name}: ${e?.message ?? e}`);
         }
       }
       return reserva.complete(args);

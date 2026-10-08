@@ -24,7 +24,7 @@ const TOKEN = process.env.RUNNER_TOKEN || '';
 const MAX_BODY = 2 * 1024 * 1024; // 2MB (writeFile pode mandar arquivo)
 const MAX_FILE = Number(process.env.RUNNER_MAX_FILE || 25 * 1024 * 1024); // /readfile cap
 
-if (!TOKEN) { console.error('RUNNER_TOKEN ausente; recusando subir.'); process.exit(1); }
+if (!TOKEN) { console.error('RUNNER_TOKEN missing; refusing to start.'); process.exit(1); }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -102,4 +102,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => console.log(`runnerd ouvindo em ${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`runnerd listening on ${HOST}:${PORT}`));

@@ -49,7 +49,7 @@ const sentinela = (ms) => new Promise((r) => setTimeout(() => r({ type: '__nada_
 
 // ── PART 1: the real module ──
 async function parte1() {
-  console.log('── Parte 1: web/runner.mjs em processo (comando de A pendente de verdade) ──');
+  console.log('── Part 1: web/runner.mjs in-process (A\'s command really pending) ──');
   const meta = { hostname: 'maquina-de-teste', os: 'linux', version: '2.1.1' };
 
   // Registers both devices and leaves each one hanging on the long-poll, which is how
@@ -136,7 +136,7 @@ async function call(who, method, path, { body, bearer } = {}) {
 }
 
 async function parte2() {
-  console.log('\n── Parte 2: canal do runner pela HTTP ──');
+  console.log('\n── Part 2: runner channel over HTTP ──');
   const criados = [];
   try {
     const st0 = await call('A', 'GET', '/api/runner/status');
@@ -178,7 +178,7 @@ async function parte2() {
     await pollA;
   } finally {
     for (const [who, id] of criados) await call(who, 'POST', '/api/device/tokens/revoke', { body: { id } });
-    if (criados.length) console.log(`Devices de teste revogados: ${criados.length}`);
+    if (criados.length) console.log(`Test devices revoked: ${criados.length}`);
   }
   return criados;
 }
@@ -186,13 +186,13 @@ async function parte2() {
 (async () => {
   await parte1();
   if (SID.A && SID.B) { BASE = baseOrExit(); await parte2(); }
-  else console.log('\n(Parte 2 pulada: sem SID_A/SID_B.)');
+  else console.log('\n(Part 2 skipped: no SID_A/SID_B.)');
 
   const falhas = results.filter((r) => r.ok === false);
   const pulados = results.filter((r) => r.ok === null);
-  console.log(`\nResumo: ${results.filter((r) => r.ok === true).length} passaram, ${falhas.length} falharam, ${pulados.length} pulados.`);
-  console.log('NÃO coberto: disparar um exec de verdade por HTTP exige o modelo chamar a tool `terminal`; ' +
-    'a pendência real com reqId de A é montada na parte 1, direto no módulo que produção usa.');
+  console.log(`\nSummary: ${results.filter((r) => r.ok === true).length} passed, ${falhas.length} failed, ${pulados.length} skipped.`);
+  console.log('NOT COVERED: triggering a real exec over HTTP requires the model to call the `terminal` tool; ' +
+    'the real pending state with A\'s reqId is set up in part 1, directly in the module production uses.');
   if (process.env.JSON === '1') console.log('\n' + JSON.stringify({ results }, null, 2));
   process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

@@ -20,7 +20,7 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
     // The preparation-failure notice has no report, so it has no PDF.
     let doc = null;
     if (!failed && buildDocument && p.body_markdown) {
-      try { doc = (await buildDocument(p)) || null; } catch (error) { console.warn('[discovery] pdf da devolutiva:', error?.message ?? error); }
+      try { doc = (await buildDocument(p)) || null; } catch (error) { console.warn('[discovery] feedback pdf:', error?.message ?? error); }
     }
 
     const withPdf = 'Preparei sua devolutiva da jornada, com ideias de como posso ajudar no seu dia a dia. Está no PDF em anexo. Depois de ler, me diga por onde você quer começar.';
@@ -51,7 +51,7 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
         // a utility template.
         const closed = p.channel === 'whatsapp' && whatsappWindowOpen ? (await whatsappWindowOpen(p)) === false : false;
         if (closed) {
-          const mailed = emailDocument ? await emailDocument(p, doc).catch((error) => { console.warn('[discovery] pdf por e-mail:', error?.message ?? error); return false; }) : false;
+          const mailed = emailDocument ? await emailDocument(p, doc).catch((error) => { console.warn('[discovery] pdf by email:', error?.message ?? error); return false; }) : false;
           if (mailed) {
             const aviso = `Sua devolutiva da jornada está pronta. Como já faz mais de 24 horas desde sua última mensagem por aqui, enviei o PDF para o seu e-mail. Você também pode abrir a conversa: ${link}`;
             const receipt = await deliverToChannel({ ...p, title: 'Sua jornada de descoberta' }, aviso, aviso);
@@ -61,7 +61,7 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
           try {
             const receipt = await sendDocument(p, { ...doc, caption });
             if (receipt?.ok === true && typeof receipt?.id === 'string' && receipt.id.trim()) return { ok: true, id: receipt.id, threadId };
-          } catch (error) { console.warn('[discovery] envio do pdf:', error?.message ?? error); }
+          } catch (error) { console.warn('[discovery] pdf delivery:', error?.message ?? error); }
         }
         // Any PDF failure on the channel falls back to the notice with a link, and
         // the attachment remains available in the conversation.

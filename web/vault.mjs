@@ -69,7 +69,7 @@ function localKey() {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   try {
     fs.writeFileSync(file, crypto.randomBytes(32).toString('base64') + '\n', { flag: 'wx', mode: 0o600 });
-    console.log(`[vault] modo local: chave do cofre gerada em ${file}`);
+    console.log(`[vault] local mode: vault key generated at ${file}`);
   } catch (e) { if (e?.code !== 'EEXIST') throw e; }
   return ler();
 }

@@ -32,7 +32,7 @@ for (const n of PAGINAS) {
 for (const idioma of idiomas) {
   const cat = catalogos[idioma] || {};
   const faltam = [...porTexto].filter(([texto]) => !cat[texto]);
-  console.log(`\n── ${idioma}: ${Object.keys(cat).length} traduzidas, ${faltam.length} sem tradução (de ${porTexto.size})`);
+  console.log(`\n── ${idioma}: ${Object.keys(cat).length} translated, ${faltam.length} untranslated (of ${porTexto.size})`);
   for (const [texto, m] of faltam) console.log(`  [${m.paginas.join(',')}] ${JSON.stringify(texto.slice(0, 100))}`);
 }
-console.log('\nSem tradução não é bug por si: marca, e-mail, comando e nome de plano ficam iguais mesmo.');
+console.log('\nUntranslated is not a bug by itself: brand, e-mail, commands and plan names stay the same anyway.');

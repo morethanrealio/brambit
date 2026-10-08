@@ -44,7 +44,7 @@ export async function freioDeIdioma({ text, language, pedido = '', provider, usa
         usages?.push(...(refeito.usages || []));
         if (!refeito.text || ideogramaAcidental(refeito.text, language, '')) continue;
         if (mesmasLinhas(text, refeito.text)) { saida = refeito.text; desfecho = 'reescrito'; } else legivel ??= refeito.text;
-      } catch (e) { console.error('[freio_idioma] reescrita falhou:', e?.message ?? e); }
+      } catch (e) { console.error('[freio_idioma] rewrite failed:', e?.message ?? e); }
     }
     if (desfecho === 'aviso' && legivel) { saida = legivel; desfecho = 'reescrito_linhas_diferentes'; }
     if (desfecho === 'aviso') saida = avisoSemIdioma(language);

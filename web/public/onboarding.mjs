@@ -60,7 +60,7 @@ export function mountWizard(options) {
                 throw new Error('telemetry');
         }
         catch {
-            console.warn('[onboarding] métrica não confirmada:', event);
+            console.warn('[onboarding] metric not confirmed:', event);
         }
         finally {
             clearTimeout(timer);

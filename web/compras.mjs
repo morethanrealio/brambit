@@ -1082,7 +1082,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
       let out;
       try { out = await orig(args); }
       catch (e) {
-        console.log(`[compras] ${t.name} user=${userId} EXCECAO ${Date.now() - t0}ms: ${e?.message ?? e}`);
+        console.log(`[compras] ${t.name} user=${userId} EXCEPTION ${Date.now() - t0}ms: ${e?.message ?? e}`);
         throw e;
       }
       const txt = typeof out === 'string' ? out : '';

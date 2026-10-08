@@ -242,38 +242,38 @@ async function selftest() {
   // 2nd round in the SAME session: history should be reused (persistence) and the
   // large blob from the 1st round should have been collapsed when persisting.
   await runCodingSubagent({ objetivo: 'continua', tools: reg, provider: fake, sessionKey: key, maxSteps: 4 });
-  console.log(`[selftest] completes=${completes} (esperado >0). Módulo roda o loop, persiste sessão e colapsa blobs sem erro.`);
+  console.log(`[selftest] completes=${completes} (expected >0). Module runs the loop, persists the session and collapses blobs without error.`);
   console.log('[selftest] OK');
 }
 
 async function main() {
   if (has('--selftest')) { await selftest(); return; }
-  if (!has('--real')) { console.log('Use --selftest (sem chave) ou --real (com GEMINI_API_KEY).'); return; }
-  if (!process.env.GEMINI_API_KEY) { console.error('ERRO: defina GEMINI_API_KEY (chave do produto) pra rodar --real.'); process.exit(1); }
+  if (!has('--real')) { console.log('Use --selftest (no key needed) or --real (with GEMINI_API_KEY).'); return; }
+  if (!process.env.GEMINI_API_KEY) { console.error('ERROR: set GEMINI_API_KEY (product key) to run --real.'); process.exit(1); }
   const model = process.env.PRIMARY_TEXT_MODEL || 'gemini-3.7-flash';
-  console.log(`\n== BENCH coding inline vs sub-agente ==\nmodelo=${model} turnos=${TURNS} passos/turno=${STEPS}`);
-  console.log(`prefixo est: system_A≈${est(PRINCIPAL_SYSTEM + CODING_SYSTEM)}tok | system_principal_B≈${est(PRINCIPAL_SYSTEM)}tok | system_coding_B≈${est(CODING_SYSTEM)}tok\n`);
+  console.log(`\n== BENCH coding inline vs sub-agent ==\nmodel=${model} turns=${TURNS} steps/turn=${STEPS}`);
+  console.log(`estimated prefix: system_A≈${est(PRINCIPAL_SYSTEM + CODING_SYSTEM)}tok | system_principal_B≈${est(PRINCIPAL_SYSTEM)}tok | system_coding_B≈${est(CODING_SYSTEM)}tok\n`);
   // search=false to measure only coding dynamics (cache/tokens), without grounding.
   const provider = makeGemini({ model, search: false, maxOutputTokens: 32768 });
 
-  console.log('— Caminho A: coding INLINE no principal (como hoje) —');
+  console.log('— Path A: coding INLINE in the main agent (as it is today) —');
   const A = await runInline(provider);
   console.log(`  TOTAL A: ${fmt(A.total)}\n`);
 
-  console.log('— Caminho B: coding em SUB-AGENTE isolado (colapso + cap, sem resumo) —');
+  console.log('— Path B: coding in an isolated SUB-AGENT (collapse + cap, no summary) —');
   const B = await runSubagent(provider, { compact: false, tag: 'B' });
   console.log(`  TOTAL B: ${fmt(B.total)}\n`);
 
-  console.log('— Caminho C: sub-agente + COMPACTAÇÃO POR RESUMO (disciplina Claude Code / "meu harness") —');
+  console.log('— Path C: sub-agent + SUMMARY COMPACTION (Claude Code / "my harness" discipline) —');
   const C = await runSubagent(provider, { compact: true, tag: 'C' });
   console.log(`  TOTAL C: ${fmt(C.total)}\n`);
 
   const pct = (base, x) => base ? Math.round((1 - x / base) * 100) : 0;
-  console.log('== RESULTADO (vs A) ==');
-  console.log(`input:  A=${A.total.in}  B=${B.total.in} (${pct(A.total.in, B.total.in)}% menos)  C=${C.total.in} (${pct(A.total.in, C.total.in)}% menos)`);
+  console.log('== RESULT (vs A) ==');
+  console.log(`input:  A=${A.total.in}  B=${B.total.in} (${pct(A.total.in, B.total.in)}% less)  C=${C.total.in} (${pct(A.total.in, C.total.in)}% less)`);
   console.log(`cached: A=${A.total.cached}  B=${B.total.cached}  C=${C.total.cached}`);
-  console.log(`total:  A=${A.total.total}  B=${B.total.total} (${pct(A.total.total, B.total.total)}% menos)  C=${C.total.total} (${pct(A.total.total, C.total.total)}% menos)`);
-  console.log(`C vs B: input ${pct(B.total.in, C.total.in)}% menos, total ${pct(B.total.total, C.total.total)}% menos`);
+  console.log(`total:  A=${A.total.total}  B=${B.total.total} (${pct(A.total.total, B.total.total)}% less)  C=${C.total.total} (${pct(A.total.total, C.total.total)}% less)`);
+  console.log(`C vs B: input ${pct(B.total.in, C.total.in)}% less, total ${pct(B.total.total, C.total.total)}% less`);
   console.log(`(A: ${A.state.edits} edits/${A.state.publishes} pub | B: ${B.state.edits}/${B.state.publishes} | C: ${C.state.edits}/${C.state.publishes})`);
 }
 

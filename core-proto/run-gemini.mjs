@@ -8,7 +8,7 @@ import { buildTools } from './tools.mjs';
 import { makeGemini } from './providers/gemini.mjs';
 
 if (!process.env.GEMINI_API_KEY) {
-  console.error('Defina GEMINI_API_KEY no ambiente.');
+  console.error('Set GEMINI_API_KEY in the environment.');
   process.exit(1);
 }
 
@@ -20,10 +20,10 @@ const casos = [
 ];
 
 const trace = (e) => {
-  if (e.type === 'start') console.log(`\n=== ${e.provider} ===\nusuário: ${e.userInput}`);
+  if (e.type === 'start') console.log(`\n=== ${e.provider} ===\nuser: ${e.userInput}`);
   else if (e.type === 'tool_call') console.log(`  → tool ${e.name}(${JSON.stringify(e.args)})`);
   else if (e.type === 'tool_result') console.log(`  ← ${e.out}`);
-  else if (e.type === 'end') console.log(`agente: ${e.text}`);
+  else if (e.type === 'end') console.log(`agent: ${e.text}`);
 };
 
 for (const c of casos) {

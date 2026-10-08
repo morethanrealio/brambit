@@ -1011,7 +1011,7 @@ export function asaasTools({
   const registrar = async (dados) => {
     if (typeof registrarOperacao !== 'function' || !dados?.id) return;
     try { await registrarOperacao(dados); }
-    catch (e) { console.error('[asaas] não consegui registrar a operação:', e?.message || e); }
+    catch (e) { console.error('[asaas] could not log the operation:', e?.message || e); }
   };
 
   // Asaas's POST response may be PENDING and the webhook may arrive a few
@@ -1038,7 +1038,7 @@ export function asaasTools({
         const j = await request(caminho);
         const erro = erroAsaas(j, `a reconciliação do ${nome}`);
         if (erro) {
-          console.error(`[asaas] reconciliação ${nome} falhou:`, erro);
+          console.error(`[asaas] reconciliation ${nome} failed:`, erro);
           return;
         }
         const status = String(j.status || '').toUpperCase();
@@ -1059,10 +1059,10 @@ export function asaasTools({
           vencimento: j.dueDate || null,
         });
         if (!finais.includes(status)) {
-          console.warn(`[asaas] ${nome} ${id} segue ${status || 'sem status'} após 60 segundos`);
+          console.warn(`[asaas] ${nome} ${id} still ${status || 'sem status'} after 60 seconds`);
         }
       } catch (e) {
-        console.error(`[asaas] reconciliação ${nome} falhou:`, e?.message || e);
+        console.error(`[asaas] reconciliation ${nome} failed:`, e?.message || e);
       }
     }, 60_000);
     timer.unref?.();
@@ -1429,7 +1429,7 @@ export function asaasTools({
           externalReference: marca, expectedHash: authorizationHash,
         });
       } catch (e) {
-        console.error('[asaas] falha fechada ao registrar intenção do boleto:', e?.message || e);
+        console.error('[asaas] closed failure while logging the boleto intent:', e?.message || e);
         return JSON.stringify({
           ok: false, pending: true, id: j.id,
           error: `A Asaas recebeu o pagamento, mas o ${marcaDoProduto().nome} não conseguiu registrar a autorização segura. A validação será recusada; não repita o pagamento e consulte este id depois.`,
@@ -1463,7 +1463,7 @@ export function asaasTools({
         && typeof aguardarOperacao === 'function') {
       let final = null;
       try { final = await aguardarOperacao(j.id, 10_000); }
-      catch (e) { console.error('[asaas] espera curta do pagamento falhou:', e?.message || e); }
+      catch (e) { console.error('[asaas] short wait for the payment failed:', e?.message || e); }
       if (final) {
         j = {
           ...j,
@@ -1603,7 +1603,7 @@ export function asaasTools({
           externalReference: marca, expectedHash: authorizationHash,
         });
       } catch (e) {
-        console.error('[asaas] falha fechada ao registrar intenção do Pix:', e?.message || e);
+        console.error('[asaas] closed failure while logging the Pix intent:', e?.message || e);
         return JSON.stringify({
           ok: false, pending: true, id: j.id,
           error: `A Asaas recebeu o Pix, mas o ${marcaDoProduto().nome} não conseguiu registrar a autorização segura. A validação será recusada; não repita e consulte este id depois.`,
@@ -1633,7 +1633,7 @@ export function asaasTools({
         && typeof aguardarOperacao === 'function') {
       let final = null;
       try { final = await aguardarOperacao(j.id, 10_000); }
-      catch (e) { console.error('[asaas] espera curta do Pix falhou:', e?.message || e); }
+      catch (e) { console.error('[asaas] short wait for the Pix failed:', e?.message || e); }
       if (final) {
         j = {
           ...j,
@@ -2031,7 +2031,7 @@ export function asaasTools({
                 // Cancelling can't be blocked by a channel failure. The single
                 // query at 60s still closes the loop; the webhook's error stays
                 // observable in the log, without requiring another POST.
-                console.error('[asaas] não consegui preparar o webhook antes do cancelamento:', e?.message || e);
+                console.error('[asaas] could not prepare the webhook before the cancellation:', e?.message || e);
               }
             }
             let j;
@@ -2066,7 +2066,7 @@ export function asaasTools({
             if (status !== 'CANCELLED' && typeof aguardarOperacao === 'function') {
               let final = null;
               try { final = await aguardarOperacao(atual.resumo.id, 10_000); }
-              catch (e) { console.error('[asaas] espera curta do cancelamento falhou:', e?.message || e); }
+              catch (e) { console.error('[asaas] short wait for the cancellation failed:', e?.message || e); }
               status = String(final?.status || status).toUpperCase();
             }
             if (status === 'CANCELLED') {
