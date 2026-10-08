@@ -53,10 +53,13 @@ cites a cloud file listed in `nuvem.txt`.
 
 ## Tests
 
-Run only the tests for the area you changed: `node --test file.test.mjs` or the
-matching `npm run <area>:test` in `package.json`. The full `npm test` takes
-several minutes; run it only when asked. Add a test only when it catches a
-plausible change that nothing else (CI, boot, normal use) would catch.
+Tests live in `tests/`. Only the TypeScript areas (`deepseek/`, `discovery/`,
+`onboarding/`) keep their `.test.mts` next to the code they compile with, and
+`ops/` keeps the tests and probes of its own scripts. Run only the tests for the
+area you changed: `node --test tests/<file>.test.mjs` or the matching
+`npm run <area>:test` in `package.json`. The full `npm test` takes several
+minutes; run it only when asked. Add a test only when it catches a plausible
+change that nothing else (CI, boot, normal use) would catch.
 
 ## Changelog
 

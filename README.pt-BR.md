@@ -219,7 +219,7 @@ Pra rodar na sua máquina, use o [Quick start](#quick-start). Nunca reutilize o
 as integrações configuradas. O `.env` não é versionado. Fora do `npm run local`,
 o entrypoint é `node web/server.mjs`, por padrão em `127.0.0.1:8090`.
 
-Na rotina, rode só os testes da área que mudou (`node --test arquivo.test.mjs` ou
+Na rotina, rode só os testes da área que mudou (`node --test tests/<arquivo>.test.mjs` ou
 o script da área); `npm test` roda a suíte inteira. Testes de navegador exigem
 Chromium/Chrome via `CHROMIUM_PATH` quando necessário; testes de armazenamento de
 programação precisam de `flock`. Os testes com banco usam o mesmo Postgres 14
@@ -227,7 +227,7 @@ embutido:
 
 ```bash
 export TEST_POSTGRES_BIN="$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")"
-node --test server-boot.test.mjs
+node --test tests/server-boot.test.mjs
 ```
 
 Esse teste cria seu próprio banco, isola credenciais e bloqueia acessos externos.

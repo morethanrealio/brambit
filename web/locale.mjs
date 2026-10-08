@@ -1,5 +1,5 @@
 // User language and country: only PURE functions, no database and no HTTP, so
-// they can be tested on their own (`node locale.test.mjs`). db.mjs does the writing;
+// they can be tested on their own (`node tests/locale.test.mjs`). db.mjs does the writing;
 // server.mjs reads the header. The rule lives here.
 
 // What the product REALLY supports today. While only Portuguese text exists,

@@ -8,7 +8,7 @@
 //     looks for and, without it, runs on the defaults.
 //  2. The core boots alone: copies the repository WITHOUT any cloud file to a
 //     temp folder and does what `npm run local` does (throwaway Postgres, boot
-//     tables, migrations, server), with the network blocked as in server-boot.test.mjs.
+//     tables, migrations, server), with the network blocked as in tests/server-boot.test.mjs.
 //     Checks the pages, sign-up and login of an account.
 //
 // Usage: node test-support/nucleo-guard.mjs          (both proofs)
