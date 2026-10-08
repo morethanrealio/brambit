@@ -37,7 +37,7 @@ function placed() {
   return [...local, path.join(h, '.local', 'share', 'applications', 'brambit.desktop'), path.join(h, '.config', 'autostart', 'brambit.desktop')];
 }
 const present = (f) => { try { lstatSync(f); return true; } catch { return false; } };
-const userPath = () => execFileSync('powershell.exe', ['-NoProfile', '-Command', "[Environment]::GetEnvironmentVariable('Path', 'User')"], { encoding: 'utf8' });
+const userPath = () => execFileSync('powershell.exe', ['-NoProfile', '-Command', "[Environment]::GetEnvironmentVariable('Path', 'User')"], { encoding: 'utf8' }).trim();
 
 // The installed `brambit` command, as a terminal runs it. Windows runs .cmd only through cmd.
 // Output goes to a file, not a pipe: `open` leaves Brambit running, and on Windows it

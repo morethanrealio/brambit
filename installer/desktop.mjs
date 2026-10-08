@@ -30,6 +30,8 @@ function powershell(script, env) {
 }
 
 const WIN_SHORTCUTS = `
+# Its progress bar comes out as CLIXML noise when the output is not a console.
+$ProgressPreference = 'SilentlyContinue'
 $shell = New-Object -ComObject WScript.Shell
 $programs = Join-Path ([Environment]::GetFolderPath('Programs')) 'Brambit.lnk'
 $desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Brambit.lnk'
