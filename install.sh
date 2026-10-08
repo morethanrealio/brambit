@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs Brambit for the current user on macOS or Linux, no administrator needed:
 #
-#   curl -fsSL https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/morethanrealio/brambit/main/install.sh | bash
 #
 # Downloads its own Node.js (checksums pinned below, nothing else on the computer
 # changes) and Brambit, installs the `brambit` command, the shortcut and starting
@@ -78,7 +78,7 @@ main() {
     tar -C "$BRAMBIT_SOURCE" --exclude ./node_modules --exclude ./.git --exclude ./.local -cf - . | tar -C "$new" -xf -
   else
     say "downloading Brambit $BRAMBIT_VERSION"
-    curl -fsSL --retry 3 -o "$tmp/brambit.tar.gz" "https://github.com/morethanrealio/Brambit/archive/refs/tags/v$BRAMBIT_VERSION.tar.gz"
+    curl -fsSL --retry 3 -o "$tmp/brambit.tar.gz" "https://github.com/morethanrealio/brambit/archive/refs/tags/v$BRAMBIT_VERSION.tar.gz"
     tar -xzf "$tmp/brambit.tar.gz" -C "$new" --strip-components 1
   fi
 

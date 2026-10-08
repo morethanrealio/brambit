@@ -1,7 +1,7 @@
 # Installs Brambit for the current user on Windows, no administrator needed.
 # In PowerShell:
 #
-#   irm https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/morethanrealio/brambit/main/install.ps1 | iex
 #
 # Downloads its own Node.js (checksum pinned below, nothing else on the computer
 # changes) and Brambit into %LOCALAPPDATA%\Programs\Brambit, installs the
@@ -72,7 +72,7 @@
     } else {
       Say "downloading Brambit $brambitVersion"
       $zip = Join-Path $tmp 'brambit.zip'
-      Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/morethanrealio/Brambit/archive/refs/tags/v$brambitVersion.zip" -OutFile $zip
+      Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/morethanrealio/brambit/archive/refs/tags/v$brambitVersion.zip" -OutFile $zip
       $extracted = Extract $zip (Join-Path $tmp 'brambit')
       Move-Item -LiteralPath $extracted -Destination $new
     }
