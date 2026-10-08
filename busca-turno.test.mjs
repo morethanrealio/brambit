@@ -52,8 +52,8 @@ t('consulta vazia continua erro', (await tool.run({ consulta: ' ' })).startsWith
 
 // Server wiring: budget shared with the research sub-agent
 const src = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
-t('principal usa o orçamento do turno', src.includes('webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget })'));
-t('sub-agente usa o mesmo orçamento', src.includes('webSearchTool({ onUsage, budget: searchBudget })') && src.includes('language: userLang, searchBudget })'));
+t('principal usa o orçamento do turno', src.includes('webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno })'));
+t('sub-agente usa o mesmo orçamento', src.includes('webSearchTool({ onUsage, budget: searchBudget, fontes })') && src.includes('language: userLang, searchBudget, fontes: fontesDoTurno })'));
 t('pesquisar para quando o teto do turno bate', src.includes('if (searchBudget.exhausted) return SEARCH_LIMIT_MSG(searchBudget.max);'));
 t('sem teto separado de pesquisar', !src.includes('MAX_PESQUISAS_POR_TURNO'));
 t('saldo repetido na conversa não grava resposta', src.includes('skipAssistant: creditStopRepetida') && src.includes("creditReplyGuard.allow(thread.id, termination, text)"));
@@ -61,7 +61,7 @@ t('saldo repetido volta suprimido', src.includes("return { text: '', attachments
 const dbsrc = readFileSync(new URL('./web/db.mjs', import.meta.url), 'utf8');
 t('saveThreadTurn aceita skipAssistant', dbsrc.includes('skipAssistant = false') && (dbsrc.match(/if \(!skipAssistant\) await client\.query/g) || []).length === 2);
 const slsrc = readFileSync(new URL('./web/slack.mjs', import.meta.url), 'utf8');
-t('slack não manda (sem resposta) no suprimido', (slsrc.match(/if \(res\?\.suppressed\) return;/g) || []).length === 2);
+t('slack não manda (sem resposta) no suprimido', (slsrc.match(/if \(res\?\.suppressed\) return;/g) || []).length === 1 && (slsrc.match(/await responder\(/g) || []).length === 2);
 t('push de chat passa pelo freio de crédito', src.includes('creditPushGuard.allow(userId, termination, text)'));
 
 // Channels: a suppressed response doesn't become a message nor "(no response)"
