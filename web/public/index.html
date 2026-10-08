@@ -4540,45 +4540,32 @@ function closeDrawer() { E('sidebar').classList.remove('open'); E('overlay').cla
 E('ham').onclick = openDrawer;
 E('overlay').onclick = closeDrawer;
 
-// Assistant types (presets). `goal` is stored on the agent and serves as the key
-// to retrieve the template tasks later. `connect` = suggested Google services.
+// Assistant types (presets), in the page's language. `goal` is stored on the agent
+// along with the instructions. `connect` = suggested Google services.
 const TYPES = [
-  { id:'shopper', em:'🛍️', label:'Shopper', name:'Mara',
-    goal:'comprar melhor: preço justo, cupom e wishlist',
-    desc:'Caça preço, cupom e acompanha sua lista de desejos.',
-    instructions:'Você é um personal shopper. Ajuda a pessoa a comprar melhor: dá veredito de preço justo, acha cupom que realmente funciona, vigia a wishlist e a queda de preço, compara lojas e rastreia pedidos. Encontra produtos REAIS à venda na web; para cada recomendação traga nome, preço aproximado (R$), a loja e o link direto. Prioriza economia real, nunca empurra compra.',
-    connect:['gmail','calendar'],
-    tasks:['Esse preço está bom?','Acha um cupom que funcione pra loja X','Vigia a queda de preço deste produto','Monta uma lista de presentes'] },
-  { id:'work', em:'💼', label:'Trabalho', name:'Bento',
-    goal:'organizar seu dia: agenda, e-mails e tarefas',
-    desc:'Briefing do dia, triagem de inbox e preparo de reunião.',
-    instructions:'Você é um assistente de trabalho com pegada de chefe de gabinete: organizado, proativo e escreve bem. Faz briefing do dia (agenda + e-mails + prazos), triagem da caixa de entrada com rascunho de resposta, preparo de reunião, gestão de to-do e follow-ups, e resumo de documentos e threads.',
-    connect:['gmail','calendar','docs','drive'],
-    tasks:['Resume minha caixa de entrada','Prepara minha próxima reunião','Rascunha uma resposta pra este e-mail','Como está meu dia hoje?'] },
-  { id:'health', em:'🩺', label:'Saúde', name:'Vita',
-    goal:'seu bem-estar: alimentação, treino e rotina',
-    desc:'Alimentação, treino, consultas e rotina anti-stress.',
-    instructions:'Você é um parceiro de bem-estar: acolhedor e motivador. Ajuda com plano de refeições e receitas pelo que a pessoa tem em casa, lembrete de treino e check-in, organização de consultas e exames, e rotina anti-stress. IMPORTANTE: você cuida de BEM-ESTAR, não dá diagnóstico nem conselho médico; diante de qualquer sinal de alarme, oriente procurar um profissional de saúde. Trate dados de saúde como sensíveis e confidenciais.',
-    connect:['calendar','drive'],
-    tasks:['Monta meu plano de refeições da semana','Lembra do meu treino','Sugere uma rotina de respiração pra hoje','Receita com o que tenho em casa'] },
-  { id:'coder', em:'💻', label:'Coder', name:'Cody',
-    goal:'parceiro de código: revisar, debugar, arquitetar',
-    desc:'Escreve, revisa e debuga código, sugere arquitetura.',
-    instructions:'Você é um par de programação: direto, pragmático e mostra o trade-off. Escreve, revisa e debuga código, explica trechos, sugere arquitetura com prós e contras e rascunha docs. Responde com código objetivo, sem textão.',
-    connect:['docs','drive'],
-    tasks:['Revisa este código','Debuga este erro','Explica este trecho','Sugere uma arquitetura pra X'] },
+  { id:'shopper', em:'🛍️', label:tx('templates.shopper_label'), name:'Mara',
+    goal:tx('templates.shopper_goal'),
+    instructions:tx('templates.shopper_instructions'),
+    connect:['gmail','calendar'] },
+  { id:'work', em:'💼', label:tx('templates.work_label'), name:'Bento',
+    goal:tx('templates.work_goal'),
+    instructions:tx('templates.work_instructions'),
+    connect:['gmail','calendar','docs','drive'] },
+  { id:'health', em:'🩺', label:tx('templates.health_label'), name:'Vita',
+    goal:tx('templates.health_goal'),
+    instructions:tx('templates.health_instructions'),
+    connect:['calendar','drive'] },
+  { id:'coder', em:'💻', label:tx('templates.coder_label'), name:'Cody',
+    goal:tx('templates.coder_goal'),
+    instructions:tx('templates.coder_instructions'),
+    connect:['docs','drive'] },
 ];
 // General "does-everything" agent: highlighted on creation, picks up all the tools the
 // user connects. `connect` lists all available services.
-const GENERIC = { id:'geral', em:'✨', label:'Assistente completo', name:'__MARCA__',
-  goal:'faz tudo: seu assistente pessoal completo',
-  desc:'Cuida de tudo: e-mails, agenda, documentos, pesquisa, compras e o que mais você precisar. Usa todas as ferramentas que você conectar.',
-  instructions:'Você é o assistente pessoal completo da pessoa, um faz-tudo. Cuida de e-mails, agenda, documentos e arquivos, pesquisa na web, compras e organização do dia a dia. Use todas as ferramentas conectadas conforme a necessidade de cada pedido. Seja proativo, organizado e direto; quando houver escolhas, mostre as opções e o trade-off principal. Adapte o tom ao que a pessoa precisa em cada momento.',
-  connect:['gmail','calendar','docs','drive'],
-  tasks:['Como está meu dia hoje?','Resume minha caixa de entrada','Pesquisa e me dá um resumo sobre um assunto','Esse preço está bom?'] };
-const ALL_TYPES = [GENERIC, ...TYPES];
-const typeByGoal = (g) => ALL_TYPES.find(t => t.goal === g);
-const SERVICE_META = { gmail:{em:'📧',label:'Gmail'}, calendar:{em:'📅',label:'Agenda'}, docs:{em:'📄',label:'Docs'}, drive:{em:'🗂️',label:'Drive'} };
+const GENERIC = { id:'geral', em:'✨', label:tx('templates.generic_label'), name:'__MARCA__',
+  goal:tx('templates.generic_goal'),
+  instructions:tx('templates.generic_instructions'),
+  connect:['gmail','calendar','docs','drive'] };
 
 let pendingType = null; // type chosen in the Assistants form (to save the goal)
 function fillFromType(t) { pendingType = t; E('aname').value = t.name; E('instructions').value = t.instructions; E('instructions').focus(); }
@@ -4586,7 +4573,7 @@ function fillFromType(t) { pendingType = t; E('aname').value = t.name; E('instru
   const box = E('templates');
   // highlight of the full agent, before the specific types
   const g = document.createElement('span');
-  g.className = 'chip chip-feat'; g.textContent = GENERIC.em + ' ' + GENERIC.label + ' • faz tudo';
+  g.className = 'chip chip-feat'; g.textContent = GENERIC.em + ' ' + GENERIC.label + ' ' + tx('templates.does_it_all');
   g.onclick = () => fillFromType(GENERIC);
   box.appendChild(g);
   TYPES.forEach(t => {
@@ -4600,11 +4587,11 @@ function fillFromType(t) { pendingType = t; E('aname').value = t.name; E('instru
 E('create').onclick = async () => {
   const name = E('aname').value.trim(), instructions = E('instructions').value.trim();
   const err = E('err1'); err.classList.add('hidden');
-  if (!name) return showErr(err, 'Dê um nome à assistente.');
-  const btn = E('create'); btn.disabled = true; btn.textContent = 'Criando...';
+  if (!name) return showErr(err, tx('agents.name_required'));
+  const btn = E('create'); btn.disabled = true; btn.textContent = tx('agents.creating');
   const goal = (pendingType && pendingType.instructions === instructions) ? pendingType.goal : undefined;
   const res = await api('api/agent', { name, instructions, goal });
-  btn.disabled = false; btn.textContent = 'Criar assistente';
+  btn.disabled = false; btn.textContent = tx('agents.create');
   if (res.error) return showErr(err, res.error);
   const me = await api('api/me');
   homeAgents = me.agents || [];
@@ -4646,8 +4633,8 @@ function onboardingLoadError() {
   if (!notice) {
     notice = document.createElement('div'); notice.id = 'onboardingLoadError'; notice.setAttribute('role', 'alert');
     notice.style.cssText = 'position:fixed;bottom:16px;left:16px;right:16px;z-index:99999;padding:16px;background:#fff;border:2px solid #9b4824;border-radius:12px;color:#302b27;';
-    const message = document.createElement('p'); message.textContent = 'Não consegui abrir a etapa inicial. Seu cadastro não foi marcado como concluído.';
-    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Recarregar para retomar'; retry.onclick = () => location.reload();
+    const message = document.createElement('p'); message.textContent = tx('onboarding.load_failed');
+    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = tx('onboarding.reload'); retry.onclick = () => location.reload();
     notice.append(message, retry); document.body.append(notice);
   }
 }
@@ -4667,11 +4654,11 @@ function openChatThread(threadId, title, agentName, msgs) {
   currentThreadId = threadId; chatViewEpoch++; chatGen++;
   chatSending = !!chatPending.get(threadId)?.size;
   E('typing').classList.toggle('hidden', !chatSending);
-  E('typing').textContent = 'digitando...';
+  E('typing').textContent = tx('chat.typing');
   pendingImages = []; pendingFiles = []; renderAttachPreview();
   E('input').value = ''; growInput();
   E('msgs').innerHTML = '';
-  E('botname').textContent = title || agentName || 'Conversa';
+  E('botname').textContent = title || agentName || tx('chat.default_title');
   switchTab('chat');
   (msgs || []).forEach(m => addMsg(m.content, m.role === 'user' ? 'me' : 'bot', m.attachments));
   scrollChatToEnd(false); // always opens at the end, even with a long history
@@ -4765,18 +4752,18 @@ async function startTask() {
   const err = E('taskErr'); err.classList.add('hidden');
   const text = E('taskInput').value.trim();
   const agentId = E('taskAgent').value;
-  if (!agentId) return showErr(err, 'Crie uma assistente primeiro (aba Assistentes).');
-  if (!text) return showErr(err, 'Escreva o que você quer resolver.');
+  if (!agentId) return showErr(err, tx('chat.create_assistant_first'));
+  if (!text) return showErr(err, tx('chat.write_request'));
   taskStarting = true;
   const epoch = chatViewEpoch, btn = E('taskStart'); btn.disabled = true;
   let createdId = null;
   try {
     const res = await api('api/thread', { agentId });
-    if (res.error || !res.id) return showErr(err, res.error || 'Não consegui abrir a conversa.');
+    if (res.error || !res.id) return showErr(err, res.error || tx('chat.open_failed'));
     if (E('taskInput').value.trim() === text) E('taskInput').value = '';
     if (epoch === chatViewEpoch) openChatThread(res.id, '', res.agentName, []);
     createdId = res.id;
-  } catch { showErr(err, 'Não consegui iniciar a conversa. Confira a lista antes de tentar novamente.'); }
+  } catch { showErr(err, tx('chat.start_failed')); }
   finally { taskStarting = false; btn.disabled = false; }
   if (createdId) await sendThread(text, [], [], createdId);
 }
@@ -4788,11 +4775,11 @@ E('backHome').onclick = async () => { navigate('/conversas'); loadThreads(); };
 E('tgConnectBtn').onclick = async () => {
   const err = E('tgErr'); err.classList.add('hidden');
   const token = E('tgToken').value.trim(), agentId = E('tgAgent').value;
-  if (!token) return showErr(err, 'Cole o token que o BotFather te deu.');
-  if (!agentId) return showErr(err, 'Crie um agente primeiro pra ligar ao Telegram.');
-  const btn = E('tgConnectBtn'); btn.disabled = true; btn.textContent = 'Conectando...';
+  if (!token) return showErr(err, tx('telegram.paste_token'));
+  if (!agentId) return showErr(err, tx('telegram.create_agent_first'));
+  const btn = E('tgConnectBtn'); btn.disabled = true; btn.textContent = tx('connections.connecting');
   const res = await api('api/connect/telegram', { token, agentId });
-  btn.disabled = false; btn.textContent = 'Conectar agente';
+  btn.disabled = false; btn.textContent = tx('telegram.connect_agent');
   if (res.error) return showErr(err, res.error);
   E('tgToken').value = '';
   const next = homeTelegramBots.filter(b => b.agentId !== agentId);
@@ -4800,7 +4787,7 @@ E('tgConnectBtn').onclick = async () => {
   renderTelegram(next, homeAgents);
 };
 async function disconnectTelegram(token, username) {
-  if (!confirm('Desconectar @' + username + '? Esse bot para de responder.')) return;
+  if (!confirm(tx('telegram.disconnect_confirm', { username }))) return;
   await api('api/disconnect/telegram', { token });
   renderTelegram(homeTelegramBots.filter(b => b.token !== token), homeAgents);
 }
@@ -4809,12 +4796,12 @@ async function disconnectTelegram(token, username) {
 E('waConnectBtn').onclick = async () => {
   const err = E('waErr'); err.classList.add('hidden');
   const phone = E('waPhone').value.trim(), agentId = E('waAgent').value;
-  if (!E('waOptin').checked) return showErr(err, 'Marque o aceite pra ativar o WhatsApp.');
-  if (phone.replace(/\D/g,'').length < 10) return showErr(err, 'Informe o número com país e DDD (ex: 5511999998888).');
-  if (!agentId) return showErr(err, 'Escolha qual assistente vai atender no WhatsApp.');
-  const btn = E('waConnectBtn'); btn.disabled = true; btn.textContent = 'Conectando...';
+  if (!E('waOptin').checked) return showErr(err, tx('whatsapp.consent_required'));
+  if (phone.replace(/\D/g,'').length < 10) return showErr(err, tx('whatsapp.number_required'));
+  if (!agentId) return showErr(err, tx('whatsapp.pick_assistant'));
+  const btn = E('waConnectBtn'); btn.disabled = true; btn.textContent = tx('connections.connecting');
   const res = await api('api/connect/whatsapp', { phone, agentId });
-  btn.disabled = false; btn.textContent = 'Conectar WhatsApp';
+  btn.disabled = false; btn.textContent = tx('whatsapp.connect');
   if (res.error) return showErr(err, res.error);
   E('waPhone').value = '';
   // Typing the number doesn't connect it: the server returns a code and the number is only
@@ -4825,10 +4812,8 @@ E('waConnectBtn').onclick = async () => {
 function showWaPending(res, agentId) {
   E('waConnect').classList.add('hidden');
   E('waPending').classList.remove('hidden');
-  E('waPendingMsg').innerHTML = 'Falta confirmar que o número <b>' + esc(res.phone) + '</b> é seu: mande o código <b>'
-    + esc(res.code) + '</b> do seu WhatsApp pro número do __MARCA__'
-    + (res.expiresInMin ? ' (vale ' + Number(res.expiresInMin) + ' min)' : '')
-    + '. Assim que a mensagem chegar, o número fica conectado.';
+  E('waPendingMsg').innerHTML = txHtml('whatsapp.confirm_number', { phone: '<b>' + esc(res.phone) + '</b>', code: '<b>' + esc(res.code) + '</b>',
+    expiry: res.expiresInMin ? txHtml('whatsapp.code_expiry', { count: Number(res.expiresInMin) }) : '' });
   const open = E('waPendingOpen'), num = String(res.number || '').replace(/\D/g, '');
   if (num) {
     open.href = 'https://wa.me/' + num + '?text=' + encodeURIComponent('conectar ' + res.code);
@@ -4840,7 +4825,7 @@ E('waPendingBack').onclick = () => {
   E('waConnect').classList.remove('hidden');
 };
 E('waDisconnect').onclick = async () => {
-  if (!confirm('Desconectar o WhatsApp?')) return;
+  if (!confirm(tx('whatsapp.disconnect_confirm'))) return;
   await api('api/disconnect/whatsapp', {});
   renderWhatsApp({ linked: false }, homeAgents);
 };
@@ -4849,15 +4834,16 @@ E('waDisconnect').onclick = async () => {
 E('slCodeBtn').onclick = async () => {
   const err = E('slErr'); err.classList.add('hidden');
   const agentId = E('slAgent').value;
-  if (!agentId) return showErr(err, 'Escolha qual assistente vai atender.');
-  const btn = E('slCodeBtn'); btn.disabled = true; btn.textContent = 'Gerando...';
+  if (!agentId) return showErr(err, tx('connections.pick_assistant'));
+  const btn = E('slCodeBtn'); btn.disabled = true; btn.textContent = tx('connections.generating');
   const res = await api('api/slack/pair-code', { agentId });
-  btn.disabled = false; btn.textContent = 'Gerar código de conexão';
+  btn.disabled = false; btn.textContent = tx('connections.generate_code');
   if (res.error) return showErr(err, res.error);
   const out = E('slCodeOut');
-  out.innerHTML = 'Código pra <b>' + esc(res.agentName) + '</b> (vale ' + (res.expiresInMin || 15) + ' min):'
+  // `conectar` is the command slack.mjs reads, so it stays as is in every language.
+  out.innerHTML = txHtml('connections.slack_code_for', { name: '<b>' + esc(res.agentName) + '</b>', count: res.expiresInMin || 15 })
     + '<div style="font-size:22px;font-weight:700;letter-spacing:2px;margin:6px 0;">' + esc(res.code) + '</div>'
-    + 'No Slack, no canal ou DM onde quer esse assistente, mande: <code>conectar ' + esc(res.code) + '</code>';
+    + txHtml('connections.slack_send', { command: '<code>conectar ' + esc(res.code) + '</code>' });
   out.classList.remove('hidden');
 };
 
@@ -4866,12 +4852,12 @@ E('extSaveBtn').onclick = async () => {
   const err = E('extErr'); err.classList.add('hidden');
   const ok = E('extOk'); ok.classList.add('hidden');
   const agentId = E('extAgent').value;
-  if (!agentId) return showErr(err, 'Escolha qual assistente vai atender.');
-  const btn = E('extSaveBtn'); btn.disabled = true; btn.textContent = 'Salvando...';
+  if (!agentId) return showErr(err, tx('connections.pick_assistant'));
+  const btn = E('extSaveBtn'); btn.disabled = true; btn.textContent = tx('common.saving');
   const res = await api('api/ext/agent', { agentId });
-  btn.disabled = false; btn.textContent = 'Salvar';
+  btn.disabled = false; btn.textContent = tx('common.save');
   if (res.error) return showErr(err, res.error);
-  ok.textContent = 'Pronto, a extensão vai responder com esse assistente.'; ok.classList.remove('hidden');
+  ok.textContent = tx('connections.extension_saved'); ok.classList.remove('hidden');
 };
 
 // ── __MARCA__ Runner (assistant that uses the local machine; requires the runner to be online) ──
@@ -4879,12 +4865,12 @@ E('runnerSaveBtn').onclick = async () => {
   const err = E('runnerErr'); err.classList.add('hidden');
   const ok = E('runnerOk'); ok.classList.add('hidden');
   const agentId = E('runnerAgent').value;
-  if (!agentId) return showErr(err, 'Escolha qual assistente vai usar o Runner.');
-  const btn = E('runnerSaveBtn'); btn.disabled = true; btn.textContent = 'Salvando...';
+  if (!agentId) return showErr(err, tx('runner.pick_assistant'));
+  const btn = E('runnerSaveBtn'); btn.disabled = true; btn.textContent = tx('common.saving');
   const res = await api('api/runner/agent', { agentId });
-  btn.disabled = false; btn.textContent = 'Salvar';
+  btn.disabled = false; btn.textContent = tx('common.save');
   if (res.error) return showErr(err, res.error);
-  ok.textContent = 'Pronto, esse assistente opera no Runner.'; ok.classList.remove('hidden');
+  ok.textContent = tx('runner.saved'); ok.classList.remove('hidden');
 };
 
 // Images attached to the next message (vision). Downsized on the client to fit the
@@ -4987,10 +4973,10 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
   const pending = chatPending.get(threadId) || new Set(); pending.add(gen); chatPending.set(threadId, pending);
   if (visible()) { chatSending = true; clearLocalNotes(); addMsg(text, 'me', atts); }
   const typing = E('typing');
-  if (visible()) { typing.textContent = 'digitando...'; typing.classList.remove('hidden'); }
+  if (visible()) { typing.textContent = tx('chat.typing'); typing.classList.remove('hidden'); }
   const heartbeatTimer = setTimeout(() => {
     if (visible() && gen === chatGen && chatSending) {
-      typing.textContent = 'Ainda estou trabalhando nisso, já te respondo.';
+      typing.textContent = tx('chat.still_working');
     }
   }, 60000);
   const payload = { threadId, message: text };
@@ -5012,17 +4998,17 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
       if (!visible()) return;
       E('typing').classList.add('hidden');
       if (!recovered && gen === chatGen) {
-        addLocalNote('Sua conexão oscilou e a resposta não chegou até aqui. Ela não se perdeu: é só reabrir esta conversa daqui a pouco que ela aparece.');
+        addLocalNote(tx('chat.reply_not_delivered'));
       }
     } else {
       E('typing').classList.add('hidden');
       // A real reply becomes a normal bubble (it's in the history). A server error
       // becomes a local note, which doesn't count toward the poller's baseline.
       if (res && (res.reply || (res.attachments && res.attachments.length))) { addMsg(res.reply || '', 'bot', res.attachments); markThreadRead(threadId); }
-      else addLocalNote((res && res.error) || 'Não consegui responder agora. Tenta de novo em instantes.');
+      else addLocalNote((res && res.error) || tx('chat.reply_failed'));
     }
   } catch {
-    if (visible()) addLocalNote('Não consegui concluir o envio. Confira esta conversa antes de tentar novamente.');
+    if (visible()) addLocalNote(tx('chat.send_unconfirmed'));
   } finally {
     clearTimeout(heartbeatTimer);
     // Only releases the poller after rendering the response, otherwise a tick in between
@@ -5030,7 +5016,7 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
     // If another send started in between (long recovery), that one releases it instead.
     pending.delete(gen); if (!pending.size) chatPending.delete(threadId);
     if (currentThreadId === threadId) chatSending = pending.size > 0;
-    if (visible()) { typing.classList.toggle('hidden', !chatSending); typing.textContent = 'digitando...'; }
+    if (visible()) { typing.classList.toggle('hidden', !chatSending); typing.textContent = tx('chat.typing'); }
     loadCredits(); loadHomeItems();
   }
 }
@@ -5071,25 +5057,25 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     return;
   }
   if (location.search.includes('e=google')) {
-    showErr(E('authErr'), 'Não consegui entrar com o Google. Tenta de novo.');
+    showErr(E('authErr'), tx('auth.google_failed'));
     history.replaceState(null, '', location.pathname);
   }
   if (location.search.includes('e=beta')) {
     // The ?e=beta comes from the Google login when the beta cap has been hit. It's not
     // an "invite": it's a sold-out slot, and signing up by email right here puts the
     // person on the waitlist (the /api/signup route returns queued in that case).
-    showErr(E('authErr'), 'As vagas do Open Beta estão esgotadas no momento. Crie sua conta com e-mail e senha aqui mesmo para entrar na fila: a gente avisa assim que abrirem novas vagas.');
+    showErr(E('authErr'), tx('auth.beta_full'));
     history.replaceState(null, '', location.pathname);
   }
   // Returning from Stripe checkout.
   if (location.search.includes('billing=success')) {
-    billingFlash = 'Pagamento confirmado! Seu plano será atualizado em instantes.';
+    billingFlash = tx('billing.flash_paid');
     history.replaceState(null, '', location.pathname);
   } else if (location.search.includes('billing=pack_success')) {
-    billingFlash = 'Compra confirmada! Os créditos avulsos vão aparecer no seu saldo em instantes.';
+    billingFlash = tx('billing.flash_pack_paid');
     history.replaceState(null, '', location.pathname);
   } else if (location.search.includes('billing=cancel')) {
-    billingFlash = 'Checkout cancelado. Nenhuma cobrança foi feita.';
+    billingFlash = tx('billing.flash_canceled');
     history.replaceState(null, '', location.pathname);
   }
   // Returned from connecting an EMAIL SOURCE (Google or Hotmail/Outlook): both
@@ -5105,12 +5091,11 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     const qs = new URLSearchParams(location.search);
     const okProv = qs.get('connected'), errProv = qs.get('e');
     if (okProv && PROV_NAMES[okProv]) {
-      connFlash = { bad: false, text: PROV_NAMES[okProv] + ' conectado. Seus assistentes já podem usar.' };
+      connFlash = { bad: false, text: tx('connections.oauth_connected', { provider: PROV_NAMES[okProv] }) };
       goConnTab = true;
       history.replaceState(null, '', location.pathname);
     } else if (errProv && PROV_NAMES[errProv]) {
-      connFlash = { bad: true, text: 'Não consegui concluir a conexão com ' + PROV_NAMES[errProv] +
-        '. Isso costuma acontecer quando a autorização demora demais ou é aberta em outro navegador. Clique em conectar e conclua na mesma janela.' };
+      connFlash = { bad: true, text: tx('connections.oauth_failed', { provider: PROV_NAMES[errProv] }) };
       goConnTab = true;
       history.replaceState(null, '', location.pathname);
     }
@@ -5157,8 +5142,8 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
   if (onboardingReturn.outcome === 'empresa_dominio' && ['google', 'microsoft'].includes(onboardingReturn.provider)) {
     const nomeProv = onboardingReturn.provider === 'google' ? 'Google' : 'Microsoft';
     const doms = (me.empresa && me.empresa.dominios) || [];
-    connFlash = { bad: true, text: 'Essa conta ' + nomeProv + ' não foi conectada: a empresa' + (me.empresa ? ' ' + me.empresa.nome : '') +
-      ' só permite contas dos domínios ' + (doms.join(', ') || 'liberados') + '. Conecte a conta ' + nomeProv + ' com o e-mail da empresa.' };
+    connFlash = { bad: true, text: tx(me.empresa ? 'connections.domain_refused_named' : 'connections.domain_refused', {
+      provider: nomeProv, company: me.empresa ? me.empresa.nome : '', domains: doms.join(', ') || tx('connections.allowed_domains') }) };
     goConnTab = true;
   }
   // Without local state, the persisted step still allows resuming on another tab/device.

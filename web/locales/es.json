@@ -1375,7 +1375,17 @@
       "default_doc_name": "documento",
       "view_product": "Ver producto",
       "image_from_assistant": "Imagen enviada por el asistente",
-      "open_attachment": "abrir adjunto"
+      "open_attachment": "abrir adjunto",
+      "typing": "escribiendo...",
+      "default_title": "Conversación",
+      "still_working": "Todavía estoy trabajando en esto, ya te respondo.",
+      "reply_not_delivered": "Tu conexión falló y la respuesta no llegó hasta aquí. No se perdió: solo vuelve a abrir este chat en un rato y aparece.",
+      "reply_failed": "No pude responder ahora. Inténtalo de nuevo en un momento.",
+      "send_unconfirmed": "No pude terminar el envío. Revisa esta conversación antes de intentarlo de nuevo.",
+      "create_assistant_first": "Crea un asistente primero (pestaña Asistentes).",
+      "write_request": "Escribe lo que quieres resolver.",
+      "open_failed": "No pude abrir la conversación.",
+      "start_failed": "No pude iniciar la conversación. Revisa la lista antes de intentarlo de nuevo."
     },
     "auth": {
       "create_account": "Crear cuenta",
@@ -1398,7 +1408,9 @@
       "enter_email_password": "Completa el correo y la contraseña.",
       "accept_terms": "Tienes que aceptar los Términos de Uso y la Política de Privacidad.",
       "waitlist_title": "¡Entraste en la lista de espera! 🎉",
-      "waitlist_text": "En cuanto {brand} abra nuevos cupos, te avisamos por correo."
+      "waitlist_text": "En cuanto {brand} abra nuevos cupos, te avisamos por correo.",
+      "google_failed": "No pude iniciar sesión con Google. Inténtalo de nuevo.",
+      "beta_full": "Los cupos del Open Beta están agotados por ahora. Crea tu cuenta con correo y contraseña aquí mismo para entrar en la fila: te avisamos apenas se abran cupos nuevos."
     },
     "connections": {
       "google_connected": "Conectado: {services} (solo lectura). Tus agentes ya pueden usarlo.",
@@ -1425,7 +1437,19 @@
       "notion_desc": "leer y escribir en las páginas que autorices",
       "canva_desc": "buscar, crear y editar tus diseños",
       "choose_assistant": "Elige un asistente…",
-      "google_calendar": "Calendario"
+      "google_calendar": "Calendario",
+      "connecting": "Conectando...",
+      "pick_assistant": "Elige qué asistente va a atender.",
+      "generating": "Generando...",
+      "generate_code": "Generar código de conexión",
+      "slack_code_for": "Código para {name} (vale {count} min):",
+      "slack_send": "En Slack, en el canal o DM donde quieras este asistente, manda: {command}",
+      "extension_saved": "Listo, la extensión va a responder con este asistente.",
+      "oauth_connected": "{provider} conectado. Tus asistentes ya pueden usarlo.",
+      "oauth_failed": "No pude completar la conexión con {provider}. Esto suele pasar cuando la autorización tarda demasiado o se abre en otro navegador. Haz clic en conectar y termina en la misma ventana.",
+      "domain_refused": "Esta cuenta de {provider} no se conectó: la empresa solo permite cuentas de los dominios {domains}. Conecta la cuenta de {provider} con el correo de la empresa.",
+      "domain_refused_named": "Esta cuenta de {provider} no se conectó: la empresa {company} solo permite cuentas de los dominios {domains}. Conecta la cuenta de {provider} con el correo de la empresa.",
+      "allowed_domains": "permitidos"
     },
     "contacts": {
       "someone": "alguien",
@@ -1502,7 +1526,14 @@
       "send_now": "Mandar mensaje ahora",
       "greeting_named": "¡Hola {name}!",
       "greeting": "¡Hola!",
-      "connect_prompt": "Conecta tu número para hablar con tus asistentes por WhatsApp. Cambias de asistente con \"@nombre\" o \"menu\"."
+      "connect_prompt": "Conecta tu número para hablar con tus asistentes por WhatsApp. Cambias de asistente con \"@nombre\" o \"menu\".",
+      "consent_required": "Marca la casilla de aceptación para activar WhatsApp.",
+      "number_required": "Escribe el número con país y código de área (ej: 5511999998888).",
+      "pick_assistant": "Elige qué asistente va a atender en WhatsApp.",
+      "connect": "Conectar WhatsApp",
+      "confirm_number": "Falta confirmar que el número {phone} es tuyo: manda el código {code} desde tu WhatsApp al número de {brand}{expiry}. En cuanto llegue el mensaje, el número queda conectado.",
+      "code_expiry": " (vale {count} min)",
+      "disconnect_confirm": "¿Desconectar WhatsApp?"
     },
     "common": {
       "remove": "Quitar",
@@ -1527,11 +1558,17 @@
       "to_activate": "{link} para activarlo",
       "connected_count_one": "1 agente conectado en Telegram.",
       "connected_count_other": "{count} agentes conectados en Telegram.",
-      "prompt": "Crea un bot en Telegram (toma 1 min) y habla con tu agente por ahí, con el nombre y la foto que elijas."
+      "prompt": "Crea un bot en Telegram (toma 1 min) y habla con tu agente por ahí, con el nombre y la foto que elijas.",
+      "paste_token": "Pega el token que te dio BotFather.",
+      "create_agent_first": "Crea un agente primero para conectarlo a Telegram.",
+      "connect_agent": "Conectar agente",
+      "disconnect_confirm": "¿Desconectar @{username}? Este bot deja de responder."
     },
     "runner": {
       "connected": "Runner conectado{host}. Elige el asistente que opera en esta máquina.",
-      "offline": "Runner offline. Abre {brand} Runner en tu máquina para elegir el asistente."
+      "offline": "Runner offline. Abre {brand} Runner en tu máquina para elegir el asistente.",
+      "pick_assistant": "Elige qué asistente va a usar el Runner.",
+      "saved": "Listo, este asistente opera el Runner."
     },
     "home": {
       "good_morning": "Buenos días",
@@ -1590,7 +1627,10 @@
       "delete_title": "¿Eliminar \"{name}\"?",
       "delete_text": "Desaparece de tus listas y ya no se puede usar. El historial de los chats sigue guardado en tu cuenta.",
       "delete_confirm": "Eliminar asistente",
-      "delete_last_warning": "Es tu único asistente. Sin ninguno, vas a tener que crear uno nuevo para usar {brand}."
+      "delete_last_warning": "Es tu único asistente. Sin ninguno, vas a tener que crear uno nuevo para usar {brand}.",
+      "name_required": "Dale un nombre al asistente.",
+      "creating": "Creando...",
+      "create": "Crear asistente"
     },
     "apps": {
       "default_name": "aplicación",
@@ -1810,7 +1850,10 @@
       "checkout_error": "Error al abrir el checkout.",
       "portal_failed": "No se pudo abrir el portal.",
       "portal_error": "Error al abrir el portal.",
-      "ladder_you": "tú: {n}"
+      "ladder_you": "tú: {n}",
+      "flash_paid": "¡Pago confirmado! Tu plan se va a actualizar en instantes.",
+      "flash_pack_paid": "¡Compra confirmada! Los créditos sueltos van a aparecer en tu saldo en instantes.",
+      "flash_canceled": "Checkout cancelado. No se hizo ningún cargo."
     },
     "models": {
       "variable_cost": "consumo variable",
@@ -1841,6 +1884,28 @@
       "tts_desc": "Dejar que el asistente responda con un audio.",
       "tts_unit": "por respuesta",
       "one_credit": "{n} crédito"
+    },
+    "templates": {
+      "shopper_label": "Shopper",
+      "shopper_goal": "comprar mejor: precio justo, cupón y wishlist",
+      "shopper_instructions": "Eres un personal shopper. Ayudas a la persona a comprar mejor: das un veredicto de precio justo, encuentras cupones que de verdad funcionan, vigilas la wishlist y la bajada de precio, comparas tiendas y rastreas pedidos. Encuentras productos REALES a la venta en la web; para cada recomendación trae el nombre, el precio aproximado (R$), la tienda y el enlace directo. Priorizas el ahorro real, nunca empujas la compra.",
+      "work_label": "Trabajo",
+      "work_goal": "organizar tu día: agenda, correos y tareas",
+      "work_instructions": "Eres un asistente de trabajo con pinta de jefe de gabinete: organizado, proactivo y escribes bien. Haces el briefing del día (agenda + correos + plazos), triaje de la bandeja de entrada con borrador de respuesta, preparación de reuniones, gestión de to-dos y follow-ups, y resumen de documentos e hilos.",
+      "health_label": "Salud",
+      "health_goal": "tu bienestar: alimentación, entrenamiento y rutina",
+      "health_instructions": "Eres un compañero de bienestar: acogedor y motivador. Ayudas con plan de comidas y recetas según lo que la persona tiene en casa, recordatorio de entrenamiento y check-in, organización de consultas y exámenes, y rutina antiestrés. IMPORTANTE: cuidas del BIENESTAR, no das diagnóstico ni consejo médico; ante cualquier señal de alarma, orienta a buscar un profesional de la salud. Trata los datos de salud como sensibles y confidenciales.",
+      "coder_label": "Coder",
+      "coder_goal": "compañero de código: revisar, depurar, diseñar arquitectura",
+      "coder_instructions": "Eres un par de programación: directo, pragmático y muestras el trade-off. Escribes, revisas y depuras código, explicas fragmentos, sugieres arquitectura con pros y contras y redactas docs. Respondes con código objetivo, sin textos larguísimos.",
+      "generic_label": "Asistente completo",
+      "generic_goal": "hace de todo: tu asistente personal completo",
+      "generic_instructions": "Eres el asistente personal completo de la persona, uno que hace de todo. Te ocupas de correos, agenda, documentos y archivos, búsqueda en la web, compras y organización del día a día. Usa todas las herramientas conectadas según lo que necesite cada pedido. Sé proactivo, organizado y directo; cuando haya opciones, muestra las alternativas y el trade-off principal. Adapta el tono a lo que la persona necesita en cada momento.",
+      "does_it_all": "• hace de todo"
+    },
+    "onboarding": {
+      "load_failed": "No pude abrir el paso inicial. Tu configuración no se ha marcado como completa.",
+      "reload": "Recargar para retomar"
     }
   }
 }
