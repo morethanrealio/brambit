@@ -28,8 +28,8 @@ import { affectedTests } from './affected.mjs';
 const root = process.cwd();
 
 const PRODUCTION_PROBES = {
-  'ops/tenancy-test.mjs': 'sonda HTTP com cookies reais SID_A/SID_B (servidor local por padrão; remoto só com ALLOW_REMOTE=1); rodar à mão: SID_A=… SID_B=… node ops/tenancy-test.mjs',
-  'ops/tenancy-write-test.mjs': 'sonda de ESCRITA com cookies reais SID_A/SID_B (servidor local por padrão; remoto só com ALLOW_REMOTE=1); rodar à mão: SID_A=… SID_B=… node ops/tenancy-write-test.mjs',
+  'ops/tenancy-test.mjs': 'HTTP probe with real SID_A/SID_B cookies (local server by default; remote only with ALLOW_REMOTE=1); run by hand: SID_A=… SID_B=… node ops/tenancy-test.mjs',
+  'ops/tenancy-write-test.mjs': 'WRITE probe with real SID_A/SID_B cookies (local server by default; remote only with ALLOW_REMOTE=1); run by hand: SID_A=… SID_B=… node ops/tenancy-write-test.mjs',
 };
 
 const areaDirs = () => readdirSync(root).filter((d) => !d.startsWith('.') && d !== 'node_modules'
@@ -70,15 +70,15 @@ let selected = listTests();
 const i = args.indexOf('--changed-since');
 if (i >= 0) {
   const base = args[i + 1];
-  if (!base) throw Error('[suite] --changed-since precisa de um sha');
+  if (!base) throw Error('[suite] --changed-since needs a sha');
   args = [...args.slice(0, i), ...args.slice(i + 2)];
   const r = affectedTests(base, selected.map((t) => t.source), root);
-  for (const f of r.uncovered) process.stderr.write(`[suite] nenhum teste alcança ${f}\n`);
-  if (r.all) process.stderr.write('[suite] mudança global (package.json/lock ou runner): suíte inteira\n');
+  for (const f of r.uncovered) process.stderr.write(`[suite] no test reaches ${f}\n`);
+  if (r.all) process.stderr.write('[suite] global change (package.json/lock or runner): whole suite\n');
   const keep = new Set(r.tests);
   selected = selected.filter((t) => keep.has(t.source));
-  process.stderr.write(`[suite] ${r.changed.length} arquivos mudaram desde ${base.slice(0, 9)}\n`);
-  if (!selected.length) { process.stderr.write('[suite] nenhum teste afetado\n'); return 0; }
+  process.stderr.write(`[suite] ${r.changed.length} files changed since ${base.slice(0, 9)}\n`);
+  if (!selected.length) { process.stderr.write('[suite] no test affected\n'); return 0; }
 }
 
 // 1) Build of the TypeScript areas.
@@ -90,13 +90,13 @@ for (const area of areaDirs()) {
 }
 const after = git(['status', '--porcelain']);
 if (before !== null && before !== after) {
-  process.stderr.write('[suite] AVISO: o build mudou arquivos versionados (saída gerada estava desatualizada em relação ao .mts):\n'
+  process.stderr.write('[suite] WARNING: the build changed versioned files (generated output was stale relative to the .mts):\n'
     + after.split('\n').filter((l) => l && !before.split('\n').includes(l)).join('\n') + '\n');
 }
 
-for (const t of selected) if (!existsSync(t.run)) throw Error(`[suite] ${t.source} não gerou ${t.run} no build da área`);
-for (const [rel, why] of Object.entries(PRODUCTION_PROBES)) process.stderr.write(`[suite] fora da suíte: ${rel}: ${why}\n`);
-process.stderr.write(`[suite] ${selected.length} arquivos de teste\n`);
+for (const t of selected) if (!existsSync(t.run)) throw Error(`[suite] ${t.source} did not generate ${t.run} in the area build`);
+for (const [rel, why] of Object.entries(PRODUCTION_PROBES)) process.stderr.write(`[suite] outside the suite: ${rel}: ${why}\n`);
+process.stderr.write(`[suite] ${selected.length} test files\n`);
 const files = selected.map((t) => t.run);
 
 // 3) A single node --test. Localhost never goes through the environment's proxy.

@@ -28,49 +28,49 @@ const est = (s) => Math.ceil((s || '').length / 4);
 
 // ── Realistic coding system (size similar to the main agent's) ──
 const CODING_SYSTEM = [
-  'Você é um assistente que ajuda o usuário a construir e manter um app web',
-  'publicado. Você tem ferramentas de código: ler/listar/buscar arquivos, editar e',
-  'escrever arquivos, rodar comandos e publicar o app. Trabalhe de forma',
-  'incremental: leia o arquivo relevante ANTES de editar, faça a mudança pedida,',
-  'e publique quando fizer sentido. Seja direto. Ao concluir cada pedido,',
-  'responda em uma frase curta o que você fez.',
+  'You are an assistant that helps the user build and maintain a published',
+  'web app. You have code tools: read/list/search files, edit and write',
+  'files, run commands and publish the app. Work incrementally: read the',
+  'relevant file BEFORE editing, make the requested change,',
+  'and publish when it makes sense. Be direct. When you finish each request,',
+  'reply with a short sentence saying what you did.',
   '',
   // realistic padding to approximate the real system prompt (~7-11k tok). Repetition of
   // style/security guidelines that the production prompt carries.
   ...Array.from({ length: 40 }, (_, i) =>
-    `Diretriz ${i + 1}: ao mexer no app, preserve o comportamento existente, ` +
-    'não quebre rotas nem HTML já publicados, mantenha o estilo do código ao ' +
-    'redor, comente só quando agregar, e nunca exponha segredos em texto. ' +
-    'Prefira edições pontuais a reescrever o arquivo inteiro; confirme o efeito ' +
-    'da mudança antes de seguir para o próximo passo do pedido do usuário.'),
+    `Guideline ${i + 1}: when touching the app, preserve the existing behavior, ` +
+    'do not break already published routes or HTML, keep the surrounding code ' +
+    'style, comment only when it adds value, and never expose secrets in text. ' +
+    'Prefer targeted edits over rewriting the whole file; confirm the effect ' +
+    'of the change before moving on to the next step of the user\'s request.'),
 ].join('\n');
 
 const PRINCIPAL_SYSTEM = [
-  'Você é o assistente pessoal do usuário. Ajuda com tarefas do dia a',
-  'dia e, quando o pedido é de PROGRAMAÇÃO/código, delega ao ferramental certo.',
-  'Seja direto e responda em português.',
+  'You are the user\'s personal assistant. Help with day-to-day',
+  'tasks and, when the request is about CODING, delegate to the right tooling.',
+  'Be direct and respond in Portuguese.',
   ...Array.from({ length: 40 }, (_, i) =>
-    `Diretriz ${i + 1}: seja útil, honesto e conciso; use a ferramenta certa ` +
-    'para cada intenção, não invente informação, respeite as preferências do ' +
-    'usuário e mantenha o tom natural. Nunca envie e-mail ou mensagem sem que o ' +
-    'usuário tenha pedido; confirme antes de qualquer ação irreversível.'),
+    `Guideline ${i + 1}: be helpful, honest and concise; use the right tool ` +
+    'for each intent, do not make up information, respect the user\'s ' +
+    'preferences and keep a natural tone. Never send an email or message without the ' +
+    'user having asked for it; confirm before any irreversible action.'),
 ].join('\n');
 
 // ── Mock file state (the "app" being built) ──
 function seedFile() {
   return [
     '<!doctype html>', '<html lang="pt-br">', '<head>',
-    '<meta charset="utf-8">', '<title>Lista de Compras</title>',
+    '<meta charset="utf-8">', '<title>Shopping List</title>',
     '<style>body{font-family:system-ui;margin:2rem}button{padding:.5rem}</style>',
-    '</head>', '<body>', '<h1>Minha lista</h1>', '<ul id="itens"></ul>',
-    '<input id="novo" placeholder="novo item">', '<button id="add">adicionar</button>',
+    '</head>', '<body>', '<h1>My list</h1>', '<ul id="itens"></ul>',
+    '<input id="novo" placeholder="new item">', '<button id="add">add</button>',
     '<script>',
     'const itens=[];const ul=document.getElementById("itens");',
     'function render(){ul.innerHTML=itens.map(i=>`<li>${i}</li>`).join("")}',
     'document.getElementById("add").onclick=()=>{const v=document.getElementById("novo").value;if(v){itens.push(v);render()}};',
     '</script>', '</body>', '</html>',
     // padding so the file has the size of a real file (~2-4k chars).
-    ...Array.from({ length: 30 }, (_, i) => `<!-- linha de contexto ${i + 1}: comentário do app, historico de mudanca, nota de layout e acessibilidade -->`),
+    ...Array.from({ length: 30 }, (_, i) => `<!-- context line ${i + 1}: app comment, change history, layout and accessibility note -->`),
   ].join('\n');
 }
 
@@ -81,35 +81,35 @@ function makeCodingTools(state) {
   const tools = [];
   const P = (extra = {}) => ({ type: 'object', properties: { caminho: { type: 'string', description: 'caminho do arquivo' }, ...extra }, required: ['caminho'] });
   tools.push({
-    name: 'ler_arquivo', description: 'Lê um arquivo de texto do app (com número de linha). Use ANTES de editar. Aceita faixa de linhas (inicio/linhas) pra não ler o arquivo inteiro.',
-    parameters: P({ inicio: { type: 'number', description: 'linha inicial' }, linhas: { type: 'number', description: 'quantas linhas' } }),
+    name: 'ler_arquivo', description: 'Reads a text file from the app (with line numbers). Use it BEFORE editing. Accepts a line range (inicio/linhas) to avoid reading the whole file.',
+    parameters: P({ inicio: { type: 'number', description: 'starting line' }, linhas: { type: 'number', description: 'quantas linhas' } }),
     async run({ caminho }) { const c = state.files[caminho] || state.files['index.html']; return c.split('\n').map((l, i) => `${i + 1}\t${l}`).join('\n'); },
   });
   tools.push({
-    name: 'listar_arquivos', description: 'Lista os arquivos do app.', parameters: { type: 'object', properties: {}, required: [] },
+    name: 'listar_arquivos', description: 'Lists the app\'s files.', parameters: { type: 'object', properties: {}, required: [] },
     async run() { return Object.keys(state.files).join('\n'); },
   });
   tools.push({
-    name: 'buscar_no_codigo', description: 'Busca um termo nos arquivos do app (grep).', parameters: { type: 'object', properties: { termo: { type: 'string' } }, required: ['termo'] },
-    async run({ termo }) { const out = []; for (const [f, c] of Object.entries(state.files)) c.split('\n').forEach((l, i) => { if (l.includes(termo)) out.push(`${f}:${i + 1}: ${l}`); }); return out.join('\n') || '(sem resultados)'; },
+    name: 'buscar_no_codigo', description: 'Searches for a term in the app\'s files (grep).', parameters: { type: 'object', properties: { termo: { type: 'string' } }, required: ['termo'] },
+    async run({ termo }) { const out = []; for (const [f, c] of Object.entries(state.files)) c.split('\n').forEach((l, i) => { if (l.includes(termo)) out.push(`${f}:${i + 1}: ${l}`); }); return out.join('\n') || '(no results)'; },
   });
   tools.push({
     name: 'editar_arquivo', description: 'Edita um arquivo do app trocando um trecho exato (string-match único) por outro. Use pra mudanças pontuais.',
     parameters: P({ trecho_antigo: { type: 'string' }, trecho_novo: { type: 'string' } }),
-    async run({ caminho, trecho_antigo, trecho_novo }) { const f = caminho in state.files ? caminho : 'index.html'; if (!state.files[f].includes(trecho_antigo)) return 'ERRO: trecho_antigo não encontrado. Leia o arquivo e use um trecho que exista.'; state.files[f] = state.files[f].replace(trecho_antigo, trecho_novo); state.edits++; return `ok, editei ${f} (${state.edits} edições no total).`; },
+    async run({ caminho, trecho_antigo, trecho_novo }) { const f = caminho in state.files ? caminho : 'index.html'; if (!state.files[f].includes(trecho_antigo)) return 'ERROR: trecho_antigo not found. Read the file and use a snippet that exists.'; state.files[f] = state.files[f].replace(trecho_antigo, trecho_novo); state.edits++; return `ok, edited ${f} (${state.edits} edits total).`; },
   });
   tools.push({
-    name: 'escrever_arquivo', description: 'Cria ou sobrescreve um arquivo do app com o conteúdo dado.',
+    name: 'escrever_arquivo', description: 'Creates or overwrites an app file with the given content.',
     parameters: P({ conteudo: { type: 'string' } }),
-    async run({ caminho, conteudo }) { state.files[caminho] = conteudo; return `ok, escrevi ${caminho} (${conteudo.length} chars).`; },
+    async run({ caminho, conteudo }) { state.files[caminho] = conteudo; return `ok, wrote ${caminho} (${conteudo.length} chars).`; },
   });
   tools.push({
-    name: 'rodar_comando', description: 'Roda um comando no ambiente do app (build/test).', parameters: { type: 'object', properties: { comando: { type: 'string' } }, required: ['comando'] },
-    async run({ comando }) { return `$ ${comando}\n(ok, saída simulada: comando executado com sucesso)`; },
+    name: 'rodar_comando', description: 'Runs a command in the app\'s environment (build/test).', parameters: { type: 'object', properties: { comando: { type: 'string' } }, required: ['comando'] },
+    async run({ comando }) { return `$ ${comando}\n(ok, simulated output: command ran successfully)`; },
   });
   tools.push({
-    name: 'publicar_sistema', description: 'Publica a versão atual do app (fica no ar pro usuário).', parameters: { type: 'object', properties: {}, required: [] },
-    async run() { state.publishes++; return `app publicado (publicação #${state.publishes}). URL: https://app.example.com/lista`; },
+    name: 'publicar_sistema', description: 'Publishes the current version of the app (goes live for the user).', parameters: { type: 'object', properties: {}, required: [] },
+    async run() { state.publishes++; return `app published (publish #${state.publishes}). URL: https://app.example.com/lista`; },
   });
   // Padding: dummies with realistic descriptions to match the size of the real suite
   // (hosting/coding/sandbox/project/permission ~ dozens of defs). Never called.
@@ -126,11 +126,11 @@ function makeCodingTools(state) {
     'analisar_planilha', 'gerar_documento', 'enviar_para_drive', 'drive_upload_arquivo',
   ];
   for (const n of dummyNames) tools.push({
-    name: n, description: `Ferramenta de código/app: ${n.replace(/_/g, ' ')}. ` +
-      'Executa a operação correspondente no ambiente do app/projeto/servidor do usuário, ' +
-      'respeitando o modo de permissão vigente e os limites do ambiente; devolve o resultado ' +
-      'da operação ou um erro claro quando não é possível concluir. Use com o contexto certo.',
-    parameters: { type: 'object', properties: { alvo: { type: 'string', description: 'alvo da operação' }, opcoes: { type: 'string', description: 'opções adicionais' } }, required: [] },
+    name: n, description: `Code/app tool: ${n.replace(/_/g, ' ')}. ` +
+      'Performs the corresponding operation in the user\'s app/project/server environment, ' +
+      'respecting the current permission mode and the environment\'s limits; returns the ' +
+      'operation\'s result or a clear error when it cannot be completed. Use with the right context.',
+    parameters: { type: 'object', properties: { alvo: { type: 'string', description: 'operation target' }, opcoes: { type: 'string', description: 'additional options' } }, required: [] },
     async run() { return 'ok'; },
   });
   return tools;
@@ -141,9 +141,9 @@ function makeCodingTools(state) {
 function makeBaseTools() {
   const names = ['enviar_mensagem', 'criar_lembrete', 'criar_rotina', 'google', 'pesquisar', 'buscar_conversas', 'ler_conversa', 'registrar_evento', 'consultar_evento', 'listar_trackers', 'anotar_memoria', 'definir_meu_fuso'];
   return names.map((n) => ({
-    name: n, description: `Ferramenta do assistente: ${n.replace(/_/g, ' ')}. ` +
-      'Cumpre a intenção correspondente do usuário no dia a dia, com confirmação quando ' +
-      'a ação tem efeito externo; devolve um resultado curto. Use quando o pedido casar.',
+    name: n, description: `Assistant tool: ${n.replace(/_/g, ' ')}. ` +
+      'Fulfills the corresponding day-to-day user intent, with confirmation when ' +
+      'the action has an external effect; returns a short result. Use when the request matches.',
     parameters: { type: 'object', properties: { texto: { type: 'string' }, opcoes: { type: 'string' } }, required: [] },
     async run() { return 'ok'; },
   }));
@@ -151,14 +151,14 @@ function makeBaseTools() {
 
 // Scenario of that case: incremental change requests to the app, one per turn.
 const TASKS = [
-  'no meu app da lista de compras, adiciona um botão de "limpar tudo" que esvazia a lista. Publica quando terminar.',
-  'agora faz os itens da lista poderem ser removidos individualmente, com um X do lado de cada um. Publica.',
-  'salva a lista no localStorage pra não perder ao recarregar a página. Publica.',
-  'coloca um contador mostrando quantos itens tem na lista, no topo. Publica.',
-  'deixa o visual mais bonito: fundo levemente cinza, itens em cartões brancos com sombra. Publica.',
-  'adiciona um campo de busca que filtra os itens da lista conforme eu digito. Publica.',
-  'permite marcar item como comprado (riscado) clicando nele. Publica.',
-  'adiciona um botão de exportar a lista como texto pra copiar. Publica.',
+  'in my shopping list app, add a "clear all" button that empties the list. Publish when done.',
+  'now make the list items individually removable, with an X next to each one. Publish.',
+  'save the list to localStorage so it is not lost on page reload. Publish.',
+  'add a counter at the top showing how many items are in the list. Publish.',
+  'make it look nicer: light gray background, items in white cards with a shadow. Publish.',
+  'add a search field that filters the list items as I type. Publish.',
+  'allow marking an item as bought (strikethrough) by clicking it. Publish.',
+  'add a button to export the list as text to copy. Publish.',
 ];
 
 function sumUsages(usages) {
@@ -181,7 +181,7 @@ async function runInline(provider) {
     const { messages, usages } = await runAgent({ provider, tools: reg, system, userInput: TASKS[i], history, maxSteps: STEPS });
     history.length = 0; for (const m of messages) history.push(m);
     all.push(...usages);
-    process.stdout.write(`  [A turno ${i + 1}] ${fmt(sumUsages(usages))} | edits=${state.edits} pub=${state.publishes}\n`);
+    process.stdout.write(`  [A turn ${i + 1}] ${fmt(sumUsages(usages))} | edits=${state.edits} pub=${state.publishes}\n`);
   }
   return { total: sumUsages(all), state };
 }
@@ -213,7 +213,7 @@ async function runSubagent(provider, { compact = false, tag = 'B' } = {}) {
     history.length = 0; for (const m of messages) history.push(m);
     all.push(...usages);
     const turnUsages = [...all.slice(before)];
-    process.stdout.write(`  [${tag} turno ${i + 1}] ${fmt(sumUsages(turnUsages))} | edits=${state.edits} pub=${state.publishes}\n`);
+    process.stdout.write(`  [${tag} turn ${i + 1}] ${fmt(sumUsages(turnUsages))} | edits=${state.edits} pub=${state.publishes}\n`);
   }
   return { total: sumUsages(all), state };
 }
@@ -231,13 +231,13 @@ async function selftest() {
       if (!lastTool || messages.filter((m) => m.role === 'tool').length < 1 || messages[messages.length - 1].role !== 'tool') {
         return { stop: 'tool', toolCalls: [{ id: 'c1', name: 'ler_arquivo', args: { caminho: 'index.html' } }], usage: { in: 100, cached: 0, out: 10, total: 110 } };
       }
-      return { stop: 'end', text: 'feito', usage: { in: 100, cached: 0, out: 10, total: 110 } };
+      return { stop: 'end', text: 'done', usage: { in: 100, cached: 0, out: 10, total: 110 } };
     },
   };
   const reg = new ToolRegistry();
-  reg.add({ name: 'ler_arquivo', description: 'lê', parameters: { type: 'object', properties: {}, required: [] }, async run() { return bigOut; } });
+  reg.add({ name: 'ler_arquivo', description: 'reads', parameters: { type: 'object', properties: {}, required: [] }, async run() { return bigOut; } });
   const key = 'st:1';
-  await runCodingSubagent({ objetivo: 'leia o index', tools: reg, provider: fake, sessionKey: key, maxSteps: 4 });
+  await runCodingSubagent({ objetivo: 'read the index', tools: reg, provider: fake, sessionKey: key, maxSteps: 4 });
   const { sessions } = await import('../web/coding-subagent.mjs').then((m) => ({ sessions: null })); // (Map is private; we validate by behavior)
   // 2nd round in the SAME session: history should be reused (persistence) and the
   // large blob from the 1st round should have been collapsed when persisting.

@@ -34,7 +34,7 @@ import { baseOrExit } from './tenancy-base.mjs';
 const SID = { A: process.env.SID_A || '', B: process.env.SID_B || '' };
 
 if (!SID.A || !SID.B) {
-  console.error('Faltou SID_A e/ou SID_B (cookie de sessão de cada conta).');
+  console.error('Missing SID_A and/or SID_B (session cookie for each account).');
   process.exit(2);
 }
 const BASE = baseOrExit();
@@ -155,10 +155,10 @@ async function setup() {
 
   const ag = await call('A', 'POST', '/api/agent', {
     name: `ZZ ${MARCA}`,
-    goal: 'Recurso descartável do teste de isolamento entre contas.',
-    instructions: 'Não usar. Criado por ops/tenancy-write-test.mjs.',
+    goal: 'Disposable resource for the cross-account isolation test.',
+    instructions: 'Do not use. Created by ops/tenancy-write-test.mjs.',
   });
-  if (ag.status !== 200 || !ag.data?.id) return { erro: `não criei o assistente de teste: HTTP ${ag.status} ${ag.raw?.slice(0, 200)}` };
+  if (ag.status !== 200 || !ag.data?.id) return { erro: `failed to create the test assistant: HTTP ${ag.status} ${ag.raw?.slice(0, 200)}` };
   R.agentId = ag.data.id;
 
   const th = await call('A', 'POST', '/api/thread', { agentId: R.agentId, title: `ZZ ${MARCA} thread` });
@@ -171,7 +171,7 @@ async function setup() {
 
   const ro = await call('A', 'POST', '/api/routine', {
     agentId: R.agentId, title: `ZZ ${MARCA} rotina`,
-    prompt: 'Recurso descartável do teste de isolamento.',
+    prompt: 'Disposable resource for the isolation test.',
     // `days` is a text column (default 'daily'), not an array. 3am and
     // a lifespan of minutes: the routine dies long before any trigger.
     hour: 3, days: 'daily', tz: 'America/Sao_Paulo',
@@ -181,26 +181,26 @@ async function setup() {
   const pg = await call('A', 'POST', '/api/memory/page', {
     slug: MARCA, title: `ZZ ${MARCA}`, body: 'CONTEUDO-ORIGINAL-DE-A',
   });
-  if (pg.status === 200 && pg.data?.page?.slug) R.slug = pg.data.page.slug; else falta.push(`página de memória (HTTP ${pg.status})`);
+  if (pg.status === 200 && pg.data?.page?.slug) R.slug = pg.data.page.slug; else falta.push(`memory page (HTTP ${pg.status})`);
 
-  for (const [k, titulo] of [['taskId', 'tarefa 1'], ['taskId2', 'tarefa 2']]) {
+  for (const [k, titulo] of [['taskId', 'task 1'], ['taskId2', 'task 2']]) {
     const t = await call('A', 'POST', '/api/cockpit/task', {
       agentId: R.agentId, title: `ZZ ${MARCA} ${titulo}`,
-      body: 'Recurso descartável do teste de isolamento.', posX: 10, posY: 10, kind: 'task',
+      body: 'Disposable resource for the isolation test.', posX: 10, posY: 10, kind: 'task',
     });
-    if (t.status === 200 && t.data?.task?.id) R[k] = t.data.task.id; else falta.push(`${titulo} do cockpit (HTTP ${t.status})`);
+    if (t.status === 200 && t.data?.task?.id) R[k] = t.data.task.id; else falta.push(`cockpit ${titulo} (HTTP ${t.status})`);
   }
   if (R.taskId && R.taskId2) {
     const ed = await call('A', 'POST', '/api/cockpit/edge', { fromTask: R.taskId, toTask: R.taskId2 });
-    if (ed.status === 200 && ed.data?.edge?.id) R.edgeId = ed.data.edge.id; else falta.push(`aresta do cockpit (HTTP ${ed.status})`);
+    if (ed.status === 200 && ed.data?.edge?.id) R.edgeId = ed.data.edge.id; else falta.push(`cockpit edge (HTTP ${ed.status})`);
   }
-  const gr = await call('A', 'POST', '/api/cockpit/group', { title: `ZZ ${MARCA} sequência`, posX: 200, posY: 200 });
+  const gr = await call('A', 'POST', '/api/cockpit/group', { title: `ZZ ${MARCA} sequence`, posX: 200, posY: 200 });
   if (gr.status === 200 && gr.data?.group?.id) {
     R.groupId = gr.data.group.id;
     // Sequence needs an agent + queue for /group/run to reach execution; without
     // that the probe dies on a 400 validation error and doesn't test ownership at all.
     await call('A', 'POST', '/api/cockpit/group/update', { id: R.groupId, agentId: R.agentId, taskIds: [R.taskId].filter(Boolean) });
-  } else falta.push(`sequência do cockpit (HTTP ${gr.status})`);
+  } else falta.push(`cockpit sequence (HTTP ${gr.status})`);
 
   const dv = await call('A', 'POST', '/api/device/tokens', { label: `ZZ ${MARCA}` });
   if (dv.status === 200 && dv.data?.device?.id) { R.deviceId = dv.data.device.id; R.deviceToken = dv.data.token; }
@@ -210,10 +210,10 @@ async function setup() {
     provider: `zz-tenancy-test`, kind: 'apikey', label: `ZZ ${MARCA}`, secret: 'valor-descartavel-de-teste',
   });
   if (cn.status === 200 && cn.data?.connection?.id) R.connectionId = cn.data.connection.id;
-  else falta.push(`conexão no cofre (HTTP ${cn.status} ${cn.raw?.slice(0, 120)})`);
+  else falta.push(`vault connection (HTTP ${cn.status} ${cn.raw?.slice(0, 120)})`);
 
   const up = await call('A', 'POST', '/api/feed/upload', {
-    data: Buffer.from(`arquivo descartável do teste ${MARCA}`).toString('base64'),
+    data: Buffer.from(`disposable test file ${MARCA}`).toString('base64'),
     mimeType: 'text/plain', name: `${MARCA}.txt`,
   });
   if (up.status === 200 && up.data?.key) {
@@ -221,7 +221,7 @@ async function setup() {
     const fl = await call('A', 'GET', '/api/files');
     R.fileId = (fl.data?.files || []).find((f) => f.url?.includes(encodeURIComponent(R.fileKey)))?.id || null;
   }
-  if (!R.fileId) falta.push(`arquivo (HTTP ${up.status})`);
+  if (!R.fileId) falta.push(`file (HTTP ${up.status})`);
 
   return { falta };
 }
@@ -291,15 +291,15 @@ function probes() {
 // Write endpoints with id that stay OUT, with the reason. None of them
 // has a way to get a disposable target without touching something real of the owner's.
 const NAO_COBERTO = [
-  ['POST /api/home-items/delete', 'item de home é gerado pelo /api/home-refresh; não há como criar um descartável'],
-  ['POST /api/apps/visibility', 'publicar/despublicar exige um app real (build de container)'],
-  ['POST /api/apps/delete', 'apagar app é irreversível e derruba o container do dono'],
-  ['POST /api/apps/copy', 'copia a partir de app público; não endereça recurso privado por id'],
-  ['POST /api/spaces/mode', 'não existe endpoint de criação de Space pela API (nascem pelo assistente)'],
-  ['POST /api/disconnect/provider', 'exige OAuth conectado de verdade; desconectar é destrutivo'],
-  ['POST /api/google/accounts/remove', 'exige conta Google conectada de verdade'],
-  ['POST /api/contacts/accept', 'exige convite pendente entre as duas contas; criaria vínculo real'],
-  ['POST /api/contacts/decline', 'idem'],
+  ['POST /api/home-items/delete', 'home item is generated by /api/home-refresh; no way to create a disposable one'],
+  ['POST /api/apps/visibility', 'publish/unpublish requires a real app (container build)'],
+  ['POST /api/apps/delete', 'deleting an app is irreversible and tears down the owner\'s container'],
+  ['POST /api/apps/copy', 'copies from a public app; does not address a private resource by id'],
+  ['POST /api/spaces/mode', 'there is no Space creation endpoint via the API (they are born through the assistant)'],
+  ['POST /api/disconnect/provider', 'requires a real connected OAuth; disconnecting is destructive'],
+  ['POST /api/google/accounts/remove', 'requires a real connected Google account'],
+  ['POST /api/contacts/accept', 'requires a pending invite between the two accounts; would create a real link'],
+  ['POST /api/contacts/decline', 'same'],
 ];
 
 // ── Cleanup: account A itself undoes everything ──
@@ -309,27 +309,27 @@ async function cleanup() {
     const r = await call(who, method, path, body);
     if (r.status !== 200) sobrou.push(`${rotulo} (HTTP ${r.status})`);
   };
-  if (R.fileId) await tenta('arquivo', 'A', 'DELETE', `/api/files?id=${encodeURIComponent(R.fileId)}`);
-  if (R.connectionId) await tenta('conexão', 'A', 'POST', '/api/connections/delete', { id: R.connectionId });
+  if (R.fileId) await tenta('file', 'A', 'DELETE', `/api/files?id=${encodeURIComponent(R.fileId)}`);
+  if (R.connectionId) await tenta('connection', 'A', 'POST', '/api/connections/delete', { id: R.connectionId });
   if (R.deviceId) await tenta('device token', 'A', 'POST', '/api/device/tokens/revoke', { id: R.deviceId });
-  if (R.groupId) await tenta('sequência', 'A', 'DELETE', `/api/cockpit/group?id=${encodeURIComponent(R.groupId)}`);
-  for (const id of [R.taskId, R.taskId2].filter(Boolean)) await tenta('tarefa', 'A', 'DELETE', `/api/cockpit/task?id=${encodeURIComponent(id)}`);
+  if (R.groupId) await tenta('sequence', 'A', 'DELETE', `/api/cockpit/group?id=${encodeURIComponent(R.groupId)}`);
+  for (const id of [R.taskId, R.taskId2].filter(Boolean)) await tenta('task', 'A', 'DELETE', `/api/cockpit/task?id=${encodeURIComponent(id)}`);
   if (R.slug) {
-    await tenta('página de memória (A)', 'A', 'POST', '/api/memory/page/delete', { slug: R.slug });
+    await tenta('memory page (A)', 'A', 'POST', '/api/memory/page/delete', { slug: R.slug });
     // If the probe created the same-named page in account B, it gets removed here.
     const b = await call('B', 'GET', `/api/memory/page?slug=${encodeURIComponent(R.slug)}`);
-    if (b.status === 200) await tenta('página de memória (B)', 'B', 'POST', '/api/memory/page/delete', { slug: R.slug });
+    if (b.status === 200) await tenta('memory page (B)', 'B', 'POST', '/api/memory/page/delete', { slug: R.slug });
   }
-  if (R.routineId) await tenta('rotina', 'A', 'POST', '/api/routine/delete', { id: R.routineId });
-  if (R.threadId) await tenta('conversa', 'A', 'POST', '/api/thread/delete', { id: R.threadId });
+  if (R.routineId) await tenta('routine', 'A', 'POST', '/api/routine/delete', { id: R.routineId });
+  if (R.threadId) await tenta('conversation', 'A', 'POST', '/api/thread/delete', { id: R.threadId });
   // Orphan threads that the chat/run probes may have created with the test's name.
   const th = await call('A', 'GET', '/api/threads');
   for (const t of (th.data?.threads || [])) {
     if (String(t.title || '').includes(MARCA) && t.id !== R.threadId) {
-      await tenta('conversa extra', 'A', 'POST', '/api/thread/delete', { id: t.id });
+      await tenta('extra conversation', 'A', 'POST', '/api/thread/delete', { id: t.id });
     }
   }
-  if (R.agentId) await tenta('assistente', 'A', 'POST', '/api/agent/delete', { agentId: R.agentId });
+  if (R.agentId) await tenta('assistant', 'A', 'POST', '/api/agent/delete', { agentId: R.agentId });
   return sobrou;
 }
 
@@ -358,7 +358,7 @@ async function run() {
     for (const p of P) {
       const antes = await SNAP[p.chave]();
       if (retratoVazio(p.chave, antes)) {
-        record(p.nome, p.chave, { status: '-' }, null, 'alvo descartável não existe; probe não rodou');
+        record(p.nome, p.chave, { status: '-' }, null, 'disposable target does not exist; probe did not run');
         continue;
       }
       const r = await call('B', p.method, p.path, p.body);
@@ -373,7 +373,7 @@ async function run() {
   } finally {
     console.log('\n── Cleanup (account A deleting what it created) ──');
     sobrou = await cleanup();
-    console.log(sobrou.length ? `SOBROU pra apagar à mão: ${sobrou.join('; ')}` : 'Tudo apagado.');
+    console.log(sobrou.length ? `LEFT to delete by hand: ${sobrou.join('; ')}` : 'All deleted.');
   }
 
   const falhas = results.filter((r) => r.ok === false);

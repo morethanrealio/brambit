@@ -49,13 +49,13 @@ const PONTES = new Set(['web/plugins.mjs>web/plugins/ativos.mjs']);
 // Proof 1. Returns the issues as text (empty = ok).
 export function conferirImports(files, read, nuvem) {
   const problemas = [];
-  for (const [e, t] of nuvem.entradas) if (!files.some(t)) problemas.push(`${MANIFESTO}: "${e}" não corresponde a nenhum arquivo (tire a linha)`);
+  for (const [e, t] of nuvem.entradas) if (!files.some(t)) problemas.push(`${MANIFESTO}: "${e}" does not match any file (remove the line)`);
   for (const [f, d] of buildGraph(files, read)) {
     if (nuvem.ehNuvem(f)) continue;
     const ruins = [...d.imports].filter(nuvem.ehNuvem);
-    if (ruins.length) problemas.push(`${f} (núcleo) importa da nuvem: ${ruins.join(', ')}`);
+    if (ruins.length) problemas.push(`${f} (core) imports from the cloud: ${ruins.join(', ')}`);
     const citados = [...d.refs].filter((r) => nuvem.ehNuvem(r) && !PONTES.has(`${f}>${r}`));
-    if (citados.length) problemas.push(`${f} (núcleo) cita arquivo da nuvem: ${citados.join(', ')}`);
+    if (citados.length) problemas.push(`${f} (core) references a cloud file: ${citados.join(', ')}`);
   }
   return problemas;
 }
@@ -66,7 +66,7 @@ function pedir(port, rota, { method = 'GET', headers = {}, body } = {}) {
     const q = http.request({ hostname: '127.0.0.1', port, path: rota, method, headers }, (r) => {
       let b = ''; r.on('data', (x) => b += x); r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, body: b }));
     });
-    q.on('error', (e) => reject(Error(`${method} ${rota}: ${e.message}`))); q.setTimeout(5000, () => q.destroy(Error(`sem resposta em ${rota}`)));
+    q.on('error', (e) => reject(Error(`${method} ${rota}: ${e.message}`))); q.setTimeout(5000, () => q.destroy(Error(`no response from ${rota}`)));
     q.end(body);
   });
 }
@@ -88,7 +88,7 @@ export async function bootSemNuvem(files, nuvem) {
   try {
     const nucleo = files.filter((f) => !nuvem.ehNuvem(f) && existsSync(path.join(root, f)));
     for (const f of nucleo) cpSync(path.join(root, f), path.join(copia, f));
-    for (const f of files.filter(nuvem.ehNuvem)) if (existsSync(path.join(copia, f))) throw Error(`${f} é da nuvem e foi copiado`);
+    for (const f of files.filter(nuvem.ehNuvem)) if (existsSync(path.join(copia, f))) throw Error(`${f} is a cloud file and was copied`);
     symlinkSync(path.join(root, 'node_modules'), path.join(copia, 'node_modules'), 'dir');
     console.log(`core copied: ${nucleo.length} files (${files.length - nucleo.length} from the outside cloud)`);
 
@@ -116,16 +116,16 @@ export async function bootSemNuvem(files, nuvem) {
         if (servidor.exitCode !== null) break;
         await espera(100);
       }
-      throw Error('o servidor do núcleo não subiu');
+      throw Error('the core server did not come up');
     };
     const conferir = (cond, msg) => { if (!cond) throw Error(msg); };
 
     // 1st boot: the server creates the core's tables; then the migrations run, like in npm run local.
     await subir();
-    conferir(await parar() === 0, 'o servidor não saiu limpo no SIGTERM');
+    conferir(await parar() === 0, 'the server did not exit cleanly on SIGTERM');
     for (const n of migrationOrder(readdirSync(path.join(copia, 'migrations')).filter((n) => n.endsWith('.sql')))) {
       try { await db.query(readFileSync(path.join(copia, 'migrations', n), 'utf8')); }
-      catch (e) { throw Error(`migração ${n} falhou no banco do núcleo: ${e.message}`); }
+      catch (e) { throw Error(`migration ${n} failed on the core database: ${e.message}`); }
     }
     await db.end();
 
@@ -133,22 +133,22 @@ export async function bootSemNuvem(files, nuvem) {
     const porta = await subir();
     for (const [rota, st] of [['/', 200], ['/login', 200], ['/api/config', 200], ['/api/me', 401]]) {
       const r = await pedir(porta, rota);
-      conferir(r.status === st, `${rota} deu ${r.status}, esperado ${st}`);
+      conferir(r.status === st, `${rota} returned ${r.status}, expected ${st}`);
     }
     const origem = `http://127.0.0.1:${porta}`;
     const cadastro = await pedir(porta, '/api/signup', { method: 'POST', headers: { 'content-type': 'application/json', origin: origem },
       body: JSON.stringify({ name: 'Conta do núcleo', email: 'nucleo@example.invalid', password: randomBytes(12).toString('hex') }) });
-    conferir(cadastro.status === 200, `cadastro deu ${cadastro.status}: ${cadastro.body.slice(0, 200)}`);
+    conferir(cadastro.status === 200, `signup returned ${cadastro.status}: ${cadastro.body.slice(0, 200)}`);
     const cookie = String(cadastro.headers['set-cookie'] || '').split(';')[0];
-    conferir(cookie.includes('='), 'cadastro sem cookie de sessão');
+    conferir(cookie.includes('='), 'signup without a session cookie');
     const eu = await pedir(porta, '/api/me', { headers: { cookie } });
-    conferir(eu.status === 200 && JSON.parse(eu.body).name === 'Conta do núcleo', `/api/me logado deu ${eu.status}`);
-    conferir(await parar() === 0, 'o servidor não saiu limpo no SIGTERM');
-    conferir(!/ERR_MODULE_NOT_FOUND|Cannot find module|ReferenceError|SyntaxError|Failed to initialize the database/.test(log), 'erro no log do servidor');
+    conferir(eu.status === 200 && JSON.parse(eu.body).name === 'Conta do núcleo', `logged-in /api/me returned ${eu.status}`);
+    conferir(await parar() === 0, 'the server did not exit cleanly on SIGTERM');
+    conferir(!/ERR_MODULE_NOT_FOUND|Cannot find module|ReferenceError|SyntaxError|Failed to initialize the database/.test(log), 'error in the server log');
     console.log('core without the cloud: 2 boots, migrations, pages, signup and login ok');
   } catch (e) {
     await espera(500);
-    e.message += `\n--- log do servidor ---\n${log.slice(-4000)}`;
+    e.message += `\n--- server log ---\n${log.slice(-4000)}`;
     throw e;
   } finally {
     await parar();

@@ -44,14 +44,14 @@ export function run({ baseSha, cwd = process.cwd(), allow = false, log = console
     log(`[crescimento] ${r.file}: ${r.before ?? '-'} -> ${r.after ?? '-'} (${d})${r.grew ? '  CRESCEU' : ''}`);
   }
   const grew = report.filter((r) => r.grew);
-  if (!grew.length) { log('[crescimento] ok: nenhum dos arquivos travados cresceu'); return 0; }
-  if (allow) { log('[crescimento] cresceu, mas o PR tem o rótulo crescimento-autorizado'); return 0; }
+  if (!grew.length) { log('[crescimento] ok: none of the locked files grew'); return 0; }
+  if (allow) { log('[crescimento] grew, but the PR has the crescimento-autorizado label'); return 0; }
   log([
     '',
-    `[crescimento] ${grew.map((r) => r.file).join(' e ')} cresceu nesta mudança.`,
-    'Esses dois arquivos estão travados: código novo vai para um módulo próprio (ex.: web/<area>.mjs)',
-    'e entra aqui só como import/registro, compensado removendo linhas em outro ponto.',
-    'Exceção pontual: rótulo `crescimento-autorizado` no PR, com o motivo na descrição.',
+    `[crescimento] ${grew.map((r) => r.file).join(' and ')} grew in this change.`,
+    'These two files are locked: new code goes into its own module (e.g.: web/<area>.mjs)',
+    'and enters here only as an import/registration, offset by removing lines somewhere else.',
+    'One-off exception: the `crescimento-autorizado` label on the PR, with the reason in the description.',
   ].join('\n'));
   return 1;
 }

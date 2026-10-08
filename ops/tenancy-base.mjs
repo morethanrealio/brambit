@@ -11,11 +11,11 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 export function resolveBase(env = process.env) {
   const raw = (env.BASE || DEFAULT_BASE).trim().replace(/\/+$/, '');
   let url;
-  try { url = new URL(raw); } catch { throw new Error(`BASE inválida: ${raw}`); }
-  if (!/^https?:$/.test(url.protocol)) throw new Error(`BASE precisa ser http(s): ${raw}`);
+  try { url = new URL(raw); } catch { throw new Error(`Invalid BASE: ${raw}`); }
+  if (!/^https?:$/.test(url.protocol)) throw new Error(`BASE needs to be http(s): ${raw}`);
   const remote = !LOOPBACK.has(url.hostname);
   if (remote && env.ALLOW_REMOTE !== '1') {
-    throw new Error(`BASE=${raw} não é esta máquina. Para sondar um servidor remoto (produção inclusive), rode de novo com ALLOW_REMOTE=1.`);
+    throw new Error(`BASE=${raw} is not this machine. To probe a remote server (production included), run again with ALLOW_REMOTE=1.`);
   }
   return { base: raw, remote };
 }
@@ -24,7 +24,7 @@ export function resolveBase(env = process.env) {
 export function baseOrExit(env = process.env) {
   try {
     const r = resolveBase(env);
-    console.log(`Target: ${r.base}${r.remote ? '  (REMOTO, ALLOW_REMOTE=1)' : ''}`);
+    console.log(`Target: ${r.base}${r.remote ? '  (REMOTE, ALLOW_REMOTE=1)' : ''}`);
     return r.base;
   } catch (e) {
     console.error(e.message);

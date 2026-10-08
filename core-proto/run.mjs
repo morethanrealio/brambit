@@ -8,13 +8,13 @@ import { makeScripted } from './providers/scripted.mjs';
 // import { makeAnthropic } from './providers/anthropic.mjs';
 // import { makeOpenAI } from './providers/openai.mjs';
 
-const SYSTEM = 'Você é um personal shopper. Ajude a achar o produto certo usando as tools.';
-const PEDIDO = 'Quero um tênis de corrida até 500 reais.';
+const SYSTEM = 'You are a personal shopper. Help find the right product using the tools.';
+const PEDIDO = 'I want running shoes for up to 500 reais.';
 
 // Two pluggable "models". In the future: makeAnthropic(), makeOpenAI(), proprietary model.
 const providers = [
-  makeScripted({ name: 'modelo-A (foca nota)', strategy: 'melhor_nota' }),
-  makeScripted({ name: 'modelo-B (foca preço)', strategy: 'mais_barato' }),
+  makeScripted({ name: 'model-A (rating-focused)', strategy: 'melhor_nota' }),
+  makeScripted({ name: 'model-B (price-focused)', strategy: 'mais_barato' }),
 ];
 
 const trace = (e) => {
