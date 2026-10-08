@@ -1358,7 +1358,8 @@
       "typing": "typing...",
       "attach_image_or_pdf": "Attach image or PDF",
       "write_message_shift_enter": "Write your message... (Shift+Enter for a new line)",
-      "send": "Send"
+      "send": "Send",
+      "speak_message": "Speak your message"
     },
     "app": {
       "remember": "To remember"
@@ -1385,7 +1386,11 @@
       "create_assistant_first": "Create an assistant first (Assistants tab).",
       "write_request": "Write what you want to solve.",
       "open_failed": "I could not open the conversation.",
-      "start_failed": "I could not start the conversation. Check the list before trying again."
+      "start_failed": "I could not start the conversation. Check the list before trying again.",
+      "mic_start": "Speak your message",
+      "mic_stop": "Stop and send",
+      "mic_blocked": "I could not use the microphone. Allow microphone access for this page in your browser and try again.",
+      "mic_not_heard": "I could not understand the audio. Try again, a little closer to the microphone."
     },
     "auth": {
       "create_account": "Create account",

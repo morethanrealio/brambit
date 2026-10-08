@@ -353,6 +353,7 @@
   .composer textarea { flex:1; resize:none; min-height:44px; max-height:140px; line-height:1.4; overflow-y:auto; }
   .composer .mini { white-space:nowrap; }
   .composer .attach { background:transparent; color:var(--mut); border:1px solid var(--line); }
+  .composer .mic.rec { background:#d33; border-color:#d33; color:#fff; }
   .attach-preview { display:flex; gap:8px; flex-wrap:wrap; padding:10px 2px 0; }
   .attach-preview .thumb { position:relative; }
   .attach-preview .thumb img { height:58px; width:58px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
@@ -1417,6 +1418,7 @@
               <button class="mini attach" id="attachBtn" title="Attach image or PDF" data-i18n-title="index_page.chat.attach_image_or_pdf">📎</button>
               <input type="file" id="imgFile" accept="image/*,application/pdf,.pdf,text/html,.html,.htm,.txt,.md,.markdown,.csv,.json,.xml" multiple class="hidden" />
               <textarea id="input" rows="1" placeholder="Write your message... (Shift+Enter for a new line)" data-i18n-placeholder="index_page.chat.write_message_shift_enter"></textarea>
+              <button class="mini attach mic hidden" id="micBtn" title="Speak your message" aria-label="Speak your message" data-i18n-title="index_page.chat.speak_message" data-i18n-aria-label="index_page.chat.speak_message">🎤</button>
               <button class="mini" id="send" data-i18n="index_page.chat.send">Send</button>
             </div>
           </div>
@@ -4961,7 +4963,9 @@ E('imgFile').onchange = async (e) => {
   renderAttachPreview();
 };
 
-async function sendThread(text, images, files, threadId = currentThreadId) {
+// voice = the text is the transcript of what the person said; the server tells
+// the model so (markVoiceInput), as it does for channel audio.
+async function sendThread(text, images, files, threadId = currentThreadId, { voice = false } = {}) {
   if (!threadId) return;
   const epoch = chatViewEpoch;
   const visible = () => showingChat(threadId, epoch);
@@ -4971,7 +4975,7 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
     .concat(files.map(f => ({ type: 'doc', name: f.name })));
   const gen = ++chatGen;
   const pending = chatPending.get(threadId) || new Set(); pending.add(gen); chatPending.set(threadId, pending);
-  if (visible()) { chatSending = true; clearLocalNotes(); addMsg(text, 'me', atts); }
+  if (visible()) { chatSending = true; clearLocalNotes(); addMsg(voice ? '🎤 ' + text : text, 'me', atts); }
   const typing = E('typing');
   if (visible()) { typing.textContent = tx('chat.typing'); typing.classList.remove('hidden'); }
   const heartbeatTimer = setTimeout(() => {
@@ -4980,6 +4984,7 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
     }
   }, 60000);
   const payload = { threadId, message: text };
+  if (voice) payload.voice = true;
   try {
   if (images.length) {
     const packed = await packImages(images);
@@ -5042,6 +5047,79 @@ E('input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
 });
 E('input').addEventListener('input', growInput);
+
+// ── Voice input ──
+// Records in the browser and converts to 16 kHz mono WAV here, so transcription
+// works with any audio provider and without ffmpeg on the machine running Brambit.
+const MIC_MAX_MS = 120000;
+let micRec = null;
+function micButton(state) {
+  const b = E('micBtn');
+  b.classList.toggle('rec', state === 'recording');
+  b.disabled = state === 'busy';
+  b.textContent = state === 'recording' ? '■' : state === 'busy' ? '…' : '🎤';
+  const label = state === 'recording' ? tx('chat.mic_stop') : tx('chat.mic_start');
+  b.title = label; b.setAttribute('aria-label', label);
+}
+async function micStart() {
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { addLocalNote(tx('chat.mic_blocked')); return; }
+  const chunks = [];
+  const rec = new MediaRecorder(stream);
+  const threadId = currentThreadId;
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    micSend(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), threadId);
+  };
+  micRec = { rec, timer: setTimeout(micStop, MIC_MAX_MS) };
+  rec.start();
+  micButton('recording');
+}
+function micStop() {
+  if (!micRec) return;
+  clearTimeout(micRec.timer);
+  const { rec } = micRec;
+  micRec = null;
+  micButton('busy');
+  if (rec.state !== 'inactive') rec.stop();
+}
+async function toWav16k(blob) {
+  const ctx = new AudioContext();
+  let decoded;
+  try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+  const rate = 16000;
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+  const src = off.createBufferSource();
+  src.buffer = decoded; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const ascii = (at, str) => { for (let i = 0; i < str.length; i++) view.setUint8(at + i, str.charCodeAt(i)); };
+  ascii(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); ascii(8, 'WAVE');
+  ascii(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  ascii(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) {
+    const v = Math.max(-1, Math.min(1, pcm[i]));
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([view.buffer], { type: 'audio/wav' });
+}
+async function micSend(blob, threadId) {
+  let text = '', error = '';
+  try {
+    let audio = blob;
+    try { audio = await toWav16k(blob); } catch {} // the server still converts with ffmpeg when it has it
+    const res = await api('api/transcribe', { audio: { mimeType: audio.type, data: await readFileB64(audio) } });
+    text = String((res && res.text) || '').trim();
+    error = (res && res.error) || '';
+  } catch {}
+  micButton('idle');
+  if (text) return sendThread(text, [], [], threadId, { voice: true });
+  if (currentThreadId === threadId) addLocalNote(error || tx('chat.mic_not_heard'));
+}
+E('micBtn').onclick = () => (micRec ? micStop() : micStart());
 ['auEmail','auPass','auName'].forEach(id => E(id).addEventListener('keydown', e => { if (e.key==='Enter') E('authBtn').click(); }));
 E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').click(); });
 
@@ -5049,6 +5127,7 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
 (async () => {
   const onboardingReturn = {provider:new URLSearchParams(location.search).get('e'), outcome:new URLSearchParams(location.search).get('connection_outcome')};
   APP_CFG = (await api('api/config')) || {};
+  E('micBtn').classList.toggle('hidden', !(APP_CFG.voice && navigator.mediaDevices && window.MediaRecorder));
   // Password reset link (/reset?token=...): shows the new-password card.
   if (location.pathname === '/reset' || new URLSearchParams(location.search).get('token')) {
     showApp(false);

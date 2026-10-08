@@ -19,3 +19,10 @@ const ROUTINE_TEXT_ONLY = new Set(['whatsapp', 'telegram', 'email']);
 export function voiceReplyDelivered({ kind, routineChannel } = {}) {
   return !(kind === 'routine' && ROUTINE_TEXT_ONLY.has(routineChannel));
 }
+
+// The marker is for the model, not for people: a chat shows a voice message as
+// the transcript after a microphone.
+export function voiceInputForDisplay(text) {
+  const t = String(text ?? '');
+  return t.startsWith(VOICE_INPUT_NOTE) ? `🎤 ${t.slice(VOICE_INPUT_NOTE.length).trim()}` : text;
+}

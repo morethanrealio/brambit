@@ -11,6 +11,10 @@ Changes merged since the last tag go under "Unreleased".
 ## [Unreleased]
 
 ### Added
+- The web chat has a microphone button when voice is set up: the person
+  speaks, the browser converts the recording to WAV (no ffmpeg needed) and the
+  transcript goes to the assistant marked as a voice message, as it does from
+  WhatsApp and Telegram. Chats show voice messages as the transcript after 🎤.
 - The setup page lists the chat models the key can use, with the recommended
   one selected, and lets the person pick another. When the provider publishes
   the model's price (Together does), it goes to `modelos.yaml` so the spend
