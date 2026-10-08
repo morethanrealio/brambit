@@ -12,7 +12,7 @@ const PROIBE_NO_CHAT = /(nunca|não)\s+(peça|pedir|solicite)\s+(pra|para)\s+(co
 const PEDE_NO_CHAT = /(col(ar|e|ando)|mand(ar|e|a)|envi(ar|e))[^.\n]{0,80}(chave|token|api key)[^.\n]{0,80}(aqui no chat|no chat)/i;
 
 for (const f of fontes) {
-  test(`${f} não instrui a pedir credencial no chat`, () => {
+  test(`${f} does not instruct asking for a credential in the chat`, () => {
     const linhas = readFileSync(f, 'utf8').split('\n');
     const ruins = linhas
       .map((l, i) => [i + 1, l])
@@ -21,17 +21,17 @@ for (const f of fontes) {
       .filter(([, l]) => !/por conta própria/i.test(l))
       // the prohibition ("NUNCA peça pra colar o token no chat") is also tolerated
       .filter(([, l]) => !PROIBE_NO_CHAT.test(l));
-    assert.deepEqual(ruins, [], `linhas pedindo segredo no chat: ${JSON.stringify(ruins)}`);
+    assert.deepEqual(ruins, [], `lines asking for a secret in the chat: ${JSON.stringify(ruins)}`);
   });
 }
 
-test('mensagem de credencial inválida aponta pro Cofre', () => {
+test('invalid credential message points to the Vault', () => {
   const src = readFileSync('web/connectors-vault.mjs', 'utf8');
   for (const nome of ['NOTION_BAD', 'SW_BAD', 'ASAAS_BAD']) {
     // Text that cites the brand became a function (read at time of use): `const X = () => [`.
     const i = Math.max(src.indexOf(`const ${nome} = [`), src.indexOf(`const ${nome} = () => [`));
-    assert.ok(i > 0, `${nome} não encontrada`);
+    assert.ok(i > 0, `${nome} not found`);
     const bloco = src.slice(i, src.indexOf('].join(', i));
-    assert.match(bloco, /Cofre de credenciais/i, `${nome} não manda pro Cofre`);
+    assert.match(bloco, /Cofre de credenciais/i, `${nome} does not point to the Vault`);
   }
 });

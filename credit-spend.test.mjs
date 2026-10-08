@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createCreditSpend,ferramentaConsultarGasto,porCategoria,validarPeriodo,categoriaDe} from './web/credit-spend.mjs';
 
-test('categorias agrupam canais e ordenam do maior pro menor', () => {
+test('categories group channels and sort from highest to lowest', () => {
   assert.deepEqual(porCategoria([{kind:'whatsapp',creditos:68},{kind:'search',creditos:240},{kind:'subagent',creditos:12},{kind:'telegram',creditos:2},{kind:'x',creditos:0}]),
     [{categoria:'buscas na web',creditos:240},{categoria:'conversa (raciocínio do assistente)',creditos:70},{categoria:'pesquisas e tarefas delegadas',creditos:12}]);
   assert.equal(categoriaDe('nao-existe'),'outros');
 });
 
-test('periodo invalido nao consulta o banco', async () => {
+test('an invalid period does not query the database', async () => {
   assert.match(validarPeriodo('2026-09-20','2026-09-10'),/depois/);
   assert.match(validarPeriodo('15/09','2026-09-10'),/AAAA-MM-DD/);
   assert.match(validarPeriodo('2025-01-01','2026-09-10'),/366/);
@@ -17,7 +17,7 @@ test('periodo invalido nao consulta o banco', async () => {
   assert.ok((await s.porPeriodo({userId:'u',de:'x',ate:'y'})).erro);
 });
 
-test('periodo de varios dias traz total, categorias e dias com gasto', async () => {
+test('a multi-day period returns total, categories and days with spend', async () => {
   const calls=[];
   const s=createCreditSpend({query:async(sql,p)=>{calls.push(p);return {rows:[
     {dia:'2026-09-26',kind:'chat',creditos:10},{dia:'2026-09-27',kind:'search',creditos:40},{dia:'2026-09-27',kind:'chat',creditos:5}]};}});
@@ -27,13 +27,13 @@ test('periodo de varios dias traz total, categorias e dias com gasto', async () 
   assert.deepEqual(calls[0].slice(0,3),['u','2026-09-26','2026-09-27']);
 });
 
-test('um dia so nao traz quebra por dia', async () => {
+test('a single day does not return a daily breakdown', async () => {
   const s=createCreditSpend({query:async()=>({rows:[{dia:'2026-09-27',kind:'chat',creditos:3}]})});
   const r=await s.porPeriodo({userId:'u',de:'2026-09-27',ate:'2026-09-27'});
   assert.equal(r.total_creditos,3);assert.equal(r.por_dia,undefined);
 });
 
-test('ultimas respostas exclui o turno atual, limita N e soma a janela de cada resposta', async () => {
+test("the latest answers exclude the current turn, limit N and sum each answer's window", async () => {
   const calls=[];
   const pool={query:async(sql,p)=>{calls.push({sql,p});
     if(sql.includes('task_measurements'))return {rows:[{id:'t2',thread_id:'th',started_at:'2026-09-27T20:06:33Z',finished_at:'2026-09-27T20:13:09Z'}]};
@@ -47,7 +47,7 @@ test('ultimas respostas exclui o turno atual, limita N e soma a janela de cada r
   assert.deepEqual(calls[1].p.slice(0,4),['u','th','2026-09-27T20:06:33Z','2026-09-27T20:13:09Z']);
 });
 
-test('resultado orienta a responder so o total por padrao', async () => {
+test('the result guides answering with just the total by default', async () => {
   const s=createCreditSpend({query:async(sql)=>sql.includes('task_measurements')
     ?{rows:[{id:'t',thread_id:'th',started_at:'2026-09-27T20:00:00Z',finished_at:'2026-09-27T20:01:00Z'}]}
     :{rows:[{dia:'2026-09-27',kind:'chat',creditos:3}]}});
@@ -57,7 +57,7 @@ test('resultado orienta a responder so o total por padrao', async () => {
   assert.ok(p.onde_foi.length);assert.ok(r.respostas[0].onde_foi.length);
 });
 
-test('unidade usd soma o custo real, arredonda em 4 casas e fala em US$', async () => {
+test('the usd unit sums the real cost, rounds to 4 decimals and speaks in US$', async () => {
   const sqls=[];
   const s=createCreditSpend({query:async(sql)=>{sqls.push(sql);return {rows:[
     {dia:'2026-09-26',kind:'chat',usd:0.01234},{dia:'2026-09-27',kind:'search',usd:0.1},{dia:'2026-09-27',kind:'chat',usd:0.00001}]};}},{unidade:'usd'});

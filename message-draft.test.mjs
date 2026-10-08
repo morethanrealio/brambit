@@ -33,7 +33,7 @@ function harness({ credit = { over: false }, response = { stop: 'end', text: 'Te
  } };
 }
 for (const credit of [{over:true},null,{}, {over:0}]) {
- const h=harness({credit}); await rejects(()=>generateMessageDraft(h.args)); eq(h.calls,['credit'],'sem modelo/contexto/uso quando bloqueado');
+ const h=harness({credit}); await rejects(()=>generateMessageDraft(h.args)); eq(h.calls,['credit'],'no model/context/usage when blocked');
 }
 for (const task of ['', '  ', null, 7]) { const h=harness(); await rejects(()=>generateMessageDraft({...h.args,task}));eq(h.calls,[]); }
 {
@@ -42,7 +42,7 @@ for (const task of ['', '  ', null, 7]) { const h=harness(); await rejects(()=>g
  eq(h.calls[3].input,{system:'SYSTEM',messages:[{role:'user',content:h.args.task}],tools:[]});eq(h.calls[4],{usage});eq(h.calls.length,5);
 }
 for (const response of [null,{}, {stop:'end',text:''},{stop:'end',text:5},{stop:'tool',text:'quase'}, {stop:'end',text:'não disponível',unavailable:true}, {stop:'end',text:'feito',toolCalls:[{name:'enviar_mensagem'}]}, {stop:'tool',toolCalls:[{name:'voltar_versao'}],usage:{model:'mock'}}]) {
- const h=harness({response});await rejects(()=>generateMessageDraft(h.args));eq(h.calls.filter(c=>c?.input).length,1,'nenhum segundo passo/tool-loop');
+ const h=harness({response});await rejects(()=>generateMessageDraft(h.args));eq(h.calls.filter(c=>c?.input).length,1,'no second step/tool-loop');
 }
 {const h=harness({failure:true});await rejects(()=>generateMessageDraft(h.args));eq(h.calls.length,4);}
 for (const dep of ['readCredit','readContext','makeProvider']) {
@@ -92,15 +92,15 @@ const build = flag => new Function(...Object.keys(deps),'primaryIsGeminiOverride
 let api=build(false);const target={agent_id:'a-mock',user_id:'u-mock'};
 const original='*Rotina sintética*\n\n• Pagar R$ 42,50 às 09:00\n• Visitar https://example.invalid/x?y=1';
 credit={over:true};
-eq(await api.whatsappProse(target,original),original,'crédito bloqueado preserva original byte a byte');eq(providerCalls,0);eq(ledger,[]);eq(reads.map(r=>r[0]),['agent','credit']);
+eq(await api.whatsappProse(target,original),original,'blocked credit preserves original byte for byte');eq(providerCalls,0);eq(ledger,[]);eq(reads.map(r=>r[0]),['agent','credit']);
 // The panel preview (runBroadcastFor, in the cloud) only assembles the request and calls this one.
-await rejects(()=>api.runAgentMessageDraft(target,'Mensagem para revisão'));eq(providerCalls,0,'preview bloqueado é erro, não texto de cobrança');
+await rejects(()=>api.runAgentMessageDraft(target,'Mensagem para revisão'));eq(providerCalls,0,'blocked preview is an error, not billing text');
 credit={over:false};reads=[];
 eq(await api.whatsappProse(target,original),'Parágrafo reformulado');eq(providerCalls,1);eq(input.tools,[]);eq(input.messages.length,1);ok(input.messages[0].content.includes(original));
 ok(input.system.includes('Preferência sintética'));ok(input.system.includes('INTERNAL DRAFT MODE'));eq(ledger.length,1);eq(ledger[0][1].threadId,null);eq(ledger[0][1].kind,'broadcast');
-ok(!JSON.stringify(ledger).includes('RASCUNHO'),'ledger não recebe prompt/texto');eq(reads.map(r=>r[0]),['agent','credit','wiki']);
+ok(!JSON.stringify(ledger).includes('RASCUNHO'),'ledger does not receive prompt/text');eq(reads.map(r=>r[0]),['agent','credit','wiki']);
 for (const invalid of [{stop:'end',text:''},{stop:'end',text:'cobrança sintética',unavailable:true},{stop:'tool',toolCalls:[{name:'voltar_versao'}]}, {stop:'end',text:'feito',toolCalls:[{name:'enviar_mensagem'}]}]) {
- response=invalid;eq(await api.whatsappProse(target,original),original,'erro/ação não vira conteúdo de entrega');
+ response=invalid;eq(await api.whatsappProse(target,original),original,'error/action does not become delivery content');
 }
 failure=true;eq(await api.whatsappProse(target,original),original);failure=false;
 missingAgent=true;eq(await api.whatsappProse(target,original),original);missingAgent=false;

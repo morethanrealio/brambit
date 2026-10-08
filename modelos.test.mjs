@@ -5,13 +5,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { carregarModelos, escolhaDe, lerModelos } from './core-proto/modelos.mjs';
 
-test('sem modelos.yaml, nenhuma função é configurada', () => {
+test('with no modelos.yaml, no function is configured', () => {
   const cfg = carregarModelos({ env: { MODELOS_ARQUIVO: '/nao/existe/modelos.yaml' }, recarregar: true });
   assert.equal(cfg, null);
   assert.equal(escolhaDe('conversa', cfg), null);
 });
 
-test('função sem linha herda da mãe; o exemplo do repo é válido', () => {
+test('a function with no entry inherits from the parent; the repo example is valid', () => {
   const cfg = lerModelos(readFileSync(new URL('./modelos.example.yaml', import.meta.url), 'utf8'));
   const proprio = lerModelos(`
 provedores:
@@ -27,7 +27,7 @@ funcoes:
   assert.equal(escolhaDe('conversa', cfg).principal.modelo, 'deepseek-ai/DeepSeek-V4.1-Flash');
 });
 
-test('chave colada no lugar do nome da variável é recusada', () => {
+test('a key pasted in place of the variable name is rejected', () => {
   assert.throws(() => lerModelos('provedores:\n  a: { endereco: https://a/v1, chave: sk-123abc }\nfuncoes:\n  padrao: a/m'),
     /NOME da variável/);
 });

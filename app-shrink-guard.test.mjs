@@ -7,7 +7,7 @@ const pad = (n) => '// ' + 'x'.repeat(n) + '\n';
 const rotas = ['/api/toque', '/api/historico', '/api/moradores'];
 const servidorGrande = rotas.map((r) => `if (pathname === '${r}') handle();\n`).join('') + pad(6000);
 
-test('reescrita a partir de versão velha (arquivo encolhe, nada novo) continua bloqueada', () => {
+test('rewrite from an old version (file shrinks, nothing new) stays blocked', () => {
   const prev = { 'server.js': b64(servidorGrande), 'public/index.html': b64(pad(3000)) };
   const files = { 'server.js': b64(rotas.map((r) => `'${r}'`).join('\n') + pad(500)), 'public/index.html': b64(pad(3000)) };
   const r = avaliarReducao(prev, files);
@@ -15,7 +15,7 @@ test('reescrita a partir de versão velha (arquivo encolhe, nada novo) continua 
   assert.equal(r.reorganizacao, false);
 });
 
-test('reorganização em módulos (caso de 25/09) passa', () => {
+test('reorganization into modules (25/09 case) passes', () => {
   const prev = { 'server.js': b64(servidorGrande), 'public/index.html': b64(pad(3000)) };
   const files = {
     'server.js': b64("require('./lib/routes/chamadas');\n" + pad(2000)),
@@ -27,7 +27,7 @@ test('reorganização em módulos (caso de 25/09) passa', () => {
   assert.equal(r.bloquear, false);
 });
 
-test('reorganização que perde uma rota do servidor continua bloqueada', () => {
+test('reorganization that loses a server route stays blocked', () => {
   const prev = { 'server.js': b64(servidorGrande) };
   const files = {
     'server.js': b64(pad(2000)),
@@ -38,7 +38,7 @@ test('reorganização que perde uma rota do servidor continua bloqueada', () => 
   assert.deepEqual(r.rotasSumidas, ['/api/moradores']);
 });
 
-test('app que encolheu no total continua bloqueado', () => {
+test('app that shrank overall stays blocked', () => {
   const prev = { 'server.js': b64(servidorGrande), 'public/app.js': b64(pad(8000)) };
   const files = { 'server.js': b64(servidorGrande), 'public/app.js': b64(pad(500)) };
   assert.equal(avaliarReducao(prev, files).bloquear, true);

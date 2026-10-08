@@ -40,7 +40,7 @@ async function comVigia(promessa, ms = 3000) {
   } finally { clearTimeout(timer); }
 }
 
-test('#26 corpo que não termina estoura o prazo em vez de pendurar pra sempre', async () => {
+test('#26 a body that never ends blows the deadline instead of hanging forever', async () => {
   const restaurar = fingirFetch(async (_url, init) => ({
     ok: true, status: 200,
     headers: cabecalhos({ 'content-type': 'video/mp4' }),
@@ -49,12 +49,12 @@ test('#26 corpo que não termina estoura o prazo em vez de pendurar pra sempre',
   }));
   try {
     const desfecho = await comVigia(fetchRenderVideo('job-lento', { timeoutMs: 120 }));
-    assert.notEqual(desfecho, 'TRAVOU', 'o download ficou pendurado: o prazo não cobriu o corpo');
+    assert.notEqual(desfecho, 'TRAVOU', 'the download hung: the deadline did not cover the body');
     assert.match(desfecho, /timeout/);
   } finally { restaurar(); }
 });
 
-test('#26 download normal continua devolvendo buffer e content-type', async () => {
+test('#26 a normal download still returns the buffer and content-type', async () => {
   const restaurar = fingirFetch(async () => ({
     ok: true, status: 200,
     headers: cabecalhos({ 'content-type': 'video/mp4', 'content-length': '6' }),
@@ -67,7 +67,7 @@ test('#26 download normal continua devolvendo buffer e content-type', async () =
   } finally { restaurar(); }
 });
 
-test('#26 corpo maior que o teto é cortado', async () => {
+test('#26 a body bigger than the cap is cut off', async () => {
   const restaurar = fingirFetch(async () => ({
     ok: true, status: 200,
     headers: cabecalhos({ 'content-type': 'video/mp4' }),
@@ -81,52 +81,52 @@ test('#26 corpo maior que o teto é cortado', async () => {
   } finally { restaurar(); }
 });
 
-test('teto de bytes tem valor de produção generoso pra um vídeo de 15s', () => {
+test('byte cap has a production value generous for a 15s video', () => {
   assert.equal(MAX_VIDEO_BYTES, 256 * 1024 * 1024);
 });
 
-test('lerCorpoComTeto junta os pedaços na ordem', async () => {
+test('lerCorpoComTeto joins the chunks in order', async () => {
   const res = { headers: cabecalhos({}), body: (async function* () { yield Buffer.from('um'); yield Buffer.from('dois'); })() };
   assert.equal((await lerCorpoComTeto(res, 100)).toString(), 'umdois');
 });
 
-test('lerCorpoComTeto recusa antes de baixar quando o content-length já estoura', async () => {
+test('lerCorpoComTeto refuses before downloading when content-length already exceeds the cap', async () => {
   let leu = false;
   const res = {
     headers: cabecalhos({ 'content-length': '999' }),
     body: (async function* () { leu = true; yield Buffer.alloc(999); })(),
   };
   await assert.rejects(lerCorpoComTeto(res, 10, 'baixa'), /anunciado de 999/);
-  assert.equal(leu, false, 'não deveria ter começado a baixar');
+  assert.equal(leu, false, 'should not have started downloading');
 });
 
-test('lerCorpoComTeto para no meio do stream quando passa do teto', async () => {
+test('lerCorpoComTeto stops mid-stream when it passes the cap', async () => {
   let pedacos = 0;
   const res = {
     headers: cabecalhos({}),
     body: (async function* () { for (let i = 0; i < 50; i++) { pedacos++; yield Buffer.alloc(10); } })(),
   };
   await assert.rejects(lerCorpoComTeto(res, 25, 'baixa'), /passou do teto/);
-  assert.ok(pedacos < 10, `parou tarde demais: leu ${pedacos} pedaços`);
+  assert.ok(pedacos < 10, `stopped too late: read ${pedacos} chunks`);
 });
 
-test('lerCorpoComTeto cai no arrayBuffer quando a resposta não tem stream, e ainda aplica o teto', async () => {
+test('lerCorpoComTeto falls back to arrayBuffer when the response has no stream, and still applies the cap', async () => {
   const semStream = (n) => ({ headers: cabecalhos({}), arrayBuffer: async () => Buffer.alloc(n) });
   assert.equal((await lerCorpoComTeto(semStream(5), 100)).length, 5);
   await assert.rejects(lerCorpoComTeto(semStream(500), 100, 'baixa'), /passa do teto/);
 });
 
-test('lerCorpoComTeto recusa teto inválido', async () => {
+test('lerCorpoComTeto refuses an invalid cap', async () => {
   const res = { headers: cabecalhos({}), body: (async function* () { yield Buffer.from('x'); })() };
   await assert.rejects(lerCorpoComTeto(res, 0, 'baixa'), /teto de bytes inválido/);
   await assert.rejects(lerCorpoComTeto(res, NaN, 'baixa'), /teto de bytes inválido/);
 });
 
-test('o corpo é lido DENTRO do withTimeout no videogen (guarda de fonte)', async () => {
+test('the body is read INSIDE withTimeout in videogen (source guard)', async () => {
   const fonte = await import('node:fs').then((fs) => fs.readFileSync('web/videogen.mjs', 'utf8'));
   // The old way: get the response from withTimeout and only then read the file.
-  assert.ok(!/\}\), 120_000, 'fetchRenderVideo'\);/.test(fonte), 'fetchRenderVideo voltou a ler o corpo fora do prazo');
-  assert.ok(!/Buffer\.from\(await res\.arrayBuffer\(\)\)/.test(fonte), 'leitura do mp4 fora do withTimeout');
+  assert.ok(!/\}\), 120_000, 'fetchRenderVideo'\);/.test(fonte), 'fetchRenderVideo went back to reading the body outside the deadline');
+  assert.ok(!/Buffer\.from\(await res\.arrayBuffer\(\)\)/.test(fonte), 'mp4 read outside withTimeout');
   assert.match(fonte, /await lerCorpoComTeto\(res, maxBytes, 'fetchRenderVideo'\)/);
   // createRender/getRender suffered from the same problem with the JSON.
   assert.match(fonte, /return res\.json\(\);\n  \}, 20_000, 'getRender'\)/);

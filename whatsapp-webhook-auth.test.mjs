@@ -12,7 +12,7 @@ function comEnv(env, fn) {
   try { return fn(); } finally { for (const k of Object.keys(process.env)) delete process.env[k]; Object.assign(process.env, antes); }
 }
 
-test('sem WA_APP_SECRET o webhook recusa em vez de aceitar qualquer POST', () => {
+test('without WA_APP_SECRET the webhook refuses instead of accepting any POST', () => {
   const corpo = Buffer.from('{"entry":[]}');
   comEnv({WA_APP_SECRET: undefined}, () => {
     assert.equal(verifySignature(corpo, assinar(corpo)), false);
@@ -20,7 +20,7 @@ test('sem WA_APP_SECRET o webhook recusa em vez de aceitar qualquer POST', () =>
   });
 });
 
-test('com secret, só a assinatura correta passa', () => {
+test('with a secret, only the correct signature passes', () => {
   const corpo = Buffer.from('{"entry":[1]}');
   comEnv({WA_APP_SECRET: SEGREDO}, () => {
     assert.equal(verifySignature(corpo, assinar(corpo)), true);
@@ -30,7 +30,7 @@ test('com secret, só a assinatura correta passa', () => {
   });
 });
 
-test('canal não se considera pronto sem o secret do webhook', () => {
+test('channel does not consider itself ready without the webhook secret', () => {
   const base = {WA_TOKEN: 't', WA_PHONE_NUMBER_ID: 'p', WA_VERIFY_TOKEN: 'v'};
   comEnv({...base, WA_APP_SECRET: undefined}, () => assert.equal(waEnabled(), false));
   comEnv({...base, WA_APP_SECRET: SEGREDO}, () => assert.equal(waEnabled(), true));

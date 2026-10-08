@@ -17,7 +17,7 @@ import {
   isConfirmation, confirmacaoComRessalva, GATED_TOOLS, IRREVERSIBLE_TOOLS,
 } from './web/confirm.mjs';
 
-test('#15 autorizar mudando o pedido não confirma a ação pendente', () => {
+test('#15 authorizing while changing the request does not confirm the pending action', () => {
   const casos = [
     'pode sim, mas manda pro outro endereço',
     'pode, mas manda para outro e-mail',
@@ -31,12 +31,12 @@ test('#15 autorizar mudando o pedido não confirma a ação pendente', () => {
     'pode mandar, no lugar de amanhã manda hoje',
   ];
   for (const t of casos) {
-    assert.equal(isConfirmation(t), false, `não podia confirmar: ${t}`);
-    assert.equal(confirmacaoComRessalva(t), true, `era ressalva: ${t}`);
+    assert.equal(isConfirmation(t), false, `could not confirm: ${t}`);
+    assert.equal(confirmacaoComRessalva(t), true, `was a caveat: ${t}`);
   }
 });
 
-test('#15 ressalva sem troca continua confirmando (não pode virar cancelamento geral)', () => {
+test("#15 a caveat without a change keeps confirming (can't become a blanket cancellation)", () => {
   const casos = [
     'nunca se sabe, mas pode mandar',        // was already in confirm.test.mjs
     'tá corrido aqui, mas pode enviar',
@@ -45,41 +45,41 @@ test('#15 ressalva sem troca continua confirmando (não pode virar cancelamento 
     'busy day, but go ahead',
   ];
   for (const t of casos) {
-    assert.equal(isConfirmation(t), true, `tinha que confirmar: ${t}`);
-    assert.equal(confirmacaoComRessalva(t), false, `não era ressalva: ${t}`);
+    assert.equal(isConfirmation(t), true, `had to confirm: ${t}`);
+    assert.equal(confirmacaoComRessalva(t), false, `was not a caveat: ${t}`);
   }
 });
 
-test('#15 troca ANTES da adversativa não cancela (a ressalva é que confirma)', () => {
+test("#15 a change BEFORE the 'but' does not cancel (the caveat is what confirms)", () => {
   assert.equal(isConfirmation('mudei de ideia ontem, mas pode mandar'), true);
 });
 
-test('#15 recusa continua sendo recusa, não "ressalva"', () => {
+test('#15 a refusal stays a refusal, not a "caveat"', () => {
   for (const t of ['não, manda pro outro endereço', 'cancela, troca o valor']) {
     assert.equal(isConfirmation(t), false);
-    assert.equal(confirmacaoComRessalva(t), false, `recusa não é ressalva: ${t}`);
+    assert.equal(confirmacaoComRessalva(t), false, `refusal is not a caveat: ${t}`);
   }
 });
 
-test('#15 o servidor explica ao modelo que o pedido MUDOU, em vez de "não confirmou"', () => {
+test('#15 the server tells the model the request CHANGED, instead of "did not confirm"', () => {
   const server = fs.readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
   assert.match(server, /confirmacaoComRessalva/);
   assert.match(server, /autorizou, mas MUDANDO o pedido/);
 });
 
-test('#16 criar doc e exportar PDF no Drive passam pelo portão de confirmação', () => {
+test('#16 creating a doc and exporting a PDF to Drive go through the confirmation gate', () => {
   for (const t of ['docs_create', 'drive_export_pdf']) {
-    assert.ok(GATED_TOOLS.has(t), `${t} tinha que ser gated`);
+    assert.ok(GATED_TOOLS.has(t), `${t} had to be gated`);
     // Same treatment as drive_upload, which was already gated: writing to Drive is
     // undoable, so 👍 confirms. It's not an irreversible action.
-    assert.ok(!IRREVERSIBLE_TOOLS.has(t), `${t} não é irreversível (igual drive_upload)`);
+    assert.ok(!IRREVERSIBLE_TOOLS.has(t), `${t} is not irreversible (same as drive_upload)`);
   }
-  assert.ok(GATED_TOOLS.has('drive_upload'), 'precedente do drive_upload sumiu');
+  assert.ok(GATED_TOOLS.has('drive_upload'), 'drive_upload precedent is gone');
 });
 
-test('#16 as duas têm texto próprio na proposta e na conclusão', () => {
+test("#16 both have their own text in the proposal and the completion", () => {
   const src = fs.readFileSync(new URL('./web/confirm.mjs', import.meta.url), 'utf8');
   for (const t of ['docs_create', 'drive_export_pdf']) {
-    assert.equal(src.split(`case '${t}':`).length - 1, 2, `${t}: falta describe ou describeDone`);
+    assert.equal(src.split(`case '${t}':`).length - 1, 2, `${t}: missing describe or describeDone`);
   }
 });

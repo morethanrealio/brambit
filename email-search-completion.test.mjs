@@ -12,11 +12,11 @@ const page = (ids, number = 1, next = null, extra = {}) => JSON.stringify({
 function fixture(responses, config, name = 'gmail_search') {
   const calls = [];
   const tool = { name, parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-    async run(args) { calls.push(args); assert.ok(responses.length, 'nenhuma chamada inesperada'); const response = responses.shift(); if (response instanceof Error) throw response; return response; } };
+    async run(args) { calls.push(args); assert.ok(responses.length, 'no unexpected call'); const response = responses.shift(); if (response instanceof Error) throw response; return response; } };
   return { calls, original: tool, wrapped: withEmailSearchCompletion([tool], config)[0] };
 }
 
-for (const name of ['gmail_search', 'hotmail_search']) test(`${name}: três páginas, IDs deduplicados e mesmos filtros/conta`, async () => {
+for (const name of ['gmail_search', 'hotmail_search']) test(`${name}: three pages, deduplicated IDs, and the same filters/account`, async () => {
   const f = fixture([page(['1', '2'], 1, 'cursor-2'), page(['2', '3'], 2, 'cursor-3'), page(['4'], 3)], undefined, name);
   const args = { [name === 'gmail_search' ? 'query' : 'q']: 'fatura setembro', max: 2, complete: true };
   const result = JSON.parse(await f.wrapped.run(args));
@@ -31,7 +31,7 @@ for (const name of ['gmail_search', 'hotmail_search']) test(`${name}: três pág
   assert.equal(f.wrapped.parameters.properties.complete.type, 'boolean');
 });
 
-test('modo legado não pagina nem altera o resultado; tools não relacionadas preservadas', async () => {
+test('legacy mode does not paginate or alter the result; unrelated tools are preserved', async () => {
   const raw = page(['1'], 1, 'cursor-2');
   for (const complete of [undefined, false]) {
     const f = fixture([raw]); const args = { query: 'fatura setembro', ...(complete === undefined ? {} : { complete }) };
@@ -43,7 +43,7 @@ test('modo legado não pagina nem altera o resultado; tools não relacionadas pr
   assert.equal(withEmailSearchCompletion([other])[0], other);
 });
 
-test('erro tardio preserva mensagens e cursor; corpo sensível do erro não vaza', async () => {
+test('a late error preserves messages and cursor; sensitive error body does not leak', async () => {
   const f = fixture([page(['1'], 1, 'cursor-2'), new Error('401 TOKEN-SECRET customer@example.invalid')]);
   const raw = await f.wrapped.run({ query: 'fatura setembro', complete: true }), result = JSON.parse(raw);
   assert.deepEqual(result.messages.map(m => m.id), ['1']); assert.equal(result.completion_reason, 'page_failed');
@@ -52,7 +52,7 @@ test('erro tardio preserva mensagens e cursor; corpo sensível do erro não vaza
   assert.ok(!raw.includes('TOKEN-SECRET')); assert.ok(!raw.includes('customer@example.invalid'));
 });
 
-test('falha inicial propaga; resposta inicial malformada não vira vazio', async () => {
+test('initial failure propagates; a malformed initial response does not become empty', async () => {
   const error = new Error('initial');
   await assert.rejects(() => fixture([error]).wrapped.run({ query: 'fatura setembro', complete: true }), e => e === error);
   for (const bad of ['garbage', '{}', 'null', page([], 1, null, { messages: [{}] }), page([], 1, null, { has_more: 'false' }), page([], 1, 'bad', { has_more: false })]) {
@@ -60,7 +60,7 @@ test('falha inicial propaga; resposta inicial malformada não vira vazio', async
   }
 });
 
-test('cursor repetido interrompe sem perder as páginas válidas', async () => {
+test('a repeated cursor stops the search without losing the valid pages', async () => {
   const f = fixture([page(['1'], 1, 'cycle'), page(['2'], 2, 'cycle')]);
   const result = JSON.parse(await f.wrapped.run({ query: 'fatura setembro', complete: true }));
   assert.equal(f.calls.length, 2); assert.deepEqual(result.messages.map(m => m.id), ['1', '2']);
@@ -68,7 +68,7 @@ test('cursor repetido interrompe sem perder as páginas válidas', async () => {
   assert.equal(result.next_cursor, null); assert.equal(result.truncated, true);
 });
 
-test('continuação sem cursor e corpo posterior malformado preservam estado parcial', async () => {
+test('continuation without a cursor and a malformed later body preserve partial state', async () => {
   for (const [second, expected] of [
     [page(['2'], 2, null, { has_more: true }), 'cursor_missing'],
     ['malformed SECRET-BODY', 'invalid_page'],
@@ -80,7 +80,7 @@ test('continuação sem cursor e corpo posterior malformado preservam estado par
   }
 });
 
-test('cadeia divergente por identidade, filtro, conta ou página é descartada integralmente', async () => {
+test('a chain that diverges by identity, filter, account or page is discarded entirely', async () => {
   for (const extra of [
     { search_id: 'another-search' }, { query: 'outro filtro' }, { account: 'personal@example.invalid' },
     { messages: [{ id: 'other', account: 'personal@example.invalid' }] }, { page: 1 },
@@ -93,7 +93,7 @@ test('cadeia divergente por identidade, filtro, conta ou página é descartada i
   }
 });
 
-test('limites do código vencem argumentos do modelo e não ocultam páginas ou mensagens', async () => {
+test("code limits win over the model's arguments and do not hide pages or messages", async () => {
   const f = fixture([page(['1'], 1, 'next')], { maxPages: 1 });
   const result = JSON.parse(await f.wrapped.run({ query: 'fatura setembro', complete: true, maxPages: 10000, maxMessages: 10000 }));
   assert.equal(f.calls.length, 1); assert.equal(result.completion_reason, 'page_limit'); assert.equal(result.has_more, true);
@@ -104,14 +104,14 @@ test('limites do código vencem argumentos do modelo e não ocultam páginas ou 
   assert.equal(exact.partial, false);
 });
 
-test('limitação do provedor não é apagada pela última página', async () => {
+test('provider limitation is not erased by the last page', async () => {
   const f = fixture([page(['1'], 1, 'next', { incomplete_search: true }), page(['2'], 2)]);
   const result = JSON.parse(await f.wrapped.run({ query: 'fatura setembro', complete: true }));
   assert.equal(result.completion_reason, 'provider_incomplete'); assert.equal(result.has_more, false); assert.equal(result.truncated, true);
   assert.deepEqual(result.messages.map(m => m.id), ['1', '2']);
 });
 
-test('Outlook sem conta explícita e primeira página vazia preservam continuação', async () => {
+test('Outlook with no explicit account and an empty first page preserve continuation', async () => {
   const f = fixture([
     page([], 1, 'next', { query: '' }),
     page([], 2, null, { query: '', messages: [{ id: 'outlook-1' }] }),
@@ -121,7 +121,7 @@ test('Outlook sem conta explícita e primeira página vazia preservam continuaç
   assert.deepEqual(f.calls, [{}, { cursor: 'next' }]);
 });
 
-test('configuração inválida e complete não booleano falham antes de chamar tools', async () => {
+test('invalid config and a non-boolean complete fail before calling any tools', async () => {
   for (const value of [0, -1, 1.5, '3', Infinity, NaN]) {
     assert.throws(() => withEmailSearchCompletion([], { maxPages: value }));
     assert.throws(() => withEmailSearchCompletion([], { maxMessages: value }));
@@ -131,7 +131,7 @@ test('configuração inválida e complete não booleano falham antes de chamar t
   assert.equal(f.calls.length, 0);
 });
 
-test('paginador e tracker reais observam agregação completa e falha parcial', async () => {
+test('real pager and tracker observe full aggregation and partial failure', async () => {
   for (const failLater of [false, true]) {
     const pager = emailPagination({ defaultMax: 1, cap: 1 }); let calls = 0;
     const tracked = trackEmailPagination(withEmailSearchCompletion([{

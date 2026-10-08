@@ -34,7 +34,7 @@ function cenario({ chatId = null, pairCode = CODIGO } = {}) {
 
 const update = (texto, chat = '999') => ({ message: { chat: { id: chat }, text: texto } });
 
-test('mensagem qualquer de um estranho não amarra o bot', async () => {
+test('any message from a stranger does not bind the bot', async () => {
   const c = cenario();
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('oi, tudo bem?'));
@@ -43,7 +43,7 @@ test('mensagem qualquer de um estranho não amarra o bot', async () => {
   } finally { c.restaurar(); }
 });
 
-test('/start sem código não amarra', async () => {
+test('/start without a code does not bind', async () => {
   const c = cenario();
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start'));
@@ -51,7 +51,7 @@ test('/start sem código não amarra', async () => {
   } finally { c.restaurar(); }
 });
 
-test('/start com código errado não amarra', async () => {
+test('/start with the wrong code does not bind', async () => {
   const c = cenario();
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start codigoerrado'));
@@ -59,7 +59,7 @@ test('/start com código errado não amarra', async () => {
   } finally { c.restaurar(); }
 });
 
-test('/start com o código certo amarra o chat', async () => {
+test('/start with the right code binds the chat', async () => {
   const c = cenario();
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start ' + CODIGO));
@@ -67,7 +67,7 @@ test('/start com o código certo amarra o chat', async () => {
   } finally { c.restaurar(); }
 });
 
-test('/start@nomedobot com o código certo também amarra', async () => {
+test('/start@botname with the right code also binds', async () => {
   const c = cenario();
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start@meu_bot ' + CODIGO));
@@ -75,7 +75,7 @@ test('/start@nomedobot com o código certo também amarra', async () => {
   } finally { c.restaurar(); }
 });
 
-test('bot sem código de pareamento não amarra por /start nenhum', async () => {
+test('a bot with no pairing code does not bind via any /start', async () => {
   const c = cenario({ pairCode: null });
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start '));
@@ -84,7 +84,7 @@ test('bot sem código de pareamento não amarra por /start nenhum', async () => 
   } finally { c.restaurar(); }
 });
 
-test('com o chat já amarrado, outro chat continua recusado', async () => {
+test('with the chat already bound, another chat is still refused', async () => {
   const c = cenario({ chatId: '111' });
   try {
     await c.mgr.handleUpdate({ token: 'TOKEN123' }, update('/start ' + CODIGO, '999'));
@@ -93,7 +93,7 @@ test('com o chat já amarrado, outro chat continua recusado', async () => {
   } finally { c.restaurar(); }
 });
 
-test('codeEq recusa vazio e tamanho diferente sem estourar', () => {
+test('codeEq refuses empty and different-length values without throwing', () => {
   assert.equal(codeEq('', ''), false);
   assert.equal(codeEq(null, null), false);
   assert.equal(codeEq('abc', 'abcd'), false);

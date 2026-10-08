@@ -10,12 +10,12 @@ const lines = [
   `O último e-mail foi em 11/09 e também diz que foi enviado à transportadora. [e-mail de envio](${work})`,
 ];
 
-test('preserva datas de envio e fontes das duas contas em relatos atribuídos aos e-mails', () => {
+test('preserves shipping dates and sources from both accounts in reports attributed to the emails', () => {
   const answer = `Encontrei duas compras.\n\n${lines.join('\n\n')}\n\nQual delas você não recebeu?`;
   assert.equal(createActionJournal().finish(answer), answer);
 });
 
-test('relatos de documento sobre objetos externos não viram recibos próprios', () => {
+test('document reports about external objects do not turn into first-person receipts', () => {
   for (const text of [
     'Segundo o e-mail, o pedido foi enviado em 18/09.',
     'Conforme a mensagem, a fatura foi cancelada e substituída.',
@@ -24,7 +24,7 @@ test('relatos de documento sobre objetos externos não viram recibos próprios',
   ]) assert.equal(createActionJournal().finish(text), text);
 });
 
-test('preserva atribuição plural após contexto de conta, inclusive entrega contestada e fontes', () => {
+test('preserves plural attribution after account context, including contested delivery and sources', () => {
   const report = `Na conta de trabalho, as mensagens sobre o B-902 dizem que o pedido foi enviado em 18/09, com prazo de entrega em 21/09/2026 ([pedido enviado](${personal})), e que o sistema da transportadora registrou o B-902 como entregue em 21/09/2026 às 14h20, com recebedor informado 'portaria' ([entrega registrada](${work})).`;
   assert.equal(createActionJournal().finish(report), report);
   for (const text of [
@@ -38,7 +38,7 @@ test('preserva atribuição plural após contexto de conta, inclusive entrega co
   ]) assert.equal(createActionJournal().finish(text), text);
 });
 
-test('prefixo de contexto e atribuição plural não validam recibos próprios', () => {
+test('context prefix and plural attribution do not validate first-person receipts', () => {
   for (const text of [
     'Na conta de trabalho, as mensagens dizem que enviei o pedido ao suporte.',
     'Sobre o pedido, os e-mails informam que foi enviado por nós.',
@@ -50,7 +50,7 @@ test('prefixo de contexto e atribuição plural não validam recibos próprios',
   ]) assert.match(createActionJournal().finish(text), /Não consegui confirmar/, text);
 });
 
-test('a atribuição e os links não liberam confirmações próprias sem recibo', () => {
+test('attribution and links do not unlock first-person confirmations without a receipt', () => {
   for (const text of [
     `Enviei o e-mail sobre o pedido. [fonte](${personal})`,
     'O e-mail foi enviado.',
@@ -67,7 +67,7 @@ test('a atribuição e os links não liberam confirmações próprias sem recibo
   }
 });
 
-test('mantém relato externo em turno misto e usa recibo real só para envio próprio', () => {
+test('keeps the external report in a mixed turn and uses a real receipt only for its own sending', () => {
   const journal = createActionJournal();
   journal.toolResult({ name:'gmail_send', args:{ to:'suporte@example.test', subject:'Meu pedido' } }, {ok:true,id:'sent-fixture'});
   const out = journal.finish(`${lines[0]}\n\nEnviei o e-mail para outra pessoa.`);
@@ -78,12 +78,12 @@ test('mantém relato externo em turno misto e usa recibo real só para envio pr�
   assert.equal((out.match(/Envio aceito pelo serviço/g) || []).length, 1);
 });
 
-test('elimina confirmação própria na frase seguinte sem apagar a evidência anterior', () => {
+test('removes the first-person confirmation in the following sentence without erasing the earlier evidence', () => {
   const report = 'O último e-mail diz que o pedido foi enviado à transportadora.';
   assert.equal(createActionJournal().finish(`${report} Enviei a mensagem ao suporte.`), report);
 });
 
-test('composição com cobertura final preserva os links e evita fontes substitutas', () => {
+test('composition with final coverage preserves the links and avoids substitute sources', () => {
   const coverage = turnSearchCoverage();
   coverage.observeEmail([
     { provider:'gmail', id:'111', account:'personal@example.test', subject:'Pedido enviado', link:personal },
@@ -96,7 +96,7 @@ test('composição com cobertura final preserva os links e evita fontes substitu
   assert.ok(final.includes(work));
 });
 
-test('achados com fonte observada preservam estado, datas e identidade sem exigir formato de prosa', () => {
+test('findings with an observed source preserve state, dates and identity without requiring prose formatting', () => {
   const coverage = turnSearchCoverage();
   coverage.observeEmail([
     {provider:'gmail',account:'personal@example.test',id:'111',link:personal},
@@ -113,12 +113,12 @@ test('achados com fonte observada preservam estado, datas e identidade sem exigi
   assert.ok(unknown.includes('19/09/2026'));
 });
 
-test('rótulos e URLs de fonte não transformam estados externos em recibos', () => {
+test('source labels and URLs do not turn external states into receipts', () => {
   const text=`Material enviado em 10/09, previsão 16/09. [e-mail de envio](${work})`;
   assert.equal(createActionJournal().finish(text),text);
 });
 
-test('fonte observada não serve de recibo de ação própria, inclusive em rótulos de link', () => {
+test('an observed source does not serve as a receipt for a first-person action, including in link labels', () => {
   const options={authenticatedEmailSources:new Set([work])};
   for(const statement of [
     'Enviei a mensagem.', 'Pedido enviado ao time.', 'Registrei seu pedido.',

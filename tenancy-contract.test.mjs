@@ -39,7 +39,7 @@ function sonda(arquivo,base){
  });
 }
 
-test('sondas de isolamento entre contas passam no servidor real com duas contas sintéticas',{timeout:180000,skip:postgresSkipReason()},async()=>{
+test('cross-account isolation probes pass against the real server with two synthetic accounts',{timeout:180000,skip:postgresSkipReason()},async()=>{
  let child,started=false,db;const root=await fs.mkdtemp(path.join(os.tmpdir(),'brambs-boot-test-'));
  try{
   const socket=path.join(root,'socket');await fs.mkdir(socket);
@@ -52,7 +52,7 @@ test('sondas de isolamento entre contas passam no servidor real com duas contas 
   let output='';child=spawn(process.execPath,['--import',path.join(repo,'test-support/boot-network-guard.mjs'),'--import',observer,path.join(repo,'web/server.mjs')],{cwd:root,env,stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
   let port;for(let i=0;i<150;i++){await delay(100);port=output.match(/BOOT_TEST_PORT=(\d+)/)?.[1];if(port||child.exitCode!==null)break;}
-  assert.ok(port,'servidor não subiu:\n'+output);
+  assert.ok(port,'server did not start up:\n'+output);
   // waits for initDb to finish before writing the accounts
   for(let i=0;i<100;i++){if((await db.query("SELECT to_regclass('mtr_harness.sessions') t")).rows[0].t)break;await delay(100);}
   await db.query(`INSERT INTO mtr_harness.users(id,name,email,password_hash) VALUES($1,'Conta A','a@example.invalid','x'),($2,'Conta B','b@example.invalid','x')`,[A,B]);
@@ -72,9 +72,9 @@ test('sondas de isolamento entre contas passam no servidor real com duas contas 
    assert.equal(r.code,0,f+':\n'+r.out);
    const res=r.rel.results;
    assert.deepEqual(res.filter(x=>x.ok===false),[],f);
-   assert.deepEqual(res.filter(x=>x.ok===null).map(x=>x.nome+'|'+(x.alvo||'')).sort(),PULOS[f].sort(),f+': pulo novo\n'+r.out);
+   assert.deepEqual(res.filter(x=>x.ok===null).map(x=>x.nome+'|'+(x.alvo||'')).sort(),PULOS[f].sort(),f+': new skip\n'+r.out);
    console.log(f+': '+res.filter(x=>x.ok).length+' provas de isolamento passaram');
-   assert.ok(res.filter(x=>x.ok).length>=MINIMO[f],f+': menos provas que o esperado\n'+r.out);
+   assert.ok(res.filter(x=>x.ok).length>=MINIMO[f],f+': fewer proofs than expected\n'+r.out);
   }
   assert.doesNotMatch(output,/ReferenceError|TypeError|SyntaxError/);
  }finally{if(child&&child.exitCode===null){child.kill('SIGKILL');}if(db)await db.end();if(started)cmd('pg_ctl',['-D',path.join(root,'data'),'-m','immediate','-w','stop']);await fs.rm(root,{recursive:true,force:true});}

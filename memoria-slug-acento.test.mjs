@@ -11,23 +11,23 @@ import { normWikiSlug } from './web/db.mjs';
 
 const ANTIGA = '- João é o contador do escritório';
 
-test('nome do banco e nome do wiki são o mesmo', () => {
+test('database name and wiki name are the same', () => {
   assert.equal(normWikiSlug('pessoa-joão'), 'pessoa-joao');
   assert.equal(normWikiSlug('pessoa joão'), 'pessoa-joao');
   assert.equal(normWikiSlug('Preferências'), 'preferencias');
 });
 
-test('add numa página com acento preserva as linhas que já existiam', () => {
+test('add on an accented page preserves the lines that already existed', () => {
   const r = aplicarOps(
     [{ op: 'add', pagina: 'pessoa-joão', texto: 'João fecha o mês toda primeira sexta' }],
     { 'pessoa-joao': ANTIGA },
   );
   assert.deepEqual(Object.keys(r.paginas), ['pessoa-joao']);
-  assert.ok(r.paginas['pessoa-joao'].includes(ANTIGA), 'a linha antiga sumiu');
+  assert.ok(r.paginas['pessoa-joao'].includes(ANTIGA), 'the old line disappeared');
   assert.ok(r.paginas['pessoa-joao'].includes('primeira sexta'));
 });
 
-test('espaço no nome cai na mesma página, não numa cópia', () => {
+test('a space in the name lands on the same page, not on a copy', () => {
   const r = aplicarOps(
     [{ op: 'add', pagina: 'pessoa joão', texto: 'João mora em Santos desde 2019' }],
     { 'pessoa-joao': ANTIGA },
@@ -36,7 +36,7 @@ test('espaço no nome cai na mesma página, não numa cópia', () => {
   assert.ok(r.paginas['pessoa-joao'].includes(ANTIGA));
 });
 
-test('página de área com acento: corrigir acha a âncora na página certa', () => {
+test('accented area page: fix finds the anchor on the right page', () => {
   const r = aplicarOps(
     [{ op: 'fix', pagina: 'Preferências', ancora: 'café coado', texto: 'prefere café expresso' }],
     { preferencias: '- prefere café coado de manhã' },
@@ -45,7 +45,7 @@ test('página de área com acento: corrigir acha a âncora na página certa', ()
   assert.equal(r.paginas.preferencias, '- prefere café expresso');
 });
 
-test('remover numa página com acento não zera o resto', () => {
+test('remove on an accented page does not wipe out the rest', () => {
   const r = aplicarOps(
     [{ op: 'remove', pagina: 'pessoa-joão', ancora: 'contador do escritório' }],
     { 'pessoa-joao': `${ANTIGA}\n- João joga tênis aos sábados` },
@@ -53,8 +53,8 @@ test('remover numa página com acento não zera o resto', () => {
   assert.equal(r.paginas['pessoa-joao'], '- João joga tênis aos sábados');
 });
 
-test('nenhum caminho do wiki usa a regra de nome antiga', () => {
+test('no wiki path uses the old naming rule', () => {
   const src = fs.readFileSync(new URL('./web/wiki.mjs', import.meta.url), 'utf8');
   assert.ok(!/replace\(\/\[\^a-z0-9-\]\/g/.test(src),
-    'ainda existe um lugar apagando acento/espaço em vez de normalizar');
+    'there is still a place stripping accent/space instead of normalizing');
 });

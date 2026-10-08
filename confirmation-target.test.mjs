@@ -37,7 +37,7 @@ async function proposal(t, threadId, id = 'routine-B', { language = 'pt-BR', ...
   return { pend: peekPending(threadId), executions, tool };
 }
 
-test('cada proposta recebe identidade própria, sem executar ao pedir autorização', async (t) => {
+test('each proposal gets its own identity, without executing when asking for authorization', async (t) => {
   const a = await proposal(t, 'target-id-a');
   const b = await proposal(t, 'target-id-b');
   assert.match(a.pend.id, /^[a-f0-9-]{36}$/);
@@ -48,7 +48,7 @@ test('cada proposta recebe identidade própria, sem executar ao pedir autorizaç
   assert.match(a.pend.confirmationText, /👍/);
 });
 
-test('cartão normal de ação irreversível pede texto e preserva idioma', async (t) => {
+test('normal card for an irreversible action asks for text and preserves language', async (t) => {
   for (const [language, expected] of [['pt-BR', 'por texto'], ['en', 'in text'], ['es', 'por texto']]) {
     const thread = `target-text-only-${language}`;
     t.after(() => takePending(thread));
@@ -61,7 +61,7 @@ test('cartão normal de ação irreversível pede texto e preserva idioma', asyn
   }
 });
 
-test('gate normal executa snapshot dos argumentos, mesmo se o chamador os altera durante preflight', async (t) => {
+test('normal gate takes a snapshot of the arguments, even if the caller alters them during preflight', async (t) => {
   const thread = 'target-immutable-args';
   t.after(() => takePending(thread));
   let release, entered;
@@ -85,7 +85,7 @@ test('gate normal executa snapshot dos argumentos, mesmo se o chamador os altera
   assert.deepEqual(calls, [{ id: 'routine-A', hora: 9, metadata: { owner: 'original' } }]);
 });
 
-test('jornada mantém o convite curto preparado a partir do rótulo, sem moldura técnica', async (t) => {
+test('journey keeps the short invite prepared from the label, with no technical framing', async (t) => {
   const thread = 'target-discovery-card';
   t.after(() => takePending(thread));
   await gateTool({ name: 'jornada_configurar', run: async () => ({ ok: true }) }, thread).run({
@@ -97,7 +97,7 @@ test('jornada mantém o convite curto preparado a partir do rótulo, sem moldura
   assert.match(pend.confirmationText, /Posso começar/);
 });
 
-test('responder pode citando a rotina A não executa nem remove a rotina B pendente', async (t) => {
+test('replying "pode" quoting routine A does not execute or remove the pending routine B', async (t) => {
   const thread = 'target-wrong-action';
   const { pend, executions } = await proposal(t, thread);
   bindPendingMessage(thread, pend.id, ref('message-B'));
@@ -114,7 +114,7 @@ test('responder pode citando a rotina A não executa nem remove a rotina B pende
   assert.deepEqual(executions, ['routine-B']);
 });
 
-test('reação negativa na mensagem errada também preserva a pendência atual', async (t) => {
+test('negative reaction on the wrong message also preserves the current pending item', async (t) => {
   const thread = 'target-negative-reaction';
   const { pend } = await proposal(t, thread);
   bindPendingMessage(thread, pend.id, ref('current-card'));
@@ -123,7 +123,7 @@ test('reação negativa na mensagem errada também preserva a pendência atual',
   assert.equal(confirmationTargetMatches(pend, ref('current-card')), true);
 });
 
-test('canal e ID precisam coincidir, sem inferir alvo de texto ou corpo citado', async (t) => {
+test('channel and ID must match, without inferring a target from text or quoted body', async (t) => {
   const thread = 'target-forged-context';
   const { pend } = await proposal(t, thread);
   bindPendingMessage(thread, pend.id, ref('real-card'));
@@ -135,7 +135,7 @@ test('canal e ID precisam coincidir, sem inferir alvo de texto ou corpo citado',
   assert.equal(confirmsPending(pend, 'pode?', ref('real-card')), false);
 });
 
-test('referência explícita inválida falha fechada; texto simples continua compatível', async (t) => {
+test('invalid explicit reference fails closed; plain text remains compatible', async (t) => {
   const { pend } = await proposal(t, 'target-invalid');
   for (const target of [null, {}, [], ref(null), ref(''), ref('  '), ref('x'.repeat(2049)), ref('x', ''), 'card']) {
     assert.equal(confirmationTargetMatches(pend, target), false);
@@ -145,7 +145,7 @@ test('referência explícita inválida falha fechada; texto simples continua com
   assert.equal(confirmsPending(undefined, 'pode'), false);
 });
 
-test('envio atrasado não vincula mensagem de proposta antiga à proposta nova', async (t) => {
+test('delayed delivery does not bind the old proposal message to the new proposal', async (t) => {
   const thread = 'target-late-delivery';
   const old = await proposal(t, thread, 'routine-A');
   let release;
@@ -159,7 +159,7 @@ test('envio atrasado não vincula mensagem de proposta antiga à proposta nova',
   assert.equal(peekPending(thread), current.pend);
 });
 
-test('replay da mensagem antiga não autoriza outra proposta depois da execução', async (t) => {
+test('replaying the old message does not authorize another proposal after execution', async (t) => {
   const thread = 'target-replay';
   const first = await proposal(t, thread, 'routine-A');
   bindPendingMessage(thread, first.pend.id, ref('card-A'));
@@ -174,7 +174,7 @@ test('replay da mensagem antiga não autoriza outra proposta depois da execuçã
   assert.deepEqual(next.executions, []);
 });
 
-test('vínculo é idempotente, aceita partes do cartão e copia o metadado recebido', async (t) => {
+test('binding is idempotent, accepts card parts and copies the received metadata', async (t) => {
   const thread = 'target-chunks';
   const { pend } = await proposal(t, thread);
   const original = ref('chunk-1');
@@ -189,7 +189,7 @@ test('vínculo é idempotente, aceita partes do cartão e copia o metadado receb
   assert.equal(bindPendingMessage('other-thread', pend.id, ref('chunk-1')), false);
 });
 
-test('restauração legada sem identidade não aceita vínculo antigo por coincidência', (t) => {
+test('legacy restoration without identity does not accept an old binding by coincidence', (t) => {
   const thread = 'target-legacy';
   t.after(() => takePending(thread));
   const legacy = { name: 'editar_rotina', label: 'legacy', messageRefs: [ref('old-card')] };
@@ -206,7 +206,7 @@ test('restauração legada sem identidade não aceita vínculo antigo por coinci
   assert.equal(confirmsPending(restored, 'pode', ref('new-card')), true);
 });
 
-test('proposta restaurada com identidade mantém o vínculo da mesma proposta', async (t) => {
+test('proposal restored with identity keeps the binding to the same proposal', async (t) => {
   const thread = 'target-restore';
   const { pend } = await proposal(t, thread);
   bindPendingMessage(thread, pend.id, ref('current-card'));
@@ -214,7 +214,7 @@ test('proposta restaurada com identidade mantém o vínculo da mesma proposta', 
   assert.equal(confirmsPending(peekPending(thread), 'pode', ref('current-card')), true);
 });
 
-test('aviso de alvo desconhecido mostra o cartão preparado e permite reenviar a proposta', async (t) => {
+test('unknown-target notice shows the prepared card and allows resending the proposal', async (t) => {
   const thread = 'target-notice';
   const { pend } = await proposal(t, thread, 'routine-B', {
     prepareConfirmation: async () => ({ run: async () => ({ ok: true }), confirmationText: 'Cartão exato aprovado pelo preparo.' }),
@@ -228,7 +228,7 @@ test('aviso de alvo desconhecido mostra o cartão preparado e permite reenviar a
   assert.equal(confirmsPending(pend, 'pode', ref('notice-card')), true);
 });
 
-test('aviso usa idioma gravado e mantém o rótulo completo quando não há cartão próprio', async (t) => {
+test('notice uses the stored language and keeps the full label when there is no own card', async (t) => {
   for (const [language, expected] of [['en', 'action is still pending'], ['es', 'acción sigue pendiente']]) {
     const { pend } = await proposal(t, `target-notice-${language}`, 'routine-B', { language });
     const notice = confirmationTargetNotice(pend);

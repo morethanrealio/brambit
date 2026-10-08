@@ -4,7 +4,7 @@ import { jevEnabled, jevChoice } from './web/jev.mjs';
 import { GATED_TOOLS, IRREVERSIBLE_TOOLS, describe, describeDone } from './web/confirm.mjs';
 import { PORTAO_TEXTOS, PORTAO_IRREVERSIVEIS } from './web/confirm-textos-portao.mjs';
 
-test('Jev sem chave fica desligado e devolve null (a regra antiga segue valendo)', async () => {
+test('Jev with no key stays off and returns null (the old rule still applies)', async () => {
   const key = process.env.TYPESAFE_API_KEY;
   delete process.env.TYPESAFE_API_KEY;
   try {
@@ -13,7 +13,7 @@ test('Jev sem chave fica desligado e devolve null (a regra antiga segue valendo)
   } finally { if (key !== undefined) process.env.TYPESAFE_API_KEY = key; }
 });
 
-test('JEV_TRAVAS=0 desliga mesmo com chave', () => {
+test('JEV_TRAVAS=0 turns it off even with a key', () => {
   const [key, flag] = [process.env.TYPESAFE_API_KEY, process.env.JEV_TRAVAS];
   process.env.TYPESAFE_API_KEY = 'k'; process.env.JEV_TRAVAS = '0';
   try { assert.equal(jevEnabled(), false); }
@@ -23,7 +23,7 @@ test('JEV_TRAVAS=0 desliga mesmo com chave', () => {
   }
 });
 
-test('Jev em erro de rede devolve null, nunca uma escolha inventada', async () => {
+test('Jev on a network error returns null, never a made-up choice', async () => {
   const [key, fetch0] = [process.env.TYPESAFE_API_KEY, globalThis.fetch];
   process.env.TYPESAFE_API_KEY = 'k';
   try {
@@ -39,7 +39,7 @@ test('Jev em erro de rede devolve null, nunca uma escolha inventada', async () =
   }
 });
 
-test('toda tool da auditoria 28/09 está no portão, com frase própria nos 3 idiomas', () => {
+test('every tool from the 28/09 audit is in the gate, with its own phrase in all 3 languages', () => {
   for (const name of Object.keys(PORTAO_TEXTOS)) {
     assert.ok(GATED_TOOLS.has(name), name);
     for (const lang of ['pt-BR', 'en', 'es']) {

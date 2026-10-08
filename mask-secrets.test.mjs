@@ -6,7 +6,7 @@ import { maskSecrets } from './web/ssh.mjs';
 
 const prose = (s) => maskSecrets(s, { prose: true });
 
-test('senha rotulada em pt/es/en mascara só o valor', () => {
+test('a labeled password in pt/es/en masks only the value', () => {
   const casos = [
     ['senha: casa2026', 'senha: ***'],
     ['Senha: casa2026.', 'Senha: ***.'],
@@ -26,7 +26,7 @@ test('senha rotulada em pt/es/en mascara só o valor', () => {
   for (const [entrada, esperado] of casos) assert.equal(prose(entrada), esperado, entrada);
 });
 
-test('texto comum sobre senha e dado financeiro passam intactos', () => {
+test('ordinary text about password and financial data passes through intact', () => {
   for (const texto of [
     'A senha é obrigatória para entrar.',
     'Sua senha é pessoal, não compartilhe.',
@@ -41,7 +41,7 @@ test('texto comum sobre senha e dado financeiro passam intactos', () => {
   ]) assert.equal(prose(texto), texto, texto);
 });
 
-test('rótulo sem valor na mesma linha não come a linha seguinte', () => {
+test('a label with no value on the same line does not eat the next line', () => {
   assert.equal(prose('A senha:\nok, conectado'), 'A senha:\nok, conectado');
   assert.equal(maskSecrets('senha=abc123\nDB_PASSWORD=x'), 'senha=***\nDB_PASSWORD=***');
 });

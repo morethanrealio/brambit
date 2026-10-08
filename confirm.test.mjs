@@ -4,8 +4,8 @@ import { isConfirmation } from './web/confirm.mjs';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
-const confirma = (txt) => t(`confirma: ${JSON.stringify(txt)}`, isConfirmation(txt) === true);
-const cancela = (txt) => t(`cancela : ${JSON.stringify(txt)}`, isConfirmation(txt) === false);
+const confirma = (txt) => t(`confirms: ${JSON.stringify(txt)}`, isConfirmation(txt) === true);
+const cancela = (txt) => t(`cancels : ${JSON.stringify(txt)}`, isConfirmation(txt) === false);
 
 // 1) Simple confirmations in pt (old behavior, must not regress).
 ['sim', 'sim!', 'pode', 'pode sim', 'pode mandar', 'manda', 'manda ver', 'manda aí',

@@ -45,7 +45,7 @@ function fakeServer(tools) {
 
 const APAGAR = { name: 'delete-page', description: 'Apaga uma página.', inputSchema: { type: 'object', properties: { id: { type: 'string' } } } };
 
-test('ferramenta MCP vira pedido de confirmação e só chama o servidor depois do sim', async (t) => {
+test('MCP tool becomes a confirmation request and only calls the server after the yes', async (t) => {
   const thread = 'mcp-portao-1';
   t.after(() => takePending(thread));
   const calls = fakeServer([APAGAR]);
@@ -54,7 +54,7 @@ test('ferramenta MCP vira pedido de confirmação e só chama o servidor depois 
 
   const out = await gateTool(tools[0], thread).run({ id: 'p42' });
   assert.match(out, /AÇÃO PENDENTE DE CONFIRMAÇÃO \(NÃO foi executada\)/);
-  assert.equal(calls.length, 0, 'nada pode ir pro servidor antes da confirmação');
+  assert.equal(calls.length, 0, 'nothing can go to the server before confirmation');
 
   const pend = peekPending(thread);
   assert.equal(pend.name, 'notion_delete_page');
@@ -65,7 +65,7 @@ test('ferramenta MCP vira pedido de confirmação e só chama o servidor depois 
   assert.deepEqual(calls, [{ name: 'delete-page', arguments: { id: 'p42' } }]);
 });
 
-test('readOnlyHint do servidor não libera o cartão: quem decide somos nós', async (t) => {
+test("the server's readOnlyHint does not release the card: we decide", async (t) => {
   const thread = 'mcp-portao-2';
   t.after(() => takePending(thread));
   const calls = fakeServer([{ ...APAGAR, annotations: { readOnlyHint: true } }]);
@@ -74,13 +74,13 @@ test('readOnlyHint do servidor não libera o cartão: quem decide somos nós', a
   assert.equal(calls.length, 0);
 });
 
-test('nome dinâmico sem a marca segue fora do portão; com a marca exige texto, não 👍', async () => {
+test('dynamic name without the marker stays outside the gate; with the marker it requires text, not 👍', async () => {
   const solta = { name: 'qualquer_coisa', run: async () => 'rodou' };
   assert.equal(gateTool(solta, 'mcp-portao-3'), solta);
   assert.equal(isReactionConfirmable('notion_delete_page'), false);
 });
 
-test('frase do cartão: idioma, conector e argumentos longos resumidos', () => {
+test('card phrase: language, connector and long arguments summarized', () => {
   assert.equal(describeMcpCall('wiki', 'search', {}, 'en'), 'run the tool "search" from the "wiki" connector');
   assert.equal(describeMcpCall('', 'buscar', { q: 'x' }, 'es-ES'), 'usar la herramienta "buscar" con {"q":"x"}');
   const longo = describeMcpCall('n', 't', { texto: 'a'.repeat(1000) });

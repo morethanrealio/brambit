@@ -19,14 +19,14 @@ function cano({ lancaNoWrite = null } = {}) {
   return s;
 }
 
-test('caminho feliz: escreve, fecha e não reporta falha', () => {
+test('happy path: writes, closes and reports no failure', () => {
   const s = cano();
   assert.equal(escreverNoStdin(s, '{"verb":"ping"}'), null);
   assert.deepEqual(s.escrito, ['{"verb":"ping"}']);
   assert.equal(s.fechado, true);
 });
 
-test('EPIPE assíncrono depois do write não derruba nada', () => {
+test('async EPIPE after the write does not crash anything', () => {
   const s = cano();
   escreverNoStdin(s, 'x');
   const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
@@ -34,22 +34,22 @@ test('EPIPE assíncrono depois do write não derruba nada', () => {
   assert.doesNotThrow(() => s.emit('error', epipe));
 });
 
-test('o listener de error é instalado ANTES do write', () => {
+test('the error listener is installed BEFORE the write', () => {
   const s = cano({ lancaNoWrite: Object.assign(new Error('cano morto'), { code: 'EPIPE' }) });
   const e = escreverNoStdin(s, 'x');
-  assert.equal(e?.message, 'cano morto', 'falha síncrona volta pra quem chamou');
+  assert.equal(e?.message, 'cano morto', 'synchronous failure goes back to the caller');
   // even having failed on write, the stream is already protected
   assert.doesNotThrow(() => s.emit('error', new Error('tardio')));
 });
 
-test('ctl usa o helper e não escreve no stdin no braço', () => {
+test('ctl uses the helper and does not write to stdin by hand', () => {
   const src = fs.readFileSync(new URL('./web/appshost.mjs', import.meta.url), 'utf8');
   assert.match(src, /const falhaStdin = escreverNoStdin\(p\.stdin,/);
-  assert.ok(!/p\.stdin\.write\(/.test(src), 'nada de write direto no stdin do ssh');
+  assert.ok(!/p\.stdin\.write\(/.test(src), 'no direct write to ssh stdin');
   assert.match(src, /stdin\.on\('error', \(\) => \{\}\)/);
 });
 
-test('o lock de tarefa de app também protege o stdin do filho', () => {
+test('the app task lock also protects the child stdin', () => {
   const src = fs.readFileSync(new URL('./web/app-task-store.mjs', import.meta.url), 'utf8');
   assert.match(src, /child\.stdin\.on\('error',\(\)=>\{\}\)/);
   // and the protection comes before any destroy/end of stdin

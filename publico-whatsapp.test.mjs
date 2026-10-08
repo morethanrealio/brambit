@@ -17,7 +17,7 @@ const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'sy
 const DONO='5511000000001',CLIENTE='5511000000002';
 let n=0;const msg=(from,text,extra={})=>({id:'publico-'+(++n),from,type:'text',text:{body:text},...extra});
 
-test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; dono e código de conexão seguem como antes',{timeout:40000,skip:postgresSkipReason()},async t=>{
+test('WhatsApp: unknown sender goes to public support only when enabled; owner and connection code keep working as before',{timeout:40000,skip:postgresSkipReason()},async t=>{
  const f=await inboxFixture();const handlers=[];t.after(async()=>{for(const h of handlers)await h.stop();await f.close();});
 
  const original=globalThis.fetch;const sent=[];t.after(()=>{globalThis.fetch=original;});
@@ -43,7 +43,7 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
  handlers.push(h);await h.start();
  const chegar=async(...msgs)=>{await h.accept(payload(msgs));await h.process(payload(msgs));await until(done);};
 
- await t.test('mensagens picadas viram um turno; o que chega durante o turno vai junto no seguinte',async()=>{
+ await t.test('chopped-up messages become one turn; whatever arrives during the turn joins the next one',async()=>{
   let soltar;const lento=new Promise(r=>{soltar=r;});
   turno=async({mensagem})=>{if(mensagem.startsWith('primeira'))await lento;return {text:'público: '+mensagem};};
   const a=msg(CLIENTE,'primeira'),b=msg(CLIENTE,'segunda'),c=msg(CLIENTE,'terceira'),d=msg(CLIENTE,'quarta');
@@ -58,19 +58,19 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
   assert.deepEqual(dono,[]);
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
- await t.test('dono vinculado segue o fluxo dele; código de conexão vale antes do público',async()=>{
+ await t.test('linked owner follows their own flow; connection code works before public support',async()=>{
   sent.length=0;turnos.length=0;
   await chegar(msg(DONO,'oi do dono'));await until(async()=>sent.length===1);
   assert.deepEqual(sent.map(s=>s.text),['dono: oi do dono']);
   await chegar(msg(CLIENTE,'CODIGO-123'));
   assert.match(sent[1].text,/Número confirmado/);assert.deepEqual(turnos,[]);
  });
- await t.test('fora texto: resposta fixa sem turno; reação: nada',async()=>{
+ await t.test('non-text: fixed reply with no turn; reaction: nothing',async()=>{
   sent.length=0;
   await chegar(msg(CLIENTE,null,{type:'audio',text:undefined,audio:{id:'m1'}}),msg(CLIENTE,null,{type:'reaction',text:undefined,reaction:{emoji:'👍'}}));
   assert.equal(sent.length,1);assert.match(sent[0].text,/só consigo ler mensagens de texto/);assert.deepEqual(turnos,[]);
  });
- await t.test('saídas do plugin: texto, imagem, botão de link e template, na ordem',async()=>{
+ await t.test('plugin outputs: text, image, link button and template, in order',async()=>{
   sent.length=0;
   turno=async()=>({text:'versão em texto',saidas:[{tipo:'texto',texto:'Oi!'},{tipo:'imagem',url:'https://x.example/a.jpg',legenda:'Blusa'},
    {tipo:'botao',texto:'Prove agora',rotulo:'Provar',url:'https://x.example/p'},{tipo:'botao',texto:'Batom',rotulo:'Ver',url:'https://x.example/b',imagem:'https://x.example/b.jpg'},{tipo:'template',nome:'boas_vindas',idioma:'pt_BR',componentes:[]}]});
@@ -82,23 +82,23 @@ test('WhatsApp: desconhecido vai pro atendimento público só quando ligado; don
   assert.equal(await estado(m.id),'completed');
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
- await t.test('saída recusada vira a reserva; com imagem, a seguinte espera a entrega',async()=>{
+ await t.test('a rejected output falls back to its backup text; with an image, the next one waits for delivery',async()=>{
   sent.length=0;process.env.WA_ESPERA_ENTREGA_MS='3000';t.after(()=>{process.env.WA_ESPERA_ENTREGA_MS='0';});
   turno=async()=>({text:'x',saidas:[{tipo:'template',nome:'recusado',idioma:'pt_BR',componentes:[],reserva:'Opções: 1. Blusa'},
    {tipo:'imagem',url:'https://x.example/a.jpg',reserva:'Foto: https://x.example/a.jpg'},{tipo:'texto',texto:'Gostou?'}]});
   const m=msg(CLIENTE,'oi');await h.accept(payload([m]));await h.process(payload([m]));
-  await until(async()=>sent.length===2);await wait(100);assert.equal(sent.length,2,'o texto espera a entrega da foto');
+  await until(async()=>sent.length===2);await wait(100);assert.equal(sent.length,2,'the text waits for the photo delivery');
   await h.process({entry:[{changes:[{value:{statuses:[{id:'out-2',status:'failed',recipient_id:CLIENTE,errors:[{code:131053}]}]}}]}]});
   await until(done);
   assert.deepEqual(sent.map(x=>x.text??Object.keys(x)[1]),['Opções: 1. Blusa','image','Foto: https://x.example/a.jpg','Gostou?']);
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
- await t.test('turno que falha: nada enviado e a entrada fica incerta (sem repetir)',async()=>{
+ await t.test('a turn that fails: nothing sent and the input stays uncertain (no retry)',async()=>{
   sent.length=0;turno=async()=>{throw Error('modelo fora');};const m=msg(CLIENTE,'vai falhar');
   await chegar(m);assert.deepEqual(sent,[]);assert.equal(await estado(m.id),'uncertain');
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
- await t.test('desligado: mensagem de login de hoje, sem turno público',async()=>{
+ await t.test('disabled: today\'s login message, no public turn',async()=>{
   sent.length=0;turnos.length=0;ligado=false;
   await chegar(msg(CLIENTE,'oi'));assert.match(sent[0].text,/faça login/);assert.deepEqual(turnos,[]);
  });

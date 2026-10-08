@@ -20,10 +20,10 @@ const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } els
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 // ── 1) Cut marker ──
-t('marcador de corte detectado', hasCutMarker('linha a\n…[cortado: 74123 chars]…\nlinha b'));
-t('marcador com espaco tambem', hasCutMarker('x …[cortado:74123 chars]… y'));
-t('texto normal nao acusa', !hasCutMarker('| Autor | Ano |\n| Bae | 2019 |'));
-t('nao-string nao quebra', !hasCutMarker(null) && !hasCutMarker(12));
+t('cut marker detected', hasCutMarker('linha a\n…[cortado: 74123 chars]…\nlinha b'));
+t('marker with space too', hasCutMarker('x …[cortado:74123 chars]… y'));
+t('normal text does not trigger', !hasCutMarker('| Autor | Ano |\n| Bae | 2019 |'));
+t('non-string does not break', !hasCutMarker(null) && !hasCutMarker(12));
 
 // ── 2) Asset selection: the most RECENT one is the valid version ──
 const assets = [
@@ -31,46 +31,46 @@ const assets = [
   { id: 8, caption: 'foto.jpg', mime: 'image/jpeg', s3_key: 'u/8', created_at: '2026-09-09T18:00:00Z' },
   { id: 7, caption: 'Matriz de artigos.xlsx', mime: XLSX_MIME, s3_key: 'u/7', created_at: '2026-09-09T17:00:00Z' },
 ];
-t('pega a planilha mais recente', pickSheetAsset(assets).asset.id === 9);
-t('pula anexo que nao e planilha', pickSheetAsset([assets[1], assets[2]]).asset.id === 7);
-t('id explicito respeitado', pickSheetAsset(assets, { id: 7 }).asset.id === 7);
-t('id inexistente da erro', !!pickSheetAsset(assets, { id: 99 }).error);
-t('id de nao-planilha da erro', !!pickSheetAsset(assets, { id: 8 }).error);
-t('biblioteca sem planilha da erro', !!pickSheetAsset([assets[1]]).error);
-t('lista vazia da erro', !!pickSheetAsset([]).error && !!pickSheetAsset(null).error);
-t('detecta planilha por extensao sem mime', isSheetAsset({ caption: 'x.xlsx' }));
-t('nao confunde docx com planilha', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
+t('picks the most recent spreadsheet', pickSheetAsset(assets).asset.id === 9);
+t('skips attachment that is not a spreadsheet', pickSheetAsset([assets[1], assets[2]]).asset.id === 7);
+t('explicit id respected', pickSheetAsset(assets, { id: 7 }).asset.id === 7);
+t('nonexistent id errors', !!pickSheetAsset(assets, { id: 99 }).error);
+t('non-spreadsheet id errors', !!pickSheetAsset(assets, { id: 8 }).error);
+t('library without spreadsheet errors', !!pickSheetAsset([assets[1]]).error);
+t('empty list errors', !!pickSheetAsset([]).error && !!pickSheetAsset(null).error);
+t('detects spreadsheet by extension without mime', isSheetAsset({ caption: 'x.xlsx' }));
+t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
 
 // ── 3) Archived version name ──
-t('versao arquivada usa aaaammddhhmmss',
+t('archived version uses yyyymmddhhmmss',
   versionedCaption('Matriz de artigos.xlsx', '2026-09-09T17:04:05Z') === 'Matriz de artigos_20260909170405.xlsx');
-t('preserva extensao xlsm',
+t('preserves xlsm extension',
   versionedCaption('a.xlsm', '2026-01-02T03:04:05Z') === 'a_20260102030405.xlsm');
-t('sem extensao ainda funciona',
+t('works even without extension',
   versionedCaption('planilha', '2026-01-02T03:04:05Z') === 'planilha_20260102030405');
-t('data invalida cai pro id',
+t('invalid date falls back to id',
   versionedCaption('a.xlsx', 'nao-e-data', { id: 7 }) === 'a_v7.xlsx');
-t('nome canonico nunca vira o arquivado',
+t('canonical name never becomes the archived one',
   versionedCaption('a.xlsx', '2026-01-02T03:04:05Z') !== 'a.xlsx');
 
 // ── 4) Delta and SILENT failure detection (valid xlsx, lost content) ──
-t('delta descreve crescimento', describeDelta({ rows: 62, sheets: 2 }, { rows: 66, sheets: 2 }).includes('62 → 66 (+4)'));
-t('delta sem mudanca de contagem', describeDelta({ rows: 62, sheets: 1 }, { rows: 62, sheets: 1 }).includes('sem mudança'));
+t('delta describes growth', describeDelta({ rows: 62, sheets: 2 }, { rows: 66, sheets: 2 }).includes('62 → 66 (+4)'));
+t('delta without count change', describeDelta({ rows: 62, sheets: 1 }, { rows: 62, sheets: 1 }).includes('sem mudança'));
 const prob = (b, a, resumo = '', identical = false) =>
   detectarProblema({ before: { rows: b }, after: { rows: a, text: resumo === 'TEXTO' ? 'x' : (resumo || '') }, resumo, identical });
-t('encolhimento grande e problema', !!prob(62, 21));
-t('encolhimento pequeno passa', !prob(62, 60));
-t('planilha minuscula nao dispara', !prob(6, 2));
-t('marcador como dado e problema',
+t('large shrink is a problem', !!prob(62, 21));
+t('small shrink passes', !prob(62, 60));
+t('tiny spreadsheet does not trigger', !prob(6, 2));
+t('marker as data is a problem',
   !!detectarProblema({ before: { rows: 62 }, after: { rows: 62, text: 'ART-07,…[cortado: 400 chars]…' }, resumo: '' }));
-t('arquivo identico e problema', !!detectarProblema({ before: { rows: 62 }, after: { rows: 62, text: '' }, resumo: '', identical: true }));
-t('resultado bom nao gera problema', !detectarProblema({ before: { rows: 62 }, after: { rows: 66, text: 'ok' }, resumo: 'acrescentei 4' }));
-t('remocao declarada e aceita',
+t('identical file is a problem', !!detectarProblema({ before: { rows: 62 }, after: { rows: 62, text: '' }, resumo: '', identical: true }));
+t('good result does not create a problem', !detectarProblema({ before: { rows: 62 }, after: { rows: 66, text: 'ok' }, resumo: 'acrescentei 4' }));
+t('declared removal is accepted',
   !detectarProblema({ before: { rows: 62 }, after: { rows: 12, text: 'ok' }, resumo: 'removi as canceladas. REMOCAO_INTENCIONAL' }));
-t('declaracao com acento tambem vale', declarouRemocao('feito: REMOÇÃO_INTENCIONAL'));
-t('declaracao nao aceita marcador de corte',
+t('declaration with accent also counts', declarouRemocao('feito: REMOÇÃO_INTENCIONAL'));
+t('declaration does not accept cut marker',
   !!detectarProblema({ before: { rows: 62 }, after: { rows: 12, text: '…[cortado: 9 chars]…' }, resumo: 'REMOCAO_INTENCIONAL' }));
-t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'string' && prob(62, 21).instrucao.length > 20);
+t('problem carries a correction instruction', typeof prob(62, 21).instrucao === 'string' && prob(62, 21).instrucao.length > 20);
 
 // ── 5) Queue per key (overlapping edits do not overlap) ──
 {
@@ -79,13 +79,13 @@ t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'stri
   const a = withKeyLock('k1', async () => { ordem.push('a-in'); await dorme(30); ordem.push('a-out'); });
   const b = withKeyLock('k1', async () => { ordem.push('b-in'); await dorme(1); ordem.push('b-out'); });
   await Promise.all([a, b]);
-  t('segunda edicao espera a primeira TERMINAR',
+  t('second edit waits for the first to FINISH',
     ordem.join(',') === 'a-in,a-out,b-in,b-out');
 
   // Failure in the first one must not lock the queue forever.
   const p1 = withKeyLock('k2', async () => { throw new Error('boom'); }).catch(() => 'erro');
   const p2 = withKeyLock('k2', async () => 'segunda rodou');
-  t('falha na fila nao trava a proxima', (await p1) === 'erro' && (await p2) === 'segunda rodou');
+  t('failure in the queue does not block the next one', (await p1) === 'erro' && (await p2) === 'segunda rodou');
 
   // Different keys (different users) run in parallel.
   const marcas = [];
@@ -93,7 +93,7 @@ t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'stri
     withKeyLock('u1', async () => { marcas.push('u1-in'); await dorme(20); marcas.push('u1-out'); }),
     withKeyLock('u2', async () => { marcas.push('u2-in'); await dorme(1); marcas.push('u2-out'); }),
   ]);
-  t('usuarios diferentes nao se bloqueiam', marcas.indexOf('u2-out') < marcas.indexOf('u1-out'));
+  t('different users do not block each other', marcas.indexOf('u2-out') < marcas.indexOf('u1-out'));
 }
 
 // ── Fakes harness for the orchestrator ──
@@ -159,19 +159,19 @@ function mkFake(over = {}) {
 {
   const { state, deps } = mkFake();
   const r = await editSpreadsheet({ userId: 'user-a', objetivo: 'acrescente 4 linhas', deps });
-  t('edicao ok', r.ok === true);
-  t('gravou UM asset novo', state.saved.length === 1);
-  t('asset novo mantem o nome canonico', state.saved[0].caption === 'Matriz.xlsx');
-  t('versao anterior foi renomeada pro historico',
+  t('edit ok', r.ok === true);
+  t('saved ONE new asset', state.saved.length === 1);
+  t('new asset keeps the canonical name', state.saved[0].caption === 'Matriz.xlsx');
+  t('previous version was renamed into history',
     state.renamed.length === 1 && state.renamed[0][1] === 'Matriz_20260909170000.xlsx');
-  t('bytes antigos NAO foram sobrescritos',
+  t('old bytes were NOT overwritten',
     JSON.parse(state.files['u/1'].toString()).rows === 62);
-  t('bytes novos tem a mudanca',
+  t('new bytes have the change',
     JSON.parse(state.files['u/2'].toString()).rows === 66);
-  t('delta contado dos bytes', r.delta.includes('62 → 66 (+4)'));
-  t('uma tentativa so', r.tentativas === 1);
-  t('sem leitor de células, entrega com ressalva de conferência indisponível', r.avisos.some((a) => a.includes('conferência das células não está disponível')));
-  t('resumo do sub-agente volta', r.resumo.includes('4 linhas'));
+  t('delta counted from the bytes', r.delta.includes('62 → 66 (+4)'));
+  t('just one attempt', r.tentativas === 1);
+  t('without a cell reader, delivers with a caveat about unavailable verification', r.avisos.some((a) => a.includes('conferência das células não está disponível')));
+  t('sub-agent summary comes back', r.resumo.includes('4 linhas'));
 }
 
 // ── 7) Atomicity: failure at any step does NOT generate an asset and does NOT rename ──
@@ -185,7 +185,7 @@ for (const [nome, over] of [
 ]) {
   const { state, deps } = mkFake(over);
   const r = await editSpreadsheet({ userId: `user-${nome}`, objetivo: 'muda algo', deps });
-  t(`atomico: ${nome}`, r.ok === false && !!r.error && state.saved.length === 0 && state.renamed.length === 0);
+  t(`atomic: ${nome}`, r.ok === false && !!r.error && state.saved.length === 0 && state.renamed.length === 0);
 }
 
 // Byte-for-byte identical file = nobody touched it: no new version is created.
@@ -193,8 +193,8 @@ for (const [nome, over] of [
   let chamadas = 0;
   const { state, deps } = mkFake({ runEditor: async () => { chamadas++; return 'não achei o que mudar'; } });
   const r = await editSpreadsheet({ userId: 'user-noop', objetivo: 'muda algo', deps });
-  t('no-op nao gera versao nova', r.ok === false && state.saved.length === 0 && state.renamed.length === 0);
-  t('no-op foi tentado de novo antes de desistir', chamadas === 2);
+  t('no-op does not create a new version', r.ok === false && state.saved.length === 0 && state.renamed.length === 0);
+  t('no-op was retried before giving up', chamadas === 2);
 }
 
 // ── 7b) SILENT failure (valid xlsx, lost content) is REDONE from the
@@ -217,12 +217,12 @@ for (const [nome, over] of [
     },
   };
   const r = await editSpreadsheet({ userId: 'user-retry', objetivo: 'acrescente 4 linhas', deps: flaky });
-  t('refazendo, a edicao passa', r.ok === true && r.tentativas === 2);
-  t('so UM asset gravado (o certo)',
+  t('retrying, the edit passes', r.ok === true && r.tentativas === 2);
+  t('only ONE asset saved (the right one)',
     state.saved.length === 1 && JSON.parse(state.files['u/2'].toString()).rows === 66);
-  t('2a tentativa recebeu o diagnostico do erro',
+  t('2nd attempt received the error diagnosis',
     objetivos.length === 2 && /ATENÇÃO/.test(objetivos[1]) && /21 linhas/.test(objetivos[1]));
-  t('aviso conta que precisou refazer', r.avisos.some((a) => a.includes('2 tentativas')));
+  t('notice says it had to redo', r.avisos.some((a) => a.includes('2 tentativas')));
 }
 
 // Ran out of attempts: nothing saved, user's file intact and with the same name.
@@ -239,11 +239,11 @@ for (const [nome, over] of [
     },
   };
   const r = await editSpreadsheet({ userId: 'user-ruim', objetivo: 'acrescente 4 linhas', deps: ruim });
-  t('desiste sem gravar nada', r.ok === false && state.saved.length === 0 && state.renamed.length === 0);
-  t('tentou duas vezes e parou', chamadas === 2 && r.tentativas === 2);
-  t('cada tentativa partiu dos bytes originais', vistos.length === 2 && vistos.every((v) => v === 62));
-  t('erro proibe oferecer versao anterior', /não ofereça "versão anterior"/.test(r.error));
-  t('biblioteca segue com o canonico intacto',
+  t('gives up without saving anything', r.ok === false && state.saved.length === 0 && state.renamed.length === 0);
+  t('tried twice and stopped', chamadas === 2 && r.tentativas === 2);
+  t('each attempt started from the original bytes', vistos.length === 2 && vistos.every((v) => v === 62));
+  t('error forbids offering a previous version', /não ofereça "versão anterior"/.test(r.error));
+  t('library still has the canonical file intact',
     state.lib.length === 1 && state.lib[0].caption === 'Matriz.xlsx'
     && JSON.parse(state.files['u/1'].toString()).rows === 62);
 }
@@ -259,23 +259,23 @@ for (const [nome, over] of [
     },
   };
   const r = await editSpreadsheet({ userId: 'user-rem', objetivo: 'apague as linhas canceladas', deps: rem });
-  t('remocao declarada passa de primeira',
+  t('declared removal passes on the first try',
     r.ok === true && r.tentativas === 1 && state.saved.length === 1);
-  t('aviso pede confirmacao ao usuario', r.avisos.some((a) => a.includes('de propósito')));
+  t('notice asks the user for confirmation', r.avisos.some((a) => a.includes('de propósito')));
 }
 
 // Failure to rename the old version does not invalidate the edit (the new asset already exists).
 {
   const { state, deps } = mkFake({ renameAsset: async () => { throw new Error('db off'); } });
   const r = await editSpreadsheet({ userId: 'user-ren', objetivo: 'muda', deps });
-  t('renomeacao falha mas edicao vale', r.ok === true && state.saved.length === 1 && r.arquivada === null);
+  t('rename fails but the edit still counts', r.ok === true && state.saved.length === 1 && r.arquivada === null);
 }
 
 // ── 8) Objetivo vazio ──
 {
   const { deps } = mkFake();
   const r = await editSpreadsheet({ userId: 'user-v', objetivo: '   ', deps });
-  t('objetivo vazio rejeitado', r.ok === false);
+  t('empty objective rejected', r.ok === false);
 }
 
 // ── 9) OVERLAPPING edits from the same user: the second one starts from the result of
@@ -290,15 +290,15 @@ for (const [nome, over] of [
     editSpreadsheet({ userId: 'user-race', objetivo: 'acrescente 4 linhas', deps: lento }),
     editSpreadsheet({ userId: 'user-race', objetivo: 'acrescente outras 4', deps: lento }),
   ]);
-  t('as duas edicoes passaram', r1.ok === true && r2.ok === true);
-  t('a segunda partiu da primeira (62→66→70)',
+  t('both edits passed', r1.ok === true && r2.ok === true);
+  t('the second started from the first (62→66→70)',
     r1.after.rows === 66 && r2.before.rows === 66 && r2.after.rows === 70);
-  t('duas versoes novas, nome canonico nas duas',
+  t('two new versions, canonical name on both',
     state.saved.length === 2 && state.saved.every((s) => s.caption === 'Matriz.xlsx'));
-  t('historico com nomes distintos',
+  t('history with distinct names',
     state.renamed.length === 2 && state.renamed[0][1] !== state.renamed[1][1]);
   const canonicos = state.lib.filter((a) => a.caption === 'Matriz.xlsx');
-  t('so UMA linha fica com o nome canonico', canonicos.length === 1 && canonicos[0].id === 3);
+  t('only ONE row keeps the canonical name', canonicos.length === 1 && canonicos[0].id === 3);
 }
 
 // ── 10) Internal file parts: lost content is an ERROR, metadata is a notice ──
@@ -314,12 +314,12 @@ for (const [nome, over] of [
   };
   const soAcessorio = { parts: ['xl/workbook.xml', 'xl/charts/chart1.xml', 'xl/media/image1.png'] };
   const p1 = pecasPerdidas(before, soAcessorio);
-  t('metadado do Office nao conta como conteudo', p1.conteudo.length === 0 && p1.acessorias.length === 3);
+  t('Office metadata does not count as content', p1.conteudo.length === 0 && p1.acessorias.length === 3);
   const semImagem = { parts: ['xl/workbook.xml', 'customXml/item1.xml', 'docMetadata/LabelInfo.xml', 'xl/sharedStrings.xml'] };
   const p2 = pecasPerdidas(before, semImagem);
-  t('grafico e imagem perdidos contam como conteudo',
+  t('lost chart and image count as content',
     p2.conteudo.length === 2 && p2.conteudo.some((n) => n.includes('media')) && p2.conteudo.some((n) => n.includes('chart')));
-  t('sem lista de pecas a checagem nao opina',
+  t('without a parts list the check stays silent',
     pecasPerdidas({ rows: 10 }, { rows: 10 }).conteudo.length === 0);
 
   const prob = detectarProblema({
@@ -327,9 +327,9 @@ for (const [nome, over] of [
     after: { rows: 10, sheets: 1, ...semImagem },
     resumo: 'mudei a celula B2',
   });
-  t('perda de conteudo vira problema (refaz)', !!prob && /peça\(s\) interna\(s\)/.test(prob.motivo));
-  t('instrucao do retry cita Pillow', !!prob && /Pillow/.test(prob.instrucao));
-  t('perda so de metadado NAO vira problema',
+  t('content loss becomes a problem (redo)', !!prob && /peça\(s\) interna\(s\)/.test(prob.motivo));
+  t('retry instruction mentions Pillow', !!prob && /Pillow/.test(prob.instrucao));
+  t('metadata-only loss does NOT become a problem',
     detectarProblema({
       before: { rows: 10, sheets: 1, ...before },
       after: { rows: 10, sheets: 1, ...soAcessorio },
@@ -345,22 +345,22 @@ for (const [nome, over] of [
     after: { ...base, formulas: 3 },
     resumo: 'atualizei a coluna de status',
   });
-  t('formula achatada vira problema', !!prob && /fórmulas/.test(prob.motivo));
-  t('instrucao do retry cita data_only', !!prob && /data_only/.test(prob.instrucao));
-  t('queda pequena de formula nao reprova',
+  t('flattened formula becomes a problem', !!prob && /fórmulas/.test(prob.motivo));
+  t('retry instruction mentions data_only', !!prob && /data_only/.test(prob.instrucao));
+  t('small formula drop does not fail',
     detectarProblema({ before: { ...base, formulas: 30 }, after: { ...base, formulas: 28 }, resumo: 'ok' }) === null);
-  t('planilha sem formula nao dispara o check',
+  t('spreadsheet without formulas does not trigger the check',
     detectarProblema({ before: { ...base, formulas: 2 }, after: { ...base, formulas: 0 }, resumo: 'ok' }) === null);
-  t('remocao declarada libera a queda de formula',
+  t('declared removal allows the formula drop',
     detectarProblema({ before: { ...base, formulas: 30 }, after: { ...base, formulas: 1 }, resumo: 'apaguei a aba de cálculo. REMOCAO_INTENCIONAL' }) === null);
 }
 
 // ── 11) Clarification channel ──
 {
-  t('sentinela detectada', pedeClarificacao('PRECISO_DE_CLARIFICACAO: qual das duas abas de 2026?') === 'qual das duas abas de 2026?');
-  t('sentinela sem acento/underscore tambem', !!pedeClarificacao('preciso de clarificação: qual coluna?'));
-  t('resumo normal nao vira pergunta', pedeClarificacao('acrescentei 4 linhas na aba Artigos') === null);
-  t('pergunta vazia ainda avisa', !!pedeClarificacao('PRECISO_DE_CLARIFICACAO:'));
+  t('sentinel detected', pedeClarificacao('PRECISO_DE_CLARIFICACAO: qual das duas abas de 2026?') === 'qual das duas abas de 2026?');
+  t('sentinel without accent/underscore too', !!pedeClarificacao('preciso de clarificação: qual coluna?'));
+  t('normal summary does not become a question', pedeClarificacao('acrescentei 4 linhas na aba Artigos') === null);
+  t('empty question still warns', !!pedeClarificacao('PRECISO_DE_CLARIFICACAO:'));
 }
 
 // ── 12) Cell evidence: parsing and verification ──
@@ -371,11 +371,11 @@ for (const [nome, over] of [
     '- EVIDENCIA: Resumo!D2==SOMA(B2:B10)',
     'EVIDENCIA: lixo sem igual',
   ].join('\n'));
-  t('parse pega multiplas evidencias', ev.length === 3);
-  t('parse separa ref e valor', ev[0].ref === 'Fontes!A63' && ev[0].esperado === 'Bae et al.');
-  t('parse aceita formula', ev[2].ref === 'Resumo!D2' && ev[2].esperado === '=SOMA(B2:B10)');
-  t('resumo sem evidencia devolve vazio', parseEvidencia('mudei umas coisas').length === 0);
-  t('teto de 20 evidencias', parseEvidencia(
+  t('parse picks up multiple evidence items', ev.length === 3);
+  t('parse separates ref and value', ev[0].ref === 'Fontes!A63' && ev[0].esperado === 'Bae et al.');
+  t('parse accepts formula', ev[2].ref === 'Resumo!D2' && ev[2].esperado === '=SOMA(B2:B10)');
+  t('summary without evidence returns empty', parseEvidencia('mudei umas coisas').length === 0);
+  t('cap of 20 evidence items', parseEvidencia(
     'EVIDENCIA: ' + Array.from({ length: 30 }, (_, i) => `A${i + 1}=${i}`).join('; ')).length === 20);
 
   const c = (ref, over) => ({ ref, exists: true, value: '', formula: null, ...over });
@@ -383,25 +383,25 @@ for (const [nome, over] of [
     [{ ref: 'A1', esperado: '1234,50' }, { ref: 'A2', esperado: 'Bae et al.' }],
     [c('A1', { value: 1234.5 }), c('A2', { value: 'Bae et al. (2019)' })],
   );
-  t('numero pt-BR confere com float', bom.erros.length === 0 && bom.conferidas === 2);
+  t('pt-BR number matches float', bom.erros.length === 0 && bom.conferidas === 2);
   const pct = conferirEvidencia([{ ref: 'B1', esperado: '15%' }], [c('B1', { value: 0.15 })]);
-  t('percentual confere com a fracao', pct.erros.length === 0);
+  t('percentage matches the fraction', pct.erros.length === 0);
   const ruim = conferirEvidencia([{ ref: 'A1', esperado: '999' }], [c('A1', { value: 12 })]);
-  t('valor diferente eh erro', ruim.erros.length === 1);
+  t('different value is an error', ruim.erros.length === 1);
   const vazia = conferirEvidencia([{ ref: 'A9', esperado: 'x' }], [c('A9', { exists: false })]);
-  t('celula vazia no arquivo salvo eh erro', vazia.erros.length === 1 && /VAZIA/.test(vazia.erros[0]));
+  t('empty cell in the saved file is an error', vazia.erros.length === 1 && /VAZIA/.test(vazia.erros[0]));
   const semAba = conferirEvidencia([{ ref: 'Nova!A1', esperado: 'x' }], [{ ref: 'Nova!A1', noSheet: true }]);
-  t('aba inexistente eh erro', semAba.erros.length === 1);
+  t('nonexistent sheet is an error', semAba.erros.length === 1);
   const form = conferirEvidencia(
     [{ ref: 'D2', esperado: '=SOMA(B2:B10)' }],
     [c('D2', { value: '', formula: 'SOMA(B2:B10)' })],
   );
-  t('formula confere por texto', form.erros.length === 0);
+  t('formula matches by text', form.erros.length === 0);
   const naoVer = conferirEvidencia([{ ref: 'D3', esperado: '42' }], [c('D3', { value: '', formula: 'B3*C3' })]);
-  t('valor de formula nao recalculada vai pra nao-verificavel',
+  t('unrecalculated formula value goes to not-verifiable',
     naoVer.erros.length === 0 && naoVer.naoVerificaveis.length === 1);
   const data = conferirEvidencia([{ ref: 'E1', esperado: '01/03/2026' }], [c('E1', { value: '46082' })]);
-  t('data vs serial do Excel nao eh erro', data.erros.length === 0 && data.naoVerificaveis.length === 1);
+  t('date vs Excel serial is not an error', data.erros.length === 0 && data.naoVerificaveis.length === 1);
 }
 
 // ── 13) End-to-end evidence: cell error redoes; lack of evidence
@@ -458,9 +458,9 @@ for (const [nome, over] of [
       },
     });
     const r = await editSpreadsheet({ userId: 'ev-ok', objetivo: 'acrescente Bae et al.', deps });
-    t('evidencia correta passa de primeira', r.ok === true && r.tentativas === 1);
-    t('relatou quantas celulas conferiu', r.evidencia?.conferidas === 1 && r.avisos.some((a) => /Conferido por código/.test(a)));
-    t('gravou um asset', state.saved.length === 1);
+    t('correct evidence passes on the first try', r.ok === true && r.tentativas === 1);
+    t('reported how many cells it verified', r.evidencia?.conferidas === 1 && r.avisos.some((a) => /Conferido por código/.test(a)));
+    t('saved an asset', state.saved.length === 1);
   }
 
   // (b) lying evidence: redoes from the original and gives up without saving.
@@ -474,10 +474,10 @@ for (const [nome, over] of [
       },
     });
     const r = await editSpreadsheet({ userId: 'ev-bad', objetivo: 'acrescente Bae et al.', deps });
-    t('evidencia que nao confere reprova', r.ok === false && r.tentativas === 2);
-    t('nada gravado quando a evidencia nunca confere', state.saved.length === 0 && state.renamed.length === 0);
-    t('erro explica que a celula nao bate', /não conferem no arquivo salvo/.test(r.error));
-    t('erro segue proibindo oferecer versao anterior', /não ofereça "versão anterior"/.test(r.error));
+    t('evidence that does not match fails', r.ok === false && r.tentativas === 2);
+    t('nothing saved when evidence never matches', state.saved.length === 0 && state.renamed.length === 0);
+    t('error explains the cell does not match', /não conferem no arquivo salvo/.test(r.error));
+    t('error still forbids offering a previous version', /não ofereça "versão anterior"/.test(r.error));
   }
 
   // (c) no evidence: asks on the 2nd attempt and, if it doesn't come, saves with a caveat.
@@ -486,7 +486,7 @@ for (const [nome, over] of [
     const { state, deps } = mkRico({
       runEditor: async ({ path, objetivo }) => {
         vistas++;
-        if (vistas === 2) t('2a tentativa pede evidencia explicitamente', /EVIDENCIA/.test(objetivo));
+        if (vistas === 2) t('2nd attempt explicitly asks for evidence', /EVIDENCIA/.test(objetivo));
         const j = JSON.parse(state.sandbox[path].toString('utf8'));
         j.rows += 1;
         state.sandbox[path] = Buffer.from(JSON.stringify(j));
@@ -494,9 +494,9 @@ for (const [nome, over] of [
       },
     });
     const r = await editSpreadsheet({ userId: 'ev-none', objetivo: 'muda algo', deps });
-    t('sem evidencia ainda entrega', r.ok === true && r.tentativas === 2);
-    t('entrega com ressalva de nao-conferido', r.avisos.some((a) => /não.*conferir célula a célula/i.test(a)));
-    t('gravou mesmo sem prova', state.saved.length === 1 && state.saved[0].caption === 'Real.xlsx');
+    t('without evidence it still delivers', r.ok === true && r.tentativas === 2);
+    t('delivers with a not-verified caveat', r.avisos.some((a) => /não.*conferir célula a célula/i.test(a)));
+    t('saved even without proof', state.saved.length === 1 && state.saved[0].caption === 'Real.xlsx');
   }
 
   // (d) clarification: does not save, does not retry, returns the question.
@@ -506,9 +506,9 @@ for (const [nome, over] of [
       runEditor: async () => { chamadas++; return 'PRECISO_DE_CLARIFICACAO: tem duas abas 2026, qual delas?'; },
     });
     const r = await editSpreadsheet({ userId: 'ev-amb', objetivo: 'atualize a aba de 2026', deps });
-    t('clarificacao nao grava nada', r.ok === false && state.saved.length === 0);
-    t('clarificacao nao gasta a 2a tentativa', chamadas === 1);
-    t('pergunta volta pro agente principal', /qual delas/.test(r.clarificacao || ''));
+    t('clarification saves nothing', r.ok === false && state.saved.length === 0);
+    t('clarification does not spend the 2nd attempt', chamadas === 1);
+    t('question goes back to the main agent', /qual delas/.test(r.clarificacao || ''));
   }
 }
 

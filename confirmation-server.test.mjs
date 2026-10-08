@@ -137,14 +137,14 @@ test('natural refusal closes the sole visible proposal before the server saves i
   assert.deepEqual(f.state.effects,[]);
 });
 
-test('frustração 25/09: "Ok, Pode seguir." e "isso" confirmam o único cartão mostrado',async t=>{
+test('frustration 25/09: "Ok, Pode seguir." and "isso" confirm the only card shown',async t=>{
   const f=await fixture(t);await f.turn('propor:rotina-A');await f.turn('Ok, Pode seguir.');
   assert.deepEqual(f.state.effects,[{id:'rotina-A',hora:9}]);
   await f.turn('propor:rotina-B');await f.turn('isso');assert.equal(f.state.effects.length,2);
   await f.turn('propor:rotina-C');await f.turn('isso não');assert.equal(f.state.effects.length,2);
 });
 
-test('frustração 25/09, inglês e espanhol: o "isso" de cada idioma confirma o único cartão mostrado',async t=>{
+test('frustration 25/09, English and Spanish: the "isso" of each language confirms the only card shown',async t=>{
   const f=await fixture(t);let n=0;
   for (const sim of ['exactly',"that's right",'Correct.','ok, exactly','eso','sí, eso','eso es','exacto','correcto']) {
     await f.turn(`propor:rotina-s${n}`);await f.turn(sim);n++;assert.equal(f.state.effects.length,n,sim);
@@ -154,12 +154,12 @@ test('frustração 25/09, inglês e espanhol: o "isso" de cada idioma confirma o
   }
 });
 
-test('frustração 25/09: com pedido antigo pendente, "pode seguir" confirma só o cartão recém-mostrado',async t=>{
+test('frustration 25/09: with an old pending request, "pode seguir" confirms only the just-shown card',async t=>{
   const f=await fixture(t);await f.turn('propor:rotina-A');await f.turn('Pergunta sobre outro assunto');
   await f.turn('propor:rotina-B');
   const turns=f.state.modelTurns;
   await f.turn('Pode seguir');
   assert.deepEqual(f.state.effects,[{id:'rotina-B',hora:9}]);assert.equal(f.state.modelTurns,turns);
   const rows=await f.store.list(f.scope);
-  assert.equal(rows.find(r=>r.number===1).state,'pending','o pedido antigo não é aprovado nem apagado');
+  assert.equal(rows.find(r=>r.number===1).state,'pending','the old request is neither approved nor erased');
 });

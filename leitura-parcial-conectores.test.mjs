@@ -17,7 +17,7 @@ const tool = (tools, nome) => tools.find((t) => t.name === nome);
 
 const bloco = (txt) => ({ type: 'paragraph', paragraph: { rich_text: [{ plain_text: txt }] } });
 
-test('notion: página com mais de 100 blocos é lida até o fim, não só a primeira leva', async () => {
+test('notion: a page with more than 100 blocks is read to the end, not just the first batch', async () => {
   const chamadas = [];
   const tools = notionTools({ secret: async () => 'tok' });
   const out = await comFetch(async (url) => {
@@ -28,13 +28,13 @@ test('notion: página com mais de 100 blocos é lida até o fim, não só a prim
   }, () => tool(tools, 'notion_read_page').run({ id: 'p1' }));
   const r = JSON.parse(out);
   assert.match(r.conteudo, /leva 1/);
-  assert.match(r.conteudo, /leva 3/, 'parou na primeira leva de blocos');
+  assert.match(r.conteudo, /leva 3/, 'stopped at the first batch of blocks');
   assert.equal(r.blocosOmitidos, undefined);
   assert.equal(r.clipped, false);
-  assert.ok(chamadas.some((u) => u.includes('start_cursor=c1')), 'não seguiu o cursor');
+  assert.ok(chamadas.some((u) => u.includes('start_cursor=c1')), 'did not follow the cursor');
 });
 
-test('notion: página gigante para no teto e DIZ que a leitura foi parcial', async () => {
+test('notion: a huge page stops at the cap and SAYS the read was partial', async () => {
   const tools = notionTools({ secret: async () => 'tok' });
   const out = await comFetch(async (url) => {
     if (String(url).includes('/pages/')) return json({ id: 'p1', url: 'http://n/p1', properties: {} });
@@ -45,7 +45,7 @@ test('notion: página gigante para no teto e DIZ que a leitura foi parcial', asy
   assert.match(r.nota, /parcial/i);
 });
 
-test('github: issue com mais comentários do que a página lida declara quantos ficaram de fora', async () => {
+test('github: an issue with more comments than the page reads declares how many were left out', async () => {
   const tools = githubTools({ token: async () => 'tok' });
   const out = await comFetch(async (url) => {
     if (String(url).includes('/comments')) {
@@ -60,7 +60,7 @@ test('github: issue com mais comentários do que a página lida declara quantos 
   assert.match(r.nota, /37/);
 });
 
-test('github: issue curta não ganha aviso nenhum', async () => {
+test('github: a short issue gets no notice at all', async () => {
   const tools = githubTools({ token: async () => 'tok' });
   const out = await comFetch(async (url) => {
     if (String(url).includes('/comments')) return json([{ user: { login: 'u' }, body: 'ok' }]);

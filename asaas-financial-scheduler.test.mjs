@@ -18,9 +18,9 @@ const bill = {
     payload: { type: 'BILL', bill }, token: 'wrong', expectedToken: 'secret',
     decide: async () => { called++; return { approved: true }; },
   });
-  eq(r.httpStatus, 401, 'token incorreto recebe 401');
-  eq(r.body.status, 'REFUSED', 'token incorreto nunca aprova');
-  eq(called, 0, 'token incorreto não consulta intenção');
+  eq(r.httpStatus, 401, 'wrong token gets 401');
+  eq(r.body.status, 'REFUSED', 'wrong token never approves');
+  eq(called, 0, 'wrong token does not query intent');
 }
 
 {
@@ -29,7 +29,7 @@ const bill = {
     payload: { type: 'BILL', bill }, token: 'secret', expectedToken: 'secret',
     decide: async (d) => ({ approved: d.providerOperationId === bill.id && d.payloadHash === expected }),
   });
-  eq(r.body.status, 'APPROVED', 'payload exato e intenção conhecida são aprovados');
+  eq(r.body.status, 'APPROVED', 'exact payload and known intent are approved');
 }
 
 {
@@ -37,8 +37,8 @@ const bill = {
     payload: { type: 'BILL', bill: { ...bill, value: 4200 } }, token: 'secret', expectedToken: 'secret',
     decide: async () => ({ approved: false, reason: 'payload_mismatch' }),
   });
-  eq(r.body.status, 'REFUSED', 'valor divergente é recusado');
-  ok(/payload_mismatch/.test(r.body.refuseReason), 'recusa fica auditável');
+  eq(r.body.status, 'REFUSED', 'divergent value is refused');
+  ok(/payload_mismatch/.test(r.body.refuseReason), 'refusal is auditable');
 }
 
 const args = { linha_digitavel: '123.456.789', valor: 42, descricao: 'Conta teste' };
@@ -82,14 +82,14 @@ const row = {
     },
   });
   await scheduler.processOne(row);
-  eq(calls.map((c) => c.path), ['/v3/bill/simulate', '/v3/bill'], 'execução confere novamente e faz um POST');
+  eq(calls.map((c) => c.path), ['/v3/bill/simulate', '/v3/bill'], 'execution double checks and makes one POST');
   const posted = calls.at(-1).opts.body;
-  eq(posted.scheduleDate, '2026-09-18', 'worker fixa a primeira data aceita pela simulação do dia');
-  eq(posted.externalReference, 'brambs-bill-fixed', 'POST preserva a chave idempotente do agendamento');
-  eq(intents.length, 1, 'resposta real cria uma intenção de autorização');
-  eq(intents[0].providerOperationId, bill.id, 'intenção fica ligada ao id da Asaas');
-  eq(operations.length, 1, 'operação fica ligada à conversa original');
-  eq(finished.at(-1).status, 'awaiting_authorization', 'campo oficial de autorização crítica é reconhecido');
+  eq(posted.scheduleDate, '2026-09-18', 'worker fixes the first date accepted by the day simulation');
+  eq(posted.externalReference, 'brambs-bill-fixed', 'POST preserves the schedule idempotency key');
+  eq(intents.length, 1, 'real response creates an authorization intent');
+  eq(intents[0].providerOperationId, bill.id, 'intent is linked to the Asaas id');
+  eq(operations.length, 1, 'operation is linked to the original conversation');
+  eq(finished.at(-1).status, 'awaiting_authorization', 'official critical authorization field is recognized');
 }
 
 {
@@ -106,8 +106,8 @@ const row = {
     notify: async () => {},
   });
   await scheduler.processOne(row);
-  eq(calls, ['/v3/bill/simulate'], 'mudança bloqueia antes do POST');
-  eq(finished.at(-1).status, 'needs_review', 'mudança pede nova revisão humana');
+  eq(calls, ['/v3/bill/simulate'], 'change blocks before the POST');
+  eq(finished.at(-1).status, 'needs_review', 'change requires a new human review');
 }
 
 console.log(`PASS ${checks}: agenda interna e autorização de saque Asaas; offline only.`);

@@ -87,7 +87,7 @@ for (const [language,message,choose,command,paused] of [
   ['pt-BR','oi bom dia, pode encerrar os monitoramentos',/Qual rotina você quer pausar/, 'Pause a rotina "Preço diário"', /pausada/],
   ['en','Hi, can you stop the monitors',/Which routine do you want to pause/, 'Pause the routine "Preço diário"', /paused/],
   ['es','Hola, ¿puedes detener los monitoreos?',/¿Qué rutina quieres pausar/, '¿Puedes pausar la rutina "Preço diário"?', /pausada/],
-]) test(`${language}: pedido genérico identifica opções e seleção explícita pausa antes do modelo/crédito`, async t => {
+]) test(`${language}: generic request identifies options and explicit selection pauses before model/credit`, async t => {
   const f = await fixture(t,language);
   const first = await f.add('Preço diário'), second = await f.add('Resumo semanal');
   const before = await f.row(first);
@@ -109,7 +109,7 @@ for (const [language,message,choose,command,paused] of [
   assert.equal(f.state.updates[0][2].expected.agent_id,f.scope.agentId);
 });
 
-test('títulos iguais, códigos ambíguos e rotina de outro dono não autorizam pausa', async t => {
+test('identical titles, ambiguous codes and another owner\'s routine don\'t authorize a pause', async t => {
   const f = await fixture(t);
   const a = await f.add('Mesmo título',{id:'abcd0000-0000-4000-8000-000000000001'});
   const b = await f.add('Mesmo título',{id:'abcd1100-0000-4000-8000-000000000002'});
@@ -132,7 +132,7 @@ test('títulos iguais, códigos ambíguos e rotina de outro dono não autorizam 
   assert.equal((await f.row(foreign)).enabled,true);
 });
 
-test('frustração 25/09: "cancelar o monitoramento programado, todos" pausa os monitoramentos do dono sem turno de modelo', async t => {
+test('frustration 25/09: "cancelar o monitoramento programado, todos" pauses the owner\'s monitors without a model turn', async t => {
   const f = await fixture(t);const travor = randomUUID();
   const tarde = await f.add('Monitoramento Passagens Orlando 2027 - Tarde',{agentId:travor});
   const manha = await f.add('Monitoramento Passagens Orlando 2027 - Manhã',{agentId:travor});
@@ -145,13 +145,13 @@ test('frustração 25/09: "cancelar o monitoramento programado, todos" pausa os 
   for (const id of [tarde,manha]) assert.equal((await f.row(id)).enabled,false);
   for (const id of [resumo,foreign]) assert.equal((await f.row(id)).enabled,true);
   assert.ok(f.state.updates.every(u => u[2].expected.agent_id === travor));
-  assert.equal(f.state.modelTurns,0,'não passa pela reserva de crédito');
+  assert.equal(f.state.modelTurns,0,'does not go through credit reservation');
   assert.match((await f.turn('Cancele todas as rotinas')).text,/Resumo semanal/);
   assert.equal((await f.row(resumo)).enabled,false);
   assert.equal(f.state.modelTurns,0);
 });
 
-test('com proposta pendente, "cancela a rotina" continua sendo recusa da proposta', async t => {
+test('with a pending proposal, "cancela a rotina" remains a refusal of the proposal', async t => {
   const f = await fixture(t);const id = await f.add('Diaria');
   const session = await sessions.createConfirmationSession(f.store,f.scope);
   await sessions.withConfirmationSession(session, () => gateTool({name:'calendar_create',run:denied},f.scope.threadId).run({title:'Evento',start:'2026-09-25T13:00:00',end:'2026-09-25T13:30:00'}));
@@ -161,7 +161,7 @@ test('com proposta pendente, "cancela a rotina" continua sendo recusa da propost
   assert.equal((await f.row(id)).enabled,true);assert.deepEqual(f.state.updates,[]);
 });
 
-test('falta de rotinas e pausa repetida têm respostas reais sem chamada de modelo', async t => {
+test('no routines and a repeated pause both have real responses without a model call', async t => {
   const f = await fixture(t,'en');
   assert.match((await f.turn('Stop the monitors')).text,/no routines to pause/i);
   const id = await f.add('Daily report',{enabled:false});
@@ -171,7 +171,7 @@ test('falta de rotinas e pausa repetida têm respostas reais sem chamada de mode
   assert.equal(f.state.modelTurns,0);
 });
 
-test('mudança concorrente de título, intervalo ou assistente impede a pausa e o falso recibo', async t => {
+test('concurrent change to title, interval or assistant blocks the pause and the false receipt', async t => {
   const f = await fixture(t);
   for (const field of ['title','repeat_every_min','agent_id']) {
     const id = await f.add('Teste '+field);
@@ -186,7 +186,7 @@ test('mudança concorrente de título, intervalo ou assistente impede a pausa e 
   assert.equal(f.state.modelTurns,0);
 });
 
-test('falha no armazenamento não produz afirmação de pausa', async t => {
+test('a storage failure does not produce a pause confirmation', async t => {
   const f = await fixture(t,'es');const id = await f.add('Diaria');
   f.state.beforeUpdate = async () => { throw Error('Synthetic storage failure'); };
   const result = await f.turn('Pausa la rutina Diaria');
@@ -195,7 +195,7 @@ test('falha no armazenamento não produz afirmação de pausa', async t => {
   assert.equal((await f.row(id)).enabled,true);
 });
 
-test('pausa preserva configurações tipadas e heartbeat concorrente sem prometer interrupção em curso', async t => {
+test('pause preserves typed configs and a concurrent heartbeat without promising to interrupt work in progress', async t => {
   const f = await fixture(t,'en');
   for (const config of [{curation:{source:'gmail'}},{email_search:{provider:'gmail'}},{flight_monitor:{version:1}}]) {
     const id = await f.add('Synthetic routine');
@@ -216,7 +216,7 @@ test('pausa preserva configurações tipadas e heartbeat concorrente sem promete
   assert.equal(f.state.modelTurns,0);
 });
 
-test('pausa retira rotina e extras pendentes da seleção futura sem apagar a fila ou alterar o intervalo', async t => {
+test('pause removes the routine and pending extras from future selection without deleting the queue or changing the interval', async t => {
   const f = await fixture(t);const id = await f.add('Intervalo');
   await f.db.exec(`ALTER TABLE mtr_harness.users ADD COLUMN email text, ADD COLUMN name text, ADD COLUMN language text;
     CREATE TABLE mtr_harness.routine_one_shots(id uuid PRIMARY KEY,routine_id uuid,user_id uuid,run_at timestamptz,status text);`);
@@ -236,7 +236,7 @@ test('pausa retira rotina e extras pendentes da seleção futura sem apagar a fi
   assert.equal((await f.db.query('SELECT status FROM mtr_harness.routine_one_shots')).rows[0].status,'pending');
 });
 
-test('título com Markdown e quebra é exibido como texto e pode ser selecionado por código', async t => {
+test('a title with Markdown and a line break is shown as text and can be selected by code', async t => {
   const f = await fixture(t,'es');
   const title = '**Diaria**\n[Informe](https://example.invalid) `x`';
   const id = await f.add(title);
@@ -250,7 +250,7 @@ test('título com Markdown e quebra é exibido como texto e pode ser selecionado
   assert.match(result.text,/ya enviada o en curso/);
 });
 
-test('condição, horário ou comando composto sem aspas não autoriza uma pausa por coincidência com título', async t => {
+test('a condition, time or compound command without quotes does not authorize a pause by title coincidence', async t => {
   const f = await fixture(t);
   for (const [title,message] of [
     ['Diaria depois do resumo','Pause a rotina Diaria depois do resumo'],
@@ -268,7 +268,7 @@ test('condição, horário ou comando composto sem aspas não autoriza uma pausa
   assert.match((await f.turn('Pause a rotina "Diaria depois do resumo"')).text,/pausada/);
 });
 
-test('recusa simples mantém precedência da proposta; citação não vira controle de rotina', async t => {
+test('a plain refusal keeps the proposal\'s precedence; a quote doesn\'t become routine control', async t => {
   const f = await fixture(t);const id = await f.add('Diaria');
   const session = await sessions.createConfirmationSession(f.store,f.scope);
   await sessions.withConfirmationSession(session, () => gateTool({name:'calendar_create',run:denied},f.scope.threadId).run({title:'Evento',start:'2026-09-25T13:00:00',end:'2026-09-25T13:30:00'}));
@@ -288,7 +288,7 @@ test('recusa simples mantém precedência da proposta; citação não vira contr
   assert.deepEqual(f.state.updates,[]);
 });
 
-test('pausa explícita de rotina não cancela nem aprova uma proposta pendente de mesmo título', async t => {
+test('an explicit routine pause neither cancels nor approves a pending proposal with the same title', async t => {
   const f = await fixture(t);const id = await f.add('Diaria');
   const session = await sessions.createConfirmationSession(f.store,f.scope);
   await sessions.withConfirmationSession(session, () => gateTool({name:'calendar_create',run:denied},f.scope.threadId).run({title:'Diaria',start:'2026-09-25T13:00:00',end:'2026-09-25T13:30:00'}));
@@ -300,7 +300,7 @@ test('pausa explícita de rotina não cancela nem aprova uma proposta pendente d
   assert.equal(f.state.modelTurns,0);
 });
 
-test('rotina, webhook, grupo e pedido não imperativo não ganham acesso ao controle do dono', async t => {
+test('routine, webhook, group and non-imperative request don\'t gain access to the owner\'s control', async t => {
   const f = await fixture(t);const id = await f.add('Diaria');
   for (const opts of [{kind:'routine'},{webhook:{}},{ephemeral:true},{noTools:true}]) await f.turn('Pause a rotina Diaria',opts);
   f.state.agent.category = 'grupo';await f.turn('Pause a rotina Diaria');f.state.agent.category = 'pessoal';
@@ -312,13 +312,13 @@ test('rotina, webhook, grupo e pedido não imperativo não ganham acesso ao cont
   assert.equal((await f.row(id)).enabled,true);
 });
 
-test('expectativa de escopo da operação SQL não permite mover uma pausa para outro assistente', async t => {
+test('the SQL operation\'s expected scope does not allow moving a pause to another assistant', async t => {
   const f = await fixture(t);const id = await f.add('Diaria');const row = await f.row(id);
   await assert.rejects(f.rawUpdate(id,f.scope.userId,{enabled:false,expected:{...routineConfirmationSnapshot(row),agent_id:randomUUID()}}),{code:'ROUTINE_CHANGED'});
   assert.equal((await f.row(id)).enabled,true);
 });
 
-test('frustração 25/09, inglês e espanhol: "turn off", "scheduled" antes do nome e "apaga" só em espanhol', async t => {
+test('frustration 25/09, English and Spanish: "turn off", "scheduled" before the name and "apaga" only in Spanish', async t => {
   const en = await fixture(t,'en');
   const a = await en.add('Flight monitor Orlando');const b = await en.add('Weekly summary');
   assert.match((await en.turn('turn off all monitors')).text,/I paused these routines/);
@@ -336,7 +336,7 @@ test('frustração 25/09, inglês e espanhol: "turn off", "scheduled" antes do n
   assert.equal((await pt.row(d)).enabled,true);assert.equal(pt.state.modelTurns,1);
 });
 
-test('com crédito, parar rotina é decisão do modelo: a regra fixa não pausa nada', async t => {
+test('with credit, stopping a routine is the model\'s decision: the fixed rule pauses nothing', async t => {
   // Eval 28/09 (#1): a regra pausava "rotina de treino A e B" e pedido condicional.
   const f = await fixture(t);
   f.state.credit = {over:false};

@@ -32,7 +32,7 @@ test('card lists only the lines that leave and enter, under the section where th
   const t=cartaoEdicaoNota({espaco:'Compras',antes:LISTA,depois,tagAntes:'',tagDepois:null}).confirmationTexts['pt-BR'];
   assert.match(t,/Em "🛒 Supermercado":\n➕ - Cottage/);
   assert.match(t,/Em "🧴 Farmácia":\n➖ - Protetor\n➕ - Protetor FPS 50/);
-  for(const igual of ['- Leite','- Pão','- Café','Histórico'])assert.ok(!t.includes(igual),`linha que não muda ficou fora: ${igual}`);
+  for(const igual of ['- Leite','- Pão','- Café','Histórico'])assert.ok(!t.includes(igual),`line that did not change was left out: ${igual}`);
 });
 
 test('card stays exact: every changed line appears literally, and removals from the history are labeled as such',()=>{
@@ -47,7 +47,7 @@ test('moving the current list to the history shows items leaving their section a
   const depois=LISTA.replace('- Leite\n- Pão','*(vazio)*').replace('## Histórico\n','## Histórico\n\n### 30/09\n- Leite\n- Pão\n');
   const t=cartaoEdicaoNota({espaco:'Compras',antes:LISTA,depois}).confirmationTexts['pt-BR'];
   assert.match(t,/Em "🛒 Supermercado":\n➖ - Leite\n➖ - Pão\n➕ \*\(vazio\)\*\n\nEm "Histórico":\n➕ ### 30\/09\n➕ - Leite\n➕ - Pão$/);
-  assert.ok(!t.includes('Café')&&!t.includes('29/09'),'a semana antiga do histórico não aparece');
+  assert.ok(!t.includes('Café')&&!t.includes('29/09'),'the old week from the history does not appear');
 });
 
 test('same heading under different parents stays apart',()=>{
@@ -87,13 +87,13 @@ test('a new proposal for the same note supersedes the pending one; other notes k
   const a=await f.propose({nota_id:'nota-1',nova_nota:comLinha(LISTA,'- Pão','- Cottage')});
   assert.match(a.out,/AÇÃO PENDENTE/);assert.equal(a.pending.length,1);
   const b=await f.propose({nota_id:'nota-1',nova_nota:comLinha(LISTA,'- Pão','- Cottage light')});
-  assert.equal(b.pending.length,1,'a proposta anterior da mesma nota saiu da fila');
+  assert.equal(b.pending.length,1,'the previous proposal for the same note left the queue');
   assert.equal(b.pending[0].args.nova_nota.includes('Cottage light'),true);
   const velho=await f.approve(a.pending[0].number);
   assert.match(velho.text,/substituída por uma nova proposta/,velho.text);
   const c=await f.propose({nota_id:'nota-2',nova_nota:'outra coisa'});
-  assert.equal(c.pending.length,2,'nota diferente não substitui');
-  assert.deepEqual(globalThis.__spaceFake.gravadas,[],'propor nunca grava');
+  assert.equal(c.pending.length,2,'a different note does not get replaced');
+  assert.deepEqual(globalThis.__spaceFake.gravadas,[],'proposing never writes');
 });
 
 test('approval writes the confirmed text, and refuses when the note changed after the card was built',async t=>{
@@ -102,7 +102,7 @@ test('approval writes the confirmed text, and refuses when the note changed afte
   await f.propose({nota_id:'nota-1',nova_nota:nova});
   globalThis.__spaceFake.notas['nota-1'].body=comLinha(LISTA,'- Leite','- Ovos');
   const r=await f.approve();
-  assert.deepEqual(globalThis.__spaceFake.gravadas,[],'nada gravado por cima da versão que a pessoa não viu');
+  assert.deepEqual(globalThis.__spaceFake.gravadas,[],'nothing written over the version the person never saw');
   assert.match(r.text,/^Não executei/,r.text);
   globalThis.__spaceFake.notas['nota-1'].body=LISTA;
   await f.propose({nota_id:'nota-1',nova_nota:nova});

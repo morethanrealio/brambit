@@ -65,14 +65,14 @@ const NEW_REQUESTS = [
   'Puedes poner los alimentos en la sección de supermercado',
 ];
 
-test('sem pendências, pedidos novos chegam ao turno normal em PT/EN/ES', async t => {
+test('with nothing pending, new requests reach the normal turn in PT/EN/ES', async t => {
   const f = await fixture(t);
   for (const message of NEW_REQUESTS) assert.equal(await f.decide(message), null, message);
   assert.deepEqual(await f.store.list(f.scope), []);
   assert.deepEqual(f.effects, []);
 });
 
-test('pedidos novos nunca autorizam uma proposta que esteja pendente', async t => {
+test('new requests never authorize a proposal that is pending', async t => {
   const f = await fixture(t);
   const [row] = await f.propose();
   for (const message of NEW_REQUESTS) {
@@ -89,7 +89,7 @@ const REFUSALS = [
   ['es', ['No hace falta hacer nada', 'No necesitas hacer nada.', 'Por favor, no hagas nada.', 'No es necesario hacer nada, gracias.', 'No hace falta hacer eso', 'No es necesario hacer eso.'], /Cancelé/],
 ];
 for (const [language, messages, expected] of REFUSALS) {
-  test(`recusa natural em ${language} persiste cancelamento antes do recibo`, async t => {
+  test(`natural refusal in ${language} persists the cancellation before the receipt`, async t => {
     const f = await fixture(t, language);
     for (const [index, message] of messages.entries()) {
       const [row] = await f.propose([`Synthetic ${index}`]);
@@ -124,7 +124,7 @@ const CONTINUATIONS = [
   'No es necesario hacer eso si está correcto',
   'No hace falta hacer eso, solo muestra la lista',
 ];
-test('perguntas, condições e pedidos adicionais não são recusas isoladas', async t => {
+test('questions, conditions and extra requests are not standalone refusals', async t => {
   const f = await fixture(t);
   const [row] = await f.propose();
   for (const message of CONTINUATIONS) {
@@ -136,7 +136,7 @@ test('perguntas, condições e pedidos adicionais não são recusas isoladas', a
   assert.deepEqual(f.effects, []);
 });
 
-test('falha de persistência não produz recibo de cancelamento nem executa a ação', async t => {
+test('persistence failure does not produce a cancellation receipt or run the action', async t => {
   const f = await fixture(t);
   await f.propose();
   f.failNext(/SET state=\$5,finished_at/);
@@ -145,13 +145,13 @@ test('falha de persistência não produz recibo de cancelamento nem executa a a�
   assert.deepEqual(f.effects, []);
 });
 
-test('recusa sem alvo não cancela propostas antigas, invisíveis ou múltiplas', async t => {
+test('a refusal with no target does not cancel old, hidden or multiple proposals', async t => {
   const f = await fixture(t);
   const [hidden] = await f.propose(['Oculto'], {present:false});
   await f.decide('Não precisa fazer nada');
   assert.equal((await f.store.list(f.scope))[0].state, 'pending');
   await f.decide(`Não precisa fazer nada pedido ${hidden.number}`);
-  assert.equal((await f.store.list(f.scope))[0].state, 'pending', 'cartão ainda não apresentado');
+  assert.equal((await f.store.list(f.scope))[0].state, 'pending', 'card not yet presented');
   const [current] = await f.propose(['Atual']);
   await f.decide('Não precisa fazer nada');
   assert.ok((await f.store.list(f.scope)).every(row => row.state === 'pending'));
@@ -168,7 +168,7 @@ test('recusa sem alvo não cancela propostas antigas, invisíveis ou múltiplas'
   assert.deepEqual(f.effects, []);
 });
 
-test('recusa por citação cancela somente a proposta indicada pelo transporte', async t => {
+test('refusal by quoting cancels only the proposal indicated by the transport', async t => {
   const f = await fixture(t);
   const [first] = await f.propose(['Primeiro']);
   const [second] = await f.propose(['Segundo']);
@@ -184,7 +184,7 @@ test('recusa por citação cancela somente a proposta indicada pelo transporte',
   assert.deepEqual(f.effects, []);
 });
 
-test('palavras da recusa não identificam por coincidência uma proposta fora do contexto', async t => {
+test('refusal wording does not coincidentally match a proposal outside the context', async t => {
   const f = await fixture(t);
   await f.propose(['Nada']);
   f.show('Conversa sobre outro assunto, sem cartão');
@@ -193,7 +193,7 @@ test('palavras da recusa não identificam por coincidência uma proposta fora do
   assert.deepEqual(f.effects, []);
 });
 
-test('texto citado não cancela e ausência de pendências preserva referências e replay', async t => {
+test('quoted text does not cancel and having nothing pending preserves references and replay', async t => {
   const f = await fixture(t);
   const [row] = await f.propose();
   const target = {channel:'whatsapp',messageId:'proposal-card'};
@@ -217,7 +217,7 @@ for (const [language, request, refusal] of [
   ['en', 'Go ahead and move the groceries to the supermarket section', 'No need to do that'],
   ['es', 'Puedes poner los alimentos en la sección de supermercado', 'No hace falta hacer eso'],
 ]) {
-  test(`pedido novo e recusa ambígua preservam escopo em ${language}`, async t => {
+  test(`new request and ambiguous refusal preserve scope in ${language}`, async t => {
     const f = await fixture(t, language);
     assert.equal(await f.decide(request), null);
     assert.deepEqual(await f.store.list(f.scope), []);

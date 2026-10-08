@@ -37,7 +37,7 @@ async function fixture(t,language){
 const SIM=[['en','yeah'],['en','yep'],['en','do it'],['en','yes, send it'],['en','go ahead'],['en','sounds good'],
   ['es','hazlo'],['es','envíalo'],['es','sí, envíalo'],['es','de acuerdo'],['es','me parece bien'],
   ['pt-BR','sim'],['pt-BR','pode'],['pt-BR','manda']];
-for(const [lang,text] of SIM) test(`"${text}" (${lang}) executa a ação`,async t=>{
+for(const [lang,text] of SIM) test(`"${text}" (${lang}) executes the action`,async t=>{
   const f=await fixture(t,lang);await f.decide(text);
   assert.deepEqual(f.effects,['Evento'],text);
   assert.equal((await f.store.list(f.scope))[0].state,'completed');
@@ -45,7 +45,7 @@ for(const [lang,text] of SIM) test(`"${text}" (${lang}) executa a ação`,async 
 
 const CANCELA=[['en','never mind',/canceled/],['en',"don't",/canceled/],['en','no thanks',/canceled/],
   ['es','mejor no',/Cancelé/],['es','olvídalo',/Cancelé/],['es','no lo hagas',/Cancelé/],['pt-BR','não',/Cancelei/]];
-for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancela e responde no idioma`,async t=>{
+for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancels and replies in the language`,async t=>{
   const f=await fixture(t,lang);const r=await f.decide(text);
   assert.equal(f.effects.length,0);assert.match(r.text,reply);
   assert.notEqual((await f.store.list(f.scope))[0].state,'pending',text);
@@ -54,6 +54,6 @@ for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancela e resp
 // Collisions with Portuguese: without an accent, "mandalo/envialo" is not the Spanish
 // imperative, and a sentence that only starts out looking similar is not consent.
 for(const text of ['envialo','mandalo','o mandaloriano é bom','do it later?','hazlo mañana y después vemos'])
-  test(`"${text}" não executa`,async t=>{
+  test(`"${text}" does not execute`,async t=>{
     const f=await fixture(t,'es');await f.decide(text);assert.equal(f.effects.length,0,text);
   });

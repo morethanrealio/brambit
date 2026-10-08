@@ -69,7 +69,7 @@ test('grounded personal notes are allowed by default; credentials remain blocked
     assert.ok((await store.notes(u)).some(n => n.sensitive));
 });
 test('same response dedup and no invented result evidence', async () => { await reset(); await accept(); const sid = sourceId(thread, 'sim', 4); await store.observe(u, a, sid); await store.observe(u, a, sid); assert.equal((await store.overview()).metrics.find(m => m.kind === 'response')!.count, 1); await assert.rejects(store.outcome(u, a, { text: 'bom dia', id: 'x' }, { outcome: 'useful_reported', quote: 'ajudou' })); await store.outcome(u, a, { text: 'isso me ajudou', id: 'x' }, { outcome: 'useful_reported', quote: 'me ajudou' }); assert.equal((await store.overview()).metrics.find(m => m.kind === 'help')!.outcome, 'useful_reported'); });
-test('claim dedup, recent conversation suppresses slot, and contatos sem resposta não pausam nada', async () => {
+test('claim dedup, recent conversation suppresses slot, and unanswered contacts pause nothing', async () => {
     await reset();
     await accept();
     const now = new Date();
@@ -102,7 +102,7 @@ test('claim dedup, recent conversation suppresses slot, and contatos sem respost
     assert.equal(await store.claim(u, now.toISOString().slice(0, 10) + ':lunch', now), null);
     assert.ok((await store.overview()).metrics.some(m => m.outcome === 'recent_conversation'));
 });
-test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida depois e só então pausa', async () => {
+test('silence ladder: sends a notice on the third day, stays quiet during the promised pause, invites later and only then pauses', async () => {
     await reset();
     await accept();
     const base = new Date();
@@ -178,7 +178,7 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     assert.equal(resumed.silence_stage, 'none');
     assert.equal(resumed.quiet_until, null);
 });
-test('qualquer resposta zera a escadinha do silêncio', async () => {
+test('any reply resets the silence ladder', async () => {
     await reset();
     await accept();
     await sql("UPDATE mtr_harness.discovery_participants SET silence_stage='notified',quiet_until=now()+interval '3 days',unanswered=2");

@@ -50,7 +50,7 @@ function atendimento(store, m, extra = {}) {
   return { ...a, usos };
 }
 
-test('turno público: nada do agente além do nome, só tools do contato e de plugin publico:true', async (t) => {
+test('public turn: nothing from the agent beyond the name, only the contact\'s tools and plugin tools with publico:true', async (t) => {
   const { store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, instrucoes: 'Atenda clientes da loja.' });
   const plugin = { doTurno: ({ contato, lembrar }) => [
@@ -63,7 +63,7 @@ test('turno público: nada do agente além do nome, só tools do contato e de pl
   const r = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511999990000', mensagem: 'cadê meu pedido?' });
   assert.equal(r.text, 'resposta 3');
   const tudo = JSON.stringify(m.chamadas);
-  assert.ok(!tudo.includes(SEGREDO), 'instruções/perfil/resumo do agente vazaram pro turno público');
+  assert.ok(!tudo.includes(SEGREDO), 'agent instructions/profile/summary leaked into the public turn');
   assert.deepEqual(m.chamadas[0].tools.sort(), ['consultar_contato', 'lembrar_do_contato', 'ver_pedido']);
   assert.match(m.chamadas[0].system, /Atenda clientes da loja/);
   assert.match(m.chamadas[0].system, /Lia/);
@@ -72,7 +72,7 @@ test('turno público: nada do agente além do nome, só tools do contato e de pl
   assert.deepEqual(await store.estado(r.contatoId), { pedido: 'P1' });
 });
 
-test('contatos separados: histórico e anotações de um não chegam ao outro, nem entre assistentes', async (t) => {
+test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {
   const { store, dono, ag, ag2 } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
   await store.configurar(ag2, dono, { ativo: true });
@@ -90,7 +90,7 @@ test('contatos separados: histórico e anotações de um não chegam ao outro, n
   assert.ok(JSON.stringify(m2.chamadas[1].messages).includes('M-ANA'));
 });
 
-test('telefone não fica em claro no banco; só o dono liga o atendimento', async (t) => {
+test('the phone number is not stored in the clear in the database; only the owner turns support on', async (t) => {
   const { db, store, dono, outro, ag } = await montar(t);
   assert.equal(await store.configurar(ag, outro, { ativo: true }), null);
   assert.equal(await store.agente(ag), null);
@@ -109,7 +109,7 @@ test('telefone não fica em claro no banco; só o dono liga o atendimento', asyn
   assert.equal(m.chamadas.length, 0);
 });
 
-test('sem saldo do dono: resposta neutra sem chamar o modelo; turnos do mesmo contato um de cada vez', async (t) => {
+test('no owner balance: neutral response without calling the model; turns from the same contact go one at a time', async (t) => {
   const { store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
   const m = modelo();
@@ -123,7 +123,7 @@ test('sem saldo do dono: resposta neutra sem chamar o modelo; turnos do mesmo co
   assert.equal(max, 1);
 });
 
-test('ganchos do plugin: roteiro sem modelo, instruções do turno, saídas ricas; gancho quebrado não derruba', async (t) => {
+test('plugin hooks: script without the model, turn instructions, rich outputs; a broken hook doesn\'t crash the turn', async (t) => {
   const { store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, instrucoes: 'do dono' });
   const vistos = [];
@@ -151,7 +151,7 @@ test('ganchos do plugin: roteiro sem modelo, instruções do turno, saídas rica
   assert.equal(r3.text, 'resposta 1'); assert.equal(r3.saidas, undefined);
 });
 
-test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) => {
+test('stop, resume and delete my data: resolved before the model', async (t) => {
   const { db, store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
   const m = modelo([{ name: 'lembrar_do_contato', args: { chave: 'nome', valor: 'Ana' } }]);
@@ -162,7 +162,7 @@ test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) 
   const chamadas = m.chamadas.length;
   assert.equal((await fala('  Parar! ')).text, RESPOSTA_PARADO);
   assert.equal((await fala('oi?')).text, null);
-  assert.equal(m.chamadas.length, chamadas, 'contato parado não pode chegar ao modelo');
+  assert.equal(m.chamadas.length, chamadas, 'a stopped contact cannot reach the model');
   assert.equal((await fala('voltar')).text, RESPOSTA_VOLTOU);
   assert.match((await fala('tudo bem?')).text, /^resposta/);
   // Delete: contact, messages and notes disappear; whoever comes back starts from zero.
@@ -175,7 +175,7 @@ test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) 
   assert.ok(!JSON.stringify(m.chamadas).includes('Ana'));
 });
 
-test('limite por hora do contato e teto diário do assistente', async (t) => {
+test('per-contact hourly limit and the assistant\'s daily cap', async (t) => {
   const { db, store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, limitePorHora: 2 });
   const m = modelo();
@@ -183,9 +183,9 @@ test('limite por hora do contato e teto diário do assistente', async (t) => {
   const fala = (mensagem, endereco = '1') => a.turno({ agentId: ag, canal: 'whatsapp', endereco, mensagem });
   for (const x of ['a', 'b']) await fala(x);
   assert.equal((await fala('c')).text, RESPOSTA_LIMITE);
-  assert.equal((await fala('d')).text, null, 'um aviso por hora, depois silêncio');
+  assert.equal((await fala('d')).text, null, 'one warning per hour, then silence');
   assert.equal(m.chamadas.length, 2);
-  assert.match((await fala('oi', '2')).text, /^resposta/, 'o limite é por contato');
+  assert.match((await fala('oi', '2')).text, /^resposta/, 'the limit is per contact');
   // Cap: only counts the cost of this assistant's public support, from today.
   await store.configurar(ag, dono, { tetoDiarioUsd: 0.5, limitePorHora: 10 });
   await db.query(`INSERT INTO mtr_harness.usage_events (agent_id, kind, cost_usd, ts) VALUES
@@ -198,7 +198,7 @@ test('limite por hora do contato e teto diário do assistente', async (t) => {
   assert.match((await fala('oi', '3')).text, /^resposta/);
 });
 
-test('retenção apaga o que passou do prazo; exportar devolve tudo do contato', async (t) => {
+test('retention deletes what is past the deadline; export returns everything for the contact', async (t) => {
   const { db, store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, retencaoDias: 30 });
   const a = atendimento(store, modelo([{ name: 'lembrar_do_contato', args: { chave: 'tamanho', valor: 'M' } }]));
@@ -220,7 +220,7 @@ test('retenção apaga o que passou do prazo; exportar devolve tudo do contato',
   assert.deepEqual(depois.anotacoes, []);
 });
 
-test('bloqueado pelo dono: silêncio sem gravar nada; apagar meus dados limpa a conversa e o bloqueio fica', async (t) => {
+test('blocked by the owner: silence without recording anything; deleting my data clears the conversation but the block stays', async (t) => {
   const { db, store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, retencaoDias: 30 });
   const m = modelo([{ name: 'lembrar_do_contato', args: { chave: 'nome', valor: 'Ana' } }]);
@@ -243,7 +243,7 @@ test('bloqueado pelo dono: silêncio sem gravar nada; apagar meus dados limpa a 
 });
 
 // A tela do dono: toda leitura confere o dono no SQL, e id de outra conta = 404.
-test('visão do dono: só os próprios assistentes, contatos e conversas', async (t) => {
+test('owner view: only their own assistants, contacts and conversations', async (t) => {
   const { db, store, dono, outro, ag, ag2 } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
   const a = atendimento(store, modelo());
@@ -293,7 +293,7 @@ test('visão do dono: só os próprios assistentes, contatos e conversas', async
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('publico.mjs só importa o tool-loop, o cofre, a regra de saúde e as saídas', () => {
+test('publico.mjs only imports the tool loop, the vault, the health rule and the outputs', () => {
   const src = fs.readFileSync(new URL('./web/publico.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
   assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './publico-saidas.mjs', './vault.mjs']);

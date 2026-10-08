@@ -14,48 +14,48 @@ const DIA = 86400_000;
 const CICLO = '2026-09-01';
 
 // 1) First time: never notified this person -> notifies.
-t('sem marca nenhuma, avisa',
+t('no mark at all, notifies',
   deveAvisarRotinaSemCredito({ marca: null, periodStart: CICLO, agora: AGORA }) === true);
-t('marca vazia, avisa',
+t('empty mark, notifies',
   deveAvisarRotinaSemCredito({ marca: {}, periodStart: CICLO, agora: AGORA }) === true);
 
 // 2) Within the window, same cycle -> silence. This is the case the fix targets:
 // a daily routine delivered one notice per day (42 in 30 days in the DB).
-t('avisou há 2 dias no mesmo ciclo, cala',
+t('notified 2 days ago in the same cycle, stays silent',
   deveAvisarRotinaSemCredito({ marca: { at: atras(2 * DIA), period: CICLO }, periodStart: CICLO, agora: AGORA }) === false);
-t('avisou há 6d23h no mesmo ciclo, ainda cala',
+t('notified 6d23h ago in the same cycle, still silent',
   deveAvisarRotinaSemCredito({ marca: { at: atras(ROUTINE_CREDIT_WARN_MS - 3600_000), period: CICLO }, periodStart: CICLO, agora: AGORA }) === false);
 
 // 3) Passou a semana -> avisa de novo.
-t('avisou há exatamente 7 dias, avisa',
+t('notified exactly 7 days ago, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: atras(ROUTINE_CREDIT_WARN_MS), period: CICLO }, periodStart: CICLO, agora: AGORA }) === true);
-t('avisou há 8 dias, avisa',
+t('notified 8 days ago, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: atras(8 * DIA), period: CICLO }, periodStart: CICLO, agora: AGORA }) === true);
 
 // 4) Credit cycle rolled over: whoever topped up and ran out again days later
 // needs to know, even within the 7 days.
-t('ciclo novo dentro da janela, avisa',
+t('new cycle within the window, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: atras(2 * DIA), period: '2026-08-01' }, periodStart: CICLO, agora: AGORA }) === true);
-t('marca sem period, com ciclo conhecido, avisa',
+t('mark without period, with known cycle, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: atras(2 * DIA) }, periodStart: CICLO, agora: AGORA }) === true);
 
 // 5) Corrupted mark or no date -> notify (err on the side of notifying, not staying silent).
-t('at inválido, avisa',
+t('invalid at, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: 'ontem', period: CICLO }, periodStart: CICLO, agora: AGORA }) === true);
-t('at ausente, avisa',
+t('missing at, notifies',
   deveAvisarRotinaSemCredito({ marca: { period: CICLO }, periodStart: CICLO, agora: AGORA }) === true);
 
 // 6) No periodStart (couldn't read the cycle): decides by the window alone, doesn't notify for no reason.
-t('sem periodStart e dentro da janela, cala',
+t('no periodStart and within the window, stays silent',
   deveAvisarRotinaSemCredito({ marca: { at: atras(2 * DIA), period: CICLO }, agora: AGORA }) === false);
-t('sem periodStart e fora da janela, avisa',
+t('no periodStart and outside the window, notifies',
   deveAvisarRotinaSemCredito({ marca: { at: atras(8 * DIA), period: CICLO }, agora: AGORA }) === true);
 
 // 7) No argument at all: must not blow up, notifies.
-t('chamada sem argumentos, avisa', deveAvisarRotinaSemCredito() === true);
+t('call with no arguments, notifies', deveAvisarRotinaSemCredito() === true);
 
 // 8) The window is the agreed-upon week.
-t('janela = 7 dias', ROUTINE_CREDIT_WARN_MS === 7 * DIA);
+t('window = 7 days', ROUTINE_CREDIT_WARN_MS === 7 * DIA);
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
