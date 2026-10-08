@@ -144,7 +144,7 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
   async function aposEntrada(out, ctx) {
     if (!out?.ok || out.aceito === false) return out;
     try { await gancho.depoisDeEntrar(ctx); }
-    catch (e) { console.error(`[empresa] pós-entrada falhou user=${ctx.userId} org=${ctx.orgId}: ${e?.message ?? e}`); }
+    catch (e) { console.error(`[empresa] post-entry failed user=${ctx.userId} org=${ctx.orgId}: ${e?.message ?? e}`); }
     return out;
   }
   async function membership(userId, db = pool) {

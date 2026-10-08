@@ -130,7 +130,7 @@ async function persistAccess(ownerUserId, system, { access, creds }) {
     const changed=await setAppAccess(ownerUserId, system, {access,user:creds?.user??null,pass:creds?.pass??null});
     if(changed===1)return true;
   } catch(error){
-    if(attempt===3)console.error('[app-access] host publicado, persistência no banco falhou',{system,ownerUserId,error:error?.message||'unknown'});
+    if(attempt===3)console.error('[app-access] host published, db persistence failed',{system,ownerUserId,error:error?.message||'unknown'});
     else await new Promise(resolve=>setTimeout(resolve,attempt*100));
   }
   return false;

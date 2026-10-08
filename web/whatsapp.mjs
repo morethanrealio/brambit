@@ -164,7 +164,7 @@ async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false 
         if (requireReceipt && (typeof id !== 'string' || !id.trim())) throw Object.assign(new Error('WhatsApp sem recibo para uma saída'), { definitive: false });
       } catch (error) {
         if (!s.reserva || !error.definitive) throw error;
-        console.warn(`[whatsapp] saída ${s.tipo}${s.nome ? ' ' + s.nome : ''} recusada, indo a reserva: ${error.message}`);
+        console.warn(`[whatsapp] output ${s.tipo}${s.nome ? ' ' + s.nome : ''} rejected, falling back to reserve: ${error.message}`);
         wamids.push(...await sendText(to, s.reserva, { requireReceipt, reenvio }));
         continue;
       }
@@ -174,7 +174,7 @@ async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false 
         if (await esperarEntrega(id, ESPERA_ENTREGA_MS()) === 'failed' && s.reserva) wamids.push(...await sendText(to, s.reserva, { requireReceipt, reenvio }));
       } else if (s.reserva) {
         void esperarEntrega(id, RESERVA_TARDIA_MS).then((st) => st === 'failed' && sendText(to, s.reserva))
-          .catch((e) => console.error('[whatsapp] reserva tardia:', e?.message ?? e));
+          .catch((e) => console.error('[whatsapp] late reserve:', e?.message ?? e));
       }
     } catch (error) {
       error.wamids = [...wamids, ...(error.wamids || [])];
@@ -255,8 +255,8 @@ function billWa(userId, n, meta = {}) {
   if (!userId || !(n > 0) || !waHooks.billMessages) return;
   try {
     const p = waHooks.billMessages({ userId, messages: n, ...meta });
-    if (p && typeof p.catch === 'function') p.catch((e) => console.warn('[whatsapp] cobrança:', e?.message ?? e));
-  } catch (e) { console.warn('[whatsapp] cobrança:', e?.message ?? e); }
+    if (p && typeof p.catch === 'function') p.catch((e) => console.warn('[whatsapp] billing:', e?.message ?? e));
+  } catch (e) { console.warn('[whatsapp] billing:', e?.message ?? e); }
 }
 
 // 5-min margin at the edge: Meta's clock isn't ours, and a session message
@@ -420,7 +420,7 @@ export async function retryProactiveAsTemplate(wamid, recipient) {
     } catch { /* keeps the original text */ }
   }
   await sendWhatsAppTemplate(to, outText, { name: rec.templateName, lang: rec.lang, params: rec.params });
-  console.warn(`[whatsapp] 131047 em ${wamid}: janela fechada, reenviado por template pra ${to}`);
+  console.warn(`[whatsapp] 131047 at ${wamid}: window closed, resent via template to ${to}`);
   return true;
 }
 
@@ -482,7 +482,7 @@ async function sendAttachments(to, attachments, getMedia) {
           // The text reply ("sent as voice") already went out; without this the person wouldn't
           // receive anything the voice said. Sends the speech as text.
           if (!a.fala) throw err;
-          console.error('[whatsapp] áudio não entregue, indo em texto:', err?.message ?? err);
+          console.error('[whatsapp] audio not delivered, falling back to text:', err?.message ?? err);
           sent += (await sendText(to, `Não consegui mandar o áudio, vai em texto:\n\n${a.fala}`)).length;
         }
       } else if (a.type === 'document') {
@@ -511,7 +511,7 @@ async function sendAttachments(to, attachments, getMedia) {
         let headerId = null;
         if (a.image) {
           headerId = await uploadCardImage(a.image).catch((e) => {
-            console.warn('[whatsapp] card sem foto:', e?.message ?? e);
+            console.warn('[whatsapp] card without photo:', e?.message ?? e);
             return null;
           });
         }
@@ -532,7 +532,7 @@ async function sendAttachments(to, attachments, getMedia) {
           sent += (await sendText(to, a.url ? `${a.title ? a.title + '\n' : ''}${a.url}` : bodyText)).length;
         }
       }
-    } catch (e) { console.error('[whatsapp] anexo:', e?.message ?? e); }
+    } catch (e) { console.error('[whatsapp] attachment:', e?.message ?? e); }
   }
   return sent;
 }
@@ -594,7 +594,7 @@ export function verifyChallenge(params) {
 // for anyone to forge a message/status and trigger the assistant as if they were the owner.
 export function verifySignature(rawBody, signature) {
   const secret = process.env.WA_APP_SECRET;
-  if (!secret) { console.error("[whatsapp] WA_APP_SECRET ausente: webhook recusado (fail-closed)"); return false; }
+  if (!secret) { console.error("[whatsapp] WA_APP_SECRET missing: webhook rejected (fail-closed)"); return false; }
   if (!signature) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   try {
@@ -689,7 +689,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       if(reply||!attachments.length)for(const part of channelReplyParts(res,'(sem resposta)')){
         let wamids=null;
         try{wamids=await sendText(from,part.text,{requireReceipt:!!inbox||!!part.id,reenvio:true});}
-        catch(e){naoEntregue=true;console.error('[whatsapp] resposta não entregue:',e?.code||e?.name||'error');saveRefs(e?.wamids||[],part.text);cobraveis+=e?.wamids?.length||0;continue;}
+        catch(e){naoEntregue=true;console.error('[whatsapp] reply not delivered:',e?.code||e?.name||'error');saveRefs(e?.wamids||[],part.text);cobraveis+=e?.wamids?.length||0;continue;}
         cobraveis+=wamids.length;
         await part.onReplySent?.({channel:'whatsapp',messageIds:wamids});
         saveRefs(wamids,part.text);
@@ -699,7 +699,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       if(naoEntregue)throw Object.assign(Error('Reply not delivered'),{code:'WA_REPLY_NOT_DELIVERED'});
       if(inbox)await inbox.complete(ids(token.consumed));
     }catch(e){
-      await finishHeartbeat();console.error('[whatsapp] erro na conversa:',e?.code||e?.name||'error');
+      await finishHeartbeat();console.error('[whatsapp] conversation error:',e?.code||e?.name||'error');
       if(inbox)await failInbox(token.consumed,e?.code==='WA_RECIPIENT_CHANGED'?'recipient_changed':e?.code==='WA_REPLY_NOT_DELIVERED'?'delivery_failed':'execution_or_delivery_uncertain').catch(()=>{});
       // Never replay the turn: `turno` asks whether to try again, `entrega` says the
       // ready reply did not arrive. Both notices enter the thread history, so the
@@ -785,7 +785,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
         }
         if(inboxIds.length)await inbox.complete(inboxIds);
       }catch(e){
-        console.error('[whatsapp] atendimento público:',e?.code||e?.name||'error');
+        console.error('[whatsapp] public support:',e?.code||e?.name||'error');
         if(inboxIds.length)await inbox.uncertain(inboxIds,'publico_falhou').catch(()=>{});
       }finally{for(const id of inboxIds)loaded.delete(id);}
     })();
@@ -1025,7 +1025,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
           // by citation (see userSaid in confirm.mjs).
           text = `[O usuário está usando o recurso "responder/citar" do WhatsApp para se referir a ${quem}: "${quoted}"]${CHANNEL_CTX_END}\n\n${text}`;
         }
-      } catch (e) { console.error('[whatsapp] resolver citação:', e?.message ?? e); }
+      } catch (e) { console.error('[whatsapp] resolve quote:', e?.message ?? e); }
     }
 
     // Doesn't run right away: queues it in the grouping window. When the person stops
@@ -1075,7 +1075,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
               // leaving a trace in the log between 2026-09-03 and 2026-09-04.
               avisarEntrega(st.id, st.status);
               if (String(st.status) === 'failed') {
-                console.warn(`[whatsapp] REPROVADA pela Meta: destino=${st.recipient_id || '?'} code=${err?.code ?? '?'} "${err?.title || err?.message || 'sem detalhe'}" wamid=${st.id}`);
+                console.warn(`[whatsapp] REJECTED by Meta: destino=${st.recipient_id || '?'} code=${err?.code ?? '?'} "${err?.title || err?.message || 'sem detalhe'}" wamid=${st.id}`);
                 // Whoever registered the send as 'sent' (born from Meta's 200, which is
                 // just "accepted") corrects it now, at the only moment the truth
                 // about delivery exists (event whatsapp_reprovada, eventos.mjs).
@@ -1085,7 +1085,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
                     errorCode: err?.code ?? null,
                     errorTitle: err?.title ?? null,
                     errorMessage: err?.message || err?.error_data?.details || null,
-                  })).catch((e) => console.error('[whatsapp] aviso de reprovação:', e?.message ?? e));
+                  })).catch((e) => console.error('[whatsapp] rejection notice:', e?.message ?? e));
                 }
               }
               // Safety net for 131047: the session message was accepted with
@@ -1110,7 +1110,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
           // business's number was answered by this instance).
           const dest = value.metadata?.phone_number_id;
           if (dest && PHONE_ID() && dest !== PHONE_ID()) {
-            console.warn(`[whatsapp] ignorando inbound endereçado a ${dest} (nosso número é ${PHONE_ID()})`);
+            console.warn(`[whatsapp] ignoring inbound addressed to ${dest} (our number is ${PHONE_ID()})`);
             continue;
           }
           if (inbox) continue; // Messages were committed before HTTP ACK; the inbox worker owns them.

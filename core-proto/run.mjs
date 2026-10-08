@@ -18,14 +18,14 @@ const providers = [
 ];
 
 const trace = (e) => {
-  if (e.type === 'start') console.log(`\n=== provider: ${e.provider} ===\nusuário: ${e.userInput}`);
+  if (e.type === 'start') console.log(`\n=== provider: ${e.provider} ===\nuser: ${e.userInput}`);
   else if (e.type === 'tool_call') console.log(`  → tool ${e.name}(${JSON.stringify(e.args)})`);
   else if (e.type === 'tool_result') console.log(`  ← ${e.out}`);
-  else if (e.type === 'end') console.log(`agente: ${e.text}`);
+  else if (e.type === 'end') console.log(`agent: ${e.text}`);
 };
 
 for (const provider of providers) {
   const tools = buildTools(); // same tools for everyone
   await runAgent({ provider, tools, system: SYSTEM, userInput: PEDIDO, onEvent: trace });
 }
-console.log('\nMesmo loop, mesmas tools, dois modelos. Trocar de modelo = trocar o provider.');
+console.log('\nSame loop, same tools, two models. Switching models = switching the provider.');

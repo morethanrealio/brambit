@@ -464,13 +464,13 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
   const lerPdf = async (buf, nome, mime) => {
     let text = '', pages, truncated;
     try { ({ text, pages, truncated } = await extractPdfText(buf, { maxChars: 20000 })); }
-    catch (e) { console.error('[onedrive] extractPdfText erro:', e?.message ?? e); }
+    catch (e) { console.error('[onedrive] extractPdfText error:', e?.message ?? e); }
     if (text) return JSON.stringify({ nome, mimeType: mime, pages, truncated, text });
     try {
       const { text: ocr, usage } = await ocrPdf(buf);
       if (usage) onUsage({ usage, kind: 'vision' });
       if (ocr) return JSON.stringify({ nome, mimeType: mime, ocr: true, text: ocr });
-    } catch (e) { console.error('[onedrive] ocrPdf falhou:', e?.message ?? e); }
+    } catch (e) { console.error('[onedrive] ocrPdf failed:', e?.message ?? e); }
     return JSON.stringify({ nome, mimeType: mime, note: 'PDF sem texto extraível (escaneado); o OCR também não conseguiu ler.' });
   };
   // Download ceiling on reads: above this it doesn't make sense to pull the
@@ -725,7 +725,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
             const { text, usage } = await describeImage(buf, mime || 'image/jpeg', 'Extraia TODO o texto legível desta imagem em português do Brasil.');
             if (usage) onUsage({ usage, kind: 'vision' });
             if (text) return JSON.stringify({ nome, mimeType: mime, ocr: true, text });
-          } catch (e) { console.error('[onedrive] describeImage falhou:', e?.message ?? e); }
+          } catch (e) { console.error('[onedrive] describeImage failed:', e?.message ?? e); }
           return JSON.stringify({ nome, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
         // Spreadsheet (Excel, CSV): goes to the analysis environment and the

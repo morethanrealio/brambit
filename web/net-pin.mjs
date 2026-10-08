@@ -122,7 +122,7 @@ export async function fetchFixado(rawUrl, opts = {}) {
             headers,
           });
         } catch {
-          console.warn(`[net-pin] status fora do padrão host=${url.hostname} status=${res.statusCode}`);
+          console.warn(`[net-pin] unexpected status host=${url.hostname} status=${res.statusCode}`);
           reject(new Error(`status HTTP fora do padrão (${res.statusCode})`));
           return;
         }

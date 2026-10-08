@@ -269,12 +269,12 @@ async function handleEmail(parsed, deps) {
   const messageId = parsed.messageId || '';
   if (!fromAddr) return 'skipped';
 
-  if (isAutoOrLoop(parsed, fromAddr)) { console.log('[email] ignorado (auto/loop):', fromAddr); return 'skipped'; }
+  if (isAutoOrLoop(parsed, fromAddr)) { console.log('[email] ignored (auto/loop):', fromAddr); return 'skipped'; }
   if (messageId && await deps.emailSeen(messageId)) return 'skipped'; // dedup
 
   const user = await deps.getUserByEmail(fromAddr);
   if (!user) {
-    console.log('[email] remetente não registrado, ignorado:', fromAddr);
+    console.log('[email] sender not registered, ignored:', fromAddr);
     if (messageId) await deps.markEmailSeen(messageId, null);
     return 'skipped';
   }
@@ -285,7 +285,7 @@ async function handleEmail(parsed, deps) {
   // window. Without this check the assistant would keep answering by e-mail
   // after deletion.
   if (user.deleted_at) {
-    console.log('[email] conta excluída, ignorado:', fromAddr);
+    console.log('[email] account deleted, ignored:', fromAddr);
     if (messageId) await deps.markEmailSeen(messageId, user.id);
     return 'skipped';
   }
@@ -294,16 +294,16 @@ async function handleEmail(parsed, deps) {
   // but that fails authentication, is discarded (doesn't trigger their assistant).
   const auth = passesEmailAuth(parsed, fromAddr);
   if (!auth.ok) {
-    console.warn('[email] REJEITADO por autenticação (possível spoofing de From):', fromAddr, '—', auth.reason);
+    console.warn('[email] REJECTED due to authentication (possible From spoofing):', fromAddr, '—', auth.reason);
     if (messageId) await deps.markEmailSeen(messageId, user.id);
     return 'skipped';
   }
-  if (!auth.strong) console.log('[email] autenticação fraca, aceito com ressalva:', fromAddr, '—', auth.reason);
-  if (!allow(user.id)) { console.log('[email] rate-limit, adiado:', fromAddr); return 'defer'; }
+  if (!auth.strong) console.log('[email] weak authentication, accepted with caveat:', fromAddr, '—', auth.reason);
+  if (!allow(user.id)) { console.log('[email] rate-limit, deferred:', fromAddr); return 'defer'; }
 
   const agents = await deps.listAgents(user.id);
   if (!agents.length) {
-    console.log('[email] usuário sem assistente:', fromAddr);
+    console.log('[email] user has no assistant:', fromAddr);
     if (messageId) await deps.markEmailSeen(messageId, user.id);
     return 'skipped';
   }
@@ -330,7 +330,7 @@ async function handleEmail(parsed, deps) {
   // If SMTP fails here, the retry re-runs the conversation (duplicate turn in
   // the thread). Accepted trade-off: better to reply late than to disappear.
   await sendReply({ to: fromAddr, subject, agentName: agent.name, text: reply, inReplyTo: messageId, references: parsed.references });
-  console.log(`[email] respondido ${fromAddr} como "${agent.name}" (assunto: ${subject.slice(0, 50)})`);
+  console.log(`[email] replied to ${fromAddr} as "${agent.name}" (subject: ${subject.slice(0, 50)})`);
   if (messageId) await deps.markEmailSeen(messageId, user.id);
   return 'done';
 }
@@ -423,7 +423,7 @@ async function drainQueue(deps) {
       await deps.settleEmail(row.id, outcome === 'done' ? 'done' : 'skipped');
     } catch (e) {
       const msg = String(e?.message ?? e).slice(0, 500);
-      console.error(`[email] fila #${row.id} (tentativa ${row.attempts}):`, msg);
+      console.error(`[email] queue #${row.id} (attempt ${row.attempts}):`, msg);
       // Goes back to 'pending' keeping the attempts already spent; the next
       // claim buries it in 'failed' once the ceiling is hit.
       await deps.settleEmail(row.id, 'pending', msg).catch(() => {});
@@ -458,13 +458,13 @@ export function createEmailPoller(deps) {
         drainQueue(deps),
         new Promise((_, rej) => setTimeout(() => rej(new Error('drain timeout (guard)')), 900000)),
       ]);
-    } catch (e) { console.error('[email] fila:', e?.message ?? e); }
+    } catch (e) { console.error('[email] queue:', e?.message ?? e); }
     finally { busy = false; schedule(); }
   }
   return {
     start() {
-      if (!emailEnabled()) { console.log('[email] inerte (faltam EMAIL_ADDRESS/EMAIL_APP_PASSWORD)'); return; }
-      console.log(`[email] poller ativo (${process.env.EMAIL_ADDRESS}, cada ${intervalMs}ms)`);
+      if (!emailEnabled()) { console.log('[email] inactive (missing EMAIL_ADDRESS/EMAIL_APP_PASSWORD)'); return; }
+      console.log(`[email] poller active (${process.env.EMAIL_ADDRESS}, every ${intervalMs}ms)`);
       tick();
     },
     stop() { stopped = true; if (timer) clearTimeout(timer); },

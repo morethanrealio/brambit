@@ -335,26 +335,26 @@ async function cleanup() {
 
 async function run() {
   console.log(`Base: ${BASE}`);
-  console.log(`Marca desta rodada: ${MARCA}\n`);
+  console.log(`Tag for this run: ${MARCA}\n`);
 
   const me = { A: await call('A', 'GET', '/api/me'), B: await call('B', 'GET', '/api/me') };
   for (const w of ['A', 'B']) {
-    if (me[w].status !== 200) { console.error(`Conta ${w}: /api/me devolveu ${me[w].status} — sessão inválida.`); process.exit(2); }
-    console.log(`Conta ${w} = ${me[w].data?.name} / ${me[w].data?.subdomain}`);
+    if (me[w].status !== 200) { console.error(`Account ${w}: /api/me returned ${me[w].status} — invalid session.`); process.exit(2); }
+    console.log(`Account ${w} = ${me[w].data?.name} / ${me[w].data?.subdomain}`);
   }
   console.log('');
 
-  console.log('── Setup: criando os recursos descartáveis na conta A ──');
+  console.log('── Setup: creating the disposable resources on account A ──');
   const s = await setup();
   if (s.erro) { console.error(s.erro); process.exit(2); }
-  console.log(`Criados: ${Object.entries(R).filter(([k]) => k !== 'deviceToken').map(([k, v]) => `${k}=${String(v).slice(0, 8)}`).join(' ')}`);
-  if (s.falta.length) console.log(`Não consegui criar: ${s.falta.join('; ')}`);
+  console.log(`Created: ${Object.entries(R).filter(([k]) => k !== 'deviceToken').map(([k, v]) => `${k}=${String(v).slice(0, 8)}`).join(' ')}`);
+  if (s.falta.length) console.log(`Could not create: ${s.falta.join('; ')}`);
   console.log('');
 
   let sobrou = [];
   try {
     const P = probes();
-    console.log(`── Probes: sessão de B contra os ${P.length} alvos descartáveis de A ──`);
+    console.log(`── Probes: B's session against the ${P.length} disposable targets of A ──`);
     for (const p of P) {
       const antes = await SNAP[p.chave]();
       if (retratoVazio(p.chave, antes)) {
@@ -371,14 +371,14 @@ async function run() {
       record(p.nome, p.chave, r, mudou, obs);
     }
   } finally {
-    console.log('\n── Limpeza (conta A apagando o que criou) ──');
+    console.log('\n── Cleanup (account A deleting what it created) ──');
     sobrou = await cleanup();
     console.log(sobrou.length ? `SOBROU pra apagar à mão: ${sobrou.join('; ')}` : 'Tudo apagado.');
   }
 
   const falhas = results.filter((r) => r.ok === false);
   console.log(`\nResumo: ${results.filter((r) => r.ok === true).length} passaram, ${falhas.length} falharam.`);
-  console.log(`Continua NÃO coberto (${NAO_COBERTO.length}):`);
+  console.log(`Still NOT covered (${NAO_COBERTO.length}):`);
   for (const [rota, motivo] of NAO_COBERTO) console.log(`  · ${rota} — ${motivo}`);
   if (process.env.JSON === '1') console.log('\n' + JSON.stringify({ marca: MARCA, results, naoCoberto: NAO_COBERTO, sobrou }, null, 2));
   process.exit(falhas.length ? 1 : 0);

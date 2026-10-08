@@ -153,7 +153,7 @@ async function sendAttachments(token, chatId, attachments, getMedia) {
         } catch (err) {
           // Same case as WhatsApp: the confirmation already went out, so the speech goes as text.
           if (!a.fala) throw err;
-          console.error('[telegram] áudio não entregue, indo em texto:', err?.message ?? err);
+          console.error('[telegram] audio not delivered, falling back to text:', err?.message ?? err);
           await tg(token, 'sendMessage', { chat_id: chatId, text: `Não consegui mandar o áudio, vai em texto:\n\n${a.fala}` });
         }
       } else if (a.type === 'document') {
@@ -193,7 +193,7 @@ async function sendAttachments(token, chatId, attachments, getMedia) {
         }
         if (!delivered) await tg(token, 'sendMessage', { chat_id: chatId, text: caption || a.url || ' ', ...markup });
       }
-    } catch (e) { console.error('[telegram] anexo:', e?.message ?? e); }
+    } catch (e) { console.error('[telegram] attachment:', e?.message ?? e); }
   }
 }
 
@@ -346,7 +346,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
         files = [{ name: dname, mime: dmime || mime || '', buffer }];
       }
     } catch (e) {
-      console.error('[telegram] mídia:', e?.message ?? e);
+      console.error('[telegram] media:', e?.message ?? e);
       await sendMessage(bot.token, chatId, 'Não consegui baixar essa mídia. Tenta mandar de novo?').catch(() => {});
       return;
     }
@@ -371,7 +371,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
       });
     } catch (e) {
       await finishHeartbeat();
-      console.error('[telegram] erro na conversa:', e?.message ?? e);
+      console.error('[telegram] conversation error:', e?.message ?? e);
       await avisar({ agent, userId: fresh.user_id, tipo: 'turno', mensagem: text, enviar: enviarAviso });
       return;
     } finally {
@@ -384,18 +384,18 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     const attachments = typeof res === 'string' ? [] : (res?.attachments || []);
     try { await sendAttachments(bot.token, chatId, attachments, getMedia); } catch (e) {
       entregou = false;
-      console.error('[telegram] anexo não entregue:', e?.message ?? e);
+      console.error('[telegram] attachment not delivered:', e?.message ?? e);
     }
     if (reply || !attachments.length) {
       for (const part of channelReplyParts(res, '(sem resposta)')) {
         let receipt;
         try { receipt = await sendMessage(bot.token, chatId, part.text, { requireReceipt: !!part.id, reenvio: true }); } catch (e) {
           entregou = false;
-          console.error('[telegram] resposta não entregue:', e?.message ?? e);
+          console.error('[telegram] reply not delivered:', e?.message ?? e);
           continue;
         }
         await Promise.resolve(part.onReplySent?.({channel:'telegram',messageIds:(receipt?.message_ids || []).filter(id=>id!=null).map(id=>`${chatId}:${id}`)}))
-          .catch((e) => console.error('[telegram] recibo da resposta:', e?.message ?? e));
+          .catch((e) => console.error('[telegram] reply receipt:', e?.message ?? e));
       }
     }
     if (!entregou) await avisar({ agent, userId: fresh.user_id, tipo: 'entrega', enviar: enviarAviso });
@@ -423,7 +423,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
         const m = String(e?.message ?? e);
         // 401 = revoked/wrong token: stops the poller for this bot.
         if (m.includes('401') || m.toLowerCase().includes('unauthorized')) {
-          console.error('[telegram] token inválido, parando poller:', bot.token.slice(0, 8));
+          console.error('[telegram] invalid token, stopping poller:', bot.token.slice(0, 8));
           running.delete(bot.token);
           return;
         }

@@ -89,7 +89,7 @@ export function makeCompativel({
         // user (instalar_skill bug, 2026-08-14).
         if(reamostrarResiduo&&!toolCalls.length&&tools?.length&&temResiduo(text)&&!pendente){
           for(let i=0;i<reamostrarResiduo&&!toolCalls.length;i++){
-            console.log(`[${provedor} malformed-toolcall] resíduo sem chamada estruturada; retry ${i+1}/${reamostrarResiduo} sem raciocínio`);
+            console.log(`[${provedor} malformed-toolcall] leftover with no structured call; retry ${i+1}/${reamostrarResiduo} without reasoning`);
             try{
               const d=await chamar({model,messages:omsgs,...camposDiretos(),tools:body.tools,tool_choice:'auto'});
               usage=somarUso(usage,lerUso(d));
@@ -100,7 +100,7 @@ export function makeCompativel({
             }catch(e){
               throwIfAttemptControl(e);
               if(e instanceof Recusa)throw e;
-              console.log(`[${provedor} malformed-toolcall] retry ${i+1}/${reamostrarResiduo} falhou: ${e.message}`);
+              console.log(`[${provedor} malformed-toolcall] retry ${i+1}/${reamostrarResiduo} failed: ${e.message}`);
               continue;
             }
           }
@@ -133,7 +133,7 @@ export function makeCompativel({
         // 2026-07-02 case). 'completo' still recovers the action written as text (Naval
         // Strike case: the retry brought back `<｜DSML｜ invoke ...>`) and measures the cache.
         if(retryVazio&&!text.trim()&&!pendente){
-          console.log(`[${provedor} empty] finish=${finish} out=${usage.out}; retry sem raciocínio`);
+          console.log(`[${provedor} empty] finish=${finish} out=${usage.out}; retry without reasoning`);
           try{
             const d2=await chamar({model,messages:omsgs,...camposDiretos()});
             const m2=d2.choices?.[0]?.message??{};
@@ -153,7 +153,7 @@ export function makeCompativel({
           }catch(e){
             throwIfAttemptControl(e);
             if(e instanceof Recusa)throw e;
-            console.log(`[${provedor} empty] retry falhou: ${e.message}`);
+            console.log(`[${provedor} empty] retry failed: ${e.message}`);
           }
         }
         if(toolCalls.length)return lote(toolCalls,text);
@@ -214,7 +214,7 @@ function recuperar(toolCalls,text,provedor){
   if(!toolCalls.length&&hasDsmlResidue(text)){
     const p=parseDsmlToolCalls(text);
     if(p.length){
-      if(provedor)console.log(`[${provedor} dsml-toolcall] recuperei ${p.length} chamada(s) do formato nativo do DeepSeek`);
+      if(provedor)console.log(`[${provedor} dsml-toolcall] recovered ${p.length} call(s) from DeepSeek's native format`);
       toolCalls=p;text=stripDsml(text);
     }
   }

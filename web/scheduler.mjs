@@ -243,7 +243,7 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
         // forever and it fell to the owner to cancel it by hand.
         if (!r.repeat_every_min && r.repeat_until && tickAt.getTime() > new Date(r.repeat_until).getTime()) {
           await deps.markRoutineNext(r.id, null);                  // turns off, doesn't delete
-          console.log(`[rotina] ${r.id} (${r.title}) encerrada: passou de repeat_until`);
+          console.log(`[rotina] ${r.id} (${r.title}) closed: passed repeat_until`);
           continue;
         }
         if (!isDue(r, tickAt)) continue;
@@ -269,7 +269,7 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
         if(deps.executeRoutine){
           const slot=r.repeat_every_min?`interval:${new Date(r.next_run).toISOString()}`:`day:${localParts(r.tz,tickAt).day}`;
           try {await deps.executeRoutine(r,{slot,prepare,run:deps.runRoutine,deliver:deps.deliver});}
-          catch(e){console.error(`[rotina] ${r.id} falhou (estado persistido quando possível):`,e?.message??e);}
+          catch(e){console.error(`[rotina] ${r.id} failed (state persisted when possible):`,e?.message??e);}
           continue;
         }
         await prepare(); // compatibility for existing isolated integrations
@@ -283,12 +283,12 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
           const body = typed ? text.text : text;
           if (body && body.trim()) {
             await deps.deliver(r, typed ? text : body.trim());
-            console.log(`[rotina] ${r.id} (${r.title}) entregue p/ ${r.email}`);
+            console.log(`[rotina] ${r.id} (${r.title}) delivered to ${r.email}`);
           } else {
-            console.log(`[rotina] ${r.id} (${r.title}) rodou sem resposta — nada entregue`);
+            console.log(`[rotina] ${r.id} (${r.title}) ran with no response — nothing delivered`);
           }
         } catch (e) {
-          console.error(`[rotina] ${r.id} falhou:`, e?.message ?? e);
+          console.error(`[rotina] ${r.id} failed:`, e?.message ?? e);
         }
       }
       // EXTRA future execution of an existing routine. It's its own queue: a
@@ -307,10 +307,10 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
             });
             const status=result?.status==='completed'?'completed':result?.status==='partial'?'partial':'failed';
             await deps.finishRoutineOneShot(job.one_shot_id,status,{contentStatus:result?.contentStatus||'unknown',delivery:result?.delivery||{status:'unknown'}});
-            console.log(`[rotina extra] ${job.one_shot_id} (${job.title}) terminou: conteúdo=${result?.contentStatus||'unknown'} entrega=${result?.delivery?.status||'unknown'}`);
+            console.log(`[rotina extra] ${job.one_shot_id} (${job.title}) finished: conteúdo=${result?.contentStatus||'unknown'} entrega=${result?.delivery?.status||'unknown'}`);
           }catch(e){
             await deps.finishRoutineOneShot(job.one_shot_id,'failed',{error:'execution_failed'}).catch(()=>{});
-            console.error(`[rotina extra] ${job.one_shot_id} (${job.title}) falhou:`,e?.message??e);
+            console.error(`[rotina extra] ${job.one_shot_id} (${job.title}) failed:`,e?.message??e);
           }
         }
       }
@@ -318,7 +318,7 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
       // Best-effort; an error here doesn't bring down the rest of the tick.
       if (!stopped && deps.pollVideoJobs) {
         try { await deps.pollVideoJobs(); }
-        catch (e) { console.error('[scheduler] pollVideoJobs falhou:', e?.message ?? e); }
+        catch (e) { console.error('[scheduler] pollVideoJobs failed:', e?.message ?? e); }
       }
       // The executor records an occurrence and gets the atomic claim before
       // sending. Acceptance and rescheduling are persisted together only AFTER the channel.
@@ -333,18 +333,18 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
             if (result?.status === 'skipped') continue;
             console.log(`[lembrete] ${rem.id} canal=${rem.channel} status=${result?.status || 'unknown'}`);
           } catch (e) {
-            console.error(`[lembrete] ${rem.id} falhou (estado persistido quando possível):`, e?.message ?? e);
+            console.error(`[lembrete] ${rem.id} failed (state persisted when possible):`, e?.message ?? e);
           }
         }
       }
     } catch (e) {
-      console.error('[scheduler] tick falhou:', e?.message ?? e);
+      console.error('[scheduler] tick failed:', e?.message ?? e);
     } finally {
       running = false;drained?.();
     }
   }
   const handle = setInterval(tick, intervalMs);
   handle.unref?.();
-  console.log(`[scheduler] rotinas ativas (tick ${Math.round(intervalMs / 1000)}s)`);
+  console.log(`[scheduler] routines active (tick ${Math.round(intervalMs / 1000)}s)`);
   return { stop: () => {stopped=true;clearInterval(handle);return drainPromise;}, tick };
 }

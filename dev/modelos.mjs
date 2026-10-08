@@ -14,7 +14,7 @@ const env = { ...(existsSync(dotenv) ? parseEnv(readFileSync(dotenv, 'utf8')) : 
 try {
   const cfg = carregarModelos({ env });
   if (!cfg) {
-    console.log(`Sem ${path.relative(root, arquivoModelos(env))}: o Brambit usa o roteamento embutido.\nPra escolher provedor e modelo por função: cp modelos.example.yaml modelos.yaml`);
+    console.log(`Without ${path.relative(root, arquivoModelos(env))}: Brambit uses the built-in routing.\nTo choose provider and model per function: cp modelos.example.yaml modelos.yaml`);
   } else {
     console.log(`${path.relative(root, arquivoModelos(env))}\n${tabelaModelos({ cfg, env })}`);
   }

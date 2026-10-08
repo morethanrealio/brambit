@@ -91,7 +91,7 @@ export async function sendEmail({ to, subject, text, html, fromName, fromAddr, h
   const files = mailAttachments(attachments);
   if (smtpEnabled()) return sendViaSmtp({ to, subject, text, html, fromName, fromAddr, headers, attachments: files });
   if (!resendEnabled()) {
-    console.log(`[mailer] (stub, sem credencial de e-mail) -> ${to}: ${subject}`);
+    console.log(`[mailer] (stub, no email credential) -> ${to}: ${subject}`);
     return { skipped: true };
   }
   const payload = {

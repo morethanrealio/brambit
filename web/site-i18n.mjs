@@ -446,7 +446,7 @@ export function carregaCatalogos(dir) {
       for (const [k, v] of Object.entries(j)) if (typeof v === 'string' && v.trim()) limpo[k] = v;
       fora[tag] = { ...fora[tag], ...limpo };
     } catch (e) {
-      if (e.code !== 'ENOENT') console.error(`[site-i18n] catálogo ${tag} ignorado: ${e.message}`);
+      if (e.code !== 'ENOENT') console.error(`[site-i18n] catalog ${tag} ignored: ${e.message}`);
     }
   }
   return fora;

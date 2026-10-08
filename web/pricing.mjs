@@ -115,7 +115,7 @@ function observeMissingPrice(model) {
   missingPriceByModel.set(id, { model: id, hits: 1, firstSeen: now, lastSeen: now });
   // One line per id and per process: draws attention without flooding the journal on
   // every costOf/billCreditsOf of the same call.
-  console.warn(`[pricing] preço ausente para ${id}, usando fallback`);
+  console.warn(`[pricing] price missing for ${id}, using fallback`);
 }
 
 // Read-only telemetry of the current process. The dashboard updates every

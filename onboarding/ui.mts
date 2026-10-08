@@ -29,7 +29,7 @@ export function mountWizard(options:Options) {
  async function touch(event:string,provider='none'){
   const c=new AbortController(),timer=setTimeout(()=>c.abort(),1500);
   try{const r=await fetch('/api/onboard/touch',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({event,provider}),signal:c.signal});if(!r.ok)throw new Error('telemetry');}
-  catch{console.warn('[onboarding] métrica não confirmada:',event)}finally{clearTimeout(timer)}
+  catch{console.warn('[onboarding] metric not confirmed:',event)}finally{clearTimeout(timer)}
  }
  const seen=new Set<string>(),observed=new Set<string>();
  function exposure(event:string,id:string){

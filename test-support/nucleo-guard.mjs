@@ -90,7 +90,7 @@ export async function bootSemNuvem(files, nuvem) {
     for (const f of nucleo) cpSync(path.join(root, f), path.join(copia, f));
     for (const f of files.filter(nuvem.ehNuvem)) if (existsSync(path.join(copia, f))) throw Error(`${f} é da nuvem e foi copiado`);
     symlinkSync(path.join(root, 'node_modules'), path.join(copia, 'node_modules'), 'dir');
-    console.log(`núcleo copiado: ${nucleo.length} arquivos (${files.length - nucleo.length} da nuvem de fora)`);
+    console.log(`core copied: ${nucleo.length} files (${files.length - nucleo.length} from the outside cloud)`);
 
     mkdirSync(socket);
     pgcmd('initdb', ['-D', dados, '-U', 'nucleo', '--auth=trust', '--no-locale', '--encoding=UTF8']);
@@ -145,7 +145,7 @@ export async function bootSemNuvem(files, nuvem) {
     conferir(eu.status === 200 && JSON.parse(eu.body).name === 'Conta do núcleo', `/api/me logado deu ${eu.status}`);
     conferir(await parar() === 0, 'o servidor não saiu limpo no SIGTERM');
     conferir(!/ERR_MODULE_NOT_FOUND|Cannot find module|ReferenceError|SyntaxError|Falha ao inicializar o banco/.test(log), 'erro no log do servidor');
-    console.log('núcleo sem a nuvem: 2 boots, migrações, páginas, cadastro e login ok');
+    console.log('core without the cloud: 2 boots, migrations, pages, signup and login ok');
   } catch (e) {
     await espera(500);
     e.message += `\n--- log do servidor ---\n${log.slice(-4000)}`;
@@ -163,10 +163,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const nuvem = lerNuvem(existsSync(manifesto) ? readFileSync(manifesto, 'utf8') : '');
   const problemas = conferirImports(files, (f) => readFileSync(path.join(root, f), 'utf8'), nuvem);
   if (problemas.length) {
-    console.error(`Núcleo dependendo da nuvem (${MANIFESTO}). Mova a ligação pra uma porta/plugin ou, se o arquivo é da nuvem, liste-o lá:\n  ${problemas.join('\n  ')}`);
+    console.error(`Core depending on the cloud (${MANIFESTO}). Move the link to a port/plugin, or if the file belongs to the cloud, list it there:\n  ${problemas.join('\n  ')}`);
     process.exit(1);
   }
-  console.log(`imports: nenhum arquivo do núcleo importa nem cita a nuvem (${files.filter(nuvem.ehNuvem).length} arquivos da nuvem)`);
+  console.log(`imports: no core file imports or mentions the cloud (${files.filter(nuvem.ehNuvem).length} cloud files)`);
   if (!process.argv.includes('--sem-boot')) {
     try { await bootSemNuvem(files, nuvem); }
     catch (e) { console.error(e.message); process.exit(1); }

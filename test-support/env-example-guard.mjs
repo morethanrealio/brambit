@@ -80,7 +80,7 @@ function main() {
   const reads = new Set();
   for (const f of files) for (const v of envReads(readFileSync(path.join(root, f), 'utf8'))) reads.add(v);
   const problems = check({ example: readFileSync(path.join(root, EXAMPLE), 'utf8'), reads });
-  console.log(`[env-example] ${reads.size} variáveis lidas em ${files.length} arquivos de produção`);
+  console.log(`[env-example] ${reads.size} variables read across ${files.length} production files`);
   for (const p of problems) console.log(`[env-example] ${p}`);
   return problems.length ? 1 : 0;
 }

@@ -162,14 +162,14 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       const enviarAviso = (t) => postMessage(evt.channel, t, threadTs);
       let res;
       try { res = await runConversation(agent, userId, text, reply); } catch (e) {
-        console.error('[slack] erro na conversa:', e?.message ?? e);
+        console.error('[slack] conversation error:', e?.message ?? e);
         await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso });
         return;
       }
       if (res?.suppressed) return;
       const out = typeof res === 'string' ? res : res?.text;
       try { await postMessage(evt.channel, out || '(sem resposta)', threadTs, { reenvio: true }); } catch (e) {
-        console.error('[slack] resposta não entregue:', e?.message ?? e);
+        console.error('[slack] reply not delivered:', e?.message ?? e);
         await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso });
       }
     };

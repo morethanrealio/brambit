@@ -61,11 +61,11 @@ function main() {
   const tests = new Set(listTests().map((t) => t.source));
   const listed = new Set(readFileSync(path.join(root, LIST), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')));
   const { found, news, gone } = check({ tests, deps, listed });
-  console.log(`[frageis] ${found.length} testes leem o texto do código de produção (lista: ${listed.size})`);
-  for (const t of news) console.log(`[frageis] NOVO: ${t} lê ${readsProductionCode(t, deps, tests).join(', ')}`);
-  for (const t of gone) console.log(`[frageis] ${t} não lê mais o código: tire da lista ${LIST}`);
-  if (news.length) console.log('\nTeste novo tem que importar o módulo e chamar a função, não ler o texto do arquivo.\n'
-    + 'Se a função está presa dentro do web/server.mjs, extraia para um módulo próprio (web/<area>.mjs) e teste por ele.');
+  console.log(`[frageis] ${found.length} tests read the production code text (list: ${listed.size})`);
+  for (const t of news) console.log(`[frageis] NEW: ${t} reads ${readsProductionCode(t, deps, tests).join(', ')}`);
+  for (const t of gone) console.log(`[frageis] ${t} no longer reads the code: remove it from the list ${LIST}`);
+  if (news.length) console.log('\nA new test must import the module and call the function, not read the file text.\n'
+    + 'If the function is stuck inside web/server.mjs, extract it into its own module (web/<area>.mjs) and test through it.');
   return news.length || gone.length ? 1 : 0;
 }
 

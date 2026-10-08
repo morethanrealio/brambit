@@ -474,7 +474,7 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
   if (ogg) return { buffer: ogg, mime: 'audio/ogg', ext: 'ogg', usage };
   // WAV plays on the web, but WhatsApp rejects it (2026-10-02: prod without ffmpeg, the voice
   // never reached WhatsApp and the assistant confirmed "mandado em voz" anyway).
-  console.error('[media tts] ffmpeg indisponível ou falhou: áudio saiu em WAV, que o WhatsApp recusa');
+  console.error('[media tts] ffmpeg unavailable or failed: audio came out as WAV, which WhatsApp rejects');
   return { buffer: wav, mime: 'audio/wav', ext: 'wav', usage };
 }
 

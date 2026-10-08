@@ -40,10 +40,10 @@ export function registrarFontes() {
     const fams = new Set(GlobalFonts.families.map((f) => f.family));
     fontesRegistradas = fams.has(FAMILIAS.sans) && fams.has(FAMILIAS.serif);
   } catch (e) {
-    console.error('[compor] registro de fontes:', e?.message ?? e);
+    console.error('[compor] font registration:', e?.message ?? e);
     fontesRegistradas = false;
   }
-  if (!fontesRegistradas) console.error('[compor] fontes não registraram; texto sairia vazio');
+  if (!fontesRegistradas) console.error('[compor] fonts failed to register; text would come out empty');
   return fontesRegistradas;
 }
 
@@ -392,14 +392,14 @@ export function comporTools(userId, { carregarAsset, saveBlob, onAttachment = ()
               if (!buf) faltando.push(id);
               return buf;
             } catch (e) {
-              console.error('[compor] carregar asset:', e?.message ?? e);
+              console.error('[compor] load asset:', e?.message ?? e);
               faltando.push(id);
               return null;
             }
           },
         });
       } catch (e) {
-        console.error('[compor] composição:', e?.message ?? e);
+        console.error('[compor] composition:', e?.message ?? e);
         return `ERRO: não consegui montar a imagem (${e?.message ?? e}). Avise o usuário e não diga que a imagem ficou pronta.`;
       }
       if (faltando.length) {
