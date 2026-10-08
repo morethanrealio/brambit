@@ -15,6 +15,16 @@ Changes merged since the last tag go under "Unreleased".
   running it again while it runs only opens the browser. The owner gets a
   "This computer" section in Settings (address, data folder, AI, version)
   with "Change the AI" and "Turn Brambit off".
+- One-line install for people who don't code, no administrator needed:
+  `install.ps1` on Windows (`irm ... | iex`) and `install.sh` on macOS and
+  Linux (`curl ... | bash`). They bring their own Node.js (checksum pinned),
+  install the `brambit` command, a shortcut that opens the browser and
+  starting with the computer, and update an existing install when run again.
+- `brambit open` (starts in the background if needed and opens the browser)
+  and `brambit uninstall` (removes the program and shortcuts, keeps the data).
+- CI runs the real installer on Windows, macOS and Linux and checks the
+  installed copy (open, setup, status, stop, uninstall).
+- `README.pt-BR.md`; the README is now in English.
 - `AGENTS.md`: instructions for coding agents (and people) working in this
   repository, starting with: everything in the repository is in English.
 
@@ -26,6 +36,8 @@ Changes merged since the last tag go under "Unreleased".
   again.
 - `npm run local`: the test account is `test@example.com` /
   `brambit-local-test`.
+- CI jobs renamed: "Quick checks", "Boots on <system>" and "Area tests" /
+  "Full suite".
 
 ### Fixed
 - App slot markers accept CRLF line endings: on Windows every plugin with an

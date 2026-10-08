@@ -1,8 +1,8 @@
-// Só uma regra: nome usado sem existir (no-undef). Em JavaScript isso só quebra quando a
-// linha roda; uma ferramenta que o modelo chama raramente pode ficar quebrada em prod sem
-// teste nenhum perceber (caso meu_convite, 03/10/2026). Rodado no CI (Checagem rápida).
-// Fora: código de navegador (web/public, a pasta publico dos plugins e o que os
-// *-browser.test.mjs rodam na página), que usa variáveis globais das próprias páginas HTML.
+// One rule only: a name used without existing (no-undef). In JavaScript that only breaks
+// when the line runs; a tool the model rarely calls can stay broken in production with no
+// test noticing (the meu_convite case, 2026-10-03). Run in CI (Quick checks).
+// Left out: browser code (web/public, the plugins' publico folder and what the
+// *-browser.test.mjs files run in the page), which uses the HTML pages' own globals.
 import globals from 'globals';
 
 export default [

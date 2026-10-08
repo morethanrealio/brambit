@@ -1,16 +1,18 @@
-# Rede de proteção do repositório.
-# sistemas: really boots on Windows, macOS and Linux (npm run local -- --check) and runs
-#           the installer end to end (installer/e2e.mjs).
-# rapido: sintaxe, nome usado sem existir (eslint no-undef), artefatos gerados em dia, trava de crescimento de server.mjs/db.mjs,
-#         trava de teste novo que lê o texto do código, .env.example em dia, núcleo sobe
-#         sozinho e
-#         varredura de segredos (gitleaks) e trava de workflow perigoso (zizmor).
-# testes: DESLIGADO no PR até a abertura do código (decisão de 01/10/2026): hoje quem
-#         manda PR já roda os testes da área na própria máquina. Na abertura, voltar o
-#         `if:` abaixo para `github.event_name != 'push'` (no PR roda só os testes que
-#         alcançam o que mudou, test-support/affected.mjs).
-#         A suíte inteira NÃO roda sozinha: só pelo botão "Run workflow" (Actions > CI)
-#         ou com `npm test` na máquina de quem quiser.
+# The repository's safety net.
+# systems: really boots on Windows, macOS and Linux (npm run local -- --check), runs
+#          the launcher end to end (installer/e2e.mjs) and the real installer
+#          (install.ps1 / install.sh, then installer/install-check.mjs).
+# quick: syntax, names used without existing (eslint no-undef), generated artifacts up
+#        to date, growth guard on server.mjs/db.mjs, guard against new tests that read
+#        the source as text, .env.example up to date, the core boots on its own, install
+#        scripts on the package.json version, secret scan (gitleaks) and unsafe workflow
+#        guard (zizmor).
+# tests: OFF on pull requests until the code opens (decision of 2026-10-01): today
+#        whoever opens a PR runs the tests of the area on their own machine. When it
+#        opens, set the `if:` below back to `github.event_name != 'push'` (on a PR it
+#        runs only the tests that reach what changed, test-support/affected.mjs).
+#        The full suite does NOT run on its own: only with the "Run workflow" button
+#        (Actions > CI) or with `npm test` on anyone's machine.
 name: CI
 
 on:
@@ -28,8 +30,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rapido:
-    name: Checagem rápida
+  quick:
+    name: Quick checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -42,16 +44,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Sintaxe de todo .mjs
+      - name: Syntax of every .mjs
         run: git ls-files -z '*.mjs' | xargs -0 -n1 -P4 node --check
-      # O node --check não vê nome que não existe: isso só quebra quando a linha roda.
-      - name: Nome usado sem existir (eslint no-undef)
+      # node --check does not see a name that does not exist: that only breaks when the line runs.
+      - name: Names used without existing (eslint no-undef)
         run: git ls-files -z '*.mjs' | xargs -0 npx eslint --no-warn-ignored
-      - name: Artefatos gerados em dia
+      - name: Generated artifacts up to date
         run: |
           for b in */build.mts; do node "$b"; done
-          git diff --exit-code || { echo "::error::Rode os build.mts e commite os arquivos gerados."; exit 1; }
-      - name: Trava de crescimento (web/server.mjs, web/db.mjs)
+          git diff --exit-code || { echo "::error::Run the build.mts files and commit the generated files."; exit 1; }
+      - name: Growth guard (web/server.mjs, web/db.mjs)
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -61,7 +63,7 @@ jobs:
         run: |
           if [ "$EVENT" = pull_request ]; then
             base=$(git merge-base "$PR_BASE" HEAD)
-            # Lido na hora (não do evento) para um re-run enxergar o rótulo posto depois.
+            # Read now (not from the event) so a re-run sees a label added later.
             if gh api "repos/$GITHUB_REPOSITORY/issues/$PR/labels" --jq '.[].name' | grep -qx crescimento-autorizado; then
               export GROWTH_GUARD_ALLOW=1
             fi
@@ -71,13 +73,20 @@ jobs:
             base=$(git merge-base origin/main HEAD)
           fi
           node test-support/growth-guard.mjs "$base"
-      - name: Trava de teste que lê o texto do código
+      - name: Guard against tests that read the source as text
         run: node test-support/fragile-guard.mjs
-      - name: .env.example completo e sem nada nosso
+      - name: .env.example complete and with nothing of ours
         run: node test-support/env-example-guard.mjs
-      - name: Núcleo sobe sozinho
+      - name: Core boots on its own
         run: node test-support/nucleo-guard.mjs
-      - name: Varredura de segredos (gitleaks, histórico inteiro)
+      # The scripts download the release tag they name: one left behind would install
+      # the previous version.
+      - name: Install scripts on the package.json version
+        run: |
+          v=$(node -p "require('./package.json').version")
+          grep -q "^BRAMBIT_VERSION=\"$v\"\$" install.sh || { echo "::error::Set BRAMBIT_VERSION in install.sh to $v."; exit 1; }
+          grep -q "^  \$brambitVersion = '$v'$" install.ps1 || { echo "::error::Set \$brambitVersion in install.ps1 to $v."; exit 1; }
+      - name: Secret scan (gitleaks, whole history)
         env:
           GL_VER: 8.30.1
           GL_SHA: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
@@ -86,10 +95,10 @@ jobs:
           echo "${GL_SHA}  /tmp/gl.tgz" | sha256sum -c -
           tar -xzf /tmp/gl.tgz -C /tmp gitleaks
           /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
-      # Barra workflow que, por escrito, dá escrita a PR, roda código de fork com acesso
-      # às chaves (pull_request_target) ou injeta texto do PR em comando. As regras do
-      # repo (token padrão só leitura, Action fixada por commit) não cobrem isso.
-      - name: Trava de workflow perigoso (zizmor)
+      # Blocks a workflow that, in writing, gives PRs write access, runs fork code with
+      # access to the secrets (pull_request_target) or injects PR text into a command. The
+      # repository rules (read-only default token, Actions pinned by commit) do not cover that.
+      - name: Unsafe workflow guard (zizmor)
         env:
           GH_TOKEN: ${{ github.token }}
           ZZ_VER: 1.30.1
@@ -103,14 +112,14 @@ jobs:
   # The installer promises Windows, macOS and Linux, and nobody on the team uses
   # Windows: without this, a break only shows up when a user complains. Boots
   # Brambit like `npm run local` (embedded Postgres, migrations, server), signs up and signs in.
-  sistemas:
+  systems:
     name: Boots on ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -122,16 +131,37 @@ jobs:
       - run: npm ci
       - name: Boots, signs up and signs in
         run: node dev/local.mjs --check
-      - name: Installer end to end (setup, closed sign-up, restart, change AI, stop)
+      - name: Launcher end to end (setup, closed sign-up, restart, change AI, stop)
         run: node installer/e2e.mjs
+      # The real installer, as a person runs it, but from this checkout (BRAMBIT_SOURCE)
+      # instead of the release download, into folders of the runner.
+      - name: Installer folders
+        shell: bash
+        run: |
+          {
+            echo "BRAMBIT_HOME=$RUNNER_TEMP/brambit-program"
+            echo "BRAMBIT_DATA_DIR=$RUNNER_TEMP/brambit-data"
+            echo "BRAMBIT_SOURCE=$GITHUB_WORKSPACE"
+            echo "BRAMBIT_NO_OPEN=1"
+          } >> "$GITHUB_ENV"
+      - name: Install (install.ps1, the way irm | iex runs it)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Get-Content install.ps1 -Raw | Invoke-Expression
+      - name: Install (install.sh, the way curl | bash runs it)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash < install.sh
+      - name: Installed copy (open, setup, status, stop, uninstall)
+        run: node installer/install-check.mjs
       - name: Postgres log (on failure)
         if: failure()
         shell: bash
         run: cat .local/postgres.log || true
 
-  testes:
-    name: ${{ github.event_name == 'pull_request' && 'Testes da área' || 'Suíte completa' }}
-    needs: rapido
+  tests:
+    name: ${{ github.event_name == 'pull_request' && 'Area tests' || 'Full suite' }}
+    needs: quick
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -148,19 +178,19 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
-      - name: Pré-requisitos dos testes (Postgres, Chromium, pandas)
+      - name: Test prerequisites (Postgres, Chromium, pandas)
         run: |
           pip install pandas openpyxl
           echo "PLANILHA_PY=$(which python)" >> "$GITHUB_ENV"
-          # Postgres 14 embutido (npm), a mesma versão do prod; o do runner é outro.
+          # Embedded Postgres 14 (npm), the same version as production; the runner has another.
           pg=$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")
-          [ -x "$pg/initdb" ] || { echo "::error::Postgres embutido não instalado (npm ci)"; exit 1; }
+          [ -x "$pg/initdb" ] || { echo "::error::Embedded Postgres not installed (npm ci)"; exit 1; }
           "$pg/postgres" --version
           echo "TEST_POSTGRES_BIN=$pg" >> "$GITHUB_ENV"
           chrome=$(which google-chrome || which chromium || which chromium-browser)
-          [ -n "$chrome" ] || { echo "::error::Chromium não encontrado no runner"; exit 1; }
+          [ -n "$chrome" ] || { echo "::error::Chromium not found on the runner"; exit 1; }
           echo "CHROMIUM_PATH=$chrome" >> "$GITHUB_ENV"
-      - name: Testes
+      - name: Tests
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}

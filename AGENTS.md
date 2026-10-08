@@ -43,8 +43,13 @@ cites a cloud file listed in `nuvem.txt`.
   `.env.example` (`test-support/env-example-guard.mjs`).
 - Secrets (gitleaks) and unsafe workflows (zizmor). Never commit keys, real user
   data, IPs or internal hosts, not even in tests.
-- The core boots on Windows, macOS and Linux (`node dev/local.mjs --check`) and
-  the installer works end to end (`node installer/e2e.mjs`).
+- The core boots on Windows, macOS and Linux (`node dev/local.mjs --check`),
+  the launcher works end to end (`node installer/e2e.mjs`) and the real installer
+  (`install.ps1` / `install.sh`) installs a copy that opens, sets up, stops and
+  uninstalls (`node installer/install-check.mjs`).
+- The version in `install.sh` (`BRAMBIT_VERSION`) and `install.ps1`
+  (`$brambitVersion`) equals the one in `package.json`: bump all three together
+  when releasing, since the scripts download the tag they name.
 
 ## Tests
 

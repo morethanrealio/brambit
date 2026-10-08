@@ -46,7 +46,7 @@ export const freePort = () => new Promise((resolve, reject) => {
 // and on a shared computer, another user of the machine can reach 127.0.0.1.
 // The password is generated on the first run and kept in <dir>/pg-password.
 const exeOf = (bin) => (name) => path.join(bin, process.platform === 'win32' ? `${name}.exe` : name);
-export const stopPostgres = (bin, dir = local) => { try { execFileSync(exeOf(bin)('pg_ctl'), ['-D', path.join(dir, 'pgdata'), '-m', 'fast', 'stop'], { stdio: 'ignore' }); } catch {} };
+export const stopPostgres = (bin, dir = local) => { try { execFileSync(exeOf(bin)('pg_ctl'), ['-D', path.join(dir, 'pgdata'), '-m', 'fast', 'stop'], { stdio: 'ignore', windowsHide: true }); } catch {} };
 export async function startPostgres(bin, dir = local) {
   const exe = exeOf(bin), pgdata = path.join(dir, 'pgdata'), pwfile = path.join(dir, 'pg-password');
   mkdirSync(dir, { recursive: true });
@@ -55,13 +55,13 @@ export async function startPostgres(bin, dir = local) {
   const noPassword = !fresh && !existsSync(pwfile);
   if (!existsSync(pwfile)) writeFileSync(pwfile, randomBytes(24).toString('hex'), { mode: 0o600 });
   const password = readFileSync(pwfile, 'utf8').trim();
-  if (fresh) execFileSync(exe('initdb'), ['-D', pgdata, '-U', DB_USER, '--auth=scram-sha-256', `--pwfile=${pwfile}`, '--no-locale', '--encoding=UTF8'], { stdio: 'ignore' });
+  if (fresh) execFileSync(exe('initdb'), ['-D', pgdata, '-U', DB_USER, '--auth=scram-sha-256', `--pwfile=${pwfile}`, '--no-locale', '--encoding=UTF8'], { stdio: 'ignore', windowsHide: true });
   const port = await freePort();
   // In a file, not in pg_ctl -o: on Windows the quotes of '' arrive literally.
   const conf = path.join(pgdata, 'postgresql.conf');
   if (!readFileSync(conf, 'utf8').includes("include_if_exists = 'brambit.conf'")) appendFileSync(conf, "\ninclude_if_exists = 'brambit.conf'\n");
   writeFileSync(path.join(pgdata, 'brambit.conf'), `listen_addresses = '127.0.0.1'\nport = ${port}\nunix_socket_directories = ''\n`);
-  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(dir, 'postgres.log'), 'start'], { stdio: 'ignore' });
+  execFileSync(exe('pg_ctl'), ['-D', pgdata, '-w', '-l', path.join(dir, 'postgres.log'), 'start'], { stdio: 'ignore', windowsHide: true });
   const stop = () => stopPostgres(bin, dir);
   const conn = { host: '127.0.0.1', port, user: DB_USER, password, database: 'postgres' };
   if (noPassword) {
