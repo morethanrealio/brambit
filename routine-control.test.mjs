@@ -1,5 +1,5 @@
-// Fronteira real do servidor e SQL real de rotinas em banco local isolado.
-// Um turno de modelo simula o bloqueio por reserva; controles não o alcançam.
+// Real server boundary and real routine SQL in an isolated local DB.
+// A model turn simulates the lock via reservation; controls don't reach it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -30,7 +30,7 @@ const {prepareEmailSearchChange} = await import('./web/email-search-config.mjs')
 const source = readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
 const dbSource = readFileSync(new URL('./web/db.mjs',import.meta.url),'utf8');
 const start = source.indexOf('async function runConversationInThread(');
-const end = source.indexOf('// Cooldown do turno de emergência',start);
+const end = source.indexOf('// Cooldown for the no-credit emergency turn',start);
 const extract = name => {
   const a = dbSource.indexOf(`export async function ${name}(`), b = dbSource.indexOf('\n}\n', a);
   assert.ok(a > 0 && b > a);
@@ -264,7 +264,7 @@ test('condição, horário ou comando composto sem aspas não autoriza uma pausa
   }
   assert.deepEqual(f.state.updates,[]);
   assert.equal(f.state.modelTurns,0);
-  // Aspas separam um título literal da linguagem condicional.
+  // Quotes separate a literal title from conditional language.
   assert.match((await f.turn('Pause a rotina "Diaria depois do resumo"')).text,/pausada/);
 });
 
@@ -329,7 +329,7 @@ test('frustração 25/09, inglês e espanhol: "turn off", "scheduled" antes do n
   const c = await es.add('Monitoreo vuelos Orlando');
   assert.match((await es.turn('apaga todos los monitoreos')).text,/Pausé estas rutinas/);
   assert.equal((await es.row(c)).enabled,false);assert.equal(es.state.modelTurns,0);
-  // Em português "apaga" é excluir: não vira pausa, segue pro modelo.
+  // In Portuguese "apaga" means delete: it doesn't become a pause, it goes to the model.
   const pt = await fixture(t,'pt-BR');
   const d = await pt.add('Monitoramento Orlando');
   await pt.turn('apaga todos os monitoramentos');

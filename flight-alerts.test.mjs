@@ -116,7 +116,7 @@ const vctx=vm.createContext({marca,Date:FakeDate,createHash,process:{env:{SERPAP
 });
 vm.runInContext(source+';globalThis.tools=voosTools;',vctx);
 const branchStart=server.indexOf("  if (kind === 'routine' && opts.flightMonitor");
-const branch=server.slice(branchStart,server.indexOf('  // Trava de confirmação: se uma ação de escrita',branchStart));
+const branch=server.slice(branchStart,server.indexOf('  // Confirmation guard: if a write action',branchStart));
 const bctx=vm.createContext({kind:'routine',opts:{flightMonitor:cfg(),routineId:'mock-routine',routineTimezone:tz},
  userId:'mock-user',agent:{id:'mock-agent'},thread:{id:'mock-thread',history:[],summary:''},message:'mock-prompt',userTz:tz,
  executeFlightMonitor,voosTools:vctx.tools,randomUUID:()=> 'mock-turn',previousFlightObservation:async()=>null,

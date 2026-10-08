@@ -44,7 +44,7 @@ const skipped=harness({skipped:true});ok((await skipped.tool.run({canal:'email',
 const template=harness({via:'template'});ok((await template.tool.run({canal:'whatsapp',mensagem:'Mock'})).includes('notificação'));eq(template.calls.filter(x=>x[0]==='append').length,1);
 // Registry pruning: only automatic-delivery routines, before constructing provider tools.
 const names=['enviar_mensagem','gmail_create_draft','gmail_send','hotmail_send','gmail_search','consultar_google','criar_lembrete','drive_upload'];
-const start=source.indexOf("  if (!noTools && kind === 'routine' && routineChannel && routineChannel !== 'none') {"),end=source.indexOf('  // Segunda camada do fix acima',start);
+const start=source.indexOf("  if (!noTools && kind === 'routine' && routineChannel && routineChannel !== 'none') {"),end=source.indexOf('  // Second layer of the fix above',start);
 assert.ok(start>0&&end>start);const prune=new Function('registry','kind','routineChannel','noTools','console',source.slice(start,end));
 for(const kind of ['routine','chat','whatsapp'])for(const ch of ['email','telegram','whatsapp','none',null])for(const noTools of [false,true]){
  const reg=new ToolRegistry();for(const name of names)reg.add({name,run:denied});prune(reg,kind,ch,noTools,{log:()=>{}});
@@ -66,7 +66,7 @@ for(const channel of ['whatsapp','telegram','email','none']){
 let step=0;const reg=new ToolRegistry().add({name:'consultar',parameters:{type:'object',properties:{}},run:async()=>'{"items":[],"partial":false}'});
 const routineCheck={completed:false,failed:false};const toolCounts={};
 const eventStart=source.indexOf("      if (ev?.type === 'tool_result') {",source.indexOf('  const interjecoes = [];'));
-const eventEnd=source.indexOf('      // Mensagem que o usuário',eventStart);
+const eventEnd=source.indexOf('      // Message the user sent mid-turn',eventStart);
 assert.ok(eventStart>0&&eventEnd>eventStart);const onEvent=new Function('ev','routineCheck','toolCounts',source.slice(eventStart,eventEnd));
 const result=await runAgent({provider:{name:'mock',complete:async()=>++step===1?{stop:'tool',toolCalls:[{id:'c',name:'consultar',args:{}}]}:{stop:'end',text:ROUTINE_NO_NEWS}},tools:reg,system:'Mock',history:[],userInput:'Só avisar se houver novidades',onEvent:ev=>onEvent(ev,routineCheck,toolCounts)});
 eq(step,2);eq(routineCheck,{completed:true,failed:false});

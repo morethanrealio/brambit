@@ -4,7 +4,7 @@ import {OnboardingError,id,publicState,starterPrompt,type State} from './store.m
 // Pure text-generation module; doesn't import server/DB/pollers.
 // @ts-expect-error runtime ESM legacy without declarations
 import {generateMessageDraft} from '../web/message-draft.mjs';
-const source=readFileSync('web/server.mjs','utf8');const a=source.indexOf('  // Estado persistente, recuperação e telemetria'),b=source.indexOf('  // Atualização automática dos boxes da home.',a);assert(a>0&&b>a);const handler=source.slice(a,b);
+const source=readFileSync('web/server.mjs','utf8');const a=source.indexOf('  // Persistent state, recovery and telemetry'),b=source.indexOf('  // Automatic refresh of the home boxes.',a);assert(a>0&&b>a);const handler=source.slice(a,b);
 const U='00000000-0000-4000-8000-000000000001',A='00000000-0000-4000-8000-000000000002';
 const state=():State=>({user_id:U,agent_id:A,step:'wow',status:'running',mode:'starter',attempt_id:'00000000-0000-4000-8000-000000000010',attempt_no:1,worker_id:null,started_at:null,result:null,error_code:null,viewed_at:null,skipped_at:null,completed_at:null});
 async function run({auth=true,body={agentId:A,mode:'starter',task:'plan',context:'Tenho uma entrega e duas reuniões amanhã.'} as Record<string,unknown>|null,path='/api/onboard',method='POST',credit=true,malformed=false,claim=true,google=[] as string[],msScope=undefined as string|null|undefined}={}){

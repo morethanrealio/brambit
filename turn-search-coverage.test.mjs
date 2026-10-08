@@ -30,7 +30,7 @@ for(const language of ['pt-BR','en','es','en-US','es-MX','fr',undefined]){
  eq(preserveSearchCoverageWarning(out,rewritten),rewritten);ok(preserveSearchCoverageWarning(out,out).startsWith(fallback));eq(preserveSearchCoverageWarning('texto comum','Novo texto'),'Novo texto');
  eq(turnSearchCoverage().hasPartial(),false);
 }
-// Consultas concluídas, inclusive vazias, não expõem filtros nem rodapé técnico.
+// Completed queries, including empty ones, do not expose filters or a technical footer.
 for(const returned of [0,3]) {
  const c=turnSearchCoverage();
  const rows=[{account:'work@example.invalid',tool:'gmail_search',query:'from:loja after:2026/09/01',status:'complete',returned}];
@@ -62,17 +62,17 @@ for(const language of ['pt-BR','en','es','en-US','es-MX','fr',undefined]) {
  eq(c.finish(out,language),out);eq(c.finishEmail(out,language),out);
  eq(findEmailCoverageWarnings(out),warnings);
  for(const warning of warnings)eq(out.split(warning).length,2);
- // O modelo não pode substituir aviso factual por garantia/ressalva genérica.
+ // The model must not replace a factual notice with a generic guarantee/caveat.
  const ignored=c.finish('Já verifiquei tudo. A resposta pode estar incompleta.',language);
  for(const warning of warnings)ok(ignored.includes(warning));
- // Menção livre ao diagnóstico e citação devem sobreviver ao processamento.
+ // Free mention of the diagnosis and citation must survive processing.
  const prose='Você perguntou sobre "Cobertura da busca".\n\n> '+warnings[0]+'\n\nIsso é uma citação.';
  const withQuote=c.finish(prose,language);ok(withQuote.includes(prose));eq(withQuote.split(warnings[0]).length,3);
  const wa=preserveSearchCoverageWarning(out,'O valor encontrado foi R$ 600.');
  ok(wa.startsWith(warnings[0]));ok(!wa.includes('\n'));for(const warning of warnings)eq(wa.split(warning).length,2);
  eq(preserveSearchCoverageWarning(out,wa),wa);
  const preserved=preserveSearchCoverageWarning(out,prose);ok(preserved.includes(prose));
- // Limites por conta coexistem com o aviso legado quando Drive/Slack falha.
+ // Per-account limits coexist with the legacy notice when Drive/Slack fails.
  c.observe(true,{nonEmailPartial:true});const mixed=c.finish(answer,language);
  const generic=turnSearchCoverage();generic.observe(true);const genericWarning=generic.finish('',language);
  ok(mixed.includes(genericWarning));for(const warning of warnings)ok(mixed.includes(warning));
@@ -80,8 +80,8 @@ for(const language of ['pt-BR','en','es','en-US','es-MX','fr',undefined]) {
  const mixedWA=preserveSearchCoverageWarning(mixed,'Resumo.');ok(mixedWA.startsWith(genericWarning));
  eq(preserveSearchCoverageWarning(mixed,mixedWA),mixedWA);
 }
-// A consulta pode terminar, mas parte do conteúdo não caber no handoff para o
-// redator. A limitação tardia permanece específica e sobrevive ao WhatsApp.
+// The query may finish, but part of the content may not fit in the handoff to the
+// writer. The late limitation stays specific and survives WhatsApp.
 for(const [language,phrase] of [
  ['pt-BR','parte do conteúdo das mensagens ficou fora da análise'],
  ['en','part of the message content was excluded from the analysis'],
@@ -100,17 +100,17 @@ for(const [language,phrase] of [
  const wa=preserveSearchCoverageWarning(final,'Resumo dos e-mails.');
  ok(wa.startsWith(warnings[0]));eq(wa.split(phrase).length,2);eq(preserveSearchCoverageWarning(final,wa),wa);
 }
-// Falha de acesso sem execução de tool é material e não vira consulta vazia.
+// Access failure without tool execution is material and doesn't become an empty query.
 {
  const c=turnSearchCoverage();c.observeAccountCoverage({account:'personal@example.invalid',status:'failed'});
  const out=c.finish('Resultado disponível na outra conta.');
  ok(out.includes('não consegui concluir o acesso'));ok(!out.includes('⚠️ Busca parcial:'));
  eq(c.finishEmail(out),out);
- // Um worker antigo parcial não perde aviso genérico só porque outro leu e-mail.
+ // An old partial worker doesn't lose the generic notice just because another one read e-mail.
  c.observe(true);const mixed=c.finish('Resultado disponível.');ok(mixed.includes(SEARCH_FALLBACK['pt-BR']));
 }
-// Anexos do mesmo e-mail têm cobertura própria: sucesso de um não limpa falha
-// de outro, e retorno só com note ou texto vazio não constitui leitura.
+// Attachments from the same e-mail have their own coverage: success of one doesn't clear the failure
+// of another, and a return with only a note or empty text doesn't constitute a read.
 for(const tool of ['gmail_read_attachment','hotmail_read_attachment']) {
  const c=emailQueryCoverage(),account='attachments@example.invalid';
  const results=[
@@ -176,8 +176,8 @@ for(const fn of ['runGoogleSubagent','runConnectorSubagent'])for(const toolName 
   if(emailOnly) {
    const bundle=JSON.parse(result.split('\n').find(line=>line.startsWith('{')));
    eq(bundle.consulta.partial,more);eq(bundle.consulta.status,'sucesso_com_resultados');
-   // Síntese inválida não elimina a fonte encontrada, inclusive Outlook sem
-   // conta explícita no caller (uma conexão autenticada por instância).
+   // Invalid synthesis doesn't eliminate the found source, including Outlook without
+   // an explicit account in the caller (one authenticated connection per instance).
    eq(bundle.consulta.observed_messages,1);eq(bundle.sources[0].id,'message');
    eq(bundle.conta,account || 'Outlook');eq(bundle.fallback_sources[0].fields[0].text,'Valor encontrado: R$ 600.');
   } else eq(result.includes('AVISO'),more);
@@ -185,7 +185,7 @@ for(const fn of ['runGoogleSubagent','runConnectorSubagent'])for(const toolName 
   const reg=new ToolRegistry().add({name:'consultar',parameters:{type:'object',properties:{}},run:async()=>result});let n=0;
   const final=await runAgent({provider:{name:'offline',complete:async()=>++n===1?{stop:'tool',toolCalls:[{id:'main',name:'consultar',args:{}}]}:{stop:'end',text:'Lista completa.'}},tools:reg,system:'mock',history:[],userInput:'mock'});
   const statement=source.match(/text = curationResult \? text : searchCoverage\.finish\(text, idiomaResposta, \{suppressEmptyEmailSources: routineNoNews\}\);/)[0];
-  const sync=source.slice(source.indexOf('  for (let i = messages.length - 1; i >= 0; i--) {',source.indexOf(statement)),source.indexOf('  // As imagens do turno NÃO ficam no history:'));
+  const sync=source.slice(source.indexOf('  for (let i = messages.length - 1; i >= 0; i--) {',source.indexOf(statement)),source.indexOf("  // The turn's images do NOT stay in the history:"));
   const finished=new Function('inventoryCalculation','text','messages','searchCoverage','idiomaResposta','curationResult','selo','const routineNoNews=false;'+statement+sync+'return {text,messages};')(createInventoryCalculationSession({enabled:false}),final.text,final.messages,coverage,'pt-BR',false,false);
   eq(findConnectorSearchLimitations(finished.text).length,more && !emailOnly ? 1 : 0);
   ok(!finished.text.includes('⚠️ Busca parcial:'));

@@ -18,10 +18,10 @@ import { createConfirmationStore } from './confirmation-store.mjs';
 import { prepareCurationChange } from './curation-config.mjs';
 import { prepareEmailSearchChange } from './email-search-config.mjs';
 import { createCurationStore } from './curation-store.mjs';
-// ── Memória persistente + contas (Postgres) ──
-// Guarda usuários, sessões, agentes, log bruto de mensagens e um PERFIL curto
-// que o agente vai montando sobre o usuário. Tudo no schema mtr_harness
-// (NUNCA tocar em public). Conexão via config (não URL) pra não escapar a senha.
+// ── Persistent memory + accounts (Postgres) ──
+// Stores users, sessions, agents, raw message log and a short PROFILE
+// that the agent builds up about the user. Everything in the mtr_harness schema
+// (NEVER touch public). Connection via config (not URL) so the password isn't escaped.
 import pg from 'pg';
 import { createHash } from 'node:crypto';
 import { encMaybe, decMaybe, encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
@@ -37,13 +37,13 @@ export const pgConfig = {
 };
 export const pool = new pg.Pool({ ...pgConfig, max: 4, idleTimeoutMillis: 30000 });
 
-// SEM ISSO O PROCESSO INTEIRO MORRE. O pg emite 'error' no POOL quando o Postgres
-// derruba uma conexão OCIOSA (a manutenção do banco manda `terminating connection
-// due to administrator command`), e um EventEmitter sem listener de 'error' vira
-// exceção não-tratada: o Node mata o processo e o systemd reinicia. Aconteceu 4x
-// entre 29/08 e 03/09, sempre ~03h SP, levando junto tudo que estava em voo (turno
-// de usuário, rotina, entrega). Aqui só registramos: o cliente quebrado já foi
-// descartado pelo próprio pool e a próxima query abre conexão nova.
+// WITHOUT THIS THE WHOLE PROCESS DIES. pg emits 'error' on the POOL when Postgres
+// drops an IDLE connection (database maintenance sends `terminating connection
+// due to administrator command`), and an EventEmitter with no 'error' listener becomes
+// an unhandled exception: Node kills the process and systemd restarts it. Happened 4x
+// between 2026-08-29 and 2026-09-03, always ~3am SP, taking down everything in flight (user
+// turn, routine, delivery). Here we just log it: the broken client was already
+// discarded by the pool itself and the next query opens a new connection.
 pool.on('error', (err) => {
   console.error('[db] conexão ociosa derrubada pelo Postgres (pool segue vivo):', err?.message ?? err);
 });
@@ -55,8 +55,8 @@ let checkoutCleanupTimer;
 export const discoveryStore = createDiscoveryStore(pool);
 export const taskMetrics = createTaskMetrics(pool);
 export const creditSpend = createCreditSpend(pool);
-// Acesso ao banco pro aviso de mudança na agenda (calendar-watch.mjs), que
-// recebe tokens e envio do server.
+// Database access for the calendar-change notice (calendar-watch.mjs), which
+// receives tokens and sending from the server.
 export const calendarWatchDb = { query: (...a) => pool.query(...a) };
 export const checklistStore = createChecklistStore(pool);
 export const waInbox = createWaInbox(pool,{seal:encryptSecret,open:decryptSecret,lookupRecipient:getWhatsAppLink});
@@ -67,8 +67,8 @@ export const S = 'mtr_harness';
 // What billing does on join and on creation a plugin wires in later
 // (through empresaStore.ligar).
 export const empresaStore = createEmpresaStore(pool, { S });
-// Porta da conta pagadora (conta-pagadora.mjs): quem paga o consumo gravado aqui.
-// Sem ela nada grava consumo (o boot liga com configurarContaPagadora).
+// Payer-account port (conta-pagadora.mjs): who pays for the consumption recorded here.
+// Without it nothing records consumption (boot wires it up with configurarContaPagadora).
 let contaPagadora = null;
 export function configurarContaPagadora(c) { contaPagadora = conferirContaPagadora(c); }
 const transacaoPagadora = (...a) => {
@@ -87,10 +87,10 @@ export const reminderDeliveryTracking = claim => reminderExecutionStore.delivery
 export const recordReminderDeliveryStatus = status => reminderExecutionStore.recordDeliveryStatus(status);
 export const getReminderDeliveryMetrics = () => reminderExecutionStore.metrics();
 export const listReminderOccurrences = (userId, reminderId, options) => reminderExecutionStore.listOccurrences(userId, reminderId, options);
-export const curationStore = createCurationStore(pool); // opt-in; sem init/migração automática
+export const curationStore = createCurationStore(pool); // opt-in; no automatic init/migration
 
-// Remove surrogates UTF-16 soltos (emoji cortado no meio) e NUL antes de gravar.
-// jsonb e colunas text do Postgres rejeitam a linha inteira se isso aparecer.
+// Removes stray UTF-16 surrogates (emoji cut in half) and NUL before saving.
+// Postgres jsonb and text columns reject the whole row if this shows up.
 const _RPL = String.fromCharCode(0xFFFD), _NUL = String.fromCharCode(0);
 export function clean(s) {
   if (typeof s !== 'string') return s;
@@ -1693,17 +1693,17 @@ export async function initDb(...esquemas) {
     CREATE INDEX IF NOT EXISTS flight_prices_route_idx
       ON ${S}.flight_prices(origin, destination, depart_date, captured_at DESC);
   `);
-  await empresaStore.init(); // antes do esquema da distribuição, que põe nela a cobrança (C2, passo 5b)
+  await empresaStore.init(); // before the distribution schema, which puts billing in it (C2, step 5b)
   for (const esquema of esquemas) await esquema({ pool, S });
   await checklistStore.init();
-  // Conta empresarial F1: quem PAGOU cada linha. user_id segue sendo quem usou;
-  // org_id é carimbado na gravação quando a pessoa é membro (NULL = pagou do
-  // próprio bolso). Fica aqui, e não no bloco do usage_events, porque depende da
-  // tabela orgs criada acima. grant_moved_at marca o pacote pessoal que foi
-  // levado pra empresa quando a pessoa entrou (o saldo passou a valer lá).
-  // grant_expires_at = validade própria de um crédito (sobra do plano de quem
-  // cria a empresa, 30 dias; org-billing.mjs). NULL = a regra geral de
-  // EXTRA_TTL_DAYS a partir do ts.
+  // Business account F1: who PAID for each line. user_id is still who used it;
+  // org_id is stamped at write time when the person is a member (NULL = paid from
+  // their own pocket). Lives here, not in the usage_events block, because it depends on the
+  // orgs table created above. grant_moved_at marks the personal package that was
+  // moved to the business when the person joined (the balance started counting there).
+  // grant_expires_at = a credit's own validity (leftover from the plan of whoever
+  // creates the business, 30 days; org-billing.mjs). NULL = the general rule of
+  // EXTRA_TTL_DAYS from ts.
   await pool.query(`
     ALTER TABLE ${S}.usage_events ADD COLUMN IF NOT EXISTS org_id uuid REFERENCES ${S}.orgs(id) ON DELETE SET NULL;
     ALTER TABLE ${S}.usage_events ADD COLUMN IF NOT EXISTS grant_moved_at timestamptz;
@@ -1718,9 +1718,9 @@ export async function initDb(...esquemas) {
   checkoutCleanupTimer ||= setInterval(()=>checkoutRecoveryStore.purgeExpired().catch(()=>console.error('[checkout-recovery] cleanup failed')),60*60_000).unref();
 }
 
-// ── Push tokens (app mobile) ──
-// Registra/atualiza o token de push de um aparelho pro usuário. Idempotente:
-// o mesmo token reatribui pro dono atual (aparelho trocou de conta).
+// ── Push tokens (mobile app) ──
+// Registers/updates a device's push token for the user. Idempotent:
+// the same token reassigns to the current owner (device changed accounts).
 export async function registerPushTokenDb(userId, token, platform) {
   await pool.query(
     `INSERT INTO ${S}.push_tokens (token, user_id, platform, updated_at)
@@ -1731,20 +1731,20 @@ export async function registerPushTokenDb(userId, token, platform) {
   return { ok: true };
 }
 
-// Remove um token específico (logout naquele aparelho).
+// Removes a specific token (logout on that device).
 export async function unregisterPushTokenDb(token) {
   await pool.query(`DELETE FROM ${S}.push_tokens WHERE token = $1`, [token]);
   return { ok: true };
 }
 
-// Tokens de push de um usuário (todos os aparelhos dele).
+// A user's push tokens (all their devices).
 export async function listPushTokensForUserDb(userId) {
   const { rows } = await pool.query(
     `SELECT token, platform FROM ${S}.push_tokens WHERE user_id = $1`, [userId]);
   return rows;
 }
 
-// Poda tokens inválidos (o Expo devolve DeviceNotRegistered pra token morto).
+// Prunes invalid tokens (Expo returns DeviceNotRegistered for a dead token).
 export async function removePushTokensDb(tokens) {
   if (!tokens || !tokens.length) return { ok: true, removed: 0 };
   const { rowCount } = await pool.query(
@@ -1752,10 +1752,10 @@ export async function removePushTokensDb(tokens) {
   return { ok: true, removed: rowCount };
 }
 
-// ── Telemetria de erros do App Mobile ──
-// Insere um erro reportado pelo app. `fingerprint` já vem calculado pelo chamador
-// (server.mjs). Trunca campos grandes por segurança (teto de tamanho é imposto
-// também na rota). Devolve o id gravado.
+// ── Mobile App error telemetry ──
+// Inserts an error reported by the app. `fingerprint` already comes computed by the caller
+// (server.mjs). Truncates large fields for safety (the size cap is also enforced
+// on the route). Returns the saved id.
 export async function insertMobileError(e) {
   const clip = (s, n) => (s == null ? '' : String(s)).slice(0, n);
   const r = await pool.query(
@@ -1781,9 +1781,9 @@ export async function insertMobileError(e) {
   return r.rows[0]?.id;
 }
 
-// Lista os erros AGRUPADOS por fingerprint (o que o admin vê no /metrics):
-// cada grupo com contagem, primeira/última ocorrência, builds e usuários afetados
-// e uma amostra (nome/mensagem). Filtra por janela de dias (padrão 30).
+// Lists errors GROUPED by fingerprint (what the admin sees on /metrics):
+// each group with count, first/last occurrence, builds and affected users,
+// and a sample (name/message). Filters by a day window (default 30).
 export async function listMobileErrorGroups({ days = 30, limit = 200 } = {}) {
   const d = Math.min(Math.max(1, Number(days) || 30), 365);
   const n = Math.min(Math.max(1, Number(limit) || 200), 500);
@@ -1810,8 +1810,8 @@ export async function listMobileErrorGroups({ days = 30, limit = 200 } = {}) {
   return r.rows;
 }
 
-// Amostras (as ocorrências mais recentes) de um fingerprint, com o stack completo,
-// pro admin abrir o detalhe de um erro específico.
+// Samples (the most recent occurrences) of a fingerprint, with the full stack,
+// so the admin can open the detail of a specific error.
 export async function listMobileErrorSamples(fingerprint, limit = 20) {
   const n = Math.min(Math.max(1, Number(limit) || 20), 50);
   const r = await pool.query(
@@ -1845,8 +1845,8 @@ export async function bumpToolCalls(counts) {
   );
 }
 
-// Grava uma entrada na trilha de auditoria de acesso a dado sensivel (leitura de
-// Gmail/Drive/Docs/Calendar). Fire-and-forget: erro so loga, nunca quebra o turno.
+// Writes an entry in the audit trail for sensitive data access (reading
+// Gmail/Drive/Docs/Calendar). Fire-and-forget: error only logs, never breaks the turn.
 export async function logSensitiveAccess({ userId, tool, resource = null, detail = null }) {
   if (!userId || !tool) return;
   try {
@@ -1872,8 +1872,8 @@ export async function recordToolCatalog(names) {
   );
 }
 
-// Estatisticas por tool: total, ultimos 7d, hoje e ultima data de uso. LEFT JOIN
-// no catalogo (uniao com nomes ja chamados) pra incluir tools com 0 chamada.
+// Per-tool statistics: total, last 7d, today and last-used date. LEFT JOIN
+// on the catalog (union with already-called names) to include tools with 0 calls.
 export async function getToolCallStats() {
   const { rows } = await pool.query(
     `WITH names AS (
@@ -1894,9 +1894,9 @@ export async function getToolCallStats() {
   return rows;
 }
 
-// ── Config do sistema (planos, precos, hosting) editavel pelo painel admin ──
-// Chave-valor JSON. Uma linha por chave (ex.: 'pricing'). Aplicado em processo
-// no boot e a cada gravacao, entao muda pra todo mundo no sistema.
+// ── System config (plans, pricing, hosting) editable from the admin panel ──
+// JSON key-value. One row per key (e.g.: 'pricing'). Applied in-process
+// at boot and on every write, so it changes for everyone in the system.
 
 export async function getConfig(key) {
   const { rows } = await pool.query(
@@ -1914,7 +1914,7 @@ export async function setConfig(key, value) {
   );
 }
 
-// ── Projetos (dev mode / tier avançado) ──
+// ── Projects (dev mode / advanced tier) ──
 const PROJECT_DEPLOY_TYPES = ['own_ssh', 'dedicated'];
 
 function projectRow(r) {
@@ -2001,10 +2001,10 @@ export async function getActiveProjectForAgent(agentId) {
   return projectRow(rows[0]);
 }
 
-// ── Freios de fundamentação ──
+// ── Grounding guards ──
 
-// Grava os achados de UM turno. Nunca derruba o turno: registrar é observação,
-// não parte da resposta, então falha de banco só vira log.
+// Saves the findings of ONE turn. Never breaks the turn: recording is an observation,
+// not part of the response, so a database failure just becomes a log.
 export async function logGroundingBrakes(findings, {
   userId = null, agentId = null, threadId = null, origem = 'chat',
   desfecho = 'corrigido', ferramentas = null,
@@ -2049,15 +2049,15 @@ export async function listGroundingBrakes({ kind = null, desfecho = null, dias =
   return rows;
 }
 
-// ── Mini-PaaS: subdomínio do usuário + registro de apps ──
+// ── Mini-PaaS: user subdomain + app registry ──
 
 function _slug(s) {
   return (s || '').toString().normalize('NFKD').replace(/\p{M}/gu, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'user';
 }
 
-// Garante que o usuário tenha um subdomínio (label) único e devolve {label,name}.
-// Gera a partir do nome (ou e-mail) na 1ª vez; sufixa número se colidir.
+// Ensures the user has a unique subdomain (label) and returns {label,name}.
+// Generates it from the name (or email) the 1st time; suffixes a number on collision.
 export async function ensureUserSubdomain(userId) {
   const { rows: ur } = await pool.query(
     `SELECT name, email, subdomain FROM ${S}.users WHERE id = $1`, [userId]);
@@ -2130,10 +2130,10 @@ export async function listAppsForUser(userId) {
   return rows;
 }
 
-// ── Painel de moderação de apps (/metrics) ──
-// TODOS os apps, de todos os donos, com o rótulo de risco já calculado. É rota
-// de admin: nunca exponha isso pra usuário. Não traz o fonte (blob grande), só
-// se ele existe e de quando é.
+// ── App moderation panel (/metrics) ──
+// ALL apps, from all owners, with the risk label already computed. This is an
+// admin route: never expose it to the user. Doesn't bring the source (large blob), only
+// whether it exists and when it's from.
 export async function listAppsForModeration() {
   const { rows } = await pool.query(
     `SELECT a.id, a.user_id, u.name AS owner_name, u.email AS owner_email,
@@ -2149,7 +2149,7 @@ export async function listAppsForModeration() {
   return rows;
 }
 
-// Fonte de UM app pra classificar (por id, não por dono: quem chama é o admin).
+// Source of ONE app to classify (by id, not by owner: the caller is the admin).
 export async function getAppSourceById(appId) {
   const { rows } = await pool.query(
     `SELECT id, label, system, runtime, description, snapshot_at, source_snapshot
@@ -2157,7 +2157,7 @@ export async function getAppSourceById(appId) {
   return rows[0] || null;
 }
 
-// Grava o rótulo. `signals` vai como jsonb (sinais determinísticos + domínios).
+// Saves the label. `signals` goes as jsonb (deterministic signals + domains).
 export async function setAppRisk(appId, { label, summary, reason, signals, snapshotAt } = {}) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.apps
@@ -2170,10 +2170,10 @@ export async function setAppRisk(appId, { label, summary, reason, signals, snaps
   return rowCount;
 }
 
-// ── Snapshot de código do app (Fase 2: dado não viaja) ──
-// Guarda SÓ o fonte enviado no publish (já comprimido pelo chamador). É a base
-// pra replicar um app público. O dado de runtime (SQLite/uploads em /app/data)
-// nunca é enviado, então nunca entra no snapshot nem viaja.
+// ── App code snapshot (Phase 2: data doesn't travel) ──
+// Stores ONLY the source sent on publish (already compressed by the caller). It's the base
+// to replicate a public app. Runtime data (SQLite/uploads in /app/data)
+// is never sent, so it never enters the snapshot or travels.
 export async function setAppSnapshot(userId, system, snapshot) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.apps SET source_snapshot = $3, snapshot_at = now()
@@ -2191,10 +2191,10 @@ export async function getAppSnapshot(userId, system) {
   return rows[0] || null;
 }
 
-// ── Rascunho de arquivos do app (staging pré-publish) ──
-// O agente monta o app arquivo a arquivo aqui; publicar_sistema lê o rascunho e o
-// aplica. Guarda só o FONTE em base64 (mesmo formato do map de publish). Dado de
-// runtime nunca entra. Chave (user_id, system, caminho) = por dono do app.
+// ── App file draft (pre-publish staging) ──
+// The agent assembles the app file by file here; publicar_sistema reads the draft and
+// applies it. Stores only the SOURCE in base64 (same format as the publish map). Runtime
+// data never enters. Key (user_id, system, path) = per app owner.
 export async function putAppDraftFile(userId, system, caminho, conteudoB64) {
   await pool.query(
     `INSERT INTO ${S}.app_drafts (user_id, system, caminho, conteudo)
@@ -2227,9 +2227,9 @@ export async function clearAppDraft(userId, system) {
     [userId, system]);
 }
 
-// Rascunhos abertos do usuário, do mais recente pro mais antigo. Rascunho é
-// exatamente "app em construção", então é a pista mais confiável de qual app está
-// sendo mexido quando o assistente não repete o nome do sistema na chamada.
+// The user's open drafts, most recent to oldest. A draft is
+// exactly "app under construction", so it's the most reliable clue to which app is
+// being worked on when the assistant doesn't repeat the system name in the call.
 export async function listAppDraftSystems(userId) {
   const { rows } = await pool.query(
     `SELECT system FROM ${S}.app_drafts WHERE user_id = $1
@@ -2237,7 +2237,7 @@ export async function listAppDraftSystems(userId) {
   return rows.map((r) => r.system);
 }
 
-// ── Visibilidade público/privado + descoberta + replicação (Fase 3) ──
+// ── Public/private visibility + discovery + replication (Phase 3) ──
 export async function setAppVisibility(userId, system, visibility, description) {
   const vis = visibility === 'public' ? 'public' : 'private';
   const { rowCount } = await pool.query(
@@ -2249,11 +2249,11 @@ export async function setAppVisibility(userId, system, visibility, description) 
   return rowCount;
 }
 
-// ── Acesso de rede: usuário/senha da URL pública (gate no roteador) ──
-// Independente de visibility (biblioteca). access: 'private' | 'public' | null.
-// null = app antigo, publicado antes do gate existir: tratado como aberto pra
-// não quebrar link já distribuído (ver DDL). Devolve a senha em CLARO — só
-// chame de contexto que já resolveu a posse do app.
+// ── Network access: username/password for the public URL (router gate) ──
+// Independent of visibility (library). access: 'private' | 'public' | null.
+// null = old app, published before the gate existed: treated as open so it doesn't
+// break an already-distributed link (see DDL). Returns the password in PLAIN TEXT — only
+// call from a context that already resolved ownership of the app.
 export async function getAppAccess(userId, system) {
   const { rows } = await pool.query(
     `SELECT access, access_user, access_pass_enc FROM ${S}.apps
@@ -2265,8 +2265,8 @@ export async function getAppAccess(userId, system) {
   return { access: r.access || null, user: r.access_user || null, pass };
 }
 
-// Grava acesso. Passar pass=null mantém a senha atual (não apaga sem querer);
-// pra tirar credencial de vez, mande access:'public'.
+// Saves access. Passing pass=null keeps the current password (doesn't accidentally erase it);
+// to remove the credential for good, send access:'public'.
 export async function setAppAccess(userId, system, { access, user, pass } = {}) {
   const acc = access === 'public' ? 'public' : 'private';
   const { rowCount } = await pool.query(
@@ -2280,8 +2280,8 @@ export async function setAppAccess(userId, system, { access, user, pass } = {}) 
   return rowCount;
 }
 
-// Busca apps PÚBLICOS replicáveis (têm snapshot de código). q casa em
-// system/description/label. Não devolve o snapshot (só metadados p/ descoberta).
+// Searches replicable PUBLIC apps (have a code snapshot). q matches
+// system/description/label. Doesn't return the snapshot (only metadata for discovery).
 export async function listPublicApps({ q, limit = 30 } = {}) {
   const vals = [];
   const where = [`a.visibility = 'public'`, `a.source_snapshot IS NOT NULL`];
@@ -2303,8 +2303,8 @@ export async function listPublicApps({ q, limit = 30 } = {}) {
   return rows;
 }
 
-// Pega um app público por label+system, COM o snapshot de código (p/ replicar).
-// Só retorna se for público e tiver snapshot; senão null.
+// Gets a public app by label+system, WITH the code snapshot (to replicate).
+// Only returns if it's public and has a snapshot; otherwise null.
 export async function getPublicApp(label, system) {
   const { rows } = await pool.query(
     `SELECT label, system, runtime, description, source_snapshot
@@ -2316,9 +2316,9 @@ export async function getPublicApp(label, system) {
   return rows[0] || null;
 }
 
-// ── Cofre de segredos por app (env injetado no boot do container) ──
-// Chave = nome de variável de ambiente (MAIÚSCULAS/dígito/_). Valor cifrado no
-// banco; só é decifrado em memória na hora de injetar no container.
+// ── Per-app secrets vault (env injected at container boot) ──
+// Key = environment variable name (UPPERCASE/digit/_). Value encrypted in the
+// database; only decrypted in memory at the moment of injecting into the container.
 export const RE_ENV_KEY = /^[A-Z_][A-Z0-9_]*$/;
 
 export async function setAppSecret(userId, system, key, value) {
@@ -2358,7 +2358,7 @@ export async function deleteAppSecret(userId, system, key) {
   return rowCount;
 }
 
-// Devolve {CHAVE: valor_em_texto} pra injetar como env. Pula segredo corrompido.
+// Returns {KEY: text_value} to inject as env. Skips a corrupted secret.
 export async function getAppSecretsDecrypted(userId, system) {
   const { rows } = await pool.query(
     `SELECT key, value_enc FROM ${S}.app_secrets WHERE user_id = $1 AND system = $2`,
@@ -2371,25 +2371,25 @@ export async function getAppSecretsDecrypted(userId, system) {
   return out;
 }
 
-// ── Colaboração Modo B (instância única compartilhada) ──
-// Um dono libera um app SEU pra um colaborador CONECTADO mexer na MESMA
-// instância (mesmo código, mesmo /app/data, mesmo container). O colaborador
-// NÃO ganha app próprio; entra pelo roster app_collab. GATE: só entra quem tem
-// agent_connection ACEITA com o dono (checado no convidar). Billing por dono.
+// ── Mode B collaboration (single shared instance) ──
+// An owner lets a CONNECTED collaborator work on THEIR OWN app in the SAME
+// instance (same code, same /app/data, same container). The collaborator
+// does NOT get their own app; they're added via the app_collab roster. GATE: only whoever has
+// an ACCEPTED agent_connection with the owner can enter (checked at invite time). Billing by owner.
 
-// Resolve, a partir de MIM e do e-mail/nome de um contato, o USUÁRIO conectado
-// (conexão ACEITA). Diferente de resolveContactTarget: não exige inbound agent,
-// só a identidade do outro lado (pra virar dono ou colaborador de um app).
-// Devolve { ok, userId, name, email } ou { error }.
+// Resolves, from ME and a contact's email/name, the connected USER
+// (ACCEPTED connection). Different from resolveContactTarget: doesn't require an inbound agent,
+// just the identity of the other side (to become owner or collaborator of an app).
+// Returns { ok, userId, name, email } or { error }.
 export async function resolveConnectedUser(fromUserId, contactQuery) {
   const q = String(contactQuery || '').trim().toLowerCase();
   if (!q) return { error: 'contato_vazio' };
   const contacts = await listContacts(fromUserId);
   const accepted = contacts.filter((c) => c.status === 'accepted');
-  // Mesma regra do resolveContactTarget: e-mail exato, senão nome exato, senão
-  // nome que contém. Se a etapa casa com mais de uma pessoa, NÃO escolhe a
-  // primeira: devolve ambíguo. Aqui o preço de errar é alto, porque é este
-  // resolvedor que dá acesso de edição a um app e entrada num Space.
+  // Same rule as resolveContactTarget: exact email, otherwise exact name, otherwise
+  // name that contains it. If the step matches more than one person, it does NOT pick the
+  // first one: it returns ambiguous. Here the cost of a mistake is high, because this
+  // resolver is what grants edit access to an app and entry into a Space.
   const byEmail = accepted.filter((c) => (c.personEmail || '').toLowerCase() === q);
   const byName = accepted.filter((c) => (c.personName || '').toLowerCase() === q);
   const byPart = accepted.filter((c) => (c.personName || '').toLowerCase().includes(q));
@@ -2405,9 +2405,9 @@ export async function resolveConnectedUser(fromUserId, contactQuery) {
   return { ok: true, userId: hit.personUserId, name: hit.personName, email: hit.personEmail };
 }
 
-// Frase única do caso ambíguo. Fica junto do resolvedor porque toda tool que
-// resolve contato precisa dizer a MESMA coisa: quem casou e que só o dono
-// desempata. Sem ela cada chamador imprimia o código do erro pro modelo.
+// Single phrasing for the ambiguous case. Lives next to the resolver because every tool that
+// resolves a contact needs to say the SAME thing: who matched and that only the owner
+// can break the tie. Without it, each caller printed the error code to the model.
 export function contatoAmbiguoMsg(contato, opcoes = []) {
   const lista = (opcoes || []).map((o) => (o.email ? o.nome + ' (' + o.email + ')' : o.nome)).join(', ');
   return '"' + contato + '" casa com mais de um contato seu: ' + lista
@@ -2442,7 +2442,7 @@ export async function removeAppCollaborator(ownerUserId, system, collabUserId) {
   return rowCount;
 }
 
-// Verdadeiro se collabUserId está no roster do app (owner_user_id, system).
+// True if collabUserId is in the app's roster (owner_user_id, system).
 export async function isAppCollaborator(ownerUserId, system, collabUserId) {
   const { rows } = await pool.query(
     `SELECT 1 FROM ${S}.app_collab
@@ -2452,7 +2452,7 @@ export async function isAppCollaborator(ownerUserId, system, collabUserId) {
   return rows.length > 0;
 }
 
-// Lista os colaboradores de um app do dono (com nome/e-mail).
+// Lists an owner's app collaborators (with name/email).
 export async function listAppCollaborators(ownerUserId, system) {
   const { rows } = await pool.query(
     `SELECT c.collab_user_id, c.created_at, u.name, u.email
@@ -2467,8 +2467,8 @@ export async function listAppCollaborators(ownerUserId, system) {
   }));
 }
 
-// Apps de OUTROS donos que este usuário pode operar como colaborador (com o
-// dono da instância pra endereçar/resolver). Join com apps p/ trazer label/url.
+// Apps from OTHER owners that this user can operate as a collaborator (with the
+// instance owner to address/resolve). Joins with apps to bring label/url.
 export async function listSharedAppsForCollaborator(collabUserId) {
   const { rows } = await pool.query(
     `SELECT c.owner_user_id, c.system, a.label, a.runtime, a.status, a.url,
@@ -2486,9 +2486,9 @@ export async function listSharedAppsForCollaborator(collabUserId) {
   }));
 }
 
-// ── Espaços: assunto vivo compartilhado, sem app/runtime ──
-// spaces = definição (about) + roster (space_members) + dado vivo (space_entries).
-// Gate de compartilhamento = agent_connection ACEITA (checado no convidar).
+// ── Spaces: shared living subject, no app/runtime ──
+// spaces = definition (about) + roster (space_members) + live data (space_entries).
+// Sharing gate = ACCEPTED agent_connection (checked at invite time).
 
 function slugifySpace(name) {
   return String(name || '')
@@ -2496,7 +2496,7 @@ function slugifySpace(name) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'espaco';
 }
 
-// Cria um espaço do dono e o insere como membro. Idempotente por (owner, slug).
+// Creates an owner's space and inserts them as a member. Idempotent by (owner, slug).
 export async function createSpace(ownerUserId, { nome, sobre }, agentId) {
   const title = String(nome || '').trim();
   if (!title) return { error: 'nome_vazio' };
@@ -2519,7 +2519,7 @@ export async function createSpace(ownerUserId, { nome, sobre }, agentId) {
   return { ok: true, id, slug, title };
 }
 
-// Todos os espaços que o usuário vê (dono OU membro), com contagem de entradas.
+// All spaces the user sees (owner OR member), with entry count.
 export async function listSpacesForUser(userId) {
   const { rows } = await pool.query(
     `SELECT s.id, s.slug, s.title, s.about, s.owner_user_id, s.updated_at, s.share_mode,
@@ -2548,9 +2548,9 @@ export async function isSpaceMember(spaceId, userId) {
   return !!rows[0];
 }
 
-// Resolve um espaço pelo NOME/slug a partir do caller. `dono` opcional (nome/email
-// de um contato conectado) desambigua quando o espaço é de outra pessoa. Espelha
-// resolveApp. Devolve { ok, space } | { error }.
+// Resolves a space by NAME/slug from the caller. Optional `dono` (name/email
+// of a connected contact) disambiguates when the space belongs to another person. Mirrors
+// resolveApp. Returns { ok, space } | { error }.
 export async function resolveSpace(callerUserId, query, dono) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return { error: 'espaco_vazio' };
@@ -2569,7 +2569,7 @@ export async function resolveSpace(callerUserId, query, dono) {
   return { ok: true, space: cands[0] };
 }
 
-// Define o modo de compartilhamento do espaço ('auto' | 'manual'). Só o dono.
+// Sets the space's sharing mode ('auto' | 'manual'). Owner only.
 export async function setSpaceMode(spaceId, ownerUserId, mode) {
   const m = mode === 'manual' ? 'manual' : 'auto';
   const { rowCount } = await pool.query(
@@ -2581,7 +2581,7 @@ export async function setSpaceMode(spaceId, ownerUserId, mode) {
   return { ok: true, mode: m };
 }
 
-// Adiciona um membro ao espaço (idempotente). Toca updated_at do espaço.
+// Adds a member to the space (idempotent). Touches the space's updated_at.
 export async function addSpaceMember(spaceId, userId, agentId) {
   await pool.query(
     `INSERT INTO ${S}.space_members (space_id, user_id, added_by_agent)
@@ -2611,7 +2611,7 @@ export async function listSpaceMembers(spaceId) {
   return rows.map((r) => ({ userId: r.user_id, name: r.name, email: r.email, isOwner: r.is_owner }));
 }
 
-// Grava uma nota no dado vivo do espaço. Toca updated_at do espaço.
+// Saves a note in the space's live data. Touches the space's updated_at.
 export async function addSpaceEntry(spaceId, authorUserId, agentId, { body, tag }) {
   const text = String(body || '').trim();
   if (!text) return { error: 'nota_vazia' };
@@ -2624,7 +2624,7 @@ export async function addSpaceEntry(spaceId, authorUserId, agentId, { body, tag 
   return { ok: true, id: rows[0].id };
 }
 
-// Últimas N entradas do espaço (com autor). Ordem: mais recentes primeiro.
+// Last N entries of the space (with author). Order: most recent first.
 export async function listSpaceEntries(spaceId, limit = 50) {
   const { rows } = await pool.query(
     `SELECT e.id, e.body, e.tag, e.created_at, u.name AS author_name
@@ -2645,7 +2645,7 @@ export async function deleteSpaceEntry(spaceId, entryId) {
   return rowCount;
 }
 
-// Uma entrada específica (pra checar autoria antes de editar/apagar).
+// A specific entry (to check authorship before editing/deleting).
 export async function getSpaceEntry(entryId, spaceId) {
   const { rows } = await pool.query(
     `SELECT id, space_id, author_user_id, body, tag FROM ${S}.space_entries
@@ -2659,7 +2659,7 @@ export async function getSpaceEntry(entryId, spaceId) {
   };
 }
 
-// Edita corpo e/ou tag de uma entrada. Só os campos passados mudam.
+// Edits the body and/or tag of an entry. Only the fields passed in change.
 export async function updateSpaceEntry(entryId, spaceId, { body, tag }) {
   const sets = []; const vals = []; let i = 1;
   if (body != null) { sets.push(`body = $${i}`); vals.push(String(body).trim()); i += 1; }
@@ -2674,10 +2674,10 @@ export async function updateSpaceEntry(entryId, spaceId, { body, tag }) {
   return rowCount ? { ok: true } : { error: 'nao_encontrada' };
 }
 
-// ── Trackers: registro estruturado de eventos datados/contáveis ──────────────
-// Um tracker = uma série nomeada (açúcar, treino, peso, gasto). tracker_events é
-// APPEND-ONLY: registrar = INSERT de 1 linha, nunca reescreve. Contagem é sempre
-// SQL, nunca no modelo. Escopo por usuário. Ver projetos/tracker-primitiva.md.
+// ── Trackers: structured record of dated/countable events ──────────────
+// A tracker = a named series (sugar, workout, weight, spending). tracker_events is
+// APPEND-ONLY: recording = INSERT of 1 row, never rewrites. Counting is always
+// SQL, never the model. Scoped per user. See projetos/tracker-primitiva.md.
 
 function slugifyTracker(name) {
   return String(name || '')
@@ -2685,8 +2685,8 @@ function slugifyTracker(name) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'tracker';
 }
 
-// Acha um tracker do usuário por nome/slug. Devolve { ok, tracker } | { error }.
-// error: nao_encontrado | ambiguo (com options).
+// Finds a user's tracker by name/slug. Returns { ok, tracker } | { error }.
+// error: nao_encontrado | ambiguo (with options).
 export async function resolveTracker(userId, name) {
   const q = String(name || '').trim().toLowerCase();
   if (!q) return { error: 'nome_vazio' };
@@ -2699,8 +2699,8 @@ export async function resolveTracker(userId, name) {
   return { ok: true, tracker: cands[0] };
 }
 
-// Acha OU cria o tracker (auto-criação no primeiro registro). Idempotente por
-// (owner, slug). Devolve { tracker, created }.
+// Finds OR creates the tracker (auto-creation on first record). Idempotent by
+// (owner, slug). Returns { tracker, created }.
 export async function resolveOrCreateTracker(userId, name, agentId, { kind, unit } = {}) {
   const found = await resolveTracker(userId, name);
   if (found.ok) return { tracker: found.tracker, created: false };
@@ -2723,7 +2723,7 @@ export async function resolveOrCreateTracker(userId, name, agentId, { kind, unit
   };
 }
 
-// Lista os trackers ativos do usuário, com contagem e data do último evento.
+// Lists the user's active trackers, with count and date of the last event.
 export async function listTrackers(userId) {
   const { rows } = await pool.query(
     `SELECT t.id, t.slug, t.title, t.kind, t.unit, t.enabled,
@@ -2754,10 +2754,10 @@ export async function addTrackerEvent(trackerId, userId, agentId, { eventDate, v
   return { ok: true, id: rows[0].id, eventDate: rows[0].event_date, value: Number(rows[0].value) };
 }
 
-// Agrega os eventos de um tracker no intervalo [de, ate] (ISO, opcionais). A
-// contagem SEMPRE sai daqui, nunca do modelo. `dias` = datas DISTINTAS com valor
-// > 0 (ex: "quantos DIAS comeu açúcar"); `eventos` = nº de linhas; `soma` = total
-// do valor (ex: gasto). Devolve os três, o modelo escolhe o que faz sentido.
+// Aggregates a tracker's events in the [de, ate] interval (ISO, optional). The
+// count ALWAYS comes from here, never from the model. `dias` = DISTINCT dates with value
+// > 0 (e.g.: "how many DAYS had sugar"); `eventos` = number of rows; `soma` = total
+// of the value (e.g.: spending). Returns all three, the model picks whichever makes sense.
 export async function aggregateTrackerEvents(trackerId, { de, ate } = {}) {
   const vals = [trackerId]; const where = [`tracker_id = $1`];
   if (de) { vals.push(de); where.push(`event_date >= $${vals.length}`); }
@@ -2773,7 +2773,7 @@ export async function aggregateTrackerEvents(trackerId, { de, ate } = {}) {
   return { dias: Number(r.dias || 0), eventos: Number(r.eventos || 0), soma: Number(r.soma || 0) };
 }
 
-// Detalhe por dia no intervalo (pra "quais dias" / conferência). Mais recentes 1º.
+// Per-day detail in the interval (for "which days" / verification). Most recent 1st.
 export async function listTrackerEventsByDay(trackerId, { de, ate } = {}, limit = 60) {
   const vals = [trackerId]; const where = [`tracker_id = $1`];
   if (de) { vals.push(de); where.push(`event_date >= $${vals.length}`); }
@@ -2791,8 +2791,8 @@ export async function listTrackerEventsByDay(trackerId, { de, ate } = {}, limit 
   }));
 }
 
-// Remove eventos de um tracker: por id específico OU por data (todos do dia).
-// Append-only não impede correção pontual; só não reescreve o resto.
+// Removes events from a tracker: by specific id OR by date (all of that day).
+// Append-only doesn't prevent a one-off correction; it just doesn't rewrite the rest.
 export async function removeTrackerEvent(trackerId, { id, eventDate } = {}) {
   if (id) {
     const { rowCount } = await pool.query(
@@ -2809,7 +2809,7 @@ export async function removeTrackerEvent(trackerId, { id, eventDate } = {}) {
   return 0;
 }
 
-// Desativa um tracker (não apaga histórico; some da lista e do prompt).
+// Deactivates a tracker (doesn't erase history; disappears from the list and the prompt).
 export async function disableTracker(userId, trackerId) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.trackers SET enabled = false, updated_at = now()
@@ -2819,15 +2819,15 @@ export async function disableTracker(userId, trackerId) {
   return rowCount;
 }
 
-// ── Monitores: engine determinística de monitoramento (Fase 2). Um monitor =
-// um alvo nomeado (ex: "Zara Japão") com fontes validadas; monitor_items guarda
-// o que já foi visto (dedup por UNIQUE). Escopo por usuário. Ver skill-monitor-compras.md.
+// ── Monitors: deterministic monitoring engine (Phase 2). A monitor =
+// a named target (e.g.: "Zara Japan") with validated sources; monitor_items stores
+// what's already been seen (dedup by UNIQUE). Scoped per user. See skill-monitor-compras.md.
 function slugifyMonitor(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'monitor';
 }
 
-// Acha um monitor ativo do usuário por nome/slug. { ok, monitor } | { error }.
+// Finds an active monitor of the user by name/slug. { ok, monitor } | { error }.
 export async function resolveMonitor(userId, name) {
   const slug = slugifyMonitor(name);
   if (!String(name || '').trim()) return { error: 'nome_vazio' };
@@ -2845,7 +2845,7 @@ export async function resolveMonitor(userId, name) {
   return { ok: true, monitor: rows[0] };
 }
 
-// Acha OU cria o monitor (auto-criação no setup). Idempotente por (owner, slug).
+// Finds OR creates the monitor (auto-creation at setup). Idempotent by (owner, slug).
 export async function resolveOrCreateMonitor(userId, name, agentId, { target, sources, channel } = {}) {
   const found = await resolveMonitor(userId, name);
   if (found.ok) return { monitor: found.monitor, created: false };
@@ -2875,8 +2875,8 @@ export async function listMonitors(userId) {
   return rows;
 }
 
-// Registra itens raspados; devolve só os que eram NOVOS (a UNIQUE faz o dedup).
-// items: [{ key, date, title, url }]. Chaves vazias/duplicadas são ignoradas.
+// Records scraped items; returns only the ones that were NEW (the UNIQUE does the dedup).
+// items: [{ key, date, title, url }]. Empty/duplicate keys are ignored.
 export async function recordMonitorItems(monitorId, items) {
   const isNew = [];
   const seen = new Set();
@@ -2900,7 +2900,7 @@ export async function markMonitorBaseline(monitorId) {
   await pool.query(`UPDATE ${S}.monitors SET baseline_done = true, updated_at = now() WHERE id = $1`, [monitorId]);
 }
 
-// Desativa um monitor inteiro (histórico de itens fica guardado).
+// Deactivates an entire monitor (item history stays saved).
 export async function disableMonitor(userId, monitorId) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.monitors SET enabled = false, updated_at = now()
@@ -2910,13 +2910,13 @@ export async function disableMonitor(userId, monitorId) {
   return rowCount;
 }
 
-// ── Skills: comportamento/conhecimento puro (SKILL.md), sem dado nem runtime ──
-// Autorada pelo usuário, instalável POR ASSISTENTE. Reusa resolveConnectedUser
-// (Fase 2) e o padrão de resolve/roster do Space. Ver skill-implementacao.md.
+// ── Skills: pure behavior/knowledge (SKILL.md), no data or runtime ──
+// Authored by the user, installable PER ASSISTANT. Reuses resolveConnectedUser
+// (Phase 2) and the Space's resolve/roster pattern. See skill-implementacao.md.
 
-const SKILL_BODY_MAX = 8000;   // cap p/ não encher o contexto
+const SKILL_BODY_MAX = 8000;   // cap so it doesn't fill up the context
 const SKILL_MAX_PER_AGENT = 50; // teto de skills instaladas por assistente
-const SKILL_SCRIPT_MAX = 20000; // cap p/ o script executável
+const SKILL_SCRIPT_MAX = 20000; // cap for the executable script
 const SKILL_RUNTIMES = new Set(['python', 'bash']);
 
 // Normaliza runtime + script. Devolve {runtime, script} ou {error}.
@@ -2925,7 +2925,7 @@ function normSkillScript(runtime, script) {
   const rt = String(runtime || '').trim().toLowerCase();
   if (s == null && !rt) return { runtime: undefined, script: undefined }; // nada a mexer
   const body = (s || '').trim();
-  if (!body) return { runtime: '', script: '' }; // limpar o script (volta a só-texto)
+  if (!body) return { runtime: '', script: '' }; // clear the script (back to text-only)
   if (!SKILL_RUNTIMES.has(rt)) return { error: 'runtime_invalido' };
   if (body.length > SKILL_SCRIPT_MAX) return { error: 'script_grande', max: SKILL_SCRIPT_MAX };
   return { runtime: rt, script: body };
@@ -2937,8 +2937,8 @@ function slugifySkill(name) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'skill';
 }
 
-// Cria uma skill do dono e a auto-instala no assistente que a criou. Idempotente
-// por (owner, slug): se já existe, devolve erro ja_existe.
+// Creates an owner's skill and auto-installs it on the assistant that created it. Idempotent
+// by (owner, slug): if it already exists, returns error ja_existe.
 export async function createSkill(ownerUserId, { nome, quando_usar, instrucoes, visibility, script, runtime }, agentId) {
   const title = String(nome || '').trim();
   if (!title) return { error: 'nome_vazio' };
@@ -2969,7 +2969,7 @@ export async function getSkillById(id) {
   return rows[0] || null;
 }
 
-// Skills que o usuário AUTOROU (independente de instalação).
+// Skills the user AUTHORED (regardless of installation).
 export async function listSkillsAuthored(userId) {
   const { rows } = await pool.query(
     `SELECT id, slug, title, trigger, visibility, verified, install_count, updated_at
@@ -2983,8 +2983,8 @@ export async function listSkillsAuthored(userId) {
   }));
 }
 
-// Skills INSTALADAS e habilitadas neste assistente, com título/gatilho/dono
-// (pra atribuição no disclosure). isOwn = o dono da skill é este usuário.
+// Skills INSTALLED and enabled on this assistant, with title/trigger/owner
+// (for attribution in the disclosure). isOwn = the skill's owner is this user.
 export async function listInstalledSkills(agentId, userId) {
   const { rows } = await pool.query(
     `SELECT s.id, s.slug, s.title, s.trigger, s.owner_user_id, s.verified,
@@ -3004,9 +3004,9 @@ export async function listInstalledSkills(agentId, userId) {
   }));
 }
 
-// Resolve uma skill pelo NOME/slug/id a partir do caller. `dono` opcional
-// (contato conectado) resolve skill de terceiro com visibility='connections'.
-// Sem dono: skill própria (por qualquer visibility). Espelha resolveSpace.
+// Resolves a skill by NAME/slug/id from the caller. Optional `dono`
+// (connected contact) resolves a third party's skill with visibility='connections'.
+// Without dono: own skill (any visibility). Mirrors resolveSpace.
 export async function resolveSkill(callerUserId, query, dono) {
   const q = String(query || '').trim();
   if (!q) return { error: 'skill_vazia' };
@@ -3048,8 +3048,8 @@ export async function resolveSkill(callerUserId, query, dono) {
   return { ok: true, skill: rows[0] };
 }
 
-// Instala (idempotente) uma skill num assistente. Incrementa install_count só na
-// 1ª vez. Respeita o teto por assistente. Reativa se estava desabilitada.
+// Installs (idempotent) a skill on an assistant. Increments install_count only on the
+// 1st time. Respects the per-assistant cap. Reactivates if it was disabled.
 export async function installSkill(skillId, userId, agentId) {
   if (!agentId) return { error: 'sem_assistente' };
   const already = await pool.query(
@@ -3086,8 +3086,8 @@ export async function uninstallSkill(skillId, agentId) {
   return rowCount;
 }
 
-// Registra 1 USO de skill (skill acionada: ler_skill/rodar_skill). Agregado por
-// (skill_id, user_id, dia). Fire-and-forget: erro só loga, nunca quebra o turno.
+// Records 1 skill USE (skill triggered: ler_skill/rodar_skill). Aggregated by
+// (skill_id, user_id, dia). Fire-and-forget: error only logs, never breaks the turn.
 export async function bumpSkillUse(skillId, userId) {
   if (!skillId || !userId) return;
   try {
@@ -3102,16 +3102,16 @@ export async function bumpSkillUse(skillId, userId) {
   }
 }
 
-// Janela em que uma skill lida segue "em curso" na conversa, e quantas cabem ao
-// mesmo tempo. 24h cobre um procedimento que atravessa o dia sem deixar corpo
-// pendurado pra sempre num thread que já mudou de assunto; 2 é o teto de custo
-// (corpo tem cap de 8000 chars, então o pior caso é ~16k chars de prompt, e só
-// em thread que está de fato executando uma skill).
+// The window in which a skill that was read stays "in progress" in the conversation, and how many fit at the
+// same time. 24h covers a procedure that spans the day without leaving a body
+// hanging forever in a thread that already changed subject; 2 is the cost cap
+// (the body has an 8000 char cap, so the worst case is ~16k chars of prompt, and only
+// in a thread that is actually running a skill).
 const SKILL_ACTIVE_HOURS = 24;
 const SKILL_ACTIVE_MAX = 2;
 
-// Marca a skill como EM CURSO nesta conversa (chamado por ler_skill). Reler
-// renova a janela. Fire-and-forget: nunca quebra a leitura da skill.
+// Marks the skill as IN PROGRESS in this conversation (called by ler_skill). Rereading
+// renews the window. Fire-and-forget: never breaks reading the skill.
 export async function activateSkillInThread(threadId, skillId) {
   if (!threadId || !skillId) return;
   try {
@@ -3125,9 +3125,9 @@ export async function activateSkillInThread(threadId, skillId) {
   }
 }
 
-// Skills em curso nesta conversa, com o corpo RELIDO do banco (editar a skill
-// no meio do fluxo passa a valer no turno seguinte). O JOIN com skill_installs
-// garante que desinstalar/desabilitar tira do prompt na hora.
+// Skills in progress in this conversation, with the body REREAD from the database (editing the skill
+// mid-flow takes effect on the next turn). The JOIN with skill_installs
+// ensures that uninstalling/disabling removes it from the prompt right away.
 export async function listActiveSkills(threadId, agentId) {
   if (!threadId || !agentId) return [];
   try {
@@ -3149,11 +3149,11 @@ export async function listActiveSkills(threadId, agentId) {
   }
 }
 
-// Métricas por skill pro /metrics: instalações (assistentes ativos + usuários
-// distintos) x usos (total/7d/hoje + usuários distintos + último uso). Só skills
-// com ao menos 1 instalação OU 1 uso. Dono resolvido pelo nome.
+// Per-skill metrics for /metrics: installs (active assistants + distinct
+// users) x uses (total/7d/today + distinct users + last use). Only skills
+// with at least 1 install OR 1 use. Owner resolved by name.
 export async function getSkillMetrics() {
-  // Skills do admin (dono da plataforma) aparecem com o nome da marca, não com o dele.
+  // Skills from the admin (platform owner) show up with the brand name, not their own.
   const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
   const { rows } = await pool.query(
     `SELECT s.id, s.title, s.visibility, s.verified,
@@ -3190,7 +3190,7 @@ export async function getSkillMetrics() {
   return rows;
 }
 
-// Author-only. Atualiza título/gatilho/corpo/visibilidade (só campos passados).
+// Author-only. Updates title/trigger/body/visibility (only fields passed in).
 export async function updateSkill(id, ownerUserId, patch = {}) {
   const owned = await pool.query(
     `SELECT id FROM ${S}.skills WHERE id = $1 AND owner_user_id = $2`, [id, ownerUserId],
@@ -3232,7 +3232,7 @@ export async function updateSkill(id, ownerUserId, patch = {}) {
   }
 }
 
-// Author-only. Apaga a skill (cascade tira as instalações). Erro nao_e_dono.
+// Author-only. Deletes the skill (cascade removes the installs). Error nao_e_dono.
 export async function deleteSkill(id, ownerUserId) {
   const { rowCount } = await pool.query(
     `DELETE FROM ${S}.skills WHERE id = $1 AND owner_user_id = $2`, [id, ownerUserId],
@@ -3240,7 +3240,7 @@ export async function deleteSkill(id, ownerUserId) {
   return rowCount ? { ok: true } : { error: 'nao_e_dono' };
 }
 
-// (Fase 2) Skills de um contato conectado disponíveis pra instalar.
+// (Phase 2) Skills from a connected contact available to install.
 export async function listSharableSkillsOf(connectedUserId) {
   const { rows } = await pool.query(
     `SELECT id, slug, title, trigger, install_count FROM ${S}.skills
@@ -3252,8 +3252,8 @@ export async function listSharableSkillsOf(connectedUserId) {
   }));
 }
 
-// (Fase 3) Selo verificado — decisão de confiança/curadoria, SÓ admin.
-// Não é author-only de propósito: o autor não se autoverifica.
+// (Phase 3) Verified badge — a trust/curation decision, admin ONLY.
+// Not author-only on purpose: the author doesn't self-verify.
 export async function setSkillVerified(id, verified) {
   const { rows } = await pool.query(
     `UPDATE ${S}.skills SET verified = $2, updated_at = now() WHERE id = $1
@@ -3263,13 +3263,13 @@ export async function setSkillVerified(id, verified) {
   return rows[0] ? { ok: true, skill: rows[0] } : { error: 'skill_nao_encontrada' };
 }
 
-// ── Biblioteca oficial de habilidades (visibility='public') ──────────────────
-// Skills curadas/verificadas por nós, visíveis pra TODO usuário na página
-// /habilidades, instaláveis num toque (sem precisar de conexão). Só admin/import
-// promove uma skill a 'public'; o usuário comum nunca chega nesse valor pelas
-// suas tools (updateSkill clampa em 'connections'/'private').
+// ── Official skills library (visibility='public') ──────────────────
+// Skills curated/verified by us, visible to EVERY user on the
+// /habilidades page, installable with one tap (no connection needed). Only admin/import
+// promotes a skill to 'public'; a regular user never reaches that value through their
+// own tools (updateSkill clamps to 'connections'/'private').
 
-// Lista a biblioteca pública (filtro de busca opcional por título/resumo/gatilho).
+// Lists the public library (optional search filter by title/summary/trigger).
 export async function listPublicSkills({ q, viewerId } = {}) {
   const like = q ? `%${String(q).trim()}%` : null;
   const { rows } = await pool.query(
@@ -3303,9 +3303,9 @@ export async function listPublicSkills({ q, viewerId } = {}) {
   }));
 }
 
-// Registra/atualiza a nota (1-5) de um usuário numa skill da biblioteca. Upsert
-// por (skill_id, user_id): reavaliar substitui. Só skills públicas. Devolve a
-// média e o total atualizados pra UI refletir na hora.
+// Records/updates a user's rating (1-5) on a library skill. Upsert
+// by (skill_id, user_id): re-rating replaces it. Only public skills. Returns the
+// updated average and total so the UI reflects it right away.
 export async function rateSkill(skillId, userId, stars) {
   const n = Math.round(Number(stars));
   if (!Number.isFinite(n) || n < 1 || n > 5) return { error: 'nota_invalida' };
@@ -3331,9 +3331,9 @@ export async function rateSkill(skillId, userId, stars) {
   };
 }
 
-// Instala uma skill DA BIBLIOTECA (só se for pública). Diferente de installSkill,
-// não exige posse/conexão: a skill ser 'public' já é a autorização. Reusa a
-// mesma tabela/limite/idempotência de installSkill.
+// Installs a skill FROM THE LIBRARY (only if it's public). Different from installSkill,
+// it doesn't require ownership/connection: the skill being 'public' is already the authorization. Reuses the
+// same table/limit/idempotency as installSkill.
 export async function installPublicSkill(skillId, userId, agentId) {
   const { rows } = await pool.query(
     `SELECT id FROM ${S}.skills WHERE id = $1 AND visibility = 'public'`, [skillId],
@@ -3342,9 +3342,9 @@ export async function installPublicSkill(skillId, userId, agentId) {
   return installSkill(skillId, userId, agentId);
 }
 
-// Admin/import: promove (ou atualiza) uma skill na biblioteca oficial. Seta
-// category/summary e, por padrão, visibility='public' + verified=true. Não é
-// author-only de propósito (é curadoria nossa, igual setSkillVerified).
+// Admin/import: promotes (or updates) a skill in the official library. Sets
+// category/summary and, by default, visibility='public' + verified=true. Not
+// author-only on purpose (it's our own curation, just like setSkillVerified).
 export async function setSkillLibrary(id, patch = {}) {
   const sets = []; const vals = []; let i = 1;
   if (patch.category != null) { sets.push(`category = $${i}`); vals.push(String(patch.category).trim()); i += 1; }
@@ -3362,9 +3362,9 @@ export async function setSkillLibrary(id, patch = {}) {
   return rows[0] ? { ok: true, skill: rows[0] } : { error: 'skill_nao_encontrada' };
 }
 
-// ── Username (= subdomínio) escolhido pelo usuário ──
-// Regras: 3-30 chars, minúsculas/números/hífen, sem hífen no começo/fim.
-// Alguns nomes são reservados. Unicidade garantida pela constraint UNIQUE.
+// ── Username (= subdomain) chosen by the user ──
+// Rules: 3-30 chars, lowercase/numbers/hyphen, no hyphen at the start/end.
+// Some names are reserved. Uniqueness guaranteed by the UNIQUE constraint.
 const RE_LABEL = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 const RESERVED_LABELS = new Set([
   'www', 'apex', 'api', 'admin', 'app', 'apps', 'brambs', 'mail', 'email',
@@ -3388,7 +3388,7 @@ export async function getUserSubdomain(userId) {
   return rows[0]?.subdomain || null;
 }
 
-// Disponibilidade: formato válido, não reservado e não usado por OUTRO usuário.
+// Availability: valid format, not reserved and not used by ANOTHER user.
 export async function isSubdomainAvailable(desired, exceptUserId = null) {
   const v = validateLabel(desired);
   if (!v.ok) return { available: false, error: v.error };
@@ -3398,9 +3398,9 @@ export async function isSubdomainAvailable(desired, exceptUserId = null) {
   return { available: true, label: v.label };
 }
 
-// Troca o username do usuário. Bloqueia se ele já tem sistemas publicados
-// (o roteamento é por label; renomear orfanaria os containers) — nesse caso
-// devolve {ok:false,error:'has_apps'} pra UI orientar apagar/republicar antes.
+// Changes the user's username. Blocks it if they already have published systems
+// (routing is by label; renaming would orphan the containers) — in that case
+// returns {ok:false,error:'has_apps'} so the UI can guide deleting/republishing first.
 export async function setUserSubdomain(userId, desired) {
   const v = validateLabel(desired);
   if (!v.ok) return v;
@@ -3436,20 +3436,20 @@ export async function markEmailSeen(messageId, userId = null) {
   );
 }
 
-// ── Canal e-mail: fila persistente (ver comentário do CREATE TABLE) ──
+// ── Email channel: persistent queue (see the CREATE TABLE comment) ──
 export async function enqueueEmail(source) {
   await pool.query(`INSERT INTO ${S}.email_queue (source) VALUES ($1)`, [source]);
 }
 
-// Reivindica até `limit` e-mails pendentes pra processar. O claim JÁ incrementa
-// attempts: se o processo cair no meio, a queda conta como tentativa.
+// Claims up to `limit` pending emails to process. The claim ALREADY increments
+// attempts: if the process crashes midway, the crash counts as an attempt.
 export async function claimPendingEmails(limit = 10, maxAttempts = 3) {
-  // Re-arma claims órfãos (processo caiu com a linha em 'working')...
+  // Re-arms orphaned claims (process crashed with the row in 'working')...
   await pool.query(
     `UPDATE ${S}.email_queue SET status = 'pending', updated_at = now()
       WHERE status = 'working' AND updated_at < now() - interval '15 minutes'`,
   );
-  // ...e enterra o que estourou as tentativas (fica auditável em 'failed').
+  // ...and buries whatever ran out of attempts (stays auditable in 'failed').
   await pool.query(
     `UPDATE ${S}.email_queue SET status = 'failed', updated_at = now()
       WHERE status = 'pending' AND attempts >= $1`,
@@ -3475,7 +3475,7 @@ export async function settleEmail(id, status, error = null) {
   );
 }
 
-// Devolve a tentativa (caso 'defer': rate-limit não é falha, não gasta attempt).
+// Returns the attempt (case 'defer': rate-limit isn't a failure, doesn't spend an attempt).
 export async function unclaimEmail(id) {
   await pool.query(
     `UPDATE ${S}.email_queue SET status = 'pending', attempts = greatest(attempts - 1, 0),
@@ -3484,8 +3484,8 @@ export async function unclaimEmail(id) {
   );
 }
 
-// ── Biblioteca de mídia ──
-// Todas as funções são escopadas por user_id (isolamento entre usuários).
+// ── Media library ──
+// All functions are scoped by user_id (isolation between users).
 export async function addMediaAsset({ userId, agentId = null, s3Key, kind = null, mime = null, source = null, caption = '' }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.media_assets (user_id, agent_id, s3_key, kind, mime, source, caption)
@@ -3503,10 +3503,10 @@ export async function listMediaAssets(userId, { limit = 40 } = {}) {
   );
   return rows;
 }
-// media_assets.id é UUID. Quando o id vem do MODELO (ele leu de listar_midia ou
-// de um marcador 🖼️ [foto id=...]), pode vir truncado ou inventado; sem esta
-// guarda o Postgres derruba a query com "invalid input syntax for type uuid" e a
-// tool estoura em vez de responder "não achei esse arquivo".
+// media_assets.id is a UUID. When the id comes from the MODEL (it read it from listar_midia or
+// from a 🖼️ [foto id=...] marker), it may come truncated or made up; without this
+// guard, Postgres drops the query with "invalid input syntax for type uuid" and the
+// tool blows up instead of answering "couldn't find that file".
 const idDeMidiaValido = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v ?? ''));
 export async function getMediaAsset(userId, id) {
   if (!idDeMidiaValido(id)) return null;
@@ -3517,10 +3517,10 @@ export async function getMediaAsset(userId, id) {
   );
   return rows[0] || null;
 }
-// ── Lápide de exclusão de arquivo (ver CREATE TABLE media_deletions) ──
-// Registra a key que precisa sumir do bucket. Só é usada DENTRO da transação que
-// remove a referência, pra nunca existir um instante em que ninguém mais sabe do
-// objeto. `client` é o cliente da transação em curso.
+// ── File deletion tombstone (see CREATE TABLE media_deletions) ──
+// Records the key that needs to disappear from the bucket. Only used INSIDE the transaction that
+// removes the reference, so there's never a moment when nobody knows about the
+// object anymore. `client` is the client of the ongoing transaction.
 async function enfileiraExclusaoDeMidia(client, { userId = null, s3Key, origem = null }) {
   if (!s3Key) return null;
   const { rows } = await client.query(
@@ -3529,10 +3529,10 @@ async function enfileiraExclusaoDeMidia(client, { userId = null, s3Key, origem =
   );
   return rows[0].id;
 }
-// Pega lápides pendentes pra tentar de novo. Incrementa attempts no claim (queda
-// no meio conta como tentativa) e só volta a oferecer a mesma linha depois de 10
-// min, pra falha de rede não virar loop apertado. Quem estourar as tentativas vira
-// 'failed' e FICA na tabela: a key continua registrada pra alguém apagar na mão.
+// Gets pending tombstones to retry. Increments attempts on claim (a crash
+// midway counts as an attempt) and only offers the same row again after 10
+// min, so a network failure doesn't turn into a tight loop. Whatever runs out of attempts becomes
+// 'failed' and STAYS in the table: the key remains recorded for someone to delete by hand.
 export async function claimPendingMediaDeletions(limit = 50, maxAttempts = 12) {
   await pool.query(
     `UPDATE ${S}.media_deletions SET status = 'failed', updated_at = now()
@@ -3551,7 +3551,7 @@ export async function claimPendingMediaDeletions(limit = 50, maxAttempts = 12) {
   );
   return rows;
 }
-// Fecha a lápide. 'done' = o objeto sumiu do bucket (ou nunca existiu).
+// Closes the tombstone. 'done' = the object disappeared from the bucket (or never existed).
 export async function settleMediaDeletion(id, status = 'done', error = null) {
   if (!id) return;
   await pool.query(
@@ -3559,10 +3559,10 @@ export async function settleMediaDeletion(id, status = 'done', error = null) {
     [id, status, error ? String(error).slice(0, 500) : null],
   );
 }
-// Registra lápide pra uma LISTA de keys de uma vez, fora de transação. É o caso da
-// destruição de conta: ali não existe transação que remova a referência (o DELETE
-// da conta leva as linhas junto por CASCADE), então a lápide precisa ser gravada
-// ANTES, senão uma falha do bucket deixaria o arquivo órfão e sem registro.
+// Records a tombstone for a LIST of keys at once, outside a transaction. This is the case for
+// account destruction: there's no transaction there that removes the reference (the account's
+// DELETE takes the rows along via CASCADE), so the tombstone needs to be recorded
+// BEFORE, otherwise a bucket failure would leave the file orphaned and unrecorded.
 export async function registrarLapidesDeExclusao(userId, keys, origem = 'purge_conta') {
   const lista = [...new Set((keys || []).filter(Boolean))];
   if (!lista.length) return [];
@@ -3574,7 +3574,7 @@ export async function registrarLapidesDeExclusao(userId, keys, origem = 'purge_c
   );
   return rows;
 }
-// Quantas lápides ainda não confirmaram o delete no bucket (pendente + estourada).
+// How many tombstones haven't confirmed the delete in the bucket yet (pending + exhausted).
 export async function countPendingMediaDeletions() {
   const { rows } = await pool.query(
     `SELECT status, count(*)::int AS n FROM ${S}.media_deletions
@@ -3582,10 +3582,10 @@ export async function countPendingMediaDeletions() {
   );
   return rows;
 }
-// Remove uma mídia da biblioteca (escopado por dono). A linha só é apagada JUNTO
-// com a criação da lápide, na mesma transação: ou as duas coisas acontecem, ou
-// nenhuma. Devolve { s3Key, tombstoneId } pra quem chamou apagar o objeto e
-// fechar a lápide; null quando nada casou (arquivo inexistente ou de outro dono).
+// Removes a media item from the library (scoped by owner). The row is only deleted TOGETHER
+// with the tombstone's creation, in the same transaction: either both things happen, or
+// neither. Returns { s3Key, tombstoneId } for the caller to delete the object and
+// close the tombstone; null when nothing matched (file doesn't exist or belongs to another owner).
 export async function deleteMediaAsset(userId, id) {
   const client = await pool.connect();
   try {
@@ -3612,9 +3612,9 @@ export async function setMediaCaption(userId, id, caption) {
   return rowCount > 0;
 }
 
-// ── Identidade verificada (geração de vídeo das pessoas) ──
-// Uma identidade por usuário. Ver tabela user_likeness. Só o próprio usuário
-// (via user_id) e o admin (revisão) tocam nisso.
+// ── Verified identity (people video generation) ──
+// One identity per user. See table user_likeness. Only the user themself
+// (via user_id) and the admin (review) touch this.
 export async function getLikeness(userId) {
   const { rows } = await pool.query(
     `SELECT user_id, status, anchor_key, anchor_mime, verified_by, verified_at,
@@ -3627,8 +3627,8 @@ export async function getLikeness(userId) {
   );
   return rows[0] || null;
 }
-// Grava/atualiza a foto-âncora e RESETA pra pending (toda troca de âncora exige
-// nova verificação humana). Idempotente por user_id.
+// Saves/updates the anchor photo and RESETS to pending (every anchor change requires
+// new human verification). Idempotent by user_id.
 export async function setLikenessAnchor({ userId, anchorKey, anchorMime = null }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.user_likeness (user_id, status, anchor_key, anchor_mime, updated_at)
@@ -3644,7 +3644,7 @@ export async function setLikenessAnchor({ userId, anchorKey, anchorMime = null }
   );
   return rows[0];
 }
-// Muda o status (revisão do admin). status ∈ verified|rejected|pending.
+// Changes the status (admin review). status ∈ verified|rejected|pending.
 export async function setLikenessStatus({ userId, status, verifiedBy = null, rejectedReason = null }) {
   const verified = status === 'verified';
   const { rowCount } = await pool.query(
@@ -3659,9 +3659,9 @@ export async function setLikenessStatus({ userId, status, verifiedBy = null, rej
   );
   return rowCount > 0;
 }
-// Grava/atualiza (ou limpa, com voiceKey=null) a voz de referência da pessoa.
-// UPSERT por user_id sem tocar no status/âncora da identidade. Se ainda não há
-// linha de identidade, cria uma (status pending, sem âncora) só pra guardar a voz.
+// Saves/updates (or clears, with voiceKey=null) the person's reference voice.
+// UPSERT by user_id without touching the identity's status/anchor. If there isn't yet an
+// identity row, creates one (status pending, no anchor) just to store the voice.
 export async function setLikenessVoice({ userId, voiceKey = null, voiceMime = null }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.user_likeness (user_id, status, voice_key, voice_mime, voice_updated_at, updated_at)
@@ -3676,8 +3676,8 @@ export async function setLikenessVoice({ userId, voiceKey = null, voiceMime = nu
   );
   return rows[0];
 }
-// Grava/atualiza (ou limpa, com speechKey=null) o áudio LITERAL pra falar. Mesmo
-// padrão do setLikenessVoice: UPSERT por user_id sem tocar no status/âncora.
+// Saves/updates (or clears, with speechKey=null) the LITERAL audio to speak. Same
+// pattern as setLikenessVoice: UPSERT by user_id without touching status/anchor.
 export async function setLikenessSpeech({ userId, speechKey = null, speechMime = null }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.user_likeness (user_id, status, speech_key, speech_mime, speech_updated_at, updated_at)
@@ -3692,13 +3692,13 @@ export async function setLikenessSpeech({ userId, speechKey = null, speechMime =
   );
   return rows[0];
 }
-// Grava/atualiza (ou limpa, com key=null) uma foto de rosto EXTRA. slot ∈ 2|3.
-// Mesma pessoa da âncora, ângulo diferente; melhora a reconstrução do rosto no
-// render. UPSERT por user_id sem tocar no status/âncora da identidade.
-// Troca/limpa a foto e, se havia uma foto ANTES, deixa a lápide da key antiga na
-// mesma transação. Vale pros dois casos: remover (faceKey=null) e substituir por
-// outra (a antiga também precisa sumir do bucket). Devolve { ..., previousKey,
-// tombstoneId } pro server apagar o objeto e fechar a lápide.
+// Saves/updates (or clears, with key=null) an EXTRA face photo. slot ∈ 2|3.
+// Same person as the anchor, different angle; improves face reconstruction in the
+// render. UPSERT by user_id without touching the identity's status/anchor.
+// Swaps/clears the photo and, if there was a photo BEFORE, leaves a tombstone for the old key in the
+// same transaction. Applies to both cases: removing (faceKey=null) and replacing with
+// another one (the old one also needs to disappear from the bucket). Returns { ..., previousKey,
+// tombstoneId } for the server to delete the object and close the tombstone.
 export async function setLikenessExtraFace({ userId, slot, faceKey = null, faceMime = null }) {
   const n = Number(slot);
   if (n !== 2 && n !== 3) throw new Error('slot de face inválido (use 2 ou 3)');
@@ -3706,9 +3706,9 @@ export async function setLikenessExtraFace({ userId, slot, faceKey = null, faceM
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Lê a key atual ANTES de sobrescrever, travando a linha (FOR UPDATE) pra que
-    // um upload concorrente no mesmo slot não troque a foto entre a leitura e a
-    // escrita, o que faria a lápide apontar pra key errada.
+    // Reads the current key BEFORE overwriting, locking the row (FOR UPDATE) so that
+    // a concurrent upload to the same slot doesn't swap the photo between the read and the
+    // write, which would make the tombstone point to the wrong key.
     const antes = await client.query(
       `SELECT ${kc} AS face_key FROM ${S}.user_likeness WHERE user_id = $1 FOR UPDATE`,
       [userId],
@@ -3735,7 +3735,7 @@ export async function setLikenessExtraFace({ userId, slot, faceKey = null, faceM
     throw e;
   } finally { client.release(); }
 }
-// Fila de revisão do admin: identidades aguardando verificação humana.
+// Admin review queue: identities awaiting human verification.
 export async function listPendingLikeness({ limit = 100 } = {}) {
   const { rows } = await pool.query(
     `SELECT l.user_id, l.status, l.anchor_key, l.anchor_mime, l.created_at, l.updated_at,
@@ -3749,9 +3749,9 @@ export async function listPendingLikeness({ limit = 100 } = {}) {
   return rows;
 }
 
-// ── Jobs de geração de vídeo das pessoas ──
-// Ver tabela video_jobs. O agente cria o job (createVideoJob) e responde na hora
-// "tô gerando"; o poller do scheduler avança status e, quando done, baixa+entrega.
+// ── People video generation jobs ──
+// See table video_jobs. The agent creates the job (createVideoJob) and immediately replies
+// "generating now"; the scheduler's poller advances the status and, when done, downloads+delivers.
 export async function createVideoJob({ userId, agentId = null, remoteJobId = null, prompt = '', withAudio = false, durationReq = null, originChannel = null, threadId = null }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.video_jobs
@@ -3762,7 +3762,7 @@ export async function createVideoJob({ userId, agentId = null, remoteJobId = nul
   );
   return rows[0];
 }
-// Atualiza campos de um job. Só sobrescreve o que vier definido (COALESCE).
+// Updates a job's fields. Only overwrites what comes in defined (COALESCE).
 export async function updateVideoJob(id, { status = null, remoteJobId = null, videoSeconds = null, videoKey = null, creditsCharged = null, error = null } = {}) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.video_jobs
@@ -3782,7 +3782,7 @@ export async function getVideoJob(id) {
   const { rows } = await pool.query(`SELECT * FROM ${S}.video_jobs WHERE id = $1`, [id]);
   return rows[0] || null;
 }
-// Jobs que o poller precisa avançar (ainda no worker), mais velho primeiro.
+// Jobs the poller needs to advance (still in the worker), oldest first.
 export async function listActiveVideoJobs({ limit = 25 } = {}) {
   const { rows } = await pool.query(
     `SELECT v.*, u.name AS user_name, u.email
@@ -3794,7 +3794,7 @@ export async function listActiveVideoJobs({ limit = 25 } = {}) {
   );
   return rows;
 }
-// Quantos jobs o usuário tem em andamento (limite anti-abuso: 1 por vez).
+// How many jobs the user has in progress (anti-abuse limit: 1 at a time).
 export async function countActiveVideoJobsForUser(userId) {
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n FROM ${S}.video_jobs
@@ -3804,9 +3804,9 @@ export async function countActiveVideoJobsForUser(userId) {
   return rows[0]?.n || 0;
 }
 
-// ── Itens da tela inicial: "Need to know" (kind='note') e "Sugestões"
-// (kind='suggestion'). Populados pelo onboarding (lê e-mails/agenda) e mantidos
-// pelo agente ao longo das conversas (tool `lembrar`). O usuário pode apagar.
+// ── Home screen items: "Need to know" (kind='note') and "Suggestions"
+// (kind='suggestion'). Populated by onboarding (reads emails/calendar) and kept up
+// by the agent throughout conversations (tool `lembrar`). The user can delete them.
 export async function listHomeItems(userId, kind = null) {
   const { rows } = kind
     ? await pool.query(
@@ -3820,7 +3820,7 @@ export async function listHomeItems(userId, kind = null) {
 export async function addHomeItem({ userId, agentId = null, kind, text }) {
   const t = String(text || '').trim();
   if (!t) return null;
-  // dedupe: não repete um item idêntico (mesmo usuário+tipo).
+  // dedupe: doesn't repeat an identical item (same user+type).
   const dup = await pool.query(
     `SELECT 1 FROM ${S}.home_items WHERE user_id = $1 AND kind = $2 AND lower(text) = lower($3)`,
     [userId, kind, t]);
@@ -3830,10 +3830,10 @@ export async function addHomeItem({ userId, agentId = null, kind, text }) {
     [userId, agentId, kind, t]);
   return rows[0].id;
 }
-// Gatilho de atualização automática dos boxes da home. Guarda quando foi a
-// última atualização (cooldown) e uma "marca" barata do estado da caixa de
-// entrada (id do e-mail mais recente) pra detectar conteúdo novo sem rodar o
-// modelo. mark null = nunca atualizou (primeira população).
+// Trigger for automatic refresh of the home boxes. Stores when the
+// last refresh was (cooldown) and a cheap "mark" of the inbox's
+// state (id of the most recent email) to detect new content without running the
+// model. mark null = never refreshed (first population).
 export async function getHomeRefresh(userId) {
   const { rows } = await pool.query(
     `SELECT home_refresh_at, home_seen_mark FROM ${S}.users WHERE id = $1`, [userId]);
@@ -3859,9 +3859,9 @@ export async function clearHomeItems(userId, kind, agentId = null) {
   }
 }
 
-// ── Convites por indicação ──
-// Status de convites de um usuário: quantos ele pode dar (total), quantos já
-// foram usados (contagem de indicados) e quantos restam.
+// ── Referral invites ──
+// Status of a user's invites: how many they can give (total), how many have already
+// been used (count of referred people) and how many remain.
 export async function getInviteStatus(userId) {
   const { rows } = await pool.query(
     `SELECT u.invites_total AS total,
@@ -3875,11 +3875,11 @@ export async function getInviteStatus(userId) {
   return { total, used, remaining: Math.max(0, total - used) };
 }
 
-// Código de convite do próprio usuário + status, pro assistente responder quando a
-// pessoa pergunta "qual meu código pra convidar alguém". Se a pessoa TEM convites
-// mas ainda não tem código (nasceu depois do backfill inicial e ganhou convites
-// depois), cunha um código único de 4 dígitos na hora (idempotente: só cunha se
-// faltar). Read-mostly: sem convites e sem código, devolve code=null sem cunhar.
+// The user's own invite code + status, for the assistant to answer when the
+// person asks "what's my code to invite someone". If the person HAS invites
+// but doesn't have a code yet (born after the initial backfill and got invites
+// later), mints a unique 4-digit code on the spot (idempotent: only mints if it's
+// missing). Read-mostly: no invites and no code, returns code=null without minting.
 export async function getOrMintReferral(userId) {
   const st = await getInviteStatus(userId);
   const { rows } = await pool.query(
@@ -3899,18 +3899,18 @@ export async function getOrMintReferral(userId) {
       if (r.rows[0]) code = r.rows[0].code;
       else {
         const cur = await pool.query(`SELECT referral_code AS code FROM ${S}.users WHERE id = $1`, [userId]);
-        if (cur.rows[0]?.code) code = cur.rows[0].code; // corrida: outro processo já cunhou
+        if (cur.rows[0]?.code) code = cur.rows[0].code; // race: another process already minted it
       }
     }
   }
   return { code: code || null, ...st };
 }
 
-// Cria um usuário CONSUMINDO um convite do indicador, resolvido pelo CÓDIGO de 4
-// dígitos. Consumo atômico: o INSERT só acontece se o código existir E o dono
-// ainda tiver convite (contagem de indicados < invites_total). Retorna o usuário
-// criado, ou null (aí o chamador manda pra fila). A conta nasce como qualquer
-// outra; o que quem instala dá a uma conta nova vem pelo evento conta_criada.
+// Creates a user CONSUMING an invite from the referrer, resolved by the 4-digit
+// CODE. Atomic consumption: the INSERT only happens if the code exists AND the owner
+// still has an invite (count of referred people < invites_total). Returns the created
+// user, or null (then the caller sends it to the queue). The account is born like any
+// other; whatever the installer gives to a new account comes through the conta_criada event.
 export async function createReferredUserByCode({ name, email, passwordHash, code }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.users (name, email, password_hash, referred_by)
@@ -3983,7 +3983,7 @@ export async function claimReferralBonus(referredUserId) {
   return rows[0] ? { referrerId: rows[0].referrer_id, referredId: rows[0].referred_id } : null;
 }
 
-// Releases the SIGN-UP bonus (08/09), once, when the REFERRED user sends the
+// Releases the SIGN-UP bonus (2026-09-08), once, when the REFERRED user sends the
 // first message to their assistant. The trigger is first use, not the moment
 // of sign-up, because 200 credits per created account would invite someone to
 // open 10 fake accounts and reward themselves; having to talk to the
@@ -4017,7 +4017,7 @@ export async function countUsers() {
   return Number(rows[0]?.n) || 0;
 }
 
-// Existe algum usuário com este código? (pra classificar o motivo da fila.)
+// Does any user exist with this code? (to classify the reason for the queue.)
 export async function referralCodeExists(code) {
   const { rows } = await pool.query(
     `SELECT 1 FROM ${S}.users WHERE referral_code = $1 LIMIT 1`, [String(code)],
@@ -4058,9 +4058,9 @@ export async function deleteOAuthToken(userId, provider) {
   await pool.query(`DELETE FROM ${S}.oauth_tokens WHERE user_id = $1 AND provider = $2`, [userId, provider]);
 }
 
-// LGPD: quando uma loja desinstala o app / pede exclusão (webhook store/redact da
-// Nuvemshop), apagamos o token dela pelo store_id guardado no meta. Devolve quantos
-// tokens foram removidos.
+// LGPD: when a store uninstalls the app / requests deletion (Nuvemshop's
+// store/redact webhook), we delete its token by the store_id stored in the meta. Returns how many
+// tokens were removed.
 export async function deleteOAuthTokenByStoreId(provider, storeId) {
   const { rowCount } = await pool.query(
     `DELETE FROM ${S}.oauth_tokens WHERE provider = $1 AND meta->>'store_id' = $2`,
@@ -4079,7 +4079,7 @@ export async function addConnection(userId, { provider, kind = 'apikey', label =
   return rows[0] || null;
 }
 
-// Lista SEM o segredo (só metadados) — é o que a UI/API expõe.
+// Lists WITHOUT the secret (metadata only) — this is what the UI/API exposes.
 export async function listConnections(userId) {
   const { rows } = await pool.query(
     `SELECT id, provider, kind, label, meta, created_at, updated_at
@@ -4101,7 +4101,7 @@ export async function getConfirmationAuthorizationContext(userId) {
   return rows[0];
 }
 
-// Traz o segredo cifrado (secret_enc) — usar só no momento da tool-call, escopado por user_id.
+// Brings the encrypted secret (secret_enc) — use only at the moment of the tool call, scoped by user_id.
 export async function getConnection(userId, id) {
   const { rows } = await pool.query(
     `SELECT * FROM ${S}.connections WHERE user_id = $1 AND id = $2`,
@@ -4110,7 +4110,7 @@ export async function getConnection(userId, id) {
   return rows[0] || null;
 }
 
-// Traz por provider (útil pra tools que buscam a credencial pelo serviço).
+// Brings it by provider (useful for tools that look up the credential by service).
 export async function getConnectionByProvider(userId, provider, label = null) {
   const vals = [userId, clean(provider)];
   let q = `SELECT * FROM ${S}.connections WHERE user_id = $1 AND provider = $2`;
@@ -4124,8 +4124,8 @@ export async function deleteConnection(userId, id) {
   await pool.query(`DELETE FROM ${S}.connections WHERE user_id = $1 AND id = $2`, [userId, id]);
 }
 
-// Troca o segredo cifrado de uma conexão existente (ex: usuário mandou uma API
-// key nova depois que a antiga expirou/ficou inválida). Escopado por user_id.
+// Swaps the encrypted secret of an existing connection (e.g.: the user sent a new API
+// key after the old one expired/became invalid). Scoped by user_id.
 export async function updateConnectionSecret(userId, id, secretEnc, { label = null } = {}) {
   const { rows } = await pool.query(
     `UPDATE ${S}.connections SET secret_enc = $3, updated_at = now()${label != null ? ', label = $4' : ''}
@@ -4135,8 +4135,8 @@ export async function updateConnectionSecret(userId, id, secretEnc, { label = nu
   return rows[0] || null;
 }
 
-// Grava o evento do webhook. Devolve false se já tinha sido processado (dedup
-// pela PK), que é como implementamos idempotência no "at least once" da Asaas.
+// Saves the webhook event. Returns false if it had already been processed (dedup
+// by PK), which is how we implement idempotency for Asaas's "at least once".
 export async function recordAsaasEvent(eventId, { accountId = '', event = '', payload = {} } = {}) {
   const { rowCount } = await pool.query(
     `INSERT INTO ${S}.asaas_events (event_id, account_id, event, payload)
@@ -4146,10 +4146,10 @@ export async function recordAsaasEvent(eventId, { accountId = '', event = '', pa
   return rowCount > 0;
 }
 
-// Guarda a operação imediatamente depois que a Asaas devolve seu id. O estado
-// "delivered" só é usado quando o próprio retorno confirmado já trouxe o link,
-// pois nesse caso renderConfirmed o entrega no mesmo turno e o webhook não deve
-// mandar a mesma coisa de novo.
+// Saves the operation right after Asaas returns its id. The
+// "delivered" state is only used when the confirmed response itself already brought the link,
+// because in that case renderConfirmed delivers it in the same turn and the webhook shouldn't
+// send the same thing again.
 export async function saveAsaasOperation(userId, {
   agentId = null, threadId = null, accountId = '', id, tipo, status = '', valor = null,
   comprovante = null, comprovanteEntregue = false, modoExecucao = null, originChannel = 'web',
@@ -4196,9 +4196,9 @@ export async function saveAsaasOperation(userId, {
   return rows[0] || null;
 }
 
-// Consulta pontual usada pelo turno que acabou de criar uma operação. O
-// vínculo com owner_user_id impede que um id conhecido de outra conta seja
-// observado. Não faz polling por conta própria e não altera estado.
+// One-off query used by the turn that just created an operation. The
+// link with owner_user_id prevents a known id from another account from being
+// observed. Doesn't do polling on its own and doesn't change state.
 export async function getAsaasOperationForOwner(userId, operationId) {
   const op = clean(operationId);
   if (!userId || !op) return null;
@@ -4268,8 +4268,8 @@ export async function listAsaasBillSchedulesForOwner(userId, limit = 20) {
   return rows.map(asaasScheduleRow);
 }
 
-// Cancelamento compare-and-set: só um agendamento ainda inteiramente local
-// pode ser cancelado. Se o worker já o reivindicou, não fingimos que parou.
+// Compare-and-set cancellation: only a schedule that's still entirely local
+// can be canceled. If the worker already claimed it, we don't pretend it stopped.
 export async function cancelAsaasBillSchedule(userId, id, expectedHash = null) {
   const vals = [clean(id), userId];
   let hashClause = '';
@@ -4284,9 +4284,9 @@ export async function cancelAsaasBillSchedule(userId, id, expectedHash = null) {
   return rows[0] || null;
 }
 
-// Um processo por linha. `executing` vencido NÃO é reexecutado: pode ter feito
-// POST e morrido antes de gravar o retorno. Ele vira `uncertain`, evitando pagar
-// duas vezes; a reconciliação por externalReference deve ser manual/observável.
+// One process per row. An expired `executing` is NOT re-run: it may have made a
+// POST and died before saving the response. It becomes `uncertain`, avoiding paying
+// twice; reconciliation by externalReference should be manual/observable.
 export async function claimDueAsaasBillSchedules(limit = 10) {
   const n = Math.max(1, Math.min(50, Number(limit) || 10));
   const { rows: overdue } = await pool.query(
@@ -4411,9 +4411,9 @@ export async function finishAsaasReceiptNotification(operationId, delivered) {
   return rows[0] || null;
 }
 
-// Recupera avisos que ficaram pendentes, falharam ou cujo processo morreu no
-// meio do envio. O SKIP LOCKED deixa a função segura mesmo se no futuro houver
-// mais de um processo drenando a mesma fila.
+// Recovers notices that were left pending, failed, or whose process died in the
+// middle of sending. The SKIP LOCKED makes the function safe even if in the future there's
+// more than one process draining the same queue.
 export async function claimDueAsaasReceiptNotifications(limit = 20) {
   const n = Math.max(1, Math.min(100, Number(limit) || 20));
   const { rows } = await pool.query(
@@ -4445,10 +4445,10 @@ export async function claimDueAsaasReceiptNotifications(limit = 20) {
   return rows;
 }
 
-// ── Servidores MCP (conectores externos via Model Context Protocol) ──
-// headers costuma trazer credencial (Authorization: Bearer ...), então o valor
-// vive cifrado em headers_enc e a coluna jsonb só serve pro que é legado. Quem
-// chama continua recebendo/mandando o objeto normal.
+// ── MCP servers (external connectors via Model Context Protocol) ──
+// headers usually carries a credential (Authorization: Bearer ...), so the value
+// lives encrypted in headers_enc and the jsonb column only serves what's legacy. The
+// caller keeps receiving/sending the normal object.
 export function mcpRow(r) {
   if (!r) return r;
   const out = { ...r };
@@ -4482,12 +4482,12 @@ export async function deleteMcpServer(userId, id) {
   await pool.query(`DELETE FROM ${S}.mcp_servers WHERE user_id = $1 AND id = $2`, [userId, id]);
 }
 
-// ── Uso/custo de modelo ──
-// Grava uma chamada ao provider. `e` traz as dimensões + os tokens já calculados.
-// user_id é quem usou; org_id é quem paga, resolvido pela porta da conta
-// pagadora sob a trava da conta, então entrar ou sair da empresa no meio não
-// deixa a linha no saldo errado. `e.orgId` explícito força a conta (null =
-// pessoal); sem userId e com orgId, é lançamento direto na empresa.
+// ── Model usage/cost ──
+// Records a call to the provider. `e` carries the dimensions + the already-computed tokens.
+// user_id is who used it; org_id is who pays, resolved by the payer-account
+// port under the account lock, so joining or leaving the business midway doesn't
+// leave the row against the wrong balance. Explicit `e.orgId` forces the account (null =
+// personal); without userId and with orgId, it's a direct entry against the business.
 export async function insertUsageEvent(e) {
   const insert=(client,orgId)=>client.query(
     `INSERT INTO ${S}.usage_events
@@ -4502,9 +4502,9 @@ export async function insertUsageEvent(e) {
   return transacaoPagadora(pool,{userId:e.userId||null,orgId:e.orgId},insert);
 }
 
-// Existe um usage_event com este turn_id? Usado pra idempotência da compra de
-// pacote (turn_id = id da sessão de checkout do Stripe), pra o webhook não
-// creditar duas vezes se o Stripe reentregar o evento.
+// Is there a usage_event with this turn_id? Used for idempotency of package
+// purchases (turn_id = Stripe checkout session id), so the webhook doesn't
+// credit twice if Stripe redelivers the event.
 export async function usageEventExistsByTurn(turnId) {
   if (!turnId) return false;
   const { rows } = await pool.query(
@@ -4513,8 +4513,8 @@ export async function usageEventExistsByTurn(turnId) {
   return rows.length > 0;
 }
 
-// Conta chamadas de um modelo desde `from` (ISO). Usado pra aplicar a franquia
-// gratuita do Tavily (1000 buscas/mês) — dentro da franquia o custo grava zero.
+// Counts calls to a model since `from` (ISO). Used to apply Tavily's
+// free allowance (1000 searches/month) — within the allowance the cost is recorded as zero.
 export async function countUsageByModelSince(model, from) {
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n FROM ${S}.usage_events WHERE model = $1 AND ts >= $2`,
@@ -4523,8 +4523,8 @@ export async function countUsageByModelSince(model, from) {
   return rows[0]?.n || 0;
 }
 
-// Agregação flexível pro dashboard. `by` define o eixo de agrupamento;
-// from/to filtram a janela (ISO). userId opcional restringe a um usuário.
+// Flexible aggregation for the dashboard. `by` defines the grouping axis;
+// from/to filter the window (ISO). Optional userId restricts to one user.
 const USAGE_GROUPS = {
   hour:   `to_char(date_trunc('hour',  ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:00')`,
   day:    `to_char(date_trunc('day',   ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD')`,
@@ -4537,10 +4537,10 @@ const USAGE_GROUPS = {
   turn:   `turn_id::text`,
 };
 
-// Pacote levado pra empresa na entrada (kind 'grant-moved', org-credit-move.mjs)
-// não é crédito novo: os relatórios contam só a linha original. A sobra do plano
-// de quem cria a empresa (kind 'plan-residual', org-billing.mjs) também sai: é o
-// mês que o criador já pagou, não receita nem crédito novo.
+// A package moved to the business at join time (kind 'grant-moved', org-credit-move.mjs)
+// is not new credit: the reports count only the original row. The leftover plan of
+// whoever creates the business (kind 'plan-residual', org-billing.mjs) is also excluded: it's the
+// month the creator already paid for, not revenue or new credit.
 export const SEM_PACOTE_LEVADO = "kind NOT IN ('grant-moved','plan-residual')";
 export async function getUsage({ by = 'day', from, to, userId } = {}) {
   const expr = USAGE_GROUPS[by] || USAGE_GROUPS.day;
@@ -4617,8 +4617,8 @@ export async function listUserThreads(userId, limit = 200) {
   }));
 }
 
-// Mídia da pessoa. `kind` filtra por tipo (image/document/audio/video); sem
-// filtro, vem tudo (que é o número do box "Arquivos").
+// The person's media. `kind` filters by type (image/document/audio/video); without a
+// filter, everything comes back (which is the number in the "Files" box).
 export async function listUserMedia(userId, { kind = null, limit = 200 } = {}) {
   const params = [userId, Math.min(500, Math.max(1, limit))];
   let where = 'm.user_id = $1';
@@ -4666,8 +4666,8 @@ export async function getLastUserMsgMap() {
   return map;
 }
 
-// Cadastros por dia (aba Cadastros do /metrics). Agrupa users.created_at pelo
-// dia no fuso de São Paulo. Opcional filtro from/to (datas YYYY-MM-DD, BRT).
+// Sign-ups per day (the Sign-ups tab of /metrics). Groups users.created_at by
+// day in the São Paulo timezone. Optional from/to filter (dates YYYY-MM-DD, BRT).
 export async function getSignupsByDay({ from, to } = {}) {
   const where = ['u.created_at IS NOT NULL'], vals = [];
   if (from) { vals.push(from); where.push(`(u.created_at AT TIME ZONE 'America/Sao_Paulo')::date >= $${vals.length}`); }
@@ -4685,15 +4685,15 @@ export async function getSignupsByDay({ from, to } = {}) {
   return rows.map((r) => ({ dia: r.dia, cadastros: Number(r.cadastros) || 0 }));
 }
 
-// Total de usuários cadastrados (all-time). Usado no card "Pessoas ativas" do
-// /metrics ("de Y pessoas cadastradas").
+// Total registered users (all-time). Used in the "Active people" card of
+// /metrics ("out of Y registered people").
 export async function countRegisteredUsers() {
   const { rows } = await pool.query(`SELECT count(*) AS n FROM ${S}.users`);
   return Number(rows[0]?.n) || 0;
 }
 
-// Usuários cadastrados ANTES de uma data (BRT, YYYY-MM-DD) — baseline pro gráfico
-// acumulado de cadastros. Sem `before`, retorna 0.
+// Users registered BEFORE a date (BRT, YYYY-MM-DD) — baseline for the
+// cumulative sign-ups chart. Without `before`, returns 0.
 export async function countUsersBefore(before) {
   if (!before) return 0;
   const { rows } = await pool.query(
@@ -4705,9 +4705,9 @@ export async function countUsersBefore(before) {
   return Number(rows[0]?.n) || 0;
 }
 
-// Quebra de custo POR MODELO na janela (todos os eventos, inclusive uso de
-// sistema sem user_id — housekeeping/classificador). O dashboard mapeia cada
-// modelo pra uma categoria (texto/fallback/multimodal/busca). Ordena por custo.
+// Cost breakdown PER MODEL in the window (all events, including system
+// use with no user_id — housekeeping/classifier). The dashboard maps each
+// model to a category (text/fallback/multimodal/search). Sorted by cost.
 export async function getUsageByModel({ from, to } = {}) {
   const where = ["e." + SEM_PACOTE_LEVADO], vals = [];
   if (from) { vals.push(from); where.push(`e.ts >= $${vals.length}`); }
@@ -4727,10 +4727,10 @@ export async function getUsageByModel({ from, to } = {}) {
   return rows;
 }
 
-// ── Rotinas (tarefas recorrentes por horário) ──
+// ── Routines (time-based recurring tasks) ──
 export async function createRoutine({ userId, agentId, title, prompt, hour, minute, days, tz, channel, repeatEveryMin, repeatUntil, nextRun, curation, emailSearch }) {
-  // Tipo explícito quando vem busca estruturada: evita a heurística de curadoria
-  // barrar um prompt de e-mail que fala em "resumo de newsletters".
+  // Explicit type when a structured search comes in: avoids the curation heuristic
+  // blocking an email prompt that mentions "newsletter summary".
   const tipo=emailSearchTipo(emailSearch,curation);
   const config=composeRoutineConfig(null,{tipo,curation,emailSearch,prompt,channel:channel||'email'})||{};
   const { rows } = await pool.query(
@@ -4744,9 +4744,9 @@ export async function createRoutine({ userId, agentId, title, prompt, hour, minu
   return rows[0];
 }
 
-// Curadoria e busca de e-mail são tipos exclusivos: os dois "prepare" rodam
-// (cada um valida o que lhe cabe e lança em pt-BR) e o config resultante é a
-// composição. undefined dos dois = nada muda.
+// Curation and email search are mutually exclusive types: both "prepare" steps run
+// (each validates what's theirs and throws in pt-BR) and the resulting config is the
+// composition. undefined for both = nothing changes.
 function emailSearchTipo(emailSearch,curation){
   if(emailSearch!==undefined&&curation!==undefined)throw Error('Passe curadoria OU busca_email, não os dois.');
   return emailSearch!==undefined?'busca_email':undefined;
@@ -4758,8 +4758,8 @@ export function composeRoutineConfig(current,{tipo,curation,emailSearch,prompt,c
   return b||a;
 }
 
-// Modo INTERVALO: avança o próximo disparo da rotina (next_run). Passe nextRunIso=null
-// pra ENCERRAR a recorrência (desliga a rotina, ex: acabou a janela repeat_until).
+// INTERVAL mode: advances the routine's next trigger (next_run). Pass nextRunIso=null
+// to END the recurrence (turns off the routine, e.g.: the repeat_until window ended).
 export async function markRoutineNext(id, nextRunIso) {
   if (nextRunIso === null) {
     await pool.query(`UPDATE ${S}.routines SET enabled = false, next_run = NULL WHERE id = $1`, [id]);
@@ -4768,7 +4768,7 @@ export async function markRoutineNext(id, nextRunIso) {
   }
 }
 
-// Rotinas do usuário (pra UI), com o nome da assistente.
+// The user's routines (for the UI), with the assistant's name.
 export async function listRoutinesForUser(userId) {
   const { rows } = await pool.query(
     `SELECT r.id, r.agent_id, r.title, r.prompt, r.hour, r.minute, r.days, r.tz, r.channel,
@@ -4781,8 +4781,8 @@ export async function listRoutinesForUser(userId) {
   return rows;
 }
 
-// Rotinas candidatas a disparo (o scheduler filtra hora/dia/dedup em memória).
-// Já traz e-mail do dono e nome da assistente pra montar e entregar.
+// Routines that are candidates to fire (the scheduler filters hour/day/dedup in memory).
+// Already brings the owner's email and the assistant's name to assemble and deliver.
 export async function listDueRoutines() {
   const { rows } = await pool.query(
     `SELECT r.*, u.email, u.name AS user_name, u.language AS user_language, a.name AS agent_name
@@ -4800,8 +4800,8 @@ export async function markRoutineRun(id, day) {
   await pool.query(`UPDATE ${S}.routines SET last_run_day = $2 WHERE id = $1`, [id, day]);
 }
 
-// Disparo futuro ÚNICO da rotina existente. Não toca na cadência da rotina e
-// não reaproveita reminders (que só entregam texto fixo, sem executar o agente).
+// SINGLE future trigger of an existing routine. Doesn't touch the routine's cadence and
+// doesn't reuse reminders (which only deliver fixed text, without running the agent).
 export async function createRoutineOneShot({ userId, routineId, runAt }) {
   const {rows}=await pool.query(
     `INSERT INTO ${S}.routine_one_shots(routine_id,user_id,run_at)
@@ -4852,10 +4852,10 @@ export async function recoverRoutineOneShots() {
   return rowCount;
 }
 
-// Alvos de um broadcast do admin: um agente por dono (o mais recente), já com
-// e-mail e nome do dono + nome da assistente pra rodar e entregar. Só donos com
-// e-mail preenchido (o canal do broadcast hoje é e-mail). 1 recado por pessoa:
-// quando a pessoa tem mais de um agente, o principal é o PRIMEIRO criado (ASC).
+// Targets of an admin broadcast: one agent per owner (the most recent), already with
+// the owner's email and name + the assistant's name to run and deliver. Only owners with
+// an email on file (today the broadcast channel is email). 1 message per person:
+// when a person has more than one agent, the main one is the FIRST created (ASC).
 export async function listBroadcastTargets() {
   const { rows } = await pool.query(
     `SELECT DISTINCT ON (u.id)
@@ -4876,9 +4876,9 @@ export async function listBroadcastTargets() {
   return rows;
 }
 
-// Grava/atualiza o status de ENTREGA de UMA mensagem de WhatsApp (webhook
-// value.statuses). Upsert por wamid; NÃO rebaixa um status já mais avançado
-// (rank), mas 'failed' (rank 9) sempre vence. Idempotente por reentrega de webhook.
+// Saves/updates the DELIVERY status of ONE WhatsApp message (webhook
+// value.statuses). Upsert by wamid; does NOT downgrade an already more advanced status
+// (rank), but 'failed' (rank 9) always wins. Idempotent for webhook redelivery.
 const WA_STATUS_RANK = { sent: 1, delivered: 2, read: 3, failed: 9 };
 export async function recordWaStatus({ wamid, recipient = '', status = '', errorCode = null, errorTitle = null, errorMessage = null, statusAt = null, raw = null }) {
   if (!wamid) return null;
@@ -4904,7 +4904,7 @@ export async function recordWaStatus({ wamid, recipient = '', status = '', error
   return rows[0]?.wamid || null;
 }
 
-// Consulta o status de entrega de uma lista de wamids (correlação pós-disparo).
+// Queries the delivery status of a list of wamids (post-send correlation).
 export async function getWaStatuses(wamids = []) {
   if (!Array.isArray(wamids) || !wamids.length) return [];
   const { rows } = await pool.query(
@@ -4915,10 +4915,10 @@ export async function getWaStatuses(wamids = []) {
   return rows;
 }
 
-// ── LIVRO DE OFERTAS DE ROTINA ────────────────────────────────────────────────
-// Um único registro que os DOIS caminhos (assistente na conversa e time no
-// /broadcast) escrevem e leem. Tudo aqui é determinístico: quem decide se pode
-// ofertar é contagem e data, não leitura de intenção.
+// ── ROUTINE OFFER BOOK ────────────────────────────────────────────────
+// A single record that BOTH paths (assistant in conversation and team on
+// /broadcast) write and read. Everything here is deterministic: what decides whether it can
+// make an offer is a count and a date, not intent reading.
 
 // The whole cadence (25/09): 3 days between one offer and the next, and the
 // person's explicit opt-out. Nothing else. No offer cap or long wait, and
@@ -4926,9 +4926,9 @@ export async function getWaStatuses(wamids = []) {
 // "I don't want more suggestions" stops the offers.
 export const OFERTA_COOLDOWN_DIAS = 3;
 
-// Registra que uma oferta FOI FEITA. Chamado pela tool oferecer_rotina (via
-// 'chat') e pelo envio do painel (via 'painel'). Append-only: duas ofertas viram
-// duas linhas, porque saber que já insistimos uma vez é justamente o ponto.
+// Records that an offer WAS MADE. Called by the tool oferecer_rotina (via
+// 'chat') and by the panel's send (via 'painel'). Append-only: two offers become
+// two rows, because knowing we already pushed once is exactly the point.
 export async function openRoutineOffer({ userId, agentId = null, padrao = '', titulo = '', via = 'chat' }) {
   if (!userId) return null;
   const { rows } = await pool.query(
@@ -4940,21 +4940,21 @@ export async function openRoutineOffer({ userId, agentId = null, padrao = '', ti
   return rows[0] || null;
 }
 
-// Janela em que uma rotina nova É, na prática, a resposta à oferta: a pessoa
-// disse "pode" e o agendamento nasceu ali mesmo, na mesma conversa. Fora dela a
-// rotina só fecha a oferta se FALAR DA MESMA COISA que foi oferecida.
+// The window in which a new routine IS, in practice, the answer to the offer: the person
+// said "sure" and the schedule was born right there, in the same conversation. Outside it, the
+// routine only closes the offer if it TALKS ABOUT THE SAME THING that was offered.
 export const OFERTA_ACEITE_JANELA_MIN = 30;
 
-// Palavras de ligação não dizem do que a rotina trata, então não podem contar
-// como correspondência (senão "resumo DA agenda" casaria com qualquer coisa).
+// Connector words don't say what the routine is about, so they can't count
+// as a match (otherwise "summary OF THE calendar" would match anything).
 const ACEITE_VAZIAS = new Set([
   'para', 'pelo', 'pela', 'pelos', 'pelas', 'esse', 'essa', 'este', 'esta', 'isso',
   'como', 'quando', 'onde', 'todo', 'toda', 'todos', 'todas', 'cada', 'meu', 'minha',
   'sobre', 'entre', 'depois', 'antes', 'sempre', 'aqui', 'mais', 'menos', 'ainda',
 ]);
 
-// Tokens que de fato dizem o ASSUNTO: sem acento, sem pontuação, sem palavra
-// curta, sem hora/número solto ("7h", "14").
+// Tokens that actually state the SUBJECT: no accents, no punctuation, no short
+// word, no stray hour/number ("7am", "14").
 function aceiteTokens(texto) {
   return new Set(String(texto || '')
     .normalize('NFD').replace(/\p{M}/gu, '')
@@ -4964,18 +4964,18 @@ function aceiteTokens(texto) {
 }
 
 /**
- * A rotina que acabou de nascer corresponde a ESTA oferta?
+ * Does the routine that just got created match THIS offer?
  *
- * Existe porque "criou uma rotina" não é o mesmo que "aceitou a oferta": em
- * 17/09 um usuário criou uma rotina de e-mails e ela fechou, de carona, uma
- * oferta de resumo de agenda feita um dia antes, que ele nunca respondeu. A
- * régua passou a contar uma conversão que não houve.
+ * Exists because "created a routine" isn't the same as "accepted the offer": on
+ * 2026-09-17 a user created an email routine and it closed, as a side effect, a
+ * calendar-summary offer made a day earlier, which he never answered. The
+ * metric started counting a conversion that never happened.
  *
- * Determinístico de propósito, sem leitura de intenção pelo modelo: vale a
- * PROXIMIDADE (a rotina nasceu logo depois da oferta, na mesma conversa) ou a
- * CORRESPONDÊNCIA DE ASSUNTO (dois termos de conteúdo em comum no título). Na
- * dúvida a oferta fica aberta, que é o lado barato do erro: no máximo a pessoa
- * aparece como "ainda não respondeu" em algo que ela já tem.
+ * Deliberately deterministic, with no intent reading by the model: either
+ * PROXIMITY counts (the routine was born right after the offer, in the same conversation) or
+ * SUBJECT MATCH (two content terms in common in the title). When in
+ * doubt, the offer stays open, which is the cheap side of the error: at most the person
+ * shows up as "hasn't answered yet" on something they already have.
  */
 export function ofertaCorresponde(oferta, { titulo = '', criadaEm = Date.now() } = {}) {
   if (!oferta) return false;
@@ -4988,12 +4988,12 @@ export function ofertaCorresponde(oferta, { titulo = '', criadaEm = Date.now() }
   return comuns >= 2;
 }
 
-// Fecha como ACEITA a oferta que a rotina nova de fato atende. Chamado quando um
-// agendamento nasce de verdade (criar_rotina): a aceitação é o FATO de a rotina
-// existir, não o "pode sim" na conversa (que o modelo poderia ler errado). Mas é
-// o fato de existir A ROTINA OFERECIDA: fecha no máximo UMA oferta, do mesmo
-// assistente, e só se ela corresponder. Sem oferta correspondente não faz nada —
-// criar rotina por conta própria é normal e não pode virar conversão.
+// Closes as ACCEPTED the offer that the new routine actually fulfills. Called when a
+// schedule is actually born (criar_rotina): acceptance is the FACT that the routine
+// exists, not the "sure" in the conversation (which the model could misread). But it's
+// the fact that THE OFFERED ROUTINE exists: closes at most ONE offer, from the same
+// assistant, and only if it matches. With no matching offer it does nothing —
+// creating a routine on one's own is normal and can't become a conversion.
 export async function acceptRoutineOffers({ userId, agentId = null, routineId = null, titulo = '' }) {
   if (!userId) return 0;
   const { rows } = await pool.query(
@@ -5023,7 +5023,7 @@ export async function listRoutineOffers(userId, limit = 10) {
   return rows;
 }
 
-// Opt-out duro. padrao '*' = não sugerir nada; um id do catálogo = só aquele tipo.
+// Hard opt-out. default '*' = suggest nothing; a catalog id = only that type.
 export async function setRoutineOfferOptOut({ userId, padrao = '*', motivo = '', origem = 'chat' }) {
   if (!userId) return null;
   const p = String(padrao || '*').slice(0, 40) || '*';
@@ -5045,9 +5045,9 @@ export async function clearRoutineOfferOptOut({ userId, padrao = null }) {
   return rowCount || 0;
 }
 
-// A PERGUNTA que os dois caminhos fazem: posso oferecer agora, e se não, por quê?
-// Devolve sempre o histórico junto, porque a tela precisa MOSTRAR o motivo da
-// supressão (esconder sem dizer por que é o que faz alguém forçar de novo).
+// The QUESTION both paths ask: can I make an offer now, and if not, why?
+// Always returns the history along with it, because the screen needs to SHOW the reason for the
+// suppression (hiding it without saying why is what makes someone force it again).
 export async function routineOfferGate(userId, padrao = null) {
   const vazio = { pode: false, motivo: 'sem usuário', ofertas: 0, ultima: null, aberta: null, optout: null };
   if (!userId) return vazio;
@@ -5078,9 +5078,9 @@ export async function routineOfferGate(userId, padrao = null) {
   return { ...base, pode: true, motivo: '' };
 }
 
-// Quantos agendamentos VIVOS a pessoa tem (rotina e lembrete contam igual, mesma
-// regra da meta: série de lembretes é UM agendamento). É o número que decide se
-// o assistente ainda deve pensar em ofertar.
+// How many LIVE schedules the person has (routine and reminder count the same, same
+// rule as the goal: a series of reminders is ONE schedule). It's the number that decides whether
+// the assistant should still think about making an offer.
 export async function countUserSchedules(userId) {
   if (!userId) return 0;
   const { rows } = await pool.query(
@@ -5092,10 +5092,10 @@ export async function countUserSchedules(userId) {
   return Number(rows[0]?.n || 0);
 }
 
-// Persiste uma ABERTURA de conversa iniciada pelo agente (só mensagem do assistente,
-// sem turno de usuário): grava no history da thread + insere 1 linha em messages.
-// Usado pelas campanhas de ciclo de vida (welcome/reativação) — o agente "abre" a
-// conversa com o dono e o texto fica no histórico pra dar continuidade se ele engajar.
+// Persists an agent-initiated conversation OPENER (assistant message only,
+// no user turn): writes to the thread's history + inserts 1 row in messages.
+// Used by lifecycle campaigns (welcome/reactivation) — the agent "opens" the
+// conversation with the owner and the text stays in the history to give continuity if they engage.
 export async function persistAgentOpening({ agentId, userId, title, text }) {
   const thread = await getOrCreateThreadByTitle({ agentId, userId, title });
   if (!(await appendAssistantToThread({ threadId: thread.id, userId, text }))) throw new Error('THREAD_NOT_FOUND');
@@ -5143,20 +5143,20 @@ export async function getRoutineOwned(id, userId) {
   return rows[0] || null;
 }
 
-// ── Lembretes pontuais (one-off, criados pelo agente na conversa) ──
+// ── One-off reminders (created by the agent in the conversation) ──
 export async function createReminder(args) {
   // Reminder, request identity and first occurrence commit together. The store
   // also scopes ownership and refuses a duplicate with different delivery terms.
   return reminderExecutionStore.create(args);
 }
 
-// Lembretes prontos pra disparar: já passaram do horário e ainda estão pendentes.
-// Traz e-mail do dono e nome da assistente pra montar/entregar.
+// Reminders ready to fire: already past their time and still pending.
+// Brings the owner's email and the assistant's name to assemble/deliver.
 export async function listDueReminders() {
   return reminderExecutionStore.listDue();
 }
 
-// Lembretes futuros do usuário (pra UI/consulta).
+// User's future reminders (for UI/queries).
 export async function listRemindersForUser(userId, options) {
   return reminderExecutionStore.listForUser(userId, options);
 }
@@ -5166,7 +5166,7 @@ export async function cancelReminder(id, userId, options) {
 }
 export const rescheduleReminder = (id,userId,change) => reminderExecutionStore.reschedule(id,userId,change);
 
-// ── Threads (tópicos/tarefas; uma conversa resgatável cada) ──
+// ── Threads (topics/tasks; each one a resumable conversation) ──
 export async function createThread({ agentId, userId, title }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.threads (agent_id, user_id, title) VALUES ($1,$2,$3)
@@ -5176,10 +5176,10 @@ export async function createThread({ agentId, userId, title }) {
   return rows[0];
 }
 
-// Todas as threads do usuário (de todas as assistentes), com o nome da assistente.
+// All of the user's threads (across all assistants), with the assistant's name.
 export async function listThreads(userId) {
-  // Esconde a thread interna do onboarding ("✨ Boas-vindas"): ela carrega o
-  // prompt interno e não é uma conversa de verdade do usuário.
+  // Hides the internal onboarding thread ("✨ Boas-vindas"): it carries the
+  // internal prompt and isn't a real conversation of the user's.
   const { rows } = await pool.query(
     `SELECT t.id, t.agent_id, t.title, t.status, t.updated_at, a.name AS agent_name,
             t.favorite, (t.archived_at IS NOT NULL) AS archived,
@@ -5200,10 +5200,10 @@ export async function listThreads(userId) {
   return rows;
 }
 
-// Atividade recente das OUTRAS conversas do usuário (todos os assistentes/canais),
-// pra dar ao assistente atual uma noção do que está rolando fora desta thread.
-// Devolve título, nome do assistente, quando foi, o resumo (se houver) e a última
-// mensagem do usuário naquela thread. Exclui a thread atual e a interna de onboarding.
+// Recent activity from the user's OTHER conversations (all assistants/channels),
+// to give the current assistant a sense of what's going on outside this thread.
+// Returns title, assistant name, when it was, the summary (if any) and the last
+// user message in that thread. Excludes the current thread and the internal onboarding one.
 export async function recentCrossChannelThreads(userId, excludeThreadId, limit = 6) {
   const { rows } = await pool.query(
     `SELECT t.id, t.title, t.updated_at, t.summary, a.name AS agent_name,
@@ -5223,8 +5223,8 @@ export async function recentCrossChannelThreads(userId, excludeThreadId, limit =
   return rows;
 }
 
-// Mapa: nome de canal como o usuário fala -> título fixo da thread daquele canal.
-// Web/títulos livres devolvem null (caem na busca por palavra).
+// Map: channel name as the user says it -> fixed title of that channel's thread.
+// Web/free-form titles return null (they fall back to word search).
 export function channelToThreadTitle(channel) {
   if (!channel) return null;
   const c = String(channel).toLowerCase().trim();
@@ -5235,9 +5235,9 @@ export function channelToThreadTitle(channel) {
   return null;
 }
 
-// RECALL entre canais: busca as OUTRAS conversas do MESMO assistente + MESMO dono.
-// Escopo TRAVADO por (agentId,userId) — o modelo só passa filtros (busca/canal/datas).
-// Exclui a thread interna de onboarding e (opcional) a thread atual.
+// RECALL across channels: searches the OTHER conversations of the SAME assistant + SAME owner.
+// Scope LOCKED by (agentId,userId) — the model only passes filters (search/channel/dates).
+// Excludes the internal onboarding thread and (optionally) the current thread.
 export async function searchThreads({ agentId, userId, q, channel, since, until, excludeThreadId, limit = 10 }) {
   const params = [agentId, userId];
   const where = [`t.agent_id = $1`, `t.user_id = $2`, `t.title <> '✨ Boas-vindas'`, `t.deleted_at IS NULL`];
@@ -5268,9 +5268,9 @@ export async function searchThreads({ agentId, userId, q, channel, since, until,
   return rows;
 }
 
-// RECALL: lê o conteúdo de UMA thread do próprio dono/assistente. Resolve por id,
-// ou por canal/título, ou pelo melhor match da busca. Devolve summary + mensagens
-// (as que casam com a busca, ou as últimas N), com teto rígido (custo de token).
+// RECALL: reads the content of ONE thread of the owner/assistant themself. Resolves by id,
+// or by channel/title, or by the best search match. Returns summary + messages
+// (the ones matching the search, or the last N), with a hard cap (token cost).
 export async function readThreadContent({ agentId, userId, threadId, channel, q, limit = 30 }) {
   let thread = null;
   if (threadId) {
@@ -5314,12 +5314,12 @@ export async function getThreadOwned(id, userId) {
   return rows[0] || null;
 }
 
-// Amarra uma thread a uma skill de webhook (persiste o slug pro ping-pong).
+// Binds a thread to a webhook skill (persists the slug for the ping-pong).
 export async function setThreadWebhookSkill(id, slug) {
   await pool.query(`UPDATE ${S}.threads SET webhook_skill = $2 WHERE id = $1`, [id, String(slug || '')]);
 }
 
-// Foco de app da conversa (route-guard sticky). Devolve null quando não há foco.
+// The conversation's app focus (sticky route-guard). Returns null when there's no focus.
 export async function getThreadAppFocus(threadId) {
   if (!threadId) return null;
   const { rows } = await pool.query(
@@ -5328,8 +5328,8 @@ export async function getThreadAppFocus(threadId) {
   return { system: rows[0].app_focus, at: rows[0].app_focus_at };
 }
 
-// Grava (ou limpa, com system vazio) o foco de app da conversa. Cada gravação
-// re-carimba o relógio: o foco morre por SILÊNCIO, não por idade absoluta.
+// Saves (or clears, with an empty system) the conversation's app focus. Every write
+// re-stamps the clock: the focus dies from SILENCE, not from absolute age.
 export async function setThreadAppFocus(threadId, system) {
   if (!threadId) return;
   const slug = String(system || '');
@@ -5342,13 +5342,13 @@ export async function setThreadAppFocus(threadId, system) {
   );
 }
 
-// Mensagens cruas de uma thread (pra resgatar o histórico na UI).
+// Raw messages of a thread (to recover the history in the UI).
 export async function getThreadMessages(threadId) {
-  // Desempate por id: cada turno grava user+assistant no MESMO INSERT, então os
-  // dois ganham o mesmo ts (now() = horário da transação). Só ORDER BY ts deixa
-  // o empate indefinido e às vezes a pergunta do usuário aparecia DEPOIS da
-  // resposta ao reabrir a conversa. O bigserial é atribuído na ordem do VALUES
-  // (user antes de assistant), então ts, id devolve a ordem real do diálogo.
+  // Tie-break by id: each turn writes user+assistant in the SAME INSERT, so
+  // both get the same ts (now() = transaction time). ORDER BY ts alone leaves
+  // the tie undefined and sometimes the user's question showed up AFTER the
+  // answer when reopening the conversation. The bigserial is assigned in VALUES order
+  // (user before assistant), so ts, id returns the real order of the dialogue.
   const { rows } = await pool.query(
     `SELECT id, role, content, ts, attachments FROM ${S}.messages WHERE thread_id = $1 ORDER BY ts, id`,
     [threadId],
@@ -5356,16 +5356,16 @@ export async function getThreadMessages(threadId) {
   return rows;
 }
 
-// Marca a conversa como lida até uma mensagem (a última que a interface REALMENTE
-// mostrou). Marcar até a mensagem em vez de now() fecha a corrida: se algo chegar
-// entre a leitura e esta gravação, continua não lido.
-// greatest() protege contra chamadas fora de ordem (poll lento passando atrás).
+// Marks the conversation as read up to a message (the last one the interface REALLY
+// showed). Marking up to the message instead of now() closes the race: if something arrives
+// between the read and this write, it stays unread.
+// greatest() guards against out-of-order calls (a slow poll arriving late).
 //
-// upToMsgId é o ID da mensagem, NÃO o ts dela. Passar o ts não funciona: o Postgres
-// guarda timestamptz com microssegundo, o driver entrega um Date de JS (milissegundo)
-// e o toISOString() trunca. O valor gravado ficava ~0,5ms ANTES do ts real, então
-// `m.ts > last_read_at` continuava verdadeiro e a bolinha de não lida nunca apagava.
-// Resolvendo o ts dentro do próprio banco, a precisão nunca sai de lá.
+// upToMsgId is the message's ID, NOT its ts. Passing the ts doesn't work: Postgres
+// stores timestamptz with microsecond precision, the driver delivers a JS Date (millisecond)
+// and toISOString() truncates it. The saved value ended up ~0.5ms BEFORE the real ts, so
+// `m.ts > last_read_at` stayed true and the unread dot never cleared.
+// By resolving the ts inside the database itself, the precision never leaves it.
 export async function markThreadRead(id, userId, upToMsgId) {
   if (!id || !userId) return;
   const msgId = Number(upToMsgId);
@@ -5380,8 +5380,8 @@ export async function markThreadRead(id, userId, upToMsgId) {
   );
 }
 
-// Reusa (ou cria) uma thread fixa por título — usado pelo canal Telegram,
-// que é uma conversa contínua só (um fio por bot).
+// Reuses (or creates) a fixed thread by title — used by the Telegram channel,
+// which is just one continuous conversation (one thread per bot).
 export async function getOrCreateThreadByTitle({ agentId, userId, title }) {
   const { rows } = await pool.query(
     `SELECT id, agent_id, user_id, title, status, summary, history, deleted_at FROM ${S}.threads
@@ -5389,7 +5389,7 @@ export async function getOrCreateThreadByTitle({ agentId, userId, title }) {
     [agentId, userId, title],
   );
   if (rows[0]) {
-    // Nova atividade num canal cuja thread o usuário havia apagado: reativa.
+    // New activity on a channel whose thread the user had deleted: reactivates it.
     if (rows[0].deleted_at) {
       await pool.query(`UPDATE ${S}.threads SET deleted_at = NULL WHERE id = $1`, [rows[0].id]);
       rows[0].deleted_at = null;
@@ -5407,10 +5407,10 @@ export async function setThreadStatus(id, userId, status) {
   await pool.query(`UPDATE ${S}.threads SET status = $3, updated_at = now() WHERE id = $1 AND user_id = $2`, [id, userId, status]);
 }
 
-// Apaga uma conversa "para o usuário": SOFT delete. A linha e as mensagens
-// FICAM no banco; só marcamos deleted_at pra sumir da interface e do recall.
-// Uma nova atividade no canal reativa a thread (getOrCreateThreadByTitle limpa o
-// flag). Retorna quantas linhas marcou (0 = não era do usuário / já apagada).
+// Deletes a conversation "for the user": SOFT delete. The row and the messages
+// STAY in the database; we only mark deleted_at so it disappears from the interface and from recall.
+// New activity on the channel reactivates the thread (getOrCreateThreadByTitle clears the
+// flag). Returns how many rows it marked (0 = wasn't the user's / already deleted).
 export async function deleteThread(id, userId) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.threads SET deleted_at = now()
@@ -5420,7 +5420,7 @@ export async function deleteThread(id, userId) {
   return rowCount;
 }
 
-// Favoritar/desfavoritar uma conversa (destaque no topo da lista).
+// Favorite/unfavorite a conversation (highlight at the top of the list).
 export async function setThreadFavorite(id, userId, on) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.threads SET favorite = $3
@@ -5430,7 +5430,7 @@ export async function setThreadFavorite(id, userId, on) {
   return rowCount;
 }
 
-// Arquivar/desarquivar (tira/traz de volta da lista principal, sem apagar).
+// Archive/unarchive (removes/brings back from the main list, without deleting).
 export async function setThreadArchived(id, userId, on) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.threads SET archived_at = ${on ? 'now()' : 'NULL'}
@@ -5440,21 +5440,21 @@ export async function setThreadArchived(id, userId, on) {
   return rowCount;
 }
 
-// Grava a pergunta do usuário JÁ NA CHEGADA, antes de o turno rodar.
-// Antes as duas linhas (pergunta + resposta) nasciam juntas no FIM do turno, então
-// durante os 60-90s de processamento a pergunta simplesmente não existia no banco:
-// a lista de conversas seguia mostrando a resposta ANTERIOR como último recado e a
-// conversa não subia pro topo. E se o turno morresse no meio, a pergunta sumia.
-// Agora a linha nasce aqui; saveThreadTurn só completa o texto final dela.
-// Devolve o id da linha (ou null se falhar: o fim do turno volta a inserir as duas).
+// Saves the user's question ON ARRIVAL, already before the turn runs.
+// Before, both rows (question + answer) were born together at the END of the turn, so
+// during the 60-90s of processing the question simply didn't exist in the database:
+// the conversation list kept showing the PREVIOUS answer as the last message and the
+// conversation didn't move to the top. And if the turn died midway, the question vanished.
+// Now the row is born here; saveThreadTurn only fills in its final text.
+// Returns the row's id (or null on failure: the end of the turn falls back to inserting both).
 export async function startThreadTurn(threadId, agentId, content, title) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.messages (agent_id, thread_id, role, content, attachments)
        VALUES ($1,$2,'user',$3,NULL) RETURNING id`,
     [agentId, threadId, clean(content ?? '')],
   );
-  // Sobe a conversa pro topo da lista na hora (a ordenação é por updated_at).
-  // O título só é preenchido se ainda estiver vazio; nunca sobrescreve o que existe.
+  // Moves the conversation to the top of the list right away (ordering is by updated_at).
+  // The title is only filled in if it's still empty; never overwrites what exists.
   await pool.query(
     title
       ? `UPDATE ${S}.threads SET updated_at = now(), title = coalesce(nullif(title, ''), $2) WHERE id = $1`
@@ -5464,20 +5464,20 @@ export async function startThreadTurn(threadId, agentId, content, title) {
   return rows[0]?.id ?? null;
 }
 
-// Persiste uma troca da thread: history+summary na thread + log bruto (com thread_id).
-// `interjecoes` = mensagens que o usuário mandou DEPOIS que o turno começou e que
-// foram absorvidas pelo próprio turno (ver pollNewUserMsg em core-proto/core.mjs).
-// Elas viram linhas de 'user' ENTRE a pergunta e a resposta: sem isso a mensagem
-// do usuário não apareceria em lugar nenhum da conversa (ficaria só no history
-// jsonb) e o histórico mentiria sobre o que foi dito. Ordem garantida pelo
-// bigserial: a listagem é ORDER BY ts, id.
+// Persists a thread exchange: history+summary in the thread + raw log (with thread_id).
+// `interjecoes` = messages the user sent AFTER the turn started and that
+// were absorbed by the turn itself (see pollNewUserMsg in core-proto/core.mjs).
+// They become 'user' rows BETWEEN the question and the answer: without this, the
+// user's message wouldn't show up anywhere in the conversation (it would only stay in the history
+// jsonb) and the history would lie about what was said. Order guaranteed by the
+// bigserial: the listing is ORDER BY ts, id.
 export async function saveThreadTurn(threadId, agentId, { history, summary, userMsg, assistantMsg, title, attachments, userMsgId, interjecoes = [], baseHistory, skipAssistant = false }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(`SELECT history FROM ${S}.threads WHERE id=$1 AND agent_id=$2 FOR UPDATE`, [threadId, agentId]);
     if (!rows.length) throw new Error('THREAD_NOT_FOUND');
-    // Snapshot obrigatório: nunca adivinhar a base a partir do estado atual.
+    // Mandatory snapshot: never guess the base from the current state.
     const base = cleanDeep(baseHistory);
     const merged = mergeThreadHistory(base, rows[0].history, cleanDeep(history));
     const histJson = JSON.stringify(merged);
@@ -5493,11 +5493,11 @@ export async function saveThreadTurn(threadId, agentId, { history, summary, user
         [threadId, histJson, summ],
       );
     }
-    // O card/anexo fica só na linha do assistente (foi ele que produziu).
+    // The card/attachment stays only on the assistant's row (it's what produced it).
     const att = Array.isArray(attachments) && attachments.length ? JSON.stringify(attachments) : null;
-    // Se a pergunta já nasceu na chegada (startThreadTurn), aqui só se completa o
-    // texto final dela — o turno reescreve a mensagem gravada quando tem anexo
-    // (o marcador 📎 no lugar do PDF inteiro, por exemplo).
+    // If the question was already born on arrival (startThreadTurn), here we only complete its
+    // final text — the turn rewrites the saved message when there's an attachment
+    // (the 📎 marker in place of the whole PDF, for example).
     const extras = (Array.isArray(interjecoes) ? interjecoes : [])
       .map((t) => clean(typeof t === 'string' ? t : (t?.text ?? '')))
       .filter((t) => t && t.trim());
@@ -5558,17 +5558,17 @@ export async function saveThreadTurn(threadId, agentId, { history, summary, user
   finally { client.release(); }
 }
 
-// ── Bots de Telegram (um por usuário, token próprio) ──
-// O token do BotFather é uma credencial long-lived: quem tem ele fala pelo bot.
-// No banco ele NUNCA aparece em claro: `token_hash` (sha256) é a chave de busca
-// e `token_enc` guarda o valor cifrado pelo cofre. Como o poller precisa do
-// token original pra chamar a API do Telegram, hash sozinho não bastaria.
+// ── Telegram bots (one per user, own token) ──
+// BotFather's token is a long-lived credential: whoever has it speaks for the bot.
+// In the database it NEVER appears in plain text: `token_hash` (sha256) is the lookup key
+// and `token_enc` holds the value encrypted by the vault. Since the poller needs the
+// original token to call the Telegram API, a hash alone wouldn't be enough.
 export const tgHash = (t) => createHash('sha256').update(String(t ?? '')).digest('hex');
-// Casa tanto o token em claro quanto o hash, e ainda pega a linha legada que
-// nunca passou pelo backfill (lá o token_hash ainda guarda o token em claro).
+// Matches both the plain-text token and the hash, and also catches the legacy row that
+// never went through the backfill (there token_hash still holds the plain-text token).
 export const tgKeys = (t) => [tgHash(t), String(t ?? '')];
 
-// Devolve o token REAL em `token`, pra todo mundo que chama seguir igual.
+// Returns the REAL token in `token`, so everyone calling it keeps working the same way.
 export function tgRow(r) {
   if (!r) return r;
   const out = { ...r };
@@ -5576,8 +5576,8 @@ export function tgRow(r) {
   delete out.token_enc;
   return out;
 }
-// Em lista, uma linha que não decifra (cofre indisponível) não pode derrubar as
-// outras: fica de fora e o motivo vai pro log.
+// In a list, a row that doesn't decrypt (vault unavailable) can't bring down the
+// others: it's left out and the reason goes to the log.
 function tgRows(rows) {
   const out = [];
   for (const r of rows) {
@@ -5591,8 +5591,8 @@ export async function saveTelegramBot({ userId, agentId, token, botUsername }) {
   const raw = String(token);
   const hash = tgHash(raw);
   const enc = encMaybe(raw);
-  // Linha legada (PK ainda é o token em claro): sobe pro par hash+cifrado ANTES
-  // do upsert, senão o ON CONFLICT não casaria e criaria uma segunda linha.
+  // Legacy row (PK is still the plain-text token): upgrades to the hash+encrypted pair BEFORE
+  // the upsert, otherwise the ON CONFLICT wouldn't match and would create a second row.
   await pool.query(
     `UPDATE ${S}.telegram_bots SET token_hash = $1, token_enc = $2 WHERE token_hash = $3`,
     [hash, enc, raw],
@@ -5611,7 +5611,7 @@ export async function saveTelegramBot({ userId, agentId, token, botUsername }) {
   return tgRow(rows[0]);
 }
 
-// Todos os bots ativos (pra subir os pollers no boot).
+// All active bots (to bring up the pollers at boot).
 export async function listEnabledTelegramBots() {
   const { rows } = await pool.query(
     `SELECT token_hash, token_enc, user_id, agent_id, bot_username, chat_id, last_update_id FROM ${S}.telegram_bots WHERE enabled = true`,
@@ -5624,9 +5624,9 @@ export async function getTelegramBot(token) {
   return rows[0] ? tgRow(rows[0]) : null;
 }
 
-// Bot do usuário (pra mostrar status na UI). Legado: primeiro bot (mais antigo)
-// do usuário. Mantido pra compatibilidade; a UI agora lista TODOS via
-// listTelegramBotsForUser (um bot por agente).
+// The user's bot (to show status in the UI). Legacy: the user's first (oldest)
+// bot. Kept for compatibility; the UI now lists ALL of them via
+// listTelegramBotsForUser (one bot per agent).
 export async function getTelegramBotForUser(userId) {
   const { rows } = await pool.query(
     `SELECT token_hash, token_enc, agent_id, bot_username, chat_id, enabled, pair_code FROM ${S}.telegram_bots WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1`,
@@ -5635,11 +5635,11 @@ export async function getTelegramBotForUser(userId) {
   return rows[0] ? tgRow(rows[0]) : null;
 }
 
-// Bot pra ENTREGA proativa (lembrete/rotina/vídeo): prefere o bot amarrado ao
-// agente que está entregando; se aquele agente não tem bot próprio, cai no
-// primeiro bot do usuário (compat com quem tem um bot só servindo vários
-// agentes). Assim, com um bot por agente a mensagem sai no chat certo, e o
-// caso de bot único segue funcionando pra todos os agentes.
+// Bot for proactive DELIVERY (reminder/routine/video): prefers the bot bound to the
+// agent that's delivering; if that agent doesn't have its own bot, falls back to the
+// user's first bot (compat with whoever has a single bot serving several
+// agents). This way, with one bot per agent the message goes out in the right chat, and the
+// single-bot case keeps working for all agents.
 export async function getTelegramBotForDelivery(userId, agentId) {
   if (agentId) {
     const { rows } = await pool.query(
@@ -5652,7 +5652,7 @@ export async function getTelegramBotForDelivery(userId, agentId) {
   return getTelegramBotForUser(userId);
 }
 
-// TODOS os bots do usuário (um por agente). Um token do BotFather = um bot.
+// ALL of the user's bots (one per agent). One BotFather token = one bot.
 export async function listTelegramBotsForUser(userId) {
   const { rows } = await pool.query(
     `SELECT token_hash, token_enc, agent_id, bot_username, chat_id, enabled, pair_code FROM ${S}.telegram_bots WHERE user_id = $1 ORDER BY created_at ASC`,
@@ -5661,9 +5661,9 @@ export async function listTelegramBotsForUser(userId) {
   return tgRows(rows);
 }
 
-// Apaga UM bot do usuário por token, com checagem de posse (não deixa apagar
-// bot de outro dono só sabendo o token). Aceita o token em claro ou o hash (é o
-// que a tela manda hoje). Devolve o registro apagado ou null.
+// Deletes ONE user's bot by token, with an ownership check (doesn't let you delete
+// another owner's bot just by knowing the token). Accepts the plain-text token or the hash (which is
+// what the screen sends today). Returns the deleted record or null.
 export async function deleteTelegramBotOwned(userId, token) {
   const [hash, raw] = tgKeys(token);
   const { rows } = await pool.query(
@@ -5680,8 +5680,8 @@ export async function bindTelegramChat(token, chatId) {
   await pool.query(`UPDATE ${S}.telegram_bots SET chat_id = $3 WHERE token_hash IN ($1,$2)`, [hash, raw, String(chatId)]);
 }
 
-// Confirma o último update_id tratado (o poller retoma daqui após restart).
-// greatest() protege contra escrita fora de ordem.
+// Confirms the last handled update_id (the poller resumes from here after a restart).
+// greatest() guards against out-of-order writes.
 export async function setTelegramOffset(token, updateId) {
   const [hash, raw] = tgKeys(token);
   await pool.query(
@@ -5703,8 +5703,8 @@ export async function deleteTelegramBot(token) {
 // initVault() (initDb runs before it, so it can't happen in there).
 export async function migrateConnectorSecrets() {
   const out = { telegram: 0, mcp: 0, oauth: 0, skipped: false };
-  // Sem chave carregada, cifrar é impossível e gravar em claro é justamente o
-  // que estamos corrigindo: não faz nada e deixa o alarme do boot falar.
+  // With no key loaded, encrypting is impossible and saving in plain text is exactly what
+  // we're fixing: does nothing and lets the boot alarm speak up.
   if (!vaultEnabled()) { out.skipped = true; return out; }
 
   const tg = await pool.query(`SELECT token_hash FROM ${S}.telegram_bots WHERE token_enc IS NULL`);
@@ -5728,9 +5728,9 @@ export async function migrateConnectorSecrets() {
     out.mcp++;
   }
 
-  // OAuth: sobrou token em claro de antes da coluna entrar no cofre (achado ao
-  // conferir o banco de produção: 2 access_token de GitHub de julho). A leitura
-  // já é tolerante (decMaybe), então cifrar aqui é transparente.
+  // OAuth: a plain-text token was left over from before the column entered the vault (found when
+  // checking the production database: 2 GitHub access_tokens from July). Reading
+  // is already tolerant (decMaybe), so encrypting here is transparent.
   const oa = await pool.query(
     `SELECT user_id, provider, access_token, refresh_token FROM ${S}.oauth_tokens
        WHERE (access_token IS NOT NULL AND access_token <> '' AND access_token NOT LIKE 'v1:%')
@@ -5749,10 +5749,10 @@ export async function migrateConnectorSecrets() {
   return out;
 }
 
-// ── Canal WhatsApp (telefone -> usuário + agente ativo) ──
-// Telefone sempre em dígitos (E.164 sem '+'), igual ao `from` que a Meta manda.
-// BR: a Meta (Cloud API) às vezes manda o 'from' SEM o 9º dígito do celular.
-// Gera as variantes (com/sem o 9) pra casar com o que o usuário cadastrou.
+// ── WhatsApp channel (phone -> user + active agent) ──
+// Phone always in digits (E.164 without '+'), same as the `from` Meta sends.
+// BR: Meta (Cloud API) sometimes sends 'from' WITHOUT the 9th digit of the cell phone.
+// Generates the variants (with/without the 9) to match what the user registered.
 function waPhoneVariants(phone) {
   const p = String(phone || '');
   const out = new Set([p]);
@@ -5773,10 +5773,10 @@ export async function getWhatsAppLink(phone) {
   return rows.find((r) => r.wa_phone === phone) || rows[0];
 }
 
-// Carimba "a pessoa acabou de falar comigo no WhatsApp". Chamado no webhook de
-// entrada, ANTES de qualquer roteamento, pra valer também pra mensagem que cai
-// no menu ou em mídia não suportada (do ponto de vista da Meta, qualquer inbound
-// reabre a janela de 24h). Casa com/sem o 9º dígito.
+// Stamps "the person just talked to me on WhatsApp". Called in the inbound
+// webhook, BEFORE any routing, so it also applies to a message that lands
+// on the menu or on unsupported media (from Meta's standpoint, any inbound
+// reopens the 24h window). Matches with/without the 9th digit.
 export async function touchWaInbound(phone) {
   try {
     await pool.query(
@@ -5786,11 +5786,11 @@ export async function touchWaInbound(phone) {
   } catch (e) { console.error('[db] touchWaInbound:', e?.message ?? e); }
 }
 
-// Quando foi o último inbound daquele telefone (null = nunca). Usado pelo envio
-// proativo pra decidir sessão vs template ANTES de chamar a Meta. PROPAGA erro de
-// propósito: quem chama distingue "sei que a janela fechou" (null) de "não deu
-// pra saber" (exceção), e no segundo caso mantém o comportamento antigo em vez de
-// achatar a formatação de todo mundo por causa de uma falha de banco.
+// When that phone's last inbound was (null = never). Used by proactive sending
+// to decide session vs. template BEFORE calling Meta. PROPAGATES errors on
+// purpose: the caller distinguishes "I know the window closed" (null) from "couldn't
+// tell" (exception), and in the second case keeps the old behavior instead of
+// flattening everyone's formatting because of a database hiccup.
 export async function getWaLastInbound(phone) {
   const { rows } = await pool.query(
     `SELECT max(last_inbound_at) AS at FROM ${S}.whatsapp_links WHERE wa_phone = ANY($1::text[])`,
@@ -5799,8 +5799,8 @@ export async function getWaLastInbound(phone) {
   return rows[0]?.at || null;
 }
 
-// Falhas de entrega do WhatsApp agregadas (painel /metrics). Junta o status da
-// Meta com a pessoa dona do número (casando com/sem o 9º dígito).
+// Aggregated WhatsApp delivery failures (/metrics panel). Joins Meta's
+// status with the person who owns the number (matching with/without the 9th digit).
 export async function listWaFailures({ days = 7 } = {}) {
   const n = Math.max(1, Math.min(90, Number(days) || 7));
   const { rows } = await pool.query(
@@ -5819,10 +5819,10 @@ export async function listWaFailures({ days = 7 } = {}) {
   return rows;
 }
 
-// Link do usuário (pra mostrar status na UI).
-// `last_inbound_at` vem junto porque quem entrega campanha (lifecycle-deliver.mjs)
-// precisa saber ANTES de mandar se a janela de 24h está aberta: dentro dela a Cloud
-// API aceita mensagem de sessão, que preserva quebra de linha e lista.
+// User's link (to show status in the UI).
+// `last_inbound_at` comes along because whoever delivers a campaign (lifecycle-deliver.mjs)
+// needs to know BEFORE sending whether the 24h window is open: inside it the Cloud
+// API accepts a session message, which preserves line breaks and lists.
 export async function getWhatsAppLinkForUser(userId) {
   const { rows } = await pool.query(
     `SELECT wa_phone, active_agent_id, enabled, last_inbound_at FROM ${S}.whatsapp_links WHERE user_id = $1 LIMIT 1`,
@@ -5831,13 +5831,13 @@ export async function getWhatsAppLinkForUser(userId) {
   return rows[0] || null;
 }
 
-// Amarra (ou re-amarra) um telefone a um usuário, com um agente ativo opcional.
-// `verified` = a posse do número FOI provada agora (inbound daquele telefone com
-// o código do desafio). Sem isso, telefone que já é de outra conta NUNCA muda de
-// dono: antes o ON CONFLICT reatribuía o user_id na palavra de quem digitou, então
-// bastava informar o número alheio pra passar a receber o inbound dele.
-// A checagem cobre as duas grafias do celular BR (com e sem o 9º dígito), que é
-// como o inbound é resolvido (waPhoneVariants).
+// Binds (or re-binds) a phone to a user, with an optional active agent.
+// `verified` = ownership of the number WAS proven just now (inbound from that phone with
+// the challenge code). Without this, a phone that already belongs to another account NEVER changes
+// owner: before, ON CONFLICT reassigned the user_id on the word of whoever typed it, so
+// it was enough to enter someone else's number to start receiving their inbound.
+// The check covers both spellings of a BR cell phone (with and without the 9th digit), which is
+// how the inbound is resolved (waPhoneVariants).
 export async function upsertWhatsAppLink({ phone, userId, activeAgentId, verified = false }) {
   const cands = waPhoneVariants(phone);
   const c = await pool.connect();
@@ -5852,8 +5852,8 @@ export async function upsertWhatsAppLink({ phone, userId, activeAgentId, verifie
       await c.query('ROLLBACK');
       throw Object.assign(Error('Esse número já está conectado a outra conta.'), { code: 'WA_PHONE_TAKEN' });
     }
-    // Posse provada: o número passa a ser desta conta e sai das outras, inclusive
-    // na variante com/sem o 9º dígito (senão o inbound ficaria ambíguo).
+    // Proven ownership: the number now belongs to this account and leaves the others, including
+    // the with/without 9th digit variant (otherwise the inbound would be ambiguous).
     if (deOutro.length) {
       await c.query(`DELETE FROM ${S}.whatsapp_links WHERE wa_phone = ANY($1::text[]) AND user_id <> $2`, [cands, userId]);
     }
@@ -5888,9 +5888,9 @@ export async function createWaClaim({ phone, userId, activeAgentId = null, code,
   return rows[0];
 }
 
-// Fecha o desafio: chegou um texto DAQUELE telefone contendo o código. É o único
-// caminho que amarra um número a uma conta. Devolve null quando não há desafio
-// compatível (aí quem chama segue com a resposta normal do inbound).
+// Closes the challenge: a text arrived FROM THAT phone containing the code. It's the only
+// path that binds a number to an account. Returns null when there's no matching
+// challenge (then the caller proceeds with the normal inbound response).
 export async function consumeWaClaim(phone, text) {
   const digitado = String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (digitado.length < 8) return null;
@@ -5903,8 +5903,8 @@ export async function consumeWaClaim(phone, text) {
   );
   const claim = rows[0];
   if (!claim) return null;
-  // Os demais desafios pendentes daquele número morrem junto: o telefone acabou
-  // de escolher a conta dele.
+  // The remaining pending challenges for that number die along with it: the phone just
+  // chose its account.
   await pool.query(`DELETE FROM ${S}.wa_claims WHERE wa_phone = ANY($1::text[])`, [cands]).catch(() => {});
   const link = await upsertWhatsAppLink({
     phone, userId: claim.user_id, activeAgentId: claim.active_agent_id, verified: true,
@@ -5923,9 +5923,9 @@ export async function deleteWhatsAppLinkForUser(userId) {
   await pool.query(`DELETE FROM ${S}.whatsapp_links WHERE user_id = $1`, [userId]);
 }
 
-// Guarda o texto de uma mensagem do WhatsApp por wamid, pra depois resolver
-// citações ("responder" do WhatsApp). Idempotente por wamid. Trunca o corpo
-// (o objetivo é dar CONTEXTO da citação ao modelo, não arquivar a conversa).
+// Stores the text of a WhatsApp message by wamid, to later resolve
+// quotes (WhatsApp's "reply"). Idempotent by wamid. Truncates the body
+// (the goal is to give the model CONTEXT for the quote, not to archive the conversation).
 export async function saveWaMsgRef({ wamid, userId = null, agentId = null, direction = 'in', body = '' }) {
   if (!wamid || !body) return;
   try {
@@ -5938,12 +5938,12 @@ export async function saveWaMsgRef({ wamid, userId = null, agentId = null, direc
   } catch (e) { console.error('[db] saveWaMsgRef:', e?.message ?? e); }
 }
 
-// Reivindica um wamid pra processamento: devolve true se é a PRIMEIRA vez que
-// vemos esse id, false se já foi processado. É o dedup dos retries da Meta, e
-// sobrevive a restart/deploy (o Set em memória não sobrevivia: o retry chegava
-// depois do restart e a mensagem era respondida duas vezes).
-// Em erro de banco devolve true (fail-open): melhor arriscar uma duplicata rara
-// do que engolir a mensagem do usuário porque o Postgres piscou.
+// Claims a wamid for processing: returns true if it's the FIRST time we've
+// seen this id, false if it's already been processed. It's the dedup for Meta's retries, and
+// survives restart/deploy (the in-memory Set didn't survive: the retry arrived
+// after the restart and the message got answered twice).
+// On a database error, returns true (fail-open): better to risk a rare duplicate
+// than to swallow the user's message because Postgres hiccupped.
 export async function claimWaMsg(wamid) {
   if (!wamid) return true;
   try {
@@ -5955,8 +5955,8 @@ export async function claimWaMsg(wamid) {
   } catch (e) { console.error('[db] claimWaMsg:', e?.message ?? e); return true; }
 }
 
-// Poda da tabela de dedup. A Meta só reentrega por algumas horas; guardamos 7
-// dias de folga. Chamado pela faxina periódica do server.
+// Pruning of the dedup table. Meta only redelivers for a few hours; we keep 7
+// days of slack. Called by the server's periodic cleanup.
 export async function pruneWaSeen(dias = 7) {
   try {
     const { rowCount } = await pool.query(
@@ -5967,9 +5967,9 @@ export async function pruneWaSeen(dias = 7) {
   } catch (e) { console.error('[db] pruneWaSeen:', e?.message ?? e); return 0; }
 }
 
-// Resolve o texto de uma mensagem citada pelo wamid. Escopado ao usuário (a
-// citação só faz sentido dentro da conversa dele). Devolve null se não achou
-// (ex: mensagem anterior ao deploy desta feature, que não foi indexada).
+// Resolves the text of a message quoted by wamid. Scoped to the user (the
+// quote only makes sense inside their conversation). Returns null if not found
+// (e.g.: a message predating this feature's deploy, which wasn't indexed).
 export async function getWaMsgRef(wamid, userId = null) {
   if (!wamid) return null;
   const { rows } = await pool.query(
@@ -5980,7 +5980,7 @@ export async function getWaMsgRef(wamid, userId = null) {
   return rows[0] || null;
 }
 
-// ── Canal Slack (mesmo padrão do WhatsApp, chave = team + usuário do Slack) ──
+// ── Slack channel (same pattern as WhatsApp, key = team + Slack user) ──
 export async function getSlackLink(teamId, slackUserId) {
   const { rows } = await pool.query(
     `SELECT * FROM ${S}.slack_links WHERE slack_team_id = $1 AND slack_user_id = $2`,
@@ -6002,7 +6002,7 @@ export async function upsertSlackLink({ teamId, slackUserId, userId, activeAgent
   return rows[0];
 }
 
-// Troca o agente ativo daquele usuário do Slack (sticky entre mensagens).
+// Switches that Slack user's active agent (sticky between messages).
 export async function setSlackActiveAgent(teamId, slackUserId, agentId) {
   await pool.query(
     `UPDATE ${S}.slack_links SET active_agent_id = $3 WHERE slack_team_id = $1 AND slack_user_id = $2`,
@@ -6010,9 +6010,9 @@ export async function setSlackActiveAgent(teamId, slackUserId, agentId) {
   );
 }
 
-// ── Extensão do Chrome: assistente ativo por USUÁRIO (persistido) ──
-// Qual assistente atende a extensão do usuário. null (ou sem linha) => o chamador
-// cai no primeiro assistente, igual ao default antigo em memória.
+// ── Chrome extension: active assistant per USER (persisted) ──
+// Which assistant serves the user's extension. null (or no row) => the caller
+// falls back to the first assistant, same as the old in-memory default.
 export async function getExtLink(userId) {
   const { rows } = await pool.query(
     `SELECT user_id, active_agent_id FROM ${S}.ext_links WHERE user_id = $1 LIMIT 1`,
@@ -6021,7 +6021,7 @@ export async function getExtLink(userId) {
   return rows[0] || null;
 }
 
-// Fixa (upsert) o assistente que atende a extensão daquele usuário.
+// Pins (upsert) the assistant that serves that user's extension.
 export async function setExtActiveAgent(userId, agentId) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.ext_links (user_id, active_agent_id) VALUES ($1,$2)
@@ -6032,8 +6032,8 @@ export async function setExtActiveAgent(userId, agentId) {
   return rows[0];
 }
 
-// ── Slack: vínculo POR CANAL + códigos de pareamento (modelo principal) ──
-// Qual assistente atende num (team, canal). null se o canal não foi pareado.
+// ── Slack: link PER CHANNEL + pairing codes (main model) ──
+// Which assistant serves a (team, channel). null if the channel hasn't been paired.
 export async function getSlackChannelLink(teamId, channelId) {
   const { rows } = await pool.query(
     `SELECT * FROM ${S}.slack_channel_links WHERE slack_team_id = $1 AND slack_channel_id = $2`,
@@ -6042,7 +6042,7 @@ export async function getSlackChannelLink(teamId, channelId) {
   return rows[0] || null;
 }
 
-// Amarra (ou re-amarra) um canal do Slack a um assistente específico do dono.
+// Binds (or re-binds) a Slack channel to a specific assistant of the owner.
 export async function upsertSlackChannelLink({ teamId, channelId, userId, agentId, createdBy }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.slack_channel_links (slack_team_id, slack_channel_id, user_id, agent_id, created_by)
@@ -6056,7 +6056,7 @@ export async function upsertSlackChannelLink({ teamId, channelId, userId, agentI
   return rows[0];
 }
 
-// Desfaz o vínculo do canal (comando "desconectar").
+// Undoes the channel's link ("disconnect" command).
 export async function deleteSlackChannelLink(teamId, channelId) {
   await pool.query(
     `DELETE FROM ${S}.slack_channel_links WHERE slack_team_id = $1 AND slack_channel_id = $2`,
@@ -6064,8 +6064,8 @@ export async function deleteSlackChannelLink(teamId, channelId) {
   );
 }
 
-// Cria um código de pareamento (uso único, expira em ttlMin minutos). O código em si
-// vem pronto de fora (gerado com charset sem ambiguidade); aqui só persistimos.
+// Creates a pairing code (single use, expires in ttlMin minutes). The code itself
+// comes ready-made from outside (generated with an unambiguous charset); here we just persist it.
 export async function createSlackPairingCode({ userId, agentId, code, ttlMin = 15 }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.slack_pairing_codes (code, user_id, agent_id, expires_at)
@@ -6076,8 +6076,8 @@ export async function createSlackPairingCode({ userId, agentId, code, ttlMin = 1
   return rows[0];
 }
 
-// Consome o código: marca usado e devolve {user_id, agent_id} se válido/não-expirado.
-// Atômico (só a 1ª chamada ganha), então serve de proteção contra reuso.
+// Consumes the code: marks it used and returns {user_id, agent_id} if valid/not expired.
+// Atomic (only the 1st call wins), so it protects against reuse.
 export async function consumeSlackPairingCode(code) {
   const { rows } = await pool.query(
     `UPDATE ${S}.slack_pairing_codes SET used_at = now()
@@ -6088,11 +6088,11 @@ export async function consumeSlackPairingCode(code) {
   return rows[0] || null;
 }
 
-// ── Wiki de memória (páginas markdown por usuário) ──
-// Normaliza um slug: minúsculo, sem acento, kebab-case, curto.
-// Exportado porque quem monta a página (wiki.mjs) tem que usar EXATAMENTE a
-// mesma regra de quem grava: se as duas divergirem, a leitura vai num slug e a
-// escrita em outro, e a página existente é sobrescrita do zero (achado #18).
+// ── Memory wiki (markdown pages per user) ──
+// Normalizes a slug: lowercase, no accents, kebab-case, short.
+// Exported because whoever builds the page (wiki.mjs) has to use EXACTLY the
+// same rule as whoever writes it: if the two diverge, reading goes to one slug and
+// writing to another, and the existing page gets overwritten from scratch (finding #18).
 export function normWikiSlug(s) {
   return (s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -6110,7 +6110,7 @@ export async function listWikiPages(userId) {
   return rows;
 }
 
-// Todas as páginas com o corpo (o conciliador da memória procura o assunto em todas).
+// All pages with their body (the memory reconciler looks for the subject across all of them).
 export async function listWikiPagesFull(userId) {
   const { rows } = await pool.query(
     `SELECT slug, title, body FROM ${S}.wiki_pages WHERE user_id = $1 ORDER BY updated_at DESC`,
@@ -6127,7 +6127,7 @@ export async function getWikiPage(userId, slug) {
   return rows[0] || null;
 }
 
-// Cria ou substitui uma página. Devolve o slug normalizado de fato gravado.
+// Creates or replaces a page. Returns the normalized slug that was actually saved.
 export async function upsertWikiPage(userId, { slug, title, body }) {
   const s = normSlug(slug || title);
   await pool.query(
@@ -6140,7 +6140,7 @@ export async function upsertWikiPage(userId, { slug, title, body }) {
   return s;
 }
 
-// Busca simples (ilike em título+corpo) com trecho de contexto.
+// Simple search (ilike on title+body) with a context snippet.
 export async function searchWikiPages(userId, q) {
   const terms = wikiSearchTerms(q);
   if (!terms.length) return [];
@@ -6154,7 +6154,7 @@ export async function searchWikiPages(userId, q) {
   return rows.map((r) => ({ slug: r.slug, title: r.title, snippet: matchingWikiLineSnippet(r.body, q) }));
 }
 
-// Apaga uma página da memória do usuário. Devolve true se removeu algo.
+// Deletes a page from the user's memory. Returns true if it removed something.
 export async function deleteWikiPage(userId, slug) {
   const { rowCount } = await pool.query(
     `DELETE FROM ${S}.wiki_pages WHERE user_id = $1 AND slug = $2`,
@@ -6163,7 +6163,7 @@ export async function deleteWikiPage(userId, slug) {
   return rowCount > 0;
 }
 
-// Todos os fatos, vigentes e encerrados (busca da memória: o encerrado é o histórico).
+// All facts, current and closed (memory search: closed ones are the history).
 export async function listAllFacts(userId, { limit = 1000 } = {}) {
   const { rows } = await pool.query(
     `SELECT id, pagina, assunto, valor, valido_desde, valido_ate, linha_pagina, criado_em FROM ${S}.memory_facts
@@ -6182,9 +6182,9 @@ export async function listCurrentFacts(userId, { limit = 200 } = {}) {
   return rows;
 }
 
-// Grava o fato VIGENTE de um assunto. Se já existe um com outro valor, ele é
-// encerrado (valido_ate) e aponta pro novo (substituido_por), numa transação só.
-// Mesmo valor = só atualiza onde a linha está (página/linha), sem abrir versão.
+// Saves the CURRENT fact for a subject. If one already exists with a different value, it's
+// closed (valido_ate) and points to the new one (substituido_por), in a single transaction.
+// Same value = only updates where the row is (page/line), without opening a new version.
 export async function setFact(userId, { pagina, assunto, valor, desde = null, linha = '', fonte = {} }) {
   const c = await pool.connect();
   try {
@@ -6210,14 +6210,14 @@ export async function setFact(userId, { pagina, assunto, valor, desde = null, li
   } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
 }
 
-// A linha do fato saiu da página (o dono pediu pra apagar): o fato deixa de valer.
+// The fact's row left the page (the owner asked to delete it): the fact stops being valid.
 export async function closeFact(userId, id) {
   await pool.query(`UPDATE ${S}.memory_facts SET valido_ate=now() WHERE user_id=$1 AND id=$2 AND valido_ate IS NULL`, [userId, id]);
 }
 
-// Linha que saiu da página (corrigida ou apagada) sem ser de nenhum fato: vira
-// um fato JÁ ENCERRADO, pra versão antiga continuar achável (histórico) em vez de
-// sumir. Não abre fato vigente, então não mexe na lista de chaves do contexto.
+// A row that left the page (corrected or deleted) without belonging to any fact: becomes
+// an ALREADY CLOSED fact, so the old version stays findable (history) instead of
+// disappearing. Doesn't open a current fact, so it doesn't touch the context's key list.
 export async function addHistorico(userId, { pagina, linha, valor, fonte = {} }) {
   await pool.query(
     `INSERT INTO ${S}.memory_facts (user_id, pagina, assunto, valor, valido_ate, fonte, linha_pagina)
@@ -6225,15 +6225,15 @@ export async function addHistorico(userId, { pagina, linha, valor, fonte = {} })
     [userId, pagina, valor, JSON.stringify(fonte || {}), linha]);
 }
 
-// A linha do fato mudou (move/corrigir na mão): acompanha página, linha e valor.
+// The fact's row changed (move/manually correct): tracks page, line and value.
 export async function updateFactLine(userId, id, { pagina, linha, valor = null }) {
   await pool.query(`UPDATE ${S}.memory_facts SET pagina=$3, linha_pagina=$4, valor=COALESCE($5, valor) WHERE user_id=$1 AND id=$2`, [userId, id, pagina, linha, valor]);
 }
 
-// ── Dúvidas da memória (memory_ambiguities) ──
-// Abre uma dúvida. Idempotente: se esse assunto já teve dúvida (aberta, resolvida
-// ou descartada), não abre de novo, senão rerodar a migração reabriria o que o
-// dono já respondeu.
+// ── Memory ambiguities (memory_ambiguities) ──
+// Opens an ambiguity. Idempotent: if this subject already had an ambiguity (open,
+// resolved, or discarded), it does not open again, otherwise rerunning the
+// migration would reopen what the owner already answered.
 export async function addMemoryAmbiguity(userId, { assunto, motivo = '', opcoes = [], fonte = {} }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.memory_ambiguities (user_id, assunto, motivo, opcoes, fonte)
@@ -6244,7 +6244,7 @@ export async function addMemoryAmbiguity(userId, { assunto, motivo = '', opcoes 
   return rows[0]?.id || null;
 }
 
-// userId null = todas as pessoas (visão do admin), com nome e o fato vigente do assunto.
+// userId null = all people (admin view), with name and the subject's current fact.
 export async function listMemoryAmbiguities({ userId = null, status = 'aberta', limit = 200 } = {}) {
   const { rows } = await pool.query(
     `SELECT a.id, a.user_id, a.assunto, a.motivo, a.opcoes, a.status, a.resolucao, a.resolvido_por, a.desfazer,
@@ -6262,7 +6262,7 @@ export async function getMemoryAmbiguity(id) {
   return r || null;
 }
 
-// Fecha só se ainda está aberta (dois cliques/duas pontas não fecham duas vezes).
+// Closes only if still open (two clicks/two ends do not close it twice).
 export async function closeMemoryAmbiguity(id, { status, resolucao = null, por = null, desfazer = null }) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.memory_ambiguities SET status=$2, resolucao=$3, resolvido_por=$4, resolvido_em=now(), desfazer=$5::jsonb
@@ -6270,7 +6270,7 @@ export async function closeMemoryAmbiguity(id, { status, resolucao = null, por =
   return rowCount > 0;
 }
 
-// Volta a dúvida pra aberta (desfazer). Só se ainda está fechada do jeito que foi lida.
+// Reopens the ambiguity (undo). Only if it is still closed the way it was read.
 export async function reopenMemoryAmbiguity(id, statusAtual) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.memory_ambiguities SET status='aberta', resolucao=NULL, resolvido_por=NULL, resolvido_em=NULL, desfazer=NULL
@@ -6278,8 +6278,8 @@ export async function reopenMemoryAmbiguity(id, statusAtual) {
   return rowCount > 0;
 }
 
-// Desfaz a troca de fato de uma resolução: encerra o fato que ela abriu e, se ela
-// tinha encerrado outro, devolve a vigência dele (só se o assunto ficou sem fato).
+// Undoes the fact swap of a resolution: ends the fact it opened and, if it
+// had ended another one, restores its validity (only if the subject was left without a fact).
 export async function revertFactSwap(userId, { novo = null, velho = null }) {
   const c = await pool.connect();
   try {
@@ -6296,22 +6296,22 @@ export async function revertFactSwap(userId, { novo = null, velho = null }) {
   } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
 }
 
-// Cópias de página valem 90 dias: dá tempo de resgatar erro sem guardar pra
-// sempre o que a pessoa pediu pra esquecer.
+// Page copies are valid for 90 days: gives time to recover from a mistake without
+// keeping forever what the person asked to forget.
 export async function pruneWikiPageVersions(dias = 90) {
   const { rowCount } = await pool.query(`DELETE FROM ${S}.wiki_page_versions WHERE saved_at < now() - make_interval(days => $1)`, [dias]);
   return rowCount;
 }
 
-// ── Conectores Google (tokens OAuth por usuário) ──
-// getGoogleTokens legado = a conta PRINCIPAL do usuário (compat com os callers
-// que ainda operam "a conta do usuário"). O roteamento por AGENTE usa
-// getGoogleAccount(userId, email) com o agents.google_email.
+// ── Google connectors (OAuth tokens per user) ──
+// Legacy getGoogleTokens = the user's PRIMARY account (compat with callers
+// that still operate on "the user's account"). Routing by AGENT uses
+// getGoogleAccount(userId, email) with agents.google_email.
 export async function getGoogleTokens(userId) {
   return getPrimaryGoogleAccount(userId);
 }
 
-// ── Multi-conta Google (N contas por usuário, vínculo por agente) ──
+// ── Google multi-account (N accounts per user, link per agent) ──
 function decAccountRow(row) {
   if (!row) return null;
   row.access_token = decMaybe(row.access_token);
@@ -6319,9 +6319,9 @@ function decAccountRow(row) {
   return row;
 }
 
-// Upsert de uma conta Google do usuário (chave user_id+google_email). Preserva
-// o refresh_token antigo quando o Google não reenvia. Se for a 1ª conta do
-// usuário (ou primary=true), marca como principal e desmarca as outras.
+// Upsert of a user's Google account (key user_id+google_email). Preserves
+// the old refresh_token when Google does not resend it. If it is the user's
+// 1st account (or primary=true), marks it as primary and unmarks the others.
 export async function saveGoogleAccount(userId, googleEmail, { access_token, refresh_token, scope, expiry }, { primary = false } = {}) {
   const email = String(googleEmail || '').toLowerCase();
   if (!email) throw new Error('google_email vazio');
@@ -6343,10 +6343,10 @@ export async function saveGoogleAccount(userId, googleEmail, { access_token, ref
   return email;
 }
 
-// Refresh de UMA conta específica (multi-conta). É o caminho certo quando o
-// assistente está amarrado a uma conta que não é a principal: sem isto, o token
-// renovado da conta de trabalho era gravado por cima da conta principal
-// (saveGoogleTokens escreve onde is_primary=true), corrompendo as duas.
+// Refresh of ONE specific account (multi-account). This is the right path when the
+// assistant is tied to an account that is not the primary one: without this, the
+// renewed token from the work account would be written over the primary account
+// (saveGoogleTokens writes where is_primary=true), corrupting both.
 export async function saveGoogleAccountTokens(userId, googleEmail, { access_token, refresh_token, scope, expiry }) {
   const email = String(googleEmail || '').toLowerCase();
   if (!email) return 0;
@@ -6361,10 +6361,10 @@ export async function saveGoogleAccountTokens(userId, googleEmail, { access_toke
   return r.rowCount;
 }
 
-// Zera as credenciais de UMA conta (invalid_grant naquela conta). Mantém a
-// linha e o vínculo dos agentes: reconectar aquele e-mail refaz tudo, e o
-// assistente amarrado a ela continua pedindo reconexão DELA, sem cair
-// silenciosamente na caixa de entrada de outra conta.
+// Clears the credentials of ONE account (invalid_grant on that account). Keeps the
+// row and the agents' link: reconnecting that email redoes everything, and the
+// assistant tied to it keeps asking for reconnection OF IT, without silently
+// falling back into another account's inbox.
 export async function clearGoogleAccount(userId, googleEmail) {
   const email = String(googleEmail || '').toLowerCase();
   if (!email) return 0;
@@ -6376,7 +6376,7 @@ export async function clearGoogleAccount(userId, googleEmail) {
   return r.rowCount;
 }
 
-// Compat: o caminho de refresh atualiza a conta PRINCIPAL do usuário.
+// Compat: the refresh path updates the user's PRIMARY account.
 export async function saveGoogleTokens(userId, { access_token, refresh_token, scope, expiry }) {
   const r = await pool.query(
     `UPDATE ${S}.google_accounts SET
@@ -6389,10 +6389,10 @@ export async function saveGoogleTokens(userId, { access_token, refresh_token, sc
   return r.rowCount;
 }
 
-// Zera as credenciais da conta PRINCIPAL quando o Google devolve invalid_grant
-// (refresh_token morto). Limpa token+scope+expiry pra o app tratar como
-// desconectado (some das caps → o assistente para de tentar e pede reconexão).
-// Mantém a linha/e-mail e o vínculo dos agentes; reconectar refaz tudo.
+// Clears the credentials of the PRIMARY account when Google returns invalid_grant
+// (dead refresh_token). Clears token+scope+expiry so the app treats it as
+// disconnected (caps disappear → the assistant stops trying and asks for reconnection).
+// Keeps the row/email and the agents' link; reconnecting redoes everything.
 export async function clearGooglePrimary(userId) {
   const r = await pool.query(
     `UPDATE ${S}.google_accounts SET access_token = NULL, refresh_token = NULL, scope = '', expiry = NULL, updated_at = now()
@@ -6433,7 +6433,7 @@ export async function removeGoogleAccount(userId, googleEmail) {
   const email = String(googleEmail || '').toLowerCase();
   const { rows } = await pool.query(
     `DELETE FROM ${S}.google_accounts WHERE user_id=$1 AND google_email=$2 RETURNING is_primary`, [userId, email]);
-  // desvincula os agentes que apontavam pra essa conta (voltam pro fallback principal)
+  // unlinks the agents that pointed to this account (they fall back to the primary one)
   await pool.query(`UPDATE ${S}.agents SET google_email = NULL WHERE user_id=$1 AND google_email=$2`, [userId, email]);
   // se apagou a principal e sobrou conta, promove a mais recente
   if (rows[0]?.is_primary) {
@@ -6461,17 +6461,17 @@ export async function getUserByEmail(email) {
   return rows[0] || null;
 }
 
-// Identidade da Apple. Busca pelo `sub` e não pelo e-mail porque o e-mail de
-// relay pode mudar (a pessoa desliga o encaminhamento e a Apple emite outro) —
-// o `sub` não muda nunca.
+// Apple identity. Looks up by `sub`, not by email, because the relay email
+// can change (the person turns off forwarding and Apple issues another one);
+// `sub` never changes.
 export async function getUserByAppleSub(sub) {
   const { rows } = await pool.query(`SELECT * FROM ${S}.users WHERE apple_sub = $1`, [sub]);
   return rows[0] || null;
 }
 
-// Lê o refresh token da Apple. Existe em separado de propósito: o getUserById
-// é a query de crédito, usada no turno inteiro, e credencial de terceiro não
-// deve viajar junto com ela. Quem chama é só a exclusão de conta.
+// Reads the Apple refresh token. Exists separately on purpose: getUserById
+// is the credit query, used throughout the turn, and third-party credentials
+// should not travel along with it. The only caller is account deletion.
 export async function getAppleRefreshToken(userId) {
   const { rows } = await pool.query(
     `SELECT apple_refresh_token FROM ${S}.users WHERE id = $1`, [userId],
@@ -6479,9 +6479,9 @@ export async function getAppleRefreshToken(userId) {
   return rows[0]?.apple_refresh_token || null;
 }
 
-// Vincula o ID Apple a uma conta existente. Só preenche o que veio: a Apple
-// manda o refresh token uma vez só, e um login posterior sem ele não pode
-// apagar o que já guardamos (senão a revogação na exclusão deixa de funcionar).
+// Links the Apple ID to an existing account. Only fills in what came through: Apple
+// sends the refresh token only once, and a later login without it must not
+// erase what we already stored (otherwise revocation on deletion stops working).
 export async function linkAppleAccount(userId, { sub, refreshToken = null, privateEmail = false }) {
   await pool.query(
     `UPDATE ${S}.users
@@ -6493,9 +6493,9 @@ export async function linkAppleAccount(userId, { sub, refreshToken = null, priva
   );
 }
 
-// Desvincula o ID Apple. Zera o refresh token junto: ele só serve pra revogar
-// o acesso, e guardar credencial de um vínculo que não existe mais é lixo com
-// risco. Quem desvincula volta a entrar por e-mail/senha ou Google.
+// Unlinks the Apple ID. Clears the refresh token along with it: it only serves to
+// revoke access, and keeping the credential of a link that no longer exists is
+// risky clutter. Whoever unlinks goes back to signing in with email/password or Google.
 export async function unlinkAppleAccount(userId) {
   await pool.query(
     `UPDATE ${S}.users
@@ -6507,8 +6507,8 @@ export async function unlinkAppleAccount(userId) {
   );
 }
 
-// Sessão: expiração absoluta de 30 dias + idle timeout de 14 dias (sliding).
-// getUserBySession renova o last_seen a cada requisição válida.
+// Session: 30-day absolute expiration + 14-day idle timeout (sliding).
+// getUserBySession renews last_seen on every valid request.
 const SESSION_MAX_DAYS = 30;
 const SESSION_IDLE_DAYS = 14;
 
@@ -6520,8 +6520,8 @@ export async function createSession(token, userId) {
   );
 }
 
-// ── Redefinição de senha ──
-// Cria um token de reset que expira em `ttlMin` minutos (default 60).
+// ── Password reset ──
+// Creates a reset token that expires in `ttlMin` minutes (default 60).
 export async function createPasswordReset(token, userId, ttlMin = 60) {
   await pool.query(
     `INSERT INTO ${S}.password_resets (token, user_id, expires_at)
@@ -6530,7 +6530,7 @@ export async function createPasswordReset(token, userId, ttlMin = 60) {
   );
 }
 
-// Retorna {token,user_id} se o token existe, NÃO foi usado e NÃO expirou; senão null.
+// Returns {token,user_id} if the token exists, was NOT used and has NOT expired; otherwise null.
 export async function getValidPasswordReset(token) {
   if (!token) return null;
   const { rows } = await pool.query(
@@ -6541,19 +6541,19 @@ export async function getValidPasswordReset(token) {
   return rows[0] || null;
 }
 
-// Marca o token como usado (uso único).
+// Marks the token as used (single use).
 export async function markPasswordResetUsed(token) {
   await pool.query(`UPDATE ${S}.password_resets SET used_at = now() WHERE token = $1`, [token]);
 }
 
-// Troca a senha do usuário e invalida QUALQUER reset pendente dele.
+// Changes the user's password and invalidates ANY pending reset of theirs.
 export async function updateUserPassword(userId, passwordHash) {
   await pool.query(`UPDATE ${S}.users SET password_hash = $2 WHERE id = $1`, [userId, passwordHash]);
   await pool.query(
     `UPDATE ${S}.password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`,
     [userId],
   );
-  // Rotação: invalida todas as sessões abertas do usuário após troca de senha.
+  // Rotation: invalidates all of the user's open sessions after a password change.
   await pool.query(`DELETE FROM ${S}.sessions WHERE user_id = $1`, [userId]);
 }
 
@@ -6561,34 +6561,34 @@ export async function deleteSession(token) {
   await pool.query(`DELETE FROM ${S}.sessions WHERE token = $1`, [token]);
 }
 
-// ── Exclusão de conta pedida pelo dono ──
-// Modelo de 30 dias: FECHAR agora, DESTRUIR depois. closeUserAccount fecha; o
-// purge (chamado pelo job diário) destrói. As duas metades são separadas de
-// propósito: fechar tem que ser instantâneo e completo do ponto de vista de
-// acesso, destruir tem que ser reversível por 30 dias.
+// ── Account deletion requested by the owner ──
+// 30-day model: CLOSE now, DESTROY later. closeUserAccount closes; the
+// purge (called by the daily job) destroys. The two halves are separated on
+// purpose: closing has to be instantaneous and complete from an access
+// standpoint, destroying has to be reversible for 30 days.
 //
-// O que closeUserAccount faz, tudo na mesma transação:
-//   • deleted_at = now(): nenhuma sessão nova resolve (ver getUserBySession) e
-//     o login (senha e Google) recusa a partir daí.
-//   • apaga TODA sessão aberta: desloga web e app, em qualquer aparelho.
-//   • apaga os VÍNCULOS DE CANAL (WhatsApp, Telegram, Slack, externo, push,
-//     device, webhook de agente): mensagem que chegar por esses canais não
-//     acha mais dono, então o assistente para de responder na hora. Sem isso o
-//     `deleted_at` não fecharia nada além do login: canal não usa sessão.
-//   • apaga CREDENCIAL DE TERCEIRO (Google, OAuth, chave de API, MCP): o
-//     tratamento do dado em serviço externo cessa imediatamente, que é o
-//     ponto da LGPD. Não fica token nosso vivo esperando o purge.
-//   • desliga rotinas e cancela lembretes pendentes: nada dispara sozinho.
-//   • corta e-mail (transacional e marketing): nada sai pra essa pessoa.
+// What closeUserAccount does, all in the same transaction:
+//   • deleted_at = now(): no new session resolves (see getUserBySession) and
+//     login (password and Google) is refused from then on.
+//   • deletes EVERY open session: logs out web and app, on any device.
+//   • deletes the CHANNEL LINKS (WhatsApp, Telegram, Slack, external, push,
+//     device, agent webhook): a message arriving through these channels no
+//     longer finds an owner, so the assistant stops responding right away. Without
+//     this, `deleted_at` would close nothing beyond login: channels do not use sessions.
+//   • deletes THIRD-PARTY CREDENTIALS (Google, OAuth, API key, MCP): data
+//     processing on the external service ceases immediately, which is the
+//     whole point under LGPD. No live token of ours is left waiting for the purge.
+//   • turns off routines and cancels pending reminders: nothing fires on its own.
+//   • cuts off email (transactional and marketing): nothing goes out to this person.
 //
-// O que ele NÃO faz: apagar conteúdo (conversas, memória, arquivos,
-// assistentes, feed). É exatamente isso que a janela de 30 dias preserva.
-// Também não fala com o Stripe: chamada de rede não entra em transação de
-// banco, então quem chama cancela a assinatura antes (ver /api/account/delete).
+// What it does NOT do: delete content (conversations, memory, files,
+// assistants, feed). That is exactly what the 30-day window preserves.
+// It also does not talk to Stripe: a network call does not belong inside a
+// database transaction, so the caller cancels the subscription beforehand (see /api/account/delete).
 //
-// Consequência aceita: recuperar dentro dos 30 dias devolve o CONTEÚDO, mas a
-// pessoa reconecta canais e integrações na mão. Preferimos isso a deixar um
-// refresh_token de Gmail vivo em conta que pediu pra ser apagada.
+// Accepted consequence: recovering within the 30 days restores the CONTENT, but the
+// person has to reconnect channels and integrations by hand. We prefer this over leaving a
+// live Gmail refresh_token on an account that asked to be deleted.
 export async function closeUserAccount(userId) {
   const client = await pool.connect();
   try {
@@ -6599,8 +6599,8 @@ export async function closeUserAccount(userId) {
         RETURNING id, email, deleted_at`,
       [userId],
     );
-    // Já estava fechada (duplo clique, retry do app): não refaz nada e não
-    // mexe no deleted_at, senão o prazo dos 30 dias reiniciava a cada toque.
+    // Was already closed (double click, app retry): redoes nothing and does not
+    // touch deleted_at, otherwise the 30-day window would restart on every touch.
     if (!rows[0]) {
       await client.query('ROLLBACK');
       return null;
@@ -6625,12 +6625,12 @@ export async function closeUserAccount(userId) {
       `UPDATE ${S}.routines SET enabled = false WHERE user_id = $1`,
       `UPDATE ${S}.reminders SET status = 'canceled'
         WHERE user_id = $1 AND status = 'pending'`,
-      // Acesso que a pessoa DAVA e acesso que a pessoa TINHA acabam aqui. Sem
-      // isso o assistente do outro lado continuava mandando pedido pra uma conta
-      // encerrada, e um colaborador seguia entrando na instância (mesmos dados)
-      // de quem pediu pra sair. Nada de conteúdo é apagado: conexão só muda de
-      // estado e roster é vínculo, não dado. Voltando atrás dentro dos 30 dias,
-      // conexão e convite se refazem na mão, igual canal e integração.
+      // Access the person GAVE and access the person HAD both end here. Without
+      // this, the assistant on the other side would keep sending requests to a
+      // closed account, and a collaborator would keep entering the instance (same data)
+      // of someone who asked to leave. No content is deleted: the connection just changes
+      // state, and the roster is a link, not data. Going back within the 30 days,
+      // the connection and invite are redone by hand, just like channel and integration.
       `UPDATE ${S}.agent_connections SET status = 'declined', updated_at = now()
         WHERE (user_a = $1 OR user_b = $1) AND status <> 'declined'`,
       `DELETE FROM ${S}.app_collab WHERE collab_user_id = $1`,
@@ -6657,9 +6657,9 @@ export async function closeUserAccount(userId) {
   }
 }
 
-// Contas fechadas há mais de `days` dias, prontas pra destruição. O que a
-// distribuição precisa encerrar antes (na nuvem, a cobrança no Stripe) ela faz
-// pelo evento exclusao_final, com o id da conta.
+// Accounts closed for more than `days` days, ready for destruction. Whatever the
+// deployment needs to end beforehand (in the cloud, the Stripe billing) it does
+// via the exclusao_final event, with the account id.
 export async function listUsersPurgeDue(days = 30, limit = 50) {
   const { rows } = await pool.query(
     `SELECT id, email, deleted_at
@@ -6673,11 +6673,11 @@ export async function listUsersPurgeDue(days = 30, limit = 50) {
   return rows;
 }
 
-// Toda key de S3 que pertence a este usuário. Existe porque o ON DELETE
-// CASCADE do Postgres apaga a LINHA, não o objeto no bucket: sem esta coleta o
-// arquivo (inclusive rosto e voz) ficaria órfão no S3 depois do purge.
-// Fonte das keys: biblioteca de mídia, likeness (âncora/documento/voz/fala/
-// faces extras) e vídeos gerados.
+// Every S3 key that belongs to this user. Exists because Postgres's ON DELETE
+// CASCADE deletes the ROW, not the object in the bucket: without this collection the
+// file (including face and voice) would be left orphaned in S3 after the purge.
+// Source of the keys: media library, likeness (anchor/document/voice/speech/
+// extra faces), and generated videos.
 export async function collectUserAssetKeys(userId) {
   const keys = [];
   const push = (v) => { if (v && typeof v === 'string') keys.push(v); };
@@ -6694,24 +6694,24 @@ export async function collectUserAssetKeys(userId) {
   return [...new Set(keys)];
 }
 
-// Destruição final. Um DELETE só: as ~60 tabelas ligadas a users.id têm
-// ON DELETE CASCADE, então conversas, memória, assistentes, rotinas, feed e
-// tokens vão embora com ele. As poucas com ON DELETE SET NULL (uso/crédito,
-// telemetria de erro, feedback, e-mail processado) ficam SEM dono, ou seja
-// anonimizadas: é o que sustenta o histórico de faturamento e as métricas sem
-// guardar dado pessoal. Chamar só DEPOIS de apagar as keys do S3.
+// Final destruction. A single DELETE: the ~60 tables linked to users.id have
+// ON DELETE CASCADE, so conversations, memory, assistants, routines, feed, and
+// tokens go away with it. The few with ON DELETE SET NULL (usage/credit,
+// error telemetry, feedback, processed email) are left WITHOUT an owner, i.e.
+// anonymized: that is what sustains the billing history and metrics without
+// keeping personal data. Only call AFTER deleting the S3 keys.
 export async function hardDeleteUser(userId) {
   const { rowCount } = await pool.query(`DELETE FROM ${S}.users WHERE id = $1`, [userId]);
   return rowCount > 0;
 }
 
-// ── Webhook de entrada por agente ──
-// O token é o segredo do sistema externo; guardamos só o hash (sha256) e um
-// prefixo curto pra exibir. Gerar/regenerar sobrescreve o token (upsert por agente).
+// ── Inbound webhook per agent ──
+// The token is the external system's secret; we only store the hash (sha256) and a
+// short prefix to display. Generating/regenerating overwrites the token (upsert per agent).
 const hashToken = (t) => createHash('sha256').update(String(t)).digest('hex');
 
-// Cria/regenera o token do webhook do agente. Recebe o token JÁ gerado (cru) e
-// devolve o registro (sem o cru). O chamador mostra o cru uma vez e não guarda.
+// Creates/regenerates the agent's webhook token. Receives the token ALREADY generated (raw) and
+// returns the record (without the raw value). The caller shows the raw value once and does not store it.
 export async function setAgentWebhookToken(agentId, userId, token) {
   const th = hashToken(token);
   const hint = String(token).slice(0, 8);
@@ -6727,7 +6727,7 @@ export async function setAgentWebhookToken(agentId, userId, token) {
   return rows[0];
 }
 
-// Estado do webhook do agente (sem o token). null se nunca foi criado.
+// Agent webhook state (without the token). null if never created.
 export async function getAgentWebhook(agentId, userId) {
   const { rows } = await pool.query(
     `SELECT agent_id, user_id, token_hint, enabled, call_count, created_at, last_used_at
@@ -6744,8 +6744,8 @@ export async function setAgentWebhookEnabled(agentId, userId, enabled) {
   );
 }
 
-// Resolve um token cru -> {agent_id, user_id} se existe e está ativo; senão null.
-// Bump idempotente de call_count/last_used_at no mesmo statement.
+// Resolves a raw token -> {agent_id, user_id} if it exists and is active; otherwise null.
+// Idempotent bump of call_count/last_used_at in the same statement.
 export async function resolveWebhookToken(token) {
   if (!token) return null;
   const { rows } = await pool.query(
@@ -6762,8 +6762,8 @@ export async function resolveWebhookToken(token) {
 // Same model as the agent webhook: the token is the secret, we keep only the hash.
 // Difference: keyed per DEVICE (own id), tied to the user, N per user.
 
-// Cria um token de device. Recebe o token JÁ gerado (cru) e devolve o registro
-// (sem o cru). O chamador mostra o cru uma única vez e não guarda.
+// Creates a device token. Receives the token ALREADY generated (raw) and returns the record
+// (without the raw value). The caller shows the raw value a single time and does not store it.
 export async function createDeviceToken(userId, label, token) {
   const th = hashToken(token);
   const hint = String(token).slice(0, 8);
@@ -6776,7 +6776,7 @@ export async function createDeviceToken(userId, label, token) {
   return rows[0];
 }
 
-// Lista os devices do usuário (sem o token). Ordenados do mais novo.
+// Lists the user's devices (without the token). Ordered from newest.
 export async function listDeviceTokens(userId) {
   const { rows } = await pool.query(
     `SELECT id, token_hint, label, active_agent_id, enabled, call_count, created_at, last_used_at
@@ -6795,7 +6795,7 @@ export async function setDeviceTokenEnabled(id, userId, enabled) {
   return rowCount > 0;
 }
 
-// Amarra o agente ativo de um device (o OS pode fixar com qual assistente fala).
+// Ties the active agent of a device (the OS can pin which assistant it talks to).
 export async function setDeviceActiveAgent(id, userId, agentId) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.device_tokens SET active_agent_id = $3 WHERE id = $1 AND user_id = $2`,
@@ -6804,7 +6804,7 @@ export async function setDeviceActiveAgent(id, userId, agentId) {
   return rowCount > 0;
 }
 
-// Revoga (apaga) um device. Irreversível: o token cru some de vez. Valida o dono.
+// Revokes (deletes) a device. Irreversible: the raw token is gone for good. Validates the owner.
 export async function deleteDeviceToken(id, userId) {
   const { rowCount } = await pool.query(
     `DELETE FROM ${S}.device_tokens WHERE id = $1 AND user_id = $2`,
@@ -6813,8 +6813,8 @@ export async function deleteDeviceToken(id, userId) {
   return rowCount > 0;
 }
 
-// Resolve um token cru -> {id, user_id, active_agent_id} se existe e está ativo;
-// senão null. Bump idempotente de call_count/last_used_at no mesmo statement.
+// Resolves a raw token -> {id, user_id, active_agent_id} if it exists and is active;
+// otherwise null. Idempotent bump of call_count/last_used_at in the same statement.
 export async function resolveDeviceToken(token) {
   if (!token) return null;
   const { rows } = await pool.query(
@@ -6827,11 +6827,11 @@ export async function resolveDeviceToken(token) {
   return rows[0] || null;
 }
 
-// Resolve a sessão -> usuário. null se inválida, expirada ou ociosa demais.
-// Renova o last_seen (idle sliding) no mesmo statement quando a sessão é válida.
-// O `deleted_at IS NULL` é defesa em profundidade: closeUserAccount já apaga
-// TODAS as sessões do dono, então isto só pega uma sessão criada no meio do
-// caminho. Conta fechada não resolve pra usuário, em nenhuma rota.
+// Resolves the session -> user. null if invalid, expired, or too idle.
+// Renews last_seen (idle sliding) in the same statement when the session is valid.
+// The `deleted_at IS NULL` check is defense in depth: closeUserAccount already deletes
+// ALL of the owner's sessions, so this only catches a session created midway
+// through. A closed account never resolves to a user, on any route.
 export async function getUserBySession(token) {
   if (!token) return null;
   const { rows } = await pool.query(
@@ -6850,10 +6850,10 @@ export async function getUserBySession(token) {
   return rows[0] || null;
 }
 
-// Donos de app (a linha do users + o label), pra reconciliar a cota de disco do
-// host. A cota do XFS vale no LABEL (por usuário, não por app), por isso a lista
-// é por label. Só quem tem app entra: aplicar cota cria a pasta do usuário no
-// host, e não faz sentido criar pasta pra quem nunca publicou nada.
+// App owners (the users row + the label), to reconcile the host's disk quota.
+// The XFS quota applies at the LABEL level (per user, not per app), which is why the list
+// is by label. Only those who have an app are included: applying the quota creates the user's
+// folder on the host, and it makes no sense to create a folder for someone who never published anything.
 export async function listAppOwnersForQuota() {
   const { rows } = await pool.query(
     `SELECT DISTINCT ON (a.label) u.*, a.label
@@ -6883,8 +6883,8 @@ export async function getUserById(userId) {
   return rows[0] || null;
 }
 
-// ── Opt-out de treinamento de IA (só faz sentido pra quem paga) ──
-// Liga o opt-out: abre um período. Já ligado, é no-op (índice parcial garante).
+// ── AI training opt-out (only makes sense for paying users) ──
+// Turns on the opt-out: opens a period. If already on, it is a no-op (ensured by a partial index).
 export async function openOptOutPeriod(userId, source = 'user') {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.training_optout_periods (user_id, source)
@@ -6894,8 +6894,8 @@ export async function openOptOutPeriod(userId, source = 'user') {
   return rows[0] || null;
 }
 
-// Desliga: carimba o fim do período vigente. O trecho já coberto continua
-// coberto pra sempre. Sem período aberto, é no-op.
+// Turns off: stamps the end of the current period. The span already covered remains
+// covered forever. With no open period, it is a no-op.
 export async function closeOptOutPeriod(userId, at = null) {
   const { rows } = await pool.query(
     `UPDATE ${S}.training_optout_periods SET ended_at = COALESCE($2, now())
@@ -6925,9 +6925,9 @@ export async function listOptOutPeriods(userId) {
   return rows;
 }
 
-// ── Preferências de mídia (por usuário) ──
-// jsonb { image, stt, tts }: chave ausente = LIGADO (default on). Só guardamos
-// o que o usuário desligou explicitamente (false).
+// ── Media preferences (per user) ──
+// jsonb { image, stt, tts }: missing key = ON (default on). We only store
+// what the user explicitly turned off (false).
 export async function getUserMediaPrefs(userId) {
   const { rows } = await pool.query(`SELECT media_prefs FROM ${S}.users WHERE id = $1`, [userId]);
   const p = rows[0]?.media_prefs || {};
@@ -6935,8 +6935,8 @@ export async function getUserMediaPrefs(userId) {
 }
 
 export async function setUserMediaPrefs(userId, prefs) {
-  // Mescla com o que já existe; só aceita as chaves booleanas conhecidas.
-  // image=gerar imagem, vision=ler/entender imagem, stt=transcrever áudio, tts=responder em voz.
+  // Merges with what already exists; only accepts the known boolean keys.
+  // image=generate image, vision=read/understand image, stt=transcribe audio, tts=reply in voice.
   const clean = {};
   for (const k of ['image', 'vision', 'stt', 'tts']) if (k in (prefs || {})) clean[k] = !!prefs[k];
   const { rows } = await pool.query(
@@ -6947,16 +6947,16 @@ export async function setUserMediaPrefs(userId, prefs) {
   return { image: p.image !== false, vision: p.vision !== false, stt: p.stt !== false, tts: p.tts !== false };
 }
 
-// ── Fuso horário do usuário (IANA, ex "America/Sao_Paulo", "Europe/Zurich") ──
-// null = não definido; o backend cai no default São Paulo. Usado pra interpretar
-// "hoje/amanhã" e pra marcar eventos na hora de parede local do usuário.
+// ── User's timezone (IANA, e.g. "America/Sao_Paulo", "Europe/Zurich") ──
+// null = not set; the backend falls back to the São Paulo default. Used to interpret
+// "today/tomorrow" and to schedule events at the user's local wall-clock time.
 export async function getUserTimezone(userId) {
   const { rows } = await pool.query(`SELECT timezone FROM ${S}.users WHERE id = $1`, [userId]);
   return rows[0]?.timezone || null;
 }
 
 export async function setUserTimezone(userId, tz) {
-  // Valida que é um fuso IANA reconhecido antes de gravar (evita lixo do modelo).
+  // Validates it is a recognized IANA timezone before saving (avoids garbage from the model).
   if (!tz || typeof tz !== 'string') return null;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
@@ -6968,21 +6968,21 @@ export async function setUserTimezone(userId, tz) {
   return rows[0]?.timezone || null;
 }
 
-// ── Idioma e país do usuário ──────────────────────────────────────────────────
-// Regra pura (normalização, lista de idiomas) mora em locale.mjs e é testada lá.
-// Aqui fica só a persistência.
+// ── User's language and country ──────────────────────────────────────────────────
+// Pure logic (normalization, language list) lives in locale.mjs and is tested there.
+// Only persistence lives here.
 
-// Devolve sempre um par utilizável: idioma cai no padrão, país pode ser null
-// (null = não sabemos, e quem decide regra de país tem que tratar isso, não
-// assumir Brasil escondido).
+// Always returns a usable pair: language falls back to the default, country can be null
+// (null = we don't know, and whoever decides country-based rules has to handle this, not
+// silently assume Brazil).
 export async function getUserLocale(userId) {
   const { rows } = await pool.query(`SELECT language, country FROM ${S}.users WHERE id = $1`, [userId]);
   return {
     language: normalizaIdioma(rows[0]?.language) || IDIOMA_PADRAO,
     country: normalizaPais(rows[0]?.country),
-    // `definido` separa "escolheu/foi carimbado" de "está no padrão porque não
-    // sabemos". Sem isso o front não teria como saber se precisa carimbar, já
-    // que `language` nunca volta vazio.
+    // `definido` separates "chose/was stamped" from "is at the default because we
+    // don't know". Without this the frontend would have no way to know whether it needs
+    // to stamp it, since `language` never comes back empty.
     definido: !!normalizaIdioma(rows[0]?.language),
   };
 }
@@ -7007,9 +7007,9 @@ export async function setUserCountry(userId, country) {
   return rows[0]?.country || null;
 }
 
-// Carimbo automático (navegador ou header), usado no cadastro e no primeiro
-// acesso. Só grava o que AINDA está vazio: palpite de máquina nunca sobrescreve
-// escolha de gente. É o mesmo princípio do primeiro-toque da atribuição.
+// Automatic stamp (browser or header), used at signup and first access.
+// Only writes what is STILL empty: a machine guess never overwrites a
+// person's choice. Same principle as attribution's first-touch.
 export async function setUserLocaleIfEmpty(userId, { language, country } = {}) {
   const lang = normalizaIdioma(language);
   const pais = normalizaPais(country);
@@ -7026,15 +7026,15 @@ export async function setUserLocaleIfEmpty(userId, { language, country } = {}) {
   return { language: rows[0]?.language || null, country: rows[0]?.country || null };
 }
 
-// ── Origem do cadastro (atribuição de campanha) ──
-// Grava de onde a pessoa veio. Duas travas no próprio SQL, e elas são o ponto:
-//  1. `attribution IS NULL` = o primeiro carimbo vence (não reescreve a origem
-//     verdadeira quando a pessoa volta por outro anúncio depois);
-//  2. `created_at > now() - interval '2 hours'` = só carimba conta RECÉM-criada.
-//     O parâmetro fica guardado no navegador, que pode ser o de um veterano;
-//     sem essa trava um clique de anúncio de hoje viraria "origem" de uma conta
-//     antiga e o relatório de campanha passaria a mentir.
-// Devolve true só quando gravou de fato (o front não precisa saber o motivo).
+// ── Signup origin (campaign attribution) ──
+// Records where the person came from. Two guards in the SQL itself, and they are the point:
+//  1. `attribution IS NULL` = the first stamp wins (does not overwrite the
+//     true origin when the person comes back through another ad later);
+//  2. `created_at > now() - interval '2 hours'` = only stamps a FRESHLY-created account.
+//     The parameter stays stored in the browser, which could belong to a veteran user;
+//     without this guard a click on today's ad would become the "origin" of an
+//     old account and the campaign report would start lying.
+// Returns true only when it actually wrote something (the frontend does not need to know why).
 export async function setUserAttribution(userId, attr) {
   if (!userId || !attr || !Object.keys(attr).length) return false;
   const { rowCount } = await pool.query(
@@ -7045,7 +7045,7 @@ export async function setUserAttribution(userId, attr) {
   return rowCount > 0;
 }
 
-// Lista os cadastros que vieram de campanha (pra conferir clique -> conta).
+// Lists the signups that came from a campaign (to check click -> account).
 export async function listAttributedUsers({ days = 30 } = {}) {
   const { rows } = await pool.query(
     `SELECT id, name, email, created_at, attribution FROM ${S}.users
@@ -7056,7 +7056,7 @@ export async function listAttributedUsers({ days = 30 } = {}) {
   return rows;
 }
 
-// Preferência de modelo do usuário (qual "qualidade" ele escolheu). Default 'g3'.
+// User's model preference (which "quality" they chose). Default 'g3'.
 export async function getUserModelPref(userId) {
   const { rows } = await pool.query(`SELECT model_pref FROM ${S}.users WHERE id = $1`, [userId]);
   return rows[0]?.model_pref || 'flash';
@@ -7069,8 +7069,8 @@ export async function setUserModelPref(userId, model) {
   return rows[0]?.model_pref || 'flash';
 }
 
-// Flag "Automático": quando ligada, o backend escolhe o modelo por pergunta
-// (pickAutoModel) em vez de usar o model_pref fixo. Padrão desligado.
+// "Automatic" flag: when on, the backend picks the model per question
+// (pickAutoModel) instead of using the fixed model_pref. Default off.
 export async function getUserModelAuto(userId) {
   const { rows } = await pool.query(`SELECT model_auto FROM ${S}.users WHERE id = $1`, [userId]);
   return !!rows[0]?.model_auto;
@@ -7083,8 +7083,8 @@ export async function setUserModelAuto(userId, enabled) {
   return !!rows[0]?.model_auto;
 }
 
-// Permissão explícita pro assistente ENVIAR e-mail (padrão false). Sem isso o
-// agente só cria rascunho.
+// Explicit permission for the assistant to SEND email (default false). Without it the
+// agent only creates a draft.
 export async function getEmailSendEnabled(userId) {
   const { rows } = await pool.query(`SELECT email_send_enabled FROM ${S}.users WHERE id = $1`, [userId]);
   return !!rows[0]?.email_send_enabled;
@@ -7097,13 +7097,13 @@ export async function setEmailSendEnabled(userId, enabled) {
   return !!rows[0]?.email_send_enabled;
 }
 
-// ── Descadastro de comunicação institucional/novidades ──
-// Alvos de um disparo institucional: usuários com e-mail que NÃO deram opt-out.
-// Garante um unsub_token por alvo (gera preguiçosamente na 1ª vez). randomToken
-// injetado pelo caller (crypto) pra não acoplar db.mjs ao módulo de random.
-// `exclude` tira endereços da base no próprio SQL (contas internas de teste,
-// review de loja, etc.). Lista vazia é no-op: `<> ALL('{}')` é verdadeiro pra
-// toda linha em Postgres, então o caminho normal não muda.
+// ── Unsubscribe from institutional communication/news ──
+// Targets of an institutional send: users with email who have NOT opted out.
+// Ensures one unsub_token per target (generated lazily on the 1st time). randomToken
+// is injected by the caller (crypto) so as not to couple db.mjs to the random module.
+// `exclude` removes addresses from the base in the SQL itself (internal test accounts,
+// store review, etc.). An empty list is a no-op: `<> ALL('{}')` is true for
+// every row in Postgres, so the normal path does not change.
 export async function listInstitutionalTargets(makeToken, exclude = [], { ensureTokens = true } = {}) {
   const fora = (Array.isArray(exclude) ? exclude : [])
     .map((e) => String(e || '').trim().toLowerCase()).filter(Boolean);
@@ -7125,7 +7125,7 @@ export async function listInstitutionalTargets(makeToken, exclude = [], { ensure
   return rows;
 }
 
-// Confere o token do link de descadastro e devolve o usuário (ou null).
+// Checks the unsubscribe link token and returns the user (or null).
 
 export async function getUserByUnsub(userId, token) {
   if (!userId || !token) return null;
@@ -7136,7 +7136,7 @@ export async function getUserByUnsub(userId, token) {
   return rows[0] || null;
 }
 
-// Marca opt-out (idempotente). Só grava o timestamp na 1ª vez.
+// Marks opt-out (idempotent). Only writes the timestamp the 1st time.
 export async function setEmailOptout(userId) {
   const { rows } = await pool.query(
     `UPDATE ${S}.users
@@ -7149,8 +7149,8 @@ export async function setEmailOptout(userId) {
   return rows[0] || null;
 }
 
-// Custo total (US$) gasto por um usuário desde `fromISO`. Base do cálculo de
-// créditos consumidos no período.
+// Total cost (US$) spent by a user since `fromISO`. Basis for calculating
+// credits consumed in the period.
 export async function sumUserCost(userId, fromISO) {
   const { rows } = await pool.query(
     `SELECT COALESCE(sum(cost_usd), 0) AS cost FROM ${S}.usage_events WHERE user_id = $1 AND ts >= $2`,
@@ -7159,9 +7159,9 @@ export async function sumUserCost(userId, fromISO) {
   return Number(rows[0]?.cost) || 0;
 }
 
-// Custo REAL de modelo (US$) desde `fromISO` — exclui concessões/compras de
-// crédito (model 'admin-grant'/'purchase'), que são saldo extra, não consumo.
-// É o que conta contra a franquia mensal do plano.
+// REAL model cost (US$) since `fromISO`; excludes credit grants/purchases
+// (model 'admin-grant'/'purchase'), which are extra balance, not consumption.
+// This is what counts against the plan's monthly allowance.
 export async function sumUserModelCost(userId, fromISO) {
   const { rows } = await pool.query(
     `SELECT COALESCE(sum(cost_usd), 0) AS cost FROM ${S}.usage_events
@@ -7171,8 +7171,8 @@ export async function sumUserModelCost(userId, fromISO) {
   return Number(rows[0]?.cost) || 0;
 }
 
-// Usuários com consumo real de modelo desde `fromISO` (base do aviso proativo de
-// crédito acabando: só checa quem de fato usou o produto no período).
+// Users with real model consumption since `fromISO` (basis for the proactive
+// low-credit notice: only checks who actually used the product in the period).
 export async function listUsersWithUsageSince(fromISO) {
   const { rows } = await pool.query(
     `SELECT DISTINCT user_id FROM ${S}.usage_events
@@ -7182,8 +7182,8 @@ export async function listUsersWithUsageSince(fromISO) {
   return rows.map((r) => r.user_id).filter(Boolean);
 }
 
-// Total (US$, negativo) concedido/comprado por um usuário (all-time). Cada
-// crédito extra é gravado como custo NEGATIVO. Persistente: não filtra período.
+// Total (US$, negative) granted/purchased by a user (all-time). Each
+// extra credit is recorded as a NEGATIVE cost. Persistent: does not filter by period.
 export async function sumUserGrantsUsd(userId) {
   const { rows } = await pool.query(
     `SELECT COALESCE(sum(cost_usd), 0) AS cost FROM ${S}.usage_events
@@ -7193,9 +7193,9 @@ export async function sumUserGrantsUsd(userId) {
   return Number(rows[0]?.cost) || 0;
 }
 
-// Admins da empresa (id, nome), do mais antigo pro mais novo. Base dos textos
-// de crédito da empresa: o membro sem crédito é mandado falar com eles, e o
-// aviso de crédito acabando da empresa vai só pra eles.
+// Company admins (id, name), from oldest to newest. Basis for the company's
+// credit messages: a member without credit is told to talk to them, and the
+// company's low-credit notice goes only to them.
 export async function listOrgAdmins(orgId) {
   if (!orgId) return [];
   const { rows } = await pool.query(
@@ -7206,9 +7206,9 @@ export async function listOrgAdmins(orgId) {
   return rows.map((r) => ({ id: r.id, name: r.name || null }));
 }
 
-// Custo real de modelo agrupado por mês-calendário (fuso BR), na janela
-// [fromISO, toISO). Base da reconciliação: para cada mês fechado, o excedente
-// acima da franquia debita o saldo de extras.
+// Real model cost grouped by calendar month (BR timezone), in the window
+// [fromISO, toISO). Basis for reconciliation: for each closed month, the amount
+// above the allowance debits the extras balance.
 export async function modelCostByMonth(userId, fromISO, toISO) {
   const { rows } = await pool.query(
     `SELECT to_char(date_trunc('month', ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM') AS mon,
@@ -7222,9 +7222,9 @@ export async function modelCostByMonth(userId, fromISO, toISO) {
   return rows.map((r) => ({ mon: r.mon, usd: Number(r.cost) || 0 }));
 }
 
-// CRÉDITOS COBRADOS agrupados por mês-calendário (fuso BR), na janela [from, to).
-// Par do modelCostByMonth, mas em crédito de cobrança (bill_credits). Base da
-// reconciliação de meses fechados: o excedente acima da franquia debita os extras.
+// BILLED CREDITS grouped by calendar month (BR timezone), in the window [from, to).
+// Counterpart to modelCostByMonth, but in billing credit (bill_credits). Basis for
+// reconciliation of closed months: the amount above the allowance debits the extras.
 export async function billByMonth(userId, fromISO, toISO) {
   const { rows } = await pool.query(
     `SELECT to_char(date_trunc('month', ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM') AS mon,
@@ -7256,9 +7256,9 @@ export async function listAgents(userId) {
   return rows;
 }
 
-// Arquiva um agente (soft-delete): valida o dono, marca archived_at e devolve
-// quantos agentes ativos sobraram. NÃO apaga threads/messages — o histórico
-// segue guardado na conta. Idempotente (já arquivado não conta como sucesso).
+// Archives an agent (soft-delete): validates the owner, marks archived_at, and returns
+// how many active agents are left. Does NOT delete threads/messages; the history
+// stays stored on the account. Idempotent (already archived does not count as success).
 export async function archiveAgent(id, userId) {
   const c = await pool.connect();
   try {
@@ -7270,10 +7270,10 @@ export async function archiveAgent(id, userId) {
       [id, userId],
     );
     if (!rows[0]) { await c.query('ROLLBACK'); return { archived: null, remaining: null }; }
-    // Marcar archived_at não bastava: o que APONTAVA pro assistente continuava
-    // vivo. A rotina seguia no agendador, o canal seguia roteando pra ele e a
-    // conexão com outra pessoa seguia entregando pedidos ao assistente excluído.
-    // Encerrar aqui é o par do soft-delete; nada disso apaga histórico.
+    // Marking archived_at alone was not enough: whatever POINTED to the assistant stayed
+    // alive. The routine kept running in the scheduler, the channel kept routing to it, and the
+    // connection with another person kept delivering requests to the deleted assistant.
+    // Ending this here is the counterpart to the soft-delete; none of this deletes history.
     for (const sql of [
       `UPDATE ${S}.routines       SET enabled = false WHERE agent_id = $1`,
       `UPDATE ${S}.reminders      SET status = 'canceled' WHERE agent_id = $1 AND status = 'pending'`,
@@ -7282,9 +7282,9 @@ export async function archiveAgent(id, userId) {
       `UPDATE ${S}.slack_links    SET active_agent_id = NULL WHERE active_agent_id = $1`,
       `UPDATE ${S}.ext_links      SET active_agent_id = NULL WHERE active_agent_id = $1`,
       `UPDATE ${S}.device_tokens  SET active_agent_id = NULL WHERE active_agent_id = $1`,
-      // Inbound do agente-a-agente volta a NULL em vez de derrubar a conexão: o
-      // resolveContactTarget refaz o backfill pro assistente principal que
-      // sobrou, então o contato do outro lado continua funcionando.
+      // Agent-to-agent inbound goes back to NULL instead of dropping the connection: the
+      // resolveContactTarget redoes the backfill to the primary assistant that
+      // is left, so the contact on the other side keeps working.
       `UPDATE ${S}.agent_connections SET inbound_agent_a = NULL WHERE inbound_agent_a = $1`,
       `UPDATE ${S}.agent_connections SET inbound_agent_b = NULL WHERE inbound_agent_b = $1`,
     ]) await c.query(sql, [id]);
@@ -7300,7 +7300,7 @@ export async function archiveAgent(id, userId) {
   } finally { c.release(); }
 }
 
-// Conta agentes ativos (não-arquivados) do dono.
+// Counts the owner's active (non-archived) agents.
 export async function countActiveAgents(userId) {
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n FROM ${S}.agents WHERE user_id = $1 AND archived_at IS NULL`,
@@ -7309,12 +7309,12 @@ export async function countActiveAgents(userId) {
   return rows[0].n;
 }
 
-// Busca o agente já validando o dono — só devolve se for do userId.
-// Carrega um assistente do dono. Por padrão RECUSA assistente já excluído
-// (archived_at): excluir tem que valer em todo caminho que EXECUTA (WhatsApp,
-// rotina, webhook, cockpit, agente-a-agente), e antes disso só a listagem
-// filtrava, então o assistente sumia da tela e continuava rodando (e queimando
-// crédito do dono). Só as telas de HISTÓRICO passam incluirArquivado.
+// Fetches the agent while already validating the owner; only returns it if it belongs to userId.
+// Loads an owner's assistant. By default REFUSES an already-deleted assistant
+// (archived_at): deletion has to hold on every path that EXECUTES (WhatsApp,
+// routine, webhook, cockpit, agent-to-agent), and before this only the listing
+// filtered it out, so the assistant disappeared from the screen but kept running (burning
+// the owner's credit). Only the HISTORY screens pass incluirArquivado.
 export async function getAgentOwned(id, userId, { incluirArquivado = false } = {}) {
   const { rows } = await pool.query(
     `SELECT id, user_id, owner, name, goal, instructions, style, profile, summary, history, perm_mode, cmd_allowlist, model, former_names, active_project_id, category, tool_config, google_email, archived_at FROM ${S}.agents WHERE id = $1 AND user_id = $2`,
@@ -7338,15 +7338,15 @@ export async function saveTurn(id, { history, profile, summary, userMsg, assista
   );
 }
 
-// ── Categoria do agente (perfil de segurança) ──
-// 'pessoal' = 1:1 do dono, arsenal completo com confirmação (default).
-// 'grupo'   = canal multi-pessoa, toolset restrito a uma allow-list; tools de
-//             conta pessoal e auto-reconfiguração ficam SEMPRE bloqueadas.
-// 'super'   = modo livre (terminal ao vivo), só 1:1 e com servidor conectado.
+// ── Agent category (security profile) ──
+// 'pessoal' = owner's 1:1, full arsenal with confirmation (default).
+// 'grupo'   = multi-person channel, toolset restricted to an allow-list; personal
+//             account tools and self-reconfiguration are ALWAYS blocked.
+// 'super'   = free mode (live terminal), 1:1 only and with a connected server.
 export const AGENT_CATEGORIES = ['pessoal', 'grupo', 'super'];
-// Grupos de tools liberáveis num agente 'grupo' (allow-list em tool_config.groups).
-// 'shell' = shell/código no box dedicado; 'produtos' = scrape + RAG/catálogo;
-// 'projeto' = criar/gerir projeto; 'web' = buscar/abrir link; 'apps' = mini-PaaS.
+// Tool groups that can be enabled on a 'grupo' agent (allow-list in tool_config.groups).
+// 'shell' = shell/code on the dedicated box; 'produtos' = scrape + RAG/catalog;
+// 'projeto' = create/manage project; 'web' = search/open link; 'apps' = mini-PaaS.
 export const AGENT_TOOL_GROUPS = ['shell', 'produtos', 'projeto', 'web', 'apps'];
 
 export async function setAgentCategory(agentId, userId, category, toolConfig) {
@@ -7359,7 +7359,7 @@ export async function setAgentCategory(agentId, userId, category, toolConfig) {
   return { ok: rowCount > 0, category, toolConfig: cfg };
 }
 
-// Saneia o tool_config vindo da UI: só grupos conhecidos, host string curta.
+// Sanitizes the tool_config coming from the UI: only known groups, short host string.
 export function normalizeToolConfig(tc) {
   const o = (tc && typeof tc === 'object') ? tc : {};
   const groups = Array.isArray(o.groups)
@@ -7369,7 +7369,7 @@ export function normalizeToolConfig(tc) {
   return { groups: [...new Set(groups)], host };
 }
 
-// ── Fase 2 coding: modo de permissão + allowlist de comandos (por agente) ──
+// ── Phase 2 coding: permission mode + command allowlist (per agent) ──
 const PERM_MODES = ['padrao', 'aceitar_edicoes', 'plano', 'livre'];
 
 export async function setAgentPermMode(agentId, userId, mode) {
@@ -7381,8 +7381,8 @@ export async function setAgentPermMode(agentId, userId, mode) {
   return { ok: rowCount > 0, mode };
 }
 
-// ── Estilo/tom por agente (o "CLAUDE.local.md" do assistente) ──
-// Só do agente e só editável pelo dono. Injetado no system dele todo turno.
+// ── Style/tone per agent (the assistant's "CLAUDE.local.md") ──
+// Belongs only to the agent and is only editable by the owner. Injected into its system prompt every turn.
 export async function setAgentStyle(agentId, userId, style) {
   const s = String(style ?? '').trim().slice(0, 4000);
   const { rowCount } = await pool.query(
@@ -7392,7 +7392,7 @@ export async function setAgentStyle(agentId, userId, style) {
   return { ok: rowCount > 0, style: s };
 }
 
-// Edição dos campos do agente (tela do assistente): só o dono, campos opcionais.
+// Editing the agent's fields (assistant screen): owner only, optional fields.
 export async function updateAgentFields(agentId, userId, fields = {}) {
   const sets = [];
   const vals = [agentId, userId];
@@ -7401,29 +7401,29 @@ export async function updateAgentFields(agentId, userId, fields = {}) {
     vals.push(String(fields[col] ?? '').trim().slice(0, max));
     sets.push(`${col} = $${vals.length}`);
   }
-  // Modelo fixo por agente (fora do roteamento). Whitelist server-side: só um id
-  // conhecido é aceito; qualquer outra coisa (inclui 'auto'/'') zera pra NULL =
-  // roteamento padrão. Blinda mesmo que a UI seja burlada.
+  // Fixed model per agent (outside routing). Server-side whitelist: only a known
+  // id is accepted; anything else (including 'auto'/'') resets to NULL =
+  // default routing. Protects even if the UI is bypassed.
   if (fields.model !== undefined) {
     const m = String(fields.model || '').trim().toLowerCase();
-    // 'deepseek4' saiu da lista em 31/08 (virou o modelo padrão do produto), então
-    // gravar esse id agora zera pra NULL = roteamento padrão, que É o V4 Pro.
+    // 'deepseek4' left the list on 2026-08-31 (it became the product's default model), so
+    // saving this id now resets to NULL = default routing, which IS V4 Pro.
     const val = ['kimi3', 'deepseek41flash', 'gemini37flash'].includes(m) ? m : null;
     vals.push(val);
     sets.push(`model = $${vals.length}`);
   }
-  // Categoria do agente (whitelist server-side): qualquer valor fora do conjunto
-  // vira 'pessoal' (o mais restrito em poder de shell). Blinda mesmo se a UI burlar.
+  // Agent category (server-side whitelist): any value outside the set
+  // becomes 'pessoal' (the most restricted in shell power). Protects even if the UI is bypassed.
   if (fields.category !== undefined) {
     const c = String(fields.category || '').trim().toLowerCase();
     vals.push(AGENT_CATEGORIES.includes(c) ? c : 'pessoal');
     sets.push(`category = $${vals.length}`);
   }
-  // Conta Google que ESTE assistente usa (multi-conta). Whitelist server-side:
-  // só um e-mail que o dono realmente conectou é aceito; qualquer outra coisa
-  // (inclui '' e 'auto') zera pra NULL = usa a conta principal do usuário.
-  // Blinda mesmo que a UI seja burlada: ninguém amarra um agente a um e-mail
-  // que não está no google_accounts DELE.
+  // Google account THIS assistant uses (multi-account). Server-side whitelist:
+  // only an email the owner actually connected is accepted; anything else
+  // (including '' and 'auto') resets to NULL = uses the user's primary account.
+  // Protects even if the UI is bypassed: no one ties an agent to an email
+  // that is not in THEIR google_accounts.
   if (fields.google_email !== undefined) {
     const em = String(fields.google_email || '').trim().toLowerCase();
     let val = null;
@@ -7436,7 +7436,7 @@ export async function updateAgentFields(agentId, userId, fields = {}) {
     vals.push(val);
     sets.push(`google_email = $${vals.length}`);
   }
-  // tool_config saneado (só grupos conhecidos + host curto).
+  // Sanitized tool_config (only known groups + short host).
   if (fields.tool_config !== undefined) {
     vals.push(JSON.stringify(normalizeToolConfig(fields.tool_config)));
     sets.push(`tool_config = $${vals.length}`);
@@ -7505,26 +7505,26 @@ export async function removeAgentAllowlist(agentId, userId, prefix) {
 
 // ══════════════ Agente ↔ Agente ══════════════
 
-// ── Contatos / handshake (conexão entre dois DONOS) ──
-// Sempre normalizamos o par: user_a = quem convidou, user_b = convidado. O
-// UNIQUE(user_a,user_b) + a checagem nos dois sentidos evitam conexão duplicada.
+// ── Contacts / handshake (connection between two OWNERS) ──
+// We always normalize the pair: user_a = whoever invited, user_b = invitee. The
+// UNIQUE(user_a,user_b) + the check in both directions prevent a duplicate connection.
 
-// Convida uma pessoa (por e-mail). Cria a conexão pending; user_a = convidante.
-// Devolve { ok, connection } ou { error }.
+// Invites a person (by email). Creates the pending connection; user_a = inviter.
+// Returns { ok, connection } or { error }.
 export async function inviteContact(fromUserId, toEmail) {
   const email = String(toEmail || '').trim().toLowerCase();
   if (!email) return { error: 'email_vazio' };
   const other = await getUserByEmail(email);
-  // Conta excluída responde igual a inexistente: não dá pra abrir conexão com
-  // quem pediu pra sair, e a mensagem de erro não pode revelar que o e-mail
-  // ainda está no banco por causa da janela de 30 dias.
+  // A deleted account responds the same as a nonexistent one: it is not possible to open a
+  // connection with someone who asked to leave, and the error message cannot reveal that the
+  // email is still in the database because of the 30-day window.
   if (!other || other.deleted_at) return { error: 'usuario_nao_encontrado' };
   if (other.id === fromUserId) return { error: 'voce_mesmo' };
-  // Já existe conexão em qualquer sentido?
+  // Does a connection already exist in either direction?
   const existing = await getConnectionBetween(fromUserId, other.id);
   if (existing) return { error: 'ja_existe', connection: existing };
-  // Já designa o assistente principal do convidante como inbound do lado dele
-  // (Fase 0 v2), pra direção reversa não ficar travada por NULL.
+  // Already designates the inviter's primary assistant as inbound on their side
+  // (Phase 0 v2), so the reverse direction does not get stuck on NULL.
   const myAgents = await listAgents(fromUserId);
   const myInbound = myAgents[0]?.id || null;
   const { rows } = await pool.query(
@@ -7536,15 +7536,15 @@ export async function inviteContact(fromUserId, toEmail) {
   return { ok: true, connection: rows[0] };
 }
 
-// Igual ao inviteContact, mas recebe o userId direto (o feed expõe o userId do
-// autor do post, não o e-mail). Cria a conexão pending; user_a = convidante.
+// Same as inviteContact, but receives the userId directly (the feed exposes the
+// post author's userId, not the email). Creates the pending connection; user_a = inviter.
 export async function inviteContactByUserId(fromUserId, toUserId) {
   if (!toUserId) return { error: 'usuario_nao_encontrado' };
   if (toUserId === fromUserId) return { error: 'voce_mesmo' };
   const other = await getUserById(toUserId);
-  // Mesma regra do inviteContact por e-mail: conta encerrada responde igual a
-  // inexistente. Aqui faltava, e como o feed manda o userId direto, dava pra
-  // abrir conexão com quem já tinha pedido pra sair.
+  // Same rule as inviteContact by email: a closed account responds the same as a
+  // nonexistent one. This was missing here, and since the feed sends the userId directly, it
+  // was possible to open a connection with someone who had already asked to leave.
   if (!other || other.deleted_at) return { error: 'usuario_nao_encontrado' };
   const existing = await getConnectionBetween(fromUserId, toUserId);
   if (existing) return { error: 'ja_existe', connection: existing };
@@ -7559,7 +7559,7 @@ export async function inviteContactByUserId(fromUserId, toUserId) {
   return { ok: true, connection: rows[0] };
 }
 
-// Devolve a conexão entre dois usuários (qualquer sentido), ou null.
+// Returns the connection between two users (either direction), or null.
 export async function getConnectionBetween(u1, u2) {
   const { rows } = await pool.query(
     `SELECT id, user_a, user_b, status, inbound_agent_a, inbound_agent_b, created_at
@@ -7579,14 +7579,14 @@ export async function getConnectionById(id) {
   return rows[0] || null;
 }
 
-// Aceita a conexão (só o convidado, user_b, pode) e designa o assistente de entrada.
+// Accepts the connection (only the invitee, user_b, can) and designates the inbound assistant.
 export async function acceptContact(connId, userId, inboundAgentId) {
   const conn = await getConnectionById(connId);
   if (!conn) return { error: 'nao_encontrada' };
   if (conn.user_b !== userId) return { error: 'sem_permissao' };
   if (conn.status === 'declined') return { error: 'ja_recusada' };
-  // Se o convidado não escolheu assistente, cai no principal (Fase 0 v2) pra
-  // conexão já nascer utilizável nos dois sentidos.
+  // If the invitee did not choose an assistant, it falls back to the primary one (Phase 0 v2) so
+  // the connection is already usable in both directions from the start.
   let inbound = inboundAgentId || null;
   if (!inbound) {
     const agents = await listAgents(userId);
@@ -7648,8 +7648,8 @@ export async function ensureInboundAgent(connId, userId) {
   return principal;
 }
 
-// Lista os contatos de um usuário (conexões em qualquer sentido/estado), já
-// resolvendo a OUTRA pessoa (nome/e-mail) e qual assistente é o meu inbound.
+// Lists a user's contacts (connections in any direction/state), already
+// resolving the OTHER person (name/email) and which assistant is my inbound.
 export async function listContacts(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.status, c.created_at,
@@ -7675,7 +7675,7 @@ export async function listContacts(userId) {
       personUserId: iAmA ? r.user_b : r.user_a,
       personName: iAmA ? r.name_b : r.name_a,
       personEmail: iAmA ? r.email_b : r.email_a,
-      // meu assistente de entrada nessa conexão:
+      // my inbound assistant on this connection:
       myInboundAgent: iAmA ? r.inbound_agent_a : r.inbound_agent_b,
       // o assistente de entrada da outra pessoa:
       theirInboundAgent: iAmA ? r.inbound_agent_b : r.inbound_agent_a,
@@ -7683,10 +7683,10 @@ export async function listContacts(userId) {
   });
 }
 
-// Lista pedidos de amizade PENDENTES que chegaram pra mim (sou o convidado,
-// user_b, status pending), já resolvendo quem me convidou (nome/e-mail). Usado
-// pra surfaçar o pedido na caixa entre assistentes (o meu assistente saber que
-// há um convite e poder aceitar/recusar por conversa).
+// Lists PENDING friend requests that reached me (I am the invitee,
+// user_b, status pending), already resolving who invited me (name/email). Used
+// to surface the request in the between-assistants inbox (so my assistant knows
+// there is an invite and can accept/decline it through conversation).
 export async function listPendingContactRequests(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.created_at, ua.name AS from_name, ua.email AS from_email
@@ -7704,9 +7704,9 @@ export async function listPendingContactRequests(userId) {
   }));
 }
 
-// Resolve um pedido pendente pelo nome/e-mail de quem convidou e aceita ou
-// recusa (só o convidado pode). Devolve { ok, from_name } ou { error }.
-// error: nenhum_pendente | ambiguo | nao_encontrado + repassa erro do accept/decline.
+// Resolves a pending request by the inviter's name/email and accepts or
+// declines it (only the invitee can). Returns { ok, from_name } or { error }.
+// error: nenhum_pendente | ambiguo | nao_encontrado + passes through the accept/decline error.
 export async function resolveContactRequest(userId, { de, aceitar }) {
   const pend = await listPendingContactRequests(userId);
   if (!pend.length) return { error: 'nenhum_pendente' };
@@ -7728,18 +7728,18 @@ export async function resolveContactRequest(userId, { de, aceitar }) {
   return { ok: true, from_name: hit.fromName };
 }
 
-// Resolve, a partir de MIM e do e-mail/nome de um contato, o alvo de uma
-// conversa agente-a-agente: só devolve se a conexão está ACEITA e o outro lado
-// designou um inbound agent. Devolve { toUser, toAgent } ou { error }.
+// Resolves, starting from ME and a contact's email/name, the target of an
+// agent-to-agent conversation: only returns if the connection is ACCEPTED and the other side
+// has designated an inbound agent. Returns { toUser, toAgent } or { error }.
 export async function resolveContactTarget(fromUserId, contactQuery) {
   const q = String(contactQuery || '').trim().toLowerCase();
   if (!q) return { error: 'contato_vazio' };
   const contacts = await listContacts(fromUserId);
   const accepted = contacts.filter((c) => c.status === 'accepted');
-  // match por e-mail exato, senão por nome (case-insensitive, contém).
-  // Em cada etapa, se mais de um contato casa, NÃO escolhe o primeiro: devolve
-  // ambíguo pra quem chamou perguntar de quem se trata. Escolher em silêncio era
-  // como "manda pra Ana" acabava no assistente da Ana errada.
+  // matches by exact email, otherwise by name (case-insensitive, contains).
+  // At each step, if more than one contact matches, it does NOT pick the first one: returns
+  // ambiguous so the caller can ask who is meant. Picking silently was how
+  // "send to Ana" ended up at the wrong Ana's assistant.
   const byEmail = accepted.filter((c) => (c.personEmail || '').toLowerCase() === q);
   const byName = accepted.filter((c) => (c.personName || '').toLowerCase() === q);
   const byPart = accepted.filter((c) => (c.personName || '').toLowerCase().includes(q));
@@ -7752,9 +7752,9 @@ export async function resolveContactTarget(fromUserId, contactQuery) {
     };
   }
   const hit = matches[0];
-  // Se o outro lado nunca designou inbound (ex.: conexões antigas com NULL),
-  // faz backfill preguiçoso pro assistente principal dele (Fase 0 v2). Só
-  // devolve sem_inbound se ele realmente não tiver nenhum assistente.
+  // If the other side never designated an inbound (e.g. old connections with NULL),
+  // does a lazy backfill to their primary assistant (Phase 0 v2). Only
+  // returns sem_inbound if they really have no assistant at all.
   let target = hit.theirInboundAgent;
   if (!target) target = await ensureInboundAgent(hit.id, hit.personUserId);
   if (!target) return { error: 'sem_inbound', person: hit.personName };
@@ -7766,7 +7766,7 @@ export async function resolveContactTarget(fromUserId, contactQuery) {
   };
 }
 
-// ── Conversas de negociação ──
+// ── Negotiation conversations ──
 export async function createAgentConvo({ fromUser, fromAgent, toUser, toAgent, objetivo, originChannel } = {}) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.agent_convos (from_user, from_agent, to_user, to_agent, objetivo, origin_channel)
@@ -7806,15 +7806,15 @@ export async function updateAgentConvo(convoId, { status, rounds, resultado } = 
   );
 }
 
-// ── Entrega assíncrona ao dono B (fechar o ciclo agente↔agente) ──
+// ── Asynchronous delivery to owner B (closing the agent<->agent cycle) ──
 //
-// Ciclo: A confirma (confirmar_com_agente) → convo status='accepted'. O
-// assistente do dono B surfaça essa decisão pro dono B (listInboundDecisions);
-// o dono B confirma/recusa (respondToInboundDecision → 'confirmed_b'/'declined_b');
-// a resposta de B volta pro dono A (listDecisionResponsesForA) e some quando A
-// vê (markDecisionsSeenByA → 'closed'). status é texto livre, sem migração.
+// Cycle: A confirms (confirmar_com_agente) → convo status='accepted'. Owner B's
+// assistant surfaces this decision to owner B (listInboundDecisions);
+// owner B confirms/declines (respondToInboundDecision → 'confirmed_b'/'declined_b');
+// B's response goes back to owner A (listDecisionResponsesForA) and disappears when A
+// sees it (markDecisionsSeenByA → 'closed'). status is free text, no migration.
 
-// Decisões vindas de outros donos aguardando a confirmação DESTE usuário (B).
+// Decisions from other owners awaiting confirmation from THIS user (B).
 export async function listInboundDecisions(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.objetivo, c.resultado, c.to_agent, c.from_user, c.origin_channel, c.created_at,
@@ -7829,13 +7829,13 @@ export async function listInboundDecisions(userId) {
   return rows;
 }
 
-// O dono B responde a uma decisão pendente (aceita ou recusa). Resolve o alvo
-// por id, senão pelo contato `de` (e-mail exato / nome contém; ambíguo → erro),
-// senão a única pendente. NÃO sobrescreve resultado (a decisão de A fica); a
-// resposta de B vive numa msg side 'b'.
+// Owner B responds to a pending decision (accepts or declines). Resolves the target
+// by id, otherwise by the `de` contact (exact email / name contains; ambiguous → error),
+// otherwise the single pending one. Does NOT overwrite the result (A's decision stays); B's
+// response lives in a msg side 'b'.
 export const respondToInboundDecision = createInboundDecisionResponder(pool);
 
-// Respostas do dono B que voltaram pro dono A (aguardando A tomar ciência).
+// Owner B's responses that came back to owner A (awaiting A's acknowledgment).
 export async function listDecisionResponsesForA(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.objetivo, c.resultado, c.status, c.updated_at,
@@ -7852,7 +7852,7 @@ export async function listDecisionResponsesForA(userId) {
   return rows;
 }
 
-// Marca respostas já surfaçadas pro dono A como encerradas (fecha o ciclo).
+// Marks responses already surfaced to owner A as closed (closes the cycle).
 export async function markDecisionsSeenByA(userId, ids) {
   if (!ids || !ids.length) return;
   await pool.query(
@@ -7863,17 +7863,17 @@ export async function markDecisionsSeenByA(userId, ids) {
   );
 }
 
-// ── Ask-human loop (Fase 2 v2): pergunta que o agente B escala pro PRÓPRIO dono ──
+// ── Ask-human loop (Phase 2 v2): a question agent B escalates to its OWN owner ──
 //
-// Ciclo: na negociação síncrona, quando o agente B detecta uma pergunta de INFO
-// fora do conhecimento do dono B (mas que o dono saberia), em vez de fechar com
-// "não sei" ele grava uma convo status='awaiting_owner_b' (msg side 'a' intent
-// 'question'). O dono B vê a pergunta pendente (listPendingQuestions) e responde
-// (answerExternalQuestion → 'answered_b', msg side 'b' intent 'answer'). A
-// resposta volta pro dono A (listQuestionAnswersForA) e some quando A vê
-// (markQuestionsSeenByA → 'closed'). status é texto livre, sem migração.
+// Cycle: in synchronous negotiation, when agent B detects an INFO question
+// outside owner B's knowledge (but that the owner would know), instead of closing with
+// "I don't know" it records a convo status='awaiting_owner_b' (msg side 'a' intent
+// 'question'). Owner B sees the pending question (listPendingQuestions) and answers
+// (answerExternalQuestion → 'answered_b', msg side 'b' intent 'answer'). The
+// answer goes back to owner A (listQuestionAnswersForA) and disappears when A sees it
+// (markQuestionsSeenByA → 'closed'). status is free text, no migration.
 
-// Perguntas de outros donos aguardando a resposta DESTE usuário (B).
+// Questions from other owners awaiting an answer from THIS user (B).
 export async function listPendingQuestions(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.objetivo, c.to_agent, c.from_user, c.origin_channel, c.created_at,
@@ -7891,18 +7891,18 @@ export async function listPendingQuestions(userId) {
   return rows;
 }
 
-// O dono B responde uma pergunta pendente. Resolve o alvo por id, senão pelo
-// contato `para` (e-mail exato / nome exato / nome contém; ambíguo → erro),
-// senão a única pendente. Guarda a resposta numa msg side 'b'.
+// Owner B answers a pending question. Resolves the target by id, otherwise by the
+// `para` contact (exact email / exact name / name contains; ambiguous → error),
+// otherwise the single pending one. Stores the answer in a msg side 'b'.
 export async function answerExternalQuestion(userId, { id, para, resposta } = {}) {
   const pend = await listPendingQuestions(userId);
   if (!pend.length) return { error: 'nenhuma_pendente' };
   let hit = null;
   if (id) {
     const key = String(id).trim().toLowerCase();
-    // Aceita o uuid inteiro ou o prefixo curto que a caixa entre assistentes
-    // mostra (>= 6 chars). Id informado e não encontrado é ERRO: cair no "para"
-    // ou na única pendente seria responder outra pergunta em silêncio.
+    // Accepts the full uuid or the short prefix that the between-assistants inbox
+    // shows (>= 6 chars). An id that was given but not found is an ERROR: falling back to "para"
+    // or to the single pending one would silently answer a different question.
     let byId = pend.filter((p) => String(p.id).toLowerCase() === key);
     if (!byId.length && key.length >= 6) byId = pend.filter((p) => String(p.id).toLowerCase().startsWith(key));
     if (byId.length > 1) return { error: 'ambigua' };
@@ -7935,7 +7935,7 @@ export async function answerExternalQuestion(userId, { id, para, resposta } = {}
   };
 }
 
-// Respostas às perguntas do dono A que voltaram (aguardando A tomar ciência).
+// Answers to owner A's questions that came back (awaiting A's acknowledgment).
 export async function listQuestionAnswersForA(userId) {
   const { rows } = await pool.query(
     `SELECT c.id, c.objetivo, c.updated_at,
@@ -7955,7 +7955,7 @@ export async function listQuestionAnswersForA(userId) {
   return rows;
 }
 
-// Marca respostas de pergunta já surfaçadas pro dono A como encerradas.
+// Marks question answers already surfaced to owner A as closed.
 export async function markQuestionsSeenByA(userId, ids) {
   if (!ids || !ids.length) return;
   await pool.query(
@@ -7966,12 +7966,12 @@ export async function markQuestionsSeenByA(userId, ids) {
   );
 }
 
-// ── Passagens aéreas: cache de busca + histórico de preço ────────────────────
-// Ver a migração de flight_searches/flight_prices no initDb e web/voos.mjs.
+// ── Flights: search cache + price history ────────────────────
+// See the flight_searches/flight_prices migration in initDb and web/voos.mjs.
 
-// Resposta cacheada de uma busca, se ainda dentro da janela (minutos). Devolve
-// { payload, fetchedAt, ageMin } ou null. Também incrementa o contador de hits
-// (visibilidade de quanta requisição o cache está poupando).
+// Cached response of a search, if still within the window (minutes). Returns
+// { payload, fetchedAt, ageMin } or null. Also increments the hit counter
+// (visibility into how many requests the cache is saving).
 export async function getFlightCache(cacheKey, maxAgeMin) {
   const { rows } = await pool.query(
     `SELECT payload, fetched_at,
@@ -7983,8 +7983,8 @@ export async function getFlightCache(cacheKey, maxAgeMin) {
   if (!r) return null;
   const ageMin = Number(r.age_min) || 0;
   if (maxAgeMin != null && ageMin > Number(maxAgeMin)) {
-    // Fora da janela: devolve como STALE, quem chamou decide se usa (só usamos
-    // quando a API falha, e nesse caso a idade vai dita na resposta).
+    // Outside the window: returns it as STALE, the caller decides whether to use it (we only use it
+    // when the API fails, and in that case the age is stated in the response).
     return { payload: r.payload, fetchedAt: r.fetched_at, ageMin, stale: true };
   }
   await pool.query(
@@ -8006,8 +8006,8 @@ export async function putFlightCache(cacheKey, { origin, destination, departDate
   );
 }
 
-// Registra o preço observado numa consulta (append-only). Só chamado quando a
-// busca foi REAL (cache hit não gera medição nova, senão o histórico infla).
+// Records the price observed in a query (append-only). Only called when the
+// search was REAL (a cache hit does not generate a new measurement, otherwise the history inflates).
 export async function recordFlightPrice(p) {
   await pool.query(
     `INSERT INTO ${S}.flight_prices
@@ -8022,9 +8022,9 @@ export async function recordFlightPrice(p) {
   );
 }
 
-// O que NÓS já medimos nessa rota (qualquer data de ida), nos últimos `days`.
-// Base do veredito de "é bom preço" que não depende de terceiro. Devolve null
-// quando ainda não há amostra suficiente (2+ medições).
+// What WE have already measured on this route (any departure date), in the last `days`.
+// Basis for the "is it a good price" verdict that does not depend on a third party. Returns null
+// when there is not yet enough sample (2+ measurements).
 export async function flightPriceStats(origin, destination, { days = 90, cabin = null } = {}) {
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n, min(price)::float AS min, max(price)::float AS max,
@@ -8041,8 +8041,8 @@ export async function flightPriceStats(origin, destination, { days = 90, cabin =
   return { n: Number(r.n), min: r.min, max: r.max, avg: r.avg, p25: r.p25, days };
 }
 
-// Monitoramento tipado, habilitado só após migração/aprovação da configuração.
-// Não chama initDb nem reconcilia dados durante consultas.
+// Typed monitoring, enabled only after migration/approval of the configuration.
+// Does not call initDb nor reconcile data during queries.
 export async function previousFlightObservation({userId,routineId,key,day,tz}) {
   const {rows}=await pool.query(`SELECT query_key,price::float,currency,
       observation_day::text,observed_at FROM ${S}.flight_monitor_observations

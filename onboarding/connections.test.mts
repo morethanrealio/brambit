@@ -39,7 +39,7 @@ test('actual Microsoft connector does not expose mail operations to a calendar-o
  assert(tools.some((t:{name:string})=>t.name==='outlook_calendar_list'));assert(!tools.some((t:{name:string})=>t.name.startsWith('hotmail_')));
 });
 test('me context metadata distinguishes absent, legacy and identity-only Microsoft tokens',async()=>{
- const source=readFileSync('web/server.mjs','utf8');const a=source.indexOf('async function microsoftServicesFor('),b=source.indexOf('// Tools dos conectores OAuth',a);assert(a>0&&b>a);
+ const source=readFileSync('web/server.mjs','utf8');const a=source.indexOf('async function microsoftServicesFor('),b=source.indexOf('// Tools of the OAuth connectors',a);assert(a>0&&b>a);
  for(const [token,expected] of [[null,[]],[{scope:null},['calendar','gmail']],[{scope:'User.Read'},[]],[{scope:'Calendars.ReadWrite'},['calendar']]] as const){
   const fn=new Function('getOAuthToken','microsoftContextServices',source.slice(a,b)+';return microsoftServicesFor;')(async()=>token,microsoftContextServices);
   assert.deepEqual(await fn('fixture'),expected);

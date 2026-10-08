@@ -91,7 +91,7 @@ const s0=sends;await delivery(routine,packed);eq(sends,s0+1);eq((await store.his
 await reject(()=>delivery({...routine,user_id:uuid(1)},packed));eq(sends,s0+1);
 const {deliverRoutine:email}=createScheduledDelivery({sendEmail:async()=>receipt,persistProactiveToThread:async()=>{}});eq(await email(routine,'body'),{...receipt,channel:'email',status:'accepted'});
 // Exact post-model branch emits guarded renderer, not raw JSON.
-const a=server.indexOf('  let curationResult = null;'),b=server.indexOf('  // Rede de segurança:',a);
+const a=server.indexOf('  let curationResult = null;'),b=server.indexOf('  // Safety net:',a);
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const turn=new AsyncFunction('text','curationHistory','opts','userId','routineCheck','searchCoverage','finalizeCuration','conferirLinks','curationEvidence',server.slice(a,b)+';return {text,curationResult};');
 const fixedFinalize=(args,deps)=>finalizeCuration({...args,now:'2026-09-11T15:00:00Z'},deps);
@@ -114,7 +114,7 @@ eq(repairs,1);eq(retryUsages.length,1);eq(retried.curationResult.executionStatus
 ok(server.indexOf('let curationHistory = null')>server.indexOf('if (credit.over)'));
 ok(!readFileSync('web/db.mjs','utf8').includes('CREATE TABLE mtr_harness.curation_deliveries'));
 ok(readFileSync('web/scheduler.mjs','utf8').includes("text?.type === 'curation-v1'"));
-// Datas futuras/antigas são filtradas antes da contagem; sem inventar substitutos.
+// Future/old dates are filtered out before counting; without inventing substitutes.
 for(const date of ['2026-09-12','2025-09-10']){const r=await finalize(JSON.stringify({items:[{...items[0],date},...items.slice(1)],checks}));eq(r.coverageSatisfied,false);eq(r.urls.includes(url(1)),false);eq(r.audit.discarded.windowSectionOrExclusion,1);ok(!r.text.includes('janela de publicação'));}
 // Scheduler real preserva envelope, sem chamar canal real.
 const savedInterval=globalThis.setInterval,savedClear=globalThis.clearInterval,NativeDate=Date;
@@ -125,8 +125,8 @@ const {startScheduler}=await import('./web/scheduler.mjs');let deliveries=0;
 const scheduled={...routine,hour:8,days:'daily',tz:'UTC',enabled:true,last_run_day:''};
 const scheduler=startScheduler({listDueRoutines:async()=>[scheduled],markRoutineRun:async(id,day)=>{scheduled.last_run_day=day;},runRoutine:async()=>packed,deliver:async(r,e)=>{eq(e.type,'curation-v1');eq(e.urls.length,4);deliveries++;}});
 for(let i=0;i<40;i++)await Promise.resolve();await scheduler.tick();eq(deliveries,1);scheduler.stop();globalThis.setInterval=savedInterval;globalThis.clearInterval=savedClear;globalThis.Date=NativeDate;
-// Preflight real: storage indisponível bloqueia antes de busca/modelo.
-const preA=server.indexOf('  let curationHistory = null;'),preB=server.indexOf('  // Monitor tipado aprovado:',preA);let stored=0;
+// Real preflight: storage unavailable blocks before search/model.
+const preA=server.indexOf('  let curationHistory = null;'),preB=server.indexOf('  // Approved typed monitor:',preA);let stored=0;
 const preflight=new AsyncFunction('kind','opts','userId','curationStore','normalizeCurationConfig','thread','agent','message','saveThreadTurn','createCurationEvidence','const baseHistory=structuredClone(thread.history||[]);'+server.slice(preA,preB));
 const stopped=await preflight('routine',{curationConfig:cfg,routineId:uuid(21)},uuid(2),{history:async()=>{throw Error('offline');}},normalizeCurationConfig,{id:uuid(41),history:[]},{id:uuid(31)},'synthetic',async()=>stored++,createCurationEvidence);eq(stored,1);eq(stopped.curation.urls,[]);eq(stopped.curation.executionStatus,'failed');ok(stopped.text.includes('Não iniciei novas buscas'));
 ok(server.includes("preview: ['flight-monitor-v1','curation-v1'].includes(text?.type) ? text.text : text"));

@@ -19,7 +19,7 @@ const {codingPolicySnapshot,codingControlIntent}=await import('./web/coding-jobs
 const {migrateCodingConfirmation}=await import('./web/confirmation-recovery.mjs');
 const {handleRoutinePause,routinePauseIntent}=await import('./web/routine-control.mjs');
 const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
-const start=source.indexOf('async function runConversationInThread('),end=source.indexOf('// Cooldown do turno de emergência',start);
+const start=source.indexOf('async function runConversationInThread('),end=source.indexOf('// Cooldown for the no-credit emergency turn',start);
 assert.ok(start>0&&end>start);
 
 async function fixture(t) {
