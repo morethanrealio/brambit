@@ -40,7 +40,7 @@ import {createEventos,criadorDeConta} from './eventos.mjs';
 import {createRotas} from './rotas.mjs';
 import {createMidiaPublica} from './midia-publica.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
-import {createPermissoesDoAmbiente} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
+import {createPermissionsFromEnv} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
 import {createContaPagadoraSimples} from './conta-pagadora.mjs';
 import {createFerramentasSimples} from './ferramentas.mjs';
 import {createContaPagamentoSimples} from './conta-pagamento.mjs';
@@ -52,7 +52,7 @@ import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
 const plugins=await carregarPlugins();
 const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
-const permissoes=pecas.permissoes??createPermissoesDoAmbiente(); // Porta 2 (permissoes.mjs): apps, disco e fila do cadastro (BRAMBIT_CADASTRO).
+const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissoes.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
 configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Porta da conta pagadora (conta-pagadora.mjs): quem paga o consumo de cada um.
 if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Conta empresarial (empresa.mjs): plano pago, pacotes, reembolso e cancelamento na entrada e na criação.

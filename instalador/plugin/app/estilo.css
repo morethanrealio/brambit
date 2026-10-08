@@ -1,3 +1,0 @@
-  #instalacaoBox .inst-linhas { display:grid; gap:4px; font-size:13px; word-break:break-all; }
-  #instalacaoBox .inst-rot { opacity:.65; margin-right:4px; }
-  #instalacaoBox .inst-botoes { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }

@@ -1,6 +1,6 @@
 # Rede de proteção do repositório.
-# sistemas: sobe de verdade em Windows, macOS e Linux (npm run local -- --check) e o
-#           instalador de ponta a ponta (instalador/conferir.mjs).
+# sistemas: really boots on Windows, macOS and Linux (npm run local -- --check) and runs
+#           the installer end to end (installer/e2e.mjs).
 # rapido: sintaxe, nome usado sem existir (eslint no-undef), artefatos gerados em dia, trava de crescimento de server.mjs/db.mjs,
 #         trava de teste novo que lê o texto do código, .env.example em dia, núcleo sobe
 #         sozinho e
@@ -100,11 +100,11 @@ jobs:
           tar -xzf /tmp/zz.tgz -C /tmp zizmor
           /tmp/zizmor --persona auditor --min-severity medium --format github .github/workflows/
 
-  # O instalador promete Windows, macOS e Linux, e ninguém do time usa Windows:
-  # sem isto, uma quebra só aparece quando um usuário reclamar. Sobe o Brambit
-  # como `npm run local` (Postgres embutido, migrações, servidor), cadastra e entra.
+  # The installer promises Windows, macOS and Linux, and nobody on the team uses
+  # Windows: without this, a break only shows up when a user complains. Boots
+  # Brambit like `npm run local` (embedded Postgres, migrations, server), signs up and signs in.
   sistemas:
-    name: Sobe em ${{ matrix.os }}
+    name: Boots on ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -120,11 +120,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Sobe, cadastra e entra
+      - name: Boots, signs up and signs in
         run: node dev/local.mjs --check
-      - name: Instalador (configura, cadastro fechado, religa)
-        run: node instalador/conferir.mjs
-      - name: Log do Postgres (se falhou)
+      - name: Installer end to end (setup, closed sign-up, restart, change AI, stop)
+        run: node installer/e2e.mjs
+      - name: Postgres log (on failure)
         if: failure()
         shell: bash
         run: cat .local/postgres.log || true

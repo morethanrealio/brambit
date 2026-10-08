@@ -10,6 +10,27 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Added
+- `npm run brambit -- start | stop | status`: one copy per data folder;
+  running it again while it runs only opens the browser. The owner gets a
+  "This computer" section in Settings (address, data folder, AI, version)
+  with "Change the AI" and "Turn Brambit off".
+- `AGENTS.md`: instructions for coding agents (and people) working in this
+  repository, starting with: everything in the repository is in English.
+
+### Changed
+- Renamed, so the repository stays in English: `BRAMBIT_CADASTRO=fechado` is
+  now `BRAMBIT_SIGNUP=closed`, `BRAMBIT_DADOS` is `BRAMBIT_DATA_DIR`, the
+  `instalador/` folder is `installer/`, and the installer's data files are
+  `installation.json` and `db/`. An install set up with 0.2.7 runs the setup
+  again.
+- `npm run local`: the test account is `test@example.com` /
+  `brambit-local-test`.
+
+### Fixed
+- App slot markers accept CRLF line endings: on Windows every plugin with an
+  app slot failed at boot.
+
 ## [0.2.7] - 2026-10-07
 
 ### Added

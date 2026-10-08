@@ -1,0 +1,17 @@
+            <!-- This computer (installation plugin): only shows for the owner, when
+                 Brambit was started by the launcher. Filled in by installationLoad(). -->
+            <div class="section hidden" id="installationBox" style="margin-top:12px;">
+              <div class="title">Este computador</div>
+              <p class="sub" style="margin:0 0 10px;">O Brambit está ligado neste computador. Só você, que é dono dele, vê esta parte.</p>
+              <div class="inst-rows">
+                <div><span class="inst-label">Endereço</span> <span id="instAddress"></span></div>
+                <div><span class="inst-label">Inteligência artificial</span> <span id="instAi"></span></div>
+                <div><span class="inst-label">Pasta dos dados</span> <span id="instDataDir"></span></div>
+                <div><span class="inst-label">Versão</span> <span id="instVersion"></span></div>
+              </div>
+              <div class="inst-buttons">
+                <button class="ghostbtn" id="instChangeAi" type="button">Trocar a IA</button>
+                <button class="ghostbtn" id="instShutdown" type="button">Desligar o Brambit</button>
+              </div>
+              <p class="sub hidden" id="instStatus" style="margin:8px 0 0;"></p>
+            </div>

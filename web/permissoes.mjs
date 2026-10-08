@@ -39,11 +39,11 @@ export function createPermissoesSimples({maxApps=null,discoMb=200,cadastroFechad
   podeRecusarTreino:async()=>false,
  });
 }
-// Default of the core, read from the environment. BRAMBIT_CADASTRO=fechado closes
+// Default of the core, read from the environment. BRAMBIT_SIGNUP=closed closes
 // sign-up: only the owner (ADMIN_EMAIL) creates an account freely, everyone
 // else comes in with the owner's invite code or a company invite. Anything
 // else, or unset, keeps sign-up open.
-export function createPermissoesDoAmbiente({cadastro=process.env.BRAMBIT_CADASTRO,admin=process.env.ADMIN_EMAIL}={}){
- const cadastroFechado=String(cadastro||'').trim().toLowerCase()==='fechado';
+export function createPermissionsFromEnv({signup=process.env.BRAMBIT_SIGNUP,admin=process.env.ADMIN_EMAIL}={}){
+ const cadastroFechado=String(signup||'').trim().toLowerCase()==='closed';
  return createPermissoesSimples({cadastroFechado,liberados:cadastroFechado?[admin]:[]});
 }

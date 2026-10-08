@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="pt-BR" data-mode="__MODE__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brambit</title>
+<style nonce="__CSP_NONCE__">
+  :root { color-scheme: light dark; --border: #8884; --accent: #2f6fed; }
+  body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; display: flex; justify-content: center; }
+  main { width: 100%; max-width: 520px; padding: 32px 20px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p.sub, small { opacity: .75; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  input[type=text], input[type=email], input[type=password], input[type=url] { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: transparent; color: inherit; }
+  .ais { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ais label { font-weight: 400; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+  .ais label:has(input:checked) { border-color: var(--accent); outline: 1px solid var(--accent); }
+  button { margin-top: 24px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { margin-top: 8px; background: transparent; color: inherit; border: 1px solid var(--border); }
+  button:disabled { opacity: .6; cursor: default; }
+  .error { color: #d33; margin-top: 12px; }
+  .status { margin-top: 16px; }
+  [hidden] { display: none !important; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1 data-t="title"></h1>
+  <p class="sub" data-t="sub"></p>
+  <p class="error" id="no-code" hidden data-t="no_code"></p>
+  <form id="form" novalidate>
+    <div id="account">
+    <h2 data-t="you"></h2>
+    <label for="name" data-t="name"></label>
+    <input id="name" type="text" autocomplete="name" required>
+    <label for="email" data-t="email"></label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="password" data-t="password"></label>
+    <input id="password" type="password" autocomplete="new-password" minlength="12" required>
+    <small data-t="password_hint"></small>
+    <label for="password2" data-t="password2"></label>
+    <input id="password2" type="password" autocomplete="new-password" required>
+    </div>
+
+    <h2 id="ai-title" data-t="ai"></h2>
+    <small data-t="ai_hint"></small>
+    <div class="ais">
+      <label><input type="radio" name="provider" value="together" checked> Together</label>
+      <label><input type="radio" name="provider" value="openai"> OpenAI</label>
+      <label><input type="radio" name="provider" value="gemini"> Google Gemini</label>
+      <label><input type="radio" name="provider" value="other"> <span data-t="other"></span></label>
+    </div>
+    <div id="other-fields" hidden>
+      <label for="url" data-t="url"></label>
+      <input id="url" type="url" placeholder="http://localhost:11434/v1">
+      <label for="model" data-t="model"></label>
+      <input id="model" type="text">
+    </div>
+    <label for="key" data-t="key"></label>
+    <input id="key" type="password" autocomplete="off">
+    <small><a id="where-key" target="_blank" rel="noopener noreferrer" data-t="where_key"></a><span id="key-optional" hidden data-t="key_optional"></span></small>
+
+    <button id="submit" type="submit" data-t="submit"></button>
+    <button id="cancel" class="secondary" type="button" hidden data-t="cancel"></button>
+    <p class="error" id="error" hidden></p>
+  </form>
+  <p class="status" id="status" hidden></p>
+</main>
+<script nonce="__CSP_NONCE__">
+const TEXTS = {
+  pt: {
+    title: 'Bem-vindo ao Brambit', sub: 'Falta só configurar. Isto aparece uma vez e fica tudo neste computador.',
+    no_code: 'Esta página precisa do endereço completo que apareceu na janela do Brambit. Feche e abra o Brambit de novo.',
+    you: '1. Sua conta', name: 'Seu nome', email: 'Seu e-mail', password: 'Crie uma senha', password_hint: 'Pelo menos 12 caracteres.', password2: 'Repita a senha',
+    ai: '2. Qual inteligência artificial usar', ai_hint: 'O Brambit usa a IA que você escolher, com a sua chave. O custo do uso é cobrado por ela, direto na sua conta.',
+    other: 'Outra (compatível com OpenAI)', url: 'Endereço da API', model: 'Nome do modelo', key: 'Chave da API',
+    where_key: 'Onde pegar a chave', key_optional: 'Pode ficar vazia se o serviço não pede chave (ex.: Ollama no seu computador).',
+    submit: 'Concluir', testing: 'Testando a chave...', starting: 'Tudo certo. Ligando o Brambit...', signing_in: 'Criando sua conta...',
+    e_name: 'Preencha seu nome.', e_email: 'Confira o e-mail.', e_password: 'A senha precisa de pelo menos 12 caracteres.', e_password2: 'As duas senhas estão diferentes.',
+    missing_key: 'Cole a chave da API.', invalid_url: 'Confira o endereço da API (começa com http:// ou https://).', missing_model: 'Escreva o nome do modelo.',
+    key_rejected: 'A IA recusou essa chave. Confira se copiou inteira.', model_missing: 'A chave funciona, mas esse modelo não aparece na sua conta da IA.',
+    no_connection: 'Não consegui falar com a IA. Confira a internet (ou o endereço).', provider_error: 'A IA respondeu com erro. Tente de novo daqui a pouco.',
+    code: 'Esta página expirou. Feche e abra o Brambit de novo.', code_exhausted: 'Esta página expirou. Feche e abra o Brambit de novo.',
+    title_change: 'Trocar a inteligência artificial', sub_change: 'O assistente fica parado até você salvar ou cancelar. A chave nova é testada antes de valer.',
+    ai_change: 'Qual inteligência artificial usar', save: 'Salvar', cancel: 'Cancelar e manter a de antes', restarting: 'Religando o Brambit...',
+    timed_out: 'O Brambit não ligou. Veja a mensagem na janela dele.', account: 'A configuração foi salva, mas a conta não foi criada: ', generic: 'Algo deu errado. Tente de novo.',
+  },
+  en: {
+    title: 'Welcome to Brambit', sub: 'Just one setup step. You only see this once, and everything stays on this computer.',
+    no_code: 'This page needs the full address shown in the Brambit window. Close Brambit and open it again.',
+    you: '1. Your account', name: 'Your name', email: 'Your email', password: 'Create a password', password_hint: 'At least 12 characters.', password2: 'Repeat the password',
+    ai: '2. Which AI to use', ai_hint: 'Brambit uses the AI you choose, with your own key. Usage is billed by that AI, straight to your account.',
+    other: 'Other (OpenAI-compatible)', url: 'API address', model: 'Model name', key: 'API key',
+    where_key: 'Where to get the key', key_optional: 'Can be empty if the service needs no key (e.g. Ollama on your computer).',
+    submit: 'Finish', testing: 'Testing the key...', starting: 'All set. Starting Brambit...', signing_in: 'Creating your account...',
+    e_name: 'Fill in your name.', e_email: 'Check the email.', e_password: 'The password needs at least 12 characters.', e_password2: 'The two passwords differ.',
+    missing_key: 'Paste the API key.', invalid_url: 'Check the API address (starts with http:// or https://).', missing_model: 'Type the model name.',
+    key_rejected: 'The AI refused this key. Check you copied all of it.', model_missing: 'The key works, but this model is not available on your AI account.',
+    no_connection: "Couldn't reach the AI. Check the internet (or the address).", provider_error: 'The AI answered with an error. Try again in a moment.',
+    code: 'This page expired. Close Brambit and open it again.', code_exhausted: 'This page expired. Close Brambit and open it again.',
+    title_change: 'Change the AI', sub_change: 'The assistant is paused until you save or cancel. The new key is tested before it takes effect.',
+    ai_change: 'Which AI to use', save: 'Save', cancel: 'Cancel and keep the current one', restarting: 'Restarting Brambit...',
+    timed_out: "Brambit didn't start. See the message in its window.", account: 'Setup was saved, but the account was not created: ', generic: 'Something went wrong. Try again.',
+  },
+  es: {
+    title: 'Bienvenido a Brambit', sub: 'Solo falta configurar. Esto aparece una vez y todo queda en esta computadora.',
+    no_code: 'Esta página necesita la dirección completa que apareció en la ventana de Brambit. Cierra Brambit y ábrelo de nuevo.',
+    you: '1. Tu cuenta', name: 'Tu nombre', email: 'Tu correo', password: 'Crea una contraseña', password_hint: 'Al menos 12 caracteres.', password2: 'Repite la contraseña',
+    ai: '2. Qué inteligencia artificial usar', ai_hint: 'Brambit usa la IA que elijas, con tu propia clave. El uso lo cobra esa IA, directo en tu cuenta.',
+    other: 'Otra (compatible con OpenAI)', url: 'Dirección de la API', model: 'Nombre del modelo', key: 'Clave de la API',
+    where_key: 'Dónde conseguir la clave', key_optional: 'Puede quedar vacía si el servicio no pide clave (ej.: Ollama en tu computadora).',
+    submit: 'Terminar', testing: 'Probando la clave...', starting: 'Todo listo. Encendiendo Brambit...', signing_in: 'Creando tu cuenta...',
+    e_name: 'Escribe tu nombre.', e_email: 'Revisa el correo.', e_password: 'La contraseña necesita al menos 12 caracteres.', e_password2: 'Las dos contraseñas son distintas.',
+    missing_key: 'Pega la clave de la API.', invalid_url: 'Revisa la dirección de la API (empieza con http:// o https://).', missing_model: 'Escribe el nombre del modelo.',
+    key_rejected: 'La IA rechazó esta clave. Revisa que la copiaste completa.', model_missing: 'La clave funciona, pero ese modelo no aparece en tu cuenta de la IA.',
+    no_connection: 'No pude hablar con la IA. Revisa internet (o la dirección).', provider_error: 'La IA respondió con un error. Intenta de nuevo en un rato.',
+    code: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.', code_exhausted: 'Esta página expiró. Cierra Brambit y ábrelo de nuevo.',
+    title_change: 'Cambiar la inteligencia artificial', sub_change: 'El asistente queda en pausa hasta que guardes o canceles. La clave nueva se prueba antes de valer.',
+    ai_change: 'Qué inteligencia artificial usar', save: 'Guardar', cancel: 'Cancelar y mantener la actual', restarting: 'Reiniciando Brambit...',
+    timed_out: 'Brambit no encendió. Mira el mensaje en su ventana.', account: 'La configuración se guardó, pero la cuenta no se creó: ', generic: 'Algo salió mal. Intenta de nuevo.',
+  },
+};
+const WHERE_KEY = {
+  together: 'https://api.together.ai/settings/api-keys',
+  openai: 'https://platform.openai.com/api-keys',
+  gemini: 'https://aistudio.google.com/apikey',
+};
+const lang = (navigator.languages || [navigator.language || 'pt']).map((l) => l.slice(0, 2)).find((l) => TEXTS[l]) || 'pt';
+const t = (k) => TEXTS[lang][k] || TEXTS.pt[k] || k;
+document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[lang];
+// Changing the AI (button in Settings): the account already exists, only the AI part shows.
+const changing = document.documentElement.dataset.mode === 'change';
+if (changing) {
+  for (const [sel, k] of [['h1', 'title_change'], ['p.sub', 'sub_change'], ['#ai-title', 'ai_change'], ['#submit', 'save']]) document.querySelector(sel).dataset.t = k;
+  document.getElementById('account').hidden = true;
+  document.getElementById('cancel').hidden = false;
+}
+for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+
+const $ = (id) => document.getElementById(id);
+// The code leaves the address as soon as it is read: it stays out of the browser history.
+const code = new URLSearchParams(location.hash.slice(1)).get('code') || '';
+history.replaceState(null, '', '/');
+if (!code) { $('no-code').hidden = false; $('form').hidden = true; }
+
+const provider = () => document.querySelector('input[name=provider]:checked').value;
+function switchProvider() {
+  const p = provider();
+  $('other-fields').hidden = p !== 'other';
+  $('where-key').hidden = p === 'other';
+  $('key-optional').hidden = p !== 'other';
+  if (WHERE_KEY[p]) $('where-key').href = WHERE_KEY[p];
+}
+for (const r of document.querySelectorAll('input[name=provider]')) r.addEventListener('change', switchProvider);
+switchProvider();
+// The current AI comes selected (the key does not: to change it, paste it again).
+if (changing) fetch('/current').then((r) => (r.ok ? r.json() : null)).then((a) => {
+  const r = a && document.querySelector(`input[name=provider][value="${a.provider}"]`);
+  if (!r) return;
+  r.checked = true;
+  if (a.provider === 'other') { $('url').value = a.url || ''; $('model').value = a.model || ''; }
+  switchProvider();
+}).catch(() => {});
+
+const showError = (msg) => { $('error').textContent = msg; $('error').hidden = !msg; };
+const status = (msg) => { $('status').textContent = msg; $('status').hidden = !msg; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin' });
+// This page goes away and the real server comes back on the same address.
+async function waitForServer(msg) {
+  $('form').hidden = true;
+  status(msg);
+  for (let i = 0; i < 180; i++) {
+    await sleep(1000);
+    try { if ((await fetch('/api/config', { cache: 'no-store' })).ok) return true; } catch {}
+  }
+  status(t('timed_out'));
+  return false;
+}
+
+$('cancel').addEventListener('click', async () => {
+  $('cancel').disabled = true;
+  try { if (!(await post('/cancel', { code })).ok) throw 0; }
+  catch { $('cancel').disabled = false; return showError(t('code')); }
+  if (await waitForServer(t('restarting'))) location.replace('/');
+});
+
+$('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  showError('');
+  const name = $('name').value.trim(), email = $('email').value.trim(), password = $('password').value;
+  if (!changing) {
+    if (!name) return showError(t('e_name'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError(t('e_email'));
+    if (password.length < 12) return showError(t('e_password'));
+    if (password !== $('password2').value) return showError(t('e_password2'));
+  }
+  $('submit').disabled = true;
+  status(t('testing'));
+  try {
+    const r = await post('/install', { code, name, email, provider: provider(), key: $('key').value, url: $('url').value, model: $('model').value });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { status(''); $('submit').disabled = false; return showError(t(j.error) === j.error ? t('generic') : t(j.error)); }
+  } catch { status(''); $('submit').disabled = false; return showError(t('generic')); }
+
+  // The setup is saved and Brambit is swapping this page for the real server.
+  if (!(await waitForServer(t(changing ? 'restarting' : 'starting')))) return;
+  // When changing the AI, the previous session is still valid.
+  if (changing) return location.replace('/');
+  status(t('signing_in'));
+  let r = await post('/api/signup', { name, email, password });
+  if (r.status === 409) r = await post('/api/login', { email, password });
+  if (r.ok) return location.replace('/');
+  const j = await r.json().catch(() => ({}));
+  status(t('account') + (j.error || r.status));
+});
+</script>
+</body>
+</html>
