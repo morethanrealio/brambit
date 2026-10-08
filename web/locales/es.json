@@ -1358,7 +1358,8 @@
       "typing": "escribiendo...",
       "attach_image_or_pdf": "Adjuntar imagen o PDF",
       "write_message_shift_enter": "Escribe tu mensaje... (Shift+Enter salta línea)",
-      "send": "Enviar"
+      "send": "Enviar",
+      "speak_message": "Decir tu mensaje"
     },
     "app": {
       "remember": "Para recordar"
@@ -1385,7 +1386,11 @@
       "create_assistant_first": "Crea un asistente primero (pestaña Asistentes).",
       "write_request": "Escribe lo que quieres resolver.",
       "open_failed": "No pude abrir la conversación.",
-      "start_failed": "No pude iniciar la conversación. Revisa la lista antes de intentarlo de nuevo."
+      "start_failed": "No pude iniciar la conversación. Revisa la lista antes de intentarlo de nuevo.",
+      "mic_start": "Decir tu mensaje",
+      "mic_stop": "Detener y enviar",
+      "mic_blocked": "No pude usar el micrófono. Permite el acceso al micrófono para esta página en tu navegador e inténtalo de nuevo.",
+      "mic_not_heard": "No pude entender el audio. Inténtalo de nuevo, un poco más cerca del micrófono."
     },
     "auth": {
       "create_account": "Crear cuenta",

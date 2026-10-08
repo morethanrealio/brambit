@@ -14,7 +14,7 @@ import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
 import { withConfirmationReceipt, createReactionConfirmationHandler } from './channel-confirmation.mjs';
-import { voiceReplyDelivered } from './voice-input.mjs';
+import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
 import { avisosTurno, imagensDesligadas } from './avisos-turno.mjs';
 import { confirmationStore, getConfirmationAuthorizationContext } from './db.mjs';
@@ -1146,7 +1146,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './planilha.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './planilha-edit.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
-import { mediaTools, transcribeAudio, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject, startAwsCredentialRefresh } from './media.mjs';
+import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject, startAwsCredentialRefresh } from './media.mjs';
 import { generateDocument, SUPPORTED_FORMATS, extractDocumentText } from './docgen.mjs';
 import { moderateVideoPrompt } from './videomod.mjs';
 import { createRender, getRender, fetchRenderVideo, videoGenEnabled, videoEmRevisao, MAX_VIDEO_SECONDS } from './videogen.mjs';
@@ -9282,7 +9282,7 @@ async function atenderRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
-    return send(res, 200, { google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE });
+    return send(res, 200, { google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), voice: sttEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE });
   }
 
   // ── Sign-up source (campaign attribution) ──
@@ -10604,7 +10604,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, {
       id: thread.id, title: thread.title, status: thread.status,
       agentId: thread.agent_id, agentName: agent ? agent.name : '',
-      messages: messages.map((m) => ({ role: m.role, content: m.content, attachments: m.attachments || undefined })),
+      messages: messages.map((m) => ({ role: m.role, content: m.role === 'user' ? voiceInputForDisplay(m.content) : m.content, attachments: m.attachments || undefined })),
     });
   }
 
@@ -10787,7 +10787,7 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/chat') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
-    const { threadId, message, images, files } = await readBody(req);
+    const { threadId, message, images, files, voice } = await readBody(req);
     const imgs = normalizeImages(images);
     const docs = normalizeFiles(files);
     if (!message && !imgs.length && !docs.length) return send(res, 400, { error: 'server.empty_message' });
@@ -10798,7 +10798,7 @@ async function atenderRequest(req, res) {
     const agent = await getAgentOwned(thread.agent_id, user.id);
     if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     try {
-      const msg = message || notaMidiaSemTexto({ images: imgs.length, files: docs.length });
+      const msg = (voice && markVoiceInput(message)) || message || notaMidiaSemTexto({ images: imgs.length, files: docs.length });
       // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on
       // every call. It's the only way to tell app from site here: both use
       // this same route and the same 'chat' kind. See appClient in runConversationTurn.
