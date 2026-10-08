@@ -42,6 +42,9 @@ Changes merged since the last tag go under "Unreleased".
   `web/confirm-textos-portao.mjs` are gone. The rest of the card moved too:
   how to confirm, the address warning, pending payment and Pix notices,
   calendar and private app lines.
+- The onboarding screens take their text from the catalogs too (`onboarding.*`),
+  served to the page in its language by `GET /api/texts/onboarding`;
+  `translateUi` in `web/public/ui-texts.mjs` is gone.
 - The instance default language is now English: it is used when nothing is
   known about the person (no saved setting, channel or browser language). To
   keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.

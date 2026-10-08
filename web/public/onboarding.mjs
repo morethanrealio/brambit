@@ -1,11 +1,11 @@
-import { translateUi } from './ui-texts.mjs';
+import { t } from './ui-texts.mjs';
 export function hasContext(me) { return !!me.connected?.length || !!(me.providers?.includes('microsoft') && (me.microsoftServices === undefined || me.microsoftServices.length)); }
 export function mountWizard(options) {
     const el = (id) => { const e = document.getElementById(id); if (!e)
         throw new Error(`Elemento ausente: ${id}`); return e; };
     const input = (id) => el(id), btn = (id) => el(id);
     const show = (id, on = true) => el(id).classList.toggle('hidden', !on);
-    const text = (id, s) => { el(id).textContent = translateUi(s, document.documentElement.lang); };
+    const text = (id, s) => { el(id).textContent = s; };
     let saved = { type: options.generic.id, agentId: null, agentName: '', step: 'type', waLinked: false, connected: false };
     let me = { name: '', agents: [] };
     let state = null;
@@ -37,13 +37,13 @@ export function mountWizard(options) {
             const r = await fetch('/' + path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'X-Idioma': document.documentElement.lang || 'pt-BR' }, body: body ? JSON.stringify(body) : undefined, signal: c.signal });
             const d = await r.json();
             if (!r.ok)
-                throw new Error(d.error || 'Não consegui salvar esta etapa. Tente novamente.');
+                throw new Error(d.error || t('step_save_failed'));
             return d;
         }
         catch (e) {
             if (e instanceof Error && e.name !== 'AbortError' && e.name !== 'TypeError')
                 throw e;
-            throw new Error('A conexão oscilou. Seu cadastro continua salvo; tente novamente.');
+            throw new Error(t('connection_dropped'));
         }
         finally {
             clearTimeout(timer);
@@ -51,7 +51,7 @@ export function mountWizard(options) {
     }
     const status = () => request('api/onboard/status' + (saved.agentId ? '?agentId=' + encodeURIComponent(saved.agentId) : ''));
     async function progress(event, selection) { if (!saved.agentId)
-        throw new Error('Crie seu assistente primeiro.'); state = await request('api/onboard/progress', { agentId: saved.agentId, event, attemptId: state?.attemptId, ...(selection === undefined ? {} : { selection }) }); return state; }
+        throw new Error(t('create_assistant_first')); state = await request('api/onboard/progress', { agentId: saved.agentId, event, attemptId: state?.attemptId, ...(selection === undefined ? {} : { selection }) }); return state; }
     async function touch(event, provider = 'none') {
         const c = new AbortController(), timer = setTimeout(() => c.abort(), 1500);
         try {
@@ -80,7 +80,7 @@ export function mountWizard(options) {
     }
     el('wizTrustDetails').ontoggle = () => { if (el('wizTrustDetails').open)
         void touch('security_details_opened'); };
-    function error(id, e) { text(id, e instanceof Error ? e.message : 'Não consegui concluir. Tente novamente.'); show(id); }
+    function error(id, e) { text(id, e instanceof Error ? e.message : t('generic_failed')); show(id); }
     async function guarded(fn, errorId = 'wowError') { if (busy)
         return; busy = true; const controls = ['wizTypeNext', 'wizConnBack', 'wizConnBtn', 'wizConnGoogle', 'wizConnEmail', 'wizConnSkip', 'wizConnMsRow', 'wizWaBtn', 'wizWaContinue', 'wowRetry', 'wowStarterBtn', 'wizDoneBtn']; controls.forEach(x => btn(x).disabled = true); try {
         await fn();
@@ -122,12 +122,12 @@ export function mountWizard(options) {
     function display() { el('wiz').classList.add('show'); options.showApp(false); el('auth').classList.add('hidden'); setupConnect(); }
     function setupConnect() { show('wizConnMsWrap', !!options.config().microsoft); show('wizConnProviders', false); btn('wizConnBtn').setAttribute('aria-expanded', 'false'); input('wizConnEmail').checked = false; }
     function renderDone() {
-        text('wizDoneTitle', state?.viewed ? 'Seu primeiro resultado está pronto' : 'Seu assistente foi criado');
-        text('wizDoneLead', state?.viewed ? 'Você já tem um primeiro resultado. Agora pode pedir a próxima tarefa na conversa.' : 'Você escolheu continuar sem a análise. Peça uma tarefa quando quiser; conectar e-mail é opcional.');
+        text('wizDoneTitle', state?.viewed ? t('done_title_result') : t('done_title_created'));
+        text('wizDoneLead', state?.viewed ? t('done_lead_result') : t('done_lead_skipped'));
         el('wizDoneList').replaceChildren();
         if (pendingTask) {
             const li = document.createElement('li');
-            li.textContent = translateUi('A tarefa escolhida será colocada na caixa de mensagem para você revisar e enviar.', document.documentElement.lang);
+            li.textContent = t('task_in_draft');
             el('wizDoneList').append(li);
         }
     }
@@ -150,14 +150,14 @@ export function mountWizard(options) {
     }
     function resetWow() { ['wowRecoveryTitle', 'wowError', 'wowRetry', 'wowResult', 'wowStarter', 'wowFeedback', 'wowBtn', 'wowSkip', 'wowLater'].forEach(x => show(x, false)); }
     function recovery(message) { show('wowRecoveryTitle'); show('wowLoading', false); text('wowError', message); show('wowError'); show('wowRetry'); show('wowSkip'); show('wowLater'); }
-    function starter() { void touch('starter_offered'); resetWow(); show('wowLoading', false); show('wowStarter'); show('wowSkip'); text('wowTitle', 'Vamos resolver uma coisa agora'); }
+    function starter() { void touch('starter_offered'); resetWow(); show('wowLoading', false); show('wowStarter'); show('wowSkip'); text('wowTitle', t('starter_title')); }
     async function present(s) {
         state = s;
         if (!s.result?.welcome)
-            throw new Error('A análise não retornou um resultado completo. Tente novamente.');
+            throw new Error(t('analysis_incomplete'));
         resetWow();
         show('wowLoading', false);
-        text('wowTitle', s.mode === 'starter' ? 'Sua primeira tarefa ficou pronta' : 'Um primeiro olhar sobre seu contexto');
+        text('wowTitle', s.mode === 'starter' ? t('starter_ready') : t('analysis_title'));
         text('wowWelcome', s.result.welcome);
         show('wowResult');
         const list = el('wowSugs');
@@ -190,7 +190,7 @@ export function mountWizard(options) {
     function restoreSelection() {
         const i = state?.selectedSuggestion;
         pendingTask = state?.refinementSelected && state.result
-            ? translateUi('Quero ajustar este resultado. Vou explicar o que precisa mudar:', document.documentElement.lang) + '\n\n' + state.result.welcome.slice(0, 6000)
+            ? t('refine_draft') + '\n\n' + state.result.welcome.slice(0, 6000)
             : typeof i === 'number' ? state?.result?.suggestions[i] || null : null;
     }
     function afterResult() { if (waOn() && !saved.waLinked) {
@@ -202,7 +202,7 @@ export function mountWizard(options) {
     function renderFeedback() {
         btn('wowUseful').setAttribute('aria-pressed', String(state?.feedback === 'useful'));
         btn('wowNeedsWork').setAttribute('aria-pressed', String(state?.feedback === 'needs_work'));
-        text('wowFeedbackStatus', state?.feedback === 'useful' ? 'Avaliação salva.' : state?.feedback === 'needs_work' ? 'Avaliação salva. Você pode pedir um ajuste na conversa.' : 'Avaliação opcional.');
+        text('wowFeedbackStatus', state?.feedback === 'useful' ? t('feedback_saved') : state?.feedback === 'needs_work' ? t('feedback_saved_refine') : t('feedback_optional'));
     }
     async function feedback(choice) {
         const attempt = state?.attemptId;
@@ -216,7 +216,7 @@ export function mountWizard(options) {
             }
         }
         catch {
-            text('wowFeedbackStatus', 'Não consegui salvar sua avaliação. Você pode continuar e tentar novamente depois.');
+            text('wowFeedbackStatus', t('feedback_save_failed'));
         }
         finally {
             btn('wowUseful').disabled = false;
@@ -228,7 +228,7 @@ export function mountWizard(options) {
     btn('wowRefine').onclick = () => void guarded(async () => { await progress('refinement_selected'); restoreSelection(); afterResult(); });
     function starterHint() {
         const task = el('wowTask').value;
-        const hints = { plan: 'Liste o que precisa fazer, os prazos e o tempo disponível.', decision: 'Conte quais são as opções e o que mais importa na escolha.', draft: 'Diga para quem é a mensagem, o objetivo e o tom que você quer.' };
+        const hints = { plan: t('hint_plan'), decision: t('hint_decision'), draft: t('hint_draft') };
         text('wowContextHint', hints[task] || hints.plan);
     }
     el('wowTask').onchange = starterHint;
@@ -239,7 +239,7 @@ export function mountWizard(options) {
         show('wowLoading');
         show('wowLater');
         show('wowSkip');
-        text('wowLoadingMsg', 'A análise pode levar até alguns minutos. Você pode continuar depois sem perder esta etapa.');
+        text('wowLoadingMsg', t('analysis_loading'));
         const deadline = Date.now() + 150000;
         let failures = 0;
         while (token === generation && Date.now() < deadline) {
@@ -254,21 +254,21 @@ export function mountWizard(options) {
                     return;
                 }
                 if (s.status === 'error') {
-                    recovery('Não conseguimos concluir a análise. Você pode tentar novamente; nenhuma conclusão foi marcada.');
+                    recovery(t('analysis_failed'));
                     return;
                 }
                 // idle is also transient; it's neither success nor authorization to stop.
             }
             catch {
                 if (++failures >= 3) {
-                    recovery('Não consegui consultar a análise. Sua etapa continua salva. Tente novamente ou continue depois.');
+                    recovery(t('analysis_check_failed'));
                     return;
                 }
             }
             await new Promise(r => setTimeout(r, 2500));
         }
         if (token === generation)
-            recovery('A análise ainda não retornou. Consultar novamente não dispara outra cobrança enquanto ela estiver em andamento.');
+            recovery(t('analysis_pending'));
     }
     async function runWow(retry = false) {
         goto('wow');
@@ -293,7 +293,7 @@ export function mountWizard(options) {
             return;
         }
         if (s.status === 'error' && !retry) {
-            recovery('A análise foi interrompida. Tente novamente para retomar.');
+            recovery(t('analysis_interrupted'));
             return;
         }
         await enqueue(retry);
@@ -311,14 +311,14 @@ export function mountWizard(options) {
             catch (e) {
                 error('wizConnErr', e);
                 goto('wow');
-                recovery('Não consegui iniciar a análise. Tente novamente.');
+                recovery(t('analysis_start_failed'));
                 return;
             }
         }
         await runWow();
     }
     function setupWhatsapp() { const linked = !!me.whatsapp?.linked || saved.waLinked; saved.waLinked = linked; show('wizWaForm', !linked); show('wizWaSuccess', linked); show('wizWaBtn', !linked); show('wizWaSkip', !linked); show('wizWaContinue', linked); if (linked) {
-        text('wizWaLead', saved.waCode ? 'Falta confirmar que o número é seu: toque abaixo e ENVIE a mensagem com o código. É ela que conecta o WhatsApp.' : '✅ Número conectado! Agora toque abaixo e mande a primeira mensagem pro seu assistente. É isso que abre a conversa no WhatsApp.');
+        text('wizWaLead', saved.waCode ? t('whatsapp_send_code') : t('whatsapp_connected'));
         setWaLink(me.whatsapp?.number);
     } }
     // With a pending code, the message is the ownership CHALLENGE (only it binds the number
@@ -326,7 +326,7 @@ export function mountWizard(options) {
     function setWaLink(number) { const a = el('wizWaOpen'); if (number) {
         const msg = saved.waCode ? 'conectar ' + saved.waCode : 'Oi ' + saved.agentName + '!';
         a.href = 'https://wa.me/' + number.replace(/\D/g, '') + '?text=' + encodeURIComponent(msg);
-        text('wizWaOpen', saved.waCode ? '💬 Confirmar meu número' : '💬 Mandar a primeira mensagem');
+        text('wizWaOpen', saved.waCode ? t('whatsapp_confirm_button') : t('whatsapp_first_message_button'));
         show('wizWaOpen');
     }
     else {
@@ -337,7 +337,7 @@ export function mountWizard(options) {
         await progress('completed'); el('wiz').classList.remove('show'); if (complete)
         clear(); options.enterHome(me, pendingTask); }
     btn('wizTypeNext').onclick = () => { const name = input('wizAgentName').value.trim(); if (!name) {
-        error('wizErr1', new Error('Primeiro, dê um nome ao seu assistente.'));
+        error('wizErr1', new Error(t('name_required')));
         input('wizAgentName').focus();
         return;
     } saved.agentName = name; save(); setupConnect(); goto('connect'); };
@@ -364,8 +364,8 @@ export function mountWizard(options) {
     else
         await runWow(); });
     btn('wizWaBtn').onclick = () => void guarded(async () => { const phone = input('wizWaPhone').value.trim(); if (!input('wizWaOptin').checked)
-        throw new Error('Marque o aceite para ativar o WhatsApp.'); if (phone.replace(/\D/g, '').length < 10)
-        throw new Error('Informe o número com país e DDD.'); const r = await request('api/connect/whatsapp', { phone, agentId: saved.agentId }); saved.waCode = r.pending ? r.code : undefined; saved.waLinked = true; me.whatsapp = { linked: !r.pending, number: r.number }; save(); await progress('whatsapp_connected'); setupWhatsapp(); }, 'wizWaErr');
+        throw new Error(t('whatsapp_consent_required')); if (phone.replace(/\D/g, '').length < 10)
+        throw new Error(t('whatsapp_number_required')); const r = await request('api/connect/whatsapp', { phone, agentId: saved.agentId }); saved.waCode = r.pending ? r.code : undefined; saved.waLinked = true; me.whatsapp = { linked: !r.pending, number: r.number }; save(); await progress('whatsapp_connected'); setupWhatsapp(); }, 'wizWaErr');
     btn('wowRetry').onclick = () => void guarded(() => recoverBoot ? recoverBoot() : runWow(true));
     btn('wowBtn').onclick = () => afterResult();
     btn('wowSkip').onclick = () => { ++generation; void progress('wow_skipped').then(() => goto('done')).catch(e => error('wowError', e)); };
@@ -373,10 +373,10 @@ export function mountWizard(options) {
     btn('wowLater').onclick = () => { void exit(false).catch(e => error('wowError', e)); };
     btn('wizDoneBtn').onclick = () => void guarded(() => exit(true), 'wizDoneErr');
     btn('wowStarterBtn').onclick = () => void guarded(async () => { const context = el('wowContext').value.trim(); if (context.length < 10)
-        throw new Error('Conte um pouco mais para gerar algo útil (pelo menos 10 caracteres).'); const task = el('wowTask').value; await enqueue(true, { task, context }); await poll(); });
+        throw new Error(t('context_too_short')); const task = el('wowTask').value; await enqueue(true, { task, context }); await poll(); });
     const controller = {
         clear,
-        async open(firstName) { state = null; pendingTask = null; me = await request('api/me'); saved = { type: options.generic.id, agentId: null, agentName: '', step: 'type', waLinked: !!me.whatsapp?.linked, connected: hasContext(me) }; text('wizHi', firstName ? 'Bem-vindo, ' + firstName + ' 👋' : 'Vamos criar seu assistente'); display(); goto('type'); },
+        async open(firstName) { state = null; pendingTask = null; me = await request('api/me'); saved = { type: options.generic.id, agentId: null, agentName: '', step: 'type', waLinked: !!me.whatsapp?.linked, connected: hasContext(me) }; text('wizHi', firstName ? t('welcome_name', { name: firstName }) : t('hi_no_name')); display(); goto('type'); },
         async boot(current, justConnected, oauth) {
             me = current;
             const local = load();
@@ -390,7 +390,7 @@ export function mountWizard(options) {
                 saved = localAgent ? { ...local, agentId: localAgent.id, agentName: localAgent.name } : saved;
                 display();
                 goto('wow');
-                recovery('Não consegui recuperar sua etapa. Seu cadastro não foi encerrado. Tente novamente.');
+                recovery(t('recover_failed'));
                 show('wowSkip', false);
                 return true;
             }
@@ -426,14 +426,14 @@ export function mountWizard(options) {
                     const cancelled = oauth.outcome === 'cancelled';
                     await touch(cancelled ? 'connection_cancelled' : 'connection_failed', oauth.provider);
                     goto('connect');
-                    error('wizConnErr', new Error(cancelled ? 'Você cancelou a autorização. Pode tentar novamente ou experimentar sem conectar.' : 'A conexão não foi concluída. Tente novamente ou experimente sem conectar.'));
+                    error('wizConnErr', new Error(cancelled ? t('oauth_cancelled') : t('oauth_incomplete')));
                     return true;
                 }
                 if (justConnected) {
                     if (!hasContext(me)) {
                         await touch('connection_returned_unconnected');
                         goto('connect');
-                        error('wizConnErr', new Error('Não encontramos uma fonte autorizada para a análise. Revise as permissões ou experimente sem conectar.'));
+                        error('wizConnErr', new Error(t('oauth_no_source')));
                         return true;
                     }
                     await afterConnections();
@@ -456,7 +456,7 @@ export function mountWizard(options) {
             }
             catch (e) {
                 goto('wow');
-                recovery(e instanceof Error ? e.message : 'Não consegui retomar. Tente novamente.');
+                recovery(e instanceof Error ? e.message : t('resume_failed'));
                 return true;
             }
         },

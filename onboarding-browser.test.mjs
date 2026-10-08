@@ -1,6 +1,6 @@
 // Browser with real HTML/module and simulated API: no real Harness server, account, or LLM.
 import {traduzPagina,carregaCatalogos} from './web/site-i18n.mjs';
-import {marcaNaPagina} from './web/marca.mjs';import {leitorDoApp} from './web/plugins.mjs';
+import {marcaNaPagina} from './web/marca.mjs';import {screenTexts} from './web/screen-texts.mjs';import {leitorDoApp} from './web/plugins.mjs';
 import {chromium} from 'playwright-core';import {readFileSync,existsSync,mkdirSync,writeFileSync} from 'node:fs';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';
 const root=resolve('web/public'),source=leitorDoApp([],root+'/index.html')(root+'/index.html'),html=source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 // Core without plugin or brand: the slots disappear and the name is the default.
@@ -16,6 +16,7 @@ async function fixture({me=structuredClone(meBase),state=structuredClone(ready),
   if(url.pathname.startsWith('/api/')){let body={};try{body=req.postDataJSON()||{}}catch{}calls.push({path:url.pathname,query:url.search,body});
    const answer=(d,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(d)});
    if(url.pathname==='/api/onboard/feedback'){if(feedbackFails)return answer({error:'synthetic feedback failure'},503);assert.equal(body.attemptId,current.attemptId);assert(current.viewed);current.feedback=body.choice;return answer(current)}
+   if(url.pathname==='/api/texts/onboarding')return answer(screenTexts('onboarding',url.searchParams.get('lang')));
    if(url.pathname==='/api/onboard/touch')return answer({ok:!touchFails},touchFails?503:200);
    if(url.pathname.endsWith('/start')&&url.pathname.startsWith('/api/connect/'))return route.abort('aborted');
    if(url.pathname==='/api/me'){if(meFailures-->0)return answer({error:'Falha temporária ao entrar.'},503);return answer(me);}
