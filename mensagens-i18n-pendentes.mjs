@@ -1,4 +1,5 @@
-// Lists what the server responds and the catalog still doesn't translate.
+// Lists what the plugins' server messages still don't translate. The core emits
+// `server.*` keys instead (checked by mensagens-i18n.test and i18n-guard).
 //
 // It exists for the same reason as site-i18n-pendentes: the mechanism is deliberately
 // silent. A message without translation stays in Portuguese and nothing complains, which is
@@ -27,7 +28,7 @@ const arquivos = [...FONTES_MENSAGENS.map((f) => path.join(WEB, f)), ...plugins.
 const fontes = arquivos.map((a) => ({ nome: path.relative(WEB, a), js: fs.readFileSync(a, 'utf8') }));
 
 const mensagens = [...new Set(fontes.flatMap((f) => extraiMensagens(f.js)))];
-const catalogos = carregaCatalogos([path.join(WEB, 'textos-servidor'), ...textosDoServidor(plugins)]);
+const catalogos = carregaCatalogos(textosDoServidor(plugins));
 const idiomas = process.argv[2] ? [process.argv[2]] : Object.keys(catalogos);
 
 for (const idioma of idiomas) {

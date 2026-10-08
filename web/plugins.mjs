@@ -32,8 +32,8 @@
 //  siteTextos: folders with the translation catalogs (en.json, es.json) of these
 //   pages, in the web/site-textos format; they complete the core's catalog.
 //  textosServidor: folders with the catalogs (en.json, es.json) of the messages that
-//   the plugin's modules answer via send/fail, in the web/textos-servidor format;
-//   they complete the core's. fontesMensagens: those modules (absolute path), from
+//   the plugin's modules answer via send/fail ({tag}.json keyed by the Portuguese sentence);
+//   an older format, new text goes in `locales`. fontesMensagens: those modules (absolute path), from
 //   which the catalog check and mensagens-i18n-pendentes pull the keys.
 //  app: folders with pieces of the logged-in app's screen (style, menu, panels,
 //   script), one file per index.html slot (see app-encaixes.mjs).
