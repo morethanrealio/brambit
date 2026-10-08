@@ -586,11 +586,19 @@ export function doneSentence(name, args, lang) {
   return f ? f(args || {}, c) : c.t('common.generic_done', { name });
 }
 
-// The frame renderConfirmed puts around a failed action.
-export function failedSentence(label, lang) {
-  return context(lang).t('frame.failed', { label });
+// The frame renderConfirmed builds around the sentence: failure header,
+// pending states, Pix data, calendar and app access lines.
+export function frameText(key, vars, lang) {
+  return context(lang).t(`frame.${key}`, vars);
 }
 
-export function stderrLabel(lang) {
-  return context(lang).t('frame.stderr');
+// Amount with two decimals and no thousands separator, in the reader's format.
+export function cardAmount(value, lang) {
+  return new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }).format(Number(value));
+}
+
+// A date-only ISO string (YYYY-MM-DD) in the reader's format, with no time zone shift.
+export function cardDay(iso, lang) {
+  const [year, month, day] = String(iso).split('-').map(Number);
+  return new Intl.DateTimeFormat(lang, { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }).format(Date.UTC(year, month - 1, day));
 }
