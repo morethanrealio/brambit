@@ -2329,7 +2329,7 @@ async function loadHomeItems() {
   notes.forEach(it => {
     const d = document.createElement('div'); d.className = 'ni';
     const sp = document.createElement('span'); sp.className = 'ni-t'; sp.textContent = it.text;
-    const x = document.createElement('button'); x.className = 'ni-x'; x.title = 'Remover'; x.textContent = '✕';
+    const x = document.createElement('button'); x.className = 'ni-x'; x.title = tx('common.remove'); x.textContent = '✕';
     x.onclick = async () => { d.remove(); await api('api/home-items/delete', { id: it.id }); if (!noteBox.children.length) notesCard.classList.add('hidden'); };
     d.appendChild(sp); d.appendChild(x); noteBox.appendChild(d);
   });
@@ -2340,7 +2340,7 @@ async function loadHomeItems() {
     const row = document.createElement('div'); row.className = 'sug-row';
     const d = document.createElement('div'); d.className = 'sug'; d.textContent = '💡 ' + it.text;
     d.onclick = () => { navigate('/conversas'); E('taskInput').value = it.text; const sel = E('taskAgent'); if (it.agent_id) sel.value = it.agent_id; E('taskInput').focus(); };
-    const x = document.createElement('button'); x.className = 'ni-x'; x.title = 'Remover'; x.textContent = '✕';
+    const x = document.createElement('button'); x.className = 'ni-x'; x.title = tx('common.remove'); x.textContent = '✕';
     x.onclick = async () => { row.remove(); await api('api/home-items/delete', { id: it.id }); if (!sugBox.children.length) sugCard.classList.add('hidden'); };
     row.appendChild(d); row.appendChild(x); sugBox.appendChild(row);
   });
@@ -2368,7 +2368,7 @@ async function loadRoutinesUI() {
       locale: document.documentElement.lang, marca: '__MARCA__',
       openDraft: async (agentId, text) => {
         const input = E('taskInput');
-        if (input.value.trim() && input.value !== text && !await confirmModal({title:'Substituir rascunho?', body:'Você já tem um pedido não enviado. Substituir pelo pedido de rotina?', okLabel:'Substituir'})) return false;
+        if (input.value.trim() && input.value !== text && !await confirmModal({title:tx('routines.replace_draft_title'), body:tx('routines.replace_draft_text'), okLabel:tx('routines.replace')})) return false;
         navigate('/conversas');
         setActiveHomeAgent(agentId);
         input.value = text;
@@ -2379,8 +2379,8 @@ async function loadRoutinesUI() {
     })).catch(error => { routinesReady = null; throw error; });
     await (await routinesReady).load();
   } catch {
-    root.textContent = 'Não foi possível carregar suas rotinas. ';
-    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Tentar novamente';
+    root.textContent = tx('routines.load_failed') + ' ';
+    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = tx('common.try_again');
     retry.onclick = loadRoutinesUI; root.append(retry);
   }
 }
@@ -2409,14 +2409,14 @@ function renderTelegram(bots, agents) {
     // goes into /start, otherwise anyone who finds the @username could bind the
     // bot to their own chat.
     const ativar = 'https://t.me/' + encodeURIComponent(b.username || '') + '?start=' + encodeURIComponent(b.pairCode || '');
-    const link = b.linked || !b.pairCode ? '' : ' <span class="sub">(<a href="' + esc(ativar) + '" target="_blank" rel="noopener">abra este link</a> pra ativar)</span>';
+    const link = b.linked || !b.pairCode ? '' : ' <span class="sub">(' + txHtml('telegram.to_activate', { link: '<a href="' + esc(ativar) + '" target="_blank" rel="noopener">' + txHtml('telegram.open_link') + '</a>' }) + ')</span>';
     const info = document.createElement('div');
     info.innerHTML = '✅ <b>@' + esc(b.username) + '</b>'
       + (ag ? ' → <b>' + esc(ag.name) + '</b>' : '') + link;
     const btn = document.createElement('button');
     btn.className = 'primary';
     btn.style.background = 'var(--mut)';
-    btn.textContent = 'Desconectar';
+    btn.textContent = tx('connections.disconnect');
     btn.onclick = () => disconnectTelegram(b.token, b.username);
     row.appendChild(info);
     row.appendChild(btn);
@@ -2427,11 +2427,9 @@ function renderTelegram(bots, agents) {
   // form/instructions.
   E('tgConnect').classList.toggle('hidden', livres.length === 0 && list.length > 0);
   if (list.length) {
-    E('tgStatus').innerHTML = list.length === 1
-      ? '1 agente conectado no Telegram.'
-      : list.length + ' agentes conectados no Telegram.';
+    E('tgStatus').textContent = tx('telegram.connected_count', { count: list.length });
   } else {
-    E('tgStatus').textContent = 'Crie um bot no Telegram (leva 1 min) e fale com seu agente por lá, com nome e foto que você escolher.';
+    E('tgStatus').textContent = tx('telegram.prompt');
   }
 }
 function renderSlack(agents) {
@@ -2458,9 +2456,9 @@ function renderRunner(agents, runner) {
   if (st) {
     if (online) {
       const h = runner.meta && runner.meta.hostname ? ' (' + esc(runner.meta.hostname) + ')' : '';
-      st.innerHTML = 'Runner conectado' + h + '. Escolha o assistente que opera nesta máquina.';
+      st.innerHTML = txHtml('runner.connected', { host: h });
     } else {
-      st.textContent = 'Runner offline. Abra o __MARCA__ Runner na sua máquina pra escolher o assistente.';
+      st.textContent = tx('runner.offline');
     }
   }
   fillAgentSelect(E('runnerAgent'), agents, runner && runner.activeAgentId);
@@ -2481,22 +2479,22 @@ async function mostrarAtendimentoPublico() {
 }
 function greetWord() {
   const h = new Date().getHours();
-  if (h < 12) return 'Bom dia'; if (h < 18) return 'Boa tarde'; return 'Boa noite';
+  if (h < 12) return tx('home.good_morning'); if (h < 18) return tx('home.good_afternoon'); return tx('home.good_evening');
 }
 function dateLine() {
-  const dias = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
-  const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const days = ['sun','mon','tue','wed','thu','fri','sat'];
+  const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
   const d = new Date();
-  return dias[d.getDay()] + ', ' + d.getDate() + ' ' + meses[d.getMonth()];
+  return tx('home.date_line', { weekday: tx('home.weekday_' + days[d.getDay()]), day: d.getDate(), month: tx('home.month_' + months[d.getMonth()]) });
 }
 function relTime(iso) {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (d < 60) return 'agora'; if (d < 3600) return Math.floor(d/60) + 'min';
+  if (d < 60) return tx('home.just_now'); if (d < 3600) return Math.floor(d/60) + 'min';
   if (d < 86400) return Math.floor(d/3600) + 'h'; return Math.floor(d/86400) + 'd';
 }
 function renderTaskAgents(agents) {
   const sel = E('taskAgent');
-  if (!agents.length) { sel.innerHTML = '<option value="">— crie uma assistente —</option>'; sel.style.display = ''; renderAgentTabs(agents); return; }
+  if (!agents.length) { sel.innerHTML = '<option value="">' + txHtml('agents.create_one_option') + '</option>'; sel.style.display = ''; renderAgentTabs(agents); return; }
   sel.innerHTML = agents.map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
   // Assistant selection is now done through the tabs; the dropdown becomes just
   // the driver (startTask reads taskAgent.value), so it stays hidden.
@@ -2529,9 +2527,9 @@ function setActiveHomeAgent(id) {
   document.querySelectorAll('#agentTabs .agent-tab').forEach(t => t.classList.toggle('active', String(t.dataset.agent) === String(id)));
   const sel = E('taskAgent'); if (sel) sel.value = id;
   const a = (homeAgents || []).find(x => String(x.id) === String(id));
-  const nome = a ? a.name : 'seu assistente';
-  const ti = E('taskInput'); if (ti) ti.placeholder = 'Escreva pra começar uma conversa com ' + nome + '…';
-  const head = E('threadsHead'); if (head) head.textContent = (homeAgents && homeAgents.length > 1) ? ('Conversas com ' + nome) : 'Conversas';
+  const nome = a ? a.name : tx('agents.your_assistant');
+  const ti = E('taskInput'); if (ti) ti.placeholder = tx('home.task_placeholder', { name: nome });
+  const head = E('threadsHead'); if (head) head.textContent = (homeAgents && homeAgents.length > 1) ? tx('threads.chats_with', { name: nome }) : tx('threads.chats');
   renderHomeThreads();
 }
 function renderHomeThreads() {
@@ -2541,7 +2539,7 @@ function renderHomeThreads() {
 function renderAgentList(agents) {
   const list = E('agentList'); list.innerHTML = '';
   if (!agents.length) {
-    list.innerHTML = '<p class="empty">Você ainda não tem assistentes. Crie a primeira aqui embaixo.</p>';
+    list.innerHTML = '<p class="empty">' + txHtml('agents.empty') + '</p>';
     return;
   }
   agents.forEach(a => {
@@ -2552,18 +2550,18 @@ function renderAgentList(agents) {
     acts.className = 'agent-actions';
     const ren = document.createElement('button');
     ren.className = 'agent-ren';
-    ren.textContent = 'Renomear';
+    ren.textContent = tx('agents.rename');
     ren.onclick = () => renameAgent(a);
     acts.appendChild(ren);
     const sty = document.createElement('button');
     sty.className = 'agent-ren';
-    sty.textContent = 'Estilo';
-    sty.title = 'Como este assistente fala/escreve (só ele)';
+    sty.textContent = tx('agents.style');
+    sty.title = tx('agents.style_hint');
     sty.onclick = () => editStyle(a);
     acts.appendChild(sty);
     const del = document.createElement('button');
     del.className = 'agent-del';
-    del.textContent = 'Excluir';
+    del.textContent = tx('common.delete');
     del.onclick = () => deleteAgent(a);
     acts.appendChild(del);
     div.appendChild(acts);
@@ -2581,28 +2579,28 @@ function renderApps(apps) {
     const div = document.createElement('div');
     div.className = 'app-item';
     const on = (app.status || '') === 'running';
-    const name = app.label ? (app.system || app.label) : (app.system || 'aplicação');
+    const name = app.label ? (app.system || app.label) : (app.system || tx('apps.default_name'));
     const pub = (app.visibility || '') === 'public';
     div.innerHTML =
       '<span class="adot' + (on ? ' on' : '') + '" title="' + esc(app.status || '') + '"></span>'
       + '<div class="ai"><div class="an">' + esc(name)
-      + (pub ? ' <span class="libtag">na biblioteca</span>' : '') + '</div>'
+      + (pub ? ' <span class="libtag">' + txHtml('apps.in_library') + '</span>' : '') + '</div>'
       + '<div class="au">' + esc(app.url || '') + '</div></div>';
     const lib = document.createElement('button');
     lib.className = 'app-open lib' + (pub ? ' on' : '');
-    lib.textContent = pub ? 'Tirar da biblioteca' : 'Publicar na biblioteca';
+    lib.textContent = pub ? tx('apps.unpublish') : tx('apps.publish');
     lib.onclick = () => toggleLibrary(app);
     div.appendChild(lib);
     const del = document.createElement('button');
     del.className = 'app-open del';
-    del.textContent = 'Apagar';
+    del.textContent = tx('apps.delete');
     del.onclick = () => deleteApp(app);
     div.appendChild(del);
     if (app.url) {
       const a = document.createElement('a');
       a.className = 'app-open';
       a.href = app.url; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = 'Abrir';
+      a.textContent = tx('apps.open');
       div.appendChild(a);
     }
     list.appendChild(div);
@@ -2612,15 +2610,15 @@ async function toggleLibrary(app) {
   const sistema = app.system;
   if ((app.visibility || '') === 'public') {
     const ok = await confirmModal({
-      title: 'Tirar da biblioteca?',
-      body: 'O app "' + (sistema || '') + '" sai da biblioteca pública e deixa de ser copiável por outras pessoas. A URL e os dados dele não mudam.',
-      okLabel: 'Tirar da biblioteca',
+      title: tx('apps.unpublish_title'),
+      body: tx('apps.unpublish_text', { name: sistema || '' }),
+      okLabel: tx('apps.unpublish'),
     });
     if (!ok) return;
     const r = await api('api/apps/visibility', { sistema, publico: false });
     if (r.error) { alert(r.error); return; }
   } else {
-    const desc = (window.prompt('Descrição curta pra biblioteca (o que o app faz):', app.description || '') || '').trim();
+    const desc = (window.prompt(tx('apps.library_description'), app.description || '') || '').trim();
     if (!desc) return;
     const r = await api('api/apps/visibility', { sistema, publico: true, descricao: desc });
     if (r.error) { alert(r.error); return; }
@@ -2631,10 +2629,10 @@ async function toggleLibrary(app) {
 async function deleteApp(app) {
   const sistema = app.system || '';
   const ok = await confirmModal({
-    title: 'Apagar esta aplicação?',
-    body: 'O app "' + sistema + '" e todos os dados dele serão removidos do servidor, incluindo segredos do cofre e acessos de colaboradores. Recriar o mesmo nome não restaura esses acessos.',
-    okLabel: 'Apagar aplicação',
-    warn: 'Isso apaga de vez e não pode ser desfeito.',
+    title: tx('apps.delete_title'),
+    body: tx('apps.delete_text', { name: sistema }),
+    okLabel: tx('apps.delete_confirm'),
+    warn: tx('common.cannot_undo'),
   });
   if (!ok) return;
   const r = await api('api/apps/delete', { sistema });
@@ -2643,7 +2641,7 @@ async function deleteApp(app) {
   renderApps(me.apps || []);
 }
 let _cmodalResolve = null;
-function confirmModal({ title, body, okLabel = 'Excluir', warn = '' }) {
+function confirmModal({ title, body, okLabel = tx('common.delete'), warn = '' }) {
   E('cmodalTitle').textContent = title;
   const b = E('cmodalBody'); b.innerHTML = '';
   const p = document.createElement('p'); p.textContent = body; b.appendChild(p);
@@ -2661,7 +2659,7 @@ E('cmodalOk').onclick = () => closeCmodal(true);
 E('cmodal').onclick = (e) => { if (e.target === E('cmodal')) closeCmodal(false); };
 
 async function renameAgent(a) {
-  const novo = (window.prompt('Novo nome pro assistente:', a.name) || '').trim();
+  const novo = (window.prompt(tx('agents.new_name'), a.name) || '').trim();
   if (!novo || novo === a.name) return;
   const res = await api('api/agent/rename', { agentId: a.id, name: novo });
   if (res.error) { alert(res.error); return; }
@@ -2679,10 +2677,10 @@ function editStyle(a) {
 async function deleteAgent(a) {
   const last = homeAgents.length <= 1;
   const ok = await confirmModal({
-    title: 'Excluir "' + a.name + '"?',
-    body: 'Ele some das suas listas e não pode mais ser usado. O histórico das conversas continua guardado na sua conta.',
-    okLabel: 'Excluir assistente',
-    warn: last ? 'É o seu único assistente. Sem nenhum, você vai precisar criar um novo pra usar o __MARCA__.' : '',
+    title: tx('agents.delete_title', { name: a.name }),
+    body: tx('agents.delete_text'),
+    okLabel: tx('agents.delete_confirm'),
+    warn: last ? tx('agents.delete_last_warning') : '',
   });
   if (!ok) return;
   const res = await api('api/agent/delete', { agentId: a.id });
@@ -2709,15 +2707,15 @@ function buildThreadItem(t) {
   const div = document.createElement('div');
   div.className = 'thread-item' + (t.status === 'done' ? ' done' : '') + (t.unread ? ' unread' : '');
   div.innerHTML =
-    '<div class="ti-main"><span class="bubble">❑</span><div><div class="ti-title">' + esc(t.title || 'Nova conversa') + '</div>' +
+    '<div class="ti-main"><span class="bubble">❑</span><div><div class="ti-title">' + esc(t.title || tx('threads.new_chat')) + '</div>' +
     '<div class="ti-meta">' + esc(t.agent_name || '') + '</div>' +
     (t.last_msg ? '<div class="ti-preview">' + esc(t.last_msg) + '</div>' : '') +
     '</div></div>' +
-    '<div class="ti-right">' + (t.unread ? '<span class="ti-unread" title="Mensagem não lida" aria-label="Mensagem não lida"></span>' : '') +
+    '<div class="ti-right">' + (t.unread ? '<span class="ti-unread" title="' + txHtml('threads.unread') + '" aria-label="' + txHtml('threads.unread') + '"></span>' : '') +
     '<span class="ti-when">' + relTime(t.updated_at) + '</span>' +
-    '<button class="ti-act ti-fav' + (t.favorite ? ' on' : '') + '" title="' + (t.favorite ? 'Desfavoritar' : 'Favoritar') + '" aria-label="Favoritar">' + (t.favorite ? '★' : '☆') + '</button>' +
-    '<button class="ti-act ti-arch" title="' + (t.archived ? 'Desarquivar' : 'Arquivar') + '" aria-label="Arquivar">' + (t.archived ? '📤' : '📥') + '</button>' +
-    '<button class="ti-act ti-del" title="Apagar conversa" aria-label="Apagar conversa">🗑</button></div>';
+    '<button class="ti-act ti-fav' + (t.favorite ? ' on' : '') + '" title="' + (t.favorite ? txHtml('threads.unfavorite') : txHtml('threads.favorite')) + '" aria-label="' + txHtml('threads.favorite') + '">' + (t.favorite ? '★' : '☆') + '</button>' +
+    '<button class="ti-act ti-arch" title="' + (t.archived ? txHtml('threads.unarchive') : txHtml('threads.archive')) + '" aria-label="' + txHtml('threads.archive') + '">' + (t.archived ? '📤' : '📥') + '</button>' +
+    '<button class="ti-act ti-del" title="' + txHtml('threads.delete') + '" aria-label="' + txHtml('threads.delete') + '">🗑</button></div>';
   div.onclick = () => openThreadById(t.id);
   div.querySelector('.ti-fav').onclick = (e) => { e.stopPropagation(); favoriteThreadItem(t); };
   div.querySelector('.ti-arch').onclick = (e) => { e.stopPropagation(); archiveThreadItem(t); };
@@ -2727,30 +2725,30 @@ function buildThreadItem(t) {
 function renderThreads(threads) {
   const box = E('threadList'); box.innerHTML = '';
   if (!threads.length) {
-    box.innerHTML = '<p class="empty">Nenhuma conversa ainda. Comece uma na caixa acima.</p>';
+    box.innerHTML = '<p class="empty">' + txHtml('threads.empty') + '</p>';
     return;
   }
   const favs = threads.filter(t => t.favorite && !t.archived);
   const normal = threads.filter(t => !t.favorite && !t.archived);
   const arch = threads.filter(t => t.archived);
   if (favs.length) {
-    const h = document.createElement('div'); h.className = 'thread-sub'; h.textContent = '★ Favoritas';
+    const h = document.createElement('div'); h.className = 'thread-sub'; h.textContent = '★ ' + tx('threads.favorites');
     box.appendChild(h);
     favs.forEach(t => box.appendChild(buildThreadItem(t)));
   }
   if (!favs.length && !normal.length && arch.length) {
-    const p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Nenhuma conversa ativa. As arquivadas estão abaixo.';
+    const p = document.createElement('p'); p.className = 'empty'; p.textContent = tx('threads.only_archived');
     box.appendChild(p);
   } else {
     if (favs.length && normal.length) {
-      const h = document.createElement('div'); h.className = 'thread-sub'; h.textContent = 'Conversas';
+      const h = document.createElement('div'); h.className = 'thread-sub'; h.textContent = tx('threads.chats');
       box.appendChild(h);
     }
     normal.forEach(t => box.appendChild(buildThreadItem(t)));
   }
   if (arch.length) {
     const tog = document.createElement('div'); tog.className = 'arch-toggle';
-    tog.textContent = (showArchived ? '▾ ' : '▸ ') + 'Arquivadas (' + arch.length + ')';
+    tog.textContent = (showArchived ? '▾ ' : '▸ ') + tx('threads.archived_count', { count: arch.length });
     tog.onclick = () => { showArchived = !showArchived; renderHomeThreads(); };
     box.appendChild(tog);
     if (showArchived) arch.forEach(t => box.appendChild(buildThreadItem(t)));
@@ -2777,9 +2775,9 @@ async function archiveThreadItem(t) {
 }
 async function deleteThreadItem(t) {
   const ok = await confirmModal({
-    title: 'Apagar esta conversa?',
-    body: t.title ? ('“' + t.title + '” vai sumir da sua lista de conversas.') : 'A conversa vai sumir da sua lista.',
-    okLabel: 'Apagar conversa',
+    title: tx('threads.delete_title'),
+    body: t.title ? tx('threads.delete_named_text', { title: t.title }) : tx('threads.delete_text'),
+    okLabel: tx('threads.delete'),
   });
   if (!ok) return;
   const res = await api('api/thread/delete', { id: t.id });
@@ -2809,7 +2807,7 @@ function enterHome(name, agents, connected, telegramBots, whatsapp, emailSend, p
   loadHomeItems();
   maybeRefreshHome();
   const first = (name || '').trim().split(/\s+/)[0] || name;
-  E('greeting').innerHTML = greetWord() + ', ' + esc(first) + '. <span class="soft">No que eu ajudo hoje?</span>';
+  E('greeting').innerHTML = esc(greetWord()) + ', ' + esc(first) + '. <span class="soft">' + txHtml('home.how_can_i_help') + '</span>';
   E('dateLine').textContent = dateLine();
   E('userName2').textContent = first;
   E('userAv').textContent = (name || '?').trim().charAt(0).toUpperCase();
@@ -2834,10 +2832,10 @@ E('goHome').onclick = () => { location.href = '/'; };
 // ── Files (user's bucket) ──
 // Folder categories: images, audio, video, and documents (everything that isn't media).
 const FILE_CATS = [
-  { key: 'imagens',    icon: '🖼', label: 'Imagens' },
-  { key: 'audios',     icon: '🔊', label: 'Áudios' },
-  { key: 'videos',     icon: '🎬', label: 'Vídeos' },
-  { key: 'documentos', icon: '📄', label: 'Documentos' },
+  { key: 'imagens',    icon: '🖼', label: tx('files.images') },
+  { key: 'audios',     icon: '🔊', label: tx('files.audio') },
+  { key: 'videos',     icon: '🎬', label: tx('files.videos') },
+  { key: 'documentos', icon: '📄', label: tx('files.documents') },
 ];
 const FILE_CAT_BY_KEY = Object.fromEntries(FILE_CATS.map(c => [c.key, c]));
 let _allFiles = [];
@@ -2860,10 +2858,10 @@ function fileIcon(kind, mime) {
 }
 function fileFallbackName(f) {
   const cat = fileCategory(f);
-  if (cat === 'imagens') return 'Imagem';
-  if (cat === 'audios') return 'Áudio';
-  if (cat === 'videos') return 'Vídeo';
-  return 'Documento';
+  if (cat === 'imagens') return tx('files.image');
+  if (cat === 'audios') return tx('files.audio_file');
+  if (cat === 'videos') return tx('files.video');
+  return tx('files.document');
 }
 function fileWhen(iso) {
   try {
@@ -2892,12 +2890,12 @@ function fileRowEl(f) {
   const del = document.createElement('button');
   del.type = 'button';
   del.textContent = '🗑';
-  del.title = 'Apagar arquivo';
-  del.setAttribute('aria-label', 'Apagar arquivo');
+  del.title = tx('files.delete');
+  del.setAttribute('aria-label', tx('files.delete'));
   del.style.flex = '0 0 auto'; del.style.marginLeft = '8px'; del.style.maxWidth = '46px';
   del.style.padding = '6px 10px'; del.style.cursor = 'pointer';
   del.onclick = async () => {
-    if (!window.confirm('Apagar "' + name + '"? Isso não dá pra desfazer.')) return;
+    if (!window.confirm(tx('files.delete_confirm', { name }))) return;
     del.disabled = true; del.textContent = '…';
     const r = await api('api/files?id=' + encodeURIComponent(f.id), null, 'DELETE');
     if (r.error) { del.disabled = false; del.textContent = '🗑'; alert(r.error); return; }
@@ -2938,7 +2936,7 @@ function fileTileEl(f) {
   // afterwards closes it (listener on the document, registered on the next tick).
   const info = document.createElement('button');
   info.type = 'button'; info.className = 'tinfo'; info.textContent = 'i';
-  info.title = 'Ver legenda'; info.setAttribute('aria-label', 'Ver legenda');
+  info.title = tx('files.show_caption'); info.setAttribute('aria-label', tx('files.show_caption'));
   const onDoc = () => { box.classList.remove('open'); document.removeEventListener('click', onDoc); };
   info.onclick = (e) => {
     e.preventDefault(); e.stopPropagation();
@@ -2948,10 +2946,10 @@ function fileTileEl(f) {
   };
   const del = document.createElement('button');
   del.type = 'button'; del.className = 'tdel'; del.textContent = '🗑';
-  del.title = 'Apagar arquivo'; del.setAttribute('aria-label', 'Apagar arquivo');
+  del.title = tx('files.delete'); del.setAttribute('aria-label', tx('files.delete'));
   del.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!window.confirm('Apagar "' + name + '"? Isso não dá pra desfazer.')) return;
+    if (!window.confirm(tx('files.delete_confirm', { name }))) return;
     del.disabled = true; del.textContent = '…';
     const r = await api('api/files?id=' + encodeURIComponent(f.id), null, 'DELETE');
     if (r.error) { del.disabled = false; del.textContent = '🗑'; alert(r.error); return; }
@@ -2979,7 +2977,7 @@ function renderFileFolders() {
     const ic = document.createElement('span'); ic.className = 'file-ic'; ic.textContent = cat.icon;
     const meta = document.createElement('span'); meta.className = 'file-meta';
     const nm = document.createElement('span'); nm.className = 'file-name'; nm.textContent = cat.label;
-    const sub = document.createElement('span'); sub.className = 'file-sub'; sub.textContent = list.length + (list.length === 1 ? ' item' : ' itens');
+    const sub = document.createElement('span'); sub.className = 'file-sub'; sub.textContent = tx('files.item_count', { count: list.length });
     meta.appendChild(nm); meta.appendChild(sub);
     const chev = document.createElement('span'); chev.textContent = '›'; chev.style.marginLeft = 'auto'; chev.style.opacity = '.5'; chev.style.fontSize = '20px';
     row.appendChild(ic); row.appendChild(meta); row.appendChild(chev);
@@ -2998,13 +2996,13 @@ function openFileFolder(key) {
   const back = document.createElement('a');
   back.className = 'sub';
   back.href = '#';
-  back.textContent = '← Pastas';
+  back.textContent = '← ' + tx('files.folders');
   back.style.display = 'inline-block';
   back.style.marginBottom = '12px';
   back.addEventListener('click', (e) => { e.preventDefault(); renderFileFolders(); });
   box.appendChild(back);
   const head = document.createElement('div'); head.className = 'title'; head.style.marginBottom = '10px';
-  head.textContent = (cat ? cat.icon + ' ' + cat.label : 'Arquivos');
+  head.textContent = (cat ? cat.icon + ' ' + cat.label : tx('files.files'));
   box.appendChild(head);
   const items = _allFiles.filter((f) => fileCategory(f) === key);
   // Images and videos: thumbnail grid with side-by-side preview.
@@ -3020,13 +3018,13 @@ function openFileFolder(key) {
 async function loadFiles() {
   const box = E('filesList');
   if (!box) return;
-  box.textContent = 'Carregando…';
+  box.textContent = tx('common.loading');
   const res = await api('api/files');
   box.textContent = '';
   if (res.error) { box.textContent = res.error; return; }
-  if (res.enabled === false) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = 'O armazenamento de arquivos ainda não está ativo por aqui.'; box.appendChild(p); return; }
+  if (res.enabled === false) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = tx('files.storage_off'); box.appendChild(p); return; }
   _allFiles = res.files || [];
-  if (!_allFiles.length) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = 'Nenhum arquivo ainda. Peça pro seu assistente gerar um documento ou uma imagem.'; box.appendChild(p); return; }
+  if (!_allFiles.length) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = tx('files.empty'); box.appendChild(p); return; }
   renderFileFolders();
 }
 
