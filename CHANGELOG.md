@@ -36,6 +36,10 @@ Changes merged since the last tag go under "Unreleased".
 - Server error and status messages come from the catalogs (`server.*` in
   `web/locales`), so an instance or plugin can reword or translate them there;
   `web/textos-servidor` is gone. A plugin's `textosServidor` still works.
+- The sentences of the confirmation card (what the assistant asks to do and
+  what it did) come from the catalogs too (`confirm.*`), in every language
+  through the same code; `web/confirm-textos.mjs` and
+  `web/confirm-textos-portao.mjs` are gone.
 - The instance default language is now English: it is used when nothing is
   known about the person (no saved setting, channel or browser language). To
   keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.
@@ -59,6 +63,10 @@ Changes merged since the last tag go under "Unreleased".
   "Full suite".
 
 ### Fixed
+- The confirmation card says what was done after removing an app file or
+  secret, configuring the discovery journey or editing its note, instead of
+  the generic "Action ... completed"; in English and Spanish, a routine
+  delivered only in the app now says so instead of "delivered on app".
 - App slot markers accept CRLF line endings: on Windows every plugin with an
   app slot failed at boot.
 

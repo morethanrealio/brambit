@@ -1151,8 +1151,7 @@ import { generateDocument, SUPPORTED_FORMATS, extractDocumentText } from './docg
 import { moderateVideoPrompt } from './videomod.mjs';
 import { createRender, getRender, fetchRenderVideo, videoGenEnabled, videoEmRevisao, MAX_VIDEO_SECONDS } from './videogen.mjs';
 import { scanBuffer, avEnabled } from './avscan.mjs';
-import { PORTAO_TEXTOS } from './confirm-textos-portao.mjs';
-import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
+import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, GATE_TOOLS, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
 import { sshTools, livreTools, userHasSshKey, maskSecrets } from './ssh.mjs';
 import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForTurn, runnerBoundAgentId, runnerSetBoundAgent, runnerReadFile } from './runner.mjs';
 import { codingTools } from './coding.mjs';
@@ -2469,7 +2468,7 @@ const PORTAO_SEM_CARTAO = {
 // routine ends itself (window closed, a monitor that found what it was looking for).
 const PORTAO_ROTINA_SE_ENCERRA = new Set(['cancelar_rotina', 'remover_monitor']);
 function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
-  if (!tool || tool.confirmationTool || (!Object.hasOwn(PORTAO_TEXTOS, tool.name) && tool.requiresConfirmation !== true)) return tool;
+  if (!tool || tool.confirmationTool || (!GATE_TOOLS.has(tool.name) && tool.requiresConfirmation !== true)) return tool;
   if (kind === 'routine' && PORTAO_ROTINA_SE_ENCERRA.has(tool.name)) return tool;
   const inline = PORTAO_SEM_CARTAO[tool.name];
   return gateTool(inline ? { ...tool, runWithoutConfirmation: inline } : tool, threadId, gateOpts);

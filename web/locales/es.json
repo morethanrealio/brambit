@@ -190,5 +190,544 @@
     "failed_remove_photo": "Error al quitar la foto.",
     "failed_save_audio": "Error al guardar el audio.",
     "failed_remove_audio": "Error al quitar el audio."
+  },
+  "confirm": {
+    "common": {
+      "copy_to": " (con copia a {cc})",
+      "recipient_unknown": "(¿destinatario?)",
+      "the_recipient": "el destinatario",
+      "with_subject": " con el asunto \"{subject}\"",
+      "the_contact": "el contacto",
+      "no_goal": "(sin objetivo)",
+      "the_contact_cap": "El contacto",
+      "unknown": "(?)",
+      "no_email": "(sin correo)",
+      "date_unknown": "(¿fecha?)",
+      "no_title_q": "(sin título)",
+      "no_title": "sin título",
+      "no_name_q": "(sin nombre)",
+      "no_name": "sin nombre",
+      "contact_unknown": "(¿contacto?)",
+      "your_contact": "tu contacto",
+      "on_host": " en {host}",
+      "in_dir": " en {dir}",
+      "no_description": "(sin descripción)",
+      "generic_request": "ejecutar la acción \"{name}\"",
+      "generic_done": "Acción \"{name}\" completada."
+    },
+    "gmail_send": {
+      "request": "enviar un correo a {to}{subject}{cc}",
+      "done": "Correo enviado a {to}{subject}{cc}."
+    },
+    "hotmail_send": {
+      "request": "enviar un correo (Hotmail/Outlook) a {to}{subject}{cc}",
+      "done": "Correo (Hotmail/Outlook) enviado a {to}{subject}{cc}."
+    },
+    "falar_com_agente": {
+      "request": "hablar con el asistente de {contact} en tu nombre sobre: {goal}",
+      "done": "Hablé con el asistente de {contact}."
+    },
+    "responder_pergunta_externa": {
+      "request": "enviar esta respuesta al asistente de {contact}: \"{answer}\"",
+      "done": "Respuesta enviada al asistente de {contact}."
+    },
+    "aceitar_contato": {
+      "request": "aceptar la solicitud de conexión de {contact} (su asistente podrá hablar con el tuyo)",
+      "done": "Conexión con {contact} aceptada."
+    },
+    "recusar_contato": {
+      "request": "rechazar la solicitud de conexión de {contact}",
+      "done": "Solicitud de {contact} rechazada."
+    },
+    "convidar_contato": {
+      "request": "enviar una invitación de conexión (por correo) a {email}",
+      "done": "Invitación enviada a {email}."
+    },
+    "anotar_no_espaco": {
+      "request": "anotar en el Space \"{space}\" (todos los participantes lo ven): \"{note}\"",
+      "done": "Anotado en el Space \"{space}\"."
+    },
+    "configurar_espaco": {
+      "request": "cambiar la configuración del Space \"{space}\"{mode}",
+      "done": "Space \"{space}\" actualizado.",
+      "with_mode": " al modo \"{mode}\""
+    },
+    "editar_nota": {
+      "request": "reemplazar la nota {id} del Space \"{space}\" por: \"{note}\"",
+      "done": "Nota del Space \"{space}\" editada."
+    },
+    "apagar_nota": {
+      "request": "borrar la nota {id} del Space \"{space}\" para todos los participantes",
+      "done": "Nota borrada del Space \"{space}\"."
+    },
+    "sair_do_espaco": {
+      "request": "salir del Space \"{space}\" (dejas de ver sus notas)",
+      "done": "Saliste del Space \"{space}\"."
+    },
+    "remover_do_espaco": {
+      "request": "quitar a {contact} del Space \"{space}\"",
+      "done": "{contact} salió del Space \"{space}\"."
+    },
+    "editar_skill": {
+      "request": "cambiar la Skill \"{skill}\"{script}",
+      "done": "Skill \"{skill}\" actualizada.",
+      "with_script": " (incluido el script)"
+    },
+    "apagar_skill": {
+      "request": "borrar definitivamente la Skill \"{skill}\"",
+      "done": "Skill \"{skill}\" borrada."
+    },
+    "desinstalar_skill": {
+      "request": "desinstalar la Skill \"{skill}\"{from} de este asistente",
+      "done": "Skill \"{skill}\" desinstalada.",
+      "from_author": " de {author}"
+    },
+    "remover_colaborador": {
+      "request": "quitar a {contact} como colaborador del sistema \"{app}\"",
+      "done": "{contact} ya no colabora en \"{app}\"."
+    },
+    "definir_visibilidade_sistema": {
+      "request": "poner la visibilidad del sistema \"{app}\" en \"{visibility}\"",
+      "done": "La visibilidad del sistema \"{app}\" ahora es \"{visibility}\"."
+    },
+    "definir_acesso_sistema": {
+      "request_public": "dejar el sistema \"{app}\" ABIERTO: cualquiera con el enlace entra, sin contraseña",
+      "request_locked": "cerrar el sistema \"{app}\" con usuario y contraseña{password}",
+      "new_password": " (contraseña nueva)",
+      "done_public": "El sistema \"{app}\" ahora está abierto.",
+      "done_locked": "Sistema \"{app}\" cerrado con contraseña."
+    },
+    "remover_da_home": {
+      "request": "quitar el bloque {id} de la página de inicio de tu subdominio",
+      "done": "Bloque {id} quitado de la página de inicio."
+    },
+    "parar_sistema": {
+      "request": "detener el sistema \"{app}\" (queda fuera de línea hasta reiniciarlo; los datos se conservan)",
+      "done": "Sistema \"{app}\" detenido."
+    },
+    "reiniciar_sistema": {
+      "request": "reiniciar el sistema \"{app}\" (queda fuera de línea unos segundos)",
+      "done": "Sistema \"{app}\" reiniciado."
+    },
+    "enviar_midia_para_sistema": {
+      "request": "enviar el archivo {media} a {method} {route} del sistema \"{app}\" (graba en la app)",
+      "done": "Archivo enviado al sistema \"{app}\"."
+    },
+    "gmail_label_create": {
+      "request": "crear la etiqueta \"{label}\" en tu Gmail",
+      "done": "Etiqueta \"{label}\" creada en Gmail."
+    },
+    "gmail_label_update": {
+      "request": "renombrar la etiqueta de Gmail \"{label}\" a \"{new_name}\"",
+      "done": "Etiqueta renombrada a \"{new_name}\"."
+    },
+    "configurar_deploy": {
+      "request": "configurar el deploy del proyecto{host}{command}",
+      "done": "Deploy del proyecto configurado.",
+      "to_host": " a {host}",
+      "running": " ejecutando \"{command}\""
+    },
+    "cancelar_rotina": {
+      "request": "cancelar definitivamente la rutina {routine}",
+      "done": "Rutina {routine} cancelada."
+    },
+    "remover_evento": {
+      "request": "borrar el registro del {date} del tracker \"{tracker}\"",
+      "done": "Registro borrado del tracker \"{tracker}\"."
+    },
+    "remover_tracker": {
+      "request": "borrar el tracker \"{tracker}\" con todos sus registros",
+      "done": "Tracker \"{tracker}\" borrado."
+    },
+    "remover_monitor": {
+      "request": "dejar de monitorear \"{monitor}\" (el historial se conserva)",
+      "done": "Dejé de monitorear \"{monitor}\"."
+    },
+    "definir_modo_permissao": {
+      "request": "cambiar el modo de permiso a \"{mode}\"{effect}",
+      "done": "El modo de permiso ahora es \"{mode}\" (desde el próximo mensaje).",
+      "accept_edits": ": las ediciones de código se ejecutarán sin pedir confirmación"
+    },
+    "permitir_comando": {
+      "request": "permitir para siempre los comandos que empiezan con \"{prefix}\" (se ejecutarán sin preguntar)",
+      "done": "Comandos \"{prefix}\" permitidos."
+    },
+    "event": {
+      "on_date": " el {date}",
+      "for_date": " para el {date}",
+      "title_to": "título a \"{title}\"",
+      "time_to": "horario a {date}",
+      "location_to": "lugar a \"{location}\"",
+      "the_description": "la descripción",
+      "the_guests": "los invitados",
+      "title": "título \"{title}\"",
+      "time": "horario {date}",
+      "location": "lugar \"{location}\"",
+      "description": "descripción",
+      "guests": "invitados",
+      "changes_request": " ({list})",
+      "changes_done": ": {list}"
+    },
+    "gmail_label_delete": {
+      "request": "borrar la etiqueta \"{label}\" de tu Gmail (los correos se quedan, solo pierden la etiqueta)",
+      "done": "Etiqueta \"{label}\" borrada de tu Gmail."
+    },
+    "gmail_filter_create": {
+      "request": "crear una regla de enrutamiento en Gmail: correos {criteria} → {actions}",
+      "done": "Regla de enrutamiento creada en tu Gmail (vale para los próximos correos).",
+      "from": "de {value}",
+      "to": "para {value}",
+      "subject": "asunto \"{value}\"",
+      "containing": "que contengan \"{value}\"",
+      "has_attachment": "con adjunto",
+      "label": "etiqueta \"{value}\"",
+      "skip_inbox": "saltar la bandeja de entrada",
+      "mark_read": "marcar como leído",
+      "mark_important": "marcar como importante",
+      "no_criteria": "(¿criterio?)",
+      "no_action": "(¿acción?)"
+    },
+    "gmail_filter_delete": {
+      "request": "borrar esa regla de enrutamiento (filtro) de tu Gmail",
+      "done": "Regla de enrutamiento borrada de tu Gmail."
+    },
+    "calendar_create": {
+      "request": "crear el evento \"{title}\"{when}",
+      "done": "Evento \"{title}\" creado en tu calendario{when}."
+    },
+    "calendar_update": {
+      "request": "editar el evento{changes}",
+      "done": "Evento actualizado{changes}."
+    },
+    "calendar_delete": {
+      "request": "borrar ese evento de tu calendario",
+      "done": "Evento borrado de tu calendario."
+    },
+    "outlook_calendar_create": {
+      "request": "crear el evento \"{title}\" en el calendario de Outlook{when}",
+      "done": "Evento \"{title}\" creado en el calendario de Outlook{when}."
+    },
+    "outlook_calendar_update": {
+      "request": "editar el evento en el calendario de Outlook{changes}",
+      "done": "Evento de Outlook actualizado{changes}."
+    },
+    "outlook_calendar_delete": {
+      "request": "borrar ese evento del calendario de Outlook",
+      "done": "Evento borrado del calendario de Outlook."
+    },
+    "drive_upload": {
+      "request": "subir el archivo \"{name}\" a tu Drive",
+      "done": "Archivo \"{name}\" subido a tu Drive."
+    },
+    "drive_upload_arquivo": {
+      "request": "guardar el archivo \"{name}\" en tu Drive",
+      "done": "Archivo \"{name}\" subido a tu Drive.",
+      "request_overwrite": "actualizar el archivo existente \"{name}\" en tu Drive, conservando el mismo enlace"
+    },
+    "enviar_para_drive": {
+      "request": "guardar el archivo{name} en tu Google Drive",
+      "done": "Copia{name} enviada a tu Google Drive.",
+      "request_overwrite": "actualizar el archivo existente{name} en tu Google Drive, conservando el mismo enlace",
+      "named": " \"{name}\"",
+      "copy_of": " de \"{name}\""
+    },
+    "docs_create": {
+      "request": "crear el Google Doc \"{name}\" en tu Drive",
+      "done": "Google Doc \"{name}\" creado en tu Drive.",
+      "request_overwrite": "actualizar el documento existente \"{name}\" en tu Drive, conservando el mismo enlace"
+    },
+    "drive_export_pdf": {
+      "request": "exportar ese archivo de Google a PDF y guardarlo en tu Drive{as}",
+      "done": "PDF generado y guardado en tu Drive.",
+      "as_name": " como \"{name}.pdf\""
+    },
+    "onedrive_upload": {
+      "request": "subir el archivo \"{name}\" a tu OneDrive",
+      "done": "Archivo \"{name}\" subido a tu OneDrive."
+    },
+    "github_create_issue": {
+      "request": "crear un issue en GitHub{repo}: \"{title}\"",
+      "done": "Issue creado{repo}: \"{title}\".",
+      "in_repo": " en {repo}"
+    },
+    "github_comment_issue": {
+      "request": "comentar en el issue {repo}#{number}",
+      "done": "Comentario publicado en el issue {repo}#{number}."
+    },
+    "slack_post_message": {
+      "request": "publicar un mensaje en Slack{channel}",
+      "done": "Mensaje publicado en Slack{channel}.",
+      "in_channel": " (canal {channel})"
+    },
+    "linkedin_post": {
+      "request": "publicar en tu LinkedIn ({audience}): \"{text}\"{link}",
+      "done": "Publicación hecha en tu LinkedIn.",
+      "connections": "contactos",
+      "public": "público",
+      "with_link": " (con el enlace {link})"
+    },
+    "confirmar_com_agente": {
+      "request": "confirmar con el asistente de {contact}: \"{decision}\"",
+      "done": "Decisión enviada al asistente de {contact}."
+    },
+    "responder_decisao": {
+      "request_accept": "aceptar la decisión{from}{message}",
+      "request_decline": "rechazar la decisión{from}{message}",
+      "done_accept": "Respuesta de aceptación enviada al asistente del contacto.",
+      "done_decline": "Respuesta de rechazo enviada al asistente del contacto.",
+      "from_contact": " de {from}",
+      "with_message": ": \"{message}\""
+    },
+    "run_command": {
+      "request": "ejecutar el comando `{command}` en el servidor{host}",
+      "done": "Comando ejecutado en el servidor{host}.",
+      "host": " {host}"
+    },
+    "editar_arquivo": {
+      "request": "editar el archivo {path}{host} (reemplazar un fragmento)",
+      "done": "Archivo {path} editado."
+    },
+    "escrever_arquivo": {
+      "request": "escribir el archivo {path}{host} (lo crea o lo sobrescribe por completo)",
+      "done": "Archivo {path} escrito."
+    },
+    "git_commit": {
+      "request": "hacer un commit{dir} con el mensaje \"{message}\"{staged}",
+      "done": "Commit hecho{dir}: \"{message}\".",
+      "only_staged": " (solo lo que ya está en el stage)",
+      "add_all": " (git add -A antes)"
+    },
+    "git_push": {
+      "request": "hacer git push{branch} al remoto {remote}{dir}",
+      "done": "Push hecho{branch} al remoto {remote}.",
+      "of_branch": " de la rama {branch}",
+      "current_branch": " de la rama actual",
+      "dir": " ({dir})"
+    },
+    "git_branch": {
+      "request": "crear y cambiar a la rama \"{name}\"{base}{dir}",
+      "done": "Rama \"{name}\" creada y activa.",
+      "from_base": " a partir de {base}"
+    },
+    "git_checkout": {
+      "request": "cambiar a \"{ref}\"{dir} (git checkout)",
+      "done": "Cambié a \"{ref}\"."
+    },
+    "gerenciar_tarefa_de_app": {
+      "request": "actualizar el alcance de {app} a {mode}: {goal}. Conserva el progreso; no publica. La ejecución posterior usa créditos de la cuenta",
+      "done": "Alcance actualizado; progreso y consumo conservados. Nada fue editado, probado o publicado. Pide continuar cuando quieras.",
+      "request_cancel": "cancelar la tarea de {app}, conservando el borrador",
+      "done_cancel": "Tarea cancelada; borrador conservado.",
+      "default_app": "la app",
+      "mode_edit": "edición del borrador",
+      "mode_review": "revisión sin edición"
+    },
+    "publicar_sistema": {
+      "request": "publicar el sistema \"{app}\" ({runtime}) en tu subdominio",
+      "done": "Sistema \"{app}\" publicado en tu subdominio.",
+      "request_collab": "publicar una nueva versión del sistema \"{app}\" de {owner} (colaboración)"
+    },
+    "routine": {
+      "weekdays": "lun–vie",
+      "weekends": "sáb–dom",
+      "every_day": "todos los días",
+      "on_days": "todos los {days}",
+      "on_days_from_weekend": "todos los {days}",
+      "list": "{init} y {last}",
+      "dow_0": "domingo",
+      "dow_1": "lunes",
+      "dow_2": "martes",
+      "dow_3": "miércoles",
+      "dow_4": "jueves",
+      "dow_5": "viernes",
+      "dow_6": "sábado",
+      "monthly": "cada mes {days}{short}",
+      "last_day": "el último día",
+      "day_n": "el día {n}",
+      "short_months": " (en los meses más cortos, el último día)",
+      "nth_weekday": "{ord} {day} del mes",
+      "ord_last": "el último",
+      "ord_1": "el 1º",
+      "ord_2": "el 2º",
+      "ord_3": "el 3º",
+      "ord_4": "el 4º",
+      "ord_5": "el 5º",
+      "interval_days_one": "{count} día",
+      "interval_days_other": "{count} días",
+      "interval_hours_one": "{count} hora",
+      "interval_hours_other": "{count} horas",
+      "interval_minutes": "{n} min",
+      "every_interval": "cada {interval}{until}",
+      "until": " hasta {date}",
+      "no_end": " (sin fecha de término)",
+      "days_at_time": "{days} a las {time}",
+      "time_separator": ":",
+      "default_time": "{time} (predeterminado)"
+    },
+    "criar_rotina": {
+      "request": "crear la rutina \"{title}\", que corre {cadence}{channel}",
+      "done": "Rutina \"{title}\" creada: corre {cadence}{channel}. La voy a ejecutar sola a partir de la próxima vez que toque.",
+      "request_channel": ", entregando en {channel}",
+      "request_channel_app": ", entregando solo en la app (sin WhatsApp, Telegram ni correo)",
+      "done_channel": " (entrega en {channel})",
+      "done_channel_app": " (entrega solo en la app)"
+    },
+    "editar_rotina": {
+      "request": "modificar la rutina {target}{changes}, la rutina actual sigue valiendo hasta que confirmes",
+      "done": "Rutina {target} actualizada en su lugar (la versión anterior corrió normalmente hasta ahora).",
+      "changes": " ({list})",
+      "resume": "reanudar",
+      "pause": "pausar",
+      "rename": "renombrarla a \"{title}\"",
+      "channel": "entregar en {channel}",
+      "channel_app": "entregar solo en la app (sin WhatsApp, Telegram ni correo)",
+      "at_minute": "en el minuto {time}",
+      "at_time": "a las {time}",
+      "change_task": "cambiar lo que hace",
+      "test_now": "aplicar los cambios y probar ahora, entregando en el canal configurado"
+    },
+    "convidar_colaborador": {
+      "request": "dar a {contact} acceso de COLABORACIÓN a tu sistema \"{name}\" (podrá editar el código y operar los MISMOS datos)",
+      "done": "{contact} ya colabora en el sistema \"{name}\" (edita el código y opera los mismos datos)."
+    },
+    "convidar_para_espaco": {
+      "request": "invitar a {contact} a tu Space \"{space}\" (podrá ver y anotar en los datos vivos del Space)",
+      "done": "{contact} ya participa en el Space \"{space}\"."
+    },
+    "instalar_skill": {
+      "request": "instalar la Skill \"{skill}\"{from} en este asistente (empezará a cargar ese comportamiento)",
+      "done": "Skill \"{skill}\"{from} instalada en este asistente.",
+      "from": " de {from}"
+    },
+    "compartilhar_skill": {
+      "request": "compartir tu Skill \"{skill}\" con {contact} (podrá instalarla en su asistente)",
+      "done": "Skill \"{skill}\" compartida con {contact} (ya puede instalarla)."
+    },
+    "rodar_skill": {
+      "request": "ejecutar el script de tu Skill \"{skill}\" en el entorno aislado (sandbox){argument}",
+      "done": "Script de la Skill \"{skill}\" ejecutado en el sandbox.",
+      "with_argument": " con el argumento \"{argument}\""
+    },
+    "canva_criar": {
+      "request": "crear esto en tu Canva: {goal}",
+      "done": "Listo en tu Canva."
+    },
+    "canva_editar": {
+      "request": "modificar un diseño en tu Canva: {goal}",
+      "done": "Diseño modificado en tu Canva."
+    },
+    "notion_create_page": {
+      "request": "crear la página \"{title}\" en tu Notion",
+      "done": "Página \"{title}\" creada en tu Notion."
+    },
+    "notion_append": {
+      "request": "agregar ese texto a una página de tu Notion",
+      "done": "Texto agregado a la página de tu Notion."
+    },
+    "infinity_criar_item": {
+      "request": "crear un elemento nuevo en Infinity (tablero {board}, carpeta {folder}){fields}",
+      "done": "Elemento creado en Infinity.",
+      "with_fields": " con {fields}"
+    },
+    "infinity_editar_item": {
+      "request": "cambiar el elemento {item} en Infinity{fields}{folder}",
+      "done": "Elemento actualizado en Infinity.",
+      "fields": ": {fields}",
+      "move_to": " (moviéndolo a la carpeta {folder})"
+    },
+    "infinity_comentar": {
+      "request": "publicar este comentario en el elemento {item} de Infinity, visible para todos en el tablero: \"{text}\"",
+      "done": "Comentario publicado en Infinity."
+    },
+    "splitwise_add_expense": {
+      "request": "registrar en Splitwise el gasto \"{description}\" de {currency} {amount}, dividido en partes iguales en el grupo",
+      "done": "Gasto \"{description}\" ({currency} {amount}) registrado en Splitwise, dividido en partes iguales."
+    },
+    "asaas_receber_pix": {
+      "request": "PREPARAR tu cuenta Asaas para recibir PIX y mostrar el código copia y pega sin importe fijo. Si la cuenta no tiene una clave PIX activa, también se creará una clave aleatoria. Antes de confirmar: el pagador verá el nombre completo del titular y su documento enmascarado para verificar el destinatario",
+      "done": "Datos para recibir PIX preparados en tu cuenta Asaas.",
+      "request_amount": "GENERAR un código PIX copia y pega de R$ {amount} para recibir dinero en tu cuenta Asaas. Si la cuenta no tiene una clave PIX activa, también se creará una clave aleatoria. Antes de confirmar: el pagador verá el nombre completo del titular y su documento enmascarado para verificar el destinatario"
+    },
+    "asaas_pagar_conta": {
+      "request": "PAGAR desde tu cuenta Asaas {amount} (boleto/factura, línea digitable {line}){scheduled}, es dinero de verdad y no se puede deshacer",
+      "done": "Pago{amount} enviado desde tu cuenta Asaas{scheduled}. Revisa el estado en el comprobante.",
+      "amount": "R$ {amount}",
+      "own_amount": "el importe del propio recibo",
+      "scheduled": ", programado para {date}",
+      "done_amount": " de R$ {amount}",
+      "done_scheduled": " (programado para {date})"
+    },
+    "asaas_cancelar_pagamento_conta": {
+      "request": "CANCELAR desde tu cuenta Asaas el pago de cuenta {id}, la cancelación es irreversible y, cuando Asaas la confirme, impedirá que se ejecute el pago",
+      "done": "Pago de cuenta cancelado por Asaas. No se ejecutará.",
+      "no_id": "(id no informado)"
+    },
+    "asaas_transferir_pix": {
+      "request": "TRANSFERIR R$ {amount} por PIX desde tu cuenta Asaas a la clave {key} ({key_type}){scheduled}, es dinero de verdad y no se puede deshacer",
+      "done": "PIX de R$ {amount} enviado desde tu cuenta Asaas a la clave {key}{scheduled}.",
+      "scheduled": ", programado para {date}",
+      "done_scheduled": " (programado para {date})"
+    },
+    "asaas_enviar_comprovante_email": {
+      "request": "enviar a {to} el comprobante oficial de la operación {id} en Asaas",
+      "done": "Comprobante enviado por correo a {to}."
+    },
+    "salvar_credencial": {
+      "request": "guardar tu API key de {service} en la Bóveda de credenciales (queda cifrada y no aparece en el chat)",
+      "done": "API key de {service} guardada en la Bóveda (cifrada).",
+      "service_unknown": "(¿servicio?)",
+      "service": "servicio"
+    },
+    "criar_conta_brambs": {
+      "request": "ABRIR TU CUENTA {brand_upper} de verdad, a tu nombre:\n• titular: {name} · {tax_id}\n• contacto: {email} · {phone}\n• dirección: {street}, {number}{complement} · {district} · CP {zip}\n• ingresos/facturación declarados: R$ {income}\n\nLa cuenta la provee *Asaas* (es la institución de pago; {brand} solo te conecta). Después de abrirla tienes que enviar un documento y hacerte la selfie en la pantalla de Asaas, y el análisis tarda hasta 48h. Abrirla no se puede deshacer desde aquí.",
+      "done": "Cuenta {brand} abierta en Asaas. Falta la documentación:"
+    },
+    "fechar_pedido": {
+      "request": "HACER EL PEDIDO DE VERDAD: {summary}. Esto crea un pedido real a tu nombre y genera el cobro; no se puede deshacer desde aquí",
+      "done": "Pedido hecho en la tienda. Solo falta el pago:",
+      "request_no_cart": "HACER UN PEDIDO DE VERDAD en la tienda (pero el carrito ya no existe, así que hay que armarlo de nuevo antes)",
+      "request_external": "abrir el checkout de la tienda con este carrito listo ({summary}). En esta tienda el pago lo terminas tú, en su pantalla; yo no creo el pedido ni cobro nada"
+    },
+    "apagar_sistema": {
+      "request": "borrar PARA SIEMPRE el sistema \"{name}\": contenedor, código, historial de versiones Y los datos que guardó la app, incluidos los secretos y accesos de colaboradores. No hay copia de seguridad ni forma de volver",
+      "done": "Sistema \"{name}\" borrado para siempre (código, historial, datos, secretos y accesos de colaboradores). No se puede recuperar."
+    },
+    "replicar_sistema": {
+      "request": "replicar la app pública \"{source}\" en tu subdominio{new_name}",
+      "done": "App replicada en tu subdominio{new_name}.",
+      "source_unknown": "(¿origen?)",
+      "as_name": " como \"{name}\""
+    },
+    "voltar_versao": {
+      "request": "volver el sistema \"{name}\" a la versión {version} (el código vuelve; los datos se preservan)",
+      "done": "Sistema \"{name}\" revertido a la versión {version}."
+    },
+    "remover_arquivo_do_app": {
+      "request": "quitar el archivo {path} del borrador de la app \"{name}\" (no toca la app en línea; se puede recuperar por versión)",
+      "done": "Archivo {path} quitado del borrador de \"{name}\"."
+    },
+    "remover_segredo": {
+      "request": "quitar el secreto \"{key}\" del sistema \"{name}\" (la app se reinicia sin esa variable; el valor no se puede recuperar)",
+      "done": "Secreto \"{key}\" quitado del sistema \"{name}\"."
+    },
+    "frame": {
+      "failed": "No pude terminar: {label}.",
+      "stderr": "_stderr:_"
+    },
+    "jornada_concluir": {
+      "done": "Recorrido concluido. Estoy preparando ideas prácticas con {brand} y te avisaré aquí cuando estén listas."
+    },
+    "jornada_refazer_devolutiva": {
+      "done": "Estoy preparando tu devolución nuevamente. Te avisaré aquí cuando esté lista."
+    },
+    "jornada_configurar": {
+      "done": "Recorrido de descubrimiento configurado según la confirmación."
+    },
+    "jornada_editar_nota": {
+      "request_delete": "borrar la nota temporal seleccionada, conservando el historial normal",
+      "request_fix": "corregir la nota temporal seleccionada: {text}",
+      "text_missing": "(falta texto)",
+      "done": "Nota temporal actualizada según la confirmación. El historial normal permanece."
+    }
   }
 }

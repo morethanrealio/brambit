@@ -49,6 +49,7 @@ import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {leitorDePagina} from './app-encaixes.mjs';
 import {conferirCsp} from './csp.mjs';
+import {useLocalePlugins} from './i18n.mjs';
 
 export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico'];
 const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','locales','csp'];
@@ -87,6 +88,7 @@ export async function carregarPlugins(arquivo=arquivoDosPlugins()){
   if(nomes.has(p.nome))throw Error('Plugin repetido: '+p.nome);
   nomes.add(p.nome);
  }
+ useLocalePlugins(lista);
  return lista;
 }
 

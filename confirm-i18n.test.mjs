@@ -13,7 +13,7 @@ import { confirmedAction } from './web/action-evidence.mjs';
 //  3. What the user reads has no leaked Portuguese, no "undefined", no
 //     loose interpolation.
 import { GATED_TOOLS, describe, describeDone, renderConfirmed, avisoEnderecoTrocado } from './web/confirm.mjs';
-import { pedidoEm, feitoEm, molduraEm, quando } from './web/confirm-textos.mjs';
+import { hasSentence, cardDate as quando } from './web/confirm-sentences.mjs';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -101,14 +101,8 @@ for (const name of TOOLS) {
 
 // 2) COVERAGE checked against GATED_TOOLS. If someone puts a new tool in the
 //    gate and forgets the translation, the failure shows up here and not on the
-//    user's card. `remover_arquivo_do_app`/`remover_segredo` fall into this bucket:
-//    in pt they fall back to the generic one, but in en/es they have their own phrase.
-for (const lang of LANGS) {
-  for (const name of TOOLS) {
-    t(`${lang} has a request phrase: ${name}`, typeof pedidoEm(lang, name, argsDe(name)) === 'string');
-    t(`${lang} has a done phrase: ${name}`, typeof feitoEm(lang, name, argsDe(name)) === 'string');
-  }
-}
+//    user's card. The texts per language are checked by the catalog guard.
+for (const name of TOOLS) t(`has its own sentences: ${name}`, hasSentence(name));
 
 // 3) The text that comes out can NOT have assembly defects. "undefined" and "${" in a
 //    confirmation card are the worst case: the owner authorizes a broken phrase.
@@ -244,11 +238,6 @@ t('pt-BR: generic same as before',
   describe('tool_que_nao_existe', {}) === 'executar a ação "tool_que_nao_existe"'
   && describeDone('tool_que_nao_existe', {}) === 'Ação "tool_que_nao_existe" concluída.');
 
-// 9) DECLARED LIMIT: the CART summary (compras.mjs) stays in Portuguese
-//    across all three languages at this stage. It's not an oversight; it's here so no one
-//    says that `fechar_pedido` is translated end to end.
-t('frame exists in en and es', !!molduraEm('en') && !!molduraEm('es'));
-t('frame does not exist in pt-BR (it is the untouched path)', molduraEm('pt-BR') === null);
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

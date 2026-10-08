@@ -190,5 +190,544 @@
     "failed_remove_photo": "Failed to remove the photo.",
     "failed_save_audio": "Failed to save the audio.",
     "failed_remove_audio": "Failed to remove the audio."
+  },
+  "confirm": {
+    "common": {
+      "copy_to": " (with a copy to {cc})",
+      "recipient_unknown": "(recipient?)",
+      "the_recipient": "the recipient",
+      "with_subject": " with the subject \"{subject}\"",
+      "the_contact": "the contact",
+      "no_goal": "(no goal)",
+      "the_contact_cap": "The contact",
+      "unknown": "(?)",
+      "no_email": "(no email)",
+      "date_unknown": "(date?)",
+      "no_title_q": "(no title)",
+      "no_title": "no title",
+      "no_name_q": "(no name)",
+      "no_name": "no name",
+      "contact_unknown": "(contact?)",
+      "your_contact": "your contact",
+      "on_host": " on {host}",
+      "in_dir": " in {dir}",
+      "no_description": "(no description)",
+      "generic_request": "run the action \"{name}\"",
+      "generic_done": "Action \"{name}\" completed."
+    },
+    "gmail_send": {
+      "request": "send an email to {to}{subject}{cc}",
+      "done": "Email sent to {to}{subject}{cc}."
+    },
+    "hotmail_send": {
+      "request": "send an email (Hotmail/Outlook) to {to}{subject}{cc}",
+      "done": "Email (Hotmail/Outlook) sent to {to}{subject}{cc}."
+    },
+    "falar_com_agente": {
+      "request": "talk to {contact}'s assistant on your behalf about: {goal}",
+      "done": "I talked to {contact}'s assistant."
+    },
+    "responder_pergunta_externa": {
+      "request": "send this answer to {contact}'s assistant: \"{answer}\"",
+      "done": "Answer sent to {contact}'s assistant."
+    },
+    "aceitar_contato": {
+      "request": "accept the connection request from {contact} (their assistant will be able to talk to yours)",
+      "done": "Connection with {contact} accepted."
+    },
+    "recusar_contato": {
+      "request": "decline the connection request from {contact}",
+      "done": "Request from {contact} declined."
+    },
+    "convidar_contato": {
+      "request": "send a connection invite (by email) to {email}",
+      "done": "Invite sent to {email}."
+    },
+    "anotar_no_espaco": {
+      "request": "add a note to the Space \"{space}\" (every member sees it): \"{note}\"",
+      "done": "Note added to the Space \"{space}\"."
+    },
+    "configurar_espaco": {
+      "request": "change the settings of the Space \"{space}\"{mode}",
+      "done": "Space \"{space}\" updated.",
+      "with_mode": " to mode \"{mode}\""
+    },
+    "editar_nota": {
+      "request": "replace note {id} in the Space \"{space}\" with: \"{note}\"",
+      "done": "Note in the Space \"{space}\" edited."
+    },
+    "apagar_nota": {
+      "request": "delete note {id} from the Space \"{space}\" for every member",
+      "done": "Note deleted from the Space \"{space}\"."
+    },
+    "sair_do_espaco": {
+      "request": "leave the Space \"{space}\" (you stop seeing its notes)",
+      "done": "You left the Space \"{space}\"."
+    },
+    "remover_do_espaco": {
+      "request": "remove {contact} from the Space \"{space}\"",
+      "done": "{contact} was removed from the Space \"{space}\"."
+    },
+    "editar_skill": {
+      "request": "change the Skill \"{skill}\"{script}",
+      "done": "Skill \"{skill}\" updated.",
+      "with_script": " (including its script)"
+    },
+    "apagar_skill": {
+      "request": "permanently delete the Skill \"{skill}\"",
+      "done": "Skill \"{skill}\" deleted."
+    },
+    "desinstalar_skill": {
+      "request": "uninstall the Skill \"{skill}\"{from} from this assistant",
+      "done": "Skill \"{skill}\" uninstalled.",
+      "from_author": " from {author}"
+    },
+    "remover_colaborador": {
+      "request": "remove {contact} as a collaborator on the system \"{app}\"",
+      "done": "{contact} no longer collaborates on \"{app}\"."
+    },
+    "definir_visibilidade_sistema": {
+      "request": "set the system \"{app}\" visibility to \"{visibility}\"",
+      "done": "System \"{app}\" visibility is now \"{visibility}\"."
+    },
+    "definir_acesso_sistema": {
+      "request_public": "make the system \"{app}\" OPEN: anyone with the link gets in, no password",
+      "request_locked": "lock the system \"{app}\" with a login and password{password}",
+      "new_password": " (new password)",
+      "done_public": "System \"{app}\" is now open.",
+      "done_locked": "System \"{app}\" locked with a password."
+    },
+    "remover_da_home": {
+      "request": "remove block {id} from your subdomain home page",
+      "done": "Block {id} removed from the home page."
+    },
+    "parar_sistema": {
+      "request": "stop the system \"{app}\" (offline until restarted; data is kept)",
+      "done": "System \"{app}\" stopped."
+    },
+    "reiniciar_sistema": {
+      "request": "restart the system \"{app}\" (offline for a few seconds)",
+      "done": "System \"{app}\" restarted."
+    },
+    "enviar_midia_para_sistema": {
+      "request": "send media {media} to {method} {route} on the system \"{app}\" (writes to the app)",
+      "done": "Media sent to the system \"{app}\"."
+    },
+    "gmail_label_create": {
+      "request": "create the label \"{label}\" in your Gmail",
+      "done": "Label \"{label}\" created in Gmail."
+    },
+    "gmail_label_update": {
+      "request": "rename the Gmail label \"{label}\" to \"{new_name}\"",
+      "done": "Label renamed to \"{new_name}\"."
+    },
+    "configurar_deploy": {
+      "request": "set up the project deploy{host}{command}",
+      "done": "Project deploy configured.",
+      "to_host": " to {host}",
+      "running": " running \"{command}\""
+    },
+    "cancelar_rotina": {
+      "request": "permanently cancel the routine {routine}",
+      "done": "Routine {routine} cancelled."
+    },
+    "remover_evento": {
+      "request": "delete the {date} entry from the tracker \"{tracker}\"",
+      "done": "Entry deleted from the tracker \"{tracker}\"."
+    },
+    "remover_tracker": {
+      "request": "delete the tracker \"{tracker}\" and all its entries",
+      "done": "Tracker \"{tracker}\" deleted."
+    },
+    "remover_monitor": {
+      "request": "stop monitoring \"{monitor}\" (history is kept)",
+      "done": "Stopped monitoring \"{monitor}\"."
+    },
+    "definir_modo_permissao": {
+      "request": "change the permission mode to \"{mode}\"{effect}",
+      "done": "Permission mode is now \"{mode}\" (from the next message on).",
+      "accept_edits": ": code edits will run without asking for confirmation"
+    },
+    "permitir_comando": {
+      "request": "permanently allow commands starting with \"{prefix}\" (they will run without asking)",
+      "done": "Commands \"{prefix}\" allowed."
+    },
+    "event": {
+      "on_date": " on {date}",
+      "for_date": " for {date}",
+      "title_to": "title to \"{title}\"",
+      "time_to": "time to {date}",
+      "location_to": "location to \"{location}\"",
+      "the_description": "the description",
+      "the_guests": "the guests",
+      "title": "title \"{title}\"",
+      "time": "time {date}",
+      "location": "location \"{location}\"",
+      "description": "description",
+      "guests": "guests",
+      "changes_request": " ({list})",
+      "changes_done": ": {list}"
+    },
+    "gmail_label_delete": {
+      "request": "delete the label \"{label}\" from your Gmail (the emails stay, they just lose the label)",
+      "done": "Label \"{label}\" deleted from your Gmail."
+    },
+    "gmail_filter_create": {
+      "request": "create a routing rule in Gmail: emails {criteria} → {actions}",
+      "done": "Routing rule created in your Gmail (it applies to incoming emails from now on).",
+      "from": "from {value}",
+      "to": "to {value}",
+      "subject": "subject \"{value}\"",
+      "containing": "containing \"{value}\"",
+      "has_attachment": "with an attachment",
+      "label": "label \"{value}\"",
+      "skip_inbox": "skip the inbox",
+      "mark_read": "mark as read",
+      "mark_important": "mark as important",
+      "no_criteria": "(criteria?)",
+      "no_action": "(action?)"
+    },
+    "gmail_filter_delete": {
+      "request": "delete that routing rule (filter) from your Gmail",
+      "done": "Routing rule deleted from your Gmail."
+    },
+    "calendar_create": {
+      "request": "create the event \"{title}\"{when}",
+      "done": "Event \"{title}\" created on your calendar{when}."
+    },
+    "calendar_update": {
+      "request": "edit the event{changes}",
+      "done": "Event updated{changes}."
+    },
+    "calendar_delete": {
+      "request": "delete that event from your calendar",
+      "done": "Event deleted from your calendar."
+    },
+    "outlook_calendar_create": {
+      "request": "create the event \"{title}\" on your Outlook calendar{when}",
+      "done": "Event \"{title}\" created on your Outlook calendar{when}."
+    },
+    "outlook_calendar_update": {
+      "request": "edit the event on your Outlook calendar{changes}",
+      "done": "Outlook event updated{changes}."
+    },
+    "outlook_calendar_delete": {
+      "request": "delete that event from your Outlook calendar",
+      "done": "Event deleted from your Outlook calendar."
+    },
+    "drive_upload": {
+      "request": "upload the file \"{name}\" to your Drive",
+      "done": "File \"{name}\" uploaded to your Drive."
+    },
+    "drive_upload_arquivo": {
+      "request": "save the file \"{name}\" in your Drive",
+      "done": "File \"{name}\" uploaded to your Drive.",
+      "request_overwrite": "update the existing file \"{name}\" in your Drive, keeping the same link"
+    },
+    "enviar_para_drive": {
+      "request": "save the file{name} in your Google Drive",
+      "done": "Copy{name} sent to your Google Drive.",
+      "request_overwrite": "update the existing file{name} in your Google Drive, keeping the same link",
+      "named": " \"{name}\"",
+      "copy_of": " of \"{name}\""
+    },
+    "docs_create": {
+      "request": "create the Google Doc \"{name}\" in your Drive",
+      "done": "Google Doc \"{name}\" created in your Drive.",
+      "request_overwrite": "update the existing Google Doc \"{name}\" in your Drive, keeping the same link"
+    },
+    "drive_export_pdf": {
+      "request": "export that Google file to PDF and save it in your Drive{as}",
+      "done": "PDF generated and saved in your Drive.",
+      "as_name": " as \"{name}.pdf\""
+    },
+    "onedrive_upload": {
+      "request": "upload the file \"{name}\" to your OneDrive",
+      "done": "File \"{name}\" uploaded to your OneDrive."
+    },
+    "github_create_issue": {
+      "request": "create an issue on GitHub{repo}: \"{title}\"",
+      "done": "Issue created{repo}: \"{title}\".",
+      "in_repo": " in {repo}"
+    },
+    "github_comment_issue": {
+      "request": "comment on issue {repo}#{number}",
+      "done": "Comment posted on issue {repo}#{number}."
+    },
+    "slack_post_message": {
+      "request": "post a message on Slack{channel}",
+      "done": "Message posted on Slack{channel}.",
+      "in_channel": " (channel {channel})"
+    },
+    "linkedin_post": {
+      "request": "post on your LinkedIn ({audience}): \"{text}\"{link}",
+      "done": "Post published on your LinkedIn.",
+      "connections": "connections",
+      "public": "public",
+      "with_link": " (with the link {link})"
+    },
+    "confirmar_com_agente": {
+      "request": "confirm with {contact}'s assistant: \"{decision}\"",
+      "done": "Decision sent to {contact}'s assistant."
+    },
+    "responder_decisao": {
+      "request_accept": "accept the decision{from}{message}",
+      "request_decline": "decline the decision{from}{message}",
+      "done_accept": "Acceptance sent to the contact's assistant.",
+      "done_decline": "Refusal sent to the contact's assistant.",
+      "from_contact": " from {from}",
+      "with_message": ": \"{message}\""
+    },
+    "run_command": {
+      "request": "run the command `{command}` on the server{host}",
+      "done": "Command executed on the server{host}.",
+      "host": " {host}"
+    },
+    "editar_arquivo": {
+      "request": "edit the file {path}{host} (replace a section)",
+      "done": "File {path} edited."
+    },
+    "escrever_arquivo": {
+      "request": "write the file {path}{host} (creates it or overwrites the whole thing)",
+      "done": "File {path} written."
+    },
+    "git_commit": {
+      "request": "make a commit{dir} with the message \"{message}\"{staged}",
+      "done": "Commit made{dir}: \"{message}\".",
+      "only_staged": " (only what is already staged)",
+      "add_all": " (git add -A first)"
+    },
+    "git_push": {
+      "request": "git push{branch} to remote {remote}{dir}",
+      "done": "Pushed{branch} to remote {remote}.",
+      "of_branch": " branch {branch}",
+      "current_branch": " the current branch",
+      "dir": " ({dir})"
+    },
+    "git_branch": {
+      "request": "create and switch to branch \"{name}\"{base}{dir}",
+      "done": "Branch \"{name}\" created and checked out.",
+      "from_base": " from {base}"
+    },
+    "git_checkout": {
+      "request": "switch to \"{ref}\"{dir} (git checkout)",
+      "done": "Switched to \"{ref}\"."
+    },
+    "gerenciar_tarefa_de_app": {
+      "request": "update the scope of {app} to {mode}: {goal}. Preserve progress; no publication. Later execution uses account credits",
+      "done": "Scope updated; progress and usage preserved. Nothing was edited, tested or published. Ask to continue when ready.",
+      "request_cancel": "cancel the task for {app}, preserving the draft",
+      "done_cancel": "Task canceled; draft preserved.",
+      "default_app": "the app",
+      "mode_edit": "draft editing",
+      "mode_review": "read-only review"
+    },
+    "publicar_sistema": {
+      "request": "publish the system \"{app}\" ({runtime}) on your subdomain",
+      "done": "System \"{app}\" published on your subdomain.",
+      "request_collab": "publish a new version of {owner}'s system \"{app}\" (collaboration)"
+    },
+    "routine": {
+      "weekdays": "Mon–Fri",
+      "weekends": "Sat–Sun",
+      "every_day": "every day",
+      "on_days": "every {days}",
+      "on_days_from_weekend": "every {days}",
+      "list": "{init} and {last}",
+      "dow_0": "Sunday",
+      "dow_1": "Monday",
+      "dow_2": "Tuesday",
+      "dow_3": "Wednesday",
+      "dow_4": "Thursday",
+      "dow_5": "Friday",
+      "dow_6": "Saturday",
+      "monthly": "monthly on {days}{short}",
+      "last_day": "the last day",
+      "day_n": "day {n}",
+      "short_months": " (in shorter months, on the last day)",
+      "nth_weekday": "{ord} {day} of the month",
+      "ord_last": "last",
+      "ord_1": "1st",
+      "ord_2": "2nd",
+      "ord_3": "3rd",
+      "ord_4": "4th",
+      "ord_5": "5th",
+      "interval_days_one": "{count} day",
+      "interval_days_other": "{count} days",
+      "interval_hours_one": "{count} hour",
+      "interval_hours_other": "{count} hours",
+      "interval_minutes": "{n} min",
+      "every_interval": "every {interval}{until}",
+      "until": " until {date}",
+      "no_end": " (with no end date)",
+      "days_at_time": "{days} at {time}",
+      "time_separator": ":",
+      "default_time": "{time} (default)"
+    },
+    "criar_rotina": {
+      "request": "create the routine \"{title}\", running {cadence}{channel}",
+      "done": "Routine \"{title}\" created: runs {cadence}{channel}. I will run it on my own from the next time it comes due.",
+      "request_channel": ", delivered on {channel}",
+      "request_channel_app": ", delivered only in the app (no WhatsApp, Telegram or email)",
+      "done_channel": " (delivered on {channel})",
+      "done_channel_app": " (delivered only in the app)"
+    },
+    "editar_rotina": {
+      "request": "change the routine {target}{changes} — the current routine keeps running until you confirm",
+      "done": "Routine {target} updated in place (the old version kept running normally until now).",
+      "changes": " ({list})",
+      "resume": "resume",
+      "pause": "pause",
+      "rename": "rename it to \"{title}\"",
+      "channel": "deliver on {channel}",
+      "channel_app": "deliver only in the app (no WhatsApp, Telegram or email)",
+      "at_minute": "at minute {time}",
+      "at_time": "at {time}",
+      "change_task": "change what it does",
+      "test_now": "apply the changes and test now, delivering on the configured channel"
+    },
+    "convidar_colaborador": {
+      "request": "give {contact} COLLABORATION access to your system \"{name}\" (they will be able to edit the code and operate the SAME data)",
+      "done": "{contact} now collaborates on the system \"{name}\" (edits the code and operates the same data)."
+    },
+    "convidar_para_espaco": {
+      "request": "invite {contact} to your Space \"{space}\" (they will see and write to the Space's live data)",
+      "done": "{contact} is now part of the Space \"{space}\"."
+    },
+    "instalar_skill": {
+      "request": "install the Skill \"{skill}\"{from} in this assistant (it will start loading that behaviour)",
+      "done": "Skill \"{skill}\"{from} installed in this assistant.",
+      "from": " from {from}"
+    },
+    "compartilhar_skill": {
+      "request": "share your Skill \"{skill}\" with {contact} (they will be able to install it in their assistant)",
+      "done": "Skill \"{skill}\" shared with {contact} (they can install it now)."
+    },
+    "rodar_skill": {
+      "request": "run your Skill \"{skill}\" script in the isolated environment (sandbox){argument}",
+      "done": "Skill \"{skill}\" script executed in the sandbox.",
+      "with_argument": " with the argument \"{argument}\""
+    },
+    "canva_criar": {
+      "request": "create this in your Canva: {goal}",
+      "done": "Ready in your Canva."
+    },
+    "canva_editar": {
+      "request": "change a design in your Canva: {goal}",
+      "done": "Design changed in your Canva."
+    },
+    "notion_create_page": {
+      "request": "create the page \"{title}\" in your Notion",
+      "done": "Page \"{title}\" created in your Notion."
+    },
+    "notion_append": {
+      "request": "append that text to a page in your Notion",
+      "done": "Text appended to the page in your Notion."
+    },
+    "infinity_criar_item": {
+      "request": "create a new item in Infinity (board {board}, folder {folder}){fields}",
+      "done": "Item created in Infinity.",
+      "with_fields": " with {fields}"
+    },
+    "infinity_editar_item": {
+      "request": "change item {item} in Infinity{fields}{folder}",
+      "done": "Item updated in Infinity.",
+      "fields": ": {fields}",
+      "move_to": " (moving it to folder {folder})"
+    },
+    "infinity_comentar": {
+      "request": "post this comment on item {item} in Infinity, visible to everyone on the board: \"{text}\"",
+      "done": "Comment posted in Infinity."
+    },
+    "splitwise_add_expense": {
+      "request": "add the expense \"{description}\" of {currency} {amount} to Splitwise, split equally in the group",
+      "done": "Expense \"{description}\" ({currency} {amount}) added to Splitwise, split equally."
+    },
+    "asaas_receber_pix": {
+      "request": "PREPARE your Asaas account to receive PIX and show a copy-and-paste code with no fixed amount. If the account has no active PIX key, a random key will also be created. Before you confirm: the payer will see the holder's full name and masked tax ID to verify the recipient",
+      "done": "PIX receiving details prepared in your Asaas account.",
+      "request_amount": "GENERATE a PIX copy-and-paste code for R$ {amount} to receive money in your Asaas account. If the account has no active PIX key, a random key will also be created. Before you confirm: the payer will see the holder's full name and masked tax ID to verify the recipient"
+    },
+    "asaas_pagar_conta": {
+      "request": "PAY {amount} from your Asaas account (bill/invoice, barcode line {line}){scheduled} — this is real money and it cannot be undone",
+      "done": "Payment{amount} sent from your Asaas account{scheduled}. Check the status on the receipt.",
+      "amount": "R$ {amount}",
+      "own_amount": "the bill's own amount",
+      "scheduled": ", scheduled for {date}",
+      "done_amount": " of R$ {amount}",
+      "done_scheduled": " (scheduled for {date})"
+    },
+    "asaas_cancelar_pagamento_conta": {
+      "request": "CANCEL bill payment {id} from your Asaas account — cancellation is irreversible and, once confirmed by Asaas, prevents the payment from being executed",
+      "done": "Bill payment cancelled by Asaas. It will not be executed.",
+      "no_id": "(missing id)"
+    },
+    "asaas_transferir_pix": {
+      "request": "TRANSFER R$ {amount} via PIX from your Asaas account to the key {key} ({key_type}){scheduled} — this is real money and it cannot be undone",
+      "done": "PIX of R$ {amount} sent from your Asaas account to the key {key}{scheduled}.",
+      "scheduled": ", scheduled for {date}",
+      "done_scheduled": " (scheduled for {date})"
+    },
+    "asaas_enviar_comprovante_email": {
+      "request": "send to {to} the official receipt for Asaas operation {id}",
+      "done": "Receipt emailed to {to}."
+    },
+    "salvar_credencial": {
+      "request": "store your {service} API key in the credential Vault (it is encrypted and never shows up in the chat)",
+      "done": "{service} API key stored in the Vault (encrypted).",
+      "service_unknown": "(service?)",
+      "service": "Service"
+    },
+    "criar_conta_brambs": {
+      "request": "OPEN YOUR REAL {brand_upper} ACCOUNT, in your name:\n• holder: {name} · {tax_id}\n• contact: {email} · {phone}\n• address: {street}, {number}{complement} · {district} · ZIP {zip}\n• declared income/revenue: R$ {income}\n\nThe account is provided by *Asaas* (they are the payment institution; {brand} only connects you). Once it is open you still need to send a document and take a selfie on the Asaas screen, and the review takes up to 48h. Opening it cannot be undone from here.",
+      "done": "{brand} account opened at Asaas. The documentation is still missing:"
+    },
+    "fechar_pedido": {
+      "request": "PLACE THE ORDER FOR REAL: {summary}. This creates a real order in your name and generates the charge; it cannot be undone from here",
+      "done": "Order placed at the store. Only the payment is left:",
+      "request_no_cart": "PLACE A REAL ORDER at the store (but the cart no longer exists, so it has to be built again first)",
+      "request_external": "open the store checkout with this cart ready ({summary}). At this store you are the one who completes the payment, on their screen; I do not create the order and I do not charge anything"
+    },
+    "apagar_sistema": {
+      "request": "PERMANENTLY delete the system \"{name}\": container, code, version history AND the data the app stored, including vault secrets and collaborator access. There is no backup and no way back",
+      "done": "System \"{name}\" permanently deleted (code, history, app data, vault secrets and collaborator access). It cannot be recovered."
+    },
+    "replicar_sistema": {
+      "request": "replicate the public app \"{source}\" on your subdomain{new_name}",
+      "done": "App replicated on your subdomain{new_name}.",
+      "source_unknown": "(source?)",
+      "as_name": " as \"{name}\""
+    },
+    "voltar_versao": {
+      "request": "roll the system \"{name}\" back to version {version} (the code goes back; the data is preserved)",
+      "done": "System \"{name}\" rolled back to version {version}."
+    },
+    "remover_arquivo_do_app": {
+      "request": "remove the file {path} from the draft of the app \"{name}\" (does not touch the live app; recoverable by version)",
+      "done": "File {path} removed from the draft of \"{name}\"."
+    },
+    "remover_segredo": {
+      "request": "remove the secret \"{key}\" from the system \"{name}\" (the app restarts without that variable; the value cannot be recovered)",
+      "done": "Secret \"{key}\" removed from the system \"{name}\"."
+    },
+    "frame": {
+      "failed": "I couldn't finish: {label}.",
+      "stderr": "_stderr:_"
+    },
+    "jornada_concluir": {
+      "done": "Journey completed. I’m preparing practical ways {brand} can help and will let you know here when they are ready."
+    },
+    "jornada_refazer_devolutiva": {
+      "done": "I’m preparing your final report again. I’ll let you know here when it is ready."
+    },
+    "jornada_configurar": {
+      "done": "Discovery journey configured as confirmed."
+    },
+    "jornada_editar_nota": {
+      "request_delete": "delete the selected temporary note, keeping normal chat history",
+      "request_fix": "correct the selected temporary note to: {text}",
+      "text_missing": "(text missing)",
+      "done": "Temporary note updated as confirmed. Normal chat history remains."
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { configurationConfirmation, configurationLabel, completionLabel, retryLabel } from './discovery-conversation.mjs';
+import { configurationConfirmation } from './discovery-conversation.mjs';
 import { randomUUID } from 'node:crypto';
 import { currentConfirmationSession } from './confirmation-session.mjs';
 import { confirmedAction, actionEvidenceFor } from './action-evidence.mjs';
@@ -21,19 +21,12 @@ import { calendarRecurrence, recurrenceLabel, recurrenceOccurrences } from './ca
 // built at the store, not a number the model repeated: that's the value the owner
 // is approving. That's why the sentence comes from compras.mjs itself, built on top
 // of the stored cart, and not from the call's args.
-import { descreverCarrinho, plataformaDoCarrinho } from './compras.mjs';
 // The routine's cadence is read by the SAME normalizer the tool uses to save,
 // otherwise the confirmation card would describe a day different from what's going to be saved
 // (the owner would confirm one thing and the platform would schedule another).
-import { normalizeRoutineDays, routineDaysLabel, intervalLabel } from './scheduler.mjs';
-import { routineArgsTimeLabel } from './routine-time.mjs';
-// Card texts in English and Spanish. The pt-BR below stays INTACT: the
-// en/es tables are consulted first and, when they don't have the sentence, the path
-// falls back to the usual Portuguese. See the header of confirm-textos.mjs.
-import { pedidoEm, feitoEm, molduraEm, copiaLabel, camposInfinity } from './confirm-textos.mjs';
+// The sentences themselves (every language) are in confirm-sentences.mjs.
 import { tagIdioma, defaultLanguage, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
-import { PORTAO_TEXTOS, PORTAO_IRREVERSIVEIS, portaoTexto } from './confirm-textos-portao.mjs';
-import { marca } from './marca.mjs';
+import { requestSentence, doneSentence, failedSentence, stderrLabel } from './confirm-sentences.mjs';
 
 const pending = new Map(); // Legacy callers/tests only. threadId -> { id, name, label, run, args, at, language, messageRefs }
 
@@ -60,40 +53,28 @@ function idiomaDoCartao(threadId) {
   return idiomaDaThread.get(String(threadId)) || defaultLanguage();
 }
 
-// How the confirmation card describes the requested channel. "app" (= not pushed on any
-// channel) needs to become a sentence: "entregar no app" doesn't make clear to the owner
-// that this is exactly the request to STOP receiving it on WhatsApp/Telegram/email.
-function canalLabel(canal, { verbo = 'entregar', detalhe = true } = {}) {
-  const c = String(canal || '').toLowerCase().trim();
-  if (!c) return '';
-  if (['app', 'none', 'nenhum', 'so app', 'só app'].includes(c)) {
-    return `${verbo} só no app${detalhe ? ' (sem WhatsApp, Telegram nem e-mail)' : ''}`;
-  }
-  return `${verbo} no ${canal}`;
-}
-
-// Cadence text built from the tool's args (criar_rotina/editar_rotina).
-// Returns '' when the call doesn't touch cadence (an edit of just the time, e.g.).
-function cadenciaLabel(args = {}) {
-  const cad = normalizeRoutineDays(args);
-  if (cad.error || !cad.days) return '';
-  return routineDaysLabel(cad.days);
-}
-
-// FULL cadence of the routine for the card ("every Sunday at 6pm", "every 30 min
-// until ..."). Exists because the routine has two modes and the card only knew how
-// to describe one: in INTERVAL mode there is no time or day, and the sentence came
-// out "runs every day at 0?h", meaning the owner was confirming a routine that
-// wasn't the one that was going to be created.
-function cadenciaFrase(args = {}) {
-  const n = Number(args.repetir_cada_min);
-  if (Number.isFinite(n) && n > 0) {
-    const ate = args.repetir_ate ? ` até ${args.repetir_ate}` : ' (sem data pra parar)';
-    return `a cada ${intervalLabel(n)}${ate}`;
-  }
-  const hora = routineArgsTimeLabel(args) || '07h (padrão)';
-  return `${cadenciaLabel(args) || 'todo dia'} às ${hora}`;
-}
+// Audit 28/09 ("anything that writes, edits, deletes or sends a message must
+// have no gaps"): these wrote, deleted or talked to third parties on the
+// model's decision alone. The server gates them even when the tool doesn't ask.
+export const GATE_TOOLS = new Set([
+  'falar_com_agente', 'responder_pergunta_externa', 'aceitar_contato',
+  'recusar_contato', 'convidar_contato', 'anotar_no_espaco',
+  'configurar_espaco', 'editar_nota', 'apagar_nota', 'sair_do_espaco',
+  'remover_do_espaco', 'editar_skill', 'apagar_skill', 'desinstalar_skill',
+  'remover_colaborador', 'definir_visibilidade_sistema',
+  'definir_acesso_sistema', 'remover_da_home', 'parar_sistema',
+  'reiniciar_sistema', 'enviar_midia_para_sistema', 'gmail_label_create',
+  'gmail_label_update', 'configurar_deploy', 'cancelar_rotina',
+  'remover_evento', 'remover_tracker', 'remover_monitor',
+  'definir_modo_permissao', 'permitir_comando',
+]);
+// Of those, the ones that delete for good, reach third parties or take the app
+// offline: a thumbs-up isn't enough.
+const IRREVERSIBLE_GATE_TOOLS = [
+  'falar_com_agente', 'responder_pergunta_externa', 'convidar_contato',
+  'apagar_nota', 'remover_do_espaco', 'apagar_skill', 'remover_tracker',
+  'cancelar_rotina', 'permitir_comando',
+];
 
 // Tools that require explicit human confirmation before executing.
 export const GATED_TOOLS = new Set([
@@ -171,10 +152,7 @@ export const GATED_TOOLS = new Set([
   'criar_conta_brambs',
   'canva_criar',
   'canva_editar',
-  // Audit 28/09 ("anything that writes, edits, deletes or sends a message must
-  // have no gaps"): these wrote, deleted or talked to third parties on the
-  // model's decision alone. Phrases in confirm-textos-portao.mjs.
-  ...Object.keys(PORTAO_TEXTOS),
+  ...GATE_TOOLS,
 ]);
 
 // IRREVERSIBLE actions, or ones that reach third parties: a 👍 (reaction) is NOT
@@ -220,7 +198,7 @@ export const IRREVERSIBLE_TOOLS = new Set([
   // with their CPF/CNPJ. There's no "un-opening" it, and the data goes to a third
   // party's credit analysis: requires text confirmation, never a thumbs-up.
   'criar_conta_brambs',
-  ...PORTAO_IRREVERSIVEIS,
+  ...IRREVERSIBLE_GATE_TOOLS,
 ]);
 
 // A gated action can be confirmed by REACTION (👍) only if it is NOT irreversible.
@@ -339,214 +317,7 @@ export function describe(name, args = {}, language = null) {
     return `${describe(name, once, language)} ${recurrenceLabel(recorrencia,start,tz,language)} ${label}: ${recurrenceOccurrences(recorrencia,start,tz).map(o=>o.local.replace('T',' ')).join('; ')}.`;
   }
   const lang = language ? tagIdioma(language) : defaultLanguage();
-  if (lang !== LEGACY_TEXT_LANGUAGE) {
-    const t = pedidoEm(lang, name, args);
-    if (t) return t;
-  }
-  { const t = portaoTexto(LEGACY_TEXT_LANGUAGE, name, args, 0); if (t) return t; }
-  switch (name) {
-    case 'jornada_configurar': return configurationLabel(args);
-    case 'jornada_concluir': return completionLabel();
-    case 'jornada_refazer_devolutiva': return retryLabel();
-    case 'jornada_editar_nota': return args.action === 'delete' ? 'apagar a nota temporária selecionada, sem apagar o histórico do chat' : `corrigir a nota temporária selecionada para: ${args.text || ''}`;
-    case 'gmail_send':
-      return `enviar um e-mail para ${args.to || '(destinatário?)'}${args.subject ? ` com o assunto "${args.subject}"` : ''}${copiaLabel(args.cc)}`;
-    case 'hotmail_send':
-      return `enviar um e-mail (Hotmail/Outlook) para ${args.to || '(destinatário?)'}${args.subject ? ` com o assunto "${args.subject}"` : ''}${copiaLabel(args.cc)}`;
-    case 'gmail_label_delete':
-      return `apagar o marcador "${args.marcador || '(?)'}" do seu Gmail (os e-mails ficam, só perdem o marcador)`;
-    case 'gmail_filter_create': {
-      const crit = [args.de && `de ${args.de}`, args.para && `para ${args.para}`, args.assunto && `assunto "${args.assunto}"`, args.contem && `contendo "${args.contem}"`, args.tem_anexo && 'com anexo'].filter(Boolean).join(', ');
-      const act = [args.marcador && `marcador "${args.marcador}"`, args.pular_caixa_entrada && 'pular a caixa de entrada', args.marcar_lido && 'marcar lido', args.marcar_importante && 'marcar importante'].filter(Boolean).join(', ');
-      return `criar uma regra de roteamento no Gmail: e-mails ${crit || '(critério?)'} → ${act || '(ação?)'}`;
-    }
-    case 'gmail_filter_delete':
-      return 'apagar essa regra de roteamento (filtro) do seu Gmail';
-    case 'calendar_create':
-      return `criar o evento "${args.summary || args.title || '(sem título)'}"${args.start ? ` em ${args.start}` : ''}`;
-    case 'calendar_update': {
-      const parts = [];
-      if (args.title != null) parts.push(`título para "${args.title}"`);
-      if (args.start != null) parts.push(`horário para ${formatWhen(args.start)}`);
-      if (args.location != null) parts.push(`local para "${args.location}"`);
-      if (args.description != null) parts.push('a descrição');
-      if (args.attendees?.length) parts.push('os convidados');
-      return `editar o evento${parts.length ? ` (${parts.join(', ')})` : ''}`;
-    }
-    case 'calendar_delete':
-      return 'apagar esse evento da sua agenda';
-    case 'outlook_calendar_create':
-      return `criar o evento "${args.titulo || '(sem título)'}" na agenda do Outlook${args.inicio ? ` em ${formatWhen(args.inicio)}` : ''}`;
-    case 'outlook_calendar_update': {
-      const parts = [];
-      if (args.titulo != null) parts.push(`título para "${args.titulo}"`);
-      if (args.inicio != null) parts.push(`horário para ${formatWhen(args.inicio)}`);
-      if (args.local != null) parts.push(`local para "${args.local}"`);
-      if (args.descricao != null) parts.push('a descrição');
-      if (args.convidados != null) parts.push('os convidados');
-      return `editar o evento na agenda do Outlook${parts.length ? ` (${parts.join(', ')})` : ''}`;
-    }
-    case 'outlook_calendar_delete':
-      return 'apagar esse evento da agenda do Outlook';
-    case 'drive_upload':
-      return `subir o arquivo "${args.name || args.filename || '(sem nome)'}" no Drive`;
-    case 'drive_upload_arquivo':
-      return `${args.overwrite === true ? 'atualizar o arquivo existente' : 'salvar o arquivo'} "${args.nome || '(sem nome)'}" no Drive${args.overwrite === true ? ', preservando o mesmo link' : ''}`;
-    case 'enviar_para_drive':
-      return `${args.overwrite === true ? 'atualizar o arquivo existente' : 'salvar o arquivo'}${args.nome ? ` "${args.nome}"` : ''} no seu Google Drive${args.overwrite === true ? ', preservando o mesmo link' : ''}`;
-    case 'docs_create':
-      return `${args.overwrite === true ? 'atualizar no mesmo link' : 'criar no seu Drive'} o Google Doc "${args.name || '(sem nome)'}"`;
-    case 'drive_export_pdf':
-      return `gerar um PDF desse arquivo do Google e salvar no seu Drive${args.name ? ` como "${String(args.name).replace(/\.pdf$/i, '')}.pdf"` : ''}`;
-    case 'onedrive_upload':
-    case 'onedrive_upload_arquivo':
-      return `subir o arquivo "${args.nome || '(sem nome)'}" no seu OneDrive`;
-    case 'github_create_issue':
-      return `criar uma issue no GitHub${args.repo ? ` em ${args.repo}` : ''}: "${args.title || ''}"`;
-    case 'github_comment_issue':
-      return `comentar na issue ${args.repo || ''}#${args.number ?? args.issue ?? ''}`;
-    case 'slack_post_message':
-      return `postar uma mensagem no Slack${args.channel ? ` (canal ${args.channel})` : ''}`;
-    case 'linkedin_post':
-      return `publicar no seu LinkedIn (${args.visibility === 'CONNECTIONS' ? 'conexões' : 'público'})`
-        + `: "${String(args.text || '').slice(0, 280)}"${args.link ? ` (com o link ${args.link})` : ''}`;
-    case 'confirmar_com_agente':
-      return `confirmar com o assistente de ${args.contato || '(contato?)'}: "${args.decisao || ''}"`;
-    case 'responder_decisao':
-      return `${args.aceito ? 'confirmar' : 'recusar'} a decisão${args.de ? ` do contato ${args.de}` : ''}${args.mensagem ? `: "${args.mensagem}"` : ''}`;
-    case 'rodar_no_servidor':
-      return `rodar o comando \`${args.comando || ''}\` no servidor${args.host ? ` ${args.host}` : ''}`;
-    case 'editar_arquivo':
-      return `editar o arquivo ${args.caminho || '(?)'}${args.host ? ` em ${args.host}` : ''} (trocar um trecho)`;
-    case 'escrever_arquivo':
-      return `gravar o arquivo ${args.caminho || '(?)'}${args.host ? ` em ${args.host}` : ''} (cria ou sobrescreve por inteiro)`;
-    case 'rodar_comando':
-      return `rodar o comando \`${args.comando || ''}\` no servidor${args.host ? ` ${args.host}` : ''}`;
-    case 'git_commit':
-      return `fazer um commit${args.diretorio ? ` em ${args.diretorio}` : ''} com a mensagem "${args.mensagem || ''}"${args.adicionar_tudo === false ? ' (só o que já está no stage)' : ' (git add -A antes)'}`;
-    case 'git_push':
-      return `dar git push${args.branch ? ` da branch ${args.branch}` : ' da branch atual'} pro remote ${args.remote || 'origin'}${args.diretorio ? ` (${args.diretorio})` : ''}`;
-    case 'git_branch':
-      return `criar e mudar pra branch "${args.nome || ''}"${args.base ? ` a partir de ${args.base}` : ''}${args.diretorio ? ` em ${args.diretorio}` : ''}`;
-    case 'git_checkout':
-      return `mudar pra "${args.ref || ''}"${args.diretorio ? ` em ${args.diretorio}` : ''} (git checkout)`;
-    case 'gerenciar_tarefa_de_app':
-      return args.acao === 'cancelar' ? `cancelar a tarefa de ${args.app || 'app'}, preservando o rascunho` : `atualizar o escopo de ${args.app || 'app'} para ${args.modo==='edicao'?'edição do rascunho':'revisão sem edição'}: ${String(args.objetivo||'').replace(/[<>\r\n]/g,' ').slice(0,2000)}. Preserva o progresso e não publica; a execução posterior usa os créditos da conta`;
-    case 'publicar_sistema':
-      return args.dono
-        ? `publicar uma nova versão do sistema "${args.nome_do_sistema || '(sem nome)'}" de ${args.dono} (colaboração)`
-        : `publicar o sistema "${args.nome_do_sistema || '(sem nome)'}" (${args.runtime || '?'}) no seu subdomínio`;
-    case 'criar_rotina':
-      return `criar a rotina "${args.titulo || '(sem título)'}" que roda ${cadenciaFrase(args)}${args.canal ? `, ${canalLabel(args.canal)}` : ''}`;
-    case 'editar_rotina': {
-      const partes = [];
-      if(args.ativa!==undefined)partes.push(args.ativa?'retomar':'pausar');
-      if (args.novo_titulo) partes.push(`renomear pra "${args.novo_titulo}"`);
-      if (args.canal) partes.push(canalLabel(args.canal));
-      const hora = routineArgsTimeLabel(args);
-      if (hora) partes.push(hora.startsWith(':') ? `no minuto ${hora}` : `às ${hora}`);
-      const cad = cadenciaLabel(args);
-      if (cad) partes.push(cad);
-      if (args.o_que_fazer) partes.push('mudar o que ela faz');
-      if (args.testar_agora === true) partes.push('aplicar as alterações e testar agora, com entrega no canal configurado');
-      // The routine may come identified by its CODE (#xxxx) instead of its title,
-      // when the owner has two with the same name; in that case the code is what
-      // goes into the question.
-      const alvo = args.titulo ? `"${args.titulo}"` : args.id ? `#${String(args.id).replace(/^#/, '')}` : '"(sem título)"';
-      return `alterar a rotina ${alvo}${partes.length ? ` (${partes.join(', ')})` : ''} — a rotina atual continua valendo até você confirmar`;
-    }
-    case 'convidar_colaborador':
-      return `dar a ${args.contato || '(contato?)'} acesso de COLABORAÇÃO ao seu sistema "${args.nome_do_sistema || '(sem nome)'}" (ele passa a editar o código e operar os MESMOS dados)`;
-    case 'convidar_para_espaco':
-      return `convidar ${args.contato || '(contato?)'} pro seu Space "${args.espaco || '(sem nome)'}" (ele passa a ver e anotar no dado vivo do Space)`;
-    case 'instalar_skill':
-      return `instalar a Skill "${args.skill || '(sem nome)'}"${args.de ? ` de ${args.de}` : ''} neste assistente (ele passa a carregar esse comportamento)`;
-    case 'compartilhar_skill':
-      return `compartilhar sua Skill "${args.skill || '(sem nome)'}" com ${args.contato || '(contato?)'} (ele poderá instalá-la no assistente dele)`;
-    case 'rodar_skill':
-      return `rodar o script da sua Skill "${args.skill || '(sem nome)'}" no ambiente isolado (sandbox)${args.argumento ? ` com o argumento "${args.argumento}"` : ''}`;
-    // Canva: the confirmation shows the FULL objective, because that's what the
-    // sub-agent is going to execute. Summarizing here would hide from the owner
-    // exactly the text that authorizes the action.
-    case 'canva_criar':
-      return `criar isto no seu Canva: ${args.objetivo || '(sem objetivo)'}`;
-    case 'canva_editar':
-      return `alterar um design no seu Canva: ${args.objetivo || '(sem objetivo)'}`;
-    case 'notion_create_page':
-      return `criar a página "${args.titulo || '(sem título)'}" no seu Notion`;
-    case 'notion_append':
-      return 'acrescentar esse texto a uma página do seu Notion';
-    case 'infinity_criar_item':
-      return `criar um item novo no Infinity (board ${args.board_id || '?'}, pasta ${args.folder_id || '?'})${camposInfinity(args.campos) ? ` com ${camposInfinity(args.campos)}` : ''}`;
-    case 'infinity_editar_item':
-      return `alterar o item ${args.item_id || '?'} no Infinity${camposInfinity(args.campos) ? `: ${camposInfinity(args.campos)}` : ''}${args.folder_id ? ` (movendo para a pasta ${args.folder_id})` : ''}`;
-    case 'infinity_comentar':
-      return `publicar este comentário no item ${args.item_id || '?'} do Infinity, visível para todos do board: "${args.texto || ''}"`;
-    case 'splitwise_add_expense':
-      return `lançar no Splitwise a despesa "${args.descricao || '(sem descrição)'}" de ${args.moeda || 'BRL'} ${args.valor ?? '?'}, dividida igualmente no grupo`;
-    case 'asaas_receber_pix':
-      return args.valor != null
-        ? `GERAR um Pix copia-e-cola de R$ ${args.valor} para receber dinheiro na sua conta Asaas. Se a conta ainda não tiver uma chave Pix ativa, também será criada uma chave aleatória. Antes de confirmar: quem usar a chave verá seu nome completo e seu CPF mascarado para conferir o destinatário`
-        : 'PREPARAR sua conta Asaas para receber Pix e mostrar o copia-e-cola sem valor fixo. Se a conta ainda não tiver uma chave Pix ativa, também será criada uma chave aleatória. Antes de confirmar: quem usar a chave verá seu nome completo e seu CPF mascarado para conferir o destinatário';
-    case 'asaas_pagar_conta':
-      return `PAGAR pela sua conta Asaas ${args.valor != null ? `R$ ${args.valor}` : 'o valor do próprio boleto'} (boleto/conta, linha digitável ${args.linha_digitavel || args.codigo_de_barras || '(?)'})${args.agendar_para ? `, agendado para ${args.agendar_para}` : ''} — é dinheiro de verdade e não dá pra desfazer`;
-    case 'asaas_cancelar_pagamento_conta':
-      return `CANCELAR pela sua conta Asaas o pagamento de conta ${args.id || '(id não informado)'} — o cancelamento é irreversível e, quando confirmado pela Asaas, impede a execução do pagamento`;
-    case 'asaas_transferir_pix':
-      return `TRANSFERIR R$ ${args.valor ?? '?'} via PIX pela sua conta Asaas para a chave ${args.chave_pix || '(?)'} (${args.tipo_chave || '?'})${args.agendar_para ? `, agendado para ${args.agendar_para}` : ''} — é dinheiro de verdade e não dá pra desfazer`;
-    case 'asaas_enviar_comprovante_email':
-      return `enviar para ${args.para || '(destinatário?)'} o comprovante oficial da operação ${args.id || '(?)'} na Asaas`;
-    case 'salvar_credencial':
-      return `guardar sua API key de ${args.servico || '(serviço?)'} no Cofre de credenciais (fica cifrada; não aparece no chat)`;
-    // The owner needs to see exactly what data the account is going to be born
-    // with: it's their CPF/CNPJ going to a credit analysis that can't be undone.
-    case 'criar_conta_brambs':
-      return [
-        `ABRIR SUA CONTA ${marca().nome.toUpperCase()} de verdade, no seu nome:`,
-        `• titular: ${args.nome || '(?)'} · ${args.cpf_cnpj || '(?)'}`,
-        `• contato: ${args.email || '(?)'} · ${args.celular || '(?)'}`,
-        `• endereço: ${args.endereco || '(?)'}, ${args.numero || '(?)'}${args.complemento ? ` ${args.complemento}` : ''} · ${args.bairro || '(?)'} · CEP ${args.cep || '(?)'}`,
-        `• renda/faturamento informado: R$ ${args.renda_mensal ?? '(?)'}`,
-        '',
-        // This is THE place for the mandatory disclosure: the account is issued
-        // by the partner payment institution. It's a regulatory requirement,
-        // stated ONCE, on the screen where the owner authorizes. Elsewhere in
-        // the flow it's just the managed payment account.
-        'Depois de abrir, faltam 2 fotos (documento e selfie), que você manda aqui mesmo nesta conversa, e uma análise de até 48h. Abrir não dá pra desfazer por aqui.',
-        `A conta é emitida pela *Asaas*, instituição de pagamento parceira do ${marca().nome}.`,
-      ].join('\n');
-    case 'fechar_pedido': {
-      const resumo = descreverCarrinho(args.carrinho_id);
-      // Without a cart there's no way to state the amount, and without an amount
-      // there's no informed approval: the text has to make this explicit instead
-      // of making it up.
-      if (!resumo) return 'FECHAR UM PEDIDO DE VERDADE na loja (mas o carrinho não existe mais, então precisa ser montado de novo antes)';
-      // A store outside VTEX won't let me close the sale: payment happens on its
-      // own screen. Asking for authorization to "create a real order" there would
-      // be promising something that doesn't happen.
-      if (plataformaDoCarrinho(args.carrinho_id) !== 'vtex') {
-        return `abrir o checkout da loja com esse carrinho pronto (${resumo}). Nessa loja quem finaliza o pagamento é você, na tela dela; eu não crio o pedido nem cobro nada`;
-      }
-      return `FECHAR O PEDIDO DE VERDADE: ${resumo}. Isso cria um pedido real no seu nome e gera a cobrança; não dá pra desfazer por aqui`;
-    }
-    case 'apagar_sistema':
-      // The detail of what exists inside the app (number of records) is added by
-      // the tool's `preflight`, which queries the host — here we only have the args.
-      return `apagar DE VEZ o sistema "${args.nome_do_sistema || '(sem nome)'}": container, código, histórico de versões E os dados que o app guardou, incluindo segredos do cofre e acessos de colaboradores. Não tem backup nem como voltar`;
-    case 'replicar_sistema':
-      return `replicar o app público "${args.origem || '(origem?)'}" no seu subdomínio${args.novo_nome ? ` como "${args.novo_nome}"` : ''}`;
-    case 'voltar_versao':
-      return `voltar o sistema "${args.nome_do_sistema || '(sem nome)'}" para a versão ${args.versao || '(?)'} (o código volta; os dados são preservados)`;
-    case 'remover_arquivo_do_app':
-      return `remover o arquivo ${args.caminho || '(?)'} do rascunho do app "${args.nome_do_sistema || '(sem nome)'}" (não mexe no app no ar; dá pra voltar por versão)`;
-    case 'remover_segredo':
-      return `remover o segredo "${args.chave || '(?)'}" do sistema "${args.nome_do_sistema || '(sem nome)'}" (o app reinicia sem essa variável; não dá pra recuperar o valor)`;
-    default:
-      // A tool in the gate with no sentence of its own in any language: here the
-      // pt-BR is also generic, so translating the generic one doesn't hide any
-      // information.
-      return lang === LEGACY_TEXT_LANGUAGE ? `executar a ação "${name}"` : molduraEm(lang).acaoPedido(name);
-  }
+  return requestSentence(name, args, lang);
 }
 
 // Formats an ISO date/time into a short pt-BR text (or returns the original).
@@ -579,165 +350,12 @@ function formatWhen(s) {
 // whoever asked in English confirms in English and gets "E-mail enviado para ..."
 // in Portuguese back.
 export function describeDone(name, args = {}, language = null) {
-  if (name === 'jornada_concluir' && tagIdioma(language) === LEGACY_TEXT_LANGUAGE) return `Jornada concluída. Estou preparando suas sugestões de uso do ${marca().nome} e aviso aqui quando estiverem prontas.`;
-  if (name === 'jornada_refazer_devolutiva' && tagIdioma(language) === LEGACY_TEXT_LANGUAGE) return 'Estou preparando sua devolutiva novamente. Aviso aqui quando estiver pronta.';
   if (['calendar_create', 'outlook_calendar_create'].includes(name) && args.recorrencia !== undefined) {
     const { recorrencia, ...once } = args;
     return `${describeDone(name, once, language)} ${recurrenceLabel(recorrencia, args.start || args.inicio, args.timezone || args.fuso, language)}`;
   }
   const lang = language ? tagIdioma(language) : defaultLanguage();
-  if (lang !== LEGACY_TEXT_LANGUAGE) {
-    const t = feitoEm(lang, name, args);
-    if (t) return t;
-  }
-  { const t = portaoTexto(LEGACY_TEXT_LANGUAGE, name, args, 1); if (t) return t; }
-  switch (name) {
-    case 'gmail_send':
-      return `E-mail enviado para ${args.to || 'o destinatário'}${args.subject ? ` com o assunto "${args.subject}"` : ''}${copiaLabel(args.cc)}.`;
-    case 'hotmail_send':
-      return `E-mail (Hotmail/Outlook) enviado para ${args.to || 'o destinatário'}${args.subject ? ` com o assunto "${args.subject}"` : ''}${copiaLabel(args.cc)}.`;
-    case 'gmail_label_delete':
-      return `Marcador "${args.marcador || ''}" apagado do seu Gmail.`;
-    case 'gmail_filter_create':
-      return 'Regra de roteamento criada no seu Gmail (vale pros próximos e-mails).';
-    case 'gmail_filter_delete':
-      return 'Regra de roteamento apagada do seu Gmail.';
-    case 'calendar_create': {
-      const when = formatWhen(args.start);
-      const tz = args.timezone ? ` (${args.timezone})` : '';
-      return `Evento "${args.summary || args.title || 'sem título'}" criado na sua agenda${when ? ` para ${when}${tz}` : ''}.`;
-    }
-    case 'calendar_update': {
-      const parts = [];
-      if (args.title != null) parts.push(`título "${args.title}"`);
-      if (args.start != null) parts.push(`horário ${formatWhen(args.start)}${args.timezone ? ` (${args.timezone})` : ''}`);
-      if (args.location != null) parts.push(`local "${args.location}"`);
-      if (args.description != null) parts.push('descrição');
-      if (args.attendees?.length) parts.push('convidados');
-      return `Evento atualizado${parts.length ? `: ${parts.join(', ')}` : ''}.`;
-    }
-    case 'calendar_delete':
-      return 'Evento apagado da sua agenda.';
-    case 'outlook_calendar_create': {
-      const when = formatWhen(args.inicio);
-      return `Evento "${args.titulo || 'sem título'}" criado na agenda do Outlook${when ? ` para ${when}` : ''}.`;
-    }
-    case 'outlook_calendar_update': {
-      const parts = [];
-      if (args.titulo != null) parts.push(`título "${args.titulo}"`);
-      if (args.inicio != null) parts.push(`horário ${formatWhen(args.inicio)}`);
-      if (args.local != null) parts.push(`local "${args.local}"`);
-      if (args.descricao != null) parts.push('descrição');
-      if (args.convidados != null) parts.push('convidados');
-      return `Evento do Outlook atualizado${parts.length ? `: ${parts.join(', ')}` : ''}.`;
-    }
-    case 'outlook_calendar_delete':
-      return 'Evento apagado da agenda do Outlook.';
-    case 'drive_upload':
-      return `Arquivo "${args.name || args.filename || 'sem nome'}" enviado pro seu Drive.`;
-    case 'drive_upload_arquivo':
-      return `Arquivo "${args.nome || 'sem nome'}" enviado pro seu Drive.`;
-    case 'enviar_para_drive':
-      return `Cópia${args.nome ? ` de "${args.nome}"` : ''} enviada pro seu Google Drive.`;
-    case 'docs_create':
-      return `Google Doc "${args.name || 'sem nome'}" criado no seu Drive.`;
-    case 'drive_export_pdf':
-      return 'PDF gerado e salvo no seu Drive.';
-    case 'onedrive_upload':
-    case 'onedrive_upload_arquivo':
-      return `Arquivo "${args.nome || 'sem nome'}" enviado pro seu OneDrive.`;
-    case 'github_create_issue':
-      return `Issue criada${args.repo ? ` em ${args.repo}` : ''}: "${args.title || ''}".`;
-    case 'github_comment_issue':
-      return `Comentário publicado na issue ${args.repo || ''}#${args.number ?? args.issue ?? ''}.`;
-    case 'slack_post_message':
-      return `Mensagem postada no Slack${args.channel ? ` (canal ${args.channel})` : ''}.`;
-    case 'linkedin_post':
-      return 'Post publicado no seu LinkedIn.';
-    case 'confirmar_com_agente':
-      return `Decisão enviada ao assistente de ${args.contato || 'seu contato'}.`;
-    case 'responder_decisao':
-      return `Resposta ${args.aceito ? 'de confirmação' : 'de recusa'} enviada ao assistente do contato.`;
-    case 'rodar_no_servidor':
-      return `Comando executado no servidor${args.host ? ` ${args.host}` : ''}.`;
-    case 'editar_arquivo':
-      return `Arquivo ${args.caminho || ''} editado.`;
-    case 'escrever_arquivo':
-      return `Arquivo ${args.caminho || ''} gravado.`;
-    case 'rodar_comando':
-      return `Comando executado no servidor${args.host ? ` ${args.host}` : ''}.`;
-    case 'git_commit':
-      return `Commit feito${args.diretorio ? ` em ${args.diretorio}` : ''}: "${args.mensagem || ''}".`;
-    case 'git_push':
-      return `Push feito${args.branch ? ` da branch ${args.branch}` : ' da branch atual'} pro remote ${args.remote || 'origin'}.`;
-    case 'git_branch':
-      return `Branch "${args.nome || ''}" criada e ativa.`;
-    case 'git_checkout':
-      return `Mudei pra "${args.ref || ''}".`;
-    case 'gerenciar_tarefa_de_app':
-      return args.acao === 'cancelar' ? 'Tarefa cancelada; rascunho preservado.' : 'Escopo atualizado; progresso e consumo preservados. Nada foi editado, testado ou publicado nesta confirmação. Peça para continuar quando quiser iniciar.';
-    case 'publicar_sistema':
-      return `Sistema "${args.nome_do_sistema || ''}" publicado no seu subdomínio.`;
-    case 'apagar_sistema':
-      return `Sistema "${args.nome_do_sistema || ''}" apagado de vez (código, histórico, dados, segredos do cofre e acessos de colaboradores). Não dá pra recuperar.`;
-    case 'replicar_sistema':
-      return `App replicado no seu subdomínio${args.novo_nome ? ` como "${args.novo_nome}"` : ''}.`;
-    case 'voltar_versao':
-      return `Sistema "${args.nome_do_sistema || ''}" revertido para a versão ${args.versao || ''}.`;
-    case 'criar_rotina':
-      return `Rotina "${args.titulo || 'sem título'}" criada: roda ${cadenciaFrase(args)}${args.canal ? ` (${canalLabel(args.canal, { verbo: 'entrega', detalhe: false })})` : ''}. Vou executá-la sozinho a partir da próxima vez que der o horário.`;
-    case 'editar_rotina':
-      return `Rotina ${args.novo_titulo || args.titulo ? `"${args.novo_titulo || args.titulo}"` : `#${String(args.id || '').replace(/^#/, '')}`} atualizada no lugar (a versão antiga rodou normalmente até agora).`;
-    case 'convidar_colaborador':
-      return `${args.contato || 'O contato'} agora colabora no sistema "${args.nome_do_sistema || ''}" (edita o código e opera os mesmos dados).`;
-    case 'convidar_para_espaco':
-      return `${args.contato || 'O contato'} agora participa do Space "${args.espaco || ''}".`;
-    case 'instalar_skill':
-      return `Skill "${args.skill || ''}"${args.de ? ` de ${args.de}` : ''} instalada neste assistente.`;
-    case 'compartilhar_skill':
-      return `Skill "${args.skill || ''}" compartilhada com ${args.contato || 'o contato'} (ele já pode instalá-la).`;
-    case 'rodar_skill':
-      return `Script da Skill "${args.skill || ''}" executado no sandbox.`;
-    case 'canva_criar':
-      return 'Pronto no seu Canva.';
-    case 'canva_editar':
-      return 'Design alterado no seu Canva.';
-    case 'notion_create_page':
-      return `Página "${args.titulo || ''}" criada no seu Notion.`;
-    case 'notion_append':
-      return 'Texto acrescentado à página do seu Notion.';
-    case 'infinity_criar_item':
-      return 'Item criado no Infinity.';
-    case 'infinity_editar_item':
-      return 'Item atualizado no Infinity.';
-    case 'infinity_comentar':
-      return 'Comentário publicado no Infinity.';
-    case 'splitwise_add_expense':
-      return `Despesa "${args.descricao || ''}" (${args.moeda || 'BRL'} ${args.valor ?? ''}) lançada no Splitwise, dividida igualmente.`;
-    case 'asaas_receber_pix':
-      return 'Recebimento Pix preparado na sua conta Asaas.';
-    case 'asaas_pagar_conta':
-      return `Pagamento${args.valor != null ? ` de R$ ${args.valor}` : ''} confirmado pela Asaas${args.agendar_para ? ` (agendado para ${args.agendar_para})` : ''}.`;
-    case 'asaas_cancelar_pagamento_conta':
-      return 'Pagamento de conta cancelado pela Asaas. Ele não será executado.';
-    case 'asaas_transferir_pix':
-      return `PIX de R$ ${args.valor ?? ''} enviado pela sua conta Asaas para a chave ${args.chave_pix || ''}${args.agendar_para ? ` (agendado para ${args.agendar_para})` : ''}.`;
-    case 'asaas_enviar_comprovante_email':
-      return `Comprovante enviado por e-mail para ${args.para || 'o destinatário'}.`;
-    case 'salvar_credencial':
-      return `API key de ${args.servico || 'serviço'} guardada no Cofre (cifrada).`;
-    // Header only: the request detail (number, total, Pix) comes in the body that
-    // the tool itself returns and renderConfirmed glues in below.
-    case 'fechar_pedido':
-      return 'Pedido feito na loja. Falta só o pagamento:';
-    // Same idea: the body (account holder, branch/account and the NEXT step, just
-    // one) comes from the tool itself. The header doesn't repeat "Asaas" nor
-    // announce a pending list: the process was already explained before it opened.
-    case 'criar_conta_brambs':
-      return `Conta ${marca().nome} aberta no seu nome.`;
-    default:
-      return lang === LEGACY_TEXT_LANGUAGE ? `Ação "${name}" concluída.` : molduraEm(lang).acaoFeita(name);
-  }
+  return doneSentence(name, args, lang);
 }
 
 // Builds the CLEAN response after executing a confirmed action. Never exposes the
@@ -754,7 +372,6 @@ export function describeDone(name, args = {}, language = null) {
 const FRASE_PRONTA_PT = new Set(['criar_rotina']);
 export function renderConfirmed(pend, r) {
   const lang = pend?.language ? tagIdioma(pend.language) : defaultLanguage();
-  const m18n = lang === LEGACY_TEXT_LANGUAGE ? null : molduraEm(lang);
   const feito = () => describeDone(pend.name, pend.args, pend.language);
   let data = null;
   if (r && typeof r === 'object') data = r;
@@ -772,7 +389,7 @@ export function renderConfirmed(pend, r) {
       // language. Only where the translated sentence says exactly the same fact;
       // for a sending tool the text might say "scheduled" and the translation
       // would say "sent".
-      const traduzido = m18n && FRASE_PRONTA_PT.has(pend.name) ? feitoEm(lang, pend.name, pend.args) : null;
+      const traduzido = lang !== LEGACY_TEXT_LANGUAGE && FRASE_PRONTA_PT.has(pend.name) ? doneSentence(pend.name, pend.args, lang) : null;
       return traduzido || t;
     }
   }
@@ -839,10 +456,10 @@ export function renderConfirmed(pend, r) {
     // instead of the failure reason. What they need is: what failed, in one
     // line, and what to do now.
     const resumo = String(pend.label || '').split('\n')[0].trim().replace(/[.:]\s*$/, '');
-    const cabeca = m18n ? m18n.falhou(resumo) : `Não consegui concluir: ${resumo}.`;
+    const cabeca = failedSentence(resumo, lang);
     let m = `❌ ${cabeca}${data.error ? ' ' + data.error : ''}`;
     if (out) m += `\n\n${out}`;
-    if (err) m += `\n\n${m18n ? m18n.stderr : '_stderr:_'}\n${err}`;
+    if (err) m += `\n\n${stderrLabel(lang)}\n${err}`;
     return m;
   }
   if (pend?.name === 'asaas_receber_pix') {
@@ -897,7 +514,7 @@ export function renderConfirmed(pend, r) {
   }
   let msg = receiptText || `✅ ${feito()}`;
   if (out) msg += `\n\n${out}`;
-  if (err) msg += `\n\n${m18n ? m18n.stderr : '_stderr:_'}\n${err}`;
+  if (err) msg += `\n\n${stderrLabel(lang)}\n${err}`;
   if (data?.conta_usada) msg += `\n${lang === 'en' ? 'Account used' : lang === 'es' ? 'Cuenta utilizada' : 'Conta usada'}: ${data.conta_usada}`;
   const rawLink = data && (data.link || data.url || data.htmlLink || data.comprovante);
   const link = rawLink && (shareableLink(rawLink) || rawLink);
