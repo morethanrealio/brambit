@@ -36,7 +36,7 @@ try {
  eq(mergeThreadHistory([{a:1,b:2}],[{b:2,a:1},{role:'assistant',content:'append'}],[{role:'assistant',content:'compact'}]),[{role:'assistant',content:'compact'},{role:'assistant',content:'append'}]);
  assert.throws(()=>mergeThreadHistory([], [{role:'user',content:'other turn'}], []),/CONFLICT/);checks++;
  // Existing FIFO wrapper still serializes, reloads fresh history, and recovers failure.
- const a=server.indexOf('const _threadTurnChains = new Map();'),bidx=server.indexOf('// ── Housekeeping',a);
+ const a=server.indexOf('const _threadTurnChains = new Map();'),bidx=server.indexOf('\n}\n',server.indexOf('function withThreadLock(',a))+2;
  const lock=Function(server.slice(a,bidx)+';return withThreadLock')();let release;const gate=new Promise(r=>release=r),order=[];
  const first=lock('same',async()=>{order.push(1);await gate;order.push(2);});const second=lock('same',async()=>order.push(3));await lock('other',async()=>order.push(4));eq(order,[1,4]);release();await Promise.all([first,second]);eq(order,[1,4,2,3]);await assert.rejects(()=>lock('same',async()=>{throw Error('fake')}));checks++;eq(await lock('same',async()=>7),7);
  console.log(`PASS ${checks}: actual DB append/turn transactions, rollback, ownership, concurrent arrivals and existing FIFO; local PGlite, no real I/O`);

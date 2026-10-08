@@ -44,7 +44,7 @@ const longFinal=await finalizeCuration({text:JSON.stringify(longChecks),config:c
 eq(longFinal.executionStatus,'partial');eq(longFinal.urls.length,4);ok(!longFinal.diagnostic);eq(longFinal.audit.acceptedBySection[0].searchStatus,'partial');ok(!longFinal.text.includes('somente os itens aceitos pelos filtros determinísticos'));
 for(const internal of ['Curadoria parcial','Limitação da pesquisa','Faltam ','candidato(s)','conferência HTTP'])ok(!longFinal.text.includes(internal));
 const serverSource=readFileSync('web/server.mjs','utf8');
-ok(serverSource.includes('text = curationResult ? text : searchCoverage.finish(text, userLang,'));
+ok(serverSource.includes('text = curationResult ? text : searchCoverage.finish(text, idiomaResposta,'));
 ok(serverSource.includes('audit:curationResult.audit'));
 
 // The real receipt overrides the model's false reinterpretation.

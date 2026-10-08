@@ -130,7 +130,7 @@ const preA=server.indexOf('  let curationHistory = null;'),preB=server.indexOf('
 const preflight=new AsyncFunction('kind','opts','userId','curationStore','normalizeCurationConfig','thread','agent','message','saveThreadTurn','createCurationEvidence','const baseHistory=structuredClone(thread.history||[]);'+server.slice(preA,preB));
 const stopped=await preflight('routine',{curationConfig:cfg,routineId:uuid(21)},uuid(2),{history:async()=>{throw Error('offline');}},normalizeCurationConfig,{id:uuid(41),history:[]},{id:uuid(31)},'synthetic',async()=>stored++,createCurationEvidence);eq(stored,1);eq(stopped.curation.urls,[]);eq(stopped.curation.executionStatus,'failed');ok(stopped.text.includes('Não iniciei novas buscas'));
 ok(server.includes("preview: ['flight-monitor-v1','curation-v1'].includes(text?.type) ? text.text : text"));
-ok(server.includes('text = curationResult ? text : searchCoverage.finish(text, userLang,'));
+ok(server.includes('text = curationResult ? text : searchCoverage.finish(text, idiomaResposta,'));
 ok(server.includes('audit:curationResult.audit'));
 const exclusionConfig={...cfg,excludeUrls:[url(1)+'?utm_source=old']};
 const excluded=await finalizeCuration({text:manifest,config:exclusionConfig,...scope,history:[],now:'2026-09-11T15:00:00Z'},{checkLinks});eq(excluded.urls.includes(url(1)),false);eq(excluded.coverageSatisfied,false);eq(excluded.audit.discarded.windowSectionOrExclusion,1);ok(!excluded.text.includes('exclusão manual'));
