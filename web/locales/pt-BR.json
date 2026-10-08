@@ -990,7 +990,7 @@
     "network_error": "Falha de rede.",
     "copied": "Copiado."
   },
-  "atendimento_page": {
+  "public_service_page": {
     "page_title": "Atendimento ao público · {brand}",
     "back": "voltar ao app",
     "title": "Atendimento ao público",
@@ -1035,7 +1035,7 @@
       "name": "Seu nome",
       "e_g_ana": "ex: Ana",
       "email": "E-mail",
-      "voce_email_com": "voce@email.com",
+      "email_placeholder": "voce@email.com",
       "password": "Senha",
       "min_12_characters": "mín. 12 caracteres",
       "show": "Mostrar",
@@ -1066,7 +1066,7 @@
       "reset_password": "Redefinir senha",
       "enter_email_we_will": "Digite seu e-mail e enviaremos um link pra criar uma senha nova.",
       "email": "E-mail",
-      "voce_email_com": "voce@email.com",
+      "email_placeholder": "voce@email.com",
       "send_link": "Enviar link",
       "back_login": "Voltar para o login"
     },
@@ -1169,7 +1169,7 @@
     "home": {
       "open_contacts": "Abrir Contatos",
       "dismiss": "Dispensar",
-      "ver_convite": "Ver convite",
+      "view_invite": "Ver convite",
       "write_here_what_need": "Escreva aqui o que você precisa que o seu assistente faça…",
       "start": "Iniciar →",
       "chats": "Conversas"
@@ -1255,16 +1255,16 @@
       "which_assistant_replies_extension": "Qual assistente atende na extensão?",
       "save": "Salvar",
       "which_assistant_uses_runner": "Qual assistente usa o Runner?",
-      "atendimento_ao_publico": "Atendimento ao público",
-      "um_assistente_seu_responde": "Um assistente seu responde quem escreve pro número de WhatsApp desta instalação sem ter conta. Configure, veja as conversas e bloqueie ou apague contatos.",
-      "abrir_atendimento": "Abrir atendimento",
+      "public_service": "Atendimento ao público",
+      "public_service_lead": "Um assistente seu responde quem escreve pro número de WhatsApp desta instalação sem ter conta. Configure, veja as conversas e bloqueie ou apague contatos.",
+      "open_public_service": "Abrir atendimento",
       "number_with_country_area": "Seu número (com país e DDD)",
       "e_g_5511999998888": "ex: 5511999998888",
       "which_assistant_answers_whatsapp": "Qual assistente atende no WhatsApp?",
       "i_want_exchange_messages": "Quero trocar mensagens com meu assistente no WhatsApp.",
       "connect_whatsapp": "Conectar WhatsApp",
-      "confirmar_no_whatsapp": "💬 Confirmar no WhatsApp",
-      "usar_outro_numero": "Usar outro número",
+      "confirm_on_whatsapp": "💬 Confirmar no WhatsApp",
+      "use_another_number": "Usar outro número",
       "send_message_now": "💬 Mandar mensagem agora",
       "disconnect": "Desconectar",
       "credentials_vault": "Cofre de credenciais",
@@ -1338,7 +1338,7 @@
       "use_my_data": "Uso dos meus dados",
       "do_not_use_my": "<0>Não usar</0> minhas conversas e arquivos para melhorar o {brand}.",
       "applies_from_now_while": "Vale a partir de agora e enquanto ficar ligado: o conteúdo criado nesse período fica de fora para sempre, mesmo que você desligue depois. Detalhes na <0>Política de Privacidade</0>.",
-      "empresa": "Empresa"
+      "company": "Empresa"
     },
     "credits": {
       "usage_this_month": "Uso do mês",
@@ -1362,6 +1362,147 @@
     },
     "app": {
       "remember": "Para lembrar"
+    }
+  },
+  "index_script": {
+    "net": {
+      "connection_dropped": "Parece que a internet oscilou por aqui. Tenta de novo em instantes.",
+      "images_too_large": "As imagens ficaram grandes demais pro envio. Tenta mandar uma de cada vez.",
+      "server_problem": "Tive um problema no servidor ({status}). Tenta de novo."
+    },
+    "chat": {
+      "default_pdf_name": "documento.pdf",
+      "default_doc_name": "documento",
+      "view_product": "Ver produto",
+      "image_from_assistant": "Imagem enviada pelo assistente",
+      "open_attachment": "abrir anexo"
+    },
+    "auth": {
+      "create_account": "Criar conta",
+      "log_in": "Entrar",
+      "signup_lead": "Crie sua conta pra começar.",
+      "login_lead": "Acesse sua conta pra falar com seus assistentes.",
+      "have_account": "Já tem cadastro?",
+      "no_account": "Não tem conta?",
+      "enter_email": "Informe seu e-mail.",
+      "reset_link_sent": "Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha.",
+      "hide": "Ocultar",
+      "show": "Mostrar",
+      "password_too_short": "A senha precisa ter no mínimo 12 caracteres.",
+      "invalid_reset_link": "Link inválido. Peça um novo em \"Esqueci minha senha\".",
+      "password_reset": "Senha redefinida.",
+      "redirecting_to_login": "Redirecionando para o login...",
+      "hide_password": "Ocultar senha",
+      "show_password": "Mostrar senha",
+      "enter_name": "Informe seu nome.",
+      "enter_email_password": "Preencha e-mail e senha.",
+      "accept_terms": "Você precisa aceitar os Termos de Uso e a Política de Privacidade.",
+      "waitlist_title": "Você entrou na fila 🎉",
+      "waitlist_text": "Assim que o {brand} abrir novas vagas, a gente te avisa por e-mail."
+    },
+    "connections": {
+      "google_connected": "Conectado: {services} (só leitura). Seus agentes já podem usar.",
+      "reconnect_review": "Reconectar / revisar acesso",
+      "google_prompt": "Conecte sua conta Google pra dar acesso a Gmail, Agenda, Drive e Docs aos seus agentes (só leitura).",
+      "connect_google": "Conectar Google",
+      "primary_tag": "(principal)",
+      "no_data_access": "sem acesso a dados",
+      "make_primary": "Tornar principal",
+      "make_primary_hint": "Conta usada por padrão pelos assistentes que não têm conta própria escolhida",
+      "reconnect": "Reconectar",
+      "reconnect_hint": "Revisar/renovar o acesso desta conta",
+      "remove": "Remover",
+      "remove_google_confirm": "Remover o acesso a {email}? Os agentes vinculados a essa conta ficam sem conta até você escolher outra.",
+      "add_google_account": "Adicionar outra conta Google",
+      "connected": "conectado",
+      "connect": "Conectar",
+      "disconnect": "Desconectar",
+      "github_desc": "repositórios, issues e pull requests",
+      "slack_desc": "canais e mensagens",
+      "nuvemshop_desc": "vendas, pedidos, catálogo e estoque",
+      "microsoft_desc": "e-mail, agenda do Outlook e arquivos do OneDrive",
+      "linkedin_desc": "publicar posts no seu perfil (texto/link)",
+      "notion_desc": "ler e escrever nas páginas que você liberar",
+      "canva_desc": "buscar, criar e editar seus designs",
+      "choose_assistant": "Escolha um assistente…",
+      "google_calendar": "Agenda"
+    },
+    "contacts": {
+      "someone": "alguém",
+      "people": "{count} pessoas",
+      "wants_to_connect_one": "{who} quer conectar o assistente com você.",
+      "wants_to_connect_other": "{who} querem conectar o assistente com você.",
+      "empty": "Nenhum contato ainda. Convide alguém pelo e-mail abaixo.",
+      "contact": "contato",
+      "connected": "conectado",
+      "receives_via": "Recebe por:",
+      "choose_assistant": "(escolha um assistente)",
+      "invite_sent": "convite enviado",
+      "invited_you": "convidou você",
+      "accept": "Aceitar",
+      "decline": "Recusar",
+      "declined": "recusado",
+      "enter_email": "Informe o e-mail da pessoa."
+    },
+    "spaces": {
+      "empty": "Nenhum Space ainda. Peça ao seu assistente pra criar um (ex: \"cria um Space de plantas\").",
+      "yours": "seu",
+      "owned_by": "de {owner}",
+      "counts": "{members} membro(s) · {notes} anotações",
+      "what_goes_in": "O que entra no espaço:",
+      "mode_auto": "o assistente decide",
+      "mode_manual": "só o que eu mandar",
+      "mode_manual_owner": "só o que o dono mandar",
+      "mode_line": "Modo: {mode} (definido pelo dono)"
+    },
+    "skills": {
+      "verified": "verificada",
+      "shared": "compartilhada",
+      "empty": "Nenhuma Skill ainda. Peça ao seu assistente pra criar uma (ex: \"cria uma skill de lista de compras\").",
+      "yours": "Suas Skills",
+      "installs": "{installs} instalação(ões)",
+      "mark_verified": "marcar como verificada",
+      "when_to_use": "quando usar:",
+      "installed_from_contacts": "Instaladas de contatos",
+      "by_owner": "de {owner}",
+      "star_of_5": "{star} de 5",
+      "no_ratings": "Sem avaliações ainda",
+      "votes_one": "{count} voto",
+      "votes_other": "{count} votos"
+    },
+    "library": {
+      "no_results": "Nenhuma habilidade encontrada pra essa busca.",
+      "empty": "Nenhuma habilidade na biblioteca ainda.",
+      "category_general": "Geral",
+      "installed_count": "{installs} instalada(s)",
+      "installed": "Já instalada",
+      "install": "Instalar",
+      "installing": "Instalando..."
+    },
+    "vault": {
+      "kind_apikey": "Chave de API",
+      "kind_token": "Token",
+      "kind_basic": "Usuário:senha",
+      "kind_ssh_key": "Chave SSH",
+      "empty": "Nenhuma credencial guardada ainda.",
+      "remove": "Remover",
+      "enter_service": "Informe o serviço.",
+      "paste_secret": "Cole a credencial."
+    },
+    "asc": {
+      "not_connected": "Não conectado.",
+      "connected": "Conectado",
+      "enter_ids": "Informe o Issuer ID e o Key ID.",
+      "select_p8": "Selecione o arquivo .p8.",
+      "read_p8_failed": "Não consegui ler o arquivo .p8.",
+      "invalid_p8": "O arquivo não parece uma chave .p8 válida."
+    },
+    "whatsapp": {
+      "linked": "Número {phone} conectado. Toque em {button} e envie a primeira mensagem pra ativar a conversa. (Depois, mande \"menu\" no WhatsApp pra trocar de assistente.)",
+      "send_now": "Mandar mensagem agora",
+      "greeting_named": "Oi {name}!",
+      "greeting": "Oi!",
+      "connect_prompt": "Conecte seu número pra falar com seus assistentes pelo WhatsApp. Troca de assistente com \"@nome\" ou \"menu\"."
     }
   }
 }
