@@ -60,7 +60,7 @@ test('real server entrypoint boots three times against owned PostgreSQL; migrati
     assert.equal(result.status,200,result.body+output);const period=JSON.parse(result.body).period;
     assert.equal(period.from,'2026-09-01T03:00:00.000Z');assert.equal(period.to,'2026-09-22T03:00:00.000Z');
    }
-   assert.doesNotMatch(output,/SQL_VIRADA_SETEMBRO is not defined|ReferenceError|SyntaxError|Falha ao inicializar o banco/);
+   assert.doesNotMatch(output,/SQL_VIRADA_SETEMBRO is not defined|ReferenceError|SyntaxError|Failed to initialize the database/);
    assert.equal(await stop(),0,'server must exit cleanly on SIGTERM');console.log(`boot ${pass+1}: production entrypoint + HTTP200 + auth401; synthetic DB only`);
    if(pass===0){
     await db.query(await fs.readFile(path.join(repo,'migrations/2026-09-12-execution-credit.sql'),'utf8'));
