@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Compara o router.py/ctl.py ao lado deste script (o que está instalado) e a marca
-# com o que de fato roda na box de apps.
-# SÓ LÊ: nenhuma escrita, nenhum restart. Sai 1 se houver divergência.
+# Compares the router.py/ctl.py next to this script (what is installed) and the
+# brand file with what actually runs on the apps host.
+# READ-ONLY: no write, no restart. Exits 1 if there is a divergence.
 #
-# Roda numa máquina com a chave do canal de controle (APPS_HOST_SSH/APPS_HOST_KEY
-# no ambiente ou no .env da pasta de onde é chamado):
-#   ops/apps-host/check-drift.sh [--marca <arquivo>] [--carimbo <versão>]
-# --marca: marca.json opcional (padrão: o que estiver ao lado deste script).
-# --carimbo: versão esperada, só mostrada (padrão: commit da pasta de onde é chamado).
+# Runs on a machine that has the control-channel key (APPS_HOST_SSH/APPS_HOST_KEY
+# in the environment or in the .env of the folder it is called from):
+#   ops/apps-host/check-drift.sh [--marca <file>] [--carimbo <version>]
+# --marca: optional marca.json (default: whatever is next to this script).
+# --carimbo: expected version, only displayed (default: commit of the folder it is called from).
 set -uo pipefail
 AQUI=$(cd "$(dirname "$0")" && pwd)
-# Le SO as duas chaves do .env, sem executar o arquivo: tem valor com $ solto la dentro.
+# Reads ONLY the two keys from .env, without executing the file: it has loose $ values in there.
 env_get() { [ -f .env ] || return 0; sed -n "s/^$1=//p" .env | tail -1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//"; }
 APPS_HOST_SSH="${APPS_HOST_SSH:-$(env_get APPS_HOST_SSH)}"
 APPS_HOST_KEY="${APPS_HOST_KEY:-$(env_get APPS_HOST_KEY)}"
@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --marca) MARCA="${2:?--marca precisa de um arquivo}"; shift ;;
     --carimbo) SHA="${2:?--carimbo precisa de um valor}"; shift ;;
-    HEAD) ;;  # jeito antigo de chamar, logo depois do pull: o disco já é o HEAD
+    HEAD) ;;  # old way of calling it, right after the pull: the disk is already HEAD
     *) echo "uso: check-drift.sh [--marca <arquivo>] [--carimbo <versão>]"; exit 2 ;;
   esac
   shift
@@ -31,11 +31,11 @@ if [ -z "$MARCA" ] && [ -f "$AQUI/marca.json" ]; then MARCA="$AQUI/marca.json"; 
 [ -z "$MARCA" ] || [ -f "$MARCA" ] || { echo "não achei a marca $MARCA"; exit 1; }
 [ -n "$SHA" ] || SHA=$(git rev-parse --short HEAD 2>/dev/null) || SHA=sem-versao
 
-# -n fecha o stdin: sem isso o ssh engole o herestring do while e o loop para na 1a linha.
+# -n closes stdin: without it ssh swallows the while loop's herestring and the loop stops at the 1st line.
 rssh() { ssh -n -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
               -o ConnectTimeout=10 "$APPS_HOST_SSH" "$@"; }
 
-# arquivo instalado : caminho na box (marca.json é opcional)
+# installed file : path on the host (marca.json is optional)
 MAP="$AQUI/router.py:/opt/brambs-router/router.py
 $AQUI/ctl.py:/opt/brambs-ctl/ctl.py
 ${MARCA:+$MARCA:/opt/brambs-router/marca.json}"

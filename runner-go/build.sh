@@ -1,17 +1,17 @@
 #!/bin/sh
-# Gera os executáveis do Runner que a página /runner oferece pra baixar.
+# Builds the Runner executables that the /runner page offers for download.
 #
-#   PRODUTO  nome da marca, igual ao do servidor (marca().nome). Padrão: Brambit.
-#   SITE     endereço do servidor que o Runner chama. Padrão: http://localhost:8080.
-#   SLUG     prefixo dos arquivos e das variáveis (brambit-runner-linux,
-#            BRAMBIT_RUNNER_TOKEN). Padrão: PRODUTO em minúsculas, só letras e
-#            números, a mesma regra do slugDaMarca() do servidor. Com acento no
-#            nome, passe o SLUG à mão.
-#   SAIDA    pasta dos executáveis. Padrão: web/public/runner-bin.
-#   ICONE_WINDOWS  .syso com o ícone do .exe (opcional; sem ele, ícone padrão).
+#   PRODUTO  brand name, same as the server's (marca().nome). Default: Brambit.
+#   SITE     address of the server the Runner calls. Default: http://localhost:8080.
+#   SLUG     prefix for the files and the variables (brambit-runner-linux,
+#            BRAMBIT_RUNNER_TOKEN). Default: PRODUTO lowercased, letters and
+#            digits only, same rule as the server's slugDaMarca(). If the name has
+#            an accent, pass SLUG by hand.
+#   SAIDA    output folder for the executables. Default: web/public/runner-bin.
+#   ICONE_WINDOWS  .syso with the .exe's icon (optional; without it, default icon).
 #
-# O app do Mac (zip com o .app, botão "Baixar para Mac") não sai daqui: é o
-# executável do Mac embrulhado num .app, montado à parte.
+# The Mac app (zip with the .app, "Download for Mac" button) doesn't come from here: it's the
+# Mac executable wrapped in a .app, assembled separately.
 set -eu
 cd "$(dirname "$0")"
 PRODUTO="${PRODUTO:-Brambit}"
@@ -21,15 +21,15 @@ SAIDA="${SAIDA:-../web/public/runner-bin}"
 mkdir -p "$SAIDA"
 X="-X 'main.produto=$PRODUTO' -X 'main.slug=$SLUG' -X 'main.siteURL=$SITE'"
 
-gerar() { # GOOS GOARCH arquivo [flags extras de link]
+gerar() { # GOOS GOARCH file [extra link flags]
   CGO_ENABLED=0 GOOS="$1" GOARCH="$2" go build -trimpath -ldflags="${4:-} -s -w $X" -o "$SAIDA/$3" .
   echo "gerado: $SAIDA/$3"
 }
 gerar darwin arm64 "$SLUG-runner-macos-arm64"
 gerar darwin amd64 "$SLUG-runner-macos-intel"
 gerar linux amd64 "$SLUG-runner-linux"
-# -H windowsgui NÃO é opcional: sem ela o .exe sai como programa de console e
-# abre uma janela de terminal preta a cada execução (ver README).
+# -H windowsgui is NOT optional: without it the .exe comes out as a console program and
+# opens a black terminal window on every run (see README).
 if [ -n "${ICONE_WINDOWS:-}" ]; then
   cp "$ICONE_WINDOWS" rsrc_windows_amd64.syso
   trap 'rm -f rsrc_windows_amd64.syso' EXIT

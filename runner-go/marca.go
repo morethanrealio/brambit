@@ -2,21 +2,21 @@ package main
 
 import "strings"
 
-// Marca do Runner, escolhida na hora de gerar o programa (build.sh passa por
-// -ldflags -X), pra quem instala o servidor gerar o próprio Runner sem mexer no
-// fonte. Sem nada, é o do núcleo: "Brambit Runner", ~/.brambit-runner.json,
-// BRAMBIT_RUNNER_TOKEN. slug tem que ser o mesmo do servidor (slugDaMarca, em
-// web/marca.mjs): é dele que saem os nomes dos executáveis e os comandos da /runner.
+// Runner brand, chosen when building the binary (build.sh passes it via
+// -ldflags -X), so whoever installs the server can generate their own Runner without
+// touching the source. With nothing set, it's the core's: "Brambit Runner", ~/.brambit-runner.json,
+// BRAMBIT_RUNNER_TOKEN. slug has to match the server's (slugDaMarca, in
+// web/marca.mjs): it's where the executable names and the /runner commands come from.
 var (
 	produto = "Brambit"
 	slug    = "brambit"
 	siteURL = "http://localhost:8080"
 )
 
-// "Brambit Runner": como o programa se apresenta pro dono.
+// "Brambit Runner": how the program introduces itself to the owner.
 func nomeRunner() string { return produto + " Runner" }
 
-// Variável de ambiente com o prefixo da marca: envVar("RUNNER_TOKEN") = BRAMBIT_RUNNER_TOKEN.
+// Environment variable with the brand prefix: envVar("RUNNER_TOKEN") = BRAMBIT_RUNNER_TOKEN.
 func envVar(s string) string { return strings.ToUpper(slug) + "_" + s }
 
 // Server address as shown in text to the owner ("example.com/runner").

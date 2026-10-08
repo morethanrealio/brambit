@@ -1,5 +1,5 @@
 // Onboarding calendar-first. No arbitrary OAuth scope comes from the browser.
-// Escopo Microsoft é do conector, não do onboarding: mora em web/microsoft-scopes.mjs.
+// Microsoft scope belongs to the connector, not onboarding: it lives in web/microsoft-scopes.mjs.
 // @ts-expect-error runtime ESM legacy without declarations
 export {microsoftOnboardingScope,microsoftContextServices,microsoftToolAllowed} from '../web/microsoft-scopes.mjs';
 export function onboardingSources(google:string[],microsoft:string[]):string {

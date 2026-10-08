@@ -171,9 +171,9 @@ export function mountRoutines(root, deps) {
                 pair(locale === 'en' ? 'Last attempt' : locale === 'es' ? 'Último intento' : 'Última tentativa', health.label);
             const details = el('details');
             details.append(el('summary', t.details), el('p', r.prompt, 'routine-prompt'));
-            // Rotina tipada "busca_email": mostra a consulta que a plataforma executa
-            // (dado do servidor, texto puro). Mantida na fonte TS para o build não apagar
-            // o detalhe que já existe no bundle publicado.
+            // Typed "busca_email" routine: shows the query the platform runs
+            // (server data, plain text). Kept in the TS source so the build doesn't erase
+            // the detail that already exists in the published bundle.
             const es = r.config?.email_search;
             if (es && typeof es === 'object') {
                 const label = locale === 'en' ? 'E-mail search run by the platform' : locale === 'es' ? 'Búsqueda de correo ejecutada por la plataforma' : 'Busca de e-mail executada pela plataforma';

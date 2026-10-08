@@ -2,18 +2,21 @@
 """
 Apps router + scale-to-zero.
 
-Caddy (TLS on-demand na 443) faz reverse_proxy de TUDO pra este roteador
-(127.0.0.1:9081). O roteador:
-  - le o Host header -> label do subdominio (fulano)
-  - le o path -> 1o segmento = nome do sistema, resto = caminho do app
-  - procura no registry apps.json a chave "<label>/<sistema>"
-  - se a entrada tem "auth", EXIGE usuario/senha (HTTP Basic) antes de qualquer
-    coisa: app privado nem acorda o container pra quem nao esta autenticado
-  - garante o container de pe (docker start se dormindo) e espera responder
-  - faz path-strip e proxeia o request pro container (IP:porta na bridge)
-  - marca atividade; uma thread reaper para containers ociosos (scale-to-zero)
+Caddy (TLS on-demand on 443) does reverse_proxy of EVERYTHING to this router
+(127.0.0.1:9081). The router:
+  - reads the Host header -> subdomain label (someone)
+  - reads the path -> 1st segment = system name, rest = app path
+  - looks up the registry apps.json for the key "<label>/<system>"
+  - if the entry has "auth", REQUIRES user/password (HTTP Basic) before
+    anything else: a private app doesn't even wake the container for
+    whoever isn't authenticated
+  - ensures the container is up (docker start if sleeping) and waits for it
+    to respond
+  - does path-strip and proxies the request to the container (IP:port on
+    the bridge)
+  - marks activity; a reaper thread stops idle containers (scale-to-zero)
 
-Roda com stdlib pura (o host so tem python3, nao tem node).
+Runs on pure stdlib (the host only has python3, no node).
 """
 import base64, hashlib, hmac, json, os, re, secrets, subprocess, threading, time
 import urllib.request, urllib.error, http.client, errno
@@ -23,12 +26,12 @@ from html import escape as _attr
 REG_PATH     = os.environ.get("BRAMBS_REGISTRY", "/opt/brambs-router/apps.json")
 IKEY_PATH    = os.environ.get("BRAMBS_INTERNAL_KEY_FILE", "/opt/brambs-router/internal.key")
 USERS_PATH   = os.environ.get("BRAMBS_USERS", "/opt/brambs-router/users.json")
-HOME_ROOT    = os.environ.get("BRAMBS_HOME", "/opt/brambs-home")   # <label>.json = blocos da home
-IDLE_SECONDS = int(os.environ.get("BRAMBS_IDLE_SECONDS", "900"))   # 15 min ocioso -> dorme
-WAKE_TIMEOUT = int(os.environ.get("BRAMBS_WAKE_TIMEOUT", "20"))    # espera o container acordar
+HOME_ROOT    = os.environ.get("BRAMBS_HOME", "/opt/brambs-home")   # <label>.json = home blocks
+IDLE_SECONDS = int(os.environ.get("BRAMBS_IDLE_SECONDS", "900"))   # 15 min idle -> sleeps
+WAKE_TIMEOUT = int(os.environ.get("BRAMBS_WAKE_TIMEOUT", "20"))    # wait for the container to wake
 LISTEN       = ("127.0.0.1", int(os.environ.get("BRAMBS_PORT", "9081")))
 
-# ---- logging estruturado (parrudo, suporte de TODOS os apps) ----
+# ---- structured logging (sturdy, supports ALL apps) ----
 import logging, logging.handlers
 LOG_DIR = os.environ.get("BRAMBS_LOG_DIR", "/var/log/brambs")
 try:
@@ -58,8 +61,8 @@ def access_log(rec):
         pass
 
 _lock      = threading.Lock()
-_last_seen = {}   # container -> epoch do ultimo request
-_ip_cache  = {}   # container -> ip na bridge
+_last_seen = {}   # container -> epoch of the last request
+_ip_cache  = {}   # container -> ip on the bridge
 
 def load_registry():
     try:
@@ -69,18 +72,18 @@ def load_registry():
         return {}
 
 
-# ---------- portao de acesso (app privado) ----------
-# Entrada do registry pode ter:
-#   "auth": {"mode":"basic","user":"...","salt":"...","hash":"sha256(salt:senha)"}
-# Sem "auth" = URL aberta (todo app publicado antes de 31/08/2026 e assim, e
-# continua assim: trancar retroativamente quebraria link ja distribuido).
+# ---------- access gate (private app) ----------
+# Registry entry can have:
+#   "auth": {"mode":"basic","user":"...","salt":"...","hash":"sha256(salt:password)"}
+# No "auth" = open URL (every app published before 2026-08-31 is like this, and
+# stays that way: locking it retroactively would break an already-distributed link).
 #
-# Bypass interno: o proprio host precisa falar com app privado sem senha (o smoke
-# test do publish le o HTML pelo roteador). NAO da pra liberar por IP de origem:
-# o Caddy tambem proxeia de 127.0.0.1, ou seja TODO trafego de producao chega do
-# loopback -- liberar loopback seria abrir tudo. Entao: segredo compartilhado em
-# arquivo 0600, mandado no header X-Brambs-Internal, que o roteador SEMPRE remove
-# antes de repassar pro app.
+# Internal bypass: the host itself needs to talk to a private app without a
+# password (publish's smoke test reads the HTML through the router). Can't
+# allow by source IP: Caddy also proxies from 127.0.0.1, meaning ALL
+# production traffic arrives from loopback -- allowing loopback would open
+# everything. So: a shared secret in a 0600 file, sent in the X-Brambs-Internal
+# header, which the router ALWAYS strips before forwarding to the app.
 
 _ikey_cache = {"v": None}
 
@@ -95,8 +98,8 @@ def internal_key():
             return k
     except Exception:
         pass
-    # roteador subiu antes do primeiro publish: cria (O_EXCL resolve a corrida
-    # com o ctl.py, que tenta criar tambem)
+    # router came up before the first publish: create it (O_EXCL resolves the
+    # race with ctl.py, which also tries to create it)
     k = secrets.token_hex(32)
     try:
         os.makedirs(os.path.dirname(IKEY_PATH), exist_ok=True)
@@ -120,7 +123,7 @@ def _pwhash(salt, password):
 
 
 def _basic_creds(header):
-    """Parseia 'Basic base64(user:senha)'. Devolve (user, senha) ou (None, None)."""
+    """Parses 'Basic base64(user:password)'. Returns (user, password) or (None, None)."""
     if not header:
         return None, None
     parts = header.split(None, 1)
@@ -138,7 +141,7 @@ def _basic_creds(header):
 
 
 def auth_check(app, headers):
-    """'ok' (pode passar) | 'need' (401). Comparacao em tempo constante."""
+    """'ok' (can pass) | 'need' (401). Constant-time comparison."""
     auth = (app or {}).get("auth")
     if not auth or auth.get("mode") != "basic":
         return "ok"
@@ -179,7 +182,7 @@ def container_ip(name):
     return (r.stdout.strip() or None) if r.returncode == 0 else None
 
 def ensure_up(name, port):
-    """Sobe o container se estiver dormindo e espera ele responder. Devolve ip ou None."""
+    """Starts the container if it's sleeping and waits for it to respond. Returns ip or None."""
     with _lock:
         if not container_exists(name):
             return None
@@ -195,16 +198,17 @@ def ensure_up(name, port):
             urllib.request.urlopen(f"http://{ip}:{port}/", timeout=2)
             return ip
         except urllib.error.HTTPError:
-            return ip            # respondeu (ate erro HTTP) = de pe
+            return ip            # responded (even an HTTP error) = it's up
         except Exception:
             time.sleep(0.3)
-    return ip                    # ultima tentativa, deixa o proxy tratar
+    return ip                    # last attempt, let the proxy handle it
 
-# Marca do host: nome, site, logo e o texto do selo. Vem de um JSON opcional
-# (BRAMBS_MARCA_FILE, padrao /opt/brambs-router/marca.json, que o deploy.sh instala
-# quando o repositorio tem ops/apps-host/marca.json); sem ele, a marca neutra.
-# BRAMBS_SITE_URL e BRAMBS_LOGO_URL do ambiente da unit valem por cima. Lido no
-# boot: marca nova entra no restart que o deploy.sh ja faz.
+# Host brand: name, site, logo and the badge text. Comes from an optional JSON
+# (BRAMBS_MARCA_FILE, default /opt/brambs-router/marca.json, which deploy.sh
+# installs when the repository has ops/apps-host/marca.json); without it, the
+# neutral brand applies. BRAMBS_SITE_URL and BRAMBS_LOGO_URL from the unit's
+# environment take precedence. Read at boot: a new brand takes effect on the
+# restart that deploy.sh already does.
 MARCA_FILE = os.environ.get("BRAMBS_MARCA_FILE", "/opt/brambs-router/marca.json")
 def _marca():
     try:
@@ -226,7 +230,7 @@ LANDING = ("<!doctype html><meta charset=utf-8>"
 
 # Brand badge ("Made with ..."): present on EVERY page served by the host (subdomain
 # home AND published apps). Brand colors, logo linking to the home page.
-# NEVER floating over the content (03/09): it either sits in the flow at the end
+# NEVER floating over the content (2026-09-03): it either sits in the flow at the end
 # of the page or takes a reserved 40px STRIP that the app doesn't use.
 SELO_HTML = (
     '<a href="' + _attr(SITE) + '" target="_blank" rel="noopener" '
@@ -245,21 +249,23 @@ FOOTER_HTML = (
     + SELO_HTML + '</div>'
 )
 
-# ---- casca de tela cheia (viewport aninhada) ----
-# App de tela cheia (jogo, canvas, dashboard com html,body{overflow:hidden}) nao
-# tem rodape: o que passa de 100vh e cortado, e um selo em posicao fixa ficaria
-# por cima dos controles. Nao da pra encolher a viewport de um documento por CSS
-# (100vh e window.innerHeight sao da janela). O unico jeito de o app RECEBER uma
-# tela 40px menor e se redimensionar sozinho (ele ja escuta 'resize') e servi-lo
-# num contexto de navegacao aninhado. Entao o documento de topo vira uma casca:
-# iframe ocupando tudo menos 40px + a faixa do selo embaixo. Mesma origem.
-# Se o app for uma pagina que ROLA, a casca desfaz a faixa e devolve o selo pro
-# fluxo do conteudo (comportamento de sempre) - decidido no cliente, medindo.
+# ---- fullscreen shell (nested viewport) ----
+# A fullscreen app (game, canvas, dashboard with html,body{overflow:hidden}) has
+# no footer: whatever goes past 100vh is clipped, and a fixed-position badge
+# would sit on top of the controls. There's no way to shrink a document's
+# viewport with CSS (100vh and window.innerHeight belong to the window). The
+# only way for the app to RECEIVE a screen 40px smaller and resize itself (it
+# already listens for 'resize') is to serve it inside a nested browsing
+# context. So the top document becomes a shell: an iframe taking up
+# everything but 40px + the badge strip below. Same origin.
+# If the app is a page that SCROLLS, the shell undoes the strip and returns
+# the badge to the content flow (the usual behavior) -- decided client-side,
+# by measuring.
 FRAME_FLAG = "_brambs_frame"
 BAR_H = 40
 
 def _strip_frame(rest):
-    """Tira o marcador da casca da query antes de proxiar pro app."""
+    """Strips the shell marker from the query before proxying to the app."""
     path, _, q = rest.partition("?")
     if not q:
         return rest
@@ -267,7 +273,7 @@ def _strip_frame(rest):
     return path + ("?" + "&".join(keep) if keep else "")
 
 def _blocks_framing(headers):
-    """App que proibe ser enquadrado nao entra na casca (respeitamos o header)."""
+    """An app that forbids being framed doesn't enter the shell (we honor the header)."""
     for k, v in headers:
         lk = k.lower(); vv = (v or "").lower()
         if lk == "x-frame-options" and "deny" in vv:
@@ -303,8 +309,8 @@ def shell_page(title, src, extra_head=""):
         'var d;try{d=f.contentDocument}catch(e){return}'
         'if(!d||!d.body)return;'
         'var se=d.scrollingElement||d.documentElement;'
-        'if(se.scrollHeight<=se.clientHeight+4)return;'   # tela cheia: faixa fica
-        'bar.style.display="none";'                        # pagina que rola: sem faixa
+        'if(se.scrollHeight<=se.clientHeight+4)return;'   # fullscreen: strip stays
+        'bar.style.display="none";'                        # scrolling page: no strip
         'if(!d.getElementById("brambs-footer")){'
         'var w=d.createElement("div");w.id="brambs-footer";'
         'w.appendChild(d.importNode(tpl.content,true));'
@@ -336,21 +342,21 @@ def _render_block(b):
     title = b.get("title")
     head = f"<h2>{_esc(title)}</h2>" if title else ""
     if kind == "html":
-        # conteudo gerado pelo agente (confiavel), embutido cru
+        # content generated by the agent (trusted), embedded raw
         inner = b.get("body") or ""
     elif kind == "link":
         url = b.get("url") or ""
         txt = _esc(b.get("body") or url)
         inner = f'<a href="{_esc(url)}" target="_blank" rel="noopener">{txt}</a>'
-    else:  # text -> escapa e preserva quebras de linha
+    else:  # text -> escapes and preserves line breaks
         inner = _esc(b.get("body") or "").replace("\n", "<br>")
     return f'<section class=block>{head}<div class=body>{inner}</div></section>'
 
 def _systems_for(label):
-    """Lista os sistemas publicados do label (chaves '<label>/<sistema>' no registry).
-    Devolve [(nome, privado)]. Esta home NAO e autenticada, entao ela revela os
-    NOMES dos sistemas -- o conteudo dos privados segue trancado pelo portao. O
-    cadeado avisa o dono de quais estao abertos pra internet."""
+    """Lists the label's published systems (keys '<label>/<system>' in the registry).
+    Returns [(name, private)]. This home is NOT authenticated, so it reveals the
+    system NAMES -- the content of private ones stays locked behind the gate. The
+    padlock tells the owner which ones are open to the internet."""
     reg = load_registry() or {}
     pref = label + "/"
     out = []
@@ -383,15 +389,15 @@ def _render_systems(systems):
     )
 
 def landing_for(label):
-    """Home do subdominio raiz: boas-vindas + box automatico dos sistemas publicados
-    + conteudos que o agente foi acrescentando, com o nome e o logo da marca."""
+    """Root subdomain home: welcome + automatic box of published systems
+    + content the agent has been adding, with the brand's name and logo."""
     name = (load_users().get(label) or "").strip()
     saud = f"Oi, {_esc(name)}." if name else "Oi."
     systems = _systems_for(label)
     blocks = (load_home(label).get("blocks") or [])
     body_parts = _render_systems(systems) + "".join(_render_block(b) for b in blocks)
     if body_parts:
-        # tem conteudo (sistemas e/ou blocos): saudacao vira cabecalho
+        # has content (systems and/or blocks): greeting becomes a header
         content = (
             "<img class=hlogo src='" + _attr(LOGO) + "' alt='" + _attr(NOME) + "'>"
             f"<header class=home-hd><h1>{saud}</h1>"
@@ -400,7 +406,7 @@ def landing_for(label):
         )
         layout = "align-items:center;justify-content:flex-start;padding:44px 16px 96px"
     else:
-        # estado vazio: mensagem de boas-vindas
+        # empty state: welcome message
         content = (
             "<div class=card>"
             "<img class=hlogo src='" + _attr(LOGO) + "' alt='" + _attr(NOME) + "'>"
@@ -458,7 +464,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "brambs-router"
 
     def log_message(self, fmt, *args):
-        pass  # silencioso (journald ja tem o systemd)
+        pass  # silent (journald already has it via systemd)
 
     def _split(self):
         host = (self.headers.get("Host", "") or "").split(":")[0]
@@ -485,7 +491,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def _unauthorized(self, system, auth=None):
-        """401 com desafio Basic: o navegador abre o dialogo de usuario/senha."""
+        """401 with a Basic challenge: the browser opens the username/password dialog."""
         body = (
             "<!doctype html><html lang=pt-BR><meta charset=utf-8>"
             "<title>Acesso restrito</title>"
@@ -502,11 +508,11 @@ class Handler(BaseHTTPRequestHandler):
         self._status = 401
         self._note = "auth_required"
         self.send_response(401)
-        # O navegador guarda a credencial por origem + realm. Versionar o realm
-        # com o salt faz uma troca REAL de senha abrir um desafio novo, em vez de
-        # o browser continuar reenviando a senha antiga num loop de 401. O ctl
-        # preserva o salt quando a credencial nao mudou, entao um simples
-        # republish nao derruba sessoes validas.
+        # The browser keeps the credential per origin + realm. Versioning the realm
+        # with the salt makes a REAL password change open a new challenge, instead
+        # of the browser continuing to resend the old password in a 401 loop. ctl
+        # preserves the salt when the credential hasn't changed, so a plain
+        # republish doesn't knock down valid sessions.
         self.send_header("WWW-Authenticate",
                          'Basic realm="%s", charset="UTF-8"' % auth_realm(system, auth))
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -519,25 +525,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route(self):
         label, system, rest = self._split()
-        # request vindo de dentro da casca: nao repete a casca nem injeta selo
-        # (quem manda o selo, nesse caso, e o documento de topo)
+        # request coming from inside the shell: don't repeat the shell nor inject
+        # the badge (in this case, the top document is the one sending the badge)
         self._in_frame = (FRAME_FLAG + "=1") in rest
         if self._in_frame:
             rest = _strip_frame(rest)
         if not system:
-            return self._landing(200, landing_for(label))  # site default do subdominio raiz
+            return self._landing(200, landing_for(label))  # root subdomain's default site
         reg = load_registry()
         app = reg.get(f"{label}/{system}")
         if not app:
             return self._landing(404,
                 b"<!doctype html><meta charset=utf-8><h1>Sistema nao encontrado</h1>")
-        # PORTAO: antes do redirect e antes de ensure_up, pra que request sem
-        # credencial nem acorde o container (nao vira vetor de custo/DoS).
+        # GATE: before the redirect and before ensure_up, so that a request
+        # without credentials doesn't even wake the container (not a cost/DoS vector).
         _gated = bool((app.get("auth") or {}).get("mode") == "basic")
         if _gated and auth_check(app, self.headers) != "ok":
             return self._unauthorized(system, app.get("auth"))
-        # Barra final canonica na raiz do app: garante que caminhos relativos
-        # (style.css, app.js, api/...) resolvam sob /<system>/ e nao na raiz do dominio.
+        # Canonical trailing slash at the app's root: ensures relative paths
+        # (style.css, app.js, api/...) resolve under /<system>/ and not at the domain root.
         _pathonly = self.path.split("?", 1)[0]
         if _pathonly.rstrip("/") == "/" + system and not _pathonly.endswith("/"):
             _loc = "/" + system + "/"
@@ -557,7 +563,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._landing(502,
                 b"<!doctype html><meta charset=utf-8><h1>App indisponivel</h1>")
         _last_seen[name] = time.time()
-        # corpo do request (POST/PUT/etc)
+        # request body (POST/PUT/etc)
         body = None
         clen = self.headers.get("Content-Length")
         if clen:
@@ -566,13 +572,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 body = None
         url = f"http://{ip}:{port}{rest}"
-        # O Node recem-desperto (scale-to-zero) pode, no primeiro burst de
-        # conexoes, ainda nao escutar (ConnectionRefused) ou aceitar e fechar
-        # sem responder (RemoteDisconnected). Nesses casos NENHUM byte de
-        # resposta foi lido, entao repetir e seguro. Seguranca de escrita:
-        # ConnectionRefused (nem conectou) -> repete qualquer metodo; fechou sem
-        # responder -> repete SO idempotente (GET/HEAD/OPTIONS), nunca POST/etc,
-        # pra nao arriscar escrita duplicada. Timeout NUNCA repete.
+        # The freshly-woken Node (scale-to-zero) may, on the first burst of
+        # connections, not be listening yet (ConnectionRefused) or accept and
+        # close without responding (RemoteDisconnected). In these cases NO
+        # response byte was read, so retrying is safe. Write safety:
+        # ConnectionRefused (never connected) -> retries any method; closed
+        # without responding -> retries ONLY idempotent ones (GET/HEAD/OPTIONS),
+        # never POST/etc, to avoid risking a duplicate write. Timeout NEVER retries.
         idempotent = self.command in ("GET", "HEAD", "OPTIONS")
         _deadline = time.time() + 8
         attempt = 0
@@ -584,13 +590,13 @@ class Handler(BaseHTTPRequestHandler):
                 if lk in ("host", "content-length", "connection", "keep-alive",
                           "proxy-connection", "transfer-encoding", "upgrade"):
                     continue
-                # segredo interno NUNCA chega no app (nem em app publico)
+                # internal secret NEVER reaches the app (not even a public app)
                 if lk == "x-brambs-internal":
                     continue
-                # a credencial do portao e do PORTAO, nao do app: se o app tem
-                # gate, o Authorization foi consumido aqui e nao vaza a senha
-                # pro codigo do usuario. App sem gate segue recebendo (pode ter
-                # autenticacao propria).
+                # the gate's credential belongs to the GATE, not the app: if the
+                # app has a gate, the Authorization was consumed here and the
+                # password doesn't leak to the user's code. An app without a
+                # gate keeps receiving it (it may have its own authentication).
                 if lk == "authorization" and _gated:
                     continue
                 req.add_header(k, v)
@@ -607,10 +613,10 @@ class Handler(BaseHTTPRequestHandler):
                     if _v is not None:
                         _en = _v
                         break
-                # conexao nunca estabeleceu (request nem foi enviado) -> seguro em QUALQUER metodo
+                # connection never established (request wasn't even sent) -> safe for ANY method
                 connect_fail = (isinstance(e, ConnectionRefusedError) or isinstance(reason, ConnectionRefusedError)
                                 or _en in (errno.ECONNREFUSED, errno.EHOSTUNREACH, errno.ENETUNREACH))
-                # conectou e fechou sem responder -> ambiguo pra escrita, so idempotente
+                # connected and closed without responding -> ambiguous for writes, idempotent only
                 reset = (isinstance(e, (http.client.RemoteDisconnected, ConnectionResetError))
                          or isinstance(reason, (http.client.RemoteDisconnected, ConnectionResetError))
                          or _en == errno.ECONNRESET)
@@ -624,11 +630,11 @@ class Handler(BaseHTTPRequestHandler):
             if attempt > 1:
                 self._note = "cold_start_recovered apos %d tentativa(s)" % attempt
             break
-        # Selo da marca em respostas HTML (so com corpo em texto puro, sem
-        # content-encoding: nao mexemos em gzip/binario).
-        #   - documento de topo  -> devolve a CASCA (app com a tela 40px menor)
-        #   - dentro da casca    -> nada (o topo ja mostra o selo)
-        #   - resto (fragmento HTML de fetch, app que proibe iframe) -> selo no fluxo
+        # Brand badge on HTML responses (only with a plain-text body, no
+        # content-encoding: we don't touch gzip/binary).
+        #   - top document       -> returns the SHELL (app with a 40px smaller screen)
+        #   - inside the shell   -> nothing (the top already shows the badge)
+        #   - rest (HTML fragment from fetch, app that forbids iframe) -> badge in the flow
         ctype = ""; cenc = ""
         for k, v in headers:
             lk = k.lower()
@@ -639,8 +645,8 @@ class Handler(BaseHTTPRequestHandler):
         dest = (self.headers.get("Sec-Fetch-Dest") or "").lower()
         if dest in ("iframe", "frame", "embed", "object"):
             in_frame = True
-        # documento de topo: navegador moderno diz "document"; sem o header
-        # (curl, navegador antigo) caimos no Accept.
+        # top document: modern browser says "document"; without the header
+        # (curl, old browser) we fall back to Accept.
         top_doc = (dest == "document") if dest else \
                   ("text/html" in (self.headers.get("Accept") or "").lower())
         if is_html and not in_frame and top_doc and self.command == "GET" \
@@ -660,7 +666,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
-                for k, v in headers:      # cookie do app nao pode se perder
+                for k, v in headers:      # the app's cookie can't be lost
                     if k.lower() == "set-cookie":
                         self.send_header(k, v)
                 self.send_header("Content-Length", str(len(shell)))
@@ -758,7 +764,7 @@ def reaper():
                 continue
             last = _last_seen.get(name)
             if last is None:
-                _last_seen[name] = now  # carencia: so reapa a partir do proximo ciclo
+                _last_seen[name] = now  # grace period: only reaps from the next cycle on
                 continue
             if now - last > IDLE_SECONDS:
                 docker("stop", name)

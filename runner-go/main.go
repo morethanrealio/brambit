@@ -1,17 +1,18 @@
-// Runner — daemon da MÁQUINA do usuário (porte Go do antigo runner em Node).
+// Runner — daemon on the user's MACHINE (Go port of the former Node runner).
 //
-// Disca (outbound) pro servidor, fica em long-poll esperando comando, roda
-// LOCALMENTE e faz streaming da saída de volta. É o outro lado do canal do
-// backend (web/runner.mjs): protocolo exec/stdout/stderr/exit/idle.
+// Dials out (outbound) to the server, long-polls waiting for a command, runs
+// it LOCALLY and streams the output back. It's the other side of the backend
+// channel (web/runner.mjs): exec/stdout/stderr/exit/idle protocol.
 //
-// Zero dependência (só a stdlib). O runner é um "device": autentica por
-// Bearer <device_token> gerado na página /runner do servidor.
+// Zero dependencies (stdlib only). The runner is a "device": it authenticates
+// with Bearer <device_token> generated on the server's /runner page.
 //
-// Modelo de escrita (igual dsh/Claude Code): LEITURA livre no sistema inteiro;
-// ESCRITA só nas pastas autorizadas, imposto no KERNEL (macOS seatbelt, Linux
-// bwrap). Quem manda no escopo é ESTA máquina (config local), nunca o servidor.
-// Onde não dá pra confinar (Windows, Linux sem bwrap), o modo restrito RECUSA o
-// comando; rodar ali exige o dono escolher acesso total de propósito.
+// Write model (same as dsh/Claude Code): free READ across the whole system;
+// WRITE only in authorized folders, enforced at the KERNEL level (macOS
+// seatbelt, Linux bwrap). This MACHINE (local config) is always the one in
+// charge of the scope, never the server. Where confinement isn't possible
+// (Windows, Linux without bwrap), restricted mode REFUSES the command; running
+// there requires the owner to deliberately choose full access.
 package main
 
 import (
@@ -34,14 +35,14 @@ import (
 	"time"
 )
 
-// 2.1.0 = canal de ARQUIVO (frames readfile/filechunk/filedone). O backend usa
-// esta versão como gate: runner mais velho descarta frame desconhecido calado
-// (ver pollOnce), então lá ele recusa na hora em vez de pendurar o pedido.
-// 2.1.1 = mesmo protocolo, primeira build com o canal de arquivo E o painel
-// juntos. O 2.1.0 publicado em 26/08 saiu SEM painel (o fonte do painel não
-// estava no repo, ver panel.go) e o app de duplo-clique morria na abertura.
-// 2.2.0 = mesmo protocolo; sem cerca no modo restrito o comando é recusado, e o
-// painel ganha a escolha explícita de acesso total (só onde não há cerca).
+// 2.1.0 = file CHANNEL (readfile/filechunk/filedone frames). The backend uses
+// this version as a gate: an older runner silently drops an unknown frame
+// (see pollOnce), so there it refuses right away instead of hanging the request.
+// 2.1.1 = same protocol, first build with the file channel AND the panel
+// together. The 2.1.0 published on 2026-08-26 shipped WITHOUT the panel (the
+// panel source wasn't in the repo, see panel.go) and the double-click app died on open.
+// 2.2.0 = same protocol; with no fence in restricted mode the command is refused, and the
+// panel gets the explicit full-access choice (only where there's no fence).
 const version = "2.2.0"
 
 var (
@@ -50,7 +51,7 @@ var (
 	stopping = false
 )
 
-// token vive em panel.go (env > config, mutável em runtime pelo painel).
+// token lives in panel.go (env > config, mutable at runtime by the panel).
 
 func envOr(k, d string) string {
 	if v := os.Getenv(k); v != "" {
@@ -91,7 +92,7 @@ func hasBin(bin string) bool {
 	return err == nil
 }
 
-// ── Política de escrita ──────────────────────────────────────────────────────
+// ── Write policy ──────────────────────────────────────────────────────────────
 
 type policy struct {
 	Mode      string
@@ -107,7 +108,7 @@ type configFile struct {
 func configPath() string      { return filepath.Join(homeDir(), "."+slug+"-runner.json") }
 func defaultWriteDir() string { return filepath.Join(homeDir(), "Documents", produto) }
 
-// Lê a política a cada exec (grants de pasta valem sem reiniciar o daemon).
+// Reads the policy on every exec (folder grants apply without restarting the daemon).
 func loadPolicy() policy {
 	var cfg configFile
 	if b, err := os.ReadFile(configPath()); err == nil {
@@ -152,7 +153,7 @@ func splitAny(s, seps string) []string {
 	return strings.FieldsFunc(s, f)
 }
 
-// ── Perfil seatbelt (macOS): allow-default + deny escrita + re-libera pastas ──
+// ── Seatbelt profile (macOS): allow-default + deny write + re-allow folders ──
 
 func sbpl(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
@@ -184,8 +185,8 @@ func seatbeltProfile(mode string, writeDirs []string) string {
 	return strings.Join(forms, "\n")
 }
 
-// buildLauncher monta o argv final envolvendo o shell no confinamento do SO.
-// confined=false = não deu pra cercar (o runExec recusa, salvo em full-access).
+// buildLauncher builds the final argv, wrapping the shell in the OS confinement.
+// confined=false = couldn't fence it (runExec refuses, except in full-access).
 func buildLauncher(pol policy, shell string, shellArgs []string) (argv []string, confined bool) {
 	full := append([]string{shell}, shellArgs...)
 	if pol.Mode == "full-access" {
@@ -210,17 +211,17 @@ func buildLauncher(pol policy, shell string, shellArgs []string) (argv []string,
 	return full, false
 }
 
-// canConfine diz se ESTA máquina consegue cercar a escrita (seatbelt ou bwrap),
-// independente do modo escolhido. Windows e Linux sem bwrap não conseguem.
+// canConfine says whether THIS machine can fence writes (seatbelt or bwrap),
+// regardless of the chosen mode. Windows and Linux without bwrap can't.
 func canConfine() bool {
 	_, ok := buildLauncher(policy{Mode: "workspace-write"}, "bash", nil)
 	return ok
 }
 
-// semCerca = modo restrito numa máquina que não consegue cercar. Nesse caso o
-// runner RECUSA o comando: rodar solto no modo restrito seria fingir uma cerca
-// que não existe. Acesso amplo continua possível, mas como escolha explícita
-// do dono (full-access, pelo painel ou pela config local).
+// semCerca ("no fence") = restricted mode on a machine that can't fence writes.
+// In that case the runner REFUSES the command: running loose in restricted
+// mode would be faking a fence that doesn't exist. Broad access is still
+// possible, but as the owner's explicit choice (full-access, via the panel or local config).
 func semCerca(pol policy, confined bool) bool { return pol.Mode != "full-access" && !confined }
 
 func msgSemCerca(goos string) string {
@@ -251,13 +252,13 @@ func metaQS() string {
 	return q.Encode()
 }
 
-// O backend/UI conhecem os nomes do Node (process.platform/arch); traduz.
+// The backend/UI know the Node names (process.platform/arch); translate.
 func goosToNode(g string) string {
 	switch g {
 	case "windows":
 		return "win32"
 	default:
-		return g // darwin, linux batem
+		return g // darwin, linux match
 	}
 }
 func goarchToNode(a string) string {
@@ -267,11 +268,11 @@ func goarchToNode(a string) string {
 	case "386":
 		return "ia32"
 	default:
-		return a // arm64 bate
+		return a // arm64 matches
 	}
 }
 
-// ── Protocolo do canal ────────────────────────────────────────────────────────
+// ── Channel protocol ──────────────────────────────────────────────────────────
 
 type frame struct {
 	Type     string `json:"type"`
@@ -281,8 +282,8 @@ type frame struct {
 	TimeoutM int    `json:"timeoutMs,omitempty"`
 	Chunk    string `json:"chunk,omitempty"`
 	ExitCode *int   `json:"exitCode,omitempty"`
-	// Canal de ARQUIVO (v2.1.0): readfile (servidor->máquina) e a resposta em
-	// filechunk (base64, sequencial) + filedone (fim ou erro).
+	// File CHANNEL (v2.1.0): readfile (server->machine) and the response in
+	// filechunk (base64, sequential) + filedone (end or error).
 	Path     string `json:"path,omitempty"`
 	MaxBytes int64  `json:"maxBytes,omitempty"`
 	Seq      int    `json:"seq,omitempty"`
@@ -306,13 +307,13 @@ func postResult(f frame) {
 	req.Header.Set("content-type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return // rede caiu; o backend tem timeout próprio, seguimos
+		return // network dropped; the backend has its own timeout, we move on
 	}
 	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 }
 
-// ── Execução ──────────────────────────────────────────────────────────────────
+// ── Execution ──────────────────────────────────────────────────────────────────
 
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
@@ -322,16 +323,16 @@ func runExec(f frame) {
 	if timeoutMs <= 0 {
 		timeoutMs = 180_000
 	}
-	// O backend é a fonte da verdade do cwd por thread; frame.cwd vazio = pasta
-	// inicial. Nada de estado global de cwd (senão uma thread herdava de outra).
+	// The backend is the source of truth for cwd per thread; empty frame.cwd = starting
+	// folder. No global cwd state (otherwise one thread would inherit another's).
 	sc := f.Cwd
 	if sc == "" {
 		sc = startDir
 	}
 	startCwd := expandHome(sc)
 
-	// Fila SERIALIZADA de envio (goroutine única): garante ordem e, crucial,
-	// que stdout/stderr cheguem ANTES do exit (senão o backend fecha o req).
+	// SERIALIZED send queue (single goroutine): guarantees order and, crucially,
+	// that stdout/stderr arrive BEFORE exit (otherwise the backend closes the req).
 	sendCh := make(chan frame, 256)
 	var sendWG sync.WaitGroup
 	sendWG.Add(1)
@@ -342,7 +343,7 @@ func runExec(f frame) {
 		}
 	}()
 
-	// Buffer com flush periódico pra não floodar de POSTs minúsculos.
+	// Buffer with periodic flush so we don't flood with tiny POSTs.
 	var mu sync.Mutex
 	var outBuf, errBuf strings.Builder
 	var flushTimer *time.Timer
@@ -383,11 +384,11 @@ func runExec(f frame) {
 		return
 	}
 	var cmd *exec.Cmd
-	var cwdReader *os.File // fd extra (unix) pra capturar o pwd final
+	var cwdReader *os.File // extra fd (unix) to capture the final pwd
 	var cwdBuf bytes.Buffer
 
 	if runtime.GOOS == "windows" {
-		// PowerShell: roda o comando e grava o cwd resultante num arquivo temp.
+		// PowerShell: runs the command and writes the resulting cwd to a temp file.
 		tmpCwd := filepath.Join(os.TempDir(), "__"+slug+"_cwd")
 		esc := strings.ReplaceAll(startCwd, "'", "''")
 		ps := "Set-Location -LiteralPath '" + esc + "'; " + f.Comando +
@@ -395,13 +396,13 @@ func runExec(f frame) {
 		cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps)
 		cmd.Dir = startCwd
 	} else {
-		// bash -lc: cd pro cwd, roda o comando, escreve o pwd final no fd 3
-		// (separado do stdout). Assim `cd` persiste entre execs de uma thread.
+		// bash -lc: cd to the cwd, run the command, write the final pwd to fd 3
+		// (separate from stdout). That way `cd` persists across execs of a thread.
 		script := "cd " + shq(startCwd) + ` 2>/dev/null || cd "$HOME"; ` + f.Comando + "\n__ec=$?; pwd >&3; exit $__ec"
 		argv, _ := buildLauncher(pol, "bash", []string{"-lc", script})
 		cmd = exec.Command(argv[0], argv[1:]...)
 		cmd.Dir = startCwd
-		// Pipe pro fd 3 do filho: ExtraFiles[0] -> fd 3.
+		// Pipe to the child's fd 3: ExtraFiles[0] -> fd 3.
 		pr, pw, err := os.Pipe()
 		if err == nil {
 			cmd.ExtraFiles = []*os.File{pw}
@@ -410,7 +411,7 @@ func runExec(f frame) {
 			defer pw.Close()
 		}
 	}
-	setPgid(cmd) // grupo de processo próprio, pra matar a árvore no timeout
+	setPgid(cmd) // own process group, to kill the tree on timeout
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -430,7 +431,7 @@ func runExec(f frame) {
 		logLine("erro ao rodar: " + err.Error())
 		return
 	}
-	// Fecha nossa ponta de escrita do fd 3 no pai (o filho tem a dele).
+	// Close our write end of fd 3 in the parent (the child has its own).
 	if len(cmd.ExtraFiles) > 0 {
 		cmd.ExtraFiles[0].Close()
 	}
@@ -453,14 +454,14 @@ func runExec(f frame) {
 	go pump(stdout, addOut)
 	go pump(stderr, addErr)
 
-	// Timeout: mata a árvore de processos.
+	// Timeout: kills the process tree.
 	timedOut := false
 	killTimer := time.AfterFunc(maxDur(5*time.Second, time.Duration(timeoutMs)*time.Millisecond), func() {
 		timedOut = true
 		killGroup(cmd)
 	})
 
-	pipeWG.Wait() // drena toda a saída
+	pipeWG.Wait() // drains all the output
 	waitErr := cmd.Wait()
 	killTimer.Stop()
 	if cwdReader != nil {
@@ -475,10 +476,10 @@ func runExec(f frame) {
 		flushTimer.Stop()
 		flushTimer = nil
 	}
-	flush() // enfileira o que sobrou ANTES do exit
+	flush() // queues what's left BEFORE exit
 	mu.Unlock()
 
-	// cwd final
+	// final cwd
 	newCwd := startCwd
 	if runtime.GOOS == "windows" {
 		if b, err := os.ReadFile(filepath.Join(os.TempDir(), "__"+slug+"_cwd")); err == nil {
@@ -511,7 +512,7 @@ func maxDur(a, b time.Duration) time.Duration {
 	return b
 }
 
-// exitCode extrai o código de saída do erro do Wait (nil = 0).
+// exitCode extracts the exit code from the Wait error (nil = 0).
 func exitCode(err error) *int {
 	if err == nil {
 		z := 0
@@ -525,19 +526,19 @@ func exitCode(err error) *int {
 	return &c
 }
 
-// ── Canal de arquivo ──────────────────────────────────────────────────────────
+// ── File channel ──────────────────────────────────────────────────────────────
 //
-// Por que existe: o canal exec só devolve TEXTO, com teto de saída. Pra trazer
-// um binário (foto, PDF, zip) o único jeito era gambiarra (base64 pelo stdout,
-// que estoura o teto, ou pior: subir num host de terceiro). Aqui os bytes saem
-// da máquina do dono direto pro NOSSO backend, em frames próprios, e nunca
-// passam pela saída do terminal nem pelo contexto do modelo.
+// Why it exists: the exec channel only returns TEXT, with an output cap. To bring
+// back a binary (photo, PDF, zip) the only option used to be a hack (base64 over
+// stdout, which blows the cap, or worse: uploading to a third-party host). Here the
+// bytes leave the owner's machine straight to OUR backend, in their own frames, and
+// never go through the terminal output or the model's context.
 //
-// LEITURA é livre na máquina inteira (mesmo modelo do exec), então o arquivo é
-// aberto direto, sem cerca. Escrita não entra aqui: este canal é só de saída.
+// READ is free across the whole machine (same model as exec), so the file is
+// opened directly, with no fence. Write doesn't enter here: this channel is output only.
 
-const fileChunkRaw = 192 * 1024       // bytes por chunk ANTES do base64
-const fileMaxBytes = 64 * 1024 * 1024 // teto duro local, mesmo se o server pedir mais
+const fileChunkRaw = 192 * 1024       // bytes per chunk BEFORE base64
+const fileMaxBytes = 64 * 1024 * 1024 // hard local cap, even if the server asks for more
 
 func fileFail(reqID, msg string) {
 	postResult(frame{ReqID: reqID, Type: "filedone", Error: msg})
@@ -584,8 +585,8 @@ func runReadFile(f frame) {
 	}
 	defer fh.Close()
 
-	// postResult é síncrono; ler e postar em sequência JÁ garante a ordem dos
-	// chunks (o `seq` viaja junto só pra o outro lado poder conferir).
+	// postResult is synchronous; reading and posting in sequence ALREADY guarantees
+	// chunk order (`seq` just rides along so the other side can double-check).
 	buf := make([]byte, fileChunkRaw)
 	var sent int64
 	seq := 0
@@ -635,8 +636,8 @@ func pollOnce() {
 	if resp.StatusCode == 401 {
 		status.setConnected(false)
 		if panelMode {
-			// No app não matamos o processo: zera o token e o painel volta a
-			// pedir um código novo, sem terminal.
+			// In the app we don't kill the process: clear the token and the panel goes back to
+			// asking for a new code, no terminal.
 			logLine("código inválido ou desativado. Gere outro em " + base + "/runner e cole no painel.")
 			setToken("")
 			_ = persistToken("")
@@ -664,13 +665,13 @@ func pollOnce() {
 		}
 		status.noteCmd(c)
 		logLine("comando recebido: " + c)
-		go runExec(f) // não bloqueia o loop de poll
+		go runExec(f) // doesn't block the poll loop
 	}
 	if f.Type == "readfile" {
 		logLine("arquivo pedido: " + f.Path)
 		go runReadFile(f) // idem: streaming em paralelo ao poll
 	}
-	// idle -> só re-pola
+	// idle -> just re-poll
 }
 
 func sleep(d time.Duration) { time.Sleep(d) }
@@ -681,13 +682,13 @@ func logLine(m string) {
 	status.push(ts + " " + m)
 }
 
-// panelMode = aberto por duplo-clique (app), sem token no ambiente. Muda o
-// comportamento de erro (não mata o processo; devolve o controle ao painel).
+// panelMode = opened by double-click (app), no token in the environment. Changes the
+// error behavior (doesn't kill the process; hands control back to the panel).
 var panelMode = false
 
 func main() {
-	// Técnico com token no ambiente => modo CLI (terminal), como sempre.
-	// Sem token no ambiente => modo painel (app de duplo-clique + navegador).
+	// Technical user with a token in the environment => CLI mode (terminal), as always.
+	// No token in the environment => panel mode (double-click app + browser).
 	if os.Getenv(envVar("RUNNER_TOKEN")) != "" {
 		runCLI()
 		return
@@ -704,7 +705,7 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() { <-sig; stopping = true; os.Exit(0) }()
-	startPanel() // abre o painel local + navegador e mantém o app vivo
+	startPanel() // opens the local panel + browser and keeps the app alive
 }
 
 func runCLI() {

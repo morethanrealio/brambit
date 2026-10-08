@@ -171,7 +171,7 @@ export function mountWizard(options) {
             b.onclick = () => void guarded(async () => { await progress('suggestion_selected', index); restoreSelection(); afterResult(); });
             list.append(b);
         }
-        // Só registra exposição depois de inserir o resultado no DOM e com a aba visível.
+        // Only logs the exposure after inserting the result into the DOM and with the tab visible.
         if (document.visibilityState !== 'visible') {
             await new Promise(resolve => { const on = () => { if (document.visibilityState === 'visible') {
                 document.removeEventListener('visibilitychange', on);
@@ -257,7 +257,7 @@ export function mountWizard(options) {
                     recovery('Não conseguimos concluir a análise. Você pode tentar novamente; nenhuma conclusão foi marcada.');
                     return;
                 }
-                // idle também é transitório; não é sucesso nem autorização para encerrar.
+                // idle is also transient; it's neither success nor authorization to stop.
             }
             catch {
                 if (++failures >= 3) {
@@ -321,8 +321,8 @@ export function mountWizard(options) {
         text('wizWaLead', saved.waCode ? 'Falta confirmar que o número é seu: toque abaixo e ENVIE a mensagem com o código. É ela que conecta o WhatsApp.' : '✅ Número conectado! Agora toque abaixo e mande a primeira mensagem pro seu assistente. É isso que abre a conversa no WhatsApp.');
         setWaLink(me.whatsapp?.number);
     } }
-    // Com código pendente a mensagem é o DESAFIO de posse (só ela amarra o número à
-    // conta; digitar o telefone no app não amarra nada). Sem código é só o "oi".
+    // With a pending code, the message is the ownership CHALLENGE (only it binds the number
+    // to the account; typing the phone in the app binds nothing). With no code it's just the "hi".
     function setWaLink(number) { const a = el('wizWaOpen'); if (number) {
         const msg = saved.waCode ? 'conectar ' + saved.waCode : 'Oi ' + saved.agentName + '!';
         a.href = 'https://wa.me/' + number.replace(/\D/g, '') + '?text=' + encodeURIComponent(msg);
@@ -369,7 +369,7 @@ export function mountWizard(options) {
     btn('wowRetry').onclick = () => void guarded(() => recoverBoot ? recoverBoot() : runWow(true));
     btn('wowBtn').onclick = () => afterResult();
     btn('wowSkip').onclick = () => { ++generation; void progress('wow_skipped').then(() => goto('done')).catch(e => error('wowError', e)); };
-    // Pode interromper a espera mesmo enquanto uma operação está em voo.
+    // Can interrupt the wait even while an operation is in flight.
     btn('wowLater').onclick = () => { void exit(false).catch(e => error('wowError', e)); };
     btn('wizDoneBtn').onclick = () => void guarded(() => exit(true), 'wizDoneErr');
     btn('wowStarterBtn').onclick = () => void guarded(async () => { const context = el('wowContext').value.trim(); if (context.length < 10)

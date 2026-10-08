@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { QUIET_DAYS, SILENCE_DAYS, sanitizeReason, slotKind } from './store.mjs';
 import type { DiscoveryStore, Journey } from './store.mjs';
 import { marca } from '../web/marca.mjs';
-/** Nome do canal como o dono o conhece, para pedir a conexão certa. */
+/** Channel name as the owner knows it, to ask for the right connection. */
 export const channelLabel = (c: string): string => ({ telegram: 'Telegram', whatsapp: 'WhatsApp', app: `aplicativo do ${marca().nome}` } as Record<string, string>)[c] || c;
 export const GUIDE = `JORNADA DE DESCOBERTA, opt-in temporário do dono, não uma campanha nem terapia.
 Este é um TURNO NORMAL iniciado pela pessoa, não um contato agendado da jornada. A mensagem humana atual é sempre o pedido prioritário: responda e execute exatamente o que ela acabou de pedir. Nunca abra com check-in de almoço/noite, “passando para fechar o dia”, retomada genérica ou assunto antigo; nunca apresente o pedido atual como pendência anterior e nunca peça autorização para fazer a mesma coisa que a pessoa já pediu nesta mensagem.
@@ -13,9 +13,9 @@ A partir de uma necessidade explícita, proponha UMA ajuda concreta pequena. Exe
 Quando houver aceite, recusa ou relato de utilidade, jornada_resultado registra a evidência, não comprova execução. Silêncio não é aceitação, ausência de dado não é zero. Não invente conclusão de tarefa.
 Tudo acontece nesta conversa, sem tela, link ou formulário de adesão. Use jornada_consultar para mostrar notas/horários e a devolutiva já preparada; jornada_configurar para combinar adesão ou ajustes; jornada_editar_nota para corrigir/apagar a nota que o dono apontar. Para concluir antecipadamente com devolutiva, use jornada_concluir e aguarde a confirmação por texto da proposta; encerrar/cancelar sem devolutiva usa jornada_controlar. O preparo da devolutiva é assíncrono: não invente uma avaliação pronta nem substitua a devolutiva registrada por uma síntese informal das últimas 40 notas. Adesão e mudanças só valem após confirmação da proposta por texto ou reação 👍 quando permitida, não um sim solto sem proposta pendente. Não crie rotinas paralelas. O dono pode pausar, reduzir mensagens, encerrar e apagar notas por aqui; apagar notas não apaga o histórico normal do chat.`;
 /**
- * Fecho obrigatório de cada tipo de contato. Todos repetem “pausar jornada”
- * porque a saída tem que estar sempre à mão, e os dois degraus do silêncio
- * repetem o convite para chamar de volta a qualquer hora.
+ * Mandatory closing of each contact type. All of them repeat "pausar jornada"
+ * because the way out has to always be at hand, and the two silence stages
+ * repeat the invitation to call back at any time.
  */
 export const CLOSING: Record<string, string> = {
     check: 'Pode pular hoje. Para pausar, diga pausar jornada.',
@@ -42,9 +42,9 @@ export async function incoming(store: DiscoveryStore, user: string, agent: strin
     // created unless this exact human message explicitly requests one of the
     // two accepted names, and both global gates are enabled.
     if (!p && intent === 'accept' && await store.available()) {
-        // Sem canal conectado a jornada não tem por onde acontecer. Criar o
-        // participante assim mesmo deixava a pessoa presa em `invited`, sem
-        // contato e sem explicação: agora o assistente diz o que falta conectar.
+        // With no channel connected, the journey has no way to happen. Creating
+        // the participant anyway used to leave the person stuck in `invited`,
+        // with no contact and no explanation: now the assistant says what's missing.
         const channels = options.connectedChannels ? await options.connectedChannels().catch(() => []) : null;
         if (channels && !channels.length)
             return { context: `O dono pediu a jornada de descoberta, mas esta conta não tem nenhum canal de entrega conectado, então nada foi criado. Explique que a jornada precisa de um canal para mandar os check-ins e que ele pode conectar o Telegram ou o WhatsApp na tela de Conexões, ou ativar as notificações do aplicativo do ${marca().nome}. Depois de conectar, basta pedir a jornada de novo. Não prometa que a jornada começou.`, participant: null, source: null, reply: null };
@@ -84,9 +84,9 @@ export interface Transport {
     prepare(p: Journey): Promise<void>;
     generate(p: Journey, instruction: string): Promise<string>;
     /**
-     * `definitive` separa recusa do provedor (4xx: bot bloqueado, número
-     * inválido) de incerteza (timeout, 5xx, rede). Sem essa distinção todo
-     * soluço virava falha e pausava a jornada.
+     * `definitive` separates a provider refusal (4xx: blocked bot, invalid
+     * number) from uncertainty (timeout, 5xx, network). Without this
+     * distinction, every hiccup turned into a failure and paused the journey.
      */
     send(p: Journey, text: string): Promise<{
         ok: boolean;
@@ -129,15 +129,15 @@ export function createDiscoveryRunner(store: DiscoveryStore, io: Transport) {
                         await store.finish(claim, receipt?.definitive ? 'failed' : 'uncertain', null, receipt?.reason ?? 'sem recibo do provedor');
                         continue;
                     }
-                    await store.finish(claim, 'accepted', receipt.id); // aceito pelo provedor, NÃO lido/entregue.
+                    await store.finish(claim, 'accepted', receipt.id); // accepted by the provider, NOT read/delivered.
                     try {
                         await io.persist(claim, text);
                     }
-                    catch { /* recibo persiste; nunca reenvia por erro de histórico */ }
+                    catch { /* receipt persists; never resend because of a history error */ }
                 }
                 catch (e) {
-                    // Depois de entregar ao provedor, erro NÃO prova que a mensagem
-                    // não chegou: só recusa determinística conta como falha.
+                    // After delivering to the provider, an error does NOT prove the
+                    // message failed to arrive: only a deterministic refusal counts as failure.
                     const definitive = (e as { definitive?: boolean })?.definitive === true;
                     await store.finish(claim, !sending || definitive ? 'failed' : 'uncertain', null, sanitizeReason(e));
                 }

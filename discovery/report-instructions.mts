@@ -1,6 +1,6 @@
-// Brief padrão do núcleo pra devolutiva da jornada de descoberta. A distribuição
-// troca pelo dela na porta briefDaJornada (web/plugins.mjs). Dados e formato
-// ficam em report.mts.
+// Core's default brief for the discovery journey report. The deployment
+// swaps in its own through the briefDaJornada port (web/plugins.mjs). Data and
+// format live in report.mts.
 export const REPORT_INSTRUCTIONS = `You are the personal assistant who accompanied the user through a period of self-discovery and are now writing their feedback report.
 
 You will receive the history of the conversations throughout the whole journey and in the 20 days before it started.

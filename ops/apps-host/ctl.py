@@ -2,71 +2,72 @@
 """
 Apps control daemon (control-plane).
 
-NAO EDITAR NESTA MAQUINA. A fonte e ops/apps-host/ctl.py no git e sobe pelo
-ops/apps-host/deploy.sh. Editar aqui e ser sobrescrito no proximo deploy.
+DO NOT EDIT ON THIS MACHINE. The source is ops/apps-host/ctl.py in git, deployed
+via ops/apps-host/deploy.sh. Editing here gets overwritten on the next deploy.
 
-Como so a 443 e a 22 estao abertas no host, o backend de producao (SP) invoca
-este script POR SSH (porta 22), mandando UM comando JSON no stdin. Nada de porta
-propria. Saida = UMA linha JSON no stdout: {"ok":true,...} ou {"ok":false,"error":...}.
+Since only 443 and 22 are open on the host, the production backend (SP) invokes
+this script OVER SSH (port 22), sending ONE JSON command on stdin. No port of
+its own. Output = ONE JSON line on stdout: {"ok":true,...} or {"ok":false,"error":...}.
 
-Verbos:
+Verbs:
   publish   {label, system, runtime:"node"|"flask", files:{path:b64}, port?, mem?, cpus?, pids?,
-             auth?}   -> auth: {"user":..,"password":..} tranca a URL (HTTP Basic no roteador);
-                         {"mode":"none"} abre; AUSENTE preserva o que ja estava (republish nao
-                         destranca app privado por esquecimento do chamador)
-  set_auth  {label, system, auth}      -> troca/remove o portao sem republicar
-  inventory {label, system}            -> o que EXISTE de dado do usuario (pre-confirmacao de delete)
+             auth?}   -> auth: {"user":..,"password":..} locks the URL (HTTP Basic at the router);
+                         {"mode":"none"} opens it; MISSING preserves what was already there (a
+                         republish does not unlock a private app by caller oversight)
+  set_auth  {label, system, auth}      -> changes/removes the gate without republishing
+  inventory {label, system}            -> what user data EXISTS (pre-confirmation of a delete)
   stop      {label, system}
   restart   {label, system}
-  delete    {label, system}   -> IRREVERSIVEL: container + codigo + /app/data + historico git
+  delete    {label, system}   -> IRREVERSIBLE: container + code + /app/data + git history
   probe     {label, system?, runtime, files:{path:b64}, port?, mem?, cpus?, pids?, env?}
-            -> PROVA DE VIDA efemera: sobe o codigo num container descartavel, confere que
-               fica de pe e exercita os GET literais do proprio app; apaga tudo no fim.
-               Nunca toca no app publicado, no /app/data dele nem no historico git.
+            -> ephemeral PROOF OF LIFE: brings the code up in a disposable container, checks
+               that it stays up and exercises the own app's literal GETs; wipes everything
+               at the end. Never touches the published app, its /app/data or its git history.
   logs      {label, system, tail?}
   list      {label?}
-  seed_user {label, name}      -> grava label->nome em users.json (landing page)
+  seed_user {label, name}      -> writes label->name to users.json (landing page)
 
-  home_add    {label, kind:"text"|"html"|"link", body, title?, url?}  -> add bloco na home
-  home_list   {label}                                                 -> lista blocos da home
-  home_remove {label, id}                                             -> remove 1 bloco
-  home_clear  {label}                                                 -> zera a home (so a msg padrao)
+  home_add    {label, kind:"text"|"html"|"link", body, title?, url?}  -> add a block to the home
+  home_list   {label}                                                 -> list home blocks
+  home_remove {label, id}                                             -> remove 1 block
+  home_clear  {label}                                                 -> clear the home (only the default msg)
 
-Roda com stdlib pura (host so tem python3).
+Runs on plain stdlib (the host only has python3).
 """
 import base64, hashlib, hmac, json, os, re, secrets, signal, subprocess, sys, time
 
-APPS_ROOT   = "/opt/brambs-apps"                       # codigo das apps (bind mount)
-REG_PATH    = "/opt/brambs-router/apps.json"           # registry do roteador
-IKEY_PATH   = "/opt/brambs-router/internal.key"        # segredo compartilhado ctl <-> roteador
-USERS_PATH  = "/opt/brambs-router/users.json"          # label -> nome (landing)
-HOME_ROOT   = "/opt/brambs-home"                        # <label>.json = blocos da home do usuario
+APPS_ROOT   = "/opt/brambs-apps"                       # apps code (bind mount)
+REG_PATH    = "/opt/brambs-router/apps.json"           # router registry
+IKEY_PATH   = "/opt/brambs-router/internal.key"        # secret shared between ctl <-> router
+USERS_PATH  = "/opt/brambs-router/users.json"          # label -> name (landing)
+HOME_ROOT   = "/opt/brambs-home"                        # <label>.json = user's home blocks
 NETWORK     = "brambs-apps"
 IMAGE       = "brambs-app-base:latest"
 APP_UID     = "10001"
-UID_PATH    = "/opt/brambs-ctl/uids.json"            # label -> UID de SO por usuario (isolamento)
+UID_PATH    = "/opt/brambs-ctl/uids.json"            # label -> OS UID per user (isolation)
 UID_BASE    = 20000
 DEF_PORT    = 8080
 DEF_MEM     = "256m"
 DEF_CPUS    = "0.5"
 DEF_PIDS    = 256
-DEF_QUOTA   = "200m"                                   # cota de disco por usuario (free tier)
+DEF_QUOTA   = "200m"                                   # disk quota per user (free tier)
 PROJID_PATH = "/opt/brambs-ctl/projids.json"           # label -> project id (xfs)
 PROJID_BASE = 1000
-GIT_ROOT    = "/opt/brambs-apps-git"                    # historico git por app (fora do mount /app e da cota XFS)
-PROBE_PREFIX = "tst"                                    # prefixo do sistema EFEMERO da prova de vida
-PROBE_TTL    = 300                                      # s: prova mais velha que isso e sobra, pode varrer
-PROBE_BUDGET = 75                                       # s: teto duro de uma prova (SIGALRM), custo limitado
+GIT_ROOT    = "/opt/brambs-apps-git"                    # per-app git history (outside the /app mount and the XFS quota)
+PROBE_PREFIX = "tst"                                    # prefix of the EPHEMERAL proof-of-life system
+PROBE_TTL    = 300                                      # s: a probe older than this is leftover, safe to sweep
+PROBE_BUDGET = 75                                       # s: hard cap on a probe (SIGALRM), bounded cost
 
-# Dominio dos apps (<label>.<dominio>/<sistema>/). Vem no JSON de cada chamada
-# ("dominio"), mandado pelo backend a partir do APPS_DOMAIN dele, que e a fonte
-# unica. Sem ele (backend antigo), APPS_DOMAIN do ambiente e depois o padrao.
-# sudo limpa o ambiente, por isso o caminho normal e o JSON.
+# Apps domain (<label>.<dominio>/<system>/). Comes in the JSON of each call
+# ("dominio"), sent by the backend from its own APPS_DOMAIN, which is the single
+# source of truth. Without it (older backend), the environment's APPS_DOMAIN and
+# then the default. sudo clears the environment, so the normal path is the JSON.
 DOMINIO_PADRAO = "localhost"
 DOMINIO = os.environ.get("APPS_DOMAIN") or DOMINIO_PADRAO
 
-# Autor dos commits sem pessoa por tras: o nome da marca do host em minusculas,
-# lido do mesmo marca.json do roteador (ver router.py); sem ele, o neutro.
+# Author of commits with no person behind them: the host's brand name in
+# lowercase, read from the same marca.json as the router (see router.py); without
+# it, the neutral default.
 def _autor_padrao():
     try:
         with open(os.environ.get("BRAMBS_MARCA_FILE", "/opt/brambs-router/marca.json"), encoding="utf-8") as f:
@@ -118,10 +119,10 @@ def container_ip(name):
     return (r.stdout.strip() or None) if r.returncode == 0 else None
 
 def _healthcheck(name, port, tries=14, delay=0.6):
-    """Pos-publish: confere se o container fica de pe.
+    """Post-publish: checks whether the container stays up.
     {"state":"ok"|"crashed"|"nostart", "exit_code":int|None}.
-    'crashed' = saiu (exit != 0 ou exit 0 logo apos subir, anormal p/ web).
-    'ok' = de pe (e, se der, respondeu HTTP). 'nostart' = nao confirmou."""
+    'crashed' = exited (exit != 0, or exit 0 right after starting, abnormal for web).
+    'ok' = up (and, if it managed to, responded over HTTP). 'nostart' = unconfirmed."""
     import urllib.request, urllib.error
     ip = None
     for _ in range(tries):
@@ -152,12 +153,12 @@ def _healthcheck(name, port, tries=14, delay=0.6):
     return {"state": "nostart", "exit_code": None}
 
 
-# ---------- smoke test / normalizacao de caminhos ----------
-# Apps rodam sob um SUBCAMINHO (label.<dominio>/system/). Caminho absoluto
-# (comecando com "/") no HTML/JS quebra: o navegador busca na raiz do dominio e
-# o roteador nao acha. Aqui a gente (1) normaliza caminho absoluto -> relativo
-# nos arquivos que o agente mandou e (2) testa pelo roteador se os assets
-# realmente carregam antes de dar o app como publicado.
+# ---------- smoke test / path normalization ----------
+# Apps run under a SUBPATH (label.<dominio>/system/). An absolute path
+# (starting with "/") in HTML/JS breaks: the browser looks under the domain
+# root and the router doesn't find it. Here we (1) normalize absolute path ->
+# relative in the files the agent sent, and (2) test through the router
+# whether the assets actually load before marking the app as published.
 import re as _re, http.client as _httpc
 
 _ATTR_ABS = _re.compile(r'(\b(?:href|src)\s*=\s*["\'])/(?=[^/"\'])')
@@ -165,26 +166,27 @@ _FETCH_ABS = _re.compile(r'(fetch\(\s*["\'`])/(?=[^/"\'`])')
 _REF_RE = _re.compile(r'\b(?:href|src)\s*=\s*["\']([^"\']+)["\']', _re.I)
 _FETCH_REF_RE = _re.compile(r'\bfetch\(\s*["\']([^"\']+)["\']', _re.I)
 _SAFE_SMOKE_REF = _re.compile(r'(?:^|/)(?:status|health|healthz|ping)(?:[/?#]|$)', _re.I)
-# Modo AMPLO (so na prova efemera): pega a chamada de fetch inteira pra poder
-# exigir que seja comprovadamente GET. O literal tem que ser o argumento inteiro,
-# entao concatenacao ("/api/" + id) e template com ${} ficam de fora sozinhos.
+# BROAD mode (only in the ephemeral probe): captures the whole fetch() call so we
+# can require it to be provably GET. The literal has to be the entire argument,
+# so concatenation ("/api/" + id) and ${} templates are excluded on their own.
 _FETCH_CALL_RE = _re.compile(r'\bfetch\(\s*["\']([^"\'\n]{1,300})["\']\s*([),])')
 _METHOD_RE = _re.compile(r'method\s*:\s*["\']([A-Za-z]+)["\']')
 
 
 def _colher_gets(txt):
-    """Refs de fetch() literais e comprovadamente GET.
-    Sem segundo argumento = GET por definicao. Com segundo argumento, so passa
-    se houver method:"GET" escrito; na duvida a prova NAO chama (POST/DELETE de
-    app de usuario podem gravar, e a prova nunca pode ter efeito colateral)."""
+    """Literal fetch() refs that are provably GET.
+    No second argument = GET by definition. With a second argument, only passes
+    if method:"GET" is written; when in doubt the probe does NOT call it (a user
+    app's POST/DELETE may write, and the probe can never have a side effect)."""
     out = []
     for m in _FETCH_CALL_RE.finditer(txt):
         ref, sep = m.group(1), m.group(2)
         if "${" in ref:
             continue
         if sep == ",":
-            # a janela e OLHADA, nunca consumida: consumir escondia a chamada
-            # seguinte do proprio regex e a prova deixava de exercita-la.
+            # the window is only PEEKED at, never consumed: consuming it would
+            # hide the next match from the same regex and the probe would stop
+            # exercising it.
             mm = _METHOD_RE.search(txt[m.end():m.end() + 200])
             if not mm or mm.group(1).upper() != "GET":
                 continue
@@ -193,8 +195,8 @@ def _colher_gets(txt):
 
 
 def _autofix_paths(files):
-    """Normaliza caminho absoluto -> relativo em .html/.htm/.js/.mjs.
-    Devolve (files_novo, lista_de_arquivos_alterados)."""
+    """Normalizes absolute path -> relative in .html/.htm/.js/.mjs.
+    Returns (new_files, list_of_changed_files)."""
     fixed = []
     out = dict(files)
     for rel, b64 in files.items():
@@ -216,22 +218,23 @@ def _autofix_paths(files):
     return out, fixed
 
 
-# ---------- portao de acesso (HTTP Basic no roteador) ----------
-# App novo nasce PRIVADO: a URL publica pede usuario e senha ANTES de o roteador
-# acordar o container. A senha NAO fica em claro aqui: guardamos sha256(salt+senha)
-# no registry, e o backend guarda a senha cifrada (pra poder mostrar ao dono e pra
-# o proprio assistente chamar o app). Ver web/db.mjs (access_pass_enc).
+# ---------- access gate (HTTP Basic at the router) ----------
+# A new app is born PRIVATE: the public URL asks for a username and password
+# BEFORE the router wakes the container. The password is NOT kept in the clear
+# here: we store sha256(salt+password) in the registry, and the backend keeps
+# the encrypted password (so it can show it to the owner and so the assistant
+# itself can call the app). See web/db.mjs (access_pass_enc).
 #
-# sha256 com salt (e nao pbkdf2/scrypt) de proposito: o roteador verifica a CADA
-# request (inclui todo asset), as senhas sao geradas por nos com entropia alta
-# (~57 bits) e o custo de derivacao viraria latencia em toda pagina. Se algum dia
-# aceitarmos senha escolhida pelo usuario, isso tem que virar pbkdf2.
+# sha256 with salt (not pbkdf2/scrypt) on purpose: the router checks on EVERY
+# request (including every asset), passwords are generated by us with high
+# entropy (~57 bits), and the derivation cost would turn into latency on every
+# page. If we ever accept a user-chosen password, this has to become pbkdf2.
 
 def internal_key():
-    """Segredo compartilhado ctl <-> roteador, pra chamada interna passar pelo
-    portao (smoke test do publish precisa ler o HTML do app privado).
-    Cria na primeira vez, 0600. O O_EXCL + releitura resolve a corrida com o
-    roteador, que tambem tenta criar."""
+    """Secret shared between ctl <-> router, so an internal call passes the
+    gate (the publish smoke test needs to read the HTML of a private app).
+    Created on first use, 0600. The O_EXCL + re-read resolves the race with the
+    router, which also tries to create it."""
     try:
         with open(IKEY_PATH) as f:
             k = f.read().strip()
@@ -261,11 +264,11 @@ def _pwhash(salt, password):
 
 
 def _auth_entry(spec, prev=None):
-    """Traduz o pedido do backend na entrada 'auth' do registry.
-      None            -> preserva o que ja estava (republish nao destranca por omissao)
-      {"mode":"none"} -> remove o portao (app publico)
-      {user,password} -> portao Basic novo
-    Devolve None quando nao ha portao."""
+    """Translates the backend's request into the registry's 'auth' entry.
+      None            -> preserves what was already there (a republish doesn't unlock by omission)
+      {"mode":"none"} -> removes the gate (public app)
+      {user,password} -> new Basic gate
+    Returns None when there is no gate."""
     if spec is None:
         return (prev or {}).get("auth")
     if not isinstance(spec, dict):
@@ -276,10 +279,11 @@ def _auth_entry(spec, prev=None):
     pw = spec.get("password") or ""
     if not user or not pw:
         return (prev or {}).get("auth")
-    # Republicar um app privado reenvia a MESMA credencial que ja esta no banco.
-    # Preserve tambem o salt nesse caso: o roteador usa esse valor para versionar
-    # o realm do HTTP Basic. Se re-salgasse todo publish, o navegador esqueceria
-    # uma credencial valida e pediria login de novo sem a senha ter mudado.
+    # Republishing a private app resends the SAME credential that is already in
+    # the database. Also preserve the salt in that case: the router uses this
+    # value to version the HTTP Basic realm. Re-salting on every publish would
+    # make the browser forget a valid credential and ask for login again even
+    # though the password hasn't changed.
     old = (prev or {}).get("auth") or {}
     if old.get("mode") == "basic" and hmac.compare_digest(
             user, str(old.get("user") or "")):
@@ -325,18 +329,19 @@ def _router_html(label, system):
 
 
 def _smoketest(label, system, amplo=False):
-    """Pega o HTML servido pelo roteador, resolve os refs como um navegador em
-    /system/ faria, e confere se cada asset carrega. Assets .css/.js que nao
-    devolvem 200 = broken_critical (quebram a pagina); o resto = broken_other.
+    """Fetches the HTML served by the router, resolves refs the way a browser
+    under /system/ would, and checks whether each asset loads. .css/.js assets
+    that don't return 200 = broken_critical (they break the page); the rest =
+    broken_other.
 
-    amplo=True SO pode ser usado no caminho EFEMERO (verbo probe): ali o
-    container e o /app/data sao descartados no fim, entao da pra exercitar todo
-    GET literal do app (e assim pegar /api/pign, que o conjunto conservador
-    deixa passar). No publish o alvo e o dado REAL do usuario, por isso a
-    allowlist estreita continua valendo."""
+    amplo=True can ONLY be used on the EPHEMERAL path (probe verb): there the
+    container and /app/data are discarded at the end, so every literal GET of
+    the app can be exercised (catching things like /api/pign, which the
+    conservative set lets through). On publish the target is the user's REAL
+    data, so the narrow allowlist still applies."""
     html = _router_html(label, system)
     if html is None:
-        return {}  # sem HTML pra checar (ex: API pura) -> nao bloqueia
+        return {}  # no HTML to check (e.g. pure API) -> doesn't block
     crit, other, seen = [], [], set()
     for ref in _REF_RE.findall(html)[:40]:
         ref = ref.strip()
@@ -423,10 +428,10 @@ def _smoketest(label, system, amplo=False):
 
 
 
-# ---------- cota de disco (XFS project quota por usuario) ----------
-# /opt/brambs-apps e uma imagem XFS montada com prjquota. Cada usuario (label)
-# vira um "project" cujo tree e APPS_ROOT/<label>; o bhard limita a SOMA de todos
-# os apps dele. Arquivos novos herdam o projid do dir pai (comportamento do XFS).
+# ---------- disk quota (XFS project quota per user) ----------
+# /opt/brambs-apps is an XFS image mounted with prjquota. Each user (label)
+# becomes a "project" whose tree is APPS_ROOT/<label>; bhard limits the SUM of
+# all of their apps. New files inherit the parent dir's projid (XFS behavior).
 
 def _xfsq(cmd):
     try:
@@ -449,7 +454,7 @@ def _projid_for(label):
 
 def ensure_quota(label, quota=None):
     quota = str(quota or DEF_QUOTA)
-    if quota.isdigit():  # sem unidade -> assume MB (senao o XFS le como bytes e zera a cota)
+    if quota.isdigit():  # no unit -> assume MB (otherwise XFS reads it as bytes and zeroes the quota)
         quota = quota + "m"
     udir = os.path.join(APPS_ROOT, label)
     os.makedirs(udir, exist_ok=True)
@@ -481,10 +486,11 @@ def quota_usage(label):
                 return None
     return None
 
-# ---------- segredos por app (injecao de env no boot) ----------
-# O valor real do segredo vem cifrado do backend, e decifrado la, e chega aqui
-# em texto no JSON do comando (canal SSH, efemero). Vira -e no container. NUNCA
-# e gravado em disco no host (nao vai pro /app, logo nao vaza no snapshot/replica).
+# ---------- per-app secrets (env injection on boot) ----------
+# The real secret value comes encrypted from the backend, decrypted there, and
+# arrives here in plain text in the command JSON (SSH channel, ephemeral).
+# Becomes -e on the container. NEVER written to disk on the host (doesn't go to
+# /app, so it doesn't leak in snapshot/replica).
 RE_ENVKEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 def _env_flags(env):
@@ -502,10 +508,10 @@ def _env_flags(env):
     return flags
 
 def _uid_for(label):
-    """UID de SO exclusivo por usuario (label). Mapa persistido; aloca sob
-    demanda a partir de UID_BASE. Segunda tranca alem do Docker: os arquivos
-    de cada usuario no host tem dono proprio, entao mesmo com falha de
-    isolamento do container um app nao le o dado de outro usuario (Fase 4)."""
+    """Exclusive OS UID per user (label). Persisted map; allocated on demand
+    starting from UID_BASE. Second lock beyond Docker: each user's files on
+    the host have their own owner, so even with a container isolation failure
+    one app can't read another user's data (Phase 4)."""
     m = load_json(UID_PATH)
     if label in m:
         return int(m[label])
@@ -517,10 +523,10 @@ def _uid_for(label):
 
 
 def _run_container(name, runtime, port, mem, cpus, pids, d, env, uid):
-    docker("rm", "-f", name)  # recria do zero
-    # /app/data: diretorio duravel e reservado a DADO de runtime (SQLite,
-    # uploads). Fica fora do plano de codigo; nao e enviado no publish nem
-    # entra no snapshot, entao o dado NUNCA viaja na replicacao (Fase 2).
+    docker("rm", "-f", name)  # recreate from scratch
+    # /app/data: durable directory reserved for runtime DATA (SQLite,
+    # uploads). It's outside the code plane; not sent on publish and not
+    # included in the snapshot, so the data NEVER travels in replication (Phase 2).
     try:
         _dd = os.path.join(d, "data")
         os.makedirs(_dd, exist_ok=True)
@@ -547,11 +553,12 @@ def _run_container(name, runtime, port, mem, cpus, pids, d, env, uid):
         IMAGE, *cmd,
     )
 
-# ---------- versionamento (git por app) ----------
-# Cada app tem um repo git em GIT_ROOT/<label>/<system>.git, com o work-tree
-# apontando pro appdir. Fica FORA do bind /app (o container nao ve o .git) e FORA
-# da imagem XFS (nao conta na cota do usuario). data/ (dado de runtime) e ignorado
-# via info/exclude, entao nunca entra em commit nem e mexido no rollback.
+# ---------- versioning (git per app) ----------
+# Each app has a git repo at GIT_ROOT/<label>/<system>.git, with the work-tree
+# pointing at appdir. It's OUTSIDE the /app bind (the container doesn't see the
+# .git) and OUTSIDE the XFS image (doesn't count against the user's quota).
+# data/ (runtime data) is ignored via info/exclude, so it never enters a commit
+# nor is touched by a rollback.
 
 def _gitdir(label, system):
     return os.path.join(GIT_ROOT, label, system + ".git")
@@ -578,7 +585,7 @@ def _git_ensure(label, system):
     if not os.path.isdir(gd):
         os.makedirs(os.path.dirname(gd), exist_ok=True)
         subprocess.run(["git", "init", "--bare", gd], capture_output=True, text=True)
-        # nao-bare pra permitir operacoes de work-tree (checkout/reset)
+        # non-bare to allow work-tree operations (checkout/reset)
         subprocess.run(["git", "--git-dir", gd, "config", "core.bare", "false"],
                        capture_output=True, text=True)
         try:
@@ -589,8 +596,9 @@ def _git_ensure(label, system):
     return gd, wt
 
 def _exclude_add(gd, paths):
-    """Acrescenta caminhos ao info/exclude do repo do app, sem duplicar. Fica no
-    repo (nao no work-tree): o app nunca ve, e nao viaja no payload de publish."""
+    """Appends paths to the app repo's info/exclude, without duplicating. Lives
+    in the repo (not the work-tree): the app never sees it, and it doesn't
+    travel in the publish payload."""
     p = os.path.join(gd, "info", "exclude")
     try:
         cur = open(p).read().splitlines() if os.path.exists(p) else []
@@ -608,14 +616,14 @@ def _exclude_add(gd, paths):
     return novos
 
 def _runtime_leftovers(gd, wt, code_paths):
-    """Arquivos que estao no appdir, NAO estao no git e NAO foram mandados pelo
-    assistente nesta publicacao. O payload de publish e sempre o app inteiro
-    (o rascunho re-semeia do snapshot), entao arquivo fora dele foi criado pelo
-    app rodando = dado de runtime gravado fora de /app/data.
+    """Files that are in appdir, are NOT in git, and were NOT sent by the
+    assistant in this publication. The publish payload is always the whole app
+    (the draft reseeds from the snapshot), so a file outside of it was created
+    by the running app = runtime data written outside /app/data.
 
-    Devolve (lista de linhas pro exclude, lista de caminhos pro aviso). So olha
-    UNTRACKED: arquivo ja versionado nao e tocado aqui, pra nunca desversionar
-    codigo por engano."""
+    Returns (list of lines for exclude, list of paths for the warning). Only
+    looks at UNTRACKED: an already-versioned file is never touched here, so
+    code never gets unversioned by mistake."""
     r = _gitrun(gd, wt, ["ls-files", "--others", "--exclude-standard", "-z"])
     if r.returncode != 0:
         return [], []
@@ -623,8 +631,8 @@ def _runtime_leftovers(gd, wt, code_paths):
     sobra = [x for x in novos if x not in code_paths]
     if not sobra:
         return [], []
-    # se o diretorio de topo nao tem NENHUM arquivo de codigo, exclui o diretorio
-    # (uploads crescem; entrada por arquivo incharia o exclude a cada publish).
+    # if the top-level directory has NO code file at all, exclude the directory
+    # (uploads grow; a per-file entry would bloat the exclude on every publish).
     dirs_codigo = set(p.split("/", 1)[0] for p in code_paths if "/" in p)
     regras, avisos = [], []
     for rel in sorted(sobra)[:200]:
@@ -639,12 +647,13 @@ def _runtime_leftovers(gd, wt, code_paths):
     return regras, avisos
 
 def _git_commit(label, system, author=None, message=None, code_paths=None):
-    """Best-effort: registra o estado atual do appdir como uma versao. Nunca
-    lanca; se der ruim, so nao versiona (nao bloqueia o publish).
+    """Best-effort: records the current appdir state as a version. Never
+    raises; if it goes wrong, it just doesn't version (doesn't block the
+    publish).
 
-    Com code_paths (o que o assistente mandou), o que sobrou no appdir e dado de
-    runtime: entra no info/exclude ANTES do add, pra nao ser versionado nem
-    rebobinado por rollback. E o mesmo contrato que data/ sempre teve."""
+    With code_paths (what the assistant sent), whatever's left over in appdir
+    is runtime data: it goes into info/exclude BEFORE the add, so it's never
+    versioned nor rewound by a rollback. Same contract data/ has always had."""
     try:
         gd, wt = _git_ensure(label, system)
         fora = []
@@ -662,12 +671,12 @@ def _git_commit(label, system, author=None, message=None, code_paths=None):
         return {"versioned": False, "error": str(e)[:200]}
 
 def _read_tree_files(wt, gd=None):
-    """Le o CODIGO do app como {rel: b64}, pra devolver ao backend atualizar o
-    snapshot da biblioteca apos um rollback.
+    """Reads the app's CODE as {rel: b64}, to return to the backend so it can
+    update the library snapshot after a rollback.
 
-    Fonte da verdade = o que esta VERSIONADO (git ls-files): dado de runtime esta
-    no info/exclude, entao nao entra no snapshot nem viaja em replicacao. Cai pro
-    walk do diretorio (menos data/) se o git falhar."""
+    Source of truth = what's VERSIONED (git ls-files): runtime data is in
+    info/exclude, so it doesn't enter the snapshot nor travel in replication.
+    Falls back to a directory walk (minus data/) if git fails."""
     if gd and os.path.isdir(gd):
         r = _gitrun(gd, wt, ["ls-files", "-z"])
         if r.returncode == 0:
@@ -741,13 +750,13 @@ def v_git_rollback(c):
         return {"ok": False, "error": "versao nao encontrada"}
     target = (chk.stdout or "").strip()
     head = (_gitrun(gd, wt, ["rev-parse", "HEAD"]).stdout or "").strip()
-    # worktree passa a ser exatamente a versao alvo (remove arquivos que nao
-    # existiam nela; data/ e ignorado, entao dado de runtime fica intacto).
+    # the worktree becomes exactly the target version (removes files that
+    # didn't exist in it; data/ is ignored, so runtime data stays intact).
     r1 = _gitrun(gd, wt, ["reset", "--hard", target])
     if r1.returncode != 0:
         return {"ok": False, "error": "falha no reset: " + ((r1.stderr or "").strip())[:200]}
-    # move o HEAD de volta pro tip mantendo o conteudo revertido, e grava um novo
-    # commit representando o rollback (preserva o historico, nao reescreve).
+    # moves HEAD back to the tip while keeping the reverted content, and records
+    # a new commit representing the rollback (preserves history, doesn't rewrite it).
     if head:
         _gitrun(gd, wt, ["reset", "--soft", head])
     _gitrun(gd, wt, ["commit", "-m", "rollback para %s" % target[:8], "--allow-empty"],
@@ -779,7 +788,7 @@ def v_git_rollback(c):
     return {"ok": True, "reverted_to": target[:8], "files": files, "health": health["state"]}
 
 
-# ---------- verbos ----------
+# ---------- verbs ----------
 
 def v_publish(c):
     label  = _san(c.get("label"))
@@ -805,9 +814,9 @@ def v_publish(c):
         ensure_quota(label, c.get("quota"))
     except Exception:
         pass
-    # normaliza caminho absoluto -> relativo (apps rodam sob /system/)
+    # normalize absolute path -> relative (apps run under /system/)
     files, _fixed = _autofix_paths(files)
-    # grava arquivos (path relativo, sem escapar do dir)
+    # write files (relative path, without escaping the dir)
     for rel, b64 in files.items():
         rel = rel.lstrip("/")
         dest = os.path.normpath(os.path.join(d, rel))
@@ -825,7 +834,7 @@ def v_publish(c):
     if run.returncode != 0:
         return {"ok": False, "error": "docker run falhou: " + (run.stderr or "").strip()[:300]}
 
-    # valida boot: se o app crashar ao subir, NAO registra e devolve o log pro agente
+    # validate boot: if the app crashes on startup, do NOT register it and return the log to the agent
     health = _healthcheck(name, port)
     if health["state"] == "crashed":
         lg = docker("logs", "--tail", "40", name)
@@ -835,8 +844,8 @@ def v_publish(c):
 
     reg = load_json(REG_PATH)
     key = f"{label}/{system}"
-    # a entrada e reescrita inteira aqui, entao o portao de acesso tem que ser
-    # carregado explicitamente: republicar app privado NAO pode destrancar a URL.
+    # the entry gets rewritten whole here, so the access gate has to be loaded
+    # explicitly: republishing a private app must NOT unlock the URL.
     auth = _auth_entry(c.get("auth"), reg.get(key))
     entry = {"container": name, "port": port, "runtime": runtime,
              "mem": mem, "cpus": cpus, "pids": pids}
@@ -845,8 +854,8 @@ def v_publish(c):
     reg[key] = entry
     save_json(REG_PATH, reg)
 
-    # smoke test pelo ROTEADOR (reproduz o que o navegador ve sob /system/):
-    # se um CSS/JS referenciado nao carregar, DESFAZ o registro e nao publica.
+    # smoke test through the ROUTER (reproduces what the browser sees under
+    # /system/): if a referenced CSS/JS doesn't load, UNDO the registration and don't publish.
     smoke = _smoketest(label, system)
     if smoke.get("broken_critical"):
         reg.pop(f"{label}/{system}", None)
@@ -860,9 +869,9 @@ def v_publish(c):
         docker("rm", "-f", name)
         return {"ok": False, "error": "smoke_funcional_falhou",
                 "broken": smoke["broken_functional"], "fixed": _fixed}
-    # versiona esta publicacao (best-effort; falha aqui nao bloqueia o publish)
-    # o payload desta publicacao E o codigo do app; o resto que estiver no appdir
-    # e dado de runtime e vai pro info/exclude (idem data/).
+    # versions this publication (best-effort; failure here doesn't block the publish)
+    # the payload of this publication IS the app's code; whatever else is in
+    # appdir is runtime data and goes to info/exclude (same as data/).
     code_paths = set(os.path.normpath(r.lstrip("/")).replace(os.sep, "/") for r in files)
     gitres = _git_commit(label, system, c.get("author"), c.get("message"), code_paths)
     out = {"ok": True, "container": name,
@@ -880,15 +889,17 @@ def v_publish(c):
         out["functional_warnings"] = smoke["functional_warnings"]
     return out
 
-# ---------- prova de vida efemera (verbo probe) ----------
-# O publish ja sobe, faz healthcheck e smoke. O que faltava era rodar isso ANTES
-# de publicar, num lugar descartavel, pra o modelo descobrir sozinho o erro que
-# so aparece EXECUTANDO (o caso /api/pign: nome quase certo, lint aprova, so
-# quem chama a rota ve o 404).
+# ---------- ephemeral proof of life (probe verb) ----------
+# publish already brings it up, runs a healthcheck and a smoke test. What was
+# missing was running this BEFORE publishing, in a disposable place, so the
+# model can discover on its own the error that only shows up by RUNNING it (the
+# /api/pign case: a near-right name, lint approves it, only calling the route
+# shows the 404).
 #
-# Tudo aqui e efemero de proposito: sistema com nome sorteado sob o prefixo
-# "tst-", container proprio, /app/data proprio (nasce vazio e morre junto).
-# A prova NUNCA toca no app publicado, no dado dele nem no historico git.
+# Everything here is ephemeral on purpose: a system with a random name under
+# the "tst-" prefix, its own container, its own /app/data (born empty and dies
+# with it). The probe NEVER touches the published app, its data, or its git
+# history.
 
 _PROBE_RE = _re.compile(r"^%s-[0-9a-f]{8}$" % PROBE_PREFIX)
 
@@ -902,9 +913,9 @@ def _probe_alarme(signum, frame):
 
 
 def _probe_sistemas(label):
-    """Provas desse usuario que ainda existem em ALGUM lugar (registry, disco,
-    docker). Varrer os tres e o que garante que uma execucao interrompida no
-    meio nao deixa container orfao comendo memoria do host."""
+    """This user's probes that still exist in ANY place (registry, disk,
+    docker). Sweeping all three is what guarantees that an execution
+    interrupted midway doesn't leave an orphan container eating host memory."""
     achados = set()
     for key in load_json(REG_PATH):
         lb, _, sy = key.partition("/")
@@ -926,7 +937,7 @@ def _probe_sistemas(label):
 
 
 def _probe_idade(label, system):
-    """Idade em segundos pela mtime do dir da prova. Sem dir = sobra, varre."""
+    """Age in seconds from the probe dir's mtime. No dir = leftover, sweep it."""
     try:
         return max(0.0, time.time() - os.path.getmtime(appdir(label, system)))
     except Exception:
@@ -934,9 +945,9 @@ def _probe_idade(label, system):
 
 
 def _probe_teardown(label, system):
-    """Desfaz TUDO que a prova criou. Duas trancas antes de qualquer rm -rf: o
-    nome tem que casar com o padrao efemero (nenhum app publicado casa) e o
-    caminho tem que estar dentro do proprio APPS_ROOT/<label>/."""
+    """Undoes EVERYTHING the probe created. Two locks before any rm -rf: the
+    name has to match the ephemeral pattern (no published app matches it) and
+    the path has to be inside APPS_ROOT/<label>/ itself."""
     label = _san(label)
     if not label or not _PROBE_RE.match(system or ""):
         return False
@@ -951,13 +962,13 @@ def _probe_teardown(label, system):
 
 
 def v_probe(c):
-    """Sobe o codigo num container descartavel, ve se fica de pe e exercita os
-    GET literais do proprio app. Devolve SEMPRE o que observou; nao publica,
-    nao versiona e nao deixa nada pra tras.
+    """Brings the code up in a disposable container, sees whether it stays up,
+    and exercises the own app's literal GETs. ALWAYS returns what it observed;
+    doesn't publish, doesn't version, and doesn't leave anything behind.
 
-    ok=False so quando a PROVA nao pode rodar (entrada invalida, outra prova em
-    andamento, docker falhou, estourou o tempo). App quebrado e resultado
-    valido da prova: ok=True com veredito != "passou"."""
+    ok=False only when the PROBE itself can't run (invalid input, another probe
+    already running, docker failed, timed out). A broken app is a valid probe
+    result: ok=True with veredito != "passou"."""
     label = _san(c.get("label"))
     runtime = c.get("runtime")
     files = c.get("files") or {}
@@ -968,9 +979,9 @@ def v_probe(c):
     if not files:
         return {"ok": False, "error": "sem arquivos"}
 
-    # Teto de UMA prova viva por pessoa (o custo do host mora na simultaneidade,
-    # nao no volume: 183 publishes em 30 dias e ~6/dia). Sobra passada do TTL e
-    # varrida antes de recusar, senao uma prova morta trancaria a pessoa.
+    # Cap of ONE live probe per person (the host's cost lives in concurrency,
+    # not volume: 183 publishes in 30 days is ~6/day). Leftovers past the TTL
+    # are swept before refusing, otherwise a dead probe would lock the person out.
     for velho in _probe_sistemas(label):
         idade = _probe_idade(label, velho)
         if idade > PROBE_TTL:
@@ -1021,10 +1032,10 @@ def v_probe(c):
                     "exit_code": health.get("exit_code"), "logs": log_txt,
                     "fixed_paths": fixed}
 
-        # Registro TEMPORARIO: e o unico jeito de falar com o app pelo roteador
-        # (o smoke reproduz o navegador em /system/). Nasce TRANCADO com senha
-        # sorteada e descartada, entao a URL da prova nunca fica aberta, nem
-        # pelos poucos segundos que ela existe.
+        # TEMPORARY registration: it's the only way to talk to the app through
+        # the router (the smoke test reproduces the browser at /system/). It's
+        # born LOCKED with a random, discarded password, so the probe's URL is
+        # never open, not even for the few seconds it exists.
         reg = load_json(REG_PATH)
         reg["%s/%s" % (label, system)] = {
             "container": name, "port": port, "runtime": runtime,
@@ -1048,17 +1059,19 @@ def v_probe(c):
     except _ProbeTimeout:
         return {"ok": False, "error": "prova_estourou_tempo", "limite_s": PROBE_BUDGET}
     finally:
-        # Desarma o alarme ANTES de limpar: a limpeza nunca pode ser interrompida
-        # pelo teto de tempo, senao a prova e que viraria o lixo no host.
+        # Disarm the alarm BEFORE cleaning up: the cleanup can never be
+        # interrupted by the time cap, otherwise the probe itself would become
+        # the litter left on the host.
         signal.alarm(0)
         signal.signal(signal.SIGALRM, anterior)
         _probe_teardown(label, system)
 
 
 def v_reload(c):
-    """Recria o container reusando os arquivos JA no disco, aplicando o env
-    (segredos) mandado pelo backend. Nao recebe arquivos: so injeta/rotaciona
-    env sem re-upload. O env nunca e gravado em disco no host."""
+    """Recreates the container reusing the files ALREADY on disk, applying the
+    env (secrets) sent by the backend. Doesn't receive files: only
+    injects/rotates env without a re-upload. The env is never written to disk
+    on the host."""
     label  = _san(c.get("label"))
     system = _san(c.get("system"))
     if not label or not system:
@@ -1103,8 +1116,9 @@ def v_restart(c):
             "error": None if r.returncode == 0 else (r.stderr or "").strip()[:200]}
 
 def v_set_auth(c):
-    """Tranca/destranca a URL publica SEM republicar. So mexe no registry, que o
-    roteador rele a cada request -> efeito imediato, sem restart."""
+    """Locks/unlocks the public URL WITHOUT republishing. Only touches the
+    registry, which the router re-reads on every request -> immediate effect,
+    no restart."""
     label, system = _san(c.get("label")), _san(c.get("system"))
     if not label or not system:
         return {"ok": False, "error": "label/system invalidos"}
@@ -1128,7 +1142,7 @@ def v_set_auth(c):
 
 
 def _dir_stats(root):
-    """Conta arquivos e bytes debaixo de root (sem seguir symlink)."""
+    """Counts files and bytes under root (without following symlinks)."""
     n = 0; b = 0
     for dirpath, dirnames, filenames in os.walk(root):
         for fn in filenames:
@@ -1144,8 +1158,8 @@ def _dir_stats(root):
 
 
 def _sqlite_counts(path):
-    """Contagem de linhas por tabela, ABRINDO READ-ONLY (uri ro): inventario nunca
-    pode alterar o banco do usuario nem criar -wal/-shm."""
+    """Row count per table, OPENING READ-ONLY (uri ro): the inventory can never
+    alter the user's database nor create -wal/-shm."""
     import sqlite3
     out = {}
     try:
@@ -1167,9 +1181,9 @@ def _sqlite_counts(path):
 
 
 def v_inventory(c):
-    """O que EXISTE de dado do usuario neste app. Serve pra confirmacao antes do
-    delete: o assistente precisa dizer QUANTOS registros vao morrer, nao um
-    'nao da pra desfazer' genarico. Somente leitura."""
+    """What user data EXISTS in this app. Used for confirmation before a
+    delete: the assistant needs to say HOW MANY records are going to be lost,
+    not a generic "can't be undone". Read-only."""
     label, system = _san(c.get("label")), _san(c.get("system"))
     if not label or not system:
         return {"ok": False, "error": "label/system invalidos"}
@@ -1183,7 +1197,7 @@ def v_inventory(c):
     if data["existe"]:
         n, b = _dir_stats(data_dir)
         data["arquivos"] = n; data["bytes"] = b
-        # dado de usuario mora em /app/data: sqlite (tabelas) ou json (listas).
+        # user data lives in /app/data: sqlite (tables) or json (lists).
         for dirpath, dirnames, filenames in os.walk(data_dir):
             for fn in filenames:
                 p = os.path.join(dirpath, fn)
@@ -1206,7 +1220,7 @@ def v_inventory(c):
                             if isinstance(j, list):
                                 data["colecoes"][rel] = len(j)
                             elif isinstance(j, dict):
-                                # {"pedidos":[...]} e o formato comum; conta cada lista
+                                # {"pedidos":[...]} is the common format; count each list
                                 sub = {k: len(v) for k, v in j.items() if isinstance(v, list)}
                                 data["colecoes"][rel] = sub or len(j)
                     except Exception:
@@ -1269,16 +1283,17 @@ def v_list(c):
     return {"ok": True, "apps": apps, "quotas": quotas}
 
 def v_quota(c):
-    """Aplica a cota de disco do LABEL sem republicar nada.
+    """Applies the LABEL's disk quota without republishing anything.
 
-    A cota do XFS vale no LABEL, ou seja, POR USUARIO, e ate agora so era aplicada
-    dentro do publish (ensure_quota em v_publish). Quem trocava de plano seguia com
-    a cota antiga ate publicar um app de novo: quem subiu de plano nao ganhava o
-    disco que pagou, e quem desceu ficava com o disco do plano grande. Este verbo
-    e a reconciliacao, chamada pelo backend. Nao toca em app nenhum.
+    The XFS quota applies at the LABEL level, i.e. PER USER, and until now was
+    only applied inside publish (ensure_quota in v_publish). Someone who
+    changed plans kept the old quota until publishing an app again: upgrading a
+    plan didn't grant the paid-for disk, and downgrading kept the big plan's
+    disk. This verb is the reconciliation, called by the backend. Doesn't
+    touch any app.
 
-    Aceita um label por chamada ({label, quota}) ou um lote ({itens: [...]}).
-    Devolve antes/depois de cada um pra quem chamou saber o que de fato mudou.
+    Accepts one label per call ({label, quota}) or a batch ({itens: [...]}).
+    Returns before/after for each one so the caller knows what actually changed.
     """
     itens = c.get("itens")
     if not isinstance(itens, list):

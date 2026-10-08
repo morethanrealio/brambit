@@ -1,8 +1,8 @@
-# Varredura de segredos (gitleaks), roda na checagem rápida do CI.
-# Regras padrão do gitleaks + exceções conferidas à mão em 01/10/2026:
-#   - test-support/apple-iap/*: cadeia de certificados de TESTE (CN "Test Leaf"),
-#     gerada só pros testes do Apple IAP; não vale em lugar nenhum.
-# Exceção nova só com o motivo escrito aqui.
+# Secret scan (gitleaks), runs in the CI quick check.
+# Default gitleaks rules + exceptions checked by hand on 2026-10-01:
+#   - test-support/apple-iap/*: TEST certificate chain (CN "Test Leaf"),
+#     generated only for the Apple IAP tests; not valid anywhere else.
+# New exception only with the reason written here.
 [extend]
 useDefault = true
 

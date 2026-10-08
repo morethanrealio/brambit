@@ -85,7 +85,7 @@ export function reportContext(input: {
 
 // Escape delimiters inside customer text; never interpolate history as instructions.
 const dataBlock = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
-// brief: o da distribuição (porta briefDaJornada); sem ele, o padrão do núcleo.
+// brief: the deployment's (briefDaJornada port); without it, the core default.
 export function reportPrompt(context: ReportContext, previousError?: string | null, brief: string = REPORT_INSTRUCTIONS): string {
     return `${brief}
 

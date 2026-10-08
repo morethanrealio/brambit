@@ -1,7 +1,7 @@
 import {microsoftContextServices,onboardingSources} from './connections.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
 import {OnboardingError,id,publicState,starterPrompt,type State} from './store.mjs';
-// Módulo puro de geração textual; não importa servidor/DB/pollers.
+// Pure text-generation module; doesn't import server/DB/pollers.
 // @ts-expect-error runtime ESM legacy without declarations
 import {generateMessageDraft} from '../web/message-draft.mjs';
 const source=readFileSync('web/server.mjs','utf8');const a=source.indexOf('  // Estado persistente, recuperação e telemetria'),b=source.indexOf('  // Atualização automática dos boxes da home.',a);assert(a>0&&b>a);const handler=source.slice(a,b);

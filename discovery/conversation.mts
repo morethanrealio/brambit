@@ -40,9 +40,9 @@ export function controlIntent(message: string): string | null {
         return 'less';
     if (/^(?:encerrar|encerre|cancelar|cancele)(?:\s+(?:(?:a|minha|essa|esta)\s+)?(?:jornada|rotina)(?:\s+d[ae]\s+descoberta)?)?$/.test(bare))
         return 'end';
-    // O grupo da jornada é OPCIONAL aqui: "pode retomar" e "retoma" sozinhos são
-    // pedidos diretos e falhavam. "continuar" segue exigindo o objeto, porque
-    // sozinho é palavra comum de conversa e não um comando.
+    // The journey group is OPTIONAL here: "pode retomar" and "retoma" alone are
+    // direct requests and used to fail. "continuar" still requires the object,
+    // because alone it's a common conversation word, not a command.
     if (/^(?:retomar|retome|retoma|despausar|despause|voltar|volte|volta)(?:\s+(?:(?:a|minha|essa|esta)\s+)?(?:jornada|rotina)(?:\s+d[ae]\s+descoberta)?)?$/.test(bare) || /^(?:continuar|continue|continua|seguir|siga)\s+(?:com\s+)?(?:(?:a|minha|essa|esta)\s+)?(?:jornada|rotina)(?:\s+d[ae]\s+descoberta)?$/.test(bare))
         return 'resume';
     if (bare === 'apagar notas da jornada' || bare === 'apagar as notas da jornada')

@@ -7,7 +7,7 @@
 <title>__MARCA__</title>
 <style nonce="__CSP_NONCE__">
   :root {
-    /* Palheta __MARCA__: bege + cinza + laranja desaturado (salmão da marca) */
+    /* __MARCA__ palette: beige + gray + desaturated orange (the brand's salmon) */
     --bg:#f4eee4; --panel:#faf6ee; --card:#fffdf8; --line:#e5ddcd; --line2:#efe7d8;
     --accent:#c97a52; --accent2:#dd9568; --txt:#2b2723; --mut:#736c5f; --mut2:#a39b89;
     --side:#efe7d8;
@@ -19,14 +19,14 @@
   a { color:inherit; }
   input, textarea, select, button { font-family:inherit; }
 
-  /* Splash de boot: evita o "flash" da home antes do boot decidir o que mostrar.
-     Enquanto <body class="booting">, só o splash aparece; auth/app/wizard ficam ocultos. */
+  /* Boot splash: avoids the home "flash" before boot decides what to show.
+     While <body class="booting">, only the splash shows; auth/app/wizard stay hidden. */
   #boot { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:var(--bg); z-index:60; }
   #boot .bootlogo { width:132px; max-width:52vw; opacity:.9; }
   body.booting #boot { display:flex; }
   body.booting #auth, body.booting #app, body.booting #wiz { display:none !important; }
 
-  /* ───── Auth (cartão central) ───── */
+  /* ───── Auth (center card) ───── */
   .authwrap { min-height:100vh; display:flex; flex-direction:column; }
   .authmain { flex:1; display:flex; align-items:center; justify-content:center; padding:32px 20px; width:100%; }
   .authcard { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:28px; }
@@ -44,8 +44,8 @@
   /* Same box as .primary, painted as secondary. Used on the sign-up ↔ login
      toggle: it used to be a 13px link hidden under the card and almost nobody
      found it (07/09/2026). */
-  /* padding 12px (e não 13px como o .primary) porque a borda de 1px em cima e
-     embaixo já repõe os 2px: assim os dois botões medem exatamente 43px. */
+  /* padding 12px (not 13px like .primary) because the 1px border top and
+     bottom already adds back the 2px: this way both buttons measure exactly 43px. */
   .secondary { width:100%; margin-top:8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--txt); font-size:15px; font-weight:600; cursor:pointer; }
   .secondary:hover { border-color:var(--accent); color:var(--accent); }
   .link { color:var(--accent2); cursor:pointer; font-size:13px; }
@@ -64,7 +64,7 @@
   .gbtn { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; padding:12px; border-radius:10px; background:#fff; color:#3c4043; font-size:14px; font-weight:600; text-decoration:none; border:1px solid var(--line); cursor:pointer; }
   .gbtn:hover { background:#f3f3f3; }
 
-  /* ───── Login/cadastro (a venda mora na home pública, home.html) ───── */
+  /* ───── Login/sign-up (the pitch lives on the public home page, home.html) ───── */
   .landing { width:100%; display:flex; justify-content:center; }
   .authcol { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
   .authcol .authcard { margin:0; }
@@ -83,15 +83,15 @@
     .authmain { align-items:flex-start; }
   }
 
-  /* ───── App shell (3 colunas) ───── */
+  /* ───── App shell (3 columns) ───── */
   .app { display:grid; grid-template-columns:248px 1fr 320px; height:100vh; }
-  /* Estado "coluna direita expandida": alarga a barra da direita e espreme a área central. */
+  /* "Right column expanded" state: widens the right rail and squeezes the center area. */
   .app.rail-wide { grid-template-columns:248px 1fr 520px; }
   .sidebar { background:var(--side); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:16px 12px; overflow-y:auto; }
-  /* Card de Sugestões movido pra baixo do menu (sidebar). */
+  /* Suggestions card moved below the menu (sidebar). */
   .sidesug { margin-top:14px; }
   .sidesug #railSug { max-height:260px; overflow-y:auto; }
-  /* ── Menu minimizável (só ícones) ── */
+  /* ── Minimizable menu (icons only) ── */
   .navmini-btn { background:transparent; border:0; font-size:18px; line-height:1; color:var(--mut); cursor:pointer; padding:2px 8px; border-radius:8px; }
   .navmini-btn:hover { color:var(--accent); background:var(--line2); }
   .app.nav-mini { grid-template-columns:64px 1fr 320px; }
@@ -130,7 +130,7 @@
   .userrow .un { font-size:13.5px; font-weight:600; line-height:1.2; }
   .userrow .us { font-size:11.5px; color:var(--mut); }
 
-  /* coluna central */
+  /* center column */
   .main { overflow-y:auto; padding:30px 40px 60px; }
   .maintop { display:flex; justify-content:space-between; align-items:center; color:var(--mut); font-size:13px; margin-bottom:18px; min-height:20px; }
   .panel { display:none; }
@@ -141,7 +141,7 @@
   .file-meta { display:flex; flex-direction:column; min-width:0; }
   .file-name { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .file-sub { font-size:12px; color:var(--soft,#8a7f6a); margin-top:2px; }
-  /* Grade de miniaturas (imagens/vídeos): previews lado a lado. */
+  /* Thumbnail grid (images/videos): side-by-side previews. */
   .file-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; align-items:start; }
   .file-tile { position:relative; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--card); transition:border-color .15s; }
   .file-tile:hover { border-color:var(--accent); }
@@ -149,7 +149,7 @@
   .file-tile .thumb img, .file-tile .thumb video { display:block; width:100%; height:150px; object-fit:cover; background:var(--panel); }
   .file-tile .tdel { position:absolute; top:6px; right:6px; border:none; border-radius:8px; padding:4px 7px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff; font-size:13px; line-height:1; opacity:0; transition:opacity .15s; z-index:3; }
   .file-tile:hover .tdel { opacity:1; }
-  /* Botão "i" (canto inferior direito) + caixa de legenda sobre a imagem. */
+  /* "i" button (bottom-right corner) + caption box over the image. */
   .file-tile .tinfo { position:absolute; bottom:8px; right:8px; width:26px; height:26px; border:none; border-radius:50%; cursor:pointer; background:rgba(0,0,0,.6); color:#fff; font-size:14px; font-style:italic; font-weight:700; line-height:1; z-index:3; display:flex; align-items:center; justify-content:center; }
   .file-tile .tinfo:hover { background:rgba(0,0,0,.8); }
   .file-tile .tbox { position:absolute; inset:0; background:rgba(20,17,14,.9); color:#fff; padding:12px 14px; font-size:13px; line-height:1.4; overflow:auto; display:none; z-index:2; cursor:pointer; word-break:break-word; }
@@ -157,7 +157,7 @@
   .file-tile .tbox .tdate { display:block; margin-top:8px; font-size:11px; opacity:.7; }
   .contentcol { max-width:720px; margin:0 auto; }
 
-  /* início */
+  /* home */
   .greet { font-size:30px; font-weight:600; line-height:1.25; margin:6px 0 26px; letter-spacing:-.01em; }
   .greet .soft { color:var(--mut); font-weight:400; }
   .taskbox { border:1px solid var(--line); border-radius:16px; padding:16px 16px 12px; background:var(--panel); transition:border-color .15s; }
@@ -185,7 +185,7 @@
   .thread-item .ti-preview { font-size:12px; color:var(--mut2); margin-top:3px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .thread-item .ti-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
   .thread-item .ti-when { font-size:11.5px; color:var(--mut); white-space:nowrap; flex-shrink:0; }
-  /* Bolinha de mensagem não lida naquela conversa. */
+  /* Unread-message dot on that thread. */
   .thread-item .ti-unread { width:9px; height:9px; border-radius:50%; background:#e0563f; flex-shrink:0; }
   .thread-item.unread .ti-title { font-weight:600; }
   .thread-item .ti-act { border:0; background:none; color:var(--mut2); font-size:16px; line-height:1; cursor:pointer; padding:3px 6px; border-radius:8px; opacity:.45; }
@@ -205,31 +205,31 @@
   .empty { color:var(--mut); font-size:14px; }
   .empty .link { font-size:14px; }
 
-  /* assistentes / seções */
+  /* assistants / sections */
   .section { padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--card); }
   .section .title { font-size:14px; font-weight:600; margin-bottom:4px; }
   .section + .section { margin-top:12px; }
-  /* barra de uso/créditos */
+  /* usage/credits bar */
   .bar { height:8px; border-radius:6px; background:var(--line2); overflow:hidden; position:relative; }
   .bar.big { height:12px; border-radius:8px; }
   .barfill { height:100%; width:0%; border-radius:6px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .4s ease; }
   .barfill.warn { background:linear-gradient(90deg,#e0a800,#ffcf3a); }
   .barfill.full { background:linear-gradient(90deg,#d63031,#ff6b6b); }
-  /* consumo dos créditos extras: sobrepõe a barra do plano, em vermelho mais escuro */
+  /* extra-credits consumption: overlays the plan bar, in a darker red */
   .barfill.extra { position:absolute; top:0; left:0; z-index:2; background:linear-gradient(90deg,#7a0d0d,#a71414); }
   .usonums { font-size:14px; color:var(--txt); margin-top:10px; }
   .usonums .soft { color:var(--mut); }
   .sideuso { margin-top:10px; padding:8px 8px 2px; cursor:pointer; }
   .su-top { display:flex; justify-content:space-between; font-size:11.5px; color:var(--mut); margin-bottom:6px; }
-  /* detalhamento dos créditos extras por pacote */
+  /* breakdown of extra credits per package */
   .extralist { margin:6px 0 0; padding-left:18px; }
   .extralist li { margin:5px 0; font-size:12.5px; }
   .minibar { height:5px; background:#e8e8ee; border-radius:3px; margin:3px 0 0; overflow:hidden; }
   .minifill { height:100%; background:#5b8def; border-radius:3px; }
   .minifill.warn { background:#e0a800; }
   .minifill.full { background:#c0392b; }
-  /* planos e pacotes: boxes um ao lado do outro (grid responsivo) */
-  /* plano corporativo da empresa: mesmo card, com campo de quantidade */
+  /* plans and packages: boxes side by side (responsive grid) */
+  /* company's corporate plan: same card, with a quantity field */
   #planCorp { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; align-items:stretch; margin-bottom:10px; }
   .plancard .corpin { width:100%; padding:9px 12px; font-size:14px; }
   .plancard .corpnote { font-size:12px; color:var(--mut); }
@@ -243,9 +243,9 @@
   .plancard .pcred { font-size:12px; color:var(--mut); margin-top:2px; }
   .plancard .pprice { font-size:15px; font-weight:700; white-space:nowrap; }
   .plancard .ptag { font-size:11px; color:var(--accent2); white-space:nowrap; margin-top:auto; padding-top:4px; }
-  /* Preço promocional: o cheio riscado fica na LINHA DE CIMA, não ao lado. O card
-     tem 160px de largura mínima e .pprice é nowrap, então os dois preços na mesma
-     linha estouravam a caixa nos planos de 3 dígitos (Super: 499,90 + 299,94). */
+  /* Promotional price: the struck-through full price goes on the LINE ABOVE, not
+     beside it. The card has a 160px min-width and .pprice is nowrap, so both
+     prices on the same line overflowed the box on 3-digit plans (Super: 499.90 + 299.94). */
   .plancard .pfull { display:block; font-size:12px; font-weight:500; color:var(--mut); text-decoration:line-through; }
   .plancard .poff { font-size:11px; color:var(--accent2); margin-top:1px; }
   .promobox { border:1px solid var(--accent); border-radius:10px; padding:10px 12px; margin:0 0 12px; background:var(--line2); font-size:13px; line-height:1.45; }
@@ -310,7 +310,7 @@
   .agent-ren { flex:1 1 0; background:none; border:1px solid var(--line); color:var(--mut); border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
   .agent-ren:hover { border-color:var(--accent); color:var(--accent); }
 
-  /* modal de confirmação */
+  /* confirmation modal */
   .cmodal { display:none; position:fixed; inset:0; z-index:80; align-items:center; justify-content:center; background:rgba(0,0,0,.45); padding:20px; }
   .cmodal.show { display:flex; }
   .cmodal .box { background:var(--card); border:1px solid var(--line); border-radius:16px; max-width:400px; width:100%; padding:22px 22px 18px; box-shadow:0 18px 48px rgba(0,0,0,.28); }
@@ -324,11 +324,11 @@
   .cmodal .row .danger { background:#e0563f; border-color:#e0563f; color:#fff; font-weight:600; }
   .cmodal .row .danger:hover { background:#c94a34; }
 
-  /* chat (dentro do shell) */
+  /* chat (inside the shell) */
   #panel-chat.active { display:flex; flex-direction:column; height:100%; position:relative; }
-  /* Botão flutuante "voltar pro fim da conversa": só aparece quando a pessoa
-     subiu o scroll pra reler algo. Fica no canto direito, logo acima do campo
-     de escrever, sem cobrir texto. */
+  /* Floating "back to end of conversation" button: only appears when the person
+     scrolled up to reread something. Sits in the right corner, right above the
+     input field, without covering text. */
   .to-end { position:absolute; right:10px; bottom:78px; z-index:5; width:34px; height:34px; border-radius:50%;
             border:1px solid var(--line); background:var(--card); color:var(--txt); font-size:15px; line-height:1;
             cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.12); display:flex; align-items:center; justify-content:center;
@@ -341,9 +341,9 @@
   .dot { width:9px; height:9px; border-radius:50%; background:#39d98a; }
   .chat-head b { font-size:15px; flex:1; }
   .msgs { flex:1; overflow-y:auto; padding:18px 2px; display:flex; flex-direction:column; gap:12px; }
-  /* overflow-wrap:anywhere = só quebra quando a "palavra" não cabe de jeito
-     nenhum. Sem isso um token longo e sem espaço (código Pix, token, URL crua)
-     estourava a bolha e vazava por cima do chat. Nomes normais não mudam. */
+  /* overflow-wrap:anywhere = only breaks when the "word" doesn't fit no matter
+     what. Without it a long, space-less token (Pix code, token, raw URL)
+     overflowed the bubble and leaked over the chat. Normal words don't change. */
   .msg { max-width:78%; padding:11px 15px; border-radius:15px; font-size:14.5px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
   .me { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:5px; }
   .bot { align-self:flex-start; background:var(--card); border:1px solid var(--line); border-bottom-left-radius:5px; }
@@ -366,10 +366,11 @@
   .msg-card .msg-img { max-width:100%; width:100%; border-radius:0; margin:0; }
   .msg-card-title { padding:8px 12px 0; font-weight:600; font-size:14px; }
   .msg-card-body { padding:2px 12px 0; font-size:13px; opacity:.85; }
-  /* O seletor precisa ser MAIS específico que o `.msg a` lá de cima (0,1,1), senão
-     o link do card herda a cor de link (--accent2) e o texto some no fundo do
-     botão. O fundo é um tom mais fechado do accent: branco sobre o accent normal
-     dá 3,3:1 de contraste, abaixo do mínimo legível; assim fica ~4,9:1. */
+  /* The selector needs to be MORE specific than `.msg a` above (0,1,1), otherwise
+     the card link inherits the link color (--accent2) and the text disappears
+     against the button background. The background is a darker accent shade: white
+     over the normal accent gives 3.3:1 contrast, below the readable minimum; this
+     way it's ~4.9:1. */
   .msg-card-btn, .msg a.msg-card-btn { display:block; margin:8px; padding:8px 12px; border-radius:8px; text-align:center; background:#a85c38; color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
   .msg audio { margin-top:6px; max-width:250px; display:block; }
   .mediarow { display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--line); }
@@ -383,11 +384,12 @@
   @keyframes wowsp { to { transform:rotate(360deg); } }
   #wowSugs .ci { transition:background .15s; } #wowSugs .ci:hover { background:rgba(0,0,0,.04); }
 
-  /* coluna direita (Need to know / Sugestões) */
+  /* right column (Need to know / Suggestions) */
   .rail { background:var(--panel); border-left:1px solid var(--line); padding:24px 20px; overflow-y:auto; }
-  /* Mesmo motivo da bolha do chat: "Para lembrar", Sugestões e os cards de plugin (feed) recebem
-     texto que a pessoa não controla, e um token longo vazava pra fora do card.
-     A propriedade é herdada, então vale pros filhos (.ni-t, .sug e os dos plugins). */
+  /* Same reason as the chat bubble: "To remember", Suggestions and the plugin
+     (feed) cards receive text the person doesn't control, and a long token leaked
+     out of the card. The property is inherited, so it applies to the children
+     too (.ni-t, .sug and the plugins' own). */
   .railcard { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--card); margin-bottom:14px; overflow-wrap:anywhere; }
   .railcard .rc-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .railcard .rc-title { font-size:14px; font-weight:600; }
@@ -412,7 +414,7 @@
   #wiz .lead { color:#665f55; }
   #wiz button.mini { background:#9b4824; color:#fff; }
   #wiz button.mini:hover { background:#803a1c; }
-  /* ───── Wizard de onboarding ───── */
+  /* ───── Onboarding wizard ───── */
   .wizwrap { display:none; position:fixed; inset:0; background:var(--bg); z-index:60; overflow-y:auto; }
   .wizwrap.show { display:block; }
   .wiz { max-width:560px; margin:0 auto; padding:48px 22px 60px; min-height:100vh; display:flex; flex-direction:column; }
@@ -428,7 +430,7 @@
   .typecard .em { font-size:24px; }
   .typecard .tn { font-size:15px; font-weight:600; margin-top:8px; }
   .typecard .td { font-size:12.5px; color:var(--mut); margin-top:3px; line-height:1.4; }
-  /* card de destaque do agente geral (faz-tudo) */
+  /* highlight card for the general-purpose (does-everything) agent */
   .featcard { position:relative; display:block; width:100%; text-align:left; border:1.5px solid var(--accent); border-radius:16px; padding:18px 18px 17px; background:linear-gradient(135deg, #fff6ee, var(--card)); cursor:pointer; transition:border-color .15s, transform .1s, box-shadow .15s; box-shadow:0 1px 0 var(--line2); }
   .featcard:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(201,122,82,.16); }
   .featcard.sel { box-shadow:0 0 0 2px var(--accent2) inset; }
@@ -451,7 +453,7 @@
   .checklist li { padding:9px 0; border-bottom:1px solid var(--line2); font-size:14px; display:flex; gap:10px; align-items:center; }
   .checklist li .ok { color:#39d98a; }
 
-  /* topbar mobile + drawer */
+  /* mobile topbar + drawer */
   .mtop { display:none; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--side); position:sticky; top:0; z-index:20; }
   .mtop .ham { font-size:20px; cursor:pointer; line-height:1; }
   .mtop .brand { padding:0; flex:1; }
@@ -473,7 +475,7 @@
     .contentcol { max-width:none; }
   }
 
-  /* ── Aba Memória & Prompt (portada de memoria.html; tudo scoped em #panel-memoria) ── */
+  /* ── Memory & Prompt tab (ported from memoria.html; everything scoped under #panel-memoria) ── */
   #panel-memoria .m-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
   #panel-memoria label { font-size:13px; color:var(--mut); }
   #panel-memoria select, #panel-memoria input[type=text], #panel-memoria textarea {
@@ -538,9 +540,9 @@
   #panel-memoria .m-md-body hr.m-md-hr { border:0; border-top:1px solid var(--line); margin:16px 0; }
   #panel-memoria .m-md-empty { color:var(--mut); font-style:italic; }
 
-  /* Seletor de idioma do SITE (rodape). Troca so a lingua da TELA; a lingua da
-     conversa com a IA fica em configuracoes. Form puro, sem JS: o botao ativo
-     vem do atributo data-idioma que o servidor preenche. */
+  /* SITE language selector (footer). Only switches the SCREEN language; the
+     language of the conversation with the AI stays in settings. Plain form, no
+     JS: the active button comes from the data-idioma attribute the server fills in. */
   .footidioma{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;}
   .footidioma button{background:none;border:0;padding:0;font:inherit;color:var(--mut);cursor:pointer;}
   .footidioma button:hover{color:var(--accent);}
@@ -568,7 +570,7 @@
   .connect-footer :focus-visible { outline:3px solid #914221; outline-offset:3px; }
   .connect-actions :focus-visible { outline:3px solid #914221; outline-offset:3px; }
 </style>
-<!-- Atribuição de primeiro toque (gclid/utm). Mesma origem: dispensa nonce. -->
+<!-- First-touch attribution (gclid/utm). Same origin: no nonce needed. -->
 <script src="/atribuicao.js"></script>
 <link rel="stylesheet" href="/routines.css">
 <!--encaixe:cabeca-->
@@ -576,15 +578,15 @@
 </head>
 <body class="booting">
 
-  <!-- splash de boot (some assim que o boot decide a tela) -->
+  <!-- boot splash (disappears as soon as boot decides the screen) -->
   <div id="boot"><img class="bootlogo" src="__LOGO__" alt="__MARCA__" /></div>
 
   <!-- ───── Auth / Home ───── -->
   <div class="authwrap" id="auth">
    <div class="authmain">
    <div class="landing">
-    <!-- Login/cadastro. A venda do produto mora na home pública (/, home.html);
-         aqui é só autenticar, com a marca em cima pra não ficar órfão. -->
+    <!-- Login/sign-up. The product pitch lives on the public home page (/, home.html);
+         here it's just auth, with the brand on top so it doesn't feel orphaned. -->
     <div class="authcol">
     <a class="authbrand" href="/"><img src="__LOGO__" alt="__MARCA__" /></a>
     <!--encaixe:auth-aviso-->
@@ -642,7 +644,7 @@
       <button type="button" class="secondary" id="toggleLink">Criar conta</button>
     </div>
 
-    <!-- esqueci minha senha -->
+    <!-- forgot my password -->
     <div class="authcard hidden" id="forgotCard">
       <h1>Redefinir senha</h1>
       <p class="sub">Digite seu e-mail e enviaremos um link pra criar uma senha nova.</p>
@@ -654,7 +656,7 @@
       <div class="toggle"><span class="link" id="fgBack">Voltar para o login</span></div>
     </div>
 
-    <!-- redefinir senha (link do e-mail, ?token=) -->
+    <!-- reset password (link from the email, ?token=) -->
     <div class="authcard hidden" id="resetCard">
       <h1>Criar senha nova</h1>
       <p class="sub">Escolha uma nova senha pra sua conta.</p>
@@ -695,12 +697,12 @@
    </footer>
   </div>
 
-  <!-- ───── Wizard de onboarding ───── -->
+  <!-- ───── Onboarding wizard ───── -->
   <div class="wizwrap" id="wiz" role="dialog" aria-modal="true" aria-label="Configuração do seu assistente">
     <div class="wiz">
       <div class="wizsteps" id="wizSteps"></div>
 
-      <!-- passo 1: tipo -->
+      <!-- step 1: type -->
       <div class="wizstep" id="wizStep-type">
         <h2 id="wizHi">Vamos criar seu assistente</h2>
         <label for="wizAgentName">Como você quer chamar o seu assistente?</label>
@@ -713,7 +715,7 @@
         </div>
       </div>
 
-      <!-- passo 2: conectar -->
+      <!-- step 2: connect -->
       <div class="wizstep hidden" id="wizStep-connect">
         <h2>Seu assistente pode te ajudar a organizar o dia.</h2>
         <p class="lead" id="wizConnLead">Conecte sua agenda para receber sugestões com base nos seus compromissos. Se quiser, conecte também seu e-mail.</p>
@@ -740,7 +742,7 @@
         <div class="wizfoot connect-footer"><button type="button" class="wizskip" id="wizConnBack">← Voltar</button><button type="button" class="wizskip" id="wizConnSkip">Continuar sem conectar</button></div>
       </div>
 
-      <!-- passo wow: o assistente já te conhece -->
+      <!-- wow step: the assistant already knows you -->
       <div class="wizstep hidden" id="wizStep-wow">
         <div id="wowLoading" role="status" aria-live="polite">
           <h2>Deixa eu te conhecer… 🔍</h2>
@@ -783,7 +785,7 @@
         </div>
       </div>
 
-      <!-- passo 3: whatsapp -->
+      <!-- step 3: whatsapp -->
       <div class="wizstep hidden" id="wizStep-whatsapp">
         <h2>Fale pelo WhatsApp</h2>
         <div id="wizWaForm">
@@ -805,7 +807,7 @@
         </div>
       </div>
 
-      <!-- passo 4: pronto -->
+      <!-- step 4: ready -->
       <div class="wizstep hidden" id="wizStep-done">
         <h2 id="wizDoneTitle">Tudo pronto 🎉</h2>
         <p class="lead" id="wizDoneLead"></p>
@@ -874,12 +876,12 @@
         </div>
       </aside>
 
-      <!-- centro -->
+      <!-- center -->
       <main class="main">
         <div class="maintop"><span id="dateLine"></span></div>
         <div class="contentcol">
 
-          <!-- Início -->
+          <!-- Home -->
           <div class="panel active" id="panel-inicio">
             <div id="greeting" class="greet"></div>
             <div class="notif-banner hidden" id="contactNotif">
@@ -906,7 +908,7 @@
             <div id="threadList"></div>
           </div>
 
-          <!-- Assistentes -->
+          <!-- Assistants -->
           <div class="panel" id="panel-assistentes">
             <div class="pagehead">
               <div class="sechead">Assistentes</div>
@@ -925,7 +927,7 @@
               <div class="err hidden" id="err1"></div>
             </div>
 
-            <!-- Memória & prompt (seção dentro de Assistentes) -->
+            <!-- Memory & prompt (section inside Assistants) -->
             <div class="sechead" style="margin-top:26px;">Memória e prompt</div>
             <div id="panel-memoria">
             <div class="m-row">
@@ -939,7 +941,7 @@
               <div class="m-tab" id="tabMem" data-mtab="mem">Memória</div>
             </div>
 
-            <!-- Sub-aba Memória -->
+            <!-- Memory sub-tab -->
             <section id="paneMem" class="hidden">
               <div class="m-cols">
                 <div class="m-card">
@@ -953,7 +955,7 @@
                 <div class="m-card">
                   <div id="editorEmpty" class="m-muted">Escolha uma página à esquerda ou crie uma nova.</div>
 
-                  <!-- Modo leitura (markdown renderizado) -->
+                  <!-- Read mode (rendered markdown) -->
                   <div id="reader" class="hidden">
                     <div class="m-pghead">
                       <h3 class="m-ptitle" id="rdTitle"></h3>
@@ -967,7 +969,7 @@
                     </div>
                   </div>
 
-                  <!-- Modo edição -->
+                  <!-- Edit mode -->
                   <div id="editor" class="hidden">
                     <div class="m-field">
                       <label for="pgTitle">Título</label>
@@ -989,7 +991,7 @@
               </div>
             </section>
 
-            <!-- Sub-aba Prompt -->
+            <!-- Prompt sub-tab -->
             <section id="panePrompt">
               <div class="m-card">
                 <h2>Quem é este assistente</h2>
@@ -1046,8 +1048,8 @@
                 </div>
               </div>
 
-              <!-- Webhook de entrada: dispara uma skill deste assistente a partir
-                   de um sistema externo (integração servidor-a-servidor). -->
+              <!-- Inbound webhook: triggers a skill of this assistant from an
+                   external system (server-to-server integration). -->
               <div class="m-card" id="whCard">
                 <h2>Webhook de skill</h2>
                 <p class="m-hint">Deixe um sistema externo disparar uma skill deste assistente por uma chamada autenticada. O sistema informa qual skill rodar e envia os dados; o assistente responde de forma assíncrona.</p>
@@ -1073,7 +1075,7 @@
             </div>
           </div>
 
-          <!-- Conexões -->
+          <!-- Connections -->
           <div class="panel" id="panel-conexoes">
             <div id="connFlash" class="flash hidden"></div>
             <div class="section" id="connectors">
@@ -1208,7 +1210,7 @@
             </div>
           </div>
 
-          <!-- Habilidades e apps -->
+          <!-- Skills and apps -->
           <div class="panel" id="panel-habilidades">
             <section class="section" id="routinesBox"></section>
             <div class="section hidden" id="appsHome">
@@ -1237,7 +1239,7 @@
             </div>
           </div>
 
-          <!-- Contatos -->
+          <!-- Contacts -->
           <div class="panel" id="panel-contatos">
             <div class="section" id="contactsBox">
               <div class="title">Contatos (assistente ↔ assistente)</div>
@@ -1250,7 +1252,7 @@
             </div>
           </div>
 
-          <!-- Arquivos -->
+          <!-- Files -->
           <div class="panel" id="panel-arquivos">
             <div class="section" id="filesBox">
               <div class="title">Seus arquivos</div>
@@ -1259,7 +1261,7 @@
             </div>
           </div>
 
-          <!-- Configurações -->
+          <!-- Settings -->
           <div class="panel" id="panel-config">
             <div class="section" id="usernameBox">
               <div class="title">Seu endereço na web</div>
@@ -1345,19 +1347,20 @@
               <p class="sub" id="emailSendHint" style="margin:6px 0 0;">Desligado, ele só cria <b>rascunhos</b> no seu Gmail pra você revisar e enviar. Ligado, ele pode disparar (sempre pedindo sua confirmação antes).</p>
             </div>
 
-            <!-- Opt-out de treinamento: só aparece pra quem assina um plano pago.
-                 A caixa marcada é a EXCLUSÃO (o padrão da Política é o uso pra
-                 melhoria), e vale pelo PERÍODO em que fica ligada: o que ficou
-                 protegido continua protegido mesmo se ela for desligada depois. -->
+            <!-- Training opt-out: only shows for paid-plan subscribers.
+                 The checked box is the EXCLUSION (the Policy default is using
+                 data for improvement), and it applies for the PERIOD it stays
+                 on: whatever got protected stays protected even if it's turned
+                 off later. -->
             <div class="section hidden" id="trainOptBox" style="margin-top:12px;">
               <div class="title">Uso dos meus dados</div>
               <label class="optin"><input type="checkbox" id="trainOptChk" /> <span><b>Não usar</b> minhas conversas e arquivos para melhorar o __MARCA__.</span></label>
               <p class="sub" style="margin:6px 0 0;">Vale a partir de agora e enquanto ficar ligado: o conteúdo criado nesse período fica de fora para sempre, mesmo que você desligue depois. Detalhes na <a href="/privacidade" target="_blank" rel="noopener">Política de Privacidade</a>.</p>
             </div>
 
-            <!-- Conta empresarial (F0): empresa, domínios liberados, convites e
-                 membros. Tudo montado por renderEmpresa(); cliques por delegação
-                 (sem on*= inline, por causa da CSP). -->
+            <!-- Business account (F0): company, allowed domains, invites and
+                 members. Everything rendered by renderEmpresa(); clicks via
+                 delegation (no inline on*=, because of the CSP). -->
             <div class="section" id="empresaBox" style="margin-top:12px;">
               <div class="title">Empresa</div>
               <div id="empresaBody" class="sub">Carregando…</div>
@@ -1366,7 +1369,7 @@
             </div>
           </div>
 
-          <!-- Créditos e plano -->
+          <!-- Credits and plan -->
           <div class="panel" id="panel-creditos">
             <div class="section">
               <div class="title">Uso do mês</div>
@@ -1423,7 +1426,7 @@
         </div>
       </main>
 
-      <!-- coluna direita -->
+      <!-- right column -->
       <aside class="rail">
         <!--encaixe:coluna-topo-->
         <div class="railcard hidden" id="rcNotes">
@@ -1446,31 +1449,34 @@ let signupMode = new URLSearchParams(location.search).get('modo') !== 'entrar';
 let userName = '';
 let APP_CFG = {};
 let billingFlash = '';
-// Aviso do retorno de uma conexão OAuth (deu certo ou não), mostrado na aba
-// Conexões. Os nomes são os providers que o servidor aceita em /api/connect/<p>.
+// Notice about the return from an OAuth connection (succeeded or not), shown on
+// the Connections tab. The names are the providers the server accepts at /api/connect/<p>.
 const PROV_NAMES = { microsoft:'Hotmail/Outlook', github:'GitHub', slack:'Slack', nuvemshop:'Nuvemshop', linkedin:'LinkedIn', notion:'Notion', canva:'Canva' };
 let connFlash = null;   // { bad:boolean, text:string }
-let goConnTab = false;  // abrir a aba Conexões ao entrar
+let goConnTab = false;  // open the Connections tab on entry
 
 async function api(path, body, method) {
   const opts = { method: method || (body ? 'POST' : 'GET'), credentials:'same-origin', headers:{'content-type':'application/json'} };
-  // Diz ao servidor em que idioma esta tela foi servida, pra mensagem de erro
-  // chegar no mesmo idioma do que a pessoa está lendo. Não é palpite do
-  // navegador: o servidor montou a página na preferência salva e carimbou o
-  // resultado no lang= do <html>, então isto é o eco dessa decisão.
+  // Tells the server what language this screen was served in, so the error
+  // message arrives in the same language the person is reading. It's not the
+  // browser's guess: the server built the page from the saved preference and
+  // stamped the result into the <html> lang=, so this is just the echo of that
+  // decision.
   const lang = document.documentElement.lang;
   if (lang) opts.headers['X-Idioma'] = lang;
   if (body) opts.body = JSON.stringify(body);
   let r;
-  // netFail = a requisição nem chegou a ter resposta HTTP (socket caiu, rede trocou,
-  // aba/app foi pro background). Quem chama precisa distinguir isso de um erro do
-  // servidor: no /api/chat o turno costuma ter TERMINADO e a resposta já está salva.
+  // netFail = the request never even got an HTTP response (socket dropped, network
+  // switched, tab/app went to the background). The caller needs to tell this apart
+  // from a server error: in /api/chat the turn has usually ALREADY FINISHED and the
+  // response is already saved.
   try { r = await fetch(path, opts); }
   catch { return { error: 'Parece que a internet oscilou por aqui. Tenta de novo em instantes.', netFail: true }; }
   const data = await r.json().catch(() => null);
   if (data) return data;
-  // Resposta não-JSON (ex.: página de erro do proxy). Traduz o status em algo útil
-  // em vez de virar {} silencioso (que aparecia como "Erro." pro usuário).
+  // Non-JSON response (e.g. the proxy's error page). Translate the status into
+  // something useful instead of turning into a silent {} (which showed up as
+  // "Erro." to the user).
   if (r.status === 413) return { error: 'As imagens ficaram grandes demais pro envio. Tenta mandar uma de cada vez.' };
   if (!r.ok) return { error: 'Tive um problema no servidor (' + r.status + '). Tenta de novo.' };
   return {};
@@ -1478,9 +1484,9 @@ async function api(path, body, method) {
 const E = (id) => document.getElementById(id);
 function showApp(on) { const a = E('auth'); if (a) a.classList.toggle('hidden', on); E('app').classList.toggle('hidden', !on); }
 function reveal() { document.body.classList.remove('booting'); }
-// Escapa aspas também: esta função é usada dentro de atributos (href/src/title/
-// data-*) montados por concatenação de string, e sem escapar " ou ' um dado vindo
-// do banco fecharia o atributo e injetaria outro.
+// Also escapes quotes: this function is used inside attributes (href/src/title/
+// data-*) built by string concatenation, and without escaping " or ', a value
+// coming from the database would close the attribute and inject another one.
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function appSlugTitle(u) {
   try {
@@ -1493,16 +1499,18 @@ function render(text) {
   const e = esc(text);
   return e
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // URL "pelada" vira link clicável; o lookbehind evita reprocessar as que já
-    // estão dentro de uma âncora (após href=" ou após o > do texto da tag).
+    // A "bare" URL becomes a clickable link; the lookbehind avoids reprocessing
+    // ones that are already inside an anchor (after href=" or after the tag's
+    // closing >).
     .replace(/(?<!["'>=])(https?:\/\/[^\s<]+)/g, function (_m, u) {
-      // A pontuação final costuma ser da FRASE, não da URL ("...em .../creditos.").
-      // Engolir ela dentro do href dava 404. Ela sai do link e volta como texto.
+      // The final punctuation usually belongs to the SENTENCE, not the URL
+      // ("...em .../creditos."). Swallowing it into the href gave a 404. It comes
+      // out of the link and goes back to being plain text.
       var cauda = '';
       while (u.length > 1 && /[.,;:!?)\]}'"]$/.test(u)) {
-        // ";" que fecha entidade escapada (&amp;) é da URL, não da frase.
+        // ";" that closes an escaped entity (&amp;) belongs to the URL, not the sentence.
         if (u.slice(-1) === ';' && /&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);$/.test(u)) break;
-        // ")" só sai se não estiver fechando um "(" da própria URL.
+        // ")" only comes out if it isn't closing a "(" that's part of the URL itself.
         if (u.slice(-1) === ')' && (u.match(/\(/g) || []).length >= (u.match(/\)/g) || []).length) break;
         cauda = u.slice(-1) + cauda;
         u = u.slice(0, -1);
@@ -1551,9 +1559,9 @@ function addMsg(text, who, attachments) {
     }
     else if (a.type === 'audio') { const au = document.createElement('audio'); au.controls = true; au.src = a.url; d.appendChild(au); }
     else {
-      // Tipo que esta versão não conhece: mostra um link em vez de sumir em silêncio.
-      // Anexo que não renderiza vira "o assistente não me mandou nada", que foi o
-      // sintoma do card de produto no app velho.
+      // Type this version doesn't know: show a link instead of silently disappearing.
+      // An attachment that doesn't render becomes "the assistant didn't send me
+      // anything," which was the symptom with the product card in the old app.
       const link = document.createElement('a'); link.className = 'msg-doc'; link.href = a.url;
       link.target = '_blank'; link.rel = 'noopener noreferrer';
       link.textContent = '🔗 ' + (a.title || a.filename || a.name || 'abrir anexo');
@@ -1561,17 +1569,19 @@ function addMsg(text, who, attachments) {
     }
   });
   const m = E('msgs');
-  // Só arrasta pro fim se a pessoa JÁ estava no fim. Se ela subiu pra reler algo,
-  // a mensagem nova entra em silêncio e quem avisa é o botão de voltar pro fim.
+  // Only scrolls to the end if the person was ALREADY at the end. If they scrolled
+  // up to reread something, the new message comes in silently and the button to
+  // go back to the end is what notifies them.
   const stick = chatNearEnd();
   m.appendChild(d);
   if (stick) m.scrollTop = m.scrollHeight;
   updateToEnd();
   return d;
 }
-// ── Voltar pro fim da conversa ──
-// Reler o que foi dito antes exigia arrastar o scroll de volta na mão. Este botão
-// flutua no canto direito e só aparece quando a pessoa não está no fim.
+// ── Back to the end of the conversation ──
+// Rereading what was said before required dragging the scroll back by hand. This
+// button floats in the right corner and only shows up when the person isn't at
+// the end.
 function chatNearEnd() {
   const m = E('msgs');
   if (!m) return true;
@@ -1590,10 +1600,10 @@ function updateToEnd() {
 }
 E('msgs').addEventListener('scroll', updateToEnd);
 E('toEnd').onclick = () => scrollChatToEnd(true);
-// Bolha que existe SÓ na tela (aviso de conexão), nunca no histórico do servidor.
-// Marcada pra ser removida antes de re-sincronizar: o poller usa o nº de bolhas
-// como baseline (1:1 com o history), então uma bolha local a mais engoliria a
-// próxima mensagem de verdade.
+// Bubble that exists ONLY on screen (connection notice), never in the server's
+// history. Marked to be removed before re-syncing: the poller uses the bubble
+// count as a baseline (1:1 with the history), so one extra local bubble would
+// swallow the next real message.
 function addLocalNote(text) {
   const d = addMsg(text, 'bot');
   if (d) d.dataset.local = '1';
@@ -1618,35 +1628,35 @@ function renderAuthMode() {
   E('authBtn').textContent = signupMode ? 'Criar conta' : 'Entrar';
   E('toggleTxt').textContent = signupMode ? 'Já tem cadastro?' : 'Não tem conta?';
   E('toggleLink').textContent = signupMode ? 'Entrar' : 'Criar conta';
-  E('forgotRow').classList.toggle('hidden', signupMode); // só no login
+  E('forgotRow').classList.toggle('hidden', signupMode); // only on login
   E('authErr').classList.add('hidden');
 }
 E('toggleLink').onclick = () => {
   signupMode = !signupMode;
-  // Carimba o modo na URL pra um F5 (ou o "voltar" do navegador) não devolver a
-  // pessoa pro cadastro depois que ela escolheu entrar.
+  // Stamps the mode into the URL so an F5 (or the browser's "back") doesn't send
+  // the person back to sign-up after they chose to log in.
   try {
     const u = new URL(location.href);
     if (signupMode) u.searchParams.delete('modo'); else u.searchParams.set('modo', 'entrar');
     history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
-  } catch { /* URL exótica: só não sincroniza, o modo já mudou */ }
+  } catch { /* exotic URL: just doesn't sync, the mode already changed */ }
   renderAuthMode();
 };
-renderAuthMode(); // aplica o modo vindo da URL já no load
+renderAuthMode(); // applies the mode coming from the URL already on load
 
-// ── Esqueci / redefinir senha ──
+// ── Forgot / reset password ──
 function showAuthCard(which) { // 'login' | 'forgot' | 'reset' | 'logged'
   E('authcard').classList.toggle('hidden', which !== 'login');
   E('forgotCard').classList.toggle('hidden', which !== 'forgot');
   E('resetCard').classList.toggle('hidden', which !== 'reset');
 }
-// Encaixes do app: plugin com tela própria traz pedaços desta página (pasta app/,
-// ver web/app-encaixes.mjs), que entram nos marcadores encaixe:*. O script dele cai
-// logo abaixo e se pendura aqui: rotas da aba, o que roda ao entrar no app, a
-// cada troca de aba e quando a conta é criada (marcarCadastro).
+// App slots: a plugin with its own screen brings pieces of this page (the app/
+// folder, see web/app-encaixes.mjs), which go into the encaixe:* markers. Its
+// script lands right below and hooks in here: tab routes, what runs on entering
+// the app, on every tab switch, and when the account is created (marcarCadastro).
 const ganchosDoApp = { rotas: {}, aoEntrar: [], aoTrocarAba: [], aoCadastrar: [] };
 /*encaixe:script*/
-// Menu minimizável (barrinha só de ícones). Estado persistido em localStorage.
+// Minimizable menu (icons-only bar). State persisted in localStorage.
 function applyNavMini(on) {
   const app = document.querySelector('.app');
   if (app) app.classList.toggle('nav-mini', !!on);
@@ -1708,17 +1718,17 @@ E('pwToggle').onclick = () => {
   E('pwToggle').textContent = show ? 'Ocultar' : 'Mostrar';
   E('pwToggle').setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
 };
-// ── De onde a pessoa VEIO (atribuição) ──
-// A CAPTURA mora em /atribuicao.js, incluído em todas as páginas públicas, porque
-// qualquer uma delas pode ser a landing de um anúncio (motivo completo no arquivo).
-// Aqui fica só o ENVIO, que depende de estar logado e do helper api().
+// ── Where the person CAME FROM (attribution) ──
+// The CAPTURE lives in /atribuicao.js, included on every public page, because
+// any of them can be an ad's landing page (full reasoning in that file). Here
+// is only the SENDING, which depends on being logged in and on the api() helper.
 const ATTR_KEY = (window.Atribuicao && window.Atribuicao.KEY) || 'brambs_attr';
-// Manda a origem quando a conta ACABOU de ser criada. O servidor só carimba
-// conta recém-criada e nunca sobrescreve, então repetir isto é inofensivo.
-// Só para de tentar quando o servidor confirma o recebimento: se a chamada cair
-// (rede, deploy no meio), a próxima abertura do app tenta de novo. A trava de
-// "conta recém-criada" mora no servidor, então a janela de retry é curta e a
-// origem não vaza pra conta antiga.
+// Sends the source when the account JUST got created. The server only stamps a
+// freshly-created account and never overwrites it, so repeating this is harmless.
+// Only stops retrying once the server confirms receipt: if the call drops
+// (network, a deploy mid-flight), the next time the app opens it tries again.
+// The "freshly-created account" guard lives on the server, so the retry window
+// is short and the source doesn't leak into an old account.
 function marcarOrigem() {
   try {
     const raw = localStorage.getItem(ATTR_KEY);
@@ -1728,16 +1738,18 @@ function marcarOrigem() {
     }).catch(() => {});
   } catch (e) {}
 }
-// Conta CRIADA (nunca o clique do botão: no clique conta quem desistiu no meio,
-// e no botão do Google também quem só está entrando numa conta antiga). Além da
-// origem, avisa os plugins (ganchosDoApp.aoCadastrar), ex.: tag de conversão.
+// Account CREATED (never the button click: on click, it also counts whoever gave
+// up midway, and on the Google button also whoever is just logging into an old
+// account). Besides the source, it notifies the plugins (ganchosDoApp.aoCadastrar),
+// e.g. a conversion tag.
 function marcarCadastro(metodo) {
   marcarOrigem();
-  ganchosDoApp.aoCadastrar.forEach((f) => { try { f(metodo); } catch (e) { /* plugin nunca quebra o cadastro */ } });
+  ganchosDoApp.aoCadastrar.forEach((f) => { try { f(metodo); } catch (e) { /* a plugin never breaks sign-up */ } });
 }
-// Marca a IDA pro consentimento do Google. sessionStorage sobrevive ao redirect
-// (mesma aba, mesma origem); na volta, essa marca + conta ainda sem assistente
-// é o sinal de cadastro novo por Google que dá pra ter sem tocar no server.
+// Marks the TRIP to Google's consent screen. sessionStorage survives the redirect
+// (same tab, same origin); on the way back, this mark plus an account still
+// without an assistant is the signal of a new Google sign-up you can get
+// without touching the server.
 if (E('googleBtn')) E('googleBtn').addEventListener('click', () => {
   try { sessionStorage.setItem('brambs_g_auth', '1'); } catch (e) {}
 });
@@ -1759,14 +1771,14 @@ E('authBtn').onclick = async () => {
       (res.message || 'Assim que o __MARCA__ abrir novas vagas, a gente te avisa por e-mail.') + '</p>';
     return;
   }
-  if (signupMode) marcarCadastro('email'); // conta criada de verdade (fila já saiu acima)
+  if (signupMode) marcarCadastro('email'); // account genuinely created (the queue case already returned above)
   if (signupMode && !(res.agents || []).length) { wizClear(); openWizard((res.name || '').split(' ')[0]); return; }
   enterHome(res.name, res.agents || [], res.connected, res.telegramBots || [], res.whatsapp, res.emailSend, res.providers, res.apps, res.ext, res.runner);
   renderTrainingOptOut(res.paying, res.trainingOptOut);
   api('api/me').then(renderEmpresaNotif).catch(() => {});
 };
 
-// ── Conexões render ──
+// ── Connections render ──
 function renderConnectors(connected, emailSend) {
   connected = connected || [];
   const names = { gmail:'Gmail', drive:'Drive', docs:'Docs', calendar:'Agenda' };
@@ -1777,17 +1789,17 @@ function renderConnectors(connected, emailSend) {
     E('connStatus').textContent = 'Conecte sua conta Google pra dar acesso a Gmail, Agenda, Drive e Docs aos seus agentes (só leitura).';
     E('connectLabel').textContent = 'Conectar Google';
   }
-  // Chave de envio de e-mail: aparece quando o Gmail está conectado.
+  // Email-sending toggle: shows up when Gmail is connected.
   const hasGmail = connected.includes('gmail');
   E('emailSendBox').classList.toggle('hidden', !hasGmail);
   if (hasGmail) E('emailSendChk').checked = !!emailSend;
   loadGoogleAccounts();
 }
 
-// Chave de opt-out de treinamento. Só existe pra quem assina: no plano grátis o
-// uso dos dados pra melhoria faz parte do acordo (é o que a Política diz), então
-// a seção nem aparece, em vez de aparecer desabilitada prometendo algo que a
-// rota do servidor recusaria.
+// Training opt-out toggle. Only exists for subscribers: on the free plan, using
+// data for improvement is part of the deal (that's what the Policy says), so
+// the section doesn't even show up, instead of showing up disabled and
+// promising something the server route would refuse.
 function renderTrainingOptOut(paying, optOut) {
   const box = E('trainOptBox');
   if (!box) return;
@@ -1795,8 +1807,8 @@ function renderTrainingOptOut(paying, optOut) {
   if (paying) E('trainOptChk').checked = !!optOut;
 }
 
-// Multi-conta Google: lista as contas conectadas (por e-mail + serviços) e
-// ajusta o rótulo do botão pra deixar claro que dá pra ADICIONAR outra conta.
+// Google multi-account: lists the connected accounts (by email + services) and
+// adjusts the button label to make clear you can ADD another account.
 async function loadGoogleAccounts() {
   const box = E('gAccounts');
   if (!box) return;
@@ -1817,9 +1829,9 @@ async function loadGoogleAccounts() {
     left.appendChild(em); left.appendChild(sv);
     const acts = document.createElement('div');
     acts.style.cssText = 'display:flex;gap:8px;flex-shrink:0;';
-    // A principal é o fallback de todo assistente que não tem conta própria
-    // amarrada. Sem este botão, a 1ª conta conectada ficava principal pra
-    // sempre e não havia como mudar de ideia pela tela.
+    // The primary account is the fallback for every assistant that doesn't have
+    // its own account tied to it. Without this button, the 1st connected account
+    // stayed primary forever and there was no way to change your mind from the screen.
     if (!a.primary) {
       const pr = document.createElement('button');
       pr.className = 'mini'; pr.textContent = 'Tornar principal';
@@ -1858,16 +1870,16 @@ E('emailSendChk').onchange = async (e) => {
   const r = await api('api/prefs/email-send', { enabled: want });
   if (r && typeof r.emailSend === 'boolean') e.target.checked = r.emailSend;
 };
-// Opt-out de treinamento. A caixa reflete o que o SERVIDOR gravou, nunca o
-// clique: se a assinatura tiver caído entre o carregamento da tela e o clique,
-// a rota recusa e a caixa volta sozinha, em vez de mostrar uma proteção que não
-// existe no banco.
+// Training opt-out. The checkbox reflects what the SERVER recorded, never the
+// click: if the subscription lapsed between the screen loading and the click,
+// the route refuses and the checkbox reverts on its own, instead of showing a
+// protection that doesn't exist in the database.
 E('trainOptChk').onchange = async (e) => {
   const r = await api('api/prefs/training-optout', { enabled: e.target.checked });
   if (r && typeof r.trainingOptOut === 'boolean') e.target.checked = r.trainingOptOut;
   else { e.target.checked = !e.target.checked; if (r && r.error) alert(r.error); }
 };
-// ── Contatos (assistente ↔ assistente) ──
+// ── Contacts (assistant ↔ assistant) ──
 async function loadContacts() {
   const res = await api('api/contacts');
   const contacts = res.contacts || [];
@@ -1953,7 +1965,7 @@ function renderContacts(contacts) {
     };
   });
 }
-// ── Espaços (assuntos vivos compartilhados) ──
+// ── Spaces (shared live subjects) ──
 async function loadSpaces() {
   const box = E('spacesList'); if (!box) return;
   const res = await api('api/spaces');
@@ -1991,7 +2003,7 @@ function renderSpaces(spaces) {
     };
   });
 }
-// ── Skills (habilidades compartilháveis) ──
+// ── Skills (shareable skills) ──
 let skillsAdmin = false;
 async function loadSkills() {
   const box = E('skillsList'); if (!box) return;
@@ -2051,7 +2063,7 @@ function renderSkills(authored, installed) {
     };
   });
 }
-// ── Biblioteca de habilidades (skills públicas/curadas, instaláveis num toque) ──
+// ── Skill library (public/curated skills, installable in one tap) ──
 function skStarsHtml(mine) {
   let h = '<span class="skstars" style="display:inline-flex;gap:1px;">';
   for (let i = 1; i <= 5; i++) {
@@ -2098,7 +2110,7 @@ async function loadSkillLibrary(q) {
     box.innerHTML = '<p class="sub" style="margin:0;">' + (q ? 'Nenhuma habilidade encontrada pra essa busca.' : 'Nenhuma habilidade na biblioteca ainda.') + '</p>';
     return;
   }
-  // Agrupa por categoria preservando a ordem (verificada/populares primeiro).
+  // Groups by category while preserving the order (verified/popular first).
   const groups = new Map();
   skills.forEach(s => { const c = s.categoria || 'Geral'; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(s); });
   groups.forEach((arr, cat) => {
@@ -2158,7 +2170,7 @@ E('contactInviteBtn').onclick = async () => {
   loadContacts();
 };
 
-// ── Apps de trabalho (GitHub / Slack) ──
+// ── Work apps (GitHub / Slack) ──
 const APP_PROVIDERS = [
   { id:'github', name:'GitHub', desc:'repositórios, issues e pull requests' },
   { id:'slack',  name:'Slack',  desc:'canais e mensagens' },
@@ -2193,7 +2205,7 @@ function renderProviders(providers) {
     row.appendChild(sp); row.appendChild(act); list.appendChild(row);
   });
 }
-// ── Cofre de credenciais ──
+// ── Credential vault ──
 const VAULT_KIND_LABEL = { apikey:'Chave de API', token:'Token', basic:'Usuário:senha', ssh_key:'Chave SSH' };
 async function loadVault() {
   const box = E('vaultBox');
@@ -2229,7 +2241,7 @@ E('vaultSaveBtn').onclick = async () => {
   loadVault();
 };
 
-// ── App Store Connect (crashes do TestFlight) ──
+// ── App Store Connect (TestFlight crashes) ──
 async function loadAsc() {
   const box = E('ascBox');
   if (!box || !APP_CFG.vault) { if (box) box.classList.add('hidden'); return; }
@@ -2293,9 +2305,10 @@ function renderWhatsApp(whatsapp, agents) {
     E('waStatus').textContent = 'Conecte seu número pra falar com seus assistentes pelo WhatsApp. Troca de assistente com "@nome" ou "menu".';
   }
 }
-// Itens da home vêm do backend (personalizados): "Para lembrar" (notes) que o
-// agente descobriu lendo e-mails/agenda e atualiza ao conversar, e "Sugestões"
-// de tarefas. Cada card só aparece se tiver conteúdo; cada item pode ser apagado.
+// Home items come from the backend (personalized): "To remember" (notes) that
+// the agent found by reading emails/calendar and updates while chatting, and
+// "Suggestions" for tasks. Each card only shows up if it has content; each item
+// can be deleted.
 async function loadHomeItems() {
   const notesCard = E('rcNotes'), sugCard = E('rcSug');
   if (!notesCard || !sugCard) return;
@@ -2324,16 +2337,16 @@ async function loadHomeItems() {
     row.appendChild(d); row.appendChild(x); sugBox.appendChild(row);
   });
 }
-// Gatilho automático: ao abrir a home, pede ao servidor pra atualizar os boxes
-// SE houver conteúdo novo (e-mail/agenda). O servidor faz um gate barato e só
-// gasta crédito quando vale; aqui é fire-and-forget. Se ele reescrever os
-// boxes, recarrega a lista pra mostrar o resultado.
+// Automatic trigger: when opening the home, asks the server to update the boxes
+// IF there's new content (email/calendar). The server does a cheap gate and only
+// spends credit when it's worth it; this is fire-and-forget. If it rewrites the
+// boxes, reloads the list to show the result.
 function maybeRefreshHome() {
   api('api/home-refresh', {}).then(r => {
     if (r && r.refreshed) loadHomeItems();
-    // O refresh agora roda em background no servidor (não segura o fetch, senão
-    // o spinner da aba do navegador fica girando). Recarrega os boxes um pouco
-    // depois pra pegar o resultado quando ele ficar pronto.
+    // The refresh now runs in the background on the server (doesn't hold the
+    // fetch, otherwise the browser tab's spinner keeps spinning). Reloads the
+    // boxes a bit later to pick up the result once it's ready.
     else if (r && r.reason === 'queued') setTimeout(loadHomeItems, 30000);
   }).catch(() => {});
 }
@@ -2372,11 +2385,11 @@ function renderTelegram(bots, agents) {
   const list = Array.isArray(bots) ? bots : (bots ? [bots] : []);
   homeTelegramBots = list;
   const sel = E('tgAgent');
-  // No seletor do form, só agentes que ainda NÃO têm bot (um bot por agente).
+  // In the form's selector, only agents that do NOT have a bot yet (one bot per agent).
   const usados = new Set(list.map(b => b.agentId));
   const livres = (agents || []).filter(a => !usados.has(a.id));
   sel.innerHTML = livres.map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
-  // Lista de bots já conectados, cada um com botão de desconectar.
+  // List of already-connected bots, each with a disconnect button.
   const box = E('tgList');
   box.innerHTML = '';
   list.forEach(b => {
@@ -2384,8 +2397,9 @@ function renderTelegram(bots, agents) {
     const row = document.createElement('div');
     row.className = 'row';
     row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--bd);';
-    // Ativação por link de pareamento: o código vem da sessão do dono e vai no
-    // /start, senão qualquer pessoa que ache o @username amarra o bot no chat dela.
+    // Activation via a pairing link: the code comes from the owner's session and
+    // goes into /start, otherwise anyone who finds the @username could bind the
+    // bot to their own chat.
     const ativar = 'https://t.me/' + encodeURIComponent(b.username || '') + '?start=' + encodeURIComponent(b.pairCode || '');
     const link = b.linked || !b.pairCode ? '' : ' <span class="sub">(<a href="' + esc(ativar) + '" target="_blank" rel="noopener">abra este link</a> pra ativar)</span>';
     const info = document.createElement('div');
@@ -2400,8 +2414,9 @@ function renderTelegram(bots, agents) {
     row.appendChild(btn);
     box.appendChild(row);
   });
-  // Esconde o form só quando não há agente livre E já existe pelo menos um bot
-  // (todos os agentes já conectados). Sem bot nenhum, mantém o form/instruções.
+  // Hides the form only when there's no free agent AND at least one bot already
+  // exists (all agents already connected). With no bot at all, keeps the
+  // form/instructions.
   E('tgConnect').classList.toggle('hidden', livres.length === 0 && list.length > 0);
   if (list.length) {
     E('tgStatus').innerHTML = list.length === 1
@@ -2447,7 +2462,7 @@ function renderRunner(agents, runner) {
   const err = E('runnerErr'); if (err) err.classList.add('hidden');
   mostrarAtendimentoPublico();
 }
-// Só aparece pra quem é dono do assistente que atende o número da instalação.
+// Only shows up for the owner of the assistant that serves the install's number.
 let atendimentoPublicoVisto = false;
 async function mostrarAtendimentoPublico() {
   if (atendimentoPublicoVisto) return;
@@ -2475,13 +2490,13 @@ function renderTaskAgents(agents) {
   const sel = E('taskAgent');
   if (!agents.length) { sel.innerHTML = '<option value="">— crie uma assistente —</option>'; sel.style.display = ''; renderAgentTabs(agents); return; }
   sel.innerHTML = agents.map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
-  // A seleção do assistente agora é feita pelas abas; o dropdown vira só o driver
-  // (startTask lê taskAgent.value), então fica escondido.
+  // Assistant selection is now done through the tabs; the dropdown becomes just
+  // the driver (startTask reads taskAgent.value), so it stays hidden.
   sel.style.display = 'none';
   renderAgentTabs(agents);
 }
-// Abas de assistente na home (estilo app): cada aba = um assistente, com o
-// histórico só dele + a caixa de "nova conversa" apontando pra ele.
+// Assistant tabs on the home screen (app-style): each tab = one assistant, with
+// only its own history + the "new conversation" box pointing to it.
 function renderAgentTabs(agents) {
   const box = E('agentTabs'); if (!box) return;
   box.innerHTML = '';
@@ -2647,8 +2662,8 @@ async function renameAgent(a) {
   renderTaskAgents(homeAgents); renderAgentList(homeAgents); renderTelegram(me.telegramBots || [], homeAgents); renderSlack(homeAgents); renderExt(homeAgents, me.ext); renderRunner(homeAgents, me.runner);
   renderWhatsApp(me.whatsapp, homeAgents); renderApps(me.apps || []);
 }
-// "Estilo" agora abre a tela de Memória (sub-aba Prompt) com o agente clicado
-// selecionado e o campo "Tom e estilo" focado, em vez de um prompt() tosco.
+// "Style" now opens the Memory screen (Prompt sub-tab) with the clicked agent
+// selected and the "Tone and style" field focused, instead of a crude prompt().
 function editStyle(a) {
   switchTab('assistentes');
   if (window.memoriaOpenStyle) window.memoriaOpenStyle(a.id);
@@ -2672,8 +2687,8 @@ async function deleteAgent(a) {
 async function loadThreads() {
   const res = await api('api/threads');
   homeThreads = res.threads || [];
-  // default = último assistente usado; se ainda não há escolha, pega o da conversa
-  // mais recente (threads vêm ordenadas por updated_at DESC), senão o primeiro.
+  // default = last assistant used; if there is no choice yet, use the one from
+  // the most recent conversation (threads come ordered by updated_at DESC), else the first.
   if (!activeHomeAgent && homeAgents.length) {
     const ids = homeAgents.map(a => String(a.id));
     const recent = homeThreads.find(t => ids.includes(String(t.agent_id)));
@@ -2749,7 +2764,7 @@ async function archiveThreadItem(t) {
   const res = await api('api/thread/archive', { id: t.id, on });
   if (res.error) { alert(res.error); return; }
   localPatchThread(t.id, { archived: on });
-  if (on) showArchived = true; // deixa visível pra pessoa ver que foi pra lá
+  if (on) showArchived = true; // keeps it visible so the person can see it went there
   renderHomeThreads();
 }
 async function deleteThreadItem(t) {
@@ -2792,24 +2807,24 @@ function enterHome(name, agents, connected, telegramBots, whatsapp, emailSend, p
   E('userAv').textContent = (name || '?').trim().charAt(0).toUpperCase();
   showApp(true);
   reveal();
-  // Mata o popup do gerenciador de senhas do navegador: uma vez dentro do app o
-  // formulário de login (com <input type=password>) não precisa mais existir no DOM.
-  // Removê-lo evita o "salvar/escolher senha" que aparecia no canto após o redirect.
+  // Kills the browser's password-manager popup: once inside the app the login
+  // form (with <input type=password>) no longer needs to exist in the DOM.
+  // Removing it avoids the "save/choose password" prompt that showed up in the corner after the redirect.
   const _auth = E('auth'); if (_auth) _auth.remove();
-  // Se caiu numa URL que não é rota do app (ex: /login logo após entrar), normaliza
-  // pra /conversas; senão respeita a rota atual (deep-link em /conexoes, /arquivos, etc.).
+  // If it landed on a URL that isn't an app route (e.g. /login right after signing
+  // in), normalize to /conversas; otherwise respect the current route (deep link to /conexoes, /arquivos, etc.).
   if (ROUTES[location.pathname] === undefined) history.replaceState(null, '', '/conversas');
   applyRoute();
   loadThreads();
   loadCredits();
-  initNavMini(); // menu minimizável (barrinha de ícones)
-  ganchosDoApp.aoEntrar.forEach((f) => f()); // plugins (ex.: feed da coluna direita)
+  initNavMini(); // minimizable menu (icons-only bar)
+  ganchosDoApp.aoEntrar.forEach((f) => f()); // plugins (e.g.: right-column feed)
 }
 E('logout').onclick = async () => { await api('api/logout', {}); location.reload(); };
 E('goHome').onclick = () => { location.href = '/'; };
 
-// ── Arquivos (bucket do usuário) ──
-// Categorias-pasta: imagens, áudios, vídeos e documentos (tudo que não é mídia).
+// ── Files (user's bucket) ──
+// Folder categories: images, audio, video, and documents (everything that isn't media).
 const FILE_CATS = [
   { key: 'imagens',    icon: '🖼', label: 'Imagens' },
   { key: 'audios',     icon: '🔊', label: 'Áudios' },
@@ -2852,7 +2867,7 @@ function fileRowEl(f) {
   const name = f.name || fileFallbackName(f);
   const row = document.createElement('div');
   row.className = 'file-row';
-  // Corpo clicável = baixa o arquivo (link interno; a lixeira fica de fora dele).
+  // Clickable body = downloads the file (internal link; the trash icon sits outside it).
   const link = document.createElement('a');
   link.href = f.url;
   link.setAttribute('download', name);
@@ -2886,7 +2901,7 @@ function fileRowEl(f) {
   row.appendChild(link); row.appendChild(del);
   return row;
 }
-// Miniatura (imagens/vídeos): preview lado a lado numa grade.
+// Thumbnail (images/videos): side-by-side preview in a grid.
 function fileTileEl(f) {
   const name = f.name || fileFallbackName(f);
   const cat = fileCategory(f);
@@ -2906,13 +2921,13 @@ function fileTileEl(f) {
     img.src = f.url; img.alt = name; img.loading = 'lazy';
     link.appendChild(img);
   }
-  // Caixa de legenda sobre a imagem (escondida; abre pelo botão "i").
+  // Caption box over the image (hidden; opened via the "i" button).
   const box = document.createElement('div'); box.className = 'tbox';
   box.appendChild(document.createTextNode(name));
   const dt = document.createElement('span'); dt.className = 'tdate'; dt.textContent = fileWhen(f.createdAt);
   box.appendChild(dt);
-  // Botão "i" no canto inferior direito: alterna a caixa. Clicar em qualquer
-  // lugar depois fecha (listener no documento, registrado no próximo tick).
+  // "i" button in the bottom-right corner: toggles the box. Clicking anywhere
+  // afterwards closes it (listener on the document, registered on the next tick).
   const info = document.createElement('button');
   info.type = 'button'; info.className = 'tinfo'; info.textContent = 'i';
   info.title = 'Ver legenda'; info.setAttribute('aria-label', 'Ver legenda');
@@ -2939,7 +2954,7 @@ function fileTileEl(f) {
   tile.appendChild(link); tile.appendChild(box); tile.appendChild(info); tile.appendChild(del);
   return tile;
 }
-// Tela de pastas: um card por categoria que tem arquivo.
+// Folder screen: one card per category that has a file.
 function renderFileFolders() {
   const box = E('filesList');
   if (!box) return;
@@ -2966,7 +2981,7 @@ function renderFileFolders() {
     box.appendChild(row);
   }
 }
-// Abre uma pasta: link de voltar + os arquivos daquela categoria.
+// Opens a folder: back link + the files from that category.
 function openFileFolder(key) {
   const box = E('filesList');
   if (!box) return;
@@ -2984,14 +2999,14 @@ function openFileFolder(key) {
   head.textContent = (cat ? cat.icon + ' ' + cat.label : 'Arquivos');
   box.appendChild(head);
   const items = _allFiles.filter((f) => fileCategory(f) === key);
-  // Imagens e vídeos: grade de miniaturas com preview lado a lado.
+  // Images and videos: thumbnail grid with side-by-side preview.
   if (key === 'imagens' || key === 'videos') {
     const grid = document.createElement('div'); grid.className = 'file-grid';
     for (const f of items) grid.appendChild(fileTileEl(f));
     box.appendChild(grid);
     return;
   }
-  // Áudios e documentos: lista.
+  // Audio and documents: list.
   for (const f of items) box.appendChild(fileRowEl(f));
 }
 async function loadFiles() {
@@ -3020,7 +3035,7 @@ function switchTab(name) {
   if (name !== 'chat') { chatViewEpoch++; chatOpenRequest++; }
   document.querySelectorAll('.navitem').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
-  ganchosDoApp.aoTrocarAba.forEach((f) => f(name)); // plugins com aba própria
+  ganchosDoApp.aoTrocarAba.forEach((f) => f(name)); // plugins with their own tab
   if (name === 'conexoes') renderConnFlash();
   if (name === 'config') { loadUsername(); loadLikeness(); loadVoice(); loadEmpresa(); }
   if (name === 'creditos') loadCredits();
@@ -3031,7 +3046,7 @@ function switchTab(name) {
   closeDrawer();
 }
 
-// ── Aba Memória & Prompt (portada de memoria.html; inicialização preguiçosa) ──
+// ── Memory & Prompt tab (ported from memoria.html; lazy initialization) ──
 let memoriaReady = false;
 function loadMemoria() {
   if (memoriaReady) return;
@@ -3042,8 +3057,8 @@ function initMemoria() {
   var $ = function (id) { return document.getElementById(id); };
   var agents = [];
   var pages = [];
-  var current = null;   // slug em edição/leitura
-  var currentPage = null; // objeto {slug,title,body,updated_at} carregado
+  var current = null;   // slug being edited/read
+  var currentPage = null; // loaded {slug,title,body,updated_at} object
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -3051,7 +3066,7 @@ function initMemoria() {
     });
   }
 
-  function inline(s) { // s já escapado
+  function inline(s) { // s is already escaped
     s = s.replace(/`([^`]+)`/g, function (_, c) { return '<code>' + c + '</code>'; });
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
@@ -3149,23 +3164,23 @@ function initMemoria() {
     });
   }
 
-  // Alterna entre os 3 estados do painel direito.
+  // Switches between the right panel's 3 states.
   function showMode(mode) { // 'empty' | 'read' | 'edit'
     $('editorEmpty').className = mode === 'empty' ? 'm-muted' : 'hidden';
     $('reader').className = mode === 'read' ? '' : 'hidden';
     $('editor').className = mode === 'edit' ? '' : 'hidden';
   }
 
-  // O agente às vezes salva a página inteira dentro de um bloco ```markdown.
-  // Isso faria o mdToHtml renderizar tudo como código cru (asteriscos à mostra),
-  // então desembrulhamos a cerca externa antes de renderizar.
+  // The assistant sometimes saves the whole page inside a ```markdown block.
+  // That would make mdToHtml render everything as raw code (asterisks showing),
+  // so we unwrap the outer fence before rendering.
   function unwrapMdFence(src) {
     var s = String(src == null ? '' : src).replace(/^﻿/, '').replace(/\r\n/g, '\n').trim();
     var m = /^```(?:markdown|md)[ \t]*\n([\s\S]*?)\n?```$/i.exec(s);
     return m ? m[1] : src;
   }
-  // O corpo costuma abrir com um título "# ..." igual ao título da página,
-  // o que mostraria o título duas vezes. Removemos esse cabeçalho inicial.
+  // The body usually opens with a "# ..." heading matching the page title,
+  // which would show the title twice. We strip that leading heading.
   function stripLeadingTitle(src, title) {
     var t = String(title == null ? '' : title).trim().toLowerCase();
     if (!t) return src;
@@ -3286,8 +3301,8 @@ function initMemoria() {
     renderWebhook(agentId);
   }
 
-  // Preenche o seletor de Modelo por agente. Só aparece quando há mais de uma
-  // opção (ex: 'auto' + 'Kimi 3'); com só 'auto' o campo fica escondido.
+  // Fills the per-agent Model selector. Only shows up when there is more than
+  // one option (e.g. 'auto' + 'Kimi 3'); with only 'auto' the field stays hidden.
   function fillModelField(models, current) {
     var field = $('pModelField'); var sel = $('pModel'); var hint = $('pModelHint');
     if (!field || !sel) return;
@@ -3305,9 +3320,9 @@ function initMemoria() {
     field.style.display = '';
   }
 
-  // Preenche o seletor de conta Google por assistente. Só aparece com MAIS DE
-  // UMA conta conectada: com uma só, "escolher a conta" não é decisão nenhuma.
-  // Opção vazia = seguir a conta principal do usuário (padrão de sempre).
+  // Fills the per-assistant Google account selector. Only shows up with MORE
+  // THAN ONE account connected: with just one, "choose the account" isn't a decision at all.
+  // Empty option = follow the user's main account (the usual default).
   function fillGoogleField(accounts, current) {
     var field = $('pGoogleField'); var sel = $('pGoogle'); var hint = $('pGoogleHint');
     if (!field || !sel) return;
@@ -3327,7 +3342,7 @@ function initMemoria() {
     field.style.display = '';
   }
 
-  // ── Categoria de segurança do agente (pessoal / grupo / super) ──
+  // ── Agent security category (personal / group / super) ──
   var TOOL_GROUP_LABELS = {
     shell: 'Shell e código (ler/editar arquivos, rodar comandos no box dedicado)',
     produtos: 'Catálogo e produtos (busca no RAG de produto)',
@@ -3341,13 +3356,13 @@ function initMemoria() {
     var sel = $('pCategory'); if (!sel) return;
     _superAvailable = !!a.superAvailable;
     var cat = a.category || 'pessoal';
-    // Desabilita 'super' quando não há servidor conectado.
+    // Disables 'super' when there is no server connected.
     for (var i = 0; i < sel.options.length; i++) {
       if (sel.options[i].value === 'super') sel.options[i].disabled = !_superAvailable;
     }
     if (cat === 'super' && !_superAvailable) cat = 'pessoal';
     sel.value = cat;
-    // Checkboxes de grupos de tools (só relevantes na categoria 'grupo').
+    // Tool group checkboxes (only relevant in the 'group' category).
     var groups = (a.toolGroups && a.toolGroups.length) ? a.toolGroups : ['shell', 'produtos', 'projeto', 'web', 'apps'];
     var enabled = (a.tool_config && Array.isArray(a.tool_config.groups)) ? a.tool_config.groups : [];
     var box = $('pToolGroups'); box.innerHTML = '';
@@ -3413,7 +3428,7 @@ function initMemoria() {
 
   function selectedAgentId() { return $('agentSel').value || ''; }
 
-  // ── Webhook de skill (por assistente) ──
+  // ── Skill webhook (per assistant) ──
   function setWhMsg(t, err) { var e = $('whMsg'); if (!e) return; e.textContent = t || ''; e.className = 'm-msg' + (err ? ' m-err' : ''); }
   function renderWebhookState(st) {
     if (!$('whCard')) return;
@@ -3496,7 +3511,7 @@ function initMemoria() {
     if (!isMem) renderPrompt(selectedAgentId());
   }
 
-  // Wiring (sem inline on*, tudo por addEventListener — CASA).
+  // Wiring (no inline on*, everything via addEventListener — CASA).
   $('newPageBtn').addEventListener('click', newPage);
   $('editBtn').addEventListener('click', enterEdit);
   $('saveBtn').addEventListener('click', savePage);
@@ -3517,9 +3532,9 @@ function initMemoria() {
     if ($('panePrompt').className !== 'hidden') renderPrompt(selectedAgentId());
   });
 
-  // Ponte: o botão "Estilo" da tela de Assistentes abre AQUI (aba de memória),
-  // seleciona o agente clicado, vai pra sub-aba Prompt e foca o campo de estilo.
-  // Como o overview carrega async, se ainda não terminou, guarda a ação pendente.
+  // Bridge: the "Style" button on the Assistants screen opens HERE (memory tab),
+  // selects the clicked agent, goes to the Prompt sub-tab, and focuses the style field.
+  // Since the overview loads async, if it hasn't finished yet, store the pending action.
   var overviewLoaded = false;
   var pendingStyleApply = null;
   window.memoriaOpenStyle = function (agentId) {
@@ -3534,7 +3549,7 @@ function initMemoria() {
     else pendingStyleApply = apply;
   };
 
-  // Aba Prompt é a inicial: carrega o prompt do 1º assistente.
+  // Prompt tab is the initial one: loads the prompt of the 1st assistant.
   loadOverview().then(function () {
     overviewLoaded = true;
     if (pendingStyleApply) { pendingStyleApply(); pendingStyleApply = null; }
@@ -3542,15 +3557,15 @@ function initMemoria() {
   }).catch(function (e) { setTop(e.message, true); });
 }
 
-// ── Verificação de identidade (foto-âncora pra geração de vídeo) ──
+// ── Identity verification (anchor photo for video generation) ──
 const LIKENESS_LABEL = { none: 'Nenhuma foto enviada ainda.', pending: 'Foto enviada. Aguardando análise do time.', verified: 'Identidade verificada. ✓', rejected: 'A foto anterior não foi aprovada.' };
 async function loadLikeness() {
   const st = E('likenessStatus'); if (!st) return;
   const res = await api('api/likeness');
   if (res.error) { st.textContent = res.error; return; }
-  // Em revisão (22/09/2026): a seção inteira some. Ela só existe pra alimentar a
-  // geração de vídeo, então enquanto a feature está parada ela só mandaria a
-  // pessoa atrás de uma verificação que não serve pra nada.
+  // Under review (2026-09-22): the whole section disappears. It only exists to feed
+  // video generation, so while the feature is paused it would just send the
+  // person chasing a verification that serves no purpose.
   if (res.emRevisao || res.storageEnabled === false) { E('likenessBox').classList.add('hidden'); return; }
   E('likenessBox').classList.remove('hidden');
   let msg = LIKENESS_LABEL[res.status] || LIKENESS_LABEL.none;
@@ -3560,7 +3575,7 @@ async function loadLikeness() {
   if (res.anchorUrl) { E('likenessPreview').src = res.anchorUrl; wrap.classList.remove('hidden'); }
   else wrap.classList.add('hidden');
   E('likenessPick').textContent = res.hasAnchor ? 'Trocar foto' : 'Enviar foto de frente';
-  // Fotos de rosto extras: só liberam depois que a foto de frente foi enviada.
+  // Extra face photos: only unlock after the front-facing photo has been sent.
   const extra = E('extraFacesBox');
   if (extra) {
     if (res.hasAnchor) extra.classList.remove('hidden'); else extra.classList.add('hidden');
@@ -3568,9 +3583,9 @@ async function loadLikeness() {
     renderExtraFace(3, res.hasFace3, res.face3Url);
   }
 }
-// ── Conta empresarial (F0) ──
-// A empresa da pessoa, os domínios liberados, e (pro admin) membros e convites.
-// Convite novo também vai por e-mail pra pessoa (sai no servidor).
+// ── Business account (F0) ──
+// The person's company, the allowed domains, and (for the admin) members and invites.
+// A new invite also goes out by email to the person (sent server-side).
 function empresaMsg(err, aviso) {
   const e = E('empresaErr'), a = E('empresaAviso');
   if (e) { e.textContent = err || ''; e.classList.toggle('hidden', !err); }
@@ -3679,7 +3694,7 @@ E('likenessFile').onchange = async (e) => {
   hint.textContent = 'Foto salva. ✓';
   loadLikeness();
 };
-// Fotos de rosto extras (slots 2 e 3): mesma pessoa, ângulos diferentes.
+// Extra face photos (slots 2 and 3): same person, different angles.
 function wireExtraFace(slot) {
   E('face' + slot + 'Pick').onclick = () => E('face' + slot + 'File').click();
   E('face' + slot + 'File').onchange = async (e) => {
@@ -3704,7 +3719,7 @@ function wireExtraFace(slot) {
 wireExtraFace(2);
 wireExtraFace(3);
 
-// ── Voz de referência (áudio pra geração de vídeo) ──
+// ── Reference voice (audio for video generation) ──
 let voiceRecorder = null, voiceChunks = [], voiceRecording = false;
 async function loadVoice() {
   const st = E('voiceStatus'); if (!st) return;
@@ -3764,23 +3779,23 @@ E('voiceDel').onclick = async () => {
   hint.textContent = ''; loadVoice();
 };
 
-// ── Roteamento (SPA com URLs reais, estilo claude.ai) ──
-// Cada seção do menu tem sua própria URL. /nova é a home com o campo de tarefa
-// em foco. Deep-link e botões voltar/avançar do navegador funcionam via History API.
-// A área principal virou /conversas. /inicio continua mapeando pra mesma aba
-// (alias) pra não quebrar links antigos (e-mails, redirects de billing); a URL é
-// canonizada pra /conversas no applyRoute.
+// ── Routing (SPA with real URLs, claude.ai style) ──
+// Each menu section has its own URL. /nova is the home screen with the task field
+// focused. Deep links and the browser's back/forward buttons work via the History API.
+// The main area became /conversas. /inicio still maps to the same tab
+// (alias) so it doesn't break old links (emails, billing redirects); the URL is
+// canonicalized to /conversas in applyRoute.
 const ROUTES = { '/conversas': 'inicio', '/inicio': 'inicio', '/nova': 'inicio', '/assistentes': 'assistentes', '/memoria': 'assistentes', '/habilidades-apps': 'habilidades', '/conexoes': 'conexoes', '/contatos': 'contatos', '/arquivos': 'arquivos', '/creditos': 'creditos', '/config': 'config' };
 Object.assign(ROUTES, ganchosDoApp.rotas);
-// A aba interna se chama 'habilidades' mas mora em /habilidades-apps: /habilidades
-// é a vitrine pública da comunidade (página própria, fora do SPA).
+// The internal tab is called 'habilidades' but lives at /habilidades-apps: /habilidades
+// is the public community showcase (its own page, outside the SPA).
 function pathForTab(tab) { return tab === 'inicio' ? '/conversas' : (tab === 'habilidades' ? '/habilidades-apps' : '/' + tab); }
 function navigate(path) {
   if (location.pathname !== path) history.pushState(null, '', path);
   applyRoute();
 }
 function applyRoute() {
-  // Canoniza o alias antigo /inicio -> /conversas sem recarregar.
+  // Canonicalizes the old /inicio -> /conversas alias without reloading.
   if (location.pathname === '/inicio') history.replaceState(null, '', '/conversas');
   const tab = ROUTES[location.pathname] || 'inicio';
   switchTab(tab);
@@ -3788,7 +3803,7 @@ function applyRoute() {
 }
 window.addEventListener('popstate', applyRoute);
 
-// ── Apelido / endereço na web (subdomínio) ──
+// ── Nickname / web address (subdomain) ──
 let currentUname = '';
 let unameTimer = null;
 function unameReason(reason) {
@@ -3839,28 +3854,28 @@ if (E('unameSave')) E('unameSave').onclick = async () => {
   }
 };
 
-// ── Uso / créditos ──
+// ── Usage / credits ──
 function fillClass(pct) { return pct >= 100 ? 'full' : (pct >= 80 ? 'warn' : ''); }
 function nf(n) { return (n || 0).toLocaleString('pt-BR'); }
-// Preço em R$. Existe porque os planos deixaram de ser redondos em 28/08: antes
-// era 'R$ ' + p.price_brl e saía "R$ 50", agora sairia "R$ 39.9". Sempre 2 casas
-// e vírgula, como o brasileiro lê preço.
+// Price in R$. Exists because plans stopped being round numbers on 2026-08-28:
+// before it was 'R$ ' + p.price_brl giving "R$ 50", now it would give "R$ 39.9". Always 2
+// decimal places and a comma, the way Brazilians read a price.
 function brl(n) { return (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-// 'AAAA-MM-DD' → 'DD/MM/AAAA'. Sem Date() de propósito: 'new Date("2026-12-31")'
-// é meia-noite UTC e no fuso do Brasil volta um dia (viraria 30/12).
+// 'YYYY-MM-DD' → 'DD/MM/YYYY'. No Date() on purpose: 'new Date("2026-12-31")'
+// is midnight UTC and in the Brazil timezone it rolls back a day (would become 12/30).
 function dmy(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
   return m ? m[3] + '/' + m[2] + '/' + m[1] : String(s || '');
 }
-// Créditos ANUNCIADOS de um plano na vitrine. Normalmente é a própria franquia
-// (p.credits). O campo credits_shown só aparece quando a tabela nova já foi
-// anunciada e a franquia ainda não virou, pra não mexer no ciclo aberto de quem
-// já é assinante. Toda a vitrine usa esta função pra não falar dois números.
+// ANNOUNCED credits of a plan in the showcase. Usually it's the allowance itself
+// (p.credits). The credits_shown field only shows up when the new pricing table has
+// already been announced but the allowance hasn't switched yet, so as not to touch the open
+// cycle of someone who's already a subscriber. The whole showcase uses this function to avoid quoting two numbers.
 function planCredits(p) { return p.credits_shown != null ? p.credits_shown : p.credits; }
 
-// Instalação sem créditos (núcleo aberto, gasto-simples.mjs): o servidor manda
-// só o gasto do mês em US$ (usedUsd) e o teto opcional (limitUsd), sem plano,
-// pacote nem cupom. Com crédito, a resposta nunca traz usedUsd.
+// Install without credits (open core, gasto-simples.mjs): the server sends
+// only the month's spend in US$ (usedUsd) and the optional cap (limitUsd), with no plan,
+// package, or coupon. With credits, the response never carries usedUsd.
 function gastoSimples(c) { return !!(c && 'usedUsd' in c); }
 function usd(v) { return 'US$ ' + brl(v); }
 function pctTeto(c) { return c.limitUsd > 0 ? Math.round((Number(c.usedUsd) || 0) / c.limitUsd * 100) : 0; }
@@ -3868,7 +3883,7 @@ function pctTeto(c) { return c.limitUsd > 0 ? Math.round((Number(c.usedUsd) || 0
 function renderCreditsBar(c) {
   if (!c) return;
   if (gastoSimples(c)) {
-    // Sem teto não há o que medir na barrinha.
+    // With no cap there's nothing to measure on the little bar.
     E('sideUso').classList.toggle('hidden', !(c.limitUsd > 0));
     if (!(c.limitUsd > 0)) return;
     const pt = pctTeto(c);
@@ -3877,14 +3892,14 @@ function renderCreditsBar(c) {
     const bf = E('suFill'); bf.style.width = Math.min(100, pt) + '%'; bf.className = 'barfill ' + fillClass(pt);
     return;
   }
-  // mini-barra sempre visível na sidebar (rodapé, junto do nome). Mostra o saldo
-  // TOTAL: franquia do mês + créditos comprados.
+  // mini-bar always visible in the sidebar (footer, next to the name). Shows the
+  // TOTAL balance: month's allowance + purchased credits.
   E('sideUso').classList.remove('hidden');
-  // Membro de empresa: o saldo é da empresa, então a barrinha leva o nome dela.
+  // Company member: the balance is the company's, so the little bar carries its name.
   const emp = contaEmpresa(c);
   E('suPlan').textContent = emp ? (emp.nome || 'Empresa') : c.planName;
-  // Mesmo padrão do box "Uso do mês": total = franquia + créditos comprados;
-  // barrinha = consumo do mês sobre esse total.
+  // Same pattern as the "Month's usage" box: total = allowance + purchased credits;
+  // bar = month's consumption over that total.
   const pct = (c.pctTotal != null ? c.pctTotal : c.pct);
   const cap = (c.capacity != null ? c.capacity : c.limit);
   const usedT = (c.usedTotal != null ? c.usedTotal : c.used);
@@ -3892,20 +3907,20 @@ function renderCreditsBar(c) {
   const sf = E('suFill'); sf.style.width = Math.min(100, pct) + '%'; sf.className = 'barfill ' + fillClass(pct);
 }
 
-// Conta empresarial: {nome, papel, voceUsou, admins} quando o saldo da tela é o
-// de uma empresa; null pra conta pessoal (aí a tela é a de sempre).
+// Business account: {nome, papel, voceUsou, admins} when the screen's balance is
+// a company's; null for a personal account (then the screen is the usual one).
 function contaEmpresa(c) {
   return c && c.conta && c.conta.tipo === 'empresa' && c.empresa ? c.empresa : null;
 }
-// Rota de cobrança da empresa que o servidor mandou pro admin. Só aceita as
-// rotas /api/billing/org/*; qualquer outra coisa cai na rota pessoal de sempre.
+// Company billing route that the server sent to the admin. Only accepts
+// /api/billing/org/* routes; anything else falls back to the usual personal route.
 function rotaCobranca(c, chave, pessoal) {
   const r = c && c.cobranca ? c.cobranca[chave] : '';
   return typeof r === 'string' && /^api\/billing\/org\/[a-z-]+$/.test(r) ? r : pessoal;
 }
 
-// Plano da empresa que o servidor montou (conta.plano): rótulo, N, preço por
-// crédito do painel, limites, redução agendada e cancelamento. null fora de empresa.
+// Company plan that the server built (conta.plano): label, N, panel's price per
+// credit, limits, scheduled reduction, and cancellation. null outside a company.
 function planoEmpresa(c) {
   const p = c && c.conta && c.conta.tipo === 'empresa' ? c.conta.plano : null;
   return p && typeof p.rotulo === 'string' ? p : null;
@@ -3914,8 +3929,8 @@ function diaMesBR(iso) {
   const d = iso ? new Date(iso) : null;
   return d && !isNaN(d) ? d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', timeZone:'America/Sao_Paulo' }) : '';
 }
-// Valor em R$ de N créditos, com o preço por crédito que veio do servidor. É só
-// vitrine: quem cobra recalcula na rota, com o preço do servidor.
+// Value in R$ of N credits, with the per-credit price that came from the server. It's just
+// a showcase: whatever charges recalculates it on the route, with the server's price.
 function precoCorpBrl(pl, n, mensal) {
   const preco = Number(pl.precoCreditoBrl) || 0;
   if (mensal) return (Math.round(pl.unidade * preco * 100) * Math.round(n / pl.unidade)) / 100;
@@ -3924,7 +3939,7 @@ function precoCorpBrl(pl, n, mensal) {
 function corpValido(pl, n) {
   return Number.isInteger(n) && n >= pl.minimo && n <= pl.maximo && n % pl.unidade === 0;
 }
-// Campo de quantidade (múltiplo de 10 mil) com o preço ao vivo embaixo.
+// Quantity field (multiple of 10 thousand) with the live price underneath.
 function campoCorp(pl, id, valor, mensal, onChange) {
   const inp = document.createElement('input');
   inp.type = 'number'; inp.id = id; inp.className = 'corpin';
@@ -3942,9 +3957,9 @@ function campoCorp(pl, id, valor, mensal, onChange) {
   inp.addEventListener('input', atualiza);
   return { inp, preco, aviso, atualiza };
 }
-// Plano corporativo na tela de Créditos e plano. Admin: vê o plano, muda o
-// volume (ou assina), cancela e compra avulso. Membro: só o rótulo (no
-// #planEmpresa), sem botão de compra.
+// Corporate plan on the Credits and plan screen. Admin: sees the plan, changes the
+// volume (or subscribes), cancels, and buys one-off credits. Member: only the label (in
+// #planEmpresa), with no purchase button.
 function renderPlanoEmpresa(c, adminEmp) {
   const box = E('planCorp'), av = E('avulsoEmpresa');
   const pl = planoEmpresa(c);
@@ -3956,7 +3971,7 @@ function renderPlanoEmpresa(c, adminEmp) {
   if (av) av.hidden = true;
   if (!pl || !adminEmp || !box) return;
   const corp = pl.id !== 'free';
-  // Card do plano atual.
+  // Current plan card.
   const atual = document.createElement('div');
   atual.className = 'plancard cur';
   let h = '<div class="pname">' + esc(pl.rotulo) + '</div>' +
@@ -3971,7 +3986,7 @@ function renderPlanoEmpresa(c, adminEmp) {
   atual.innerHTML = h;
   box.appendChild(atual);
   if (!pode || !rotaPlano) return;
-  // Card de assinar ou mudar o volume.
+  // Card to subscribe or change the volume.
   const card = document.createElement('div');
   card.className = 'plancard';
   const alvoAtual = corp ? ((pl.proximo && pl.proximo.creditos) || pl.creditos) : null;
@@ -3994,7 +4009,7 @@ function renderPlanoEmpresa(c, adminEmp) {
   box.appendChild(card);
   campo.atualiza();
   btn.addEventListener('click', () => { if (escolhido != null) cobrancaEmpresa(rotaPlano, { creditos: escolhido }, btn); });
-  // Cancelar (ou desfazer o cancelamento) só existe com plano corporativo.
+  // Cancel (or undo the cancellation) only exists with a corporate plan.
   if (corp && rotaCancelar) {
     const cx = document.createElement('button');
     cx.className = 'ghostbtn'; cx.id = 'corpCancelarBtn';
@@ -4006,8 +4021,8 @@ function renderPlanoEmpresa(c, adminEmp) {
     });
     atual.appendChild(cx);
   }
-  // Crédito avulso da empresa: mesmo preço por crédito do plano. A tela mostra
-  // só o total do volume digitado, nunca o preço unitário.
+  // Company's one-off credits: same per-credit price as the plan. The screen shows
+  // only the total of the entered volume, never the unit price.
   const form = E('avulsoEmpresaForm');
   if (av && form && rotaAvulso) {
     av.hidden = false; form.innerHTML = '';
@@ -4027,8 +4042,8 @@ function renderPlanoEmpresa(c, adminEmp) {
   }
 }
 
-// Tela da instalação sem créditos: o gasto do mês e o teto, se houver. Some tudo
-// que é de plano, pacote, cupom e empresa; modelo e mídia ficam.
+// Screen for the install without credits: the month's spend and the cap, if any. Hides everything
+// that is plan, package, coupon, and company; model and media stay.
 function renderGastoSimples(c) {
   const teto = c.limitUsd > 0;
   const pt = pctTeto(c);
@@ -4052,11 +4067,11 @@ function renderCreditsPanel(c) {
   if (gastoSimples(c)) return renderGastoSimples(c);
   const emp = contaEmpresa(c);
   const adminEmp = !!(emp && emp.papel === 'admin');
-  // Membro comum não compra nada: quem assina e compra pela empresa é o admin.
+  // Regular member buys nothing: whoever subscribes and buys for the company is the admin.
   const semCompra = !!(emp && !adminEmp);
   if (emp) {
-    // Plano da empresa vem pronto do servidor ("Plano corporativo: 50.000
-    // créditos/mês" ou "Plano Free: 1.500 créditos/mês"). Preço só pro admin.
+    // Company plan comes ready-made from the server ("Plano corporativo: 50.000
+    // créditos/mês" or "Plano Free: 1.500 créditos/mês"). Price only for the admin.
     const pl = planoEmpresa(c);
     const rot = pl ? pl.rotulo : c.planName;
     E('usoPlan').innerHTML = 'Saldo da empresa <b>' + esc(emp.nome) + '</b>, dividido entre os membros. ' +
@@ -4064,8 +4079,8 @@ function renderCreditsPanel(c) {
   } else {
     E('usoPlan').innerHTML = 'Plano atual: <b>' + esc(c.planName) + '</b>' + (c.price ? ' — R$ ' + brl(c.price) + '/mês' : ' — grátis');
   }
-  // Barra COMBINADA: franquia do mês + créditos comprados. capacity = total que a
-  // pessoa tem; usedTotal = quanto já consumiu desse total.
+  // COMBINED bar: month's allowance + purchased credits. capacity = total the
+  // person has; usedTotal = how much of that total has already been consumed.
   const pctT = (c.pctTotal != null ? c.pctTotal : c.pct);
   const cap = (c.capacity != null ? c.capacity : c.limit);
   const usedT = (c.usedTotal != null ? c.usedTotal : c.used);
@@ -4074,7 +4089,7 @@ function renderCreditsPanel(c) {
   E('usoUsed').textContent = nf(usedT);
   E('usoLimit').textContent = nf(cap);
   E('usoPctTxt').textContent = '(' + pctT + '%)';
-  // Quanto ESTA pessoa usou do saldo que é de todos os membros.
+  // How much THIS person used of the balance that belongs to all members.
   const ue = E('usoEmpresa');
   if (ue) {
     if (emp) {
@@ -4083,10 +4098,10 @@ function renderCreditsPanel(c) {
         '</b> de ' + nf(cap) + ' créditos da empresa.';
     } else ue.hidden = true;
   }
-  // Créditos extras: o box é "uso do mês", então mostra só o que impacta o mês
-  // atual. Remanescente do mês anterior vira uma linha; cada pacote deste mês
-  // aparece separado, com barrinha de quanto já foi consumido. A franquia é
-  // gasta primeiro; extras depois, do mais antigo pro mais novo.
+  // Extra credits: the box is "month's usage", so it shows only what impacts the
+  // current month. The previous month's remainder becomes one line; each package from this month
+  // shows up separately, with a little bar of how much has already been consumed. The allowance is
+  // spent first; extras afterwards, oldest to newest.
   const ex = E('usoExtra');
   if (ex) {
     const bd = (c.extrasBreakdown || []);
@@ -4116,8 +4131,8 @@ function renderCreditsPanel(c) {
   if (c.periodEnd) {
     const d = new Date(c.periodEnd);
     let txt = 'A franquia renova em ' + d.toLocaleDateString('pt-BR', { day:'2-digit', month:'long' }) + '.';
-    // Primeiro mês grátis: a data é a MESMA, mas o que acontece nela é outro
-    // (ou assina, ou cai pro Free), então o texto precisa dizer isso.
+    // First free month: the date is the SAME, but what happens on it is different
+    // (either subscribe, or drop to Free), so the text needs to say that.
     if (c.trialEndsAt) {
       const t = new Date(c.trialEndsAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'long' });
       txt = 'Seu primeiro mês é por nossa conta: você está no ' + (c.planName || 'Básico') +
@@ -4127,12 +4142,12 @@ function renderCreditsPanel(c) {
   }
   renderModels(c);
   renderMedia(c.media, c.mediaCosts);
-  // aviso de retorno do checkout
+  // notice about returning from checkout
   const fl = E('billingFlash');
   if (fl) { if (billingFlash) { fl.textContent = billingFlash; fl.classList.remove('hidden'); } else fl.classList.add('hidden'); }
-  // Desconto promocional vigente (vem do backend, não é chumbado aqui). Enquanto
-  // houver promoção, o preço em destaque é o COM desconto e o cheio fica riscado:
-  // o número na tela tem que ser o número que a pessoa vai pagar.
+  // Current promotional discount (comes from the backend, not hardcoded here). While
+  // a promotion is active, the highlighted price is the discounted one and the full price is struck through:
+  // the number on screen has to be the number the person will actually pay.
   const promo = semCompra ? null : (c.promo || null);
   const pbox = E('promoBox');
   if (pbox) {
@@ -4165,7 +4180,7 @@ function renderCreditsPanel(c) {
     const cur = p.id === c.plan;
     const div = document.createElement('div');
     div.className = 'plancard' + (cur ? ' cur' : '');
-    // price_promo só vem preenchido quando há promoção e o plano é pago.
+    // price_promo is only filled in when there's a promotion and the plan is paid.
     const hasPromo = p.price_promo != null && p.price_promo < p.price_brl;
     const priceHtml = !p.price_brl ? '' :
       (hasPromo ? '<span class="pfull">de R$ ' + brl(p.price_brl) + '</span>' : '') +
@@ -4176,8 +4191,8 @@ function renderCreditsPanel(c) {
     else if (p.price_brl > 0 && APP_CFG.stripe) {
       const up = p.credits > (c.limit || 0);
       action = '<button class="pbtn" data-plan="' + p.id + '">' + (up ? 'Assinar' : 'Mudar para este') + '</button>';
-    // Sem Stripe não há botão. Só o plano grátis precisa de rótulo aqui: o preço
-    // dos pagos já saiu em priceHtml (repetir mostraria o cheio embaixo do promocional).
+    // Without Stripe there's no button. Only the free plan needs a label here: the price
+    // for the paid ones already came out in priceHtml (repeating it would show the full price under the promo one).
     } else action = p.price_brl ? '' : '<span class="pprice">grátis</span>';
     div.innerHTML =
       '<div class="pgrow"><div class="pname">' + esc(p.name) + '</div>' +
@@ -4188,8 +4203,8 @@ function renderCreditsPanel(c) {
   });
   const rotaPlano = rotaCobranca(c, 'checkout', 'api/billing/checkout');
   list.querySelectorAll('.pbtn').forEach(b => { b.onclick = () => startCheckout(b.dataset.plan, b, rotaPlano); });
-  // pacotes de crédito avulsos (compra única). Só aparece se o Stripe está ligado
-  // e há pacotes habilitados vindos do backend.
+  // one-off credit packages (single purchase). Only shows up if Stripe is enabled
+  // and there are packages enabled coming from the backend.
   const psec = E('packSection'), plist = E('packList');
   if (psec && plist) {
     const packs = semCompra ? [] : (c.packs || []);
@@ -4198,8 +4213,8 @@ function renderCreditsPanel(c) {
       packs.forEach(p => {
         const div = document.createElement('div');
         div.className = 'plancard';
-        // mesmo tratamento do card de plano: o preço em destaque é o que a pessoa
-        // paga com o cupom, e o cheio fica riscado em cima.
+        // same treatment as the plan card: the highlighted price is what the person
+        // pays with the coupon, and the full price is struck through above it.
         const packPromo = promo && p.price_promo != null && p.price_promo < p.price_brl;
         div.innerHTML =
           '<div class="pname">' + nf(p.credits) + ' créditos</div>' +
@@ -4213,7 +4228,7 @@ function renderCreditsPanel(c) {
       plist.querySelectorAll('.pbtn').forEach(b => { b.onclick = () => startPackCheckout(b.dataset.pack, b, rotaPacote); });
     } else psec.hidden = true;
   }
-  // botão de gerenciar assinatura (só se já é cliente Stripe)
+  // manage-subscription button (only if already a Stripe customer)
   const mng = E('manageBilling');
   if (mng) {
     if (c.manageable && APP_CFG.stripe && !semCompra) {
@@ -4224,8 +4239,8 @@ function renderCreditsPanel(c) {
   }
 }
 
-// Mostra o custo relativo em "barras" (1× = 1 barra preenchida de 8). Amigável,
-// sem expor token/dólar. 'auto' = variável.
+// Shows the relative cost in "bars" (1x = 1 bar filled out of 8). Friendly,
+// without exposing token/dollar. 'auto' = variable.
 function costPips(rel) {
   if (rel == null) return '<span class="msoft">consumo variável</span>';
   const max = 8, n = Math.max(1, Math.min(max, Math.round(rel)));
@@ -4239,7 +4254,7 @@ function renderModels(c) {
   const wrap = E('modelList'); if (!wrap) return;
   wrap.innerHTML = '';
   const auto = !!c.modelAuto;
-  // Flag "Automático": deixa o backend escolher o modelo por pergunta.
+  // "Automatic" flag: lets the backend choose the model per question.
   const arow = document.createElement('label');
   arow.className = 'mediarow';
   arow.innerHTML =
@@ -4247,7 +4262,7 @@ function renderModels(c) {
     + '<span class="mr-body"><b>Automático</b><span class="mr-desc">Deixa o __MARCA__ escolher o modelo mais econômico que dá conta de cada pergunta. Conversa simples gasta menos; pedido de pesquisa, preço ou análise usa um modelo mais forte. Quando ligado, a escolha manual abaixo fica em pausa.</span></span>';
   wrap.appendChild(arow);
   arow.querySelector('#modelAutoChk').onchange = (e) => toggleModelAuto(e.target);
-  // Cards de escolha manual: ficam em pausa (apagados) quando o Automático está ligado.
+  // Manual-choice cards: stay paused (grayed out) when Automatic is on.
   const grid = document.createElement('div');
   grid.style.marginTop = '12px';
   if (auto) { grid.style.opacity = '0.45'; grid.style.pointerEvents = 'none'; }
@@ -4276,16 +4291,16 @@ async function toggleModelAuto(inp) {
   } catch { inp.checked = !inp.checked; }
 }
 
-// Seletor de idioma (Config › Idioma). A escolha da PESSOA sempre vence o
-// palpite do navegador, então aqui grava direto, sem COALESCE.
+// Language selector (Config › Language). The PERSON's choice always wins over the
+// browser's guess, so here it saves directly, without COALESCE.
 function renderIdioma(me) {
   const sel = document.getElementById('idiomaSelect');
   if (!sel) return;
   const atual = (me && me.locale && me.locale.language) || 'pt-BR';
   if ([...sel.options].some((o) => o.value === atual)) sel.value = atual;
-  // `salvo` acompanha o que o servidor confirmou. Se a gravação falhar, o select
-  // volta pra isso, e não pro valor de quando a tela abriu: quem trocou duas
-  // vezes não pode perder junto a escolha anterior, que estava salva.
+  // `salvo` tracks what the server confirmed. If the save fails, the select
+  // reverts to this, not to the value from when the screen opened: whoever changed it twice
+  // shouldn't lose the previous choice along with it, which was saved.
   let salvo = sel.value;
   sel.onchange = async () => {
     const hint = document.getElementById('idiomaHint');
@@ -4302,15 +4317,15 @@ function renderIdioma(me) {
   };
 }
 
-// Conta que já existia antes do multi-idioma não tem idioma gravado. Carimba uma
-// vez com o que o navegador declara e segue. O servidor só preenche o que está
-// vazio, então isto nunca atropela quem já escolheu.
+// An account that already existed before multi-language has no language saved. Stamps it
+// once with what the browser declares and moves on. The server only fills in what is
+// empty, so this never overrides someone who already chose.
 //
-// Só IDIOMA. Antes isto também mandava país, tirado da região da tag
-// (`new Intl.Locale('es-AR').region` -> 'AR'), o que é palpite: a região da tag
-// de idioma não prova onde a pessoa mora. País decide cobrança e recurso
-// (Asaas só no Brasil), então fica NULL até haver evidência de verdade, CEP ou
-// CPF/CNPJ. O servidor ignora `country` aqui de qualquer forma.
+// Language ONLY. Before, this also sent country, taken from the tag's region
+// (`new Intl.Locale('es-AR').region` -> 'AR'), which is a guess: a language tag's
+// region doesn't prove where the person lives. Country decides billing and resource
+// (Asaas only in Brazil), so it stays NULL until there's real evidence, a CEP (postal code) or
+// CPF/CNPJ (Brazilian tax IDs). The server ignores `country` here anyway.
 async function maybeSyncLocale(me) {
   try {
     if (!me || !me.locale || me.locale.definido) return;
@@ -4320,9 +4335,9 @@ async function maybeSyncLocale(me) {
   } catch {}
 }
 
-// Se o usuário ainda não tem fuso salvo, detecta pelo navegador e grava (uma vez).
-// Assim "hoje/amanhã" e eventos de agenda saem na hora local certa sem o agente
-// precisar adivinhar o fuso a cada pedido.
+// If the user doesn't yet have a timezone saved, detect it from the browser and save it (once).
+// This way "today/tomorrow" and calendar events come out at the correct local time without the agent
+// having to guess the timezone on every request.
 async function maybeSyncTimezone(me) {
   try {
     if (!me || me.timezone) return;
@@ -4332,9 +4347,9 @@ async function maybeSyncTimezone(me) {
   } catch {}
 }
 
-// Toggles de mídia (Conexões › Mídia). Cada item mostra um custo APROXIMADO por
-// uso, vindo do backend (mediaCosts): em créditos onde há crédito, em US$ na versão
-// sem crédito (emUsd). Chave ausente em media = ligado.
+// Media toggles (Connections › Media). Each item shows an APPROXIMATE cost per
+// use, coming from the backend (mediaCosts): in credits where there are credits, in US$ in the
+// version without credits (emUsd). Key absent in media = enabled.
 function renderMedia(media, costs, emUsd) {
   const wrap = E('mediaList'); if (!wrap) return;
   media = media || {}; costs = costs || {};
@@ -4381,9 +4396,9 @@ async function pickModel(id, card) {
   } catch (e) { wrap.querySelectorAll('.modelcard').forEach(c => c.style.opacity = '1'); }
 }
 
-// Ações de cobrança da empresa (plano, avulso, cancelar). O servidor valida o N
-// e calcula o valor; aqui só manda o N. Com url, vai pro checkout do Stripe;
-// sem url, mostra a mensagem que o servidor devolveu e recarrega o saldo.
+// Company billing actions (plan, one-off, cancel). The server validates the N
+// and calculates the value; here it just sends the N. With a url, it goes to Stripe
+// checkout; without a url, it shows the message the server returned and reloads the balance.
 async function cobrancaEmpresa(rota, body, btn) {
   const old = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Aguarde…'; }
@@ -4396,7 +4411,7 @@ async function cobrancaEmpresa(rota, body, btn) {
   else { const fl = E('billingFlash'); if (fl) { fl.textContent = billingFlash; fl.classList.remove('hidden'); } }
 }
 
-// rota = pessoal por padrão; o admin de empresa passa a rota da empresa.
+// route = personal by default; the company admin passes the company's route.
 async function startCheckout(plan, btn, rota) {
   const old = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Abrindo…'; }
@@ -4406,7 +4421,7 @@ async function startCheckout(plan, btn, rota) {
     clearPlanSwitch(E('billingFlash'));
     const r = await api(rota || 'api/billing/checkout', { plan });
     if (r && r.url) { window.location = r.url; return; }
-    // Estado persistente na tela, sem apagar a pendência num reload/alerta.
+    // Persistent state on the screen, without erasing the pending item on a reload/alert.
     const resultMessage = showPlanSwitch(E('billingFlash'), r);
     if (resultMessage) {
       billingFlash = resultMessage;
@@ -4440,31 +4455,31 @@ async function openPortal(btn, rota) {
   if (btn) { btn.disabled = false; btn.textContent = old; }
 }
 
-// Barra-escada: cada plano é uma faixa cumulativa, largura proporcional à
-// franquia (com piso mínimo pra os pequenos não sumirem). Um marcador mostra
-// onde o consumo do usuário cai na escala — assim dá pra ver "estou aqui" e
-// "o próximo plano me daria tudo isso".
+// Ladder bar: each plan is a cumulative band, width proportional to the
+// allowance (with a minimum floor so small ones don't disappear). A marker shows
+// where the user's usage falls on the scale, so you can see "I'm here" and
+// "the next plan would give me all this".
 function renderLadder(c) {
   const box = E('planLadder'); if (!box) return;
-  // planCredits em vez de p.credits: a escada é vitrine, tem que falar o mesmo
-  // número dos cards. Enquanto credits_shown estiver ligado, o marcador de consumo
-  // fica levemente deslocado dentro da faixa; preferível a mostrar dois números
-  // diferentes pro mesmo plano na mesma tela.
+  // planCredits instead of p.credits: the ladder is a showcase, it has to say the same
+  // number as the cards. While credits_shown is on, the usage marker
+  // ends up slightly offset within the band; preferable to showing two different
+  // numbers for the same plan on the same screen.
   const plans = (c.plans || []).slice().sort((a, b) => planCredits(a) - planCredits(b));
   if (!plans.length) { box.innerHTML = ''; return; }
   const COLORS = ['#b9b09c', '#d3a06f', '#c97a52', '#a85f3d'];
-  const MINW = 0.07; // piso de largura por faixa (fração do total)
-  // limites cumulativos em créditos: [0, c0, c1, c2, ...]
+  const MINW = 0.07; // minimum width floor per band (fraction of total)
+  // cumulative bounds in credits: [0, c0, c1, c2, ...]
   const bounds = [0]; plans.forEach(p => bounds.push(planCredits(p)));
   const maxCred = bounds[bounds.length - 1];
-  // largura "crua" de cada faixa = incremento sobre a anterior
+  // "raw" width of each band = increment over the previous one
   const raw = plans.map((p, i) => (bounds[i + 1] - bounds[i]) / maxCred);
   const floored = raw.map(r => Math.max(r, MINW));
   const sum = floored.reduce((a, b) => a + b, 0);
-  const vw = floored.map(w => w / sum); // largura visual normalizada (fração)
-  // posição visual inicial acumulada de cada faixa
+  const vw = floored.map(w => w / sum); // normalized visual width (fraction)
+  // cumulative starting visual position of each band
   const vstart = []; let acc = 0; vw.forEach(w => { vstart.push(acc); acc += w; });
-  // mapeia um valor de crédito -> posição visual (%) interpolando por faixa
+  // maps a credit value -> visual position (%) interpolating by band
   function creditToX(v) {
     if (v <= 0) return 0;
     if (v >= maxCred) return 100;
@@ -4494,7 +4509,7 @@ function renderLadder(c) {
   const mark = document.createElement('div');
   mark.className = 'lmark';
   mark.style.left = x + '%';
-  // alinha a etiqueta pra não estourar as bordas (perto da esquerda/direita)
+  // aligns the tag so it doesn't overflow the edges (near the left/right)
   const tagStyle = x < 14 ? 'left:0;transform:translateX(-2px)'
                  : x > 86 ? 'right:0;transform:translateX(2px)'
                  : 'left:50%;transform:translateX(-50%)';
@@ -4514,14 +4529,14 @@ E('sideUso').onclick = () => navigate('/creditos');
 document.querySelectorAll('.navitem').forEach(t => { if (!t.dataset.tab) return; t.onclick = () => navigate(pathForTab(t.dataset.tab)); });
 E('newConv').onclick = () => navigate('/nova');
 
-// drawer mobile
+// mobile drawer
 function openDrawer() { E('sidebar').classList.add('open'); E('overlay').classList.add('show'); }
 function closeDrawer() { E('sidebar').classList.remove('open'); E('overlay').classList.remove('show'); }
 E('ham').onclick = openDrawer;
 E('overlay').onclick = closeDrawer;
 
-// Tipos de assistente (presets). `goal` é guardado no agente e serve de chave
-// pra recuperar as tarefas-modelo depois. `connect` = serviços Google sugeridos.
+// Assistant types (presets). `goal` is stored on the agent and serves as the key
+// to retrieve the template tasks later. `connect` = suggested Google services.
 const TYPES = [
   { id:'shopper', em:'🛍️', label:'Shopper', name:'Mara',
     goal:'comprar melhor: preço justo, cupom e wishlist',
@@ -4548,8 +4563,8 @@ const TYPES = [
     connect:['docs','drive'],
     tasks:['Revisa este código','Debuga este erro','Explica este trecho','Sugere uma arquitetura pra X'] },
 ];
-// Agente geral "faz-tudo": destaque na criação, pega todas as ferramentas que o
-// usuário conectar. `connect` lista todos os serviços disponíveis.
+// General "does-everything" agent: highlighted on creation, picks up all the tools the
+// user connects. `connect` lists all available services.
 const GENERIC = { id:'geral', em:'✨', label:'Assistente completo', name:'__MARCA__',
   goal:'faz tudo: seu assistente pessoal completo',
   desc:'Cuida de tudo: e-mails, agenda, documentos, pesquisa, compras e o que mais você precisar. Usa todas as ferramentas que você conectar.',
@@ -4560,11 +4575,11 @@ const ALL_TYPES = [GENERIC, ...TYPES];
 const typeByGoal = (g) => ALL_TYPES.find(t => t.goal === g);
 const SERVICE_META = { gmail:{em:'📧',label:'Gmail'}, calendar:{em:'📅',label:'Agenda'}, docs:{em:'📄',label:'Docs'}, drive:{em:'🗂️',label:'Drive'} };
 
-let pendingType = null; // tipo escolhido no form de Assistentes (pra salvar o goal)
+let pendingType = null; // type chosen in the Assistants form (to save the goal)
 function fillFromType(t) { pendingType = t; E('aname').value = t.name; E('instructions').value = t.instructions; E('instructions').focus(); }
 (function renderTypeChips() {
   const box = E('templates');
-  // destaque do agente completo, antes dos tipos específicos
+  // highlight of the full agent, before the specific types
   const g = document.createElement('span');
   g.className = 'chip chip-feat'; g.textContent = GENERIC.em + ' ' + GENERIC.label + ' • faz tudo';
   g.onclick = () => fillFromType(GENERIC);
@@ -4594,8 +4609,8 @@ E('create').onclick = async () => {
   E('createBox').classList.add('hidden');
   navigate('/conversas');
 };
-// O box "Nova assistente" fica escondido; só aparece ao clicar em "Criar assistente"
-// no header. "Cancelar" recolhe de volta.
+// The "New assistant" box stays hidden; it only shows up when clicking "Create assistant"
+// in the header. "Cancel" collapses it back.
 E('showCreate').onclick = () => {
   E('createBox').classList.remove('hidden');
   E('aname').focus();
@@ -4606,7 +4621,7 @@ E('cancelCreate').onclick = () => {
   E('err1').classList.add('hidden');
 };
 
-// ───── Wizard persistente, fonte TypeScript em onboarding/ui.mts ─────
+// ───── Persistent wizard, TypeScript source in onboarding/ui.mts ─────
 let wizardModule = null;
 function wizClear() { try { localStorage.removeItem('mtr_wiz'); } catch {} }
 async function getWizard() {
@@ -4638,8 +4653,8 @@ async function openWizard(firstName) {
 
 // ── Chat / thread ──
 let currentThreadId = null;
-let chatSending = false; // trava o poller enquanto uma mensagem está em voo
-let chatGen = 0; // muda a cada envio; invalida recuperação de um envio anterior
+let chatSending = false; // locks the poller while a message is in flight
+let chatGen = 0; // changes on every send; invalidates recovery of a previous send
 let chatViewEpoch = 0, chatOpenRequest = 0, taskStarting = false;
 const chatPending = new Map();
 const showingChat = (id, epoch) => currentThreadId === id && chatViewEpoch === epoch && E('panel-chat').classList.contains('active');
@@ -4654,24 +4669,24 @@ function openChatThread(threadId, title, agentName, msgs) {
   E('botname').textContent = title || agentName || 'Conversa';
   switchTab('chat');
   (msgs || []).forEach(m => addMsg(m.content, m.role === 'user' ? 'me' : 'bot', m.attachments));
-  scrollChatToEnd(false); // abre sempre no fim, mesmo com histórico longo
+  scrollChatToEnd(false); // always opens at the end, even with a long history
   E('input').focus();
 }
-// ── Aviso ao vivo na thread aberta ──────────────────────────────────────────
-// O chat da web não tinha refresh: mensagens PROATIVAS (vídeo ficou pronto,
-// lembrete, recado de outro agente) chegam no banco mas não apareciam sozinhas,
-// só ao recarregar ou mandar outra mensagem. Este poller relê a thread aberta e
-// anexa o que chegou DEPOIS do que já está na tela. Baseline = nº de bolhas em
-// #msgs (cada mensagem = 1 bolha, 1:1 com o history), então não precisa contador.
-// Relê a thread aberta e anexa o que chegou depois do que está na tela.
-// Devolve quantas mensagens anexou, ou -1 se nem deu pra consultar.
+// ── Live notice on the open thread ──────────────────────────────────────────
+// The web chat had no refresh: PROACTIVE messages (video got ready,
+// reminder, message from another agent) arrive in the database but didn't show up on their own,
+// only on reload or when sending another message. This poller re-reads the open thread and
+// appends whatever arrived AFTER what's already on screen. Baseline = number of bubbles in
+// #msgs (each message = 1 bubble, 1:1 with the history), so it needs no counter.
+// Re-reads the open thread and appends whatever arrived after what's on screen.
+// Returns how many messages it appended, or -1 if it couldn't even query.
 async function syncOpenThread(openId) {
   const epoch = chatViewEpoch, gen = chatGen;
   let res;
   try { res = await api('api/thread?id=' + encodeURIComponent(openId)); }
   catch { return -1; }
   if (!res || res.error || !Array.isArray(res.messages)) return -1;
-  if (!showingChat(openId, epoch) || gen !== chatGen || res.id !== openId) return -1; // thread trocou no meio
+  if (!showingChat(openId, epoch) || gen !== chatGen || res.id !== openId) return -1; // thread changed midway
   clearLocalNotes();
   const shown = E('msgs').children.length;
   let added = 0;
@@ -4689,33 +4704,33 @@ async function pollOpenThread() {
   await syncOpenThread(currentThreadId);
 }
 setInterval(pollOpenThread, 8000);
-// Recuperação depois de uma queda de conexão no meio do turno.
-// O turno leva 60-90s e o servidor só grava a resposta no FIM; se o socket do POST
-// morreu antes (nginx loga 499), a resposta ainda vai aparecer no banco. Então em
-// vez de mostrar erro, reconsultamos a thread com backoff até ela chegar.
+// Recovery after a dropped connection in the middle of a turn.
+// The turn takes 60-90s and the server only saves the response at the END; if the POST's socket
+// died before that (nginx logs 499), the response will still show up in the database. So instead
+// of showing an error, we re-query the thread with backoff until it arrives.
 const RESYNC_BACKOFF = [2000, 3000, 5000, 8000, 12000, 20000, 30000, 45000, 60000];
 async function resyncAfterDrop(openId, gen) {
   for (const wait of RESYNC_BACKOFF) {
     await new Promise(r => setTimeout(r, wait));
-    // Saiu da thread ou mandou outra mensagem: para de recuperar, quem estiver
-    // no comando agora cuida (o poller ou o novo envio).
+    // Left the thread or sent another message: stop recovering, whoever is
+    // in command now handles it (the poller or the new send).
     if (currentThreadId !== openId || gen !== chatGen) return true;
     const added = await syncOpenThread(openId);
     if (added > 0) return true;
   }
   return false;
 }
-// Voltar pra aba/janela depois de um tempo fora: ressincroniza na hora em vez de
-// esperar o próximo tick do poller (queda de conexão costuma acontecer justamente
-// quando a aba fica em segundo plano).
+// Returning to the tab/window after time away: resyncs right away instead of
+// waiting for the poller's next tick (a dropped connection tends to happen precisely
+// when the tab goes to the background).
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOpenThread(); });
 window.addEventListener('online', () => { pollOpenThread(); });
-// ── Lista de conversas ao vivo ───────────────────────────────────────────────
-// A tela de início não recarregava a lista sozinha: conversas com atividade nova
-// (resposta proativa, recado de outro canal, nova troca) só subiam ao trocar de
-// aba ou dar refresh. Este poller relê a lista quando a aba Início está ativa e
-// a reordena — o servidor já devolve por updated_at DESC — trazendo as conversas
-// com interação mais recente pro topo.
+// ── Live conversation list ───────────────────────────────────────────────
+// The home screen didn't reload the list on its own: conversations with new activity
+// (proactive response, message from another channel, new exchange) only surfaced when switching
+// tabs or refreshing. This poller re-reads the list when the Home tab is active and
+// reorders it (the server already returns it ordered by updated_at DESC), bringing the conversations
+// with the most recent interaction to the top.
 async function pollThreadList() {
   if (!userName || document.hidden) return;
   const panel = E('panel-inicio');
@@ -4728,13 +4743,13 @@ async function openThreadById(id) {
   const res = await api('api/thread?id=' + encodeURIComponent(id));
   if (request !== chatOpenRequest) return;
   if (res.error) return showErr(E('taskErr'), res.error);
-  // O GET acima já marcou a conversa como lida no servidor; apaga a bolinha aqui
-  // pra ela não reaparecer no próximo tick da lista.
+  // The GET above already marked the conversation as read on the server; clears the dot here
+  // so it doesn't reappear on the list's next tick.
   localPatchThread(id, { unread: false });
   openChatThread(res.id, res.title, res.agentName, res.messages);
 }
-// Envio inline (a resposta apareceu na tela): avisa o servidor que foi lida. Se a
-// conexão cair no meio do turno isto NÃO roda, e a bolinha na lista fica de aviso.
+// Inline send (the reply showed up on screen): tells the server it was read. If the
+// connection drops mid-turn this does NOT run, and the dot in the list stays as a notice.
 function markThreadRead(id) {
   if (!id) return;
   localPatchThread(id, { unread: false });
@@ -4797,8 +4812,8 @@ E('waConnectBtn').onclick = async () => {
   btn.disabled = false; btn.textContent = 'Conectar WhatsApp';
   if (res.error) return showErr(err, res.error);
   E('waPhone').value = '';
-  // Digitar o número não conecta: o servidor devolve um código e o número só é
-  // amarrado quando a mensagem com ele chega DESTE telefone (prova de posse).
+  // Typing the number doesn't connect it: the server returns a code and the number is only
+  // bound when the message with it arrives FROM that phone (proof of possession).
   if (res.pending) return showWaPending(res, agentId);
   renderWhatsApp({ phone: res.phone, activeAgentId: agentId, linked: true, number: res.number }, homeAgents);
 };
@@ -4825,7 +4840,7 @@ E('waDisconnect').onclick = async () => {
   renderWhatsApp({ linked: false }, homeAgents);
 };
 
-// ── Slack (código de pareamento por assistente) ──
+// ── Slack (pairing code per assistant) ──
 E('slCodeBtn').onclick = async () => {
   const err = E('slErr'); err.classList.add('hidden');
   const agentId = E('slAgent').value;
@@ -4841,7 +4856,7 @@ E('slCodeBtn').onclick = async () => {
   out.classList.remove('hidden');
 };
 
-// ── Extensão do Chrome (assistente que atende, persistido em ext_links) ──
+// ── Chrome extension (assistant that answers, persisted in ext_links) ──
 E('extSaveBtn').onclick = async () => {
   const err = E('extErr'); err.classList.add('hidden');
   const ok = E('extOk'); ok.classList.add('hidden');
@@ -4854,7 +4869,7 @@ E('extSaveBtn').onclick = async () => {
   ok.textContent = 'Pronto, a extensão vai responder com esse assistente.'; ok.classList.remove('hidden');
 };
 
-// ── __MARCA__ Runner (assistente que usa a máquina local; exige runner online) ──
+// ── __MARCA__ Runner (assistant that uses the local machine; requires the runner to be online) ──
 E('runnerSaveBtn').onclick = async () => {
   const err = E('runnerErr'); err.classList.add('hidden');
   const ok = E('runnerOk'); ok.classList.add('hidden');
@@ -4867,11 +4882,11 @@ E('runnerSaveBtn').onclick = async () => {
   ok.textContent = 'Pronto, esse assistente opera no Runner.'; ok.classList.remove('hidden');
 };
 
-// Imagens anexadas à próxima mensagem (visão). Reduzidas no cliente p/ caber no
-// limite de upload e economizar banda; mandamos só {mimeType,data} pro backend.
+// Images attached to the next message (vision). Downsized on the client to fit the
+// upload limit and save bandwidth; we only send {mimeType,data} to the backend.
 let pendingImages = [];
-// PDFs anexados à próxima mensagem. Mandamos {name,mime,data(base64)} pro backend,
-// que extrai o texto e salva o arquivo no bucket privado do usuário.
+// PDFs attached to the next message. We send {name,mime,data(base64)} to the backend,
+// which extracts the text and saves the file in the user's private bucket.
 let pendingFiles = [];
 function renderAttachPreview() {
   const box = E('attachPreview'); if (!box) return;
@@ -4890,7 +4905,7 @@ function renderAttachPreview() {
   box.querySelectorAll('.x[data-i]').forEach(x => { x.onclick = () => { pendingImages.splice(+x.dataset.i, 1); renderAttachPreview(); }; });
   box.querySelectorAll('.x[data-fi]').forEach(x => { x.onclick = () => { pendingFiles.splice(+x.dataset.fi, 1); renderAttachPreview(); }; });
 }
-// Lê um arquivo como base64 (sem o prefixo data:).
+// Reads a file as base64 (without the data: prefix).
 function readFileB64(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -4924,7 +4939,7 @@ function resizeImage(file, max = 1568, q = 0.85) {
 // quality in the common case and avoids absurd payloads/high vision cost.
 const IMG_LADDER = [[1280, 0.8], [1024, 0.72], [800, 0.65], [640, 0.6]];
 async function packImages(imgs) {
-  const BUDGET = 12000000; // ~12MB de base64 (bem sob os 25m do proxy)
+  const BUDGET = 12000000; // ~12MB of base64 (well under the proxy's 25m)
   const files = imgs.map(im => im.file).filter(Boolean);
   let packed = imgs;
   for (const [max, q] of IMG_LADDER) {
@@ -4940,8 +4955,8 @@ E('imgFile').onchange = async (e) => {
   e.target.value = '';
   for (const f of files) {
     const isImage = /^image\//i.test(f.type) && !/svg/i.test(f.type);
-    // Documento = PDF ou arquivo de texto (HTML/txt/markdown/csv/json/xml) usado
-    // como referência. Vai como anexo pro modelo ler; imagem vai pela visão.
+    // Document = PDF or text file (HTML/txt/markdown/csv/json/xml) used
+    // as reference. Goes as an attachment for the model to read; image goes through vision.
     const isDoc = !isImage && (/\.(pdf|html?|txt|md|markdown|csv|tsv|json|xml)$/i.test(f.name)
       || /^(text\/|application\/(pdf|json|xml|xhtml\+xml))/i.test(f.type));
     if (isDoc) {
@@ -4985,8 +5000,8 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
     const res = await api('api/chat', payload);
     if (!visible()) return;
     if (res && res.netFail) {
-      // A conexão caiu antes da resposta chegar. Não mostra erro: o turno
-      // provavelmente terminou no servidor e a resposta já está salva.
+      // The connection dropped before the response arrived. Doesn't show an error: the turn
+      // probably finished on the server and the response is already saved.
       const openId = threadId;
       const recovered = await resyncAfterDrop(openId, gen);
       if (!visible()) return;
@@ -4996,8 +5011,8 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
       }
     } else {
       E('typing').classList.add('hidden');
-      // Resposta de verdade vira bolha normal (está no history). Erro do servidor
-      // vira nota local, que não conta no baseline do poller.
+      // A real reply becomes a normal bubble (it's in the history). A server error
+      // becomes a local note, which doesn't count toward the poller's baseline.
       if (res && (res.reply || (res.attachments && res.attachments.length))) { addMsg(res.reply || '', 'bot', res.attachments); markThreadRead(threadId); }
       else addLocalNote((res && res.error) || 'Não consegui responder agora. Tenta de novo em instantes.');
     }
@@ -5005,9 +5020,9 @@ async function sendThread(text, images, files, threadId = currentThreadId) {
     if (visible()) addLocalNote('Não consegui concluir o envio. Confira esta conversa antes de tentar novamente.');
   } finally {
     clearTimeout(heartbeatTimer);
-    // Só libera o poller depois de renderar a resposta, senão um tick no meio
-    // duplicaria a bolha do assistente (server já persistiu, tela ainda não).
-    // Se outro envio começou no meio (recuperação longa), quem libera é ele.
+    // Only releases the poller after rendering the response, otherwise a tick in between
+    // would duplicate the assistant's bubble (server already persisted it, screen hasn't yet).
+    // If another send started in between (long recovery), that one releases it instead.
     pending.delete(gen); if (!pending.size) chatPending.delete(threadId);
     if (currentThreadId === threadId) chatSending = pending.size > 0;
     if (visible()) { typing.classList.toggle('hidden', !chatSending); typing.textContent = 'digitando...'; }
@@ -5031,7 +5046,7 @@ function growInput() {
   t.style.height = Math.min(t.scrollHeight, 140) + 'px';
 }
 E('send').onclick = sendMsg;
-// Enter envia; Shift+Enter pula linha.
+// Enter sends; Shift+Enter breaks the line.
 E('input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
 });
@@ -5043,7 +5058,7 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
 (async () => {
   const onboardingReturn = {provider:new URLSearchParams(location.search).get('e'), outcome:new URLSearchParams(location.search).get('connection_outcome')};
   APP_CFG = (await api('api/config')) || {};
-  // Link de redefinição de senha (/reset?token=...): mostra o card de nova senha.
+  // Password reset link (/reset?token=...): shows the new-password card.
   if (location.pathname === '/reset' || new URLSearchParams(location.search).get('token')) {
     showApp(false);
     showAuthCard('reset');
@@ -5055,13 +5070,13 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     history.replaceState(null, '', location.pathname);
   }
   if (location.search.includes('e=beta')) {
-    // O ?e=beta vem do login com Google quando o teto do beta bateu. Não é
-    // "convite": é vaga esgotada, e o cadastro por e-mail aqui mesmo põe a
-    // pessoa na fila (a rota /api/signup devolve queued nesse caso).
+    // The ?e=beta comes from the Google login when the beta cap has been hit. It's not
+    // an "invite": it's a sold-out slot, and signing up by email right here puts the
+    // person on the waitlist (the /api/signup route returns queued in that case).
     showErr(E('authErr'), 'As vagas do Open Beta estão esgotadas no momento. Crie sua conta com e-mail e senha aqui mesmo para entrar na fila: a gente avisa assim que abrirem novas vagas.');
     history.replaceState(null, '', location.pathname);
   }
-  // Volta do checkout do Stripe.
+  // Returning from Stripe checkout.
   if (location.search.includes('billing=success')) {
     billingFlash = 'Pagamento confirmado! Seu plano será atualizado em instantes.';
     history.replaceState(null, '', location.pathname);
@@ -5072,16 +5087,16 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     billingFlash = 'Checkout cancelado. Nenhuma cobrança foi feita.';
     history.replaceState(null, '', location.pathname);
   }
-  // Voltou de conectar uma FONTE DE E-MAIL (Google ou Hotmail/Outlook): os dois
-  // levam ao "momento wow". Github/Slack/Nuvemshop só limpam a URL (não é fonte
-  // de e-mail pro onboarding).
+  // Returned from connecting an EMAIL SOURCE (Google or Hotmail/Outlook): both
+  // lead to the "wow moment". Github/Slack/Nuvemshop just clean up the URL (not an
+  // email source for onboarding).
   const justConnected = location.search.includes('connected=google') || location.search.includes('connected=microsoft');
   if (justConnected) history.replaceState(null, '', location.pathname);
   else {
-    // Volta de conectar qualquer OUTRO provedor. Antes o erro era MUDO: quem
-    // autorizava no Hotmail e voltava com ?e=microsoft não via nada na tela e
-    // ficava achando que estava conectado (caso real). Agora o retorno sempre
-    // diz o que aconteceu, na própria aba de Conexões.
+    // Returning from connecting any OTHER provider. Before, the error was SILENT: whoever
+    // authorized on Hotmail and came back with ?e=microsoft saw nothing on screen and
+    // was left thinking they were connected (a real case). Now the return always
+    // says what happened, right on the Connections tab.
     const qs = new URLSearchParams(location.search);
     const okProv = qs.get('connected'), errProv = qs.get('e');
     if (okProv && PROV_NAMES[okProv]) {
@@ -5097,9 +5112,9 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
   }
   const me = await api('api/me');
   const path = location.pathname;
-  // /login é a tela de autenticação e NÃO entra no app: a área logada vive em
-  // /inicio (URL própria). A home pública (/) é outra página (home.html) e nem
-  // chega aqui. Quem abre /login já logado vai direto pras conversas.
+  // /login is the authentication screen and does NOT enter the app: the logged-in area lives at
+  // /inicio (its own URL). The public home (/) is another page (home.html) and doesn't even
+  // reach here. Whoever opens /login while already logged in goes straight to conversations.
   if (path === '/login') {
     if (me && me.name) { location.replace('/conversas'); return; }
     showApp(false); showAuthCard('login');
@@ -5108,10 +5123,10 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     return;
   }
 
-  // ── Área logada (/inicio e subrotas do menu) ──
-  // Sem sessão, o servidor já redireciona pro /login; este guard cobre o client-side.
-  // modo=entrar: quem cai aqui já tem conta, então a tela abre no login e não no
-  // formulário de cadastro (mesma regra dos redirects do servidor).
+  // ── Logged-in area (/inicio and menu subroutes) ──
+  // Without a session, the server already redirects to /login; this guard covers the client side.
+  // modo=entrar: whoever lands here already has an account, so the screen opens on login and not on the
+  // signup form (same rule as the server's redirects).
   if (!(me && me.name)) {
     const q = new URLSearchParams(location.search || '');
     q.set('modo', 'entrar');
@@ -5119,21 +5134,21 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
     return;
   }
   reveal();
-  maybeSyncTimezone(me); // fire-and-forget: grava o fuso do navegador se ainda não houver
+  maybeSyncTimezone(me); // fire-and-forget: saves the browser's timezone if there isn't one yet
   renderIdioma(me);
-  maybeSyncLocale(me); // fire-and-forget: carimba idioma/país de quem ainda não tem
-  // Volta do cadastro por Google: marca da ida + conta ainda sem assistente.
-  // Quem só logou numa conta antiga tem assistente, então não conta.
+  maybeSyncLocale(me); // fire-and-forget: stamps the language/country of whoever doesn't have one yet
+  // Returning from Google signup: round-trip marker + account still without an assistant.
+  // Whoever just logged into an old account has an assistant, so it doesn't count.
   try {
     if (sessionStorage.getItem('brambs_g_auth')) {
       sessionStorage.removeItem('brambs_g_auth');
       if (!(me.agents || []).length) marcarCadastro('google');
     }
-    marcarOrigem(); // retry: no-op quando já gravou ou quando não há origem
+    marcarOrigem(); // retry: no-op when it already saved or when there is no origin
   } catch (e) {}
-  // Conexão Google/Microsoft recusada porque a conta é de fora dos domínios da
-  // empresa (o servidor não gravou o token). Troca o aviso genérico de erro,
-  // montado acima, por um que diz o motivo real.
+  // Google/Microsoft connection refused because the account is outside the
+  // company's domains (the server didn't save the token). Replaces the generic error
+  // notice built above with one that states the real reason.
   if (onboardingReturn.outcome === 'empresa_dominio' && ['google', 'microsoft'].includes(onboardingReturn.provider)) {
     const nomeProv = onboardingReturn.provider === 'google' ? 'Google' : 'Microsoft';
     const doms = (me.empresa && me.empresa.dominios) || [];
@@ -5141,16 +5156,16 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
       ' só permite contas dos domínios ' + (doms.join(', ') || 'liberados') + '. Conecte a conta ' + nomeProv + ' com o e-mail da empresa.' };
     goConnTab = true;
   }
-  // Sem estado local, a etapa persistida ainda permite retomar em outra aba/dispositivo.
+  // Without local state, the persisted step still allows resuming on another tab/device.
   try { if (await (await getWizard()).boot(me, justConnected, onboardingReturn)) return; }
   catch { onboardingLoadError(); }
   enterHome(me.name, me.agents || [], me.connected, me.telegramBots || [], me.whatsapp, me.emailSend, me.providers, me.apps, me.ext, me.runner);
   renderTrainingOptOut(me.paying, me.trainingOptOut);
   renderEmpresaNotif(me);
-  // Volta de conectar um provedor: leva pra aba Conexões, que é onde o aviso
-  // (deu certo / não deu) faz sentido e onde fica o botão pra tentar de novo.
+  // Returning from connecting a provider: takes to the Connections tab, which is where the notice
+  // (succeeded / failed) makes sense and where the retry button lives.
   if (goConnTab) { history.replaceState(null, '', '/conexoes'); switchTab('conexoes'); }
-  // Deep-link pra uma conversa (ex: "abrir conversa" do cockpit): /inicio?c=<threadId>
+  // Deep-link to a conversation (e.g. "open conversation" from the cockpit): /inicio?c=<threadId>
   const _openConv = new URLSearchParams(location.search).get('c');
   if (_openConv) { history.replaceState(null, '', '/conversas'); openThreadById(_openConv); }
 })();

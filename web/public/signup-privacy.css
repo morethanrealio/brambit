@@ -1,5 +1,5 @@
-/* Microcopy de privacidade junto aos CTAs de cadastro. Deve ficar próxima da
-   decisão, sem competir visualmente com o botão nem prometer zero processamento. */
+/* Privacy microcopy next to the signup CTAs. Must stay close to the
+   decision, without visually competing with the button or promising zero processing. */
 .signup-privacy {
   max-width:620px;
   margin:10px 0 0;
