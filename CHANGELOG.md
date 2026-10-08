@@ -45,6 +45,10 @@ Changes merged since the last tag go under "Unreleased".
 - The onboarding screens take their text from the catalogs too (`onboarding.*`),
   served to the page in its language by `GET /api/texts/onboarding`;
   `translateUi` in `web/public/ui-texts.mjs` is gone.
+- The routines list takes its text from the catalogs too (`routines.*`, through
+  `GET /api/texts/routines`), so a fourth language or a plugin can translate it.
+  `cadence()` and `routineHealth()` in `web/public/routines.mjs` now receive
+  those texts instead of a language.
 - The instance default language is now English: it is used when nothing is
   known about the person (no saved setting, channel or browser language). To
   keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.

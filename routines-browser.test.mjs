@@ -1,5 +1,5 @@
 // Actual SPA in Chromium; every response is fixture/local file, all external requests blocked.
-import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';
+import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {screenTexts} from './web/screen-texts.mjs';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright-core');
 const out=process.env.ROUTINES_TEST_OUTPUT||'/tmp/routines-browser';fs.mkdirSync(out,{recursive:true});
 const root=path.resolve('web/public');const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
@@ -9,6 +9,7 @@ const base={id:'routine-test',agent_id:'agent-test',agent_name:'Assistente Teste
 await page.route('**/*',async r=>{const u=new URL(r.request().url());if(u.hostname!=='localhost')return r.abort();if(u.pathname.startsWith('/api/')){
  const method=r.request().method(),data=method==='POST'?r.request().postDataJSON():null;if(method!=='GET')writes.push({path:u.pathname,data});let d={};
  if(u.pathname==='/api/me')d={name:'Pessoa de Teste',timezone:'America/Sao_Paulo',locale:{definido:true,language:'pt-BR'},agents:[{id:'agent-test',name:'Assistente Teste'},{id:'agent-2',name:'Outra Assistente'}],connected:[],providers:[],apps:[]};
+ if(u.pathname==='/api/texts/routines')d=screenTexts('routines',u.searchParams.get('lang'));
  if(u.pathname==='/api/routines')d=failGet?{error:'fixture unavailable'}:{routines:rows};
  if(u.pathname==='/api/routine/update'||u.pathname==='/api/routine/delete'){
   if(failWrite)return r.fulfill({status:409,json:{error:'A rotina mudou. Atualize a lista.'}});
