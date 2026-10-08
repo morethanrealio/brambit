@@ -42,8 +42,10 @@ Changes merged since the last tag go under "Unreleased".
   same in every language carry `translate="no"`. Texts built by its script
   are moving to `index_script.*` area by area: network errors, attachments,
   sign-in and password reset, connections (Google, apps, credentials, App
-  Store Connect, WhatsApp), contacts, Spaces, Skills and the skill library are
-  done; the rest still use the old Portuguese-keyed catalogs for now.
+  Store Connect, WhatsApp, Telegram, Runner), contacts, Spaces, Skills, the
+  skill library, the home greeting and date, the assistant and app lists, the
+  chat list and the Files screen are done; the rest still use the old
+  Portuguese-keyed catalogs for now.
 
 ### Changed
 - Server error and status messages come from the catalogs (`server.*` in
@@ -87,7 +89,8 @@ Changes merged since the last tag go under "Unreleased".
 ### Fixed
 - Labels of the main screen that stayed in Portuguese in English and Spanish
   (Accept, Decline, Install, Connect, Reconnect, Hide, Calendar, "invited
-  you", vote counts...) are translated, and a Space owner's name with `&` or
+  you", vote counts, Rename, Style, Favorite, Archive, Images, Documents, the
+  home date...) are translated, and a Space owner's name with `&` or
   `<` no longer shows escaped twice.
 - The confirmation card says what was done after removing an app file or
   secret, configuring the discovery journey or editing its note, instead of
