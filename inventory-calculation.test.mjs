@@ -178,9 +178,9 @@ test('without a tool call, no keyword turns an answer into an inventory report',
 // free-form overwrite without opening any service or copying server logic.
 test('real server setup, provider control and finalization preserve receipts/cards and the typed snapshot',async()=>{
  const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
- const setup=source.slice(source.indexOf('  const inventoryCalculation = createInventoryCalculationSession('),source.indexOf('  // noTools: gera SÓ texto'));
+ const setup=source.slice(source.indexOf('  const inventoryCalculation = createInventoryCalculationSession('),source.indexOf('  // noTools: generates text ONLY'));
  const control=source.match(/    control:\{beforeAnswer:\(\)=>inventoryCalculation\.beforeAnswer\(\),afterTool:[^\n]+/)[0].trim().replace(/^control:/,'').replace(/,$/,'');
- const finalize=source.slice(source.indexOf('  // Inventory totals and row counts'),source.indexOf('  // As imagens do turno NÃO ficam no history:'));
+ const finalize=source.slice(source.indexOf('  // Inventory totals and row counts'),source.indexOf("  // The turn's images do NOT stay in the history:"));
  for(const l of locales){
   const f=fixture(l);const registry=new ToolRegistry();
   const deps={createInventoryCalculationSession,message:f.message,baseHistory:[],userLang:l.language,idiomaResposta:l.language,noTools:false,ephemeral:false,agentCategory:'pessoal',kind:'chat',opts:{},registry,discoveryFrame:'',routineFrame:'',userInput:f.message,nowLine:'',confirmFailureNote:'',tail:''};

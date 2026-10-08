@@ -55,7 +55,7 @@ test('real PostgreSQL: durable admission, exclusive worker, recovery, uncertaint
 });
 
 test('actual webhook waits for committed admission and returns 503 when persistence fails',async()=>{
- const source=readFileSync('web/server.mjs','utf8'),a=source.indexOf("  if (req.method === 'POST' && url.pathname === '/api/wa/webhook') {"),b=source.indexOf('\n  // ── Canal Slack',a);
+ const source=readFileSync('web/server.mjs','utf8'),a=source.indexOf("  if (req.method === 'POST' && url.pathname === '/api/wa/webhook') {"),b=source.indexOf('\n  // ── Slack channel',a);
  let commit,fail=false,auth=true,status=null,processed=0;
  const deps={readRaw:async()=>Buffer.from(JSON.stringify(payload([msg(1)]))),verifySignature:()=>auth,recordReminderDeliveryStatuses:async()=>{},recordReminderDeliveryStatus:()=>{},waEnabled:()=>true,waHandler:{accept:async()=>{if(fail)throw Error('DB unavailable');await new Promise(r=>commit=r);},process:async()=>processed++}};
  const route=Function(...Object.keys(deps),'return async(req,res,url)=>{'+source.slice(a,b)+'}')( ...Object.values(deps));

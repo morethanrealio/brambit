@@ -20,7 +20,7 @@ const payload = (status, business = 'business-fixture') => ({ entry: [{ changes:
 test('real webhook route authenticates before SQL and acknowledges only committed status',async()=>{
   const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
   const start=source.indexOf("  if (req.method === 'POST' && url.pathname === '/api/wa/webhook') {");
-  const end=source.indexOf('\n  // ── Canal Slack',start);
+  const end=source.indexOf('\n  // ── Slack channel',start);
   assert.ok(start>0&&end>start);
   const raw=Buffer.from(JSON.stringify(payload({id:'route-id',status:'sent',recipient_id:phone})));
   let authorized=false,fail=false,records=0,background=0,httpStatus;

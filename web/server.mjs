@@ -54,16 +54,16 @@ const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
 const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissoes.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
-configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Porta da conta pagadora (conta-pagadora.mjs): quem paga o consumo de cada um.
-if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Conta empresarial (empresa.mjs): plano pago, pacotes, reembolso e cancelamento na entrada e na criação.
-const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Porta de ferramentas (ferramentas.mjs): tools que quem instala pluga no turno.
+configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Payer account port (conta-pagadora.mjs): who pays for each person's usage.
+if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Business account (empresa.mjs): paid plan, packages, refund and cancellation on entry and on creation.
+const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (ferramentas.mjs): tools that whoever installs plugs into the turn.
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Porta da conta de pagamento (conta-pagamento.mjs).
-const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Chave do DeepSeek oficial (modelo escolhível); sem ela a opção some.
-const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Porta 3 (eventos.mjs): o núcleo avisa; os plugins se inscrevem no ligar. Todo cadastro passa por criarConta.
+const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
+const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (eventos.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
 const rotas=createRotas(); // Porta de rotas (rotas.mjs): os plugins registram as deles no ligar.
-const midiaPublica=createMidiaPublica(); // Porta de mídia publicada (midia-publica.mjs): um plugin diz quais keys alheias o /api/media pode servir.
-// Porta 1 (gasto.mjs): o resto do server só fala com `gasto`, nunca com o crédito direto.
-// Sem plugin, sem crédito nem cobrança: o uso fica gravado em US$ (gasto-simples.mjs).
+const midiaPublica=createMidiaPublica(); // Published media port (midia-publica.mjs): a plugin says which third-party keys /api/media may serve.
+// Port 1 (gasto.mjs): the rest of the server only talks to `gasto`, never to credit directly.
+// Without a plugin, no credit and no billing: usage is logged in US$ (gasto-simples.mjs).
 const gasto=pecas.gasto??createGastoSimples({gravarUso:insertUsageEvent,spend:createCreditSpend(pool,{unidade:'usd'})});
 let creditCleanupTimer;
 let appAccessReconcileTimer;
@@ -106,9 +106,9 @@ import { emailSearchToolSchema, emailSearchToolHelp, prepareEmailSearchChange, d
 import { deliverAsaasReceipt } from './asaas-receipt-delivery.mjs';
 import { executeEmailSearch, emailSearchPromptBlock, emailSearchFailureBlock, describeEmailSearchTest } from './email-search-runtime.mjs';
 
-// Rotina tipada (curadoria OU busca_email): os dois "prepare" rodam em sequência,
-// cada um valida o que lhe cabe e lança em pt-BR; o config devolvido é a
-// composição. undefined = nada muda. (db.mjs tem o par composeRoutineConfig.)
+// Typed routine (curation OR email search): the two "prepare" steps run in sequence,
+// each validates what's its own and throws in pt-BR; the returned config is the
+// composition. undefined = nothing changes. (db.mjs has the composeRoutineConfig pair.)
 function prepareRoutineChange(current, { tipo, curadoria, busca_email, prompt, channel } = {}) {
   if (curadoria !== undefined && busca_email !== undefined) throw Error('Passe curadoria OU busca_email, não os dois.');
   const t = tipo ?? (busca_email !== undefined ? 'busca_email' : undefined);
@@ -133,15 +133,15 @@ import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.
 import { createEmailResearchSession } from './email-research-session.mjs';
 import { createEmailAnswerReviewState } from './email-answer-review.mjs';
 import { EMAIL_ANSWER_CONTRACT, EMAIL_RESEARCH_CONTRACT } from './email-answer-contract.mjs';
-// ── Servidor do Beta: onboarding + chat ──
-// Node puro (sem dependências). Serve a interface e expõe a API que roda o
-// harness por trás. O consumidor cria o agente dele e conversa.
+// ── Beta server: onboarding + chat ──
+// Plain Node (no dependencies). Serves the interface and exposes the API that runs the
+// harness behind it. The consumer creates their own agent and talks to it.
 //
-// Rodar: GEMINI_API_KEY=... node server.mjs   (porta 8080 por padrão)
+// Run: GEMINI_API_KEY=... node server.mjs   (port 8080 by default)
 
-// Primeiro import de propósito: instala o ponto único de saída (envolve o
-// `fetch` global) antes de qualquer outro módulo poder falar com a rede.
-// Ver `web/egress.mjs`.
+// Deliberately the first import: installs the single egress point (wraps the
+// global `fetch`) before any other module can talk to the network.
+// See `web/egress.mjs`.
 import './egress.mjs';
 
 import http from 'http';
@@ -167,21 +167,21 @@ import { comporTools } from './compor.mjs';
 import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
 import { xlsxToText, xlsxParts, xlsxCells } from './xlsxread.mjs';
 
-// Checa se a URL de uma imagem está MORTA (usado por mostrar_produtos antes de
-// virar card.image). O modelo às vezes inventa uma URL de CDN plausível que dá
-// 404/500; renderizar isso é foto quebrada no iOS e no site. Regra conservadora:
-// só considera MORTA com evidência clara (404/410/5xx, ou 2xx com content-type
-// que não é imagem). Em 401/403 (hotlink protegido), 3xx, timeout ou erro de
-// rede devolve `false` (mantém a imagem), pra não derrubar foto que na real
-// carrega no cliente. HEAD primeiro; se o servidor não suportar (405/501), tenta
-// um GET pedindo só o 1º byte. Nunca lança: falha vira "mantém".
-// Confirma que uma URL SERVE MESMO uma imagem: só true com prova positiva
-// (status 2xx + content-type image/*). Qualquer outra coisa (404/410/5xx, 403,
-// 429 rate-limit, 3xx sem imagem, 200 devolvendo HTML/JSON, timeout/rede) => false.
-// Regra invertida de propósito: "só mostra foto se eu VI que é imagem". Um 429 ou
-// um 200 text/plain seriam setados como card.image e viram caixa em branco no
-// device; com confirmação positiva, na dúvida o card sai LIMPO (sem foto), nunca
-// com uma imagem quebrada.
+// Checks whether a product image URL is DEAD (used by mostrar_produtos before
+// it becomes card.image). The model sometimes invents a plausible-looking CDN URL that returns
+// 404/500; rendering that is a broken photo on iOS and on the site. Conservative rule:
+// only considers it DEAD with clear evidence (404/410/5xx, or 2xx with a content-type
+// that isn't an image). On 401/403 (hotlink protected), 3xx, timeout or network
+// error it returns `false` (keeps the image), so as not to drop a photo that in
+// reality loads fine on the client. HEAD first; if the server doesn't support it (405/501), tries
+// a GET asking for just the 1st byte. Never throws: failure becomes "keep".
+// Confirms that a URL actually SERVES an image: only true with positive proof
+// (status 2xx + content-type image/*). Anything else (404/410/5xx, 403,
+// 429 rate-limit, 3xx without an image, 200 returning HTML/JSON, timeout/network) => false.
+// Rule deliberately inverted: "only show a photo if I SAW that it's an image". A 429 or
+// a 200 text/plain would get set as card.image and become a blank box on the
+// device; with positive confirmation, when in doubt the card comes out CLEAN (no photo), never
+// with a broken image.
 async function imageServed(url) {
   const UA = uaBot({ comSite: false });
   const okFromResp = (r) => {
@@ -191,22 +191,22 @@ async function imageServed(url) {
   };
   try {
     let r = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(6000), headers: { 'User-Agent': UA } });
-    // HEAD sem content-type (comum em CDN) ou não suportado => confirma via GET Range.
+    // HEAD without content-type (common on CDNs) or unsupported => confirm via GET Range.
     if (r.status === 405 || r.status === 501 || !(r.headers.get('content-type') || '')) {
       r = await fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(6000), headers: { 'User-Agent': UA, Range: 'bytes=0-0' } });
     }
     return okFromResp(r);
   } catch {
-    return false; // timeout/rede: sem prova de que é imagem => não mostra
+    return false; // timeout/network: no proof that it's an image => don't show it
   }
 }
 
-// Extrai a imagem REAL de uma página de produto (usado por mostrar_produtos como
-// fallback quando o modelo não tem/inventou a imagem). Todo e-commerce publica a
-// foto canônica em <meta og:image> (ou twitter:image) pra compartilhamento;
-// alguns só em JSON-LD (schema.org Product.image). Em vez de o modelo adivinhar
-// o caminho do CDN, o servidor busca o HTML da própria página e lê essa tag.
-// On-demand, texto leve + regex; nunca lança (falha vira null = sem foto).
+// Extracts the REAL image from a product page (used by mostrar_produtos as a
+// fallback when the model doesn't have/invented the image). Every e-commerce site publishes the
+// canonical photo in <meta og:image> (or twitter:image) for sharing;
+// some only in JSON-LD (schema.org Product.image). Instead of the model guessing
+// the CDN path, the server fetches the page's own HTML and reads that tag.
+// On-demand, light text + regex; never throws (failure becomes null = no photo).
 async function productImageFromPage(url) {
   const UA = uaBot({ comSite: false });
   const norm = (s) => {
@@ -235,35 +235,35 @@ async function productImageFromPage(url) {
   }
 }
 
-// ── Proxy/cache de imagem de produto ────────────────────────────────────────
-// Por que existe: (1) o CSP do site é img-src 'self' (imagem de origem externa é
-// BLOQUEADA no navegador); (2) muitos CDN de e-commerce dão 403/429 pra hotlink
-// mas servem numa requisição browser-like. Igual ao Google Shopping: o servidor
-// baixa a foto da fonte, guarda num bucket DEDICADO (o de campanha, isolado do
-// bucket privado do usuário; foto de produto = conteúdo público de terceiro, não
-// dado do usuário) e o card aponta pra uma URL do NOSSO domínio (/api/img?k=hash),
-// que passa no CSP e é estável. Chave = sha256 da URL de origem (imutável por
-// conteúdo). Sem storage disponível => retorna null e o card sai sem foto (limpo).
+// ── Product image proxy/cache ────────────────────────────────────────
+// Why it exists: (1) the site's CSP is img-src 'self' (an image from an external origin is
+// BLOCKED in the browser); (2) many e-commerce CDNs return 403/429 for hotlinking
+// but serve it on a browser-like request. Same as Google Shopping: the server
+// downloads the photo from the source, stores it in a DEDICATED bucket (the campaign one, isolated from
+// the user's private bucket; a product photo is public third-party content, not
+// the user's data) and the card points to a URL on OUR domain (/api/img?k=hash),
+// which passes the CSP and is stable. Key = sha256 of the source URL (immutable by
+// content). No storage available => returns null and the card comes out without a photo (clean).
 
 const IMG_CACHE_PREFIX = 'imgcache/';
 const IMG_MAX_BYTES = 6 * 1024 * 1024; // 6 MB por imagem
 const IMG_FETCH_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const PUBLIC_BASE = () => (process.env.PUBLIC_BASE_URL || siteDaMarca()).replace(/\/$/, '');
 
-// Última versão do app publicada na loja/TestFlight. O app compara com o próprio
-// CFBundleVersion e avisa quando está velho. Sem esse sinal a pessoa não tem como
-// saber que o que falta é o binário dela, e não o servidor (caso dos cards de
-// produto em 26/08: build 6 é anterior ao código que desenha card). `build` é o
-// número que a EAS atribui (appVersionSource remote), o mesmo que aparece no
-// User-Agent `Brambs/N`. Env sobrepõe pra dar pra atualizar sem deploy.
+// Latest app version published in the store/TestFlight. The app compares it with its own
+// CFBundleVersion and warns when it's outdated. Without this signal the person has no way to
+// know that what's missing is their binary, not the server (the case of the
+// product cards on 2026-08-26: build 6 predates the code that renders the card). `build` is the
+// number that EAS assigns (appVersionSource remote), the same one that appears in the
+// User-Agent `Brambs/N`. Env overrides it so it can be updated without a deploy.
 const MOBILE_RELEASE = {
   version: process.env.MOBILE_APP_VERSION || '0.1.6',
   build: Number(process.env.MOBILE_APP_BUILD || 7) || 0,
 };
 
-// SSRF guard: só http/https e host que NÃO resolve pra IP privado/reservado
-// (loopback, link-local/metadata 169.254, RFC1918, ULA/link-local IPv6). Evita
-// que o "proxy" seja usado pra alcançar rede interna. Falha/erro => inseguro.
+// SSRF guard: only http/https and a host that does NOT resolve to a private/reserved IP
+// (loopback, link-local/metadata 169.254, RFC1918, ULA/IPv6 link-local). Prevents
+// the "proxy" from being used to reach the internal network. Failure/error => unsafe.
 function isPrivateIp(ip) {
   if (!ip) return true;
   if (ip.includes(':')) { // IPv6
@@ -290,10 +290,10 @@ async function isSafeRemoteUrl(u) {
   } catch { return false; }
 }
 
-// Baixa a imagem (seguindo até 3 redirects, validando o host de CADA salto pra
-// não escapar a guarda via redirect), confirma content-type image/*, respeita o
-// teto de bytes, grava no bucket de campanha e devolve a URL /api/img do card.
-// Nunca lança: qualquer falha => null (card sem foto).
+// Downloads the image (following up to 3 redirects, validating the host at EACH hop so as
+// not to escape the guard via redirect), confirms content-type image/*, respects the
+// byte cap, saves it to the campaign bucket and returns the card's /api/img URL.
+// Never throws: any failure => null (card without a photo).
 async function cacheProductImage(imgUrl, referer) {
   try {
     if (!campaignS3Enabled() || !imgUrl) return null;
@@ -327,7 +327,7 @@ async function cacheProductImage(imgUrl, referer) {
   } catch { return null; }
 }
 
-// Provider de teste (não-Gemini): habilitado só quando a chave está configurada.
+// Test provider (non-Gemini): enabled only when the key is configured.
 function testProviderEnabled(p) {
   if (p === 'openai') return openaiEnabled();
   if (p === 'deepinfra') return deepinfraEnabled();
@@ -354,20 +354,20 @@ function testProviderEnabled(p) {
 // goes straight to the fallback, so the timeout isn't repeated at each tool-loop step.
 // Cost comes out right because usage.model reflects who actually answered.
 const PRIMARY_MODEL = process.env.PRIMARY_MODEL || 'deepseek-ai/DeepSeek-V4-Pro-0813';
-// Teto de saída do padrão. 32k porque este é o modelo que também escreve arquivo
-// inteiro num tool-call; com 8192 a geração era cortada no meio e o usuário via
-// resposta em branco (caso de 19/08). Output é cobrado por token GERADO, não
-// pelo teto: subir o teto não encarece turno normal.
+// Default output cap. 32k because this is the model that also writes an
+// entire file in one tool call; with 8192 the generation was being cut off halfway and the user saw
+// a blank response (case from 2026-08-19). Output is billed per token GENERATED, not
+// by the cap: raising the cap doesn't make a normal turn more expensive.
 const PRIMARY_MAX_OUT = 32768;
-// Fallback de texto (item 5): Gemini 3.7 Flash. O GPT-5.4 mini fica só como
-// último recurso, pra quando não houver chave do Gemini configurada.
+// Text fallback (item 5): Gemini 3.7 Flash. GPT-5.4 mini is only the
+// last resort, for when no Gemini key is configured.
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'gpt-5.4-mini';
 const FALLBACK_TEXT_MODEL = process.env.FALLBACK_TEXT_MODEL || 'gemini-3.7-flash';
 function geminiEnabled() { return !!process.env.GEMINI_API_KEY; }
-// Fallback padrão de texto. `search: false` de propósito: no papel de fallback ele
-// entra no MEIO de um tool-loop, e a busca nativa do Google concorreria com as
-// tools do produto (que continuam registradas — useWebSearch não depende de quem
-// é o primário). Grounding segue existindo via buscar_web/pesquisar.
+// Default text fallback. `search: false` on purpose: as a fallback it
+// enters in the MIDDLE of a tool-loop, and Google's native search would compete with
+// the product's tools (which remain registered — useWebSearch doesn't depend on who
+// is primary). Grounding still exists via buscar_web/pesquisar.
 function makeTextFallback({ maxOut } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
   const cfg = configurado('conversa', maxOut); if (cfg) return cfg;
@@ -380,9 +380,9 @@ function makeTextFallback({ maxOut } = {}) {
   if (openai) return openai;
   return null;
 }
-// Rede sticky genérica: tenta o primário e, no primeiro erro de verdade, passa o
-// resto do turno no fallback. Sem fallback disponível, degrada numa mensagem
-// honesta em vez de derrubar o turno (e sem usage, pra não cobrar a tentativa).
+// Generic sticky network: tries the primary and, on the first real error, spends the
+// rest of the turn on the fallback. With no fallback available, degrades into an
+// honest message instead of dropping the turn (and without usage, so as not to bill for the attempt).
 function withFallback(primary, fallback, tag) {
   if (!fallback) {
     return {
@@ -430,10 +430,10 @@ function withFallback(primary, fallback, tag) {
     },
   };
 }
-// modelos.yaml (quem instala escolhe provedor e modelo por função): quando o
-// arquivo existe, a função configurada vence o roteamento embutido das fábricas
-// abaixo, com a reserva dela atrás. Sem arquivo devolve null e nada muda. Um
-// erro no arquivo derruba o boot aqui, com a linha do problema.
+// modelos.yaml (whoever installs picks provider and model per function): when the
+// file exists, the configured function wins over the built-in routing of the factories
+// below, with its own fallback behind it. Without the file it returns null and nothing changes. An
+// error in the file brings down the boot right here, with the line of the problem.
 const modelosCfg = carregarModelos();
 if (modelosCfg) { registerPrices(modelosCfg.precos); console.log(`[modelos] modelos.yaml\n${tabelaModelos()}`); }
 const configurado = (funcao, maxOut) => modeloPara(funcao, { maxTokens: maxOut || PRIMARY_MAX_OUT, juntar: withFallback });
@@ -454,28 +454,28 @@ const primaryIsGeminiOverride = /^gemini[-.]/i.test(PRIMARY_TEXT_MODEL);
 // so switching provider only pays off in LATENCY. Switching provider means
 // touching BOTH ends (env + price line in pricing.mjs), or cost is recorded wrong.
 const CHEAP_MODEL = process.env.CHEAP_MODEL || 'deepseek-ai/DeepSeek-V4-Flash';
-// Toggle de EMERGÊNCIA do modelo padrão: por padrão ele roda na Together (rápida).
-// Se a Together ficar sem crédito (402), setar
-// ROBUSTO_PROVIDER=deepinfra aponta o padrão pro MESMO PRIMARY_MODEL no DeepInfra
-// (mais lento, mas com crédito) até a Together recarregar. Reverter = tirar a
-// env (ou =together) + restart. É stopgap, não estado final (DeepInfra serve o
-// 5.2 em FP4, mais devagar). Raciocínio fica LIGADO no robusto (não passar
-// reasoning:{enabled:false}); maxTokens com folga pro raciocínio não comer a saída.
+// EMERGENCY toggle for the default model: by default it runs on Together (fast).
+// If Together runs out of credit (402), setting
+// ROBUSTO_PROVIDER=deepinfra points the default at the SAME PRIMARY_MODEL on DeepInfra
+// (slower, but with credit) until Together recharges. Revert = remove the
+// env var (or =together) + restart. It's a stopgap, not a final state (DeepInfra serves
+// 5.2 in FP4, slower). Reasoning stays ON in robusto (don't pass
+// reasoning:{enabled:false}); maxTokens with headroom so reasoning doesn't eat into the output.
 const ROBUSTO_PROVIDER = (process.env.ROBUSTO_PROVIDER || 'together').toLowerCase();
-// Lever 1 (input tokens, Plano B): TODO o ferramental de CÓDIGO/APP (construir/
-// editar app, admin de app, sandbox, servidor/terminal SSH, coding, projetos de
-// dev, permissões) sai do tool set inicial e fica sob abrir_ferramentas({grupo:
-// 'codigo'}) — como cofre/espacos/skills já fazem. Só a DESCOBERTA de apps
-// (listar_sistemas/chamar_sistema, ~600 tok) segue sempre inline, e o grupo
-// AUTO-ABRE (sem custo de turno) quando o turno claramente é de código: mira um
-// app do usuário, projeto ativo, ou terminal ao vivo de agente super. Nos demais
-// turnos (papo, pesquisa, e-mail, lembrete) esse ~5,6k de schema não é enviado.
-// Flag CODE_DEFER=0 volta ao comportamento antigo (tudo inline).
+// Lever 1 (input tokens, Plan B): ALL of the CODE/APP tooling (build/
+// edit app, app admin, sandbox, SSH server/terminal, coding, dev
+// projects, permissions) leaves the initial tool set and sits behind abrir_ferramentas({grupo:
+// 'codigo'}) — the way cofre/espacos/skills already do. Only app DISCOVERY
+// (listar_sistemas/chamar_sistema, ~600 tok) always stays inline, and the group
+// AUTO-OPENS (no turn cost) when the turn is clearly about code: targets an
+// app the user owns, an active project, or a live super-agent terminal. On other
+// turns (chat, research, email, reminder) that ~5.6k of schema isn't sent.
+// Flag CODE_DEFER=0 reverts to the old behavior (everything inline).
 const CODE_DEFER = process.env.CODE_DEFER !== '0';
 const APPS_INLINE = new Set(['listar_sistemas', 'chamar_sistema']);
-// Provider do PADRÃO do produto (tier 'robusto') e dos sub-agentes leves (tier
-// 'barato'). Desde 31/08 o turno do usuário SEMPRE pede 'robusto': quem chama com
-// 'barato' são só os sub-agentes de leitura, via makeSubagentProvider().
+// Provider for the product's DEFAULT (tier 'robusto') and for the lightweight sub-agents (tier
+// 'barato'). Since 2026-08-31 the user's turn ALWAYS requests 'robusto'; the ones calling with
+// 'barato' are only the read sub-agents, via makeSubagentProvider().
 function makePrimaryProvider(tier = 'robusto', { maxOut } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
   const cfg = configurado(tier === 'barato' ? 'pesquisa' : 'conversa', maxOut || (tier === 'barato' ? 8192 : PRIMARY_MAX_OUT)); if (cfg) return cfg;
@@ -484,47 +484,47 @@ function makePrimaryProvider(tier = 'robusto', { maxOut } = {}) {
   let primary;
   let primaryIsFallbackModel = false;
   if (tier === 'barato' && canCheap) {
-    // maxTokens = teto RÍGIDO de saída (anti-loop). Ficava em 4096, mas isso
-    // truncava tool-calls de arquivo inteiro (ex: escrever_arquivo_do_app com um
-    // app.js grande): a geração batia no teto no meio do argumento, o JSON vinha
-    // cortado e a tool era engolida → loop de "vou terminar agora" sem entregar
-    // (bug de 15/08, planner). 8192 = default do próprio DeepInfra; output é
-    // desprezível no custo. Turnos de BUILD já vão pro robusto (16384) pelo tier.
+    // maxTokens = HARD output cap (anti-loop). It used to be 4096, but that
+    // truncated whole-file tool calls (e.g. escrever_arquivo_do_app with a large
+    // app.js): generation hit the cap mid-argument, the JSON came back
+    // cut off and the tool call was swallowed → "I'll finish now" loop without delivering
+    // (bug from 2026-08-15, planner). 8192 = DeepInfra's own default; output is
+    // negligible in cost. BUILD turns already go to robusto (16384) via the tier.
     primary = makeDeepInfra({ model: CHEAP_MODEL, temperature: 0.3, maxTokens: maxOut || 8192, reasoning: { enabled: false } });
   } else if (ROBUSTO_PROVIDER === 'deepinfra' && canCheap) {
-    // Stopgap: robusto no GLM-5.2 do DeepInfra (Together sem crédito). Raciocínio
-    // LIGADO (robusto pensa); maxTokens com folga (32768 em build via maxOut,
-    // 16384 padrão) pra o raciocínio não consumir todo o teto e devolver vazio.
+    // Stopgap: robusto on DeepInfra's GLM-5.2 (Together out of credit). Reasoning
+    // ON (robusto thinks); maxTokens with headroom (32768 in build via maxOut,
+    // 16384 default) so reasoning doesn't consume the whole cap and return empty.
     primary = makeDeepInfra({ model: PRIMARY_MODEL, maxTokens: maxOut || 16384 });
   } else if (canGlm) {
-    // Padrão do produto: DeepSeek V4 Pro 0813 na Together.
+    // Product default: DeepSeek V4 Pro 0813 on Together.
     primary = makeTogether({ model: PRIMARY_MODEL, maxTokens: maxOut || PRIMARY_MAX_OUT });
   } else {
     primary = makeTextFallback({ maxOut }) || makeOpenAI({ model: FALLBACK_MODEL, ...(maxOut ? { maxTokens: maxOut } : {}) });
     primaryIsFallbackModel = true;
   }
-  // Fallback pro Gemini 3.7 Flash quando o primário cai de verdade (vale pros dois
-  // tiers). Se o primário JÁ é o próprio fallback, não há pra onde escalar.
+  // Fallback to Gemini 3.7 Flash when the primary truly fails (applies to both
+  // tiers). If the primary is ALREADY the fallback itself, there's nowhere left to escalate to.
   return withFallback(primary, primaryIsFallbackModel ? null : makeTextFallback({ maxOut }), 'primary');
 }
 
-// Provider dos SUB-AGENTES de leitura (pesquisa na web, Google, conectores): modelo
-// barato e rápido, hoje o DeepSeek V4 Flash (CHEAP_MODEL) no DeepInfra. Existia
-// grudado no turno principal pelo roteador de tier; virou função própria em 31/08,
-// quando o turno do usuário passou a ser sempre o padrão (V4 Pro). Separar importa
-// porque as duas pontas têm exigências diferentes: aqui o que manda é latência e
-// preço, lá é qualidade de raciocínio e tool-calling.
+// Provider for READ sub-agents (web research, Google, connectors): a cheap,
+// fast model, currently DeepSeek V4 Flash (CHEAP_MODEL) on DeepInfra. It used to be
+// stuck to the main turn via the tier router; it became its own function on 2026-08-31,
+// when the user's turn started always being the default (V4 Pro). Separating them matters
+// because the two sides have different requirements: here what matters is latency and
+// price, there it's reasoning quality and tool-calling.
 function makeSubagentProvider({ maxOut } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected.forBillingPhase?.({kind:'subagent'})||selected;
   const p=makePrimaryProvider('barato', { maxOut });return wrapProvider(p).forBillingPhase({kind:'subagent'});
 }
 
-// ── Kimi K3 (Moonshot): modelo AVANÇADO opcional, ATRIBUÍDO manualmente a um
-// agente (fora do roteamento). "Habilitar" = setar KIMI_ENABLED=1 no .env do box;
-// sem isso, a opção nem aparece nas configurações. Provider e id do modelo por env.
-// Default = Together, porque o K3 só existe lá (a DeepInfra serve só a linha K2.x,
-// não o K3; verificado 07/08/2026). Roda sob demanda (serverless). Fallback pro
-// primário do produto (GLM/GPT) se o Kimi cair, igual ao makePrimaryProvider.
+// ── Kimi K3 (Moonshot): optional ADVANCED model, manually ASSIGNED to an
+// agent (outside of routing). "Enabling" = set KIMI_ENABLED=1 in the box's .env;
+// without it, the option doesn't even show up in settings. Provider and model id via env.
+// Default = Together, because K3 only exists there (DeepInfra only serves the K2.x line,
+// not K3; verified 2026-08-07). Runs on demand (serverless). Falls back to the
+// product's primary (GLM/GPT) if Kimi goes down, same as makePrimaryProvider.
 const KIMI_PROVIDER = (process.env.KIMI_PROVIDER || 'together').toLowerCase();
 const KIMI_MODEL = process.env.KIMI_MODEL || 'moonshotai/Kimi-K3';
 function kimiAvailable() {
@@ -540,21 +540,21 @@ function makeKimiProvider() {
   return withFallback(kimi, fallback, 'kimi');
 }
 
-// ── DeepSeek V4 Pro: modelo de CODING opcional, ATRIBUÍDO manualmente a um agente
-// pelo dono (mesmo esquema do Kimi 3 — escolha fixa no dropdown de configurações,
-// fora do roteamento). "Habilitar" = setar DEEPSEEK_ENABLED=1 no .env do box; sem
-// isso a opção nem aparece. Provider por env (DEEPSEEK_PROVIDER), igual ao Kimi:
-// a Together e a DeepInfra servem o MESMO id, e a DeepInfra sai mais barata em
-// tudo (1,30/0,10/2,60 contra 1,32/0,13/3,96 por 1M tok, cotado 29/08/2026), com
-// destaque pra SAÍDA (34% abaixo), que é onde turno de coding pesa. Tool-calling e
-// teto de 32k verificados ao vivo na DeepInfra em 29/08 antes da troca.
-// Default = o snapshot `-0813`: 1M de contexto e $1,32 in / $0,13 cache / $3,96 out
-// por 1M tok, contra 1,74/0,20/3,48 da variante sem data (API da Together, 25/08/26).
-// Entrada e cache mais baratos ganham a conta porque o nosso consumo é dominado por
-// ENTRADA (estudo de 24/07); a saída um pouco mais cara quase não pesa. Fica abaixo
-// do próprio GLM-5.2 (1,40/0,26/4,40) nos dois cenários de cache.
-// TETO DE SAÍDA 32k (o Kimi usa 8192): é o modelo de CODING, e turno que gera
-// arquivo inteiro batia no teto e entregava resposta cortada (caso de 19/08).
+// ── DeepSeek V4 Pro: optional CODING model, manually ASSIGNED to an agent
+// by the owner (same scheme as Kimi 3 — fixed choice in the settings dropdown,
+// outside of routing). "Enabling" = set DEEPSEEK_ENABLED=1 in the box's .env; without
+// it the option doesn't even show up. Provider via env (DEEPSEEK_PROVIDER), same as Kimi:
+// Together and DeepInfra serve the SAME id, and DeepInfra comes out cheaper across
+// the board (1.30/0.10/2.60 vs 1.32/0.13/3.96 per 1M tok, quoted 2026-08-29), with
+// the biggest gap on OUTPUT (34% lower), which is where a coding turn weighs most. Tool-calling and
+// the 32k cap were verified live on DeepInfra on 2026-08-29 before the switch.
+// Default = the `-0813` snapshot: 1M context and $1.32 in / $0.13 cache / $3.96 out
+// per 1M tok, vs 1.74/0.20/3.48 for the dateless variant (Together API, 2026-08-25).
+// Cheaper input and cache win the math because our usage is dominated by
+// INPUT (2026-07-24 study); the slightly pricier output barely weighs in. It still comes in below
+// GLM-5.2 itself (1.40/0.26/4.40) in both cache scenarios.
+// 32k OUTPUT CAP (Kimi uses 8192): this is the CODING model, and a turn that generates a
+// whole file was hitting the cap and delivering a truncated response (case from 2026-08-19).
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-ai/DeepSeek-V4-Pro-0813';
 const DEEPSEEK_PROVIDER = (process.env.DEEPSEEK_PROVIDER || 'together').toLowerCase();
 function deepseekAvailable() {
@@ -563,8 +563,8 @@ function deepseekAvailable() {
 }
 function makeDeepSeekProvider({ maxOut } = {}) {
   const opts = { model: DEEPSEEK_MODEL, maxTokens: maxOut || PRIMARY_MAX_OUT };
-  // Fallback direto no Gemini 3.7 Flash: o V4 Pro É o padrão do produto agora, então
-  // não faz sentido cair "no primário" (seria ele mesmo, sem rede nenhuma).
+  // Direct fallback to Gemini 3.7 Flash: V4 Pro IS the product's default now, so
+  // it doesn't make sense to fall back "to the primary" (that would be itself, no real fallback at all).
   return withFallback(
     DEEPSEEK_PROVIDER === 'together' ? makeTogether(opts) : makeDeepInfra(opts),
     makeTextFallback({ maxOut }),
@@ -572,12 +572,12 @@ function makeDeepSeekProvider({ maxOut } = {}) {
   );
 }
 
-// ── Modelo do raciocínio PESADO (programação + planilhas) ──
-// Todo executor de código e de planilha usa a mesma rota geral: DeepSeek V4.1
-// Flash na Together com effort alto; se a Together rejeitar/ficar indisponível,
-// a reserva é o MESMO modelo na API oficial da DeepSeek. Não cai em Gemini,
-// OpenAI, V4 Pro ou flag técnica por conta. Uma escolha explícita de modelo feita
-// pelo próprio dono continua soberana via selectedDeepSeek.
+// ── HEAVY reasoning model (coding + spreadsheets) ──
+// Every code and spreadsheet executor uses the same general route: DeepSeek V4.1
+// Flash on Together with high effort; if Together rejects/becomes unavailable,
+// the fallback is the SAME model on DeepSeek's official API. It never falls back to Gemini,
+// OpenAI, V4 Pro, or a per-account technical flag. An explicit model choice made
+// by the owner themself still takes precedence via selectedDeepSeek.
 function makeHeavyProvider(site, { maxOut = PRIMARY_MAX_OUT } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected.forBillingPhase?.({kind:'subagent'})||selected;
   const cfg = configurado('programacao', maxOut); if (cfg) return wrapProvider(cfg).forBillingPhase({kind:'subagent'});
@@ -640,14 +640,14 @@ function makeTogetherFlashPrimary({ maxOut = 32768, vision = false } = {}) {
   return withFallback(makeTogether({model:TOGETHER_FLASH_DEFAULT,maxTokens:maxOut}),backup,'together-flash');
 }
 
-// ── Provider do turno COM IMAGEM ──
-// Quem enxerga aqui é o Gemini, e de propósito o MESMO modelo do texto
-// (PRIMARY_TEXT_MODEL quando o override está ligado). Trocar de modelo só porque
-// o turno tem foto é o que doía: invalida o prefixo cacheado da thread e o
-// modelo que recebia a foto (GPT-5.4 mini) ainda lia pior (medição 08/09,
-// §3-D de projetos/custo-por-turno-franquia.md).
-// O GPT-5.4 mini fica como ÚLTIMA rede (ele enxerga), não como destino padrão;
-// sem Gemini configurado, ele volta a ser o caminho. Nada foi removido.
+// ── Provider for the turn WITH IMAGE ──
+// What does the seeing here is Gemini, and deliberately the SAME model as text
+// (PRIMARY_TEXT_MODEL when the override is on). Switching models just because
+// the turn has a photo was the pain point: it invalidates the thread's cached prefix, and
+// the model that used to receive the photo (GPT-5.4 mini) still read it worse (measured 2026-09-08,
+// §3-D of projetos/custo-por-turno-franquia.md).
+// GPT-5.4 mini stays as the LAST fallback (it can see), not as the default target;
+// without Gemini configured, it becomes the path again. Nothing was removed.
 function makeVisionProvider({ maxOut = 32768 } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
   const cfg = configurado('imagem', maxOut); if (cfg) return cfg;
@@ -655,13 +655,13 @@ function makeVisionProvider({ maxOut = 32768 } = {}) {
   if (!geminiEnabled()) return makeOpenAI({ model: FALLBACK_MODEL, ...(maxOut ? { maxTokens: maxOut } : {}) });
   const model = primaryIsGeminiOverride ? PRIMARY_TEXT_MODEL : FALLBACK_TEXT_MODEL;
   const gemini = makeGemini({ model, search: true, maxOutputTokens: maxOut });
-  // Rede: só pro GPT, que enxerga. NÃO cai no primário de texto (DeepSeek/GLM),
-  // que devolveria 400 na imagem e queimaria uma chamada.
+  // Fallback: only for GPT, which can see. It does NOT fall back to the text primary (DeepSeek/GLM),
+  // which would return 400 on the image and burn a call.
   return withFallback(gemini, openaiEnabled() ? makeOpenAI({ model: FALLBACK_MODEL, maxTokens: maxOut }) : null, 'vision');
 }
 
-// Modelos que o usuário pode ATRIBUIR a um agente nas configurações (não é o
-// roteamento automático; é uma escolha manual, fixa por agente). 'auto' = padrão.
+// Models the user can ASSIGN to an agent in settings (not
+// automatic routing; it's a manual, per-agent fixed choice). 'auto' = default.
 let deepseekFlashReady = false;
 function makeOfficialDeepSeek(maxTokens = 32768, account = null) {
   if(account)return gasto.vincularDeepSeek({...account,maxTokens,secret:async()=>{
@@ -680,17 +680,17 @@ function assignableAgentModels(current = 'auto') {
   if (kimiAvailable()) {
     out.push({ id: 'kimi3', label: 'Kimi 3', desc: 'Modelo avançado de raciocínio (Moonshot Kimi K3), fixo pra este assistente e fora do roteamento. Consome bem mais crédito por conversa.' });
   }
-  // O DeepSeek V4 Pro SAIU do dropdown em 31/08: ele virou o modelo PADRÃO do
-  // produto, então oferecê-lo como "escolha alternativa" seria oferecer o mesmo
-  // que o 'auto' já entrega. Quem tinha 'deepseek4' gravado cai no padrão (mesmo
-  // modelo, nenhuma mudança prática) via normalizeAgentModel.
+  // DeepSeek V4 Pro LEFT the dropdown on 2026-08-31: it became the product's DEFAULT
+  // model, so offering it as an "alternative choice" would be offering the same thing
+  // 'auto' already delivers. Whoever had 'deepseek4' saved falls back to the default (same
+  // model, no practical change) via normalizeAgentModel.
   return out;
 }
 
-// Modelo FIXO escolhido pelo dono no dropdown de configurações. Devolve o provider
-// pronto, ou null quando o agente está em 'auto' — ou quando o modelo escolhido foi
-// desligado no servidor DEPOIS da escolha (o valor fica gravado no agente; aqui ele
-// simplesmente volta a cair no roteamento padrão em vez de quebrar o turno).
+// FIXED model chosen by the owner in the settings dropdown. Returns the ready
+// provider, or null when the agent is on 'auto' — or when the chosen model was
+// turned off on the server AFTER the choice was made (the value stays saved on the agent; here it
+// simply falls back to default routing instead of breaking the turn).
 function forcedAgentProvider(model) {
   const id = String(model || '').trim().toLowerCase();
   if (id === DEEPSEEK_AGENT_MODEL) return makeOfficialDeepSeek(); // never silently normalize a saved selection to Gemini
@@ -699,29 +699,29 @@ function forcedAgentProvider(model) {
     return makeGemini({model:GEMINI_COMPARISON_MODEL,search:false,maxOutputTokens:32768});
   }
   if (id === 'kimi3' && kimiAvailable()) return makeKimiProvider();
-  // 'deepseek4' não é mais escolha do dropdown (virou o padrão). Se sobrou gravado
-  // em algum agente, devolve null e o turno segue pelo roteamento padrão — que É o
-  // V4 Pro. Nenhum agente muda de modelo na prática.
+  // 'deepseek4' is no longer a dropdown choice (it became the default). If it's left saved
+  // on some agent, returns null and the turn proceeds via default routing — which IS
+  // V4 Pro. No agent actually changes model in practice.
   return null;
 }
 
-// Normaliza o modelo vindo da UI: só um id OFERECIDO agora é aceito (a whitelist é
-// a própria lista do dropdown); qualquer outra coisa vira 'auto'.
+// Normalizes the model coming from the UI: only an id currently OFFERED is accepted (the whitelist is
+// the dropdown's own list); anything else becomes 'auto'.
 function normalizeAgentModel(model) {
   const id = String(model || '').trim().toLowerCase();
   return id === DEEPSEEK_AGENT_MODEL || id === GEMINI_COMPARISON_ID || (id !== 'auto' && assignableAgentModels().some((m) => m.id === id)) ? id : 'auto';
 }
 
-// ── Sub-agente de pesquisa (padrão de isolamento de contexto) ──
-// Uma pesquisa longa faz DEZENAS de buscas num único tool-loop → o contexto do
-// agente principal incha (15k→57k tokens) e às vezes bate no teto de passos sem
-// fechar a resposta. Em vez disso, a tool `pesquisar` (registrada abaixo) dispara
-// um sub-agente ISOLADO: history vazio, só as tools de busca, prompt enxuto de
-// "você é um pesquisador", contexto PRÓPRIO. Ele faz todo o trabalho pesado e
-// devolve SÓ o texto sintetizado — os resultados crus das buscas nunca poluem a
-// conversa principal, então o contexto do principal fica pequeno e não estoura no
-// meio. Padrão orchestrator-worker: o principal decompõe/delega, o worker pesquisa
-// e reporta; o único canal entre eles é o prompt (o worker não vê a conversa).
+// ── Research sub-agent (context isolation pattern) ──
+// A long research task runs DOZENS of searches in a single tool-loop → the main
+// agent's context bloats (15k→57k tokens) and sometimes hits the step cap without
+// closing the response. Instead, the `pesquisar` tool (registered below) spawns
+// an ISOLATED sub-agent: empty history, only search tools, a lean "you are a
+// researcher" prompt, its OWN context. It does all the heavy lifting and
+// returns ONLY the synthesized text — the raw search results never pollute the
+// main conversation, so the main agent's context stays small and doesn't overflow
+// midway. Orchestrator-worker pattern: the main agent decomposes/delegates, the worker researches
+// and reports; the only channel between them is the prompt (the worker doesn't see the conversation).
 const SUBAGENT_SYSTEM = `You are a RESEARCH sub-agent. You receive a goal and search the web until you can answer with CONCRETE, CURRENT data.
 
 Rules:
@@ -732,15 +732,15 @@ Rules:
 
 async function runResearchSubagent({ objetivo, formato, onUsage, language, searchBudget = null, fontes = null }) {
   const sub = new ToolRegistry();
-  // Mesmo orçamento do turno que chamou: busca repetida entre sub-agentes volta
-  // do cache e o teto vale pro turno inteiro, não por sub-agente.
-  // Mesmo registro de fontes do turno: o [n] do sub-agente vale na resposta final.
+  // Same budget as the calling turn: a repeated search across sub-agents comes back
+  // from cache and the cap applies to the whole turn, not per sub-agent.
+  // Same source registry as the turn: the sub-agent's [n] is valid in the final response.
   sub.add(webSearchTool({ onUsage, budget: searchBudget, fontes }));
   sub.add(openLinkTool({ onUsage, fontes }));
-  // Sub-agentes de LEITURA/BUSCA (pesquisa, Google, conectores) só levantam
-  // informação e sintetizam texto: trabalho onde o modelo barato empata o forte
-  // (ver evals). Vão pro provider de sub-agente (DeepSeek V4 Flash), alta
-  // frequência e payload grande. Fallback pro Gemini 3.7 Flash segue valendo.
+  // READ/SEARCH sub-agents (research, Google, connectors) only gather
+  // information and synthesize text: work where the cheap model ties the strong one
+  // (see evals). They go to the sub-agent provider (DeepSeek V4 Flash), high
+  // frequency and large payload. Fallback to Gemini 3.7 Flash still applies.
   const provider = makeSubagentProvider();
   const userInput = formato
     ? `Research goal: ${objetivo}\n\nDesired answer format: ${formato}`
@@ -748,22 +748,22 @@ async function runResearchSubagent({ objetivo, formato, onUsage, language, searc
   const { text, usages } = await runAgent({
     provider, tools: sub, system: comIdioma(SUBAGENT_SYSTEM, language), userInput, history: [], maxSteps: 10,
   });
-  // Cada chamada de modelo do sub-agente é cobrada como kind='subagent' (mesmo
-  // pipeline de crédito do turno). onUsage já cuida das buscas (kind='search').
+  // Each sub-agent model call is billed as kind='subagent' (same credit
+  // pipeline as the turn). onUsage already handles searches (kind='search').
   if (onUsage) for (const u of (usages || [])) onUsage({ usage: u, kind: 'subagent' });
   return text || 'Não consegui levantar informação suficiente pra essa pesquisa.';
 }
 
-// ── Sub-agente do GOOGLE WORKSPACE (1º domínio do swarm) ──
-// Mesma ideia do sub-agente de pesquisa, aplicada às tools de LEITURA do Google
-// (Gmail/Drive/Agenda/Docs). O motivo: essas leituras devolvem payloads enormes
-// (threads de e-mail inteiras, listas de arquivos, corpos de documento) que,
-// inline no agente principal, incham o input de TODO turno seguinte — e input é
-// ~88% do custo. Delegando a um agente isolado (history vazio, só as tools de
-// leitura), o principal vê SÓ a síntese final; os resultados crus morrem no
-// worker. As tools de ESCRITA (mandar e-mail, criar evento, subir arquivo) NÃO
-// vêm pra cá: elas dependem da trava de confirmação por-thread (confirm.mjs),
-// que não existe dentro do sub-agente, então ficam inline no principal.
+// ── GOOGLE WORKSPACE sub-agent (1st swarm domain) ──
+// Same idea as the research sub-agent, applied to Google's READ tools
+// (Gmail/Drive/Calendar/Docs). The reason: these reads return huge payloads
+// (entire email threads, file lists, document bodies) that, inline in the main agent,
+// bloat the input of EVERY following turn — and input is
+// ~88% of the cost. By delegating to an isolated agent (empty history, only read
+// tools), the main agent sees ONLY the final synthesis; the raw results die in the
+// worker. The WRITE tools (send email, create event, upload file) do NOT
+// come here: they depend on the per-thread confirmation guard (confirm.mjs),
+// which doesn't exist inside the sub-agent, so they stay inline in the main agent.
 const GOOGLE_READ = new Set([
   'gmail_search', 'gmail_read', 'gmail_read_attachment', 'gmail_labels', 'gmail_filters_list',
   'drive_search', 'drive_read', 'calendar_list', 'docs_read',
@@ -791,10 +791,10 @@ async function runGoogleSubagent({ objetivo, formato, readTools, nowContext, onU
   const research = createEmailResearchSession(readTools, { account, onEvidence:onEmailResearch });
   const pagination = trackEmailPagination(research.tools, { account, language });
   for (const t of pagination.tools) sub.add(t);
-  // Sub-agentes de LEITURA/BUSCA (pesquisa, Google, conectores) só levantam
-  // informação e sintetizam texto: trabalho onde o modelo barato empata o forte
-  // (ver evals). Vão pro provider de sub-agente (DeepSeek V4 Flash), alta
-  // frequência e payload grande. Fallback pro Gemini 3.7 Flash segue valendo.
+  // READ/SEARCH sub-agents (research, Google, connectors) only gather
+  // information and synthesize text: work where the cheap model ties the strong one
+  // (see evals). They go to the sub-agent provider (DeepSeek V4 Flash), high
+  // frequency and large payload. Fallback to Gemini 3.7 Flash still applies.
   const provider = makeSubagentProvider();
   const partes = [`Goal: ${objetivo}`];
   if (accountContext) partes.unshift(accountContext);
@@ -813,10 +813,10 @@ async function runGoogleSubagent({ objetivo, formato, readTools, nowContext, onU
   } finally { if (!research.isEmailOnly()) onEmailResearch?.({unsupported:true}); onPagination?.(pagination.hasPartial(), { nonEmailPartial:pagination.hasNonEmailPartial(), nonEmailCoverage:pagination.nonEmailCoverage() }); onEmailEvidence?.(pagination.evidence()); onEmailCoverage?.(pagination.coverage()); }
 }
 
-// Swarm dos conectores OAuth (GitHub/Slack/Microsoft): mesma ideia do Google.
-// As tools de LEITURA de cada domínio vão pra um sub-agente isolado, acessível
-// por UMA meta-tool por domínio; só a síntese volta pro principal. As de
-// ESCRITA ficam inline no principal (dependem da trava de confirmação).
+// OAuth connector swarm (GitHub/Slack/Microsoft): same idea as Google.
+// Each domain's READ tools go to an isolated sub-agent, accessible
+// through ONE meta-tool per domain; only the synthesis goes back to the main agent. The
+// WRITE ones stay inline in the main agent (they depend on the confirmation guard).
 function connectorSubagentSystem(label) {
   return `You are a sub-agent for the user's ${label} connector. You receive a goal and use the available READ tools to gather the information and return ONLY the final synthesized answer.
 
@@ -835,10 +835,10 @@ async function runConnectorSubagent({ objetivo, formato, readTools, system, fall
   const research = createEmailResearchSession(readTools, { account, onEvidence:onEmailResearch });
   const pagination = trackEmailPagination(research.tools, { account, language });
   for (const t of pagination.tools) sub.add(t);
-  // Sub-agentes de LEITURA/BUSCA (pesquisa, Google, conectores) só levantam
-  // informação e sintetizam texto: trabalho onde o modelo barato empata o forte
-  // (ver evals). Vão pro provider de sub-agente (DeepSeek V4 Flash), alta
-  // frequência e payload grande. Fallback pro Gemini 3.7 Flash segue valendo.
+  // READ/SEARCH sub-agents (research, Google, connectors) only gather
+  // information and synthesize text: work where the cheap model ties the strong one
+  // (see evals). They go to the sub-agent provider (DeepSeek V4 Flash), high
+  // frequency and large payload. Fallback to Gemini 3.7 Flash still applies.
   const provider = makeSubagentProvider();
   const partes = [`Goal: ${objetivo}`];
   if (accountContext) partes.unshift(accountContext);
@@ -857,12 +857,12 @@ async function runConnectorSubagent({ objetivo, formato, readTools, system, fall
   } finally { if (!research.isEmailOnly()) onEmailResearch?.({unsupported:true}); onPagination?.(pagination.hasPartial(), { nonEmailPartial:pagination.hasNonEmailPartial(), nonEmailCoverage:pagination.nonEmailCoverage() }); onEmailEvidence?.(pagination.evidence()); onEmailCoverage?.(pagination.coverage()); }
 }
 
-// ── Sub-agente ANALISTA DE PLANILHAS ──
-// Planilha (Excel/CSV) já gravada no /workspace do sandbox do usuário. Este
-// sub-agente tem as tools de sandbox (roda python/pandas) e responde o objetivo
-// processando o arquivo INTEIRO por código — sem truncar, pra qualquer tamanho.
-// A conta sai sempre do código (determinística), nunca "de cabeça". Só a síntese
-// final volta pro principal; os dados crus morrem no worker.
+// ── SPREADSHEET ANALYST sub-agent ──
+// A spreadsheet (Excel/CSV) already saved in the user's sandbox /workspace. This
+// sub-agent has the sandbox tools (runs python/pandas) and answers the goal by
+// processing the WHOLE file via code — no truncation, for any size.
+// The math always comes from code (deterministic), never "from memory". Only the final
+// synthesis goes back to the main agent; the raw data dies in the worker.
 const SPREADSHEET_SUBAGENT_SYSTEM = `You are the user's SPREADSHEET ANALYST sub-agent. You receive a goal and one or more spreadsheets (Excel/CSV) ALREADY SAVED in the /workspace of the isolated environment. Your task is to answer the goal by processing the data with CODE and return ONLY the final result.
 
 Rules (follow them strictly):
@@ -879,8 +879,8 @@ Rules (follow them strictly):
 async function runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage, language }) {
   const sub = new ToolRegistry();
   for (const t of sandboxTools(userId)) sub.add(t);
-  // Análise de planilha ENVOLVE lógica/código: usa o tier PRIMÁRIO (robusto), não
-  // o barato dos sub-agentes de leitura — a correção da conta é o ponto todo.
+  // Spreadsheet analysis INVOLVES logic/code: uses the PRIMARY tier (robusto), not
+  // the cheap one from the read sub-agents — getting the math right is the whole point.
   const provider = makeHeavyProvider('planilha');
   const lista = sheets
     .map((s) => `- "${s.filename}" -> ${s.path}${s.sheets != null ? ` (${s.sheets} sheet(s), ${s.rows} row(s))` : ''}`)
@@ -898,14 +898,14 @@ async function runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsa
   return text || 'Não consegui analisar a planilha.';
 }
 
-// ── Sub-agente EDITOR DE PLANILHAS (caminho de ESCRITA) ──
-// Espelha o analista acima, mas MUTA o arquivo em vez de só ler. É o que permite
-// alterar uma planilha grande sem que o conteúdo dela passe pelo contexto do
-// principal — o modo antigo ("reescreve tudo por gerar_documento") fazia a tabela
-// inteira transitar num argumento de tool, que o limitador de blob truncava; numa
-// regeneração o modelo copiava a própria chamada cortada e a planilha perdia
-// linhas (incidente de 09/09/2026). O prompt e a orquestração estão em
-// planilha-edit.mjs; aqui só amarramos provider + tools de sandbox.
+// ── SPREADSHEET EDITOR sub-agent (WRITE path) ──
+// Mirrors the analyst above, but MUTATES the file instead of just reading it. This is what lets
+// you change a large spreadsheet without its content passing through the main
+// agent's context — the old way ("rewrite everything via gerar_documento") made the whole
+// table transit through a tool argument, which the blob limiter would truncate; on a
+// regeneration the model would copy its own cut-off call and the spreadsheet would lose
+// rows (incident from 2026-09-09). The prompt and orchestration live in
+// planilha-edit.mjs; here we only wire up the provider + sandbox tools.
 async function runSheetEditorSubagent({ objetivo, path, filename, sheets, rows, userId, onUsage, language }) {
   const sub = new ToolRegistry();
   for (const t of sandboxTools(userId)) sub.add(t);
@@ -924,7 +924,7 @@ async function runSheetEditorSubagent({ objetivo, path, filename, sheets, rows, 
   return text || 'Editei a planilha, mas não consegui resumir a mudança.';
 }
 
-// Config dos domínios de conector que entram no swarm (leitura -> sub-agente).
+// Config of the connector domains that enter the swarm (read -> sub-agent).
 const CONNECTOR_DOMAINS = [
   {
     tool: 'microsoft', label: 'Microsoft (Hotmail/Outlook)',
@@ -949,9 +949,9 @@ const CONNECTOR_DOMAINS = [
     reads: new Set(['nuvemshop_loja', 'nuvemshop_produtos', 'nuvemshop_produto', 'nuvemshop_pedidos', 'nuvemshop_pedido', 'nuvemshop_resumo_vendas']),
     description: 'Queries the user\'s Nuvemshop STORE to READ store data, catalog/products/stock and orders/sales. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("meus produtos com estoque baixo", "últimos pedidos", "quanto vendi em agosto", "faturamento da semana com quebra por dia"). The sub-agent does NOT see the conversation: describe the goal with context (period, what to look for).',
     ex: '"faturamento e nº de pedidos de agosto/2026, com quebra por dia" ou "produtos com estoque abaixo de 5 unidades"',
-    // Sistema especializado: força o caminho DETERMINÍSTICO pra relatório de
-    // vendas (o resumo pagina tudo e soma no código), evitando o bug de somar
-    // uma listagem parcial no modelo (dias suprimidos no report da loja).
+    // Specialized system: forces the DETERMINISTIC path for the sales
+    // report (the summary paginates everything and sums it in code), avoiding the bug of
+    // summing a partial listing in the model (days missing from the store's report).
     system: `You are a sub-agent for the user's NUVEMSHOP STORE. You receive a goal and use the read tools to gather the information and return ONLY the final synthesized answer.
 
 Rules (follow them strictly):
@@ -1061,9 +1061,9 @@ import { createTelegramManager, validateBotToken, sendTelegramMessage, sendTeleg
 import { criarAtendimentoDoServidor, esquemaDoAtendimento } from './publico-canal.mjs';
 import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sendWhatsAppTemplate, sendWhatsAppProactive, sendWhatsAppDocument, whatsappWindowOpen as waWindowOpen, WA_TEMPLATE_MAX, setWaHooks } from './whatsapp.mjs';
 
-// Deixa o envio proativo consultar a janela de 24h do WhatsApp por dado nosso
-// (whatsapp_links.last_inbound_at) em vez de descobrir tarde demais pelo webhook
-// de status. whatsapp.mjs não importa db.mjs; a costura é aqui.
+// Lets proactive sending check WhatsApp's 24h window from our own data
+// (whatsapp_links.last_inbound_at) instead of finding out too late via the status
+// webhook. whatsapp.mjs doesn't import db.mjs; the wiring happens here.
 setWaHooks({ lastInboundAt: getWaLastInbound, billMessages: billWaMessages });
 
 // ── Billing for WhatsApp messages sent to the user ──
@@ -1074,22 +1074,22 @@ setWaHooks({ lastInboundAt: getWaLastInbound, billMessages: billWaMessages });
 // messages, utility templates and marketing sends stay the operator's cost.
 const WA_MSG_MODEL = 'whatsapp-service';
 const WA_META_COST_BRL = 0.035;   // tabela Meta Brasil, vigente 1/10/2026
-const WA_META_FREE_MONTHLY = 1000; // franquia por número de telefone, por mês
+const WA_META_FREE_MONTHLY = 1000; // allowance per phone number, per month
 async function billWaMessages({ userId, messages, agentId = null, threadId = null } = {}) {
   const n = Math.max(0, Math.round(Number(messages) || 0));
   const porMsg = Math.max(0, Math.round(Number(gasto.creditosDe({ tipo: 'whatsapp' })) || 0));
   if (!userId || !n) return;
-  // Custo REAL (relatório de margem): só o que passa da franquia mensal da Meta é
-  // pago. A cobrança do usuário NÃO depende da franquia — o preço por mensagem é
-  // uniforme, senão o extrato dele mudaria de valor no meio do mês.
+  // REAL cost (margin report): only what goes beyond Meta's monthly allowance is
+  // paid. The user's billing does NOT depend on the allowance — the price per message is
+  // uniform, otherwise their statement would change in value mid-month.
   let jaNoMes = null;
   try {
     const { start } = currentPeriodBRT();
     jaNoMes = await countUsageByModelSince(WA_MSG_MODEL, start);
-  } catch { jaNoMes = null; } // na dúvida, lança o custo cheio
+  } catch { jaNoMes = null; } // when in doubt, charge the full cost
   const cotacao = Number(gasto.dolarEmReais()) || 5.40;
   const custoUnit = cotacao > 0 ? WA_META_COST_BRL / cotacao : 0;
-  // Uma linha por MENSAGEM: deixa a contagem da franquia exata e o extrato auditável.
+  // One line per MESSAGE: keeps the allowance count exact and the statement auditable.
   for (let i = 0; i < n; i++) {
     const gratis = jaNoMes != null && jaNoMes + i < WA_META_FREE_MONTHLY;
     try {
@@ -1162,31 +1162,31 @@ import { hostingTools, configurarPermissoes, replicateApp, deleteAppForUser, lem
 import { ctl as appsCtl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
 import { verifyTotp } from './totp.mjs';
 
-// As tools de conector são montadas por usuário no chat (Gmail/Drive/Docs).
+// Connector tools are assembled per user in chat (Gmail/Drive/Docs).
 
-// Interpreta uma data/hora de lembrete. Se o ISO já traz offset explícito (Z ou
-// ±hh:mm), respeita. Se vier sem offset (hora de parede), interpreta na hora
-// LOCAL do fuso `tz` do usuário (não no fuso do servidor). A diferença entre a
-// mesma parede lida como UTC e como `tz` dá o offset correto (independe do fuso
-// do processo e cobre horário de verão).
+// Parses a reminder date/time. If the ISO already carries an explicit offset (Z or
+// ±hh:mm), it's honored. If it comes without an offset (wall-clock time), it's interpreted in the
+// user's LOCAL `tz` timezone (not the server's timezone). The difference between the
+// same wall-clock time read as UTC and as `tz` gives the correct offset (independent of the
+// process's timezone and covers daylight saving).
 function resolveReminderWhen(quando, tz) {
   const s = String(quando || '').trim();
   if (!s) return new Date(NaN);
   const hasOffset = /(Z|[+-]\d\d:?\d\d)$/.test(s);
   if (hasOffset) return new Date(s);
-  const base = new Date(s + 'Z'); // lê a parede como se fosse UTC
+  const base = new Date(s + 'Z'); // reads the wall-clock time as if it were UTC
   if (isNaN(base.getTime())) return base;
   const asTz = new Date(base.toLocaleString('en-US', { timeZone: tz }));
   const asUtc = new Date(base.toLocaleString('en-US', { timeZone: 'UTC' }));
   return new Date(base.getTime() + (asUtc.getTime() - asTz.getTime()));
 }
 
-// Recorrência de granularidade livre, comum a lembrete e rotina. Recebe o intervalo em
-// minutos (o modelo converte "5 min"→5, "1 hora"→60, "todo dia"→1440) e, opcionalmente,
-// o "repetir_ate" em ISO local (resolvido no fuso do dono). REGRA DE PRODUTO: piso de 1
-// min; recorrência SUB-DIÁRIA (< 1 dia) SEMPRE precisa de fim (senão devolve um pedido
-// pra perguntar "por quanto tempo?"); >= 1 dia pode ser aberta. Retorna { error } (texto
-// pra devolver ao dono), ou { stepMin, untilIso } quando válido (untilIso pode ser null).
+// Free-granularity recurrence, shared by reminders and routines. Takes the interval in
+// minutes (the model converts "5 min"→5, "1 hour"→60, "every day"→1440) and, optionally,
+// "repeat_until" in local ISO (resolved in the owner's timezone). PRODUCT RULE: 1
+// min floor; SUB-DAILY recurrence (< 1 day) ALWAYS needs an end (otherwise it returns a
+// request to ask "for how long?"); >= 1 day can be open-ended. Returns { error } (text
+// to give back to the owner), or { stepMin, untilIso } when valid (untilIso can be null).
 function parseRecurrence({ repetirCadaMin, repetirAte, startMs, tz }) {
   if (repetirCadaMin === undefined || repetirCadaMin === null || repetirCadaMin === '') return null;
   const step = Number(repetirCadaMin);
@@ -1202,40 +1202,40 @@ function parseRecurrence({ repetirCadaMin, repetirAte, startMs, tz }) {
     if (until.getTime() <= (startMs || Date.now())) return { error: 'O fim da recorrência precisa ser depois do começo. Me diga até quando (ex: "por 2 dias").' };
     untilIso = until.toISOString();
   }
-  // Sub-diário sem fim: NÃO agenda; pede a janela (o assistente pergunta ao dono).
+  // Sub-daily without an end: does NOT schedule; asks for the window (the assistant asks the owner).
   if (subDaily && !untilIso) {
     return { error: `Pra repetir a cada ${intervalLabel(step)} (mais de uma vez por dia) eu preciso saber ATÉ QUANDO. Por quanto tempo você quer? (ex: por 2 dias, por 10 dias, até hoje 18h)` };
   }
   return { stepMin: step, untilIso };
 }
 
-// Rede de segurança pro texto FINAL do assistente, independente de provider. A
-// parte pura (tool-call vazado, citações, pontuação grudada em link) mora em
-// citacoes.mjs; aqui fica só o mascaramento de segredo que por acaso tenha ido
-// parar na prosa (defesa extra; as saídas de tool já saem mascaradas na origem).
+// Safety net for the assistant's FINAL text, provider-independent. The
+// pure part (leaked tool-call, citations, punctuation stuck to a link) lives in
+// citacoes.mjs; here is only the masking of secrets that happened to end up in the
+// prose (extra defense; tool outputs already come out masked at the source).
 const TOOLS_COM_FONTES = new Set(['buscar_web', 'pesquisar', 'abrir_link']);
 function sanitizeAssistantText(t, opts = {}) {
   return desgrudarPontuacaoDeLink(maskSecrets(limparTextoFinal(t, opts), { prose: true }).trim());
 }
 
-// Mensagem única de reconexão do Google (usada quando não há refresh_token ou o
-// grant morreu). Fica em português, acionável, e NUNCA expõe o erro cru da API.
-// Com multi-conta ela NOMEIA a conta: "reconecte o Google" é inútil pra quem
-// tem duas contas e só uma caiu.
+// Single Google reconnection message (used when there's no refresh_token or the
+// grant died). Stays in Portuguese, actionable, and NEVER exposes the raw API error.
+// With multiple accounts it NAMES the account: "reconnect Google" is useless for someone
+// who has two accounts and only one of them dropped.
 function googleReconnectMsg(email) {
   const qual = email ? ` da conta ${email}` : '';
   return `Sua conexão com o Google${qual} expirou ou foi revogada, então não consigo acessar sua agenda/e-mail agora. Reconecte em ${hostDaMarca()} › Conexões › Google que eu volto a agendar pra você.`;
 }
 
-// ── Resolução de conta Google (multi-conta) ──
-// Cada assistente pode estar amarrado a UMA das contas Google do dono
-// (agents.google_email). Sem vínculo, cai na conta principal — que é o
-// comportamento de sempre pra quem tem uma conta só.
+// ── Google account resolution (multi-account) ──
+// Each assistant can be tied to ONE of the owner's Google accounts
+// (agents.google_email). Without a link, it falls back to the main account — which is the
+// usual behavior for someone with just one account.
 //
-// Se o vínculo aponta pra uma conta que EXISTE mas está sem token (grant
-// morto), devolvemos essa conta mesmo assim, pra o chamador pedir reconexão
-// DELA. Cair no fallback aqui seria pior que um erro: o assistente leria a
-// caixa de entrada da conta errada achando que é a certa.
+// If the link points to an account that EXISTS but has no token (dead
+// grant), we return that account anyway, so the caller asks for reconnection
+// FOR IT. Falling back here would be worse than an error: the assistant would read
+// the wrong account's inbox thinking it's the right one.
 async function googleAccountFor(userId, googleEmail) {
   if (googleEmail) {
     return getGoogleAccount(userId, googleEmail);
@@ -1243,9 +1243,9 @@ async function googleAccountFor(userId, googleEmail) {
   return getPrimaryGoogleAccount(userId);
 }
 
-// Devolve um access_token válido do Google pro usuário, renovando se expirou.
-// `googleEmail` = conta do assistente (null = principal do usuário).
-// Lança se o usuário não tem tokens (não conectou) ou não dá pra renovar.
+// Returns a valid Google access_token for the user, refreshing if expired.
+// `googleEmail` = the assistant's account (null = user's main account).
+// Throws if the user has no tokens (didn't connect) or it can't be refreshed.
 async function validGoogleToken(userId, googleEmail = null) {
   const t = await googleAccountFor(userId, googleEmail);
   if (!t) throw new Error('Google não conectado.');
@@ -1257,57 +1257,57 @@ async function validGoogleToken(userId, googleEmail = null) {
     try {
       fresh = await googleRefresh(t.refresh_token);
     } catch (e) {
-      // invalid_grant = grant morto (revogado/expirado): limpa a credencial pra
-      // o assistente parar de tentar e pedir reconexão, sem vazar o erro cru.
-      // Limpa SÓ a conta que morreu, não a principal do usuário.
+      // invalid_grant = dead grant (revoked/expired): clears the credential so
+      // the assistant stops trying and asks for reconnection, without leaking the raw error.
+      // Clears ONLY the account that died, not the user's main one.
       if (e?.code === 'invalid_grant') {
         await clearGoogleAccount(userId, t.google_email).catch(() => {});
         throw googleReconnectError(googleReconnectMsg(t.google_email));
       }
-      // Falha transitória (rede/5xx): não apaga nada, só reporta pra tentar de novo.
+      // Transient failure (network/5xx): doesn't delete anything, just reports it so it can be retried.
       console.error('[google] refresh falhou:', e?.message ?? e);
       throw new Error('Não consegui renovar sua conexão com o Google agora. Tente de novo em instantes.');
     }
     const expiry = new Date(Date.now() + (fresh.expires_in || 3600) * 1000);
-    // Grava na conta que foi renovada (e não em "a principal"): com duas contas,
-    // escrever no lugar errado derruba as duas.
+    // Saves to the account that was refreshed (not to "the main one"): with two
+    // accounts, writing to the wrong one breaks both.
     await saveGoogleAccountTokens(userId, t.google_email, { access_token: fresh.access_token, refresh_token: null, scope: t.scope, expiry });
     return fresh.access_token;
   }
   return t.access_token;
 }
 
-// Serviços Google conectados pelo usuário (ex: ['gmail','drive']), na conta que
-// o assistente usa (null = principal).
+// Google services connected by the user (e.g. ['gmail','drive']), on the account
+// the assistant uses (null = main).
 async function connectedServices(userId, googleEmail = null) {
   const t = await googleAccountFor(userId, googleEmail);
   return t ? servicesFromScope(t.scope) : [];
 }
 
-// Lê os bytes de um anexo de mídia pra entrega nos canais. No modo S3 (bucket
-// privado, sem link público) o servidor baixa o byte e o canal faz upload
-// direto; no modo disco (a.key null) devolve null e o canal usa o link estático.
+// Reads the bytes of a media attachment for delivery on channels. In S3 mode
+// (private bucket, no public link) the server downloads the byte and the channel does the upload
+// directly; in disk mode (a.key null) it returns null and the channel uses the static link.
 async function getMediaBytes(a) {
   if (!a || !a.key || !s3Enabled()) return null;
   try { return await fetchMedia(a.key); } catch { return null; }
 }
 
-// Capacidades read/write por serviço do usuário (pra montar as tools de escrita
-// só quando ele concedeu o escopo). Ex: { gmail:{read,write}, calendar:{...} }.
+// Read/write capabilities per user service (to assemble the write tools
+// only when they've granted the scope). E.g.: { gmail:{read,write}, calendar:{...} }.
 async function connectedCaps(userId, googleEmail = null) {
   const t = await googleAccountFor(userId, googleEmail);
   const caps = t ? serviceCaps(t.scope) : {};
-  // ENVIO de e-mail é uma permissão à parte: só liga a capacidade `send` do
-  // Gmail se o usuário ativou explicitamente E já tem o escopo de rascunho
-  // (gmail.compose, que tecnicamente também envia). Sem isso, só rascunho.
+  // SENDING email is a separate permission: it only turns on Gmail's `send`
+  // capability if the user explicitly enabled it AND already has the draft scope
+  // (gmail.compose, which technically can also send). Without that, draft only.
   if (caps.gmail?.write && await getEmailSendEnabled(userId)) caps.gmail.send = true;
   return caps;
 }
 
-// Devolve um access_token válido de um conector OAuth. GitHub/Slack/Nuvemshop
-// não expiram (expiry null, sem refresh) → direto. Microsoft expira ~1h → se
-// tiver expiry+refresh_token e estiver perto de vencer, renova e persiste.
-// Lança se não conectou.
+// Returns a valid access_token for an OAuth connector. GitHub/Slack/Nuvemshop
+// don't expire (expiry null, no refresh) → direct. Microsoft expires in ~1h → if
+// it has expiry+refresh_token and is close to expiring, it refreshes and persists.
+// Throws if not connected.
 async function validProviderToken(userId, provider) {
   const t = await getOAuthToken(userId, provider);
   if (!t || !t.access_token) throw new Error(`${provider} não conectado.`);
@@ -1332,7 +1332,7 @@ async function microsoftServicesFor(userId) {
   return token ? microsoftContextServices(token.scope ?? null) : [];
 }
 
-// Tools dos conectores OAuth (GitHub/Slack) que o usuário conectou.
+// Tools of the OAuth connectors (GitHub/Slack) the user connected.
 async function providerTools(userId, opts = {}) {
   let names = [];
   try { names = await listOAuthProviders(userId); } catch { return []; }
@@ -1340,9 +1340,9 @@ async function providerTools(userId, opts = {}) {
   if (names.includes('github')) out.push(...githubTools({ token: () => validProviderToken(userId, 'github') }));
   if (names.includes('slack')) out.push(...slackTools({ token: () => validProviderToken(userId, 'slack') }));
   if (names.includes('microsoft')) {
-    // `scope` do token = o que a Microsoft concedeu NESTA conexão. Quem conectou
-    // antes do OneDrive entrar não tem Files.ReadWrite; passar isso adiante deixa
-    // a tool responder "reconecte" em vez de estourar 403 (ver connectors-ext).
+    // `scope` of the token = what Microsoft granted on THIS connection. Whoever connected
+    // before OneDrive was added doesn't have Files.ReadWrite; passing that along would leave
+    // the tool responding "reconnect" instead of throwing a 403 (see connectors-ext).
     const t = await getOAuthToken(userId, 'microsoft');
     out.push(...microsoftTools({
       token: () => validProviderToken(userId, 'microsoft'),
@@ -1402,9 +1402,9 @@ async function sendAsaasReceiptFromConnectedEmail(userId, googleEmail, { to, sub
 const ASAAS_INLINE_WAIT_MS = 10_000;
 const asaasDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Aguarda apenas o estado persistido pelo webhook. É uma espera de leitura:
-// nunca refaz POST, não consulta a instituição em loop e termina em no máximo
-// dez segundos para não prender a conversa.
+// Waits only for the state persisted by the webhook. It's a read-only wait:
+// it never redoes the POST, never polls the institution in a loop, and finishes in at most
+// ten seconds so as not to hold up the conversation.
 async function waitForAsaasOperation(userId, operationId, timeoutMs = ASAAS_INLINE_WAIT_MS) {
   const deadline = Date.now() + Math.max(0, Math.min(ASAAS_INLINE_WAIT_MS, Number(timeoutMs) || 0));
   do {
@@ -1433,15 +1433,15 @@ async function drainAsaasReceiptNotifications() {
   for (const row of rows) await deliverAsaasReceiptNotification(row);
 }
 
-// ── Conectores por token do COFRE (Notion, Splitwise) ──
-// Sem OAuth: o usuário gera um token no serviço e guarda no Cofre (kind
-// apikey/token/basic). Aqui a gente resolve o segredo decifrado por serviço.
+// ── VAULT token connectors (Notion, Splitwise) ──
+// No OAuth: the user generates a token in the service and stores it in the Vault (kind
+// apikey/token/basic). Here we resolve the decrypted secret per service.
 const VAULT_CONNECTORS = [
-  // Notion tem DOIS caminhos de conexão e as MESMAS tools nos dois: o clique
-  // (OAuth) e o token do cofre, que é como quem já usava conectou. Por isso o
-  // segredo não vem direto do cofre aqui, e sim de notionSecret(), que prefere
-  // o OAuth quando existe. Registrar um segundo toolset quebraria: o registry é
-  // um map por NOME, o segundo apagaria o primeiro.
+  // Notion has TWO connection paths and the SAME tools for both: the click
+  // (OAuth) and the vault token, which is how people who already used it connected. That's why the
+  // secret doesn't come straight from the vault here, but from notionSecret(), which prefers
+  // OAuth when it exists. Registering a second toolset would break things: the registry is
+  // a map by NAME, the second one would overwrite the first.
   { provider: 'notion', build: (secret) => notionTools({ secret, oneClick: providerEnabled('notion') }), resolve: (userId) => notionSecret(userId) },
   { provider: 'splitwise', build: (secret) => splitwiseTools({ secret }) },
   { provider: 'infinity', build: (secret) => infinityTools({ secret }) },
@@ -1483,26 +1483,26 @@ const VAULT_CONNECTORS = [
     resolve: (userId) => asaasSecret(userId),
   },
 ];
-// Nomes que são ESCRITA (gated). O resto é leitura (inline).
+// Names that are WRITE (gated). The rest is read (inline).
 const VAULT_WRITE_TOOLS = new Set([
   'notion_create_page', 'notion_append', 'splitwise_add_expense',
   'infinity_criar_item', 'infinity_editar_item', 'infinity_comentar',
-  // `asaas_receber_pix` também é escrita: sem chave ativa ela cadastra uma
-  // chave Pix real e, com valor, cria um QR. Todas as ações financeiras passam
-  // pelo mesmo gate humano, inclusive quando chamadas por uma automação.
+  // `asaas_receber_pix` is also write: with no active key it registers a real
+  // Pix key, and with a value, creates a QR code. All financial actions go through
+  // the same human gate, including when called by an automation.
   'asaas_receber_pix', 'asaas_pagar_conta', 'asaas_cancelar_pagamento_conta', 'asaas_transferir_pix', 'asaas_enviar_comprovante_email',
 ]);
 
-// ── Categorias de agente: filtro de toolset (deny-by-default na categoria 'grupo') ──
-// Num agente 'grupo' (canal multi-pessoa), o registry é montado normalmente e
-// DEPOIS podado: só sobrevivem as tools de uma base conversacional segura + os
-// GRUPOS explicitamente habilitados em tool_config.groups. Tudo que toca a CONTA
-// do dono (Google/Microsoft/conectores/MCP/cofre/memória), que reconfigura o
-// próprio agente, ou que pivota pra outro host/agente NÃO está em nenhum grupo,
-// então cai fora por não estar na allow-list. Deny-by-default: nome desconhecido
-// some. O shell só aparece se o grupo 'shell' estiver ligado.
+// ── Agent categories: toolset filter (deny-by-default on the 'grupo' category) ──
+// On a 'grupo' agent (multi-person channel), the registry is assembled normally and
+// THEN pruned: only tools from a safe conversational base + the
+// GROUPS explicitly enabled in tool_config.groups survive. Anything that touches the
+// owner's ACCOUNT (Google/Microsoft/connectors/MCP/vault/memory), that reconfigures
+// the agent itself, or that pivots to another host/agent is NOT in any group,
+// so it falls out for not being on the allow-list. Deny-by-default: an unknown name
+// disappears. The shell only shows up if the 'shell' group is enabled.
 const GRUPO_TOOL_GROUPS = {
-  // shell/código no box dedicado (o alvo do host é fixado em tool_config.host).
+  // shell/code on the dedicated box (the host target is fixed in tool_config.host).
   shell: new Set([
     'sandbox_python', 'sandbox_read_file', 'sandbox_shell', 'sandbox_write_file',
     'buscar_no_codigo', 'ler_arquivo', 'listar_arquivos', 'rodar_leitura',
@@ -1510,25 +1510,25 @@ const GRUPO_TOOL_GROUPS = {
     'git_branch', 'git_checkout', 'git_commit', 'git_push',
     'rodar_no_servidor', 'terminal',
   ]),
-  // catálogo/produtos: consultar varejo e mostrar cards de produto (nomes reais
-  // verificados no código; não inclui conectores da conta do dono tipo Nuvemshop).
+  // catalog/products: look up retail items and show product cards (real names
+  // verified in the code; does not include owner-account connectors like Nuvemshop).
   produtos: new Set([
     'mostrar_produtos', 'buscar_produtos', 'buscar_produto_por_imagem',
-    // Só a LEITURA da página de produto entra no grupo. montar_carrinho,
-    // salvar_perfil_compra e ver_perfil_compra ficam de fora de propósito: são
-    // escopadas ao dono e carregam CPF/endereço dele, que num canal multi-pessoa
-    // qualquer participante poderia fazer aparecer na tela.
+    // Only READING the product page enters the group. montar_carrinho,
+    // salvar_perfil_compra and ver_perfil_compra are left out on purpose: they are
+    // scoped to the owner and carry their CPF/address, which in a multi-person channel
+    // any participant could make show up on screen.
     'analisar_produto',
   ]),
-  // gerir projeto de código (criar/entrar/listar/deploy no workspace de dev).
+  // manage code project (create/enter/list/deploy in the dev workspace).
   projeto: new Set(['criar_projeto', 'entrar_projeto', 'listar_projetos', 'sair_projeto', 'configurar_deploy']),
-  // web: busca e leitura de página.
+  // web: page search and reading.
   web: new Set(['buscar_web', 'abrir_link']),
   // mini-PaaS (publicar/gerir sisteminhas).
   apps: new Set([
-    // construir_app é a porta do build (as tools de arquivo vivem DENTRO dele,
-    // no sub-agente; ver APP_BUILD_TOOLS). Os nomes antigos ficam na lista sem
-    // efeito: allow-list só filtra o que existe no registry.
+    // construir_app is the build gateway (the file tools live INSIDE it,
+    // in the sub-agent; see APP_BUILD_TOOLS). The old names stay in the list with no
+    // effect: the allow-list only filters what exists in the registry.
     'construir_app',
     'publicar_sistema', 'ler_arquivo_do_app', 'escrever_arquivo_do_app', 'editar_arquivo_do_app',
     'listar_arquivos_do_app', 'remover_arquivo_do_app', 'listar_sistemas', 'chamar_sistema',
@@ -1537,51 +1537,51 @@ const GRUPO_TOOL_GROUPS = {
     'definir_visibilidade_sistema', 'replicar_sistema', 'listar_home', 'adicionar_na_home', 'remover_da_home',
   ]),
 };
-// Base sempre disponível num agente 'grupo' (não toca conta nem infra do dono).
+// Base always available on a 'grupo' agent (doesn't touch the owner's account or infra).
 const GRUPO_BASE = new Set(['definir_meu_fuso', 'abrir_ferramentas']);
-// Tools de auto-reconfiguração / pivot: REMOVIDAS na 'grupo' (não estão em grupo
-// nenhum) e também na 'super' (o modo livre já é a categoria; o agente não muda
-// o próprio modo nem gera chave pra host novo por conta própria). É o fix da
-// auto-escalada por prompt injection.
+// Self-reconfiguration / pivot tools: REMOVED in 'grupo' (they aren't in any
+// group) and also in 'super' (free mode is already the category; the agent doesn't change its
+// own mode nor generate a key for a new host on its own). This is the fix for the
+// auto-escalation-via-prompt-injection issue.
 const SELF_RECONFIG_TOOLS = new Set([
   'definir_modo_permissao', 'permitir_comando', 'revogar_comando', 'gerar_chave_ssh',
 ]);
-// Tools que abrem SSH pra um host arbitrário usando as chaves do dono. Num
-// agente 'grupo' o host é FIXADO em tool_config.host (trilho anti-pivot): o
-// participante do canal não consegue redirecionar o shell pra outra máquina.
-// A lista é TODA tool que aceita `host` e sai pelo sshExec/livreExec, não só o
-// terminal: as tools de código (coding.mjs) também recebem host/usuario, então
-// deixar elas de fora era o mesmo pivot por outra porta.
+// Tools that open SSH to an arbitrary host using the owner's keys. On a
+// 'grupo' agent the host is FIXED in tool_config.host (anti-pivot rail): a
+// channel participant cannot redirect the shell to another machine.
+// The list is EVERY tool that accepts `host` and goes out via sshExec/livreExec, not just
+// the terminal: the code tools (coding.mjs) also receive host/usuario, so
+// leaving them out would be the same pivot through another door.
 const HOST_BOUND_TOOLS = new Set([
   'rodar_no_servidor', 'terminal',
   'ler_arquivo', 'listar_arquivos', 'buscar_no_codigo', 'rodar_leitura',
   'editar_arquivo', 'escrever_arquivo', 'rodar_comando',
   'git_commit', 'git_push', 'git_branch', 'git_checkout',
 ]);
-// Tools que "rodam algo" e devem ser narradas ao vivo no canal (Slack) →
-// campo do argumento que carrega o comando/código. Antes só o 'terminal' do
-// modo livre era narrado; um agente 'grupo' usa estes, então narramos eles
-// também pra não ficar em silêncio no meio de um turno longo.
+// Tools that "run something" and must be narrated live on the channel (Slack) →
+// the argument field that carries the command/code. Before, only the free mode's 'terminal' was
+// narrated; a 'grupo' agent uses these, so we narrate them
+// too, so it doesn't go silent in the middle of a long turn.
 const NARRATE_CMD_FIELD = {
   terminal: 'comando', rodar_no_servidor: 'comando', rodar_comando: 'comando',
   rodar_leitura: 'comando', sandbox_shell: 'command', sandbox_python: 'code',
 };
-// Allow-list do turno de onboarding/atualização da home (kind='onboard'). Esse
-// turno só LÊ e-mail/agenda e ESCREVE memória; o resto do registry (dezenas de
-// schemas) só engordava o input, que é o que custa aqui. Duas vantagens: corta o
-// piso de tokens do turno e blinda o "momento wow" (não manda e-mail, não cria
-// compromisso, não publica app) sem tirar nada da conversa normal.
+// Allow-list for the onboarding/home-refresh turn (kind='onboard'). This
+// turn only READS email/calendar and WRITES memory; the rest of the registry (dozens of
+// schemas) was only bloating the input, which is what costs here. Two benefits: cuts the
+// turn's token floor and shields the "wow moment" (doesn't send email, doesn't create
+// an appointment, doesn't publish an app) without taking anything away from the normal conversation.
 const ONBOARD_TOOLS = new Set([
   'google', 'hotmail_search', 'hotmail_read', 'outlook_calendar_list',
   'memoria_listar', 'memoria_ler', 'memoria_buscar', 'memoria_anotar', 'memoria_atualizar', 'memoria_escrever',
 ]);
-// Variante do REFRESH da home (roda todo dia, na página de perfil já POVOADA):
-// memória só de LEITURA. Quem grava fato durável é o housekeeping do turno de
-// conversa, por patch; um refresh de cartão da home não tem por que escrever
-// nada, e escrevendo é onde o A/B de 01/09 mediu perda de linha. No primeiro
-// contato a escrita FICA: lá a página está vazia, não há o que perder.
+// Home REFRESH variant (runs every day, on the profile page already POPULATED):
+// memory READ only. Whoever writes a durable fact is the conversation turn's housekeeping, via
+// patch; a home card refresh has no reason to write
+// anything, and writing is where the 2026-09-01 A/B measured line loss. On first
+// contact the write STAYS: there the page is empty, there's nothing to lose.
 const REFRESH_TOOLS = new Set([...ONBOARD_TOOLS].filter((n) => !/^memoria_(anotar|escrever)$/.test(n)));
-// Poda o registry de um agente 'grupo' pra allow-list dos grupos habilitados.
+// Prunes a 'grupo' agent's registry down to the allow-list of enabled groups.
 function podarRegistryGrupo(registry, cfg) {
   const groups = Array.isArray(cfg?.groups) ? cfg.groups : [];
   const permitido = new Set(GRUPO_BASE);
@@ -1590,19 +1590,19 @@ function podarRegistryGrupo(registry, cfg) {
   for (const name of [...registry.map.keys()]) {
     if (SELF_RECONFIG_TOOLS.has(name) || !(permitido.has(name) || groups.includes(registry.map.get(name)?.grupo))) { registry.map.delete(name); removidas++; }
   }
-  // Trava de host: qualquer tool de SSH que sobreviveu à poda só executa no host
-  // configurado. Ignora o `host` que o modelo mandar e força o do tool_config.
+  // Host guard: any SSH tool that survived the pruning only executes on the
+  // configured host. Ignores the `host` the model sends and forces tool_config's.
   const host = typeof cfg?.host === 'string' ? cfg.host.trim() : '';
   let travadas = 0;
   for (const name of HOST_BOUND_TOOLS) {
     const tool = registry.map.get(name);
     if (!tool || typeof tool.run !== 'function') continue;
-    // SEM host configurado a trava não tem em quê travar, e antes o `if (host)`
-    // simplesmente pulava o bloco: a tool sobrevivia à poda SOLTA e quem escolhe
-    // a máquina passava a ser o texto do canal (o alvo cai no default da chave do
-    // cofre, ou no host que o modelo inventar). Num canal multi-pessoa isso é
-    // shell na infra do dono a pedido de participante. Fail-closed: sem host, o
-    // grupo 'shell' entrega só o que roda no sandbox; nada de SSH.
+    // WITHOUT a configured host the guard has nothing to lock onto, and before the
+    // `if (host)` simply skipped the block: the tool would survive the pruning LOOSE and
+    // whoever picks the machine became the channel text (the target falls to the vault
+    // key's default, or whatever host the model invents). In a multi-person channel this is
+    // shell on the owner's infra at a participant's request. Fail-closed: without a host, the
+    // 'shell' group only delivers what runs in the sandbox; no SSH.
     if (!host) { registry.map.delete(name); removidas++; continue; }
     const orig = tool.run.bind(tool);
     registry.map.set(name, { ...tool, run: (args = {}) => orig({ ...args, host }) });
@@ -1611,10 +1611,10 @@ function podarRegistryGrupo(registry, cfg) {
   return { mantidas: registry.map.size, removidas, travadas, host: host || null };
 }
 
-// Grupos de `abrir_ferramentas` já abertos em turnos ANTERIORES desta thread.
-// Lê a CHAMADA persistida no history (toolCalls), não o texto do resultado: o
-// argumento `grupo` é o dado, a frase de retorno é só prosa. Quem consome usa
-// isso pra reabrir o grupo no registry do turno novo (ver buildRegistry).
+// Groups from `abrir_ferramentas` already opened in PREVIOUS turns of this thread.
+// Reads the CALL persisted in history (toolCalls), not the result text: the
+// `grupo` argument is the data, the returned sentence is just prose. Whoever consumes this
+// uses it to reopen the group in the new turn's registry (see buildRegistry).
 function gruposAbertosNoHistory(history) {
   const out = new Set();
   for (const m of Array.isArray(history) ? history : []) {
@@ -1627,8 +1627,8 @@ function gruposAbertosNoHistory(history) {
   return out;
 }
 
-// Devolve o segredo decifrado da conexão do usuário pra um serviço, ou null se
-// não houver. Casa por provider (case-insensitive) e kind de credencial simples.
+// Returns the decrypted secret for the user's connection to a service, or null if
+// there is none. Matches by provider (case-insensitive) and simple credential kind.
 async function vaultSecret(userId, provider) {
   let conns = [];
   try { conns = await listConnections(userId); } catch { return null; }
@@ -1639,11 +1639,11 @@ async function vaultSecret(userId, provider) {
   try { return decryptSecret(full.secret_enc); } catch { return null; }
 }
 
-// Credencial da Asaas. Uma pessoa pode ter mais de uma conta Asaas guardada
-// (a do operador + conta própria); a regra de qual delas vale mora na porta da
-// conta de pagamento (conta-pagamento.mjs), não na ordem de cadastro do cofre.
-// Aqui só resolvemos o segredo da conta escolhida.
-// Devolve { key, rotulo, contaBrambs, ambigua } ou null.
+// Asaas credential. A person can have more than one Asaas account stored
+// (the operator's + their own account); the rule for which one applies lives in the
+// payment account port (conta-pagamento.mjs), not in the vault's registration order.
+// Here we only resolve the chosen account's secret.
+// Returns { key, rotulo, contaBrambs, ambigua } or null.
 async function asaasCred(userId) {
   let conns = [];
   try { conns = await listConnections(userId); } catch { return null; }
@@ -1666,20 +1666,20 @@ async function asaasSecret(userId) {
   return cred ? cred.key : null;
 }
 
-// Credencial do Notion. Aceita as duas formas de conectar e devolve sempre um
-// token de Bearer, que é o que as tools esperam: a API do Notion não distingue
-// token de integração interna de token de OAuth.
-// Ordem: OAuth primeiro (é o caminho novo, de um clique, e se a pessoa acabou de
-// conectar por ele é o que ela espera que valha), cofre como fallback pra não
-// quebrar quem já tinha colado o token na mão.
+// Notion credential. Accepts both connection paths and always returns a
+// Bearer token, which is what the tools expect: Notion's API doesn't distinguish
+// an internal integration token from an OAuth token.
+// Order: OAuth first (it's the new, one-click path, and if the person just
+// connected via it, it's what they expect to take effect), vault as a fallback so as not to
+// break whoever had already pasted the token in by hand.
 async function notionSecret(userId) {
-  try { return await validProviderToken(userId, 'notion'); } catch { /* não conectou por OAuth */ }
+  try { return await validProviderToken(userId, 'notion'); } catch { /* didn't connect via OAuth */ }
   return vaultSecret(userId, 'notion');
 }
 
-// Credencial do App Store Connect (conector de 3 partes: .p8 cifrada em
-// secret_enc + issuer id/key id no meta). Escopado por user_id. Devolve
-// { issuerId, keyId, p8, appId? } ou null se não conectou.
+// App Store Connect credential (3-part connector: .p8 encrypted in
+// secret_enc + issuer id/key id in meta). Scoped by user_id. Returns
+// { issuerId, keyId, p8, appId? } or null if not connected.
 async function ascCred(userId) {
   let conns = [];
   try { conns = await listConnections(userId); } catch { return null; }
@@ -1694,18 +1694,18 @@ async function ascCred(userId) {
   return { issuerId: meta.issuerId, keyId: meta.keyId, p8, appId: meta.appId || null };
 }
 
-// ── Elegibilidade a recurso exclusivo do Brasil (Asaas: conta, Pix, boleto) ──
-// TRÊS estados, de propósito, porque "sei que é Brasil" e "não sei" são coisas
-// diferentes e juntar as duas num boolean apaga a diferença justo onde ela
-// importa. Hoje as duas coincidem (100% dos usuários são brasileiros), então
-// dava pra escrever um boolean e funcionaria; o problema é que quando aparecer o
-// primeiro usuário estrangeiro não carimbado a decisão estaria espalhada em
-// forma de `!country ||` por vários pontos, em vez de num lugar só.
+// ── Eligibility for a Brazil-exclusive feature (Asaas: account, Pix, boleto) ──
+// THREE states, on purpose, because "I know it's Brazil" and "I don't know" are
+// different things, and merging the two into a boolean erases the difference exactly where
+// it matters. Today the two coincide (100% of users are Brazilian), so
+// a boolean would work fine; the problem is that when the first unflagged
+// foreign user shows up, the decision would be scattered in the
+// form of `!country ||` across several places, instead of in one single spot.
 //
-// Este NÃO é o gate de compliance. O gate duro já existe e é determinístico:
-// `web/asaas-contas.mjs:60-61` exige CPF (11) ou CNPJ (14) dígitos e CEP antes
-// de bater no Asaas. Aqui é gate de EXPECTATIVA: serve pra o assistente não
-// prometer o que a pessoa não conseguiria concluir.
+// This is NOT the compliance gate. The hard gate already exists and is deterministic:
+// `web/asaas-contas.mjs:60-61` requires CPF (11) or CNPJ (14) digits and a CEP before
+// hitting Asaas. This one is an EXPECTATION gate: it serves to keep the assistant from
+// promising something the person wouldn't be able to complete.
 const paisElegivelAsaas = (country) => {
   if (!country) return 'desconhecido';
   return country === 'BR' ? 'sim' : 'nao';
@@ -1717,9 +1717,9 @@ const paisElegivelAsaas = (country) => {
 // asking the assistant or in the settings screen.
 const brasilOuDesconhecido = (country) => paisElegivelAsaas(country) !== 'nao';
 
-// Tools dos conectores por cofre. Sempre construídas quando o cofre está ligado
-// (as tools se auto-orientam se não houver token guardado), pra o assistente
-// poder guiar o usuário no "caminho técnico" de conectar Notion/Splitwise/ASC.
+// Vault-based connector tools. Always built when the vault is enabled
+// (the tools self-orient if there's no stored token), so the assistant
+// can guide the user through the "technical path" of connecting Notion/Splitwise/ASC.
 function vaultConnectorTools(userId, { country = null, agentId = null, threadId = null, googleEmail = null, originChannel = 'web' } = {}) {
   if (!vaultEnabled()) return [];
   const out = [];
@@ -1737,11 +1737,11 @@ function vaultConnectorTools(userId, { country = null, agentId = null, threadId 
   return out;
 }
 
-// Tool GATED pra o assistente GRAVAR/trocar uma API key no cofre quando o
-// usuário JÁ colou a chave no chat por conta própria: em vez de a chave ficar só
-// solta no histórico, ela vai cifrada pro cofre. NÃO é caminho pra PEDIR chave
-// no chat (isso se orienta pela tela do Cofre / OAuth); ver NOTION_BAD/SW_BAD em
-// connectors-vault.mjs. A chave fica cifrada; nunca volta pro chat. Upsert por serviço.
+// GATED tool for the assistant to SAVE/swap an API key in the vault when the
+// user has ALREADY pasted the key into chat themself: instead of the key staying just
+// loose in the history, it goes encrypted into the vault. It is NOT a path to ASK for a key
+// in chat (that's guided by the Vault screen / OAuth); see NOTION_BAD/SW_BAD in
+// connectors-vault.mjs. The key stays encrypted; it never goes back to chat. Upsert per service.
 function vaultSaveTool(userId) {
   if (!vaultEnabled()) return [];
   return [{
@@ -1773,10 +1773,10 @@ function vaultSaveTool(userId) {
   }];
 }
 
-// Carrega as tools dos servidores MCP do usuário (conectores externos).
-// Conecta a cada servidor habilitado, com timeout curto, e devolve as tools
-// achatadas. Um servidor que falha (fora do ar, auth ruim) é só pulado — nunca
-// quebra a conversa. agentId restringe servidores amarrados a um assistente.
+// Loads tools from the user's MCP servers (external connectors).
+// Connects to each enabled server, with a short timeout, and returns the
+// flattened tools. A server that fails (offline, bad auth) is just skipped — it never
+// breaks the conversation. agentId restricts servers tied to one assistant.
 async function mcpToolsForUser(userId, agentId) {
   let servers = [];
   try { servers = await listMcpServers(userId); } catch { return []; }
@@ -1796,28 +1796,28 @@ async function mcpToolsForUser(userId, agentId) {
   return all;
 }
 
-// Deriva um título curto pra thread a partir da primeira mensagem do usuário.
+// Derives a short title for a thread from the user's first message.
 function deriveTitle(message) {
   const t = (message || '').replace(/\s+/g, ' ').trim();
   if (!t) return 'Nova conversa';
   return t.length > 56 ? t.slice(0, 56).trim() + '…' : t;
 }
 
-// Grava o uso/custo de N chamadas ao modelo com as mesmas dimensões. Nunca
-// quebra o fluxo da conversa: erro de gravação só loga.
-// Franquia GRÁTIS mensal por fonte cobrada-por-chamada (busca web, busca de
-// voo): enquanto o plano da fonte não cobra de nós, não cobramos do usuário.
-// Acima do teto, o custo por chamada da pricing.mjs vale normalmente. A conta é
-// por MODELO (a linha de usage_events), então trocar de plano é mudar 1 número.
+// Logs the usage/cost of N model calls with the same dimensions. Never
+// breaks the conversation flow: a logging error is just logged.
+// Monthly FREE allowance per charged-per-call source (web search, flight
+// search): as long as the source's plan doesn't charge us, we don't charge the user.
+// Above the cap, the per-call cost from pricing.mjs applies normally. The count is
+// per MODEL (the usage_events row), so changing plans is a 1-number change.
 const SEARCH_FREE_MONTHLY = {
   'tavily-search': 1000,   // plano Tavily atual
-  // SerpApi Free = 250 buscas/mês, e essa cota é COMPARTILHADA com o
-  // google_lens (buscar_produto_por_imagem). Deixamos 100 de folga pra ela:
-  // acima de 150 buscas de voo no mês a busca passa a custar crédito.
+  // SerpApi Free = 250 searches/month, and that quota is SHARED with
+  // google_lens (buscar_produto_por_imagem). We leave 100 as slack for it:
+  // above 150 flight searches in the month, the search starts costing credit.
   'serpapi-flights': 150,
 };
-// Tools de tool_catalog já gravadas neste processo (dedup pra não reescrever o
-// catálogo inteiro a cada turno; o boot repopula do que aparecer).
+// tool_catalog tools already saved in this process (dedup so as not to rewrite the
+// whole catalog every turn; boot repopulates whatever shows up).
 const seenToolCatalog = new Set();
 // `opts.noBill`: records the REAL cost in cost_usd but zeroes the billed
 // credit. For spend that is the operator's expense, not user usage (today:
@@ -1830,14 +1830,14 @@ async function recordUsages(usages, dims, { noBill = false, eventId = null, stri
   // final flush. A model/JSON receipt or an altered usage never bypasses it.
   usages = usages.filter(u => !isSettledUsage(u, dims));
   if (!usages.length) return;
-  // Quantas chamadas de cada fonte com franquia já foram gravadas neste mês.
+  // How many calls of each allowance-covered source have already been logged this month.
   const usadasNoMes = {};
   for (const m of Object.keys(SEARCH_FREE_MONTHLY)) {
     if (!usages.some((u) => u?.model === m)) continue;
     try {
       const { start } = currentPeriodBRT();
       usadasNoMes[m] = await countUsageByModelSince(m, start);
-    } catch { usadasNoMes[m] = SEARCH_FREE_MONTHLY[m]; } // na dúvida, cobra normal
+    } catch { usadasNoMes[m] = SEARCH_FREE_MONTHLY[m]; } // when in doubt, charge normally
   }
   for (const u of usages) {
     try {
@@ -1873,7 +1873,7 @@ const ROUTINE_CREDIT_WARN_KEY = 'routine_credit_warned';
 // Subscription bonus, paid period, Apple, company and handleStripeEvent moved
 // to a billing plugin (C2 port 3).
 
-// Infere o MIME de um nome de arquivo pela extensão (pro upload de binário ao Drive).
+// Infers the MIME type of a file name from its extension (for binary uploads to Drive).
 function guessMime(name = '') {
   const ext = (String(name).match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase();
   return {
@@ -1886,10 +1886,10 @@ function guessMime(name = '') {
   }[ext] || '';
 }
 
-// Digest curto do que está rolando nas OUTRAS conversas/canais do usuário, pra
-// o assistente atual ter noção do contexto ao redor (ex: perguntar no WhatsApp
-// sobre algo que ele falou na web). Uma linha por thread recente. Vazio se não
-// houver nada. O histórico de cada thread segue isolado; isto é só um panorama.
+// Short digest of what's happening in the user's OTHER conversations/channels, so
+// the current assistant has a sense of the surrounding context (e.g. asking on WhatsApp
+// about something they said on the web). One line per recent thread. Empty if there's
+// nothing. Each thread's history stays isolated; this is just an overview.
 async function crossChannelDigest(userId, currentThreadId) {
   try {
     const rows = await recentCrossChannelThreads(userId, currentThreadId, 6);
@@ -1905,15 +1905,15 @@ async function crossChannelDigest(userId, currentThreadId) {
   } catch (e) { console.error('[crosschannel]', e?.message ?? e); return ''; }
 }
 
-// Caixa agente↔agente: decisões que o assistente de OUTRO dono mandou pra este
-// usuário e aguardam a resposta dele (o dono B), e respostas que voltaram pro
-// dono A. Surfaça no prompt pra o ciclo fechar de forma assíncrona (o dono não
-// precisa estar online quando a decisão chega). Retorna { block, responseIds }.
-// Notifica o DONO de um agente por E-MAIL (canal proativo do agente↔agente v2 —
-// notifyOwner). É só e-mail (nada de WhatsApp/template): o e-mail é uma
-// NOTIFICAÇÃO pura, sem ação embutida (sem link de aceite/token). Quem age é a
-// própria pessoa, conversando com o assistente dela. Fire-and-forget: nunca
-// derruba o fluxo que chamou. Devolve { ok } | { skipped } | { error }.
+// Agent-to-agent mailbox: decisions that ANOTHER owner's assistant sent to this
+// user and are awaiting their response (owner B), and responses that went back to
+// owner A. Surfaces in the prompt so the loop closes asynchronously (the owner doesn't
+// need to be online when the decision arrives). Returns { block, responseIds }.
+// Notifies an agent's OWNER by EMAIL (the agent-to-agent v2 proactive channel —
+// notifyOwner). It's email only (no WhatsApp/template): the email is a pure
+// NOTIFICATION, with no action embedded (no accept link/token). The person themself acts,
+// by talking to their own assistant. Fire-and-forget: never
+// brings down the calling flow. Returns { ok } | { skipped } | { error }.
 async function notifyOwnerEmail(userId, { subject, html, text }) {
   try {
     const u = await getUserById(userId);
@@ -1941,14 +1941,14 @@ async function notifyOwnerEmail(userId, { subject, html, text }) {
 const EMAIL_NOTIFY_ON = String(process.env.A2A_NOTIFY_EMAIL || '').toLowerCase() === 'true'
   || process.env.A2A_NOTIFY_EMAIL === '1';
 
-// Outlook entra no aviso de agenda se a conexão tem permissão de agenda (token
-// antigo sem scope gravado conta como tendo, igual ao resto dos conectores).
+// Outlook enters the calendar-change notice if the connection has calendar permission (an
+// old token with no saved scope counts as having it, same as the rest of the connectors).
 async function calendarWatchMsToken(userId) {
   const t = await getOAuthToken(userId, 'microsoft').catch(() => null);
   if (!t?.access_token || (t.scope && !/calendars\./i.test(t.scope))) return null;
   return () => validProviderToken(userId, 'microsoft');
 }
-// Motor do aviso de mudança na agenda (ciclo lá embaixo, junto dos outros).
+// Engine for the calendar-change notice (loop further down, alongside the others).
 const CALENDAR_WATCH_ON = !['0', 'false', 'no'].includes(String(process.env.CALENDAR_WATCH ?? '1').toLowerCase());
 const calendarWatch = createCalendarWatch({
   pool: calendarWatchDb,
@@ -1960,15 +1960,15 @@ const calendarWatch = createCalendarWatch({
   notify: (userId, text) => notifyOwner(userId, text, { keepBreaks: true }),
 });
 async function notifyOwner(userId, text, { channel, keepBreaks = false, strictChannel = false } = {}) {
-  // Por padrão o recado proativo é de UMA LINHA (formato do a2a, que é um bilhete
-  // curto). Quando a mensagem é DIAGRAMADA de propósito (aviso de crédito acabando),
-  // `keepBreaks` preserva as quebras: colapsa só espaço horizontal e limita a
-  // sequência de linhas em branco. Sem isso o texto chega num parágrafo só.
+  // By default the proactive note is ONE LINE (the a2a format, which is a short
+  // note). When the message is deliberately LAID OUT (credit-running-out notice),
+  // `keepBreaks` preserves the line breaks: it only collapses horizontal space and caps
+  // the run of blank lines. Without it the text arrives as a single paragraph.
   const body = keepBreaks
     ? String(text || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
     : String(text || '').replace(/\s+/g, ' ').trim();
   if (!userId || !body) return { skipped: true, reason: 'vazio' };
-  // Resolvedores de push (best-effort; qualquer um pode não estar conectado).
+  // Push resolvers (best-effort; any one of them might not be connected).
   const tryTelegram = async () => {
     const bot = await getTelegramBotForUser(userId).catch(() => null);
     if (!bot?.token || !bot?.chat_id) return false;
@@ -1987,9 +1987,9 @@ async function notifyOwner(userId, text, { channel, keepBreaks = false, strictCh
     const r = await notifyOwnerEmail(userId, { subject: 'Recado do seu assistente', text: body });
     return !!r?.ok;
   };
-  // Ordem de tentativa conforme o canal de origem/override. E-mail só entra na
-  // ordem quando foi EXPLICITAMENTE pedido (channel==='email'); nos demais casos
-  // ele é só o último recurso e ainda depende da flag.
+  // Order of attempts per origin channel/override. Email only enters the
+  // order when it was EXPLICITLY requested (channel==='email'); in other cases
+  // it's just the last resort and still depends on the flag.
   let order;
   if (strictChannel && channel === 'telegram') order = [tryTelegram];
   else if (strictChannel && channel === 'whatsapp') order = [tryWhatsApp];
@@ -1997,7 +1997,7 @@ async function notifyOwner(userId, text, { channel, keepBreaks = false, strictCh
   else if (channel === 'telegram') order = [tryTelegram, tryWhatsApp, tryEmail];
   else if (channel === 'whatsapp') order = [tryWhatsApp, tryTelegram, tryEmail];
   else if (channel === 'email') order = [tryEmail, tryTelegram, tryWhatsApp];
-  else order = [tryTelegram, tryWhatsApp, tryEmail]; // web/desconhecido → push disponível
+  else order = [tryTelegram, tryWhatsApp, tryEmail]; // web/unknown → push available
   for (const step of order) {
     try { if (await step()) return { ok: true }; }
     catch (e) { console.error('[notifyOwner]', channel || 'auto', e?.message ?? e); }
@@ -2005,12 +2005,12 @@ async function notifyOwner(userId, text, { channel, keepBreaks = false, strictCh
   return { skipped: true, reason: 'sem_canal' };
 }
 
-// ── Push mobile (Expo Push Service) ──
-// Envia um push pra todos os aparelhos de um usuário via serviço do Expo
-// (https://exp.host/--/api/v2/push/send). Fire-and-forget: nunca lança, nunca
-// derruba o fluxo que chamou. Poda tokens mortos (DeviceNotRegistered) que o
-// Expo reporta no ticket de resposta. `data` vira o payload que o app usa pra
-// navegar ao tocar na notificação (ex.: { kind:'chat', threadId } ).
+// ── Mobile push (Expo Push Service) ──
+// Sends a push to all of a user's devices via the Expo service
+// (https://exp.host/--/api/v2/push/send). Fire-and-forget: never throws, never
+// brings down the calling flow. Prunes dead tokens (DeviceNotRegistered) that
+// Expo reports in the response ticket. `data` becomes the payload the app uses to
+// navigate when the notification is tapped (e.g.: { kind:'chat', threadId } ).
 async function sendPush(userId, { title, body, data } = {}) {
   try {
     if (!userId) return { skipped: true, reason: 'sem_usuario' };
@@ -2026,7 +2026,7 @@ async function sendPush(userId, { title, body, data } = {}) {
       sound: 'default',
       data: data || {},
     }));
-    // Expo aceita até 100 mensagens por requisição.
+    // Expo accepts up to 100 messages per request.
     const dead = [], ids = [];
     let rejected = 0;
     for (let i = 0; i < messages.length; i += 100) {
@@ -2073,13 +2073,13 @@ async function agentInboxDigest(userId) {
         '\nSe o seu dono quiser aceitar ou recusar alguma, use a tool `responder_decisao` com o id exato acima (não mostrar o id ao dono; ela pede o ok explícito dele antes de valer). Não responda sozinho: só quando o dono decidir.',
       );
     }
-    // 2b: perguntas que o assistente de um contato levantou pro dono deste usuário.
+    // 2b: questions a contact's assistant raised for this user's owner.
     const questions = await listPendingQuestions(userId);
     if (questions.length) {
       const lines = questions.map((r) => {
         const who = r.from_name || r.from_email || 'um contato';
-        // O id vai junto (prefixo curto) porque com 2+ perguntas pendentes o nome
-        // do contato não desambigua: sem ele a resposta ia parar na pergunta errada.
+        // The id tags along (short prefix) because with 2+ pending questions the contact's
+        // name doesn't disambiguate: without it the answer would land on the wrong question.
         return `- [id: ${String(r.id).slice(0, 8)}] o assistente de ${who} está perguntando: "${clip(r.pergunta, 240)}"`;
       });
       parts.push(
@@ -2101,7 +2101,7 @@ async function agentInboxDigest(userId) {
         'RESPOSTAS QUE VOLTARAM DOS SEUS CONTATOS (avise o seu dono):\n' + lines.join('\n'),
       );
     }
-    // 2c: respostas de PERGUNTAS que voltaram pro dono deste usuário.
+    // 2c: answers to QUESTIONS that came back to this user's owner.
     const qBack = await listQuestionAnswersForA(userId);
     if (qBack.length) {
       const lines = qBack.map((r) => {
@@ -2113,8 +2113,8 @@ async function agentInboxDigest(userId) {
         'RESPOSTAS DE PERGUNTAS QUE VOLTARAM DOS SEUS CONTATOS (avise o seu dono):\n' + lines.join('\n'),
       );
     }
-    // 2d: PEDIDOS DE AMIZADE (conexão de contatos) pendentes chegados pra este
-    // usuário. Fica pendente até aceitar/recusar, então não precisa de cleanup.
+    // 2d: pending FRIEND REQUESTS (contact connection) that arrived for this
+    // user. Stays pending until accepted/declined, so it needs no cleanup.
     const reqs = await listPendingContactRequests(userId);
     if (reqs.length) {
       const lines = reqs.map((r) => {
@@ -2131,35 +2131,35 @@ async function agentInboxDigest(userId) {
   } catch (e) { console.error('[agentinbox]', e?.message ?? e); return { block: '', responseIds: [], questionIds: [] }; }
 }
 
-// ── Guardrail de roteamento (apps-processo-fix Fase 4) ──
-// Quando o turno mira CLARAMENTE um app BÁSICO do próprio usuário (ele nomeia o
-// app, sem falar de repo/servidor/SSH), devolve a row do app pra suprimir os
-// toolsets de sandbox e coding-SSH naquele turno — foram justamente eles que
-// vazaram em dois casos: um escreveu no sandbox, outro alegou "não consigo ler
-// os arquivos"/SSH), quando o caminho certo eram as tools de app (hosting).
-// Alta precisão de propósito: na dúvida devolve null (no-op = status quo). Só
-// casa quando aponta pra UM app básico sem ambiguidade.
+// ── Routing guardrail (apps-processo-fix Phase 4) ──
+// When the turn CLEARLY targets a BASIC app owned by the user (they name the
+// app, without mentioning repo/server/SSH), returns the app row to suppress
+// the sandbox and coding-SSH toolsets for that turn — those were exactly the ones that
+// leaked in two cases: one wrote to the sandbox, the other claimed "I can't read
+// the files"/SSH, when the right path was the app (hosting) tools.
+// Deliberately high precision: when in doubt, returns null (no-op = status quo). It only
+// matches when it points unambiguously to ONE basic app.
 const APP_TOKEN_STOP = new Set(['app', 'apps', 'sistema', 'sistemas', 'aplicativo',
   'aplicativos', 'minhas', 'minha', 'meus', 'dados', 'painel', 'site', 'novo', 'teste',
   'gestao', 'controle', 'cadastro', 'lista', 'pagina', 'projeto', 'coisa', 'ferramenta',
-  // Nome do produto: "brambs-atividades" não pode capturar "QR do brambs.com.br" (caso de 28/09).
+  // Product name: "brambs-atividades" must not capture "QR do brambs.com.br" (case from 2026-09-28).
   'brambs']);
 function stripAccents(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
-// Sinais de que o turno SAIU do app básico de propósito: caminho avançado
-// (repo/servidor/SSH) ou pedido explícito de rodar código solto. Nos dois casos o
-// foco da conversa é solto na hora, senão o sticky viraria uma jaula: a pessoa
-// pediria pra rodar um script e o modelo não teria mais a tool pra isso.
+// Signals that the turn deliberately LEFT the basic app: an advanced path
+// (repo/server/SSH) or an explicit request to run standalone code. In both cases the
+// conversation's focus is released on the spot, otherwise the sticky behavior would become a cage:
+// the person would ask to run a script and the model would no longer have the tool for it.
 const APP_EXIT_RE = /\b(github|repositorio|repo|meu servidor|servidor proprio|ssh|vps|ec2|infra propria|deploy no meu|na minha infra|sandbox|rodar? (esse |este |um )?(codigo|script|python)|executar (esse |este |um )?(codigo|script|python))\b/;
-// Foco de app da conversa: expira por SILÊNCIO (cada turno que usa o foco
-// re-carimba o relógio). 6h cobre uma conversa de app que atravessa o dia sem
-// deixar a supressão viva pra sempre numa thread de canal (Telegram/WhatsApp,
-// que nunca "fecha").
+// Conversation's app focus: expires by SILENCE (every turn that uses the focus
+// re-stamps the clock). 6h covers an app conversation that spans the day without
+// keeping the suppression alive forever in a channel thread (Telegram/WhatsApp,
+// which never "closes").
 const APP_FOCUS_TTL_MS = 6 * 60 * 60 * 1000;
 function pickTargetedBasicApp(message, apps) {
   const raw = stripAccents(String(message || '').toLowerCase());
   const txt = ` ${raw.replace(/[^a-z0-9]+/g, ' ')} `;
   if (!txt.trim() || !Array.isArray(apps) || !apps.length) return null;
-  // Contexto avançado (repo/servidor próprio) => NÃO é o caminho básico, não mexe.
+  // Advanced context (own repo/server) => NOT the basic path, leave it alone.
   if (APP_EXIT_RE.test(raw)) return null;
   const basicos = apps.filter((a) => (a.mode || 'basico') === 'basico' && a.system);
   if (!basicos.length) return null;
@@ -2169,8 +2169,8 @@ function pickTargetedBasicApp(message, apps) {
     const despaced = slug.replace(/[-_]+/g, ' ');
     if (slug.length >= 4 && (txt.includes(` ${despaced} `))) return a;
   }
-  // 2) Token distintivo do slug (>=5 chars, fora da stoplist) que aponta pra UM
-  //    único app básico. Casa "plantas"->minhas-plantas, "veiculos"->manutencao-veiculos.
+  // 2) Distinctive slug token (>=5 chars, outside the stoplist) that points to ONE
+  //    single basic app. Matches "plantas"->minhas-plantas, "veiculos"->manutencao-veiculos.
   const tokenToApps = new Map();
   for (const a of basicos) {
     const toks = stripAccents(String(a.system).toLowerCase()).split(/[-_]+/)
@@ -2190,7 +2190,7 @@ function pickTargetedBasicApp(message, apps) {
     }
   }
   if (hit && !ambiguous) return hit;
-  // 3) Fallback: usuário tem UM único app básico e fala "meu/no/o app|sistema|aplicativo".
+  // 3) Fallback: the user has ONE single basic app and says "my/the app|system|application".
   if (basicos.length === 1 && /\b(meu|no|o|nesse|neste|desse|deste|do meu|no meu)\s+(app|aplicativo|sistema)\b/.test(raw)) {
     return basicos[0];
   }
@@ -2230,8 +2230,8 @@ async function resolveTargetedApp({ message, userApps, threadId }) {
   if (!focus) return { app: null, sticky: false };
   const age = focus.at ? Date.now() - new Date(focus.at).getTime() : Infinity;
   const app = userApps.find((a) => a.system === focus.system && (a.mode || 'basico') === 'basico');
-  // Foco velho, ou app que não existe mais (apagado/virou avançado): limpa e
-  // volta ao status quo em vez de suprimir tool por causa de um resto de estado.
+  // Stale focus, or an app that no longer exists (deleted/became advanced): clears it
+  // and returns to status quo instead of suppressing a tool over leftover state.
   if (age > APP_FOCUS_TTL_MS || !app) {
     await setThreadAppFocus(threadId, '').catch(() => {});
     return { app: null, sticky: false };
@@ -2241,24 +2241,24 @@ async function resolveTargetedApp({ message, userApps, threadId }) {
   return { app, sticky: true };
 }
 
-// Sinais de que o turno TEM a ver com apps do subdomínio (criar/mexer/publicar).
-// Usado só pra decidir se injeta o MANUAL COMPLETO de apps no system (caro, ~2,9k
-// tokens) ou só um ponteiro curto. Não muda a disponibilidade das tools de app —
-// elas seguem sempre no registry; isto é puramente sobre o tamanho do prompt.
+// Signals that the turn is about subdomain apps (create/edit/publish).
+// Used only to decide whether to inject the FULL app MANUAL into the system (expensive, ~2.9k
+// tokens) or just a short pointer. Doesn't change the availability of the app tools —
+// they always stay in the registry; this is purely about prompt size.
 const APP_INTENT_RE = /\b(app|apps|aplicativo|aplicativos|webapp|dashboard|painel|landing|publicar|publica|publique|subdominio|brambs|sisteminha|ferramentinha)\b/;
 function appsIntentInMessage(message) {
   return APP_INTENT_RE.test(stripAccents(String(message || '').toLowerCase()));
 }
 
-// ── Build de app = DELEGAÇÃO (roteamento estilo dsh) ───────────────────────
-// Estas tools SAEM do registry do principal e passam a viver só dentro do
-// sub-agente `construir_app` (contexto novo, modelo forte, teto 32k/40 passos).
-// Nenhuma delas é gated hoje, então nada de trava se perde no caminho.
-// O que FICA no principal é a decisão do DONO (publicar, apagar, replicar,
-// voltar versão, remover arquivo/segredo, convidar colaborador) — tudo gated,
-// e gate não vive num sub-agente: a pendência é presa ao turno/thread.
-// Isto substitui a heurística APP_HOT/appBuildTurn: a rota agora é config da
-// instância (qual sub-agente), nunca regex sobre a mensagem do turno.
+// ── App build = DELEGATION (dsh-style routing) ───────────────────────
+// These tools LEAVE the main agent's registry and go on to live only inside the
+// `construir_app` sub-agent (new context, strong model, 32k cap/40 steps).
+// None of them is gated today, so no guard is lost along the way.
+// What STAYS in the main agent is the OWNER's decision (publish, delete, replicate,
+// roll back version, remove file/secret, invite collaborator) — all gated,
+// and a gate doesn't live in a sub-agent: the pending item is tied to the turn/thread.
+// This replaces the APP_HOT/appBuildTurn heuristic: the route is now an
+// instance config (which sub-agent), never a regex over the turn's message.
 const APP_BUILD_TOOLS = new Set([
   'iniciar_estrutura_do_app',
   'escrever_arquivo_do_app',
@@ -2272,26 +2272,26 @@ const APP_BUILD_TOOLS = new Set([
   'ver_logs_sistema',
   'ver_diff',
   'ver_historico',
-  // Prova de vida (fim da tarefa de app): NÃO é tool do modelo. Entra aqui só pra
-  // SAIR do registry do principal (a linha do addGated abaixo filtra por este
-  // conjunto) e ENTRAR no do sub-agente, de onde o app-task-runner a dispara
-  // pelo host. O runner não a expõe ao modelo (fica fora de READS/EDITS).
+  // Proof of life (end of the app task): it is NOT a model tool. It's here only to
+  // LEAVE the main agent's registry (the addGated line below filters by this
+  // set) and ENTER the sub-agent's, from where the app-task-runner fires it
+  // via the host. The runner doesn't expose it to the model (it stays out of READS/EDITS).
   'provar_app',
 ]);
-// O sub recebe as de build MAIS listar_sistemas/chamar_sistema. As duas são
-// não-gated e continuam TAMBÉM no principal (são de conversa: "abre meu app X").
-// Sem elas o sub não fecha o loop de depurar (ler código → bater na rota real →
-// olhar log), que é metade do trabalho de mexer num app que já está no ar.
+// The sub-agent receives the build ones PLUS listar_sistemas/chamar_sistema. Both are
+// non-gated and ALSO remain in the main agent (they're conversational: "open my app X").
+// Without them the sub-agent can't close the debugging loop (read code → hit the real route →
+// check the log), which is half the work of touching an app that's already live.
 const APP_SUB_TOOLS = new Set([...APP_BUILD_TOOLS, 'listar_sistemas', 'chamar_sistema']);
 
-// ── Serialização de turnos por thread ──────────────────────────────────────
-// Bug (08/08): duas mensagens na MESMA thread podiam rodar em turnos
-// CONCORRENTES (ex.: WhatsApp com um turno lento de pesquisa + uma 2ª mensagem
-// caindo num flush novo, ou duas abas web). Cada turno carregava o MESMO snapshot
-// de `history`, então o segundo respondia o assunto ANTERIOR (ou a ordem saía
-// trocada). A trava abaixo garante que os turnos de uma mesma thread rodem UM DE
-// CADA VEZ, na ordem de chegada; e o wrapper RELÊ o history fresco dentro da trava
-// (já com o resultado do turno anterior) — sem isso, serializar não adiantaria.
+// ── Per-thread turn serialization ──────────────────────────────────────
+// Bug (2026-08-08): two messages in the SAME thread could run in
+// CONCURRENT turns (e.g.: WhatsApp with a slow research turn + a 2nd message
+// landing in a new flush, or two web tabs). Each turn loaded the SAME `history`
+// snapshot, so the second one answered the PREVIOUS subject (or the order came out
+// swapped). The guard below ensures turns on the same thread run ONE AT A
+// TIME, in arrival order; and the wrapper RE-READS the fresh history inside the guard
+// (already with the previous turn's result) — without that, serializing wouldn't help at all.
 // A durable programming worker owns execution; chat owns intent and presentation.
 // Neither raw provider credentials nor live request/response objects are persisted.
 const codingJobStore=createAppTaskStore({root:process.env.CODING_JOB_STORE_DIR||fileURLToPath(new URL('../.brambs-programming-jobs/',import.meta.url)),seal:sealAppTask,open:openAppTask,acquire:pgTaskLock(pgConfig)});
@@ -2309,7 +2309,7 @@ const _threadTurnChains = new Map(); // threadId -> Promise (cauda da fila)
 function withThreadLock(key, fn) {
   const prev = _threadTurnChains.get(key) || Promise.resolve();
   const next = prev.then(fn, fn); // roda fn mesmo se o turno anterior falhou
-  const tail = next.catch(() => {}); // cauda sempre resolvida (não trava a fila)
+  const tail = next.catch(() => {}); // tail always resolved (doesn't block the queue)
   _threadTurnChains.set(key, tail);
   tail.then(() => { if (_threadTurnChains.get(key) === tail) _threadTurnChains.delete(key); });
   return next;
@@ -2335,23 +2335,23 @@ function runProfileHousekeeping({ userId, agentId, threadId, turnId, userMsg, as
   _profileHkInFlight.add(userId);
   (async () => {
     const hk = await updateUserProfile(userId, userMsg, assistantMsg, { language, fonte: { agent_id: agentId, thread_id: threadId, turn_id: turnId } });
-    // Custo segue gravado com o MESMO turn_id e kind='housekeeping': o relatório
-    // de consumo não muda, só o momento em que a linha aparece.
+    // Cost is still logged with the SAME turn_id and kind='housekeeping': the
+    // usage report doesn't change, only when the line appears.
     if (hk?.usage) await recordUsages([hk.usage], { userId, agentId, threadId, turnId, kind: 'housekeeping' });
   })()
     .catch((e) => console.error('[housekeeping perfil]', e?.message ?? e))
     .finally(() => _profileHkInFlight.delete(userId));
 }
 
-// Roda uma troca de conversa DENTRO de uma thread (carregada) + persiste tudo
-// na thread. A memória do usuário (wiki/perfil) segue por usuário. Devolve a resposta.
-// Wrapper: serializa por thread e relê o estado fresco antes de rodar o turno.
+// Runs a conversation exchange INSIDE a (loaded) thread + persists everything
+// to the thread. The user's memory (wiki/profile) stays per-user. Returns the response.
+// Wrapper: serializes per thread and re-reads the fresh state before running the turn.
 const confirmationRecovery = createConfirmationRecovery({store:confirmationStore,appTaskStore,jobs:codingJobs,getAgentOwned});
 async function runConversationInThread(agent, thread, userId, message, opts = {}) {
   return withThreadLock(thread.id, async () => {
-    // Relê a thread DENTRO da trava: o turno anterior desta mesma thread já
-    // persistiu o history novo, então aqui pegamos o estado fresco. Sem isso a
-    // serialização não resolveria (continuaríamos com o snapshot velho).
+    // Re-reads the thread INSIDE the guard: the previous turn on this same thread already
+    // persisted the new history, so here we grab the fresh state. Without this the
+    // serialization wouldn't solve anything (we'd still have the old snapshot).
     const fresh = await getThreadOwned(thread.id, userId);
     const currentAgent = await getAgentOwned(agent.id, userId);
     if (!currentAgent || !fresh || fresh.agent_id !== currentAgent.id) throw Error('Conversa indisponível.');
@@ -2366,8 +2366,8 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
       const ids = last?.role === 'assistant' ? confirmationTargetsInMessage(session.pending(), last.content) : [];
       session.implicitTargetIds = ids;
       session.implicitTargetId = ids.length === 1 ? ids[0] : null;
-      // Idioma pras respostas que não têm pedido nenhum de onde tirar a língua
-      // ("não há ação aguardando confirmação").
+      // Language for responses that have no request at all to pull the language from
+      // ("no action awaiting confirmation").
       session.language = (await getUserLocale(userId).catch(() => null))?.language || 'pt-BR';
     }
     const finalize = async result => {
@@ -2378,11 +2378,11 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
       return wrapped;
     };
     const proceed = async () => {
-      // Parar rotina sem crédito: o modelo nem roda, então o controle fixo é o
-      // único jeito de o dono parar uma rotina (caso de 25/09). Com crédito, quem
-      // decide é o modelo (eval 28/09: a regra pausava "rotina de treino A e B" e
-      // pedido condicional; 24/28 contra 28/28 do modelo sozinho).
-      // Citações/reações e recusas simples mantêm o fluxo de confirmação.
+      // Stopping a routine without credit: the model doesn't even run, so the fixed control is the
+      // only way for the owner to stop a routine (case from 2026-09-25). With credit, the
+      // model decides (2026-09-28 eval: the rule paused "training routine A and B" and
+      // a conditional request; 24/28 vs 28/28 for the model alone).
+      // Citations/reactions and simple refusals still keep the confirmation flow going.
       if (human && !opts.viaReaction && opts.confirmationTarget === undefined && agent.category !== 'grupo'
         && routinePauseIntent(message,{hasPendingProposals:!!session?.pending().length,language:session?.language ?? 'pt-BR'})
         && (await getCreditStatus(userId)).over) {
@@ -2419,9 +2419,9 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
       // controls only run here when no proposal could be confused with the job.
       const codingControlAllowed = human && opts.confirmationTarget === undefined && !session?.pending().length;
       let codingIntent = codingControlAllowed ? codingControlIntent(message) : null;
-      // Jev (#3): lê a intenção melhor que a regra, mas só VETA cancelar/retomar;
-      // sozinho ele só abre o status, que é leitura. Pedido de cancelar/retomar que
-      // a regra não reconhece vai pro modelo, onde gerenciar_tarefa_de_app tem cartão.
+      // Jev (#3): reads intent better than the rule, but only VETOES cancel/resume;
+      // alone it only opens the status, which is read-only. A cancel/resume request the
+      // rule doesn't recognize goes to the model, where gerenciar_tarefa_de_app has a card.
       if (codingControlAllowed && jevEnabled() && typeof message === 'string' && message.length <= 300) {
         const job = (await codingJobs.status(scope).catch(() => null))?.programming_job;
         if (job && (job.background || job.state === 'paused')) {
@@ -2452,21 +2452,21 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
   });
 }
 
-// Cooldown do turno de emergência sem créditos (thread.id -> timestamp ms).
-// Em memória de propósito: se o processo reiniciar, no pior caso o usuário
-// ganha UM turno de emergência a mais. Ver uso no bloco credit.over abaixo.
+// Cooldown for the no-credit emergency turn (thread.id -> timestamp ms).
+// In-memory on purpose: if the process restarts, worst case the user
+// gets ONE extra emergency turn. See usage in the credit.over block below.
 const emergencyTurnCooldown = new Map();
-const EMERGENCY_COOLDOWN_MS = 6 * 3600_000; // 1 turno de emergência a cada 6h por thread
+const EMERGENCY_COOLDOWN_MS = 6 * 3600_000; // 1 emergency turn every 6h per thread
 
-// Exceções estreitas do portão da auditoria 28/09, sempre pelos argumentos,
-// nunca pelo texto do modelo: consultar o acesso do app sem mudar nada, e
-// voltar para um modo de permissão MAIS restrito.
+// Narrow exceptions to the 2026-09-28 audit gate, always by arguments,
+// never by the model's text: checking the app's access without changing anything, and
+// going back to a MORE restricted permission mode.
 const PORTAO_SEM_CARTAO = {
   definir_acesso_sistema: (a) => !a?.acesso,
   definir_modo_permissao: (a) => ['padrao', 'plano'].includes(a?.modo),
 };
-// Rotina não tem ninguém pra clicar no cartão, e estas duas são o jeito de uma
-// rotina se encerrar (janela fechada, monitor que achou o que buscava).
+// A routine has no one to click the card, and these two are how a
+// routine ends itself (window closed, a monitor that found what it was looking for).
 const PORTAO_ROTINA_SE_ENCERRA = new Set(['cancelar_rotina', 'remover_monitor']);
 function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
   if (!tool || tool.confirmationTool || (!Object.hasOwn(PORTAO_TEXTOS, tool.name) && tool.requiresConfirmation !== true)) return tool;
@@ -2477,15 +2477,15 @@ function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
 
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const baseHistory = structuredClone(thread.history || []);
-  // `appClient` = a conversa chegou pelo app iOS (cabeçalho X-Brambs-Mobile: 1
-  // no POST /api/chat). Quando é true, o assistente NÃO cita preço, pacote,
-  // site, link nem onde contratar/comprar. Motivo: em 20/09/26 a Apple rejeitou
-  // a versão 0.1.13 (15) pela diretriz 3.1.1, que proíbe "botões, links externos
-  // ou OUTRAS CHAMADAS PRA AÇÃO" levando a meio de pagamento fora do In-App
-  // Purchase. Texto corrido do assistente conta como chamada pra ação. Limpamos
-  // as telas do app no mesmo dia; sem isto aqui, o próprio assistente devolveria
-  // a vitrine de preços e o link de compra dentro do app. Os outros canais
-  // (site, Telegram, WhatsApp, e-mail, rotinas) seguem exatamente como eram.
+  // `appClient` = the conversation arrived via the iOS app (X-Brambs-Mobile: 1
+  // header on POST /api/chat). When true, the assistant does NOT mention price, package,
+  // site, link, or where to subscribe/buy. Reason: on 2026-09-20 Apple rejected
+  // version 0.1.13 (15) under guideline 3.1.1, which bans "buttons, external links,
+  // or OTHER CALLS TO ACTION" leading to a payment method outside of In-App
+  // Purchase. The assistant's free-flowing text counts as a call to action. We cleaned
+  // up the app's screens the same day; without this here, the assistant itself would return
+  // the pricing showcase and the purchase link inside the app. The other channels
+  // (site, Telegram, WhatsApp, email, routines) remain exactly as they were.
   const { search = true, maxSteps = 22, kind = 'chat', onAttachment, ephemeral = false, images, files, viaReaction = false, noTools = false, pageContext = '', webhook = null, onProgress = null, routineChannel = null, routineTitle = '', routineScheduled = false, refreshHome = false, pollNewUserMsg = null, appClient = false } = opts;
   // Quote/reaction IDs are trusted transport metadata, never parsed from the
   // model's context. Reject a stale target before credit gates or any tool can
@@ -2513,9 +2513,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     },()=>runConversationTurn(agent,thread,userId,message,opts),creditScopeIdentity);
   }
   const appPendingInputs = [];
-  // O modelo não consome como interjeição resposta que confirma ação gated: o
-  // poll do WhatsApp é destrutivo; sem ele, o adaptador reenvia a mensagem como
-  // próximo turno, onde o gate acima executa/cancela a ação exatamente uma vez.
+  // The model doesn't consume as an interjection a response that confirms a gated action: the
+  // WhatsApp poll is destructive; without this, the adapter resends the message as the
+  // next turn, where the gate above runs/cancels the action exactly once.
   const pollNewUserMsgAtSafeBoundary = deferIncomingWhileConfirmationPending(thread.id, pollNewUserMsg);
   let codingSubmissionId=randomUUID();
   const codingIdentity={userId,agentId:agent.id,threadId:thread.id};
@@ -2530,12 +2530,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const searchCoverage = turnSearchCoverage();
   const emailAnswers = createEmailAnswerReviewState({onIncomplete:row=>searchCoverage.observeEmailCoverage([row])});
   const routineCheck = { completed: false, failed: false };
-  // Chamadores legados de rascunho não podem alcançar saídas antecipadas do
-  // chat (crédito/emergência/confirmação) nem a montagem de tools/housekeeping.
+  // Legacy draft callers cannot reach the chat's early exits
+  // (credit/emergency/confirmation) nor the tools/housekeeping assembly.
   if (ephemeral && noTools) {
     return { text: await isolatedAgentDraft(agent, userId, message), attachments: [] };
   }
-  // Piloto opt-in. Somente entrada humana, nunca rotina, webhook, reação ou rascunho.
+  // Opt-in pilot. Human input only, never a routine, webhook, reaction, or draft.
   let discovery = {context:'',participant:null,source:null,reply:null};
   if (!opts.confirmationRestore && !ephemeral && !noTools && !viaReaction && !webhook && ['chat','telegram','whatsapp'].includes(kind) && typeof message==='string') {
     discovery = await discoveryIncoming(discoveryStore,userId,agent.id,thread.id,message,baseHistory.length,{connectedChannels:()=>discoveryConnectedChannels(userId,agent.id)});
@@ -2549,48 +2549,48 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return {text,attachments:[]};
     }
   }
-  // Modo de permissão do agente (coding): padrao (pede ok) | aceitar_edicoes
-  // (edições rodam inline) | plano (só leitura). Allowlist = prefixos de comando
-  // pré-autorizados a rodar inline. Passados ao gate das tools de escrita/SSH.
+  // Agent permission mode (coding): padrao (asks for ok) | aceitar_edicoes
+  // (edits run inline) | plano (read-only). Allowlist = command prefixes
+  // pre-authorized to run inline. Passed to the write/SSH tools' gate.
   const permMode = agent?.perm_mode || 'padrao';
   const cmdAllow = Array.isArray(agent?.cmd_allowlist) ? agent.cmd_allowlist : [];
   const gateOpts = { mode: permMode, allowlist: cmdAllow };
-  // Categoria do agente (perfil de segurança): 'pessoal' (default) | 'grupo' | 'super'.
-  // 'grupo' poda o toolset a uma allow-list (tool_config.groups) no fim da montagem.
-  // 'super' é quem habilita o modo livre (terminal ao vivo). Ver podarRegistryGrupo.
+  // Agent category (security profile): 'pessoal' (default) | 'grupo' | 'super'.
+  // 'grupo' prunes the toolset to an allow-list (tool_config.groups) at the end of assembly.
+  // 'super' is what enables free mode (live terminal). See podarRegistryGrupo.
   const agentCategory = AGENT_CATEGORIES?.includes(agent?.category) ? agent.category : 'pessoal';
   const toolConfig = (agent?.tool_config && typeof agent.tool_config === 'object') ? agent.tool_config : {};
-  // Preferências de mídia do usuário (gerar imagem / ler imagem / STT / TTS).
+  // User's media preferences (generate image / read image / STT / TTS).
   const mprefs = await getUserMediaPrefs(userId);
-  // Fuso do usuário (IANA). null = não definido → cai no default São Paulo. Usado
-  // pra interpretar "hoje/amanhã" e pra o agente marcar eventos na hora de parede
-  // local dele (evita o bug de confirmar num fuso e o evento cair em outro).
+  // User's timezone (IANA). null = not set → falls back to the São Paulo default. Used
+  // to interpret "today/tomorrow" and for the agent to mark events at their own
+  // local wall-clock time (avoids the bug of confirming in one timezone and the event landing in another).
   const userTz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
-  // Idioma e país do usuário. O idioma manda no system deste turno e no dos
-  // sub-agentes; o país decide o que é oferecido só no Brasil (conta Asaas).
-  // getUserLocale já cai em pt-BR quando ninguém escolheu nada; country vem
-  // null quando não sabemos, e null NÃO significa "fora do Brasil".
+  // User's language and country. The language drives this turn's system prompt and the
+  // sub-agents'; the country decides what's offered only in Brazil (Asaas account).
+  // getUserLocale already falls back to pt-BR when no one chose anything; country comes as
+  // null when we don't know, and null does NOT mean "outside Brazil".
   const { language: userLang, country: userCountry } = await getUserLocale(userId);
   const idiomaResposta = idiomaDaResposta(userLang);
-  // Identificação obrigatória da conta de pagamento do operador (porta
-  // conta-pagamento.mjs): quando a mensagem abre a jornada, o selo e o texto
-  // institucional vão por conta do servidor, não do modelo, e entram no texto
-  // entregue E no histórico. null = turno sem identificação.
+  // Mandatory identification of the operator's payment account (conta-pagamento.mjs
+  // port): when the message opens the journey, the seal and the institutional text
+  // come from the server, not the model, and go into both the delivered text and the history.
+  // null = turn without identification.
   const selo = !opts.confirmationRestore && !ephemeral && !noTools && !viaReaction && !webhook
     && ['chat', 'telegram', 'whatsapp'].includes(kind)
     ? contaPagamento.apresentacao({ mensagem: message, historico: baseHistory, idioma: idiomaResposta })
     : null;
   const anexoSelo = selo ? selo.anexo : null;
 
-  // Onde a jornada não pode continuar, responder de forma determinística ANTES
-  // da LLM. A resposta e o selo são persistidos como qualquer outro turno;
-  // nenhuma conta ou registro de negócio é criado aqui.
+  // Where the journey cannot continue, respond deterministically BEFORE
+  // the LLM. The response and the seal are persisted like any other turn;
+  // no account or business record is created here.
   if (selo) {
     const text = selo.indisponivel({ userId, grupo: agentCategory === 'grupo', brasil: brasilOuDesconhecido(userCountry) });
     if (text) {
-      // Mudança explícita de assunto cancela qualquer ação antiga aguardando
-      // confirmação. Sem isso, um "pode" futuro poderia executar a pendência
-      // anterior depois desta resposta determinística.
+      // An explicit change of subject cancels any old action awaiting
+      // confirmation. Without this, a future "go ahead" could execute the old
+      // pending action after this deterministic response.
       if (hasPending(thread.id)) takePending(thread.id);
       const attachments = [anexoSelo];
       const history = [...baseHistory, { role: 'user', content: message }, { role: 'assistant', content: text, meta: selo.meta }];
@@ -2602,15 +2602,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return { text, attachments };
     }
   }
-  // Tag pra interpolar nas descrições de tool que antes fixavam "em pt-BR".
-  // A diretriz do fim do prompt é instrução MOLE: reduz vazamento de idioma,
-  // não zera. Onde o texto gerado VIRA DADO DURÁVEL (lembrar, nota de mídia,
-  // descrição de imagem, perfil) um vazamento não é uma frase feia que passa, é
-  // português gravado pra sempre na conta de quem não fala português. Então
-  // essas descrições passam a CONCORDAR com a diretriz em vez de contradizê-la.
-  // Em pt-BR rende exatamente 'pt-BR': as strings ficam byte a byte iguais.
+  // Tag to interpolate into tool descriptions that used to hard-code "in pt-BR".
+  // The directive at the end of the prompt is a SOFT instruction: it reduces language
+  // leakage, it doesn't zero it out. Where the generated text BECOMES DURABLE DATA
+  // (remember, media note, image description, profile) a leak isn't a single ugly
+  // sentence that slips by, it's Portuguese saved forever into the account of someone who doesn't
+  // speak Portuguese. So these descriptions now AGREE with the directive instead of contradicting it.
+  // In pt-BR it renders exactly as 'pt-BR': the strings end up byte-for-byte identical.
   const tagLang = tagIdioma(userLang);
-  // Visão: se vieram imagens mas o usuário desligou "ler imagens", avisa e não roda.
+  // Vision: if images came in but the user turned off "read images", warn and don't run.
   if (images?.length && !mprefs.vision) {
     let text = imagensDesligadas(idiomaResposta);
     if (selo) text = selo.comTexto(text);
@@ -2625,8 +2625,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (!opts.confirmationRestore && !ephemeral && kind !== 'routine' && kind !== 'cockpit' && !webhook && !(thread.history?.length)) {
     eventos.emitir('primeira_mensagem', { userId });
   }
-  // Controle de franquia: se estourou os créditos do mês, não roda o modelo.
-  // Cap suave, vale pra todos os canais (web, Telegram, WhatsApp, rotinas).
+  // Allowance control: if the month's credits are exhausted, don't run the model.
+  // Soft cap, applies to all channels (web, Telegram, WhatsApp, routines).
   const credit = await getCreditStatus(userId);
   if (credit.over && !opts.confirmationRestore) {
     const avisos = avisosTurno(idiomaResposta);
@@ -2634,12 +2634,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // and a plan allowance in a plugin; in the core, the US$ cap).
     const semSaldo = await gasto.avisoSemSaldo(credit, { userId, language: idiomaResposta, appClient });
     let reply = semSaldo.texto;
-    // Mesmo sem crédito, o pedido de abertura precisa da identificação. Não
-    // rodamos modelo nem coletamos dados, mas também não escondemos quem presta
-    // o serviço financeiro.
+    // Even with no credit, an opening request still needs the identification. We don't
+    // run the model nor collect data, but we also don't hide who provides
+    // the financial service.
     if (selo) reply = selo.comTexto(reply);
-    // O bloqueio antecede a leitura/persistência dos uploads. Não deixar o
-    // usuário achar que o arquivo foi analisado ou ficará disponível depois.
+    // The block happens before reading/persisting the uploads. Don't let the
+    // user think the file was analyzed or will be available later.
     const blockedAttachmentNotice = images?.length || files?.length
       ? avisos.anexosBloqueados
       : '';
@@ -2662,39 +2662,39 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const avisados = (await getConfig(ROUTINE_CREDIT_WARN_KEY).catch(() => null)) || {};
       const marca = avisados[userId] || null;
       if (!deveAvisarRotinaSemCredito({ marca, periodStart: credit.periodStart })) {
-        // Texto vazio: o scheduler só entrega quando vem texto, então a rotina
-        // roda em silêncio. Também não grava turno nenhum na thread ⏰ — o aviso
-        // que a pessoa recebeu na semana passada já está lá no histórico.
+        // Empty text: the scheduler only delivers when text comes along, so the routine
+        // runs silently. It also doesn't log any turn to the thread ⏰ — the notice
+        // the person received last week is already there in the history.
         console.log(`[rotina] usuário ${userId} sem crédito, aviso já dado em ${marca?.at} — rodando em silêncio`);
         return { text: '', attachments: [] };
       }
-      // Vai avisar agora: registra a data ANTES de responder, pra rotina que
-      // dispara logo em seguida já cair no silêncio.
+      // About to notify now: logs the date BEFORE responding, so a routine that
+      // fires right after already falls into silence.
       const nova = { at: new Date().toISOString(), period: credit.periodStart || null };
       try { await setConfig(ROUTINE_CREDIT_WARN_KEY, { ...avisados, [userId]: nova }); }
       catch (e) { console.error('[rotina] não consegui gravar a data do aviso de crédito:', e?.message ?? e); }
     }
-    // Mesma falha segura do caminho com crédito: mensagem que NÃO confirma
-    // cancela a pendência. Um "pode" posterior não pode reviver uma ação antiga
-    // que o usuário já recusou ou deixou para trás ao mudar de assunto.
+    // Same fail-safe as the with-credit path: a message that does NOT confirm
+    // cancels the pending item. A later "go ahead" cannot revive an old action
+    // the user already declined or moved on from by changing the subject.
     if (!opts.confirmationManaged && hasPending(thread.id) && !confirmsPending(peekPending(thread.id), message, opts.confirmationTarget)) {
       if (peekPending(thread.id)?.durableId) await codingApprovals.cancel();
       takePending(thread.id);
       pendingCreditNotice = avisos.pendenciaCancelada;
       reply += `\n\n${pendingCreditNotice}`;
     }
-    // ── Confirmação já dada NÃO morre no portão de crédito ──
-    // Caso de 07/09/2026: a assistente propôs uma rotina, pediu "confirma
-    // ou manda 👍", ela mandou o 👍 e recebeu só o aviso de franquia. A rotina
-    // nunca foi criada e ninguém avisou. Motivo: este portão encerrava o turno
-    // ANTES do bloco de confirmação lá embaixo, e a pendência morria.
-    // Executar uma ação JÁ CONFIRMADA não chama o modelo: a ação é a mesma que
-    // o usuário aprovou e a resposta é determinística (renderConfirmed). O
-    // raciocínio que a propôs já foi pago no turno anterior, então honrar a
-    // confirmação aqui não fura o cap. Só depois vem o aviso de crédito.
-    // Duas exceções, que devolvem a pendência e caem no aviso: ação
-    // irreversível confirmada por 👍 (exige texto) e ação que falhou pedindo
-    // re-entrada no modelo (essa sim precisaria de crédito pra terminar).
+    // ── A confirmation already given does NOT die at the credit gate ──
+    // Case from 2026-09-07: the assistant proposed a routine, asked "confirm
+    // or send 👍", they sent the 👍 and only got the allowance notice back. The routine
+    // was never created and no one was notified. Reason: this gate ended the turn
+    // BEFORE the confirmation block further down, and the pending item died.
+    // Running an ALREADY CONFIRMED action doesn't call the model: the action is the same one
+    // the user approved and the response is deterministic (renderConfirmed). The
+    // reasoning that proposed it was already paid for in the previous turn, so honoring the
+    // confirmation here doesn't break the cap. Only after that comes the credit notice.
+    // Two exceptions, which return the pending item and fall into the notice: an
+    // irreversible action confirmed via 👍 (requires text) and an action that failed asking
+    // to re-enter the model (that one really would need credit to finish).
     if (!opts.confirmationManaged && kind !== 'webhook' && hasPending(thread.id) && confirmsPending(peekPending(thread.id), message, opts.confirmationTarget)) {
       const pendSemCredito = takePending(thread.id);
       const soPorTexto = viaReaction && !isReactionConfirmable(pendSemCredito.name);
@@ -2729,24 +2729,24 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         }
       }
     }
-    // ── Turno de emergência sem créditos ──
-    // O incidente KhaosClass ficou 2 dias com o app QUEBRADO no ar porque os
-    // créditos acabaram logo depois de uma regressão de publish: o usuário
-    // reportava o problema e só recebia o aviso de franquia. Pra ESSE caso
-    // (usuário relatando app quebrado/regressão), rodamos UM micro-turno com
-    // ferramentas restritas de recuperação (histórico + rollback + logs), teto
-    // baixo de passos e cooldown por thread. O custo do turno é nosso (não é
-    // contabilizado contra o usuário — ele está sem créditos por definição).
-    // Relato em inglês e espanhol também abre a emergência: sem isso quem não
-    // escreve em português nunca chegava ao rollback e só via o aviso de crédito.
+    // ── No-credit emergency turn ──
+    // The KhaosClass incident left the app BROKEN and live for 2 days because the
+    // credits ran out right after a publish regression: the user
+    // kept reporting the problem and only got the allowance notice back. For THIS case
+    // (user reporting a broken app/regression), we run ONE micro-turn with
+    // restricted recovery tools (history + rollback + logs), a low step
+    // cap, and a per-thread cooldown. The turn's cost is ours (it is not
+    // counted against the user — they're out of credit by definition).
+    // Reports in English and Spanish also open the emergency: without this, whoever
+    // doesn't write in Portuguese would never reach the rollback and would only see the credit notice.
     const emergRe = /(regress|voltou\s+(pra|para|a)\s*(uma\s*)?vers|apagou|sumiu|desapareceu|quebrou|quebrado|perdeu|perdido|fora\s+do\s+ar|parou\s+de\s+funcionar|n[aã]o\s+(abre|carrega|funciona)|\bbroke|\bbroken|\bis\s+down\b|stopped\s+working|disappeared|got\s+deleted|went\s+back\s+to\s+(an?\s+)?(old|previous)|(not|isn'?t|won'?t|doesn'?t|does\s+not|will\s+not)\s+(load|loading|open|opening|work|working)|se\s+rompi[oó]|\broto\b|dej[oó]\s+de\s+funcionar|desapareci[oó]|se\s+borr[oó]|borr[oó]|se\s+perdi[oó]|volvi[oó]\s+a\s+una\s+versi|no\s+(abre|carga|funciona)|est[aá]\s+ca[ií]d)/i;
     const appRe = /(app|aplicativo|aplicaci[oó]n|sistema|system|site|sitio|website|p[aá]gina|page|publicad|published|vers[aã]o|versi[oó]n|version|c[oó]digo|code|dados|datos|data)/i;
     const lastEmerg = emergencyTurnCooldown.get(thread.id) || 0;
     const emergCooldownOk = Date.now() - lastEmerg > EMERGENCY_COOLDOWN_MS;
     let emergency = emergCooldownOk && emergRe.test(message) && appRe.test(message);
-    // Jev (#7): a regra abria o turno grátis pra "o site da Receita não abre" e
-    // perdia "sumiu tudo do porteiro". Abrir o turno não autoriza nada: o rollback
-    // dentro dele passa pelo cartão (gateTool abaixo). Sem Jev, fica a regra.
+    // Jev (#7): the rule opened the free turn for "the IRS site won't load" and
+    // missed "everything vanished from the doorman app". Opening the turn doesn't authorize anything: the rollback
+    // inside it still goes through the card (gateTool below). Without Jev, the rule stands.
     if (emergCooldownOk && jevEnabled()) {
       const apps = hostingEnabled() ? await listAppsForUser(userId).catch(() => []) : [];
       const jev = apps.length ? await jevAppEmergency({ message, apps: apps.map(a => a.system) }) : null;
@@ -2757,8 +2757,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       try {
         const emerg = new ToolRegistry();
         const allowed = new Set(['listar_sistemas', 'ver_historico', 'ver_logs_sistema', 'voltar_versao']);
-        // voltar_versao está em GATED_TOOLS, mas aqui entrava cru: o rollback rodava
-        // sem cartão. Confirmado, a pendência roda sem crédito pelo caminho de cima.
+        // voltar_versao is in GATED_TOOLS, but here it came in raw: the rollback ran
+        // without a card. Once confirmed, the pending item runs with no credit via the path above.
         for (const t of hostingTools(userId, agent.id)) if (allowed.has(t.name)) emerg.add(gateTool(t, thread.id));
         const emergSystem = comIdioma(`${agent.system_prompt || ''}\n\n[EMERGENCY MODE: credits exhausted]\n`
           + `The user has run out of credits, but they are reporting that a published app broke or regressed. `
@@ -2789,9 +2789,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         console.error('[emergência sem créditos] falhou, caindo pro aviso padrão:', e?.message ?? e);
       }
     }
-    // Persiste o turno no histórico (msg do usuário + este aviso). Sem isso o
-    // assistente "esquece" que avisou do estouro e não entende quando o usuário
-    // volta dizendo que recolocou crédito. Não roda o modelo (cap suave).
+    // Persists the turn to the history (user's msg + this notice). Without this the
+    // assistant "forgets" that it gave the notice and doesn't understand when the user
+    // comes back saying they topped up credit. Doesn't run the model (soft cap).
     const history = [
       ...(thread.history || []),
       { role: 'user', content: message },
@@ -2817,8 +2817,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return {text,attachments:[],curation:{urls:[],coverageSatisfied:false,executionStatus:'failed'}};
     }
   }
-  // Monitor tipado aprovado: consulta, conta e redação sem LLM. Não extrai
-  // parâmetros/meta do prompt livre. Rotinas legadas não mudam implicitamente.
+  // Approved typed monitor: query, count, and wording with no LLM. It doesn't extract
+  // parameters/metadata from free-form prompts. Legacy routines don't change implicitly.
   if (kind === 'routine' && opts.flightMonitor && opts.routineId) {
     const usages = [];
     const result = await executeFlightMonitor({config:opts.flightMonitor,userId,
@@ -2837,26 +2837,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     await saveThreadTurn(thread.id,agent.id,{ baseHistory,history,summary:thread.summary||'',userMsg:message,assistantMsg:result.text});
     return {text:result.text,templateText:result.templateText,attachments:[],...(result.deliver===false?{deliver:false}:{})};
   }
-  // Trava de confirmação: se uma ação de escrita ficou pendente nesta thread no
-  // turno anterior, resolve aqui no CÓDIGO (independe do raciocínio do modelo).
-  // Se o usuário confirmou explicitamente, executa de fato; senão, cancela.
-  // Contexto de uma ação confirmada que FALHOU e pede re-entrada no agente (ver
-  // abaixo): em vez de despejar o erro cru pro usuário, o modelo assume o turno.
+  // Confirmation guard: if a write action was left pending on this thread in the
+  // previous turn, it's resolved here in CODE (independent of the model's reasoning).
+  // If the user explicitly confirmed, it actually executes; otherwise, it cancels.
+  // Context of a confirmed action that FAILED and asks to re-enter the agent (see
+  // below): instead of dumping the raw error on the user, the model takes over the turn.
   let confirmFailureNote = opts.confirmationNote || null;
   const confirmedToolLog = [];
-  // O que o DONO escreveu (este turno + as últimas falas dele nesta thread) fica
-  // disponível pro cartão de confirmação: é com isso que o gate compara o
-  // destinatário de um e-mail e denuncia endereço alterado no caminho. Só as
-  // falas DELE — texto do assistente não é fonte de endereço digitado.
+  // What the OWNER wrote (this turn + their last messages on this thread) is made
+  // available to the confirmation card: that's what the gate uses to compare an
+  // email's recipient and flag an address altered along the way. Only THEIR
+  // messages — the assistant's text is not a source of a typed-in address.
   try {
     const falas = (thread.history || []).filter((h) => h?.role === 'user').slice(-12).map((h) => String(h.content || ''));
     setOwnerText(thread.id, [...falas, String(message || '')].join('\n'), String(message || ''));
   } catch { /* o gate segue valendo sem o aviso */ }
-  // Idioma do dono, pro cartão de confirmação sair na língua dele. Vai por
-  // thread, e não por parâmetro do addGated, porque o addGated é chamado em
-  // ~20 pontos deste arquivo: esquecer um deles deixaria o cartão em português
-  // só naquele caminho, sem erro nenhum aparecendo. Anotado ANTES do
-  // takePending: o registro de uma pendência nova neste turno já precisa dele.
+  // Owner's language, so the confirmation card comes out in their language. It's set
+  // per thread, not as an addGated parameter, because addGated is called at
+  // ~20 points in this file: forgetting one of them would leave the card in Portuguese
+  // only on that path, with no error showing up at all. Set BEFORE
+  // takePending: registering a new pending item this turn already needs it.
   setThreadLanguage(thread.id, userLang);
   const durableProposal=opts.confirmationManaged ? null : await codingApprovals.peek();
   if(durableProposal && !peekPending(thread.id)){
@@ -2872,13 +2872,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (mismatchedRestoredConfirmation) return mismatchedRestoredConfirmation;
   const pend = takePending(thread.id);
   if (pend) {
-    // Webhook: quem escreve o "reply" é um sistema externo, não o dono. Um "sim"
-    // vindo dele nunca executa ação do portão (a pendência já saiu do mapa aqui).
+    // Webhook: whoever writes the "reply" is an external system, not the owner. A "yes"
+    // coming from it never executes the gate's action (the pending item has already left the map here).
     if (kind === 'webhook') console.warn(`[webhook] pendência "${pend.name}" descartada sem executar: confirmação só vale do dono.`);
     else if (confirmsPending(pend, message, opts.confirmationTarget) || (pend.durableId && durableProposal?.id===pend.durableId && durableProposal.state==='approved')) {
-      // Confirmação por REACTION (👍) não vale pra ação IRREVERSÍVEL: devolve a
-      // pendência pra thread e pede confirmação por TEXTO. (Joinha confirma o
-      // comum; mandar e-mail, apagar, postar, comando de shell exigem "pode".)
+      // Confirmation via REACTION (👍) doesn't count for an IRREVERSIBLE action: it returns the
+      // pending item to the thread and asks for confirmation via TEXT. (A thumbs-up confirms the
+      // ordinary; sending email, deleting, posting, a shell command require "go ahead".)
       if (viaReaction && !isReactionConfirmable(pend.name) && durableProposal?.state!=='approved') {
         restorePending(thread.id, pend);
         const reply = `${avisosTurno(userLang).joinhaIrreversivel(pend.label)}\n\n${pend.confirmationText || pend.label}`;
@@ -2895,12 +2895,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       let r = null, execErr = null;
       try { r = await pend.run(pend.args); }
       catch (e) { execErr = e; }
-      // Falha que pede RE-ENTRADA no agente (tool devolveu { ok:false, reentrar:true }):
-      // caso do publish que crashou. Em vez de mostrar o erro técnico (com
-      // instruções internas do tipo "corrija e publique de novo") pro USUÁRIO, a
-      // gente devolve o controle pro modelo — ele conserta o problema e escreve
-      // uma resposta natural. As instruções técnicas ficam SÓ no contexto do
-      // modelo (confirmFailureNote), nunca no texto entregue.
+      // Failure that requests RE-ENTRY into the agent (tool returned { ok:false, reentrar:true }):
+      // the publish-crash case. Instead of showing the technical error (with
+      // internal instructions like "fix it and publish again") to the USER, we
+      // hand control back to the model: it fixes the problem and writes
+      // a natural response. The technical instructions stay ONLY in the model's
+      // context (confirmFailureNote), never in the delivered text.
       if(!execErr && pend.name==='gerenciar_tarefa_de_app' && r?.ok===true && r.continuation){
         approvedAppContinuation=r.continuation;approvedContinuationId=pend.durableId||null;
         if(approvedContinuationId)codingSubmissionId='approval:'+approvedContinuationId;
@@ -2908,11 +2908,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         confirmFailureNote='[SISTEMA: escopo de programação confirmado e salvo. A continuação será executada pelo servidor neste turno; não peça outra autorização para a mesma edição. Publicação continua separada.]';
       } else if (!execErr && r && typeof r === 'object' && r.ok === false && r.reentrar) {
         confirmFailureNote = confirmationFailureContext(pend, r);
-        // `usuario` é a frase que a própria tool escreveu PRO DONO (por que barrou).
-        // Sem carregar isso até o fim do turno a pessoa lia só "foi bloqueada".
+        // `usuario` is the sentence the tool itself wrote FOR THE OWNER (why it blocked).
+        // Without carrying this to the end of the turn, the person just read "it was blocked".
         confirmedToolLog.push({ name:pend.name, hint:pend.name, falhou:true, usuario:typeof r.usuario==='string'?r.usuario:'' });
         console.log(`[confirm] thread=${thread.id} ação "${pend.name}" CONFIRMADA mas FALHOU: ${String(r.error || '').slice(0, 200)}`);
-        // NÃO retorna: cai no fluxo normal do modelo lá embaixo.
+        // Does NOT return: falls through to the model's normal flow below.
       } else {
         const reply = execErr
           ? avisosTurno(userLang).naoConclui(pend.label, execErr?.message ?? execErr)
@@ -2929,23 +2929,23 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return { text: reply, attachments: [] };
       }
     } else {
-      // Não confirmou -> ação CANCELADA (falha segura). Segue o turno normalmente;
-      // o modelo vê no histórico que tinha pedido confirmação e age sobre a nova
-      // mensagem. Se ele quiser de novo, a tool re-registra e re-pede.
-      // ⚠️ Só o histórico NÃO basta: o modelo lê "pedi confirmação" + "sim" e
-      // responde "Done ✅" por cima de uma ação que nunca rodou (foi o que
-      // aconteceu com quem confirmava em inglês). Então avisa ele no CÓDIGO.
-      // ⚠️ Este bloco é EXCLUSIVO do caminho "não confirmou". Ele já morou fora do
-      // else e SOBRESCREVIA o aviso de falha real do caminho `reentrar` acima:
-      // publish que falhava de verdade (segredo no código, lint, app quebrado)
-      // chegava no modelo como "você não confirmou", e o assistente pedia
-      // confirmação pra sempre em vez de consertar. Não tirar do else.
+      // Did not confirm -> action CANCELLED (safe failure). The turn continues normally;
+      // the model sees in the history that it had requested confirmation and acts on the new
+      // message. If it wants to try again, the tool re-registers and re-asks.
+      // ⚠️ History ALONE is not enough: the model reads "I asked for confirmation" + "yes" and
+      // replies "Done ✅" on top of an action that never ran (this happened
+      // with people confirming in English). So warn it in the CODE.
+      // ⚠️ This block is EXCLUSIVE to the "did not confirm" path. It used to live outside the
+      // else and OVERWROTE the real-failure notice from the `reentrar` path above:
+      // a publish that genuinely failed (secret in the code, lint, broken app)
+      // reached the model as "you didn't confirm", and the assistant kept asking for
+      // confirmation forever instead of fixing it. Do not take it out of the else.
       if(pend.durableId)await codingApprovals.resolve(pend.durableId,false,()=>{throw Error('Unconfirmed action');});
-      // Sim COM RESSALVA ("pode, mas manda pro outro endereço"): o usuário
-      // autorizou OUTRA coisa. Executar a pendência seria rodar o pedido antigo,
-      // então ela cai aqui junto com as recusas, mas o motivo é outro e o modelo
-      // precisa saber disso pra repropor JÁ COM a mudança em vez de responder
-      // que não houve confirmação.
+      // Yes WITH A CAVEAT ("sure, but send it to the other address"): the user
+      // authorized SOMETHING ELSE. Running the pending action would run the old request,
+      // so this falls here together with the refusals, but the reason is different and the model
+      // needs to know this to re-propose ALREADY WITH the change instead of replying
+      // that there was no confirmation.
       const comRessalva = confirmacaoComRessalva(message);
       confirmFailureNote = comRessalva ? [
         '[SISTEMA — a ação que estava pendente NÃO foi executada]',
@@ -2966,11 +2966,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       console.log(`[confirm] thread=${thread.id} ação "${pend.name}" CANCELADA (${comRessalva ? 'confirmada com ressalva: o pedido mudou' : 'sem confirmação explícita'}).`);
     }
   }
-  // A pergunta entra no banco AGORA, não no fim do turno. O turno demora 60-90s
-  // e até aqui a lista de conversas continuava mostrando a resposta anterior como
-  // último recado, sem subir a conversa pro topo. Passados os portões acima
-  // (mídia desligada, crédito acabado), o turno vai rodar de verdade: dá pra
-  // gravar. Turno efêmero (onboarding/broadcast) não persiste nada, por definição.
+  // The question enters the database NOW, not at the end of the turn. The turn takes 60-90s
+  // and up to here the conversation list kept showing the previous reply as the
+  // last message, without bumping the conversation to the top. Having passed the gates above
+  // (media off, credit exhausted), the turn is actually going to run: it is safe to
+  // save. An ephemeral turn (onboarding/broadcast) persists nothing, by definition.
   let userMsgId = null;
   if (!opts.confirmationRestore && !ephemeral) {
     try {
@@ -2979,10 +2979,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       userMsgId = await startThreadTurn(thread.id, agent.id, message, t0);
     } catch (e) { console.error('[thread] startTurn', e?.message ?? e); }
   }
-  // Recusa curta encerra a proposta no código. Sem esta saída, o modelo recebia
-  // "NÃO NÃO NÃO" depois de sugerir uma configuração, explicava a mesma coisa
-  // outra vez e terminava pedindo a mesma autorização (incidente de 14/09).
-  // Mensagens com um pedido alternativo ("não, faça X") não entram aqui.
+  // A short refusal closes the proposal in code. Without this exit, the model would get
+  // "NO NO NO" after suggesting a setting, explain the same thing
+  // again, and end up asking for the same authorization again (incident of 2026-09-14).
+  // Messages with an alternative request ("no, do X instead") don't fall here.
   if (!opts.confirmationRestore && standaloneRefusal(message)) {
     const reply = refusalAcknowledgement(userLang);
     if (!ephemeral) {
@@ -2991,28 +2991,28 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     }
     return { text:reply, attachments:[] };
   }
-  // ── Conta Google DESTE assistente (multi-conta) ──
-  // O dono pode ter várias contas Google conectadas (pessoal, trabalho). Cada
-  // assistente opera em UMA delas (agents.google_email); sem vínculo, usa a
-  // principal. `gEmail` atravessa o turno inteiro: toda tool Google abaixo
-  // resolve o token por ele, senão o assistente "de trabalho" leria a caixa
-  // pessoal do dono.
+  // ── Google account for THIS assistant (multi-account) ──
+  // The owner may have several Google accounts connected (personal, work). Each
+  // assistant operates on ONE of them (agents.google_email); without a binding, it uses the
+  // primary one. `gEmail` flows through the whole turn: every Google tool below
+  // resolves the token through it, otherwise the "work" assistant would read the owner's
+  // personal inbox.
   const gAccounts = await listGoogleAccounts(userId).catch(() => []);
   let gEmail = agent?.google_email
     ? agent.google_email
     : (gAccounts.find((a) => a.is_primary)?.google_email || gAccounts[0]?.google_email || null);
   const gToken = () => validGoogleToken(userId, gEmail);
   const caps = await connectedCaps(userId, gEmail);
-  // Rotina busca_email: token da conta que a busca gravou (ou a do assistente).
+  // busca_email routine: token of the account the search recorded (or the assistant's).
   const emailSearchToken = (cfg) => (cfg.provider === 'outlook'
     ? () => validProviderToken(userId, 'microsoft')
     : () => validGoogleToken(userId, cfg.account || gEmail));
   const registry = new ToolRegistry();
-  // Portão da auditoria 28/09: estas tools gravavam, apagavam ou falavam com
-  // terceiros sem cartão, porque cada ponto de registro chamava registry.add
-  // direto. Aqui o próprio registry do turno as envolve, então nenhum caminho
-  // (inclusive os grupos que abrem no meio do turno) as registra sem trava.
-  // Sub-agentes usam registries próprios e ficam de fora de propósito.
+  // Gate from the 2026-09-28 audit: these tools wrote, deleted or talked to
+  // third parties without a card, because each registration point called registry.add
+  // directly. Here the turn's own registry wraps them, so no path
+  // (including the groups that open mid-turn) registers them without the guard.
+  // Sub-agents use their own registries and are left out on purpose.
   {
     const add = registry.add.bind(registry);
     registry.add = (tool) => add(portaoDoTurno(tool, { kind, threadId: thread.id, gateOpts }));
@@ -3059,27 +3059,27 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Escolha do modelo decidida JÁ aqui (antes de montar as tools): se o usuário
-  // estiver num modelo OpenAI (que não tem busca embutida), adicionamos a tool
-  // `buscar_web` ao tool-loop pra dar grounding (backend = busca no Gemini).
+  // Model choice decided ALREADY here (before assembling the tools): if the user
+  // is on an OpenAI model (which has no built-in search), we add the tool
+  // `buscar_web` to the tool loop to provide grounding (backend = Gemini search).
   const isNemotron = (process.env.MODEL_PROVIDER || 'gemini') === 'nemotron';
-  // MODELO PRINCIPAL DO PRODUTO: GLM-5.2 (Together) pra TODO MUNDO, com fallback
-  // automático pro GPT-5.4 mini (OpenAI) só quando o GLM cai de verdade. Não há
-  // mais escolha de modelo por usuário. Como GLM e GPT não têm busca embutida, o
-  // grounding vem sempre da tool `buscar_web`.
+  // PRODUCT'S PRIMARY MODEL: GLM-5.2 (Together) for EVERYONE, with automatic
+  // fallback to GPT-5.4 mini (OpenAI) only when GLM genuinely goes down. There is no
+  // more per-user model choice. Since GLM and GPT have no built-in search,
+  // grounding always comes from the `buscar_web` tool.
   const usePrimaryLLM = isDeepSeekTurn() || isGeminiComparison() || (!isNemotron && (togetherEnabled() || openaiEnabled() || !!modelosCfg));
   const useWebSearch = usePrimaryLLM;
-  // As tools de ESCRITA (gmail_send, calendar_create, drive_upload,
-  // github_create_issue, github_comment_issue, slack_post_message) entram
-  // envolvidas pela trava de confirmação (addGated): ao serem chamadas, só
-  // registram a ação pendente e pedem o ok do usuário, sem executar.
+  // The WRITE tools (gmail_send, calendar_create, drive_upload,
+  // github_create_issue, github_comment_issue, slack_post_message) are wrapped
+  // by the confirmation guard (addGated): when called, they just
+  // register the pending action and ask for the user's ok, without executing.
   if (Object.keys(caps).length) {
     const gTools = googleTools({ token: gToken, caps, account: () => gEmail || '', onUsage: (e) => mediaUsages.push(e), onAccess: (e) => { logSensitiveAccess({ userId, ...e }); }, folderName: agent?.name || marca().nome,
-      // Planilha lida do Drive é carregada automaticamente no ambiente de análise
-      // (pandas), pra a tool analisar_planilha processar o arquivo inteiro depois.
+      // A spreadsheet read from Drive is automatically loaded into the analysis environment
+      // (pandas), so the analisar_planilha tool can process the whole file afterward.
       onSheetLoad: (buf, fname, mime) => loadSpreadsheetIntoSandbox(userId, buf, fname, { mime }) });
-    // Agenda: escrita em qualquer conta conectada com permissão de agenda
-    // (evento lido da conta de trabalho também pode ser editado/apagado).
+    // Calendar: writes to any connected account with calendar permission
+    // (an event read from the work account can also be edited/deleted).
     const contasAgenda = gAccounts.filter((a) => serviceCaps(a.scope).calendar?.write).map((a) => a.google_email);
     const gWrites = calendarWritesPorConta(gTools.filter((t) => !GOOGLE_READ.has(t.name)), {
       contas: contasAgenda, padrao: gEmail || '',
@@ -3089,10 +3089,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     addGated(registry, gWrites, thread.id);
   }
-  // Uma consulta pode abranger várias contas sem trocar o vínculo do assistente.
-  // Token, capacidades e cursores ficam presos à conta consultada, inclusive
-  // quando duas consultas rodam no mesmo turno. Escritas mantêm o vínculo atual,
-  // exceto as de agenda, que aceitam `conta` (calendarWritesPorConta).
+  // A query can span several accounts without changing the assistant's binding.
+  // Token, capabilities and cursors stay tied to the queried account, even
+  // when two queries run in the same turn. Writes keep the current binding,
+  // except calendar ones, which accept `conta` (calendarWritesPorConta).
   if (gAccounts.length) {
     registry.add({
       name: 'google',
@@ -3129,18 +3129,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Tools dos conectores OAuth próprios (GitHub/Slack/Microsoft/Nuvemshop).
-  // Swarm: LEITURA de cada domínio vai pra um sub-agente isolado (uma meta-tool
-  // por domínio: `github`/`slack`/`microsoft`), tirando as tools e os resultados
-  // crus do contexto do principal; só a síntese volta. ESCRITA (create_issue,
-  // comment_issue, post_message, hotmail_send) + o que não for classificado
-  // (ex: Nuvemshop, read-only mas inline por ora) seguem inline no principal,
-  // envoltos na trava de confirmação (addGated).
+  // Tools of our own OAuth connectors (GitHub/Slack/Microsoft/Nuvemshop).
+  // Swarm: READING each domain goes to an isolated sub-agent (one meta-tool
+  // per domain: `github`/`slack`/`microsoft`), keeping the tools and the raw
+  // results out of the main context; only the synthesis comes back. WRITING (create_issue,
+  // comment_issue, post_message, hotmail_send) + whatever isn't classified
+  // (e.g. Nuvemshop, read-only but inline for now) stay inline in the main agent,
+  // wrapped by the confirmation guard (addGated).
   const provTools = await providerTools(userId, {
     folderName: agent?.name || marca().nome,
     onUsage: (e) => mediaUsages.push(e),
-    // Planilha lida do OneDrive entra no ambiente de análise (pandas), igual à
-    // que vem do Drive: é o que deixa a analisar_planilha ler o arquivo inteiro.
+    // A spreadsheet read from OneDrive enters the analysis environment (pandas), same as the
+    // one coming from Drive: this is what lets analisar_planilha read the whole file.
     onSheetLoad: (buf, fname, mime) => loadSpreadsheetIntoSandbox(userId, buf, fname, { mime }),
   });
   const consumedProv = new Set();
@@ -3173,11 +3173,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
   }
   addGated(registry, provTools.filter((t) => !consumedProv.has(t.name)), thread.id);
-  // Ponte sandbox -> OneDrive: sobe um ARQUIVO (binário) que o assistente gerou
-  // no sandbox (PDF, imagem, planilha) pro OneDrive do usuário. É o par da
-  // drive_upload_arquivo do Google; a onedrive_upload só serve pra texto. Só
-  // aparece quando a pessoa conectou a Microsoft (a tool de texto está no
-  // provTools) E tem sandbox. Gated: pede confirmação antes de subir.
+  // Sandbox -> OneDrive bridge: uploads a FILE (binary) the assistant generated
+  // in the sandbox (PDF, image, spreadsheet) to the user's OneDrive. It is the counterpart of the
+  // Google drive_upload_arquivo; onedrive_upload only works for text. It only
+  // shows up when the person connected Microsoft (the text tool is in
+  // provTools) AND has a sandbox. Gated: asks for confirmation before uploading.
   if (provTools.some((t) => t.name === 'onedrive_upload') && sandboxEnabled()) {
     const msToken = () => validProviderToken(userId, 'microsoft');
     const odFolder = agent?.name || marca().nome;
@@ -3190,8 +3190,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         mimeType: { type: 'string', description: 'File MIME type (e.g.: application/pdf). Optional, inferred from the name if omitted.' },
       }, required: ['caminho', 'nome'] },
       async run({ caminho, nome, mimeType }) {
-        // Mesma checagem determinística das tools do OneDrive: conexão antiga não
-        // tem o escopo de arquivos, então pede reconexão em vez de estourar 403.
+        // Same deterministic check as the OneDrive tools: an old connection doesn't
+        // have the files scope, so it asks for reconnection instead of throwing a 403.
         const tok = await getOAuthToken(userId, 'microsoft').catch(() => null);
         if (!microsoftHasFiles(tok?.scope ?? null)) return JSON.stringify({ ok: false, error: RECONECTAR_MSG });
         const b = await sandboxReadBytes(userId, caminho);
@@ -3208,9 +3208,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     }], thread.id);
   }
-  // Canva (via MCP). Não entra pelo mcpToolsForUser porque o token expira e as
-  // ~34 tools do servidor estourariam o piso de schema: as três tools abaixo têm
-  // schema fixo e só conectam no momento da execução. Ver web/canva.mjs.
+  // Canva (via MCP). Does not go through mcpToolsForUser because the token expires and the
+  // server's ~34 tools would blow past the schema floor: the three tools below have a
+  // fixed schema and only connect at execution time. See web/canva.mjs.
   if (providerEnabled('canva') && await getOAuthToken(userId, 'canva').catch(() => null)) {
     const cv = canvaTools({
       tokenFn: () => validProviderToken(userId, 'canva'),
@@ -3219,21 +3219,21 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     for (const t of cv.tools) registry.add(t);
     addGated(registry, cv.gated, thread.id);
   }
-  // Tools dos conectores MCP do usuário (Notion/etc.). Falha de um servidor
-  // não derruba a conversa (mcpToolsForUser já trata).
+  // Tools of the user's MCP connectors (Notion/etc.). A server failure
+  // doesn't bring down the conversation (mcpToolsForUser already handles it).
   for (const t of await mcpToolsForUser(userId, agent.id)) registry.add(t);
-  // turn_id agrupa todas as chamadas ao modelo deste turno (o tool-loop pode
-  // fazer várias) pra agregação "por turno". Nasce aqui porque a escrita de
-  // memória das tools também carrega ele: o housekeeping do mesmo turno não
-  // pode passar por cima do que o assistente gravou de propósito.
+  // turn_id groups all model calls in this turn (the tool loop can
+  // make several) for "per turn" aggregation. It's born here because the tools'
+  // memory writes also carry it: housekeeping from the same turn can't
+  // overwrite what the assistant saved on purpose.
   const turnId = opts.measurementTurnId || randomUUID();
-  // Tools da wiki de memória (por usuário, compartilhada entre os Claws dele).
+  // Memory wiki tools (per user, shared across their Claws).
   for (const t of wikiTools(userId, { fonte: { agent_id: agent.id, thread_id: thread.id, turn_id: turnId } })) registry.add(t);
-  // Tools de tracker (registro estruturado de eventos datados/contáveis). Ficam
-  // SEMPRE ativas, ao lado da memória: são o par determinístico dela (dado
-  // contável vira INSERT append-only + contagem em SQL, não texto em página). Ter
-  // as tools presentes junto com as de memória é o que torna o roteamento
-  // confiável (o modelo escolhe o tracker pro contável). Ver trackers.mjs.
+  // Tracker tools (structured log of dated/countable events). They stay
+  // ALWAYS active, alongside memory: they are its deterministic counterpart (countable
+  // data becomes an append-only INSERT + a SQL count, not text on a page). Having
+  // these tools present together with the memory ones is what makes routing
+  // reliable (the model picks the tracker for countable things). See trackers.mjs.
   for (const t of trackersTools(userId, agent.id)) registry.add(t);
   for (const t of checklistTools({ store: checklistStore, userId,
     requestId: opts.confirmationInputId || opts.measurementTurnId || randomUUID(),
@@ -3249,11 +3249,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         : tracker.ok ? { tipo:'registro', nome:tracker.tracker.title } : tracker.error === 'ambiguo' ? { tipo:'registros', nomes:tracker.options } : null;
     },
   })) registry.add(t);
-  // Compra em loja online (VTEX): ler a página real do produto, montar o carrinho
-  // no nome do dono e, com o OK dele, fechar o pedido. Sempre ativas: o gatilho é
-  // um LINK colado no chat, não um assunto que dê pra prever pelo roteamento.
-  // fechar_pedido vai pela TRAVA (addGated) porque é o único passo irreversível:
-  // cria pedido real e cobra. O resto é reversível e roda direto. Ver compras.mjs.
+  // Purchase on an online store (VTEX): read the real product page, build the cart
+  // in the owner's name and, with their OK, close the order. Always active: the trigger is
+  // a LINK pasted in the chat, not a topic routing could predict.
+  // fechar_pedido goes through the GUARD (addGated) because it's the only irreversible step:
+  // it creates a real order and charges. The rest is reversible and runs directly. See compras.mjs.
   {
     const cTools = comprasTools(userId, agent.id, { threadId: thread.id });
     for (const t of cTools.filter((t) => t.name !== 'fechar_pedido')) registry.add(t);
@@ -3264,9 +3264,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // usual spot in the list so the tool order doesn't change. Spend by slice
   // (27/09): "quanto gastei hoje", "quanto custou essa busca". See credit-spend.mjs.
   for (const t of gasto.ferramentas({ userId, appClient, agentId: agent.id, turnId })) registry.add(t);
-  // Aviso de mudança na agenda: ligado por padrão; a pessoa desliga (ou religa)
-  // conversando. Só aparece
-  // pra quem tem agenda conectada. Ver calendar-watch.mjs.
+  // Calendar change notice: on by default; the person turns it off (or back on)
+  // by talking to the assistant. Only shows up
+  // for people who have a calendar connected. See calendar-watch.mjs.
   const temOutlookAgenda = !!(await calendarWatchMsToken(userId));
   if (gAccounts.some((a) => serviceCaps(a.scope).calendar?.read) || temOutlookAgenda) {
     registry.add({
@@ -3287,45 +3287,45 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Tools de monitor (engine determinística de monitoramento de compras, Fase 2
-  // da skill Monitor de Compras). O dedup do "o que já avisei" vira UNIQUE em SQL
-  // em vez de memória do modelo. Usadas sobretudo dentro da rotina de
-  // monitoramento (checar_monitor com os itens raspados). Ver monitors.mjs.
+  // Monitor tools (deterministic purchase-monitoring engine, Phase 2
+  // of the Monitor de Compras skill). The dedup of "what I already notified" becomes a SQL UNIQUE
+  // instead of the model's memory. Used mostly inside the monitoring
+  // routine (checar_monitor with the scraped items). See monitors.mjs.
   for (const t of monitorsTools(userId, agent.id)) registry.add(t);
-  // ler_skill (só-leitura) fica SEMPRE ativa quando o assistente tem alguma Skill
-  // instalada. É o caminho de EXECUÇÃO de uma skill (ler o corpo e seguir o
-  // procedimento) disparado quando o gatilho bate — não pode depender de abrir o
-  // grupo "skills" (que é pra AUTORIA/gestão), senão o modelo tropeça (tenta ler
-  // antes de abrir → "ferramentas não disponíveis"/"erro ao ler a skill"). O
-  // índice de skills instaladas já vai no tail (skillsContext); esta é a tool que
-  // torna esse índice acionável. Custo: 1 schema pequeno e só quando há skill
-  // instalada (assistente sem skill não paga nada). As tools de criar/editar/
-  // instalar/compartilhar/rodar seguem guardadas no grupo abaixo.
+  // ler_skill (read-only) stays ALWAYS active when the assistant has some Skill
+  // installed. It's the EXECUTION path of a skill (read the body and follow the
+  // procedure), triggered when the trigger hits; it can't depend on opening the
+  // "skills" group (which is for AUTHORING/management), otherwise the model trips (tries to read
+  // before opening -> "tools not available"/"error reading the skill"). The
+  // index of installed skills already goes in the tail (skillsContext); this is the tool that
+  // makes that index actionable. Cost: 1 small schema, and only when there is a skill
+  // installed (an assistant with no skill pays nothing). The create/edit/
+  // install/share/run tools stay guarded in the group below.
   if ((await listInstalledSkills(agent.id, userId)).length) {
     const readSkill = skillsTools(userId, agent.id, thread.id).find((t) => t.name === 'ler_skill');
     if (readSkill) registry.add(readSkill);
   }
-  // ── Suites RARAS carregadas SOB DEMANDA (mega-tool `abrir_ferramentas`) ──
-  // Pra encolher o prefixo fixo de schemas (a maior fatia do input; ver
-  // knowledge/input-tokens-e-cache.md), as suites pouco usadas NÃO entram no
-  // tool set inicial. Ficam atrás de abrir_ferramentas({grupo}): quando o usuário
-  // pede algo dessas áreas, o modelo abre o grupo e as tools reais aparecem já no
-  // passo seguinte do MESMO turno (o registry é lido a cada passo). O gating
-  // (addGated) segue idêntico: a trava é presa ao thread, e uma ação gated
-  // adicionada aqui, se chamada, fica pendente e é confirmada no próximo turno
-  // como sempre (o pending guarda o próprio closure, não re-consulta o registry).
-  // O registry é reconstruído a cada turno → a expansão é efêmera e o prefixo
-  // cacheável volta pequeno no turno seguinte.
+  // ── RARE suites loaded ON DEMAND (mega-tool `abrir_ferramentas`) ──
+  // To shrink the fixed schema prefix (the biggest slice of input; see
+  // knowledge/input-tokens-e-cache.md), rarely used suites do NOT enter the
+  // initial tool set. They stay behind abrir_ferramentas({grupo}): when the user
+  // asks for something in these areas, the model opens the group and the real tools show up already on the
+  // next step of the SAME turn (the registry is read at every step). Gating
+  // (addGated) works the same way: the guard is tied to the thread, and a gated action
+  // added here, if called, stays pending and is confirmed on the next turn
+  // as usual (the pending item keeps its own closure, it doesn't re-query the registry).
+  // The registry is rebuilt every turn -> the expansion is ephemeral and the cacheable
+  // prefix goes back to being small on the next turn.
   const loadedGroups = new Set();
-  // Populador do grupo "codigo" (Plano B). Definido lá embaixo, depois que
-  // targetedApp/livreActive/activeProject/gateOpts já foram calculados; o grupo o
-  // referencia por closure. Fica null se, por algum caminho, não for atribuído.
+  // Populator of the "codigo" group (Plan B). Defined further down, after
+  // targetedApp/livreActive/activeProject/gateOpts have already been computed; the group
+  // references it by closure. Stays null if, through some path, it isn't assigned.
   let populateCodeTools = null;
   const deferredGroups = {
     cofre: {
-      // O rótulo é o que o modelo lê pra decidir carregar o grupo. Fora do
-      // Brasil ele não pode anunciar conta de pagamento, Pix nem boleto: o
-      // grupo carrega, mas essas tools não estão lá dentro.
+      // The label is what the model reads to decide whether to load the group. Outside
+      // Brazil it can't advertise a payment account, Pix or boleto: the
+      // group loads, but these tools aren't inside it.
       label: brasilOuDesconhecido(userCountry)
         ? contaPagamento.rotuloDoCofre('Credential vault and token-based connectors (Notion, Splitwise, Infinity, Asaas, App Store Connect): read/create page, log expense, view/create/edit Infinity board items, check balance/pay boleto/send PIX through the Asaas account, list and download TestFlight crashes (App Store Connect), save credential', { brasil: true })
         : 'Credential vault and token-based connectors (Notion, Splitwise, Infinity, App Store Connect): read/create page, log expense, view/create/edit Infinity board items, list and download TestFlight crashes, save credential',
@@ -3340,11 +3340,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         for (const t of vaultTools.filter((t) => !VAULT_WRITE_TOOLS.has(t.name))) registry.add(t);
         addGated(registry, vaultTools.filter((t) => VAULT_WRITE_TOOLS.has(t.name)), thread.id);
         addGated(registry, vaultSaveTool(userId), thread.id);
-        // `imagensDoTurno` vai como FUNÇÃO: este populate() roda dentro do loop
-        // de tools, quando `turnAttachmentIds` já existe. É por ela que a foto do
-        // documento sobe pelo chat, sem link e sem sair da conversa. Vai a lista
-        // de ANEXOS (não só imagens): a instituição aceita PDF, e a eCNH em PDF é
-        // o formato que o Detran entrega.
+        // `imagensDoTurno` goes in as a FUNCTION: this populate() runs inside the tools
+        // loop, when `turnAttachmentIds` already exists. It's through it that the photo of the
+        // document goes up through the chat, with no link and without leaving the conversation. It uses the
+        // ATTACHMENT list (not just images): the institution accepts PDF, and the eCNH in PDF is
+        // the format Detran delivers.
         const conta = contaPagamento.ferramentasDoCofre({ userId, cred: () => asaasCred(userId), brasil: brasilOuDesconhecido(userCountry), imagensDoTurno: () => turnAttachmentIds });
         for (const t of conta.livres) registry.add(t);
         addGated(registry, conta.comConfirmacao, thread.id);
@@ -3391,10 +3391,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Ferramentas do grupo "${grupo}" carregadas e disponíveis agora: ${added.join(', ')}. Chame a que precisar no próximo passo. (Ações de escrita seguem pedindo confirmação como sempre.)`;
     },
   });
-  // WEBHOOK: tool de conclusão. Só existe quando o turno roda uma skill via
-  // webhook. Não faz efeito colateral: marca a sessão como concluída pro sistema
-  // externo (o POST devolve done:true + result). NÃO é gated (é a mecânica de
-  // encerramento da própria integração, não uma ação sobre o mundo).
+  // WEBHOOK: completion tool. Only exists when the turn runs a skill via
+  // webhook. Has no side effect: marks the session as completed for the
+  // external system (the POST returns done:true + result). It is NOT gated (it's the
+  // closing mechanism of the integration itself, not an action on the world).
   if (webhook?.ctl) {
     registry.add({
       name: 'concluir_skill_webhook',
@@ -3413,10 +3413,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // "Need to know" da tela inicial: o agente registra um fato curto e útil que
-  // descobriu na conversa (compromisso, pendência, preferência). Aparece pro
-  // usuário na home e ele pode apagar. Diferente da wiki (memória interna): isto
-  // é o que fica VISÍVEL pra ele. Use com parcimônia, só o que vale destacar.
+  // Home-screen "need to know": the agent records a short, useful fact it
+  // discovered in the conversation (commitment, pending item, preference). Shows up for the
+  // user on the home screen and they can delete it. Unlike the wiki (internal memory), this
+  // is what stays VISIBLE to them. Use sparingly, only what's worth highlighting.
   registry.add({
     name: 'lembrar',
     description: 'Records a short, relevant fact in the "Para lembrar" list on the user\'s home screen (something you found out that is worth highlighting for them: an appointment, a pending item, a preference). Use it only for concrete, useful facts, one short sentence.',
@@ -3430,11 +3430,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return id ? 'Anotado na lista "Para lembrar".' : 'Esse item já estava na lista.';
     },
   });
-  // Fuso horário do usuário: quando ele disser onde está / em que fuso vive
-  // ("estou em Portugal", "moro em Basileia", "meu fuso é GMT+2"), o agente salva
-  // o fuso IANA aqui. A partir daí "hoje/amanhã" e os eventos de agenda usam a
-  // hora de parede local dele, sem precisar deduzir o offset toda vez. Não-gated:
-  // só grava uma preferência do próprio dono, baixo risco.
+  // User's timezone: when they say where they are / what timezone they live in
+  // ("I'm in Portugal", "I live in Basel", "my timezone is GMT+2"), the agent saves
+  // the IANA timezone here. From then on "today/tomorrow" and calendar events use their
+  // local wall-clock time, without needing to infer the offset every time. Not gated:
+  // it only saves a preference of the owner themselves, low risk.
   registry.add({
     name: 'definir_meu_fuso',
     description: 'Saves the user\'s time zone to interpret "hoje/amanhã" and schedule events in their local time. Use it when they say where they are or which time zone they live in (e.g.: "estou morando em Portugal", "mudei pra Basileia", "meu fuso é GMT+2"). ALWAYS pass a valid IANA identifier (e.g.: "America/Sao_Paulo", "Europe/Lisbon", "Europe/Zurich", "America/New_York"), never "GMT+2".',
@@ -3470,17 +3470,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     run: async ({ idioma }) => {
       const saved = await setUserLanguage(userId, idioma);
       if (!saved) return `Não atendo "${idioma}" ainda. Hoje dá em: ${IDIOMAS_OK.join(', ')}.`;
-      // A confirmação sai na língua NOVA de propósito: é a primeira prova pro
-      // usuário de que a troca pegou. Este turno ainda foi montado com a língua
-      // antiga, então quem escreve na nova aqui é este texto, não o prompt.
+      // The confirmation goes out in the NEW language on purpose: it's the first proof for the
+      // user that the switch took. This turn was still assembled with the old
+      // language, so this text, not the prompt, is what writes in the new one here.
       const ok = { 'pt-BR': 'Pronto, vou falar com você em português daqui pra frente.', en: "Done, I'll speak to you in English from now on.", es: 'Listo, de ahora en adelante te hablo en español.' };
       return ok[saved] || `Idioma alterado para ${saved}.`;
     },
   });
-  // Estilo/tom deste assistente (o "CLAUDE.local.md" dele): quando o dono pede
-  // pra mudar COMO ESTE assistente fala/escreve/se porta. Fica só neste agente e
-  // é injetado no system dele todo turno. Não-gated: o dono pedir já é a
-  // autorização; passa a valer da PRÓXIMA mensagem (o system é lido no início).
+  // Style/tone of this assistant (its "CLAUDE.local.md"): when the owner asks
+  // to change HOW THIS assistant speaks/writes/behaves. It stays only on this agent and
+  // is injected into its system prompt every turn. Not gated: the owner asking is already the
+  // authorization; it takes effect from the NEXT message (the system prompt is read at the start).
   registry.add({
     name: 'ajustar_meu_estilo',
     description: 'Adjusts the TONE/VOICE/MANNER in which YOU write and behave (this assistant only, it does not affect the user\'s other assistants). Use it when the owner asks you to change your style (e.g.: "seja mais formal", "responde curtinho", "sem emoji", "me chama de você", "fala mais solto"). Pass the CONSOLIDATED style text: keep what already applied and change only what they asked (read listar_permissoes/the current style first if you need to). It applies from the NEXT message on. Do NOT use it for facts about the user (that is memoria_escrever) and do not call it on your own.',
@@ -3495,13 +3495,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return r.style ? 'Pronto, ajustei meu jeito de falar. Já vale a partir da sua próxima mensagem.' : 'Pronto, limpei o estilo personalizado. Volto ao jeito padrão na próxima mensagem.';
     },
   });
-  // RECALL entre canais: quando o dono pede pra resgatar/retomar uma conversa de
-  // OUTRO canal ou de antes ("aquela da extensão de ontem", "o que falamos no
-  // WhatsApp semana passada"). O histórico é isolado por thread; estas 2 tools
-  // deixam o assistente buscar e ler os PRÓPRIOS threads deste mesmo dono. Escopo
-  // travado no servidor por (agent.id, userId) — o modelo só passa filtros. Só
-  // este assistente vê os threads deste assistente (não mistura com outros).
-  // Não-gated: é leitura de dado do próprio dono, igual ler a memória.
+  // Cross-channel RECALL: when the owner asks to retrieve/resume a conversation from
+  // ANOTHER channel or from before ("the one from the extension yesterday", "what we talked about on
+  // WhatsApp last week"). History is isolated by thread; these 2 tools
+  // let the assistant search and read the SAME owner's OWN threads. Scope
+  // locked on the server by (agent.id, userId); the model only passes filters. Only
+  // this assistant sees this assistant's threads (no mixing with others).
+  // Not gated: it's reading the owner's own data, same as reading memory.
   {
     const fmtWhen = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
     const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
@@ -3548,11 +3548,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return `${head}\n\n${body}`;
       },
     });
-    // RELER A CONVERSA ATUAL: quando o papo fica longo, o começo sai da janela de
-    // contexto (compactação), mas as mensagens continuam no banco. As duas tools
-    // acima IGNORAM o thread atual (excludeThreadId), então o assistente não tinha
-    // como reler o próprio fio. Esta lê o thread ATUAL cru do banco — é o antídoto
-    // pro "não acho / deve ter sido em outra conversa" sobre algo feito aqui mesmo.
+    // RE-READING THE CURRENT CONVERSATION: when the chat gets long, the beginning falls out of the
+    // context window (compaction), but the messages stay in the database. The two tools
+    // above IGNORE the current thread (excludeThreadId), so the assistant had no
+    // way to re-read its own thread. This one reads the CURRENT thread raw from the database; it's the antidote
+    // to "I can't find it / it must have been in another conversation" about something done right here.
     registry.add({
       name: 'reler_esta_conversa',
       description: 'Re-reads the history of THIS SAME conversation straight from the database. Use it when the chat got long and you no longer remember what was said, or what YOU did/generated earlier here (the context may have been compacted and left your window). Pass a `busca` (word/topic) to find the excerpt, or leave it empty for the latest messages. IMPORTANT: ALWAYS call this BEFORE saying that you "cannot find", that you "have no access" or that "it was in another conversation / with another assistant" something the user says they did WITH YOU; what they did with you is here, not in another channel.',
@@ -3594,8 +3594,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           linhas.push('Você ainda não tem um código de convite na sua conta.');
         }
         linhas.push(`Convites: ${inv.remaining} de ${inv.total} disponíveis${inv.used ? ` (${inv.used} já usado${inv.used > 1 ? 's' : ''})` : ''}.`);
-        // A regra de premiação vem de quem paga o prêmio (porta premiacaoDoConvite);
-        // sem plugin, não há prêmio pra contar.
+        // The reward rule comes from whoever pays the reward (premiacaoDoConvite port);
+        // without a plugin, there is no reward to count.
         const premiacao = inv.code ? pecas.premiacaoDoConvite?.() : null;
         if (premiacao) linhas.push(premiacao);
         if (inv.code && inv.remaining <= 0) linhas.push('No momento você não tem convites restantes, então o código não vai deixar ninguém novo entrar até liberar mais.');
@@ -3603,11 +3603,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Lembrete proativo: o usuário pede pra ser avisado num MOMENTO futuro, num
-  // CANAL específico ("me manda no Telegram amanhã 14h..."). O agente resolve a
-  // data/hora pra ISO (o "agora" com timezone vai injetado no fim da mensagem) e
-  // escolhe o canal. Guardamos um lembrete de disparo ÚNICO; o scheduler entrega
-  // no horário. Não-gated: só manda mensagem pro próprio dono, baixo risco.
+  // Proactive reminder: the user asks to be notified at a future MOMENT, on a
+  // specific CHANNEL ("send it to me on Telegram tomorrow at 2pm..."). The agent resolves the
+  // date/time to ISO (the "now" with timezone is injected at the end of the message) and
+  // picks the channel. We store a SINGLE-fire reminder; the scheduler delivers it
+  // at the time. Not gated: it only sends a message to the owner themselves, low risk.
   registry.add({
     name: 'criar_lembrete',
     description: 'Schedules a reminder to be sent to the user themselves at a future moment, through the channel they ask for. It serves for a ONE-TIME trigger ("me lembra amanhã 14h de X") AND for a RECURRING fixed message ("me avise de hora em hora pra beber água", "de 5 em 5 min me lembra de X até as 18h"). Resolve the date/time to ISO 8601 in the user\'s LOCAL wall-clock time (e.g.: 2026-07-09T14:00:00), using the current time given at the end of the message ("it is now") as reference; `quando` is the FIRST trigger. Channels TODAY: telegram, email, whatsapp. Without an explicit channel, use this conversation\'s only if it has delivery available. Chat/app/device/slack do not deliver reminders yet: do NOT swap "aqui"/"neste canal" for Telegram or another destination. The tool reports the channels actually connected; ask the user to choose one and only then schedule. Pass `fuso` (IANA) only if the user is in a time zone different from the one of the current time ("it is now"). RECURRENCE: for daily/weekly/monthly/yearly at a local time, prefer `recorrencia` (e.g.: monthly every day 14, or daily interval 2 for every other day). Show the next occurrences. Do not simulate monthly with 30 days nor every other day with odd days. Fifth business day/holidays are not supported: explain before proposing an alternative. Do not combine recorrencia with repetir_cada_min/repetir_ate. For fixed-duration intervals, pass `repetir_cada_min` (every how many MINUTES: 5 = every 5 min, 60 = every hour, 1440 = every day). NEVER stack several criar_lembrete calls to simulate recurrence; use this parameter, which creates ONE row that reschedules itself. IMPORTANT RULE: if the recurrence is SHORTER than 1 day (repetir_cada_min < 1440), you MUST ask the user FOR HOW LONG they want it BEFORE scheduling (e.g.: "por quanto tempo? 2 dias? até as 18h?") and pass the end in `repetir_ate`; if it is >= 1 day (daily/weekly), you may leave it without `repetir_ate` (it runs until they tell you to stop). This reminder sends a FIXED MESSAGE; if what repeats needs to GENERATE new content each time (calendar summary, checking emails), use criar_rotina.',
@@ -3625,12 +3625,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       required: ['quando', 'mensagem'],
     },
     run: async ({ quando, mensagem, canal, fuso, repetir_cada_min, repetir_ate, recorrencia }) => {
-      // Recusa ANTES de createReminder = certeza de que nada foi gravado. Vai como
-      // { ok:false } para o recibo marcar 'failed' (não 'unknown'): assim uma
-      // 2ª tentativa bem-sucedida no mesmo turno esconde esta, em vez de a
-      // resposta final dizer "Pronto. Não consegui confirmar..." em cima do
-      // lembrete agendado (teste no chat web, 02/10/2026). O texto
-      // que o modelo lê continua o mesmo, dentro de `error`.
+      // Refusal BEFORE createReminder = certainty that nothing was saved. It goes as
+      // { ok:false } so the receipt marks 'failed' (not 'unknown'): this way a
+      // 2nd successful attempt in the same turn hides this one, instead of the
+      // final reply saying "Done. I couldn't confirm..." on top of the
+      // reminder that was scheduled (tested in the web chat, 2026-10-02). The text
+      // the model reads stays the same, inside `error`.
       const naoAgendado = error => JSON.stringify({ ok: false, error });
       const texto = String(mensagem || '').trim();
       if (!texto) return naoAgendado('Preciso do texto do lembrete.');
@@ -3650,8 +3650,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           ? 'Ainda não consigo entregar lembretes neste canal.' : 'Preciso confirmar o canal de entrega.';
         return naoAgendado(`${reason} Nada foi agendado.${available.length ? ` Você tem ${available.join(' e ')} ${available.length > 1 ? 'disponíveis' : 'disponível'}. Por qual prefere receber?` : ' Não consegui confirmar um canal de entrega disponível. Conecte Telegram ou WhatsApp em Conexões, ou confira o e-mail cadastrado.'}`);
       }
-      // Antes de setUserTimezone, consulta de canal e createReminder: nenhuma
-      // escrita é feita ao recusar a duplicação da entrega deste disparo.
+      // Before setUserTimezone, the channel query and createReminder: no
+      // write is made when refusing to duplicate the delivery of this firing.
       if (kind === 'routine' && ['whatsapp', 'telegram', 'email'].includes(routineChannel)) {
         const candidateChannel = defaultReminderChannel;
         let candidateWhen;
@@ -3661,7 +3661,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           return ROUTINE_REMINDER_CONFLICT;
         }
       }
-      // Fuso de um compromisso não muda silenciosamente o perfil inteiro.
+      // The timezone of one commitment doesn't silently change the whole profile.
       const effTz = fuso || userTz;
       let when, calendarCadence = null;
       try {
@@ -3675,7 +3675,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       } catch (e) { return naoAgendado(`Não agendei: ${e.message}`); }
       if (isNaN(when.getTime())) return naoAgendado('Não entendi a data/hora. Me diga de novo (ex: "amanhã às 14h").');
       if (when.getTime() < Date.now() - 60_000) return naoAgendado('Esse horário já passou. Me dê um momento no futuro.');
-      // O destino é vinculado ao pedido do usuário; não há fallback para outro canal.
+      // The destination is bound to the user's request; there's no fallback to another channel.
       const ch = defaultReminderChannel;
       if (ch === 'slack') {
         return naoAgendado(`Lembrete por Slack ainda não está disponível (estamos liberando). Posso te lembrar por *Telegram*, *WhatsApp* ou *e-mail*, qual você prefere?`);
@@ -3699,8 +3699,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       } else {
         return naoAgendado(`Canal "${ch}" não reconhecido. Use telegram, whatsapp ou email.`);
       }
-      // Recorrência (opcional). Sub-diário sem fim volta um pedido pra perguntar
-      // "por quanto tempo?" — nesse caso NÃO cria e devolve a pergunta ao dono.
+      // Recurrence (optional). Sub-daily with no end returns a request to ask
+      // "for how long?": in that case it does NOT create and returns the question to the owner.
       const rec = parseRecurrence({ repetirCadaMin: repetir_cada_min, repetirAte: repetir_ate, startMs: when.getTime(), tz: effTz });
       if (rec?.error) return naoAgendado(rec.error);
       const rem = await createReminder({
@@ -3714,7 +3714,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const savedRec = { stepMin: rem.repeat_every_min, untilIso: rem.repeat_until };
       const quandoFmt = new Date(rem.run_at).toLocaleString('pt-BR', { timeZone: effTz, dateStyle: 'short', timeStyle: 'short' });
       const canalLabel = rem.channel === 'telegram' ? 'Telegram' : rem.channel === 'whatsapp' ? 'WhatsApp' : 'e-mail';
-      // Sufixo de recorrência pra confirmação ficar clara.
+      // Recurrence suffix so the confirmation is clear.
       let recSuffix = '';
       if (rem.calendar_recurrence) {
         const c=rem.calendar_recurrence;
@@ -3729,15 +3729,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           ? `, repetindo a cada ${intervalLabel(savedRec.stepMin)} até ${ateFmt}`
           : `, repetindo a cada ${intervalLabel(savedRec.stepMin)} até você mandar parar`;
       }
-      // Já havia um lembrete idêntico pendente pra esse horário: não dupliquei.
+      // There was already an identical pending reminder for that time: did not duplicate.
       if (rem?.duplicate) return actionResult({ state: 'scheduled', id: rem.id, target: canalLabel, at: quandoFmt + recSuffix, subject: texto }, `Esse lembrete já estava agendado pra ${quandoFmt} (${canalLabel})${recSuffix}, então não criei outro igual.`);
       return actionResult({ state: 'scheduled', id: rem?.id, target: canalLabel, at: quandoFmt + recSuffix, subject: texto }, `Lembrete agendado pra ${quandoFmt} (${canalLabel})${recSuffix}. Vou te avisar: "${texto}".`);
     },
   });
-  // Envio IMEDIATO pro próprio dono, em QUALQUER canal conectado (Telegram, e-mail,
-  // WhatsApp) a partir de QUALQUER conversa. Diferente de criar_lembrete (que agenda
-  // pro futuro), este dispara na hora. Ex: estou conversando no Telegram e o usuário
-  // pede "me manda isso no WhatsApp agora". Não-gated: só manda pro próprio dono.
+  // IMMEDIATE send to the owner themselves, on ANY connected channel (Telegram, email,
+  // WhatsApp) from ANY conversation. Unlike criar_lembrete (which schedules
+  // for the future), this one fires right away. Ex: I'm chatting on Telegram and the user
+  // asks "send me this on WhatsApp now". Not gated: it only sends to the owner themselves.
   registry.add({
     name: 'enviar_mensagem',
     description: 'Sends a message NOW to the user THEMSELVES (only to them) on one of their connected channels (telegram, email or whatsapp), from any conversation. Use it when they ask you to send/forward something RIGHT AWAY to another channel OF THEIRS ("me manda no WhatsApp agora", "manda isso no meu e-mail", "me avisa no Telegram"). It does NOT serve to send a message to ANOTHER PERSON: there is no WhatsApp/Telegram sending to third parties on this platform, not even through the user\'s number. If they ask you to notify someone, say so honestly instead of trying. To SCHEDULE for the future use criar_lembrete. Write the message ready, as you want it to arrive. (slack is not enabled yet.)',
@@ -3753,12 +3753,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     run: async ({ canal, mensagem, para }) => {
       const texto = String(mensagem || '').trim();
       if (!texto) return 'Preciso do texto da mensagem.';
-      // Guarda determinística contra o bug do caso de 17/08: o usuário pediu
-      // pra mandar uma mensagem PRA OUTRA PESSOA ("envie para paula") e esta tool,
-      // que só entrega no canal do PRÓPRIO dono, mandou pro número dele mesmo
-      // devolvendo "enviada ✅" — o assistente então afirmou que a terceira pessoa
-      // recebeu. Envio pra terceiro não existe na plataforma, então aqui a tool
-      // recusa e devolve a verdade em vez de entregar no lugar errado.
+      // Deterministic guard against the 2026-08-17 incident: the user asked
+      // to send a message TO ANOTHER PERSON ("send it to paula") and this tool,
+      // which only delivers on the OWNER's own channel, sent it to the owner's own number,
+      // returning "sent ✅": the assistant then claimed the third party
+      // had received it. Sending to a third party doesn't exist on the platform, so here the tool
+      // refuses and returns the truth instead of delivering to the wrong place.
       const destinatario = String(para || '').trim();
       if (destinatario) {
         return `Não consigo mandar mensagem pra outra pessoa (${destinatario}): este canal entrega só pro próprio usuário, no WhatsApp/Telegram/e-mail dele. Diga isso a ele com clareza, sem prometer o envio. Se ele quiser que a outra pessoa receba, os caminhos reais são: ele mesmo encaminhar a mensagem no WhatsApp dele, ou (se o Google estiver conectado) você mandar um E-MAIL pra essa pessoa com a tool de e-mail, que aí sim aceita destinatário externo.`;
@@ -3778,19 +3778,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           if (!waEnabled()) return 'O canal WhatsApp não está disponível agora. Posso mandar por *Telegram* ou *e-mail*.';
           const link = await getWhatsAppLinkForUser(userId);
           if (!link || !link.wa_phone || link.enabled === false) return 'Você ainda não conectou o WhatsApp. Conecte seu número em *Conexões › WhatsApp* no app.';
-          // Dentro da janela de 24h vai como mensagem de sessão (preserva a
-          // formatação); fora dela cai no template aprovado (o de notificação),
-          // que achata listas, então o agente reescreve em texto corrido antes.
+          // Inside the 24h window it goes as a session message (preserves the
+          // formatting); outside it, it falls back to the approved template (the notification one),
+          // which flattens lists, so the agent rewrites it as running text first.
           const res = await sendWhatsAppProactive(link.wa_phone, texto, {
             retryUnknown: false,
             proseFallback: (t) => whatsappProse({ agent_id: agent.id, user_id: userId }, t),
           });
           if (kind === 'routine') await persistProactiveToThread({ agent_id: agent.id, user_id: userId, channel: ch }, texto);
-          // Reporta o que REALMENTE aconteceu. Antes isto devolvia "enviada ✅"
-          // fixo, inclusive quando a Meta dropava a mensagem depois; o assistente
-          // então garantia a entrega pro dono e inventava explicação (chegou a
-          // mandar gente "reconectar o QR Code", que nem existe: o canal é Cloud
-          // API). Se o envio falhar de vez, o throw cai no catch abaixo.
+          // Reports what REALLY happened. Before, this always returned "sent ✅"
+          // even when Meta dropped the message afterward; the assistant
+          // would then guarantee delivery to the owner and make up an explanation (it even
+          // told people to "reconnect the QR Code", which doesn't even exist: the channel is Cloud
+          // API). If the send fails outright, the throw falls into the catch below.
           if (res?.via === 'template') {
             return actionResult({ state: 'accepted', id: res?.wamid, target: 'seu WhatsApp (notificação)', subject: texto }, 'Envio aceito como notificação; entrega/leitura não confirmadas. Fora da janela de conversa, o formato é texto corrido; responder no WhatsApp reabre a janela.');
           }
@@ -3816,12 +3816,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     },
   });
-  // Checagem PURA dos argumentos de rotina. Roda no `preflight` (ANTES do cartão
-  // de confirmação) e de novo na execução. Existe porque o cartão descreve os
-  // args CRUS: com hora 25 ou dia da semana que não existe, o dono confirmava uma
-  // rotina que a tool ia recusar logo depois, e a recusa ainda chegava nele como
-  // "✅ Rotina criada" (o renderConfirmed redige pelo describeDone, não pelo texto
-  // que a tool devolveu). Erro de argumento agora nem chega a virar pedido.
+  // PURE check of routine arguments. Runs in `preflight` (BEFORE the confirmation
+  // card) and again at execution. Exists because the card describes the
+  // RAW args: with hour 25 or a weekday that doesn't exist, the owner would confirm a
+  // routine the tool would refuse right after, and the refusal still reached them as
+  // "✅ Routine created" (renderConfirmed writes from describeDone, not from the text
+  // the tool returned). An argument error now doesn't even become a request anymore.
   const checarArgsRotina = ({ hora, minuto, dias, dias_da_semana, dias_do_mes, semana_do_mes, canal, repetir_cada_min, repetir_ate } = {}) => {
     const horario = parseRoutineTime({ hora, minuto });
     if (horario.error) return horario.error;
@@ -3835,26 +3835,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (rec?.error) return rec.error;
     return null;
   };
-  // Rotina RECORRENTE: o usuário pede um comportamento PERMANENTE, que se repete
-  // por horário ("todo dia de manhã", "toda segunda", "a partir de hoje sempre
-  // X"). Diferente de criar_lembrete (disparo ÚNICO), a rotina acorda o próprio
-  // assistente no horário marcado e roda uma INSTRUÇÃO (com todas as tools). Ex:
-  // uma rotina diária "olhe minha agenda de hoje e crie um lembrete 5 min antes
-  // de cada reunião" se auto-renova todo dia sozinha, sem o usuário refazer nada.
-  // É a ferramenta certa pra "sempre/todo dia/antes de cada reunião" — NÃO empilhe
-  // vários criar_lembrete pra cobrir dias futuros. GATED: criar uma rotina é uma
-  // ação recorrente que afeta o mundo do dono (dispara sozinha, roda com todas as
-  // tools, pode mandar mensagem no WhatsApp), então passa pela trava de confirmação
-  // (addGated) — o dono confirma antes de valer. Isso impede que a rotina seja
-  // criada a partir de texto de EXEMPLO/citado (um testemunho de outra pessoa colado
-  // na conversa) sem o dono querer de fato (incidente 24/07: um exemplo do Panelinha
-  // virou rotina de WhatsApp sem o dono pedir).
+  // RECURRING routine: the user asks for a PERMANENT behavior, repeating
+  // on a schedule ("every day in the morning", "every Monday", "from today on, always
+  // X"). Unlike criar_lembrete (single fire), the routine wakes the assistant
+  // itself at the set time and runs an INSTRUCTION (with all the tools). Ex:
+  // a daily routine "look at my agenda for today and create a reminder 5 min before
+  // each meeting" renews itself every day on its own, with no need for the user to redo anything.
+  // It's the right tool for "always/every day/before each meeting"; do NOT stack
+  // several criar_lembrete calls to cover future days. GATED: creating a routine is a
+  // recurring action that affects the owner's world (it fires on its own, runs with all the
+  // tools, can send a WhatsApp message), so it goes through the confirmation guard
+  // (addGated): the owner confirms before it takes effect. This stops a routine from being
+  // created from EXAMPLE/quoted text (someone else's testimonial pasted
+  // into the conversation) without the owner actually wanting it (incident 2026-07-24: an example from Panelinha
+  // turned into a WhatsApp routine without the owner asking for it).
   // Routine delivery channel. 'app' = pushes to no channel: the text stays
   // saved in the routine's ⏰ thread, inside the app (the same 'none' the DB has
   // always stored for a routine without delivery; an existing value).
   // Being a CHOOSABLE VALUE is what lets the owner ASK for "deliver only in the
   // app" in an edit: before, omitting the channel in editar_rotina meant "leave
-  // it", so a WhatsApp delivery couldn't be undone. Case of 09/08→09/09: the
+  // it", so a WhatsApp delivery couldn't be undone. Case of 2026-08-09→2026-09-09: the
   // request had nowhere to fit in the schema, became free text in the prompt, the
   // routine kept firing on WhatsApp and the screen still showed ✅.
   const normalizarCanalRotina = (canal) => {
@@ -3891,8 +3891,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       required: ['titulo', 'o_que_fazer','tipo'],
     },
-    supersedeKey: routineSupersedeKey, // re-proposta da mesma rotina fecha o cartão velho
-    // Recusa ANTES do cartão: argumento inválido não vira pedido de confirmação.
+    supersedeKey: routineSupersedeKey, // re-proposing the same routine closes the old card
+    // Refusal BEFORE the card: an invalid argument doesn't become a confirmation request.
     preflight: async (args = {}) => {
       if (!String(args.titulo || '').trim()) return { erro: 'Falta o título da rotina.' };
       if (!String(args.o_que_fazer || '').trim()) return { erro: 'Falta dizer o que a rotina deve fazer.' };
@@ -3904,8 +3904,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       try {
         const config=prepareRoutineChange(null,{tipo:args.tipo,curadoria:args.curadoria,busca_email:args.busca_email,prompt:args.o_que_fazer,channel:args.canal});
         if(config?.email_search){
-          // A rotina só nasce se a consulta gravada RODA: testa agora, com a
-          // mesma consulta, e o dono confirma vendo quantos e-mails ela acha.
+          // The routine only gets created if the saved query RUNS: it tests now, with the
+          // same query, and the owner confirms by seeing how many emails it finds.
           const es=config.email_search;
           let r;
           try { r=await executeEmailSearch(es,{token:emailSearchToken(es),bodyLimit:0,cap:50}); }
@@ -3916,9 +3916,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }catch(e){return {erro:e.message};}
     },
     run: async ({ titulo, o_que_fazer, hora, minuto, dias, dias_da_semana, dias_do_mes, semana_do_mes, fuso, canal, repetir_cada_min, repetir_ate, tipo, curadoria, busca_email }) => {
-      // Falha aqui volta como {ok:false}: string crua vira "✅ Rotina criada" na
-      // tela do dono (o renderConfirmed redige pelo describeDone e joga fora o
-      // texto), ou seja, ele acreditaria numa rotina que não existe.
+      // A failure here comes back as {ok:false}: raw string becomes "✅ Routine created" on the
+      // owner's screen (renderConfirmed writes from describeDone and discards the
+      // text), meaning they would believe in a routine that doesn't exist.
       try {prepareRoutineChange(null,{tipo,curadoria,busca_email,prompt:o_que_fazer,channel:canal});}catch(e){return {ok:false,error:e.message};}
       const title = String(titulo || '').trim();
       const prompt = String(o_que_fazer || '').trim();
@@ -3927,7 +3927,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const horario = parseRoutineTime({ hora, minuto });
       if (horario.error) return { ok: false, error: horario.error };
       const h = horario.hour ?? 7, min = horario.hour === undefined ? 0 : horario.minute;
-      // A cadência é DADO (coluna days), nunca condição escrita no texto da rotina.
+      // The cadence is DATA (the days column), never a condition written in the routine's text.
       const cad = normalizeRoutineDays({ dias, dias_da_semana, dias_do_mes, semana_do_mes });
       if (cad.error) return { ok: false, error: cad.error };
       const days = cad.days || 'daily';
@@ -3936,27 +3936,27 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const saved = await setUserTimezone(userId, fuso);
         if (saved) tz = saved;
       }
-      // canal ausente (ou 'app') = 'none' → a rotina roda e age por conta própria
-      // (cria lembretes etc.) e o texto fica só no app, sem empurrar em canal nenhum.
+      // missing channel (or 'app') = 'none' -> the routine runs and acts on its own
+      // (creates reminders etc.) and the text stays only in the app, without pushing to any channel.
       const canalNovo = normalizarCanalRotina(canal);
       if (canalNovo.error) return { ok: false, error: canalNovo.error };
       const ch = canalNovo.ch || 'none';
-      // Recorrência por INTERVALO (opcional). Sub-diário sem fim devolve o pedido de
-      // "por quanto tempo?" e NÃO cria.
+      // Recurrence by INTERVAL (optional). Sub-daily with no end returns the request for
+      // "for how long?" and does NOT create.
       const rec = parseRecurrence({ repetirCadaMin: repetir_cada_min, repetirAte: repetir_ate, startMs: Date.now(), tz });
       if (rec?.error) return { ok: false, error: rec.error };
       if (rec?.stepMin) {
-        // Modo intervalo: primeiro disparo daqui a um intervalo (não dispara na hora).
+        // Interval mode: first fire happens one interval from now (doesn't fire immediately).
         const nextRun = new Date(Date.now() + rec.stepMin * 60_000).toISOString();
         const r = await createRoutine({
           userId, agentId: agent.id, title, prompt, curation:curadoria, emailSearch:busca_email, hour: h, minute: min, days, tz, channel: ch,
           repeatEveryMin: rec.stepMin, repeatUntil: rec.untilIso, nextRun,
         });
         if (!r) return { ok: false, error: 'Não consegui criar a rotina agora.' };
-        // A rotina OFERECIDA existir é a aceitação da oferta (ver livro de ofertas
-        // em db.mjs). Fechar no fato, e não no "pode sim" da conversa, tira do
-        // modelo a leitura de intenção; mandar junto o assistente e o título é o
-        // que impede uma rotina qualquer de fechar oferta de outro assunto.
+        // The OFFERED routine existing is the acceptance of the offer (see the offers book
+        // in db.mjs). Closing on the fact, instead of on the "sure" in the conversation, takes away the
+        // model's reading of intent; sending the assistant and the title along is what
+        // stops any random routine from closing an offer about a different subject.
         await acceptRoutineOffers({ userId, agentId: agent.id, routineId: r.id, titulo: title });
         const ateFmt = rec.untilIso
           ? new Date(rec.untilIso).toLocaleString('pt-BR', { timeZone: tz, dateStyle: 'short', timeStyle: 'short' })
@@ -3964,10 +3964,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const janela = ateFmt ? `até ${ateFmt}` : 'até você mandar parar';
         return `Rotina "${title}" criada: roda a cada ${intervalLabel(rec.stepMin)} ${janela} (${tz}). Primeira vez daqui a ${intervalLabel(rec.stepMin)}.`;
       }
-      // Modo HORÁRIO também aceita fim de janela. Antes o `repetir_ate` só era lido
-      // junto com `repetir_cada_min` (parseRecurrence devolve null sem intervalo), ou
-      // seja: quem pedia "todo dia às 5h ATÉ dia 29" tinha o "até dia 29" descartado
-      // em silêncio e a rotina seguia pra sempre.
+      // SCHEDULE mode also accepts a window end. Before, `repetir_ate` was only read
+      // together with `repetir_cada_min` (parseRecurrence returns null without an interval), which
+      // meant: whoever asked for "every day at 5am UNTIL the 29th" had "until the 29th" silently
+      // discarded and the routine kept going forever.
       let untilIso = null;
       const ateHorario = String(repetir_ate || '').trim();
       if (ateHorario) {
@@ -3985,13 +3985,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Rotina "${title}" criada: roda ${routineDaysLabel(days)} às ${routineTimeLabel(h, min)} (${tz})${janelaFmt}. Vou executar sozinho a partir da próxima vez que der o horário.`;
     },
   }], thread.id);
-  // ── Identidade da rotina ────────────────────────────────────────────────────
-  // Título NÃO é chave: o dono pode ter duas rotinas com o MESMO título exato, e
-  // aí "achei mais de uma, qual você quer?" é pergunta sem resposta possível (as
-  // duas se chamam igual) — ele ficava sem conseguir cancelar nem editar nenhuma
-  // das duas (sugestão de um usuário, 30/08). Por isso toda rotina ganha um CÓDIGO
-  // curto estável (prefixo do uuid, ampliado só se colidir), que aparece no
-  // listar_rotinas e que cancelar_rotina/editar_rotina aceitam em `id`.
+  // ── Routine identity ────────────────────────────────────────────────────
+  // Title is NOT a key: the owner can have two routines with the EXACT SAME title, and
+  // then "I found more than one, which one do you mean?" is a question with no possible answer (the
+  // two have the same name); they ended up unable to cancel or edit either
+  // one (a user's suggestion, 2026-08-30). That's why every routine gets a short, stable
+  // CODE (uuid prefix, extended only on collision), which shows up in
+  // listar_rotinas and which cancelar_rotina/editar_rotina accept as `id`.
   const routineCode = (r, rows) => {
     const id = String(r?.id || '');
     let n = 4;
@@ -4000,18 +4000,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   };
   const routineDiasLabel = (d) => routineDaysLabel(d);
   const routineCadence = (r) => {
-    // Janela de fim aparece nos dois modos: é o que o dono precisa ver pra saber
-    // que a rotina tem prazo (e não sair cancelando na mão achando que é eterna).
+    // The window end shows up in both modes: it's what the owner needs to see to know
+    // the routine has a deadline (so they don't go cancel it by hand thinking it's eternal).
     const ate = r.repeat_until
       ? ` até ${new Date(r.repeat_until).toLocaleString('pt-BR', { timeZone: userTz, dateStyle: 'short', timeStyle: 'short' })}`
       : '';
     if (r.repeat_every_min) return `a cada ${intervalLabel(r.repeat_every_min)}${ate}`;
     return `${routineDiasLabel(r.days)} às ${routineTimeLabel(r.hour, r.minute)}${ate}`;
   };
-  // Resolve QUAL rotina a chamada quer: por código (`id`, exato/prefixo) ou por
-  // título (contém). Devolve { row } ou { err } com uma saída ACIONÁVEL: na
-  // ambiguidade lista os candidatos com código + cadência + canal, pra o dono
-  // conseguir escolher mesmo quando os títulos são idênticos.
+  // Resolves WHICH routine the call means: by code (`id`, exact/prefix) or by
+  // title (contains). Returns { row } or { err } with an ACTIONABLE output: on
+  // ambiguity it lists the candidates with code + cadence + channel, so the owner
+  // can choose even when the titles are identical.
   const resolveRoutine = (rows, { id, titulo, verbo, tool }) => {
     const code = String(id || '').trim().toLowerCase().replace(/^#/, '');
     if (code) {
@@ -4041,8 +4041,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const rows = await listRoutinesForUser(userId);
       if (!rows.length) return 'Você não tem nenhuma rotina configurada.';
       const lines = rows.map((r) => {
-        // A entrega aparece SEMPRE, inclusive quando é só-app: sem isso o dono
-        // pergunta "onde essa rotina me avisa?" e o estado real fica invisível.
+        // Delivery shows up ALWAYS, even when it's app-only: without this the owner
+        // asks "where does this routine notify me?" and the real state stays invisible.
         const info = routineExecutionInfo(r);
         const tentativa = info ? ` Última tentativa — ${routineExecutionText(r)}${['failed','partial','uncertain','interrupted'].includes(info.status) ? ' Confira o conteúdo e o estado de entrega antes de repetir.' : ''}` : '';
         return `• #${routineCode(r, rows)} ${r.enabled === false ? '(pausada) ' : ''}"${r.title}" — ${routineCadence(r)}. ${routineChannelText(r)}.${tentativa} ${String(r.prompt || '').slice(0, 120)}${r.config?.curation?'\nCritérios atuais (para editar sem perder preferências): '+JSON.stringify(editableCuration(r.config.curation))+'\nPedido completo: '+r.prompt:''}${r.config?.email_search?'\nBusca de e-mail (a plataforma executa; edite via busca_email): '+describeEmailSearch(r.config.email_search)+' Parâmetros: '+JSON.stringify(editableEmailSearch(r.config.email_search)):''}`;
@@ -4050,10 +4050,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Rotinas configuradas:\n${lines.join('\n')}`;
     },
   });
-  // A rotina já foi autorizada pelo dono quando foi criada. Se ele pedir de
-  // forma explícita pra testar/rodar agora, deixa o próprio assistente disparar
-  // a execução real — o endpoint web já tinha essa capacidade, mas ela não
-  // existia no registry e o assistente era obrigado a dizer que não conseguia.
+  // The routine was already authorized by the owner when it was created. If they explicitly
+  // ask to test/run it now, let the assistant itself fire
+  // the real execution; the web endpoint already had this capability, but it
+  // didn't exist in the registry and the assistant was forced to say it couldn't.
   registry.add({
     name: 'executar_rotina_agora',
     description: 'Runs NOW an existing routine of the user themselves and makes the REAL delivery on the configured channel. Use it only when the owner explicitly asks "rode agora", "execute agora" or "teste minha rotina". Locate it by the title or by the code returned by listar_rotinas. Do not create another routine and do not imitate the task manually: this tool uses the same executor and the same delivery as the scheduler. The manual run counts as the day\'s run, so the automatic time does not fire the same routine again today. If it fails or ends up uncertain, do NOT retry automatically: report the state and ask them to check before a new attempt.',
@@ -4103,9 +4103,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     },
   });
-  // Agenda UMA execução real futura da rotina existente. Isto não é lembrete:
-  // no horário o scheduler roda o mesmo executor, gera conteúdo novo e entrega
-  // no canal já configurado, sem tocar na cadência normal.
+  // Schedules ONE real future execution of the existing routine. This is not a reminder:
+  // at the time the scheduler runs the same executor, generates new content and delivers it
+  // on the already configured channel, without touching the normal cadence.
   registry.add({
     name:'agendar_execucao_rotina',
     description:'Schedules ONE EXTRA, future run of an existing recurring routine, without changing its normal days/time. Use it when the owner asks "rode esta rotina hoje às 14h10", "agende um teste extra" or equivalent. This tool really runs the routine at the time and delivers on the channel it already has configured. NEVER use criar_lembrete to fire a routine: a reminder only sends fixed text and runs nothing. For right now, use executar_rotina_agora. To change the normal cadence, use editar_rotina.',
@@ -4136,7 +4136,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return actionResult({state:'routine_scheduled',id:job.id,target:canal,at,subject:routine.title},msg);
     },
   });
-  // Cancela (apaga) uma rotina, por título ou por código.
+  // Cancels (deletes) a routine, by title or by code.
   registry.add({
     name: 'cancelar_rotina',
     description: 'Cancels (removes) one of the user\'s recurring routines. Pass the title of the routine (or part of it) they want to stop, OR the `id` (the #xxxx code that appears in listar_rotinas) when the title does not distinguish it. Use it ONLY when they want to STOP a routine FOR GOOD ("para de fazer X todo dia", "cancela a rotina de reuniões"). If they only want to CHANGE/REFORMAT an existing routine (switch channel, time, days, text or format), do NOT cancel it to recreate; use editar_rotina, which changes it in place without leaving the owner without the routine. If the title matches more than one routine, the tool returns the candidates with code and cadence: show them to the owner and call again with `id`.',
@@ -4157,13 +4157,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Rotina "${sel.row.title}" (#${routineCode(sel.row, rows)}, ${routineCadence(sel.row)}) cancelada. Não vou mais executá-la.`;
     },
   });
-  // Edita uma rotina que JÁ EXISTE, no lugar (sem apagar e recriar). Corrige o
-  // buraco em que "reformatar uma rotina" virava cancelar_rotina (imediato) +
-  // criar_rotina (gated/pendente), deixando o dono sem rotina nenhuma enquanto a
-  // nova esperava confirmação (sugestão do usuário 06/08). Mudanças e retomada
-  // seguem gated como criar_rotina. PAUSAR, sozinho, roda direto: é reversível,
-  // reduz automação/custo e pedir um segundo "sim" foi justamente o bug que se viu.
-  // Passa só os campos que mudam.
+  // Edits a routine that ALREADY EXISTS, in place (without deleting and recreating). Fixes the
+  // gap where "reshaping a routine" turned into cancelar_rotina (immediate) +
+  // criar_rotina (gated/pending), leaving the owner with no routine at all while the
+  // new one waited for confirmation (user suggestion, 2026-08-06). Changes and resuming
+  // stay gated like criar_rotina. PAUSING, by itself, runs directly: it's reversible,
+  // it reduces automation/cost, and asking for a second "yes" was exactly the bug that was seen.
+  // Only the fields that change are passed.
   addGated(registry, [{
     name: 'editar_rotina',
     description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) happens right away and returns the real receipt; do not ask for a second confirmation. Resuming or changing anything else still waits for confirmation. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same confirmation authorizes applying the edit and only then testing the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
@@ -4190,18 +4190,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       required: [],
     },
-    // Desligar sozinho e reversivel e reduz efeito/custo. A excecao e
-    // deliberadamente por lista de chaves: `ativa:false` nunca pode carregar
-    // junto uma troca de horario, prompt, canal, titulo ou criterios.
+    // Turning off by itself is reversible and reduces effect/cost. The exception is
+    // deliberately by key list: `ativa:false` can never carry along
+    // a change of time, prompt, channel, title or criteria.
     runWithoutConfirmation: isPauseOnlyRoutineChange,
     normalizeConfirmationArgs: async (args = {}) => {
       const sel = resolveRoutine(await listRoutinesForUser(userId), {id:args.id,titulo:args.titulo,verbo:'alterar',tool:'editar_rotina'});
       if (sel.err) return {erro:sel.err};
       return {args:{...args,id:sel.row.id,expected:routineConfirmationSnapshot(sel.row)}};
     },
-    // Antes do cartão: acha a rotina de verdade (leitura) e recusa argumento
-    // inválido. Sem isto o dono confirmava "alterar a rotina X" com um título que
-    // não existe (ou ambíguo) e só depois vinha a recusa, disfarçada de ✅.
+    // Before the card: actually finds the routine (read) and refuses an invalid
+    // argument. Without this the owner would confirm "change routine X" with a title that
+    // doesn't exist (or is ambiguous), and only afterward would the refusal come, disguised as a ✅.
     preflight: async (args = {}) => {
       if(args.testar_agora!==undefined&&typeof args.testar_agora!=='boolean')return {erro:'testar_agora deve ser booleano.'};
       const erro = checarArgsRotina(args);
@@ -4212,8 +4212,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (sel.err) return { erro: sel.err };
       if (args.expected && confirmationFingerprint(args.expected) !== confirmationFingerprint(routineConfirmationSnapshot(sel.row))) return {erro:'A rotina mudou desde a proposta. Confira e proponha novamente.'};
       const testNotice=args.testar_agora ? ` Depois de aplicar, vou testar agora com entrega ${entregaLabel(args.canal || sel.row.channel)}.` : '';
-      // O cartão cita o título que o modelo escreveu, que pode ser um pedaço do
-      // nome real; dizer qual rotina foi encontrada evita confirmar a errada.
+      // The card quotes the title the model wrote, which may be a fragment of the
+      // real name; saying which routine was found avoids confirming the wrong one.
       try {
         const config=prepareRoutineChange(sel.row,{curadoria:args.curadoria,busca_email:args.busca_email,prompt:args.o_que_fazer,channel:args.canal});
         if(config || sel.row.config?.curation || sel.row.config?.email_search){
@@ -4263,9 +4263,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         catch { return {ok:false,error:'Fuso horário inválido.'}; }
         fields.tz = fuso; tz = fuso;
       }
-      // Fim da janela: data nova, ou "sempre"/"nunca" pra tirar o prazo e deixar
-      // a rotina aberta. Sem isso, uma rotina com prazo não teria como voltar a
-      // ser permanente sem apagar e recriar.
+      // Window end: a new date, or "always"/"never" to remove the deadline and leave
+      // the routine open-ended. Without this, a routine with a deadline would have no way to go back to
+      // being permanent without deleting and recreating it.
       const ateEdit = String(repetir_ate || '').trim();
       if (ateEdit) {
         if (/^(sempre|nunca|indefinid|sem fim|sem prazo)/i.test(ateEdit)) fields.repeat_until = null;
@@ -4279,9 +4279,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (!Object.keys(fields).length) {
         return { ok: false, error: 'Você não passou nenhuma mudança. Diga o que quer alterar na rotina (canal, horário, dias, texto ou nome).' };
       }
-      // Só conta como mudança o que ficou DIFERENTE do que está gravado. Sem isso,
-      // "muda pro WhatsApp" numa rotina que já é WhatsApp saía com ✅ de alteração
-      // feita, e o ✅ deixava de significar alguma coisa.
+      // Only what ended up DIFFERENT from what's saved counts as a change. Without this,
+      // "switch to WhatsApp" on a routine that's already WhatsApp would come out with a ✅ of a change
+      // made, and the ✅ would stop meaning anything.
       for (const k of Object.keys(fields)) {
         if (k!=='curation' && k!=='emailSearch' && String(cur[k] ?? '') === String(fields[k] ?? '')) delete fields[k];
       }
@@ -4293,13 +4293,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const now = updated.routine || { ...cur, ...fields };
       const rotulos = { enabled:ativa?'a ativação':'a pausa', curation:'os critérios da curadoria', emailSearch:'os parâmetros da busca de e-mail', title: 'o nome', prompt: 'o que ela faz', hour: 'o horário', minute: 'o horário', days: 'os dias', tz: 'o fuso', channel: 'o canal de entrega', repeat_until: 'até quando ela repete' };
       const mudou = [...new Set(Object.keys(fields).map((k) => rotulos[k] || k))];
-      // O texto que o dono LÊ depois de confirmar é este `saida`: o ✅ acima dele é
-      // uma frase fixa (describeDone), que diz "atualizada" sem dizer o quê. Por isso
-      // aqui vai (a) exatamente o que mudou e (b) onde a rotina entrega AGORA, mesmo
-      // quando a entrega não foi o que mudou — é a linha que teria mostrado, no caso
-      // de 09/09, que a rotina continuava saindo no WhatsApp.
-      // routineCadence (e não dias+hora) porque a rotina pode ser por INTERVALO,
-      // e aí "às 00h" seria uma cadência que não existe.
+      // The text the owner READS after confirming is this `saida`: the ✅ above it is
+      // a fixed phrase (describeDone), which says "updated" without saying what. That's why
+      // this one carries (a) exactly what changed and (b) where the routine delivers NOW, even
+      // when delivery wasn't what changed: it's the line that would have shown, in the
+      // case of 2026-09-09, that the routine kept going out on WhatsApp.
+      // routineCadence (and not days+time) because the routine can be by INTERVAL,
+      // in which case "at 00h" would be a cadence that doesn't exist.
       let testMessage='';
       if(testar_agora){
         if(!updated.routine)testMessage=' Não consegui confirmar a versão salva para o teste; nenhum teste foi iniciado.';
@@ -4312,11 +4312,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       };
     },
   }], thread.id);
-  // ── OFERTA DE ROTINA: a única porta pra sugerir um agendamento ──────────────
-  // O registro no livro de ofertas é efeito colateral do MECANISMO, não disciplina
-  // do modelo: quem não passa por aqui não ofereceu, e quem passa fica registrado
-  // pro /broadcast ver (e vice-versa). Não é gated: oferecer é falar, não agir; o
-  // que cria rotina de verdade (criar_rotina) esse sim é gated.
+  // ── ROUTINE OFFER: the only port for suggesting a schedule ──────────────
+  // The record in the offers book is a side effect of the MECHANISM, not the model's
+  // discipline: whoever doesn't go through here didn't make an offer, and whoever does gets recorded
+  // for /broadcast to see (and vice versa). It's not gated: offering is speaking, not acting; what
+  // actually creates a routine (criar_rotina), that one is gated.
   registry.add({
     name: 'oferecer_rotina', keepsStepText: true,
     description: 'Records that you are going to SUGGEST to the owner leaving something running on its own (a recurring routine/reminder), and only then do you make the invitation in your own words. It is the ONLY way to offer a schedule: never suggest a routine without calling this first, because it is what keeps the team from offering the same thing again two days later. Call it when the CURRENT topic opens the door: they repeated a request, said "todo dia"/"toda semana", or are dealing with something that could be left running (including the pattern your internal context indicates). Never out of nowhere nor changing the subject. If the tool answers that you cannot, do NOT offer and carry on the conversation normally. This does NOT create the routine; if they agree, then use criar_rotina.',
@@ -4340,9 +4340,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return ofertaRegistrada(t);
     },
   });
-  // Opt-out DURO, na palavra do dono. Vale pros dois caminhos: some do prompt dele
-  // e bloqueia o envio pelo painel. Não é gated porque desligar uma sugestão é o
-  // pedido dele sendo cumprido na hora, não uma ação sobre o mundo dele.
+  // HARD opt-out, on the owner's word. Applies to both paths: it disappears from their prompt
+  // and blocks sending from the panel. It's not gated because turning off a suggestion is their
+  // request being fulfilled right away, not an action on their world.
   registry.add({
     name: 'dispensar_oferta_de_rotina',
     description: 'Marks that the owner does NOT want to be offered leaving things running on their own. Call it when they say so clearly ("não me ofereça rotina", "para de sugerir automação", "não quero nada automático"). After this nobody offers again, neither you nor the team. If they declined only one TYPE ("não quero resumo de agenda, mas o resto pode"), pass the corresponding padrao; without padrao, it applies to everything. Do not use it out of doubt or because they just let it pass: only on an explicit refusal.',
@@ -4363,10 +4363,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         : `Registrado: não sugerir mais ofertas do tipo ${p}. Confirme em uma linha e siga.`;
     },
   });
-  // Lista os lembretes PENDENTES do dono. Importante pra eu enxergar o ESTADO
-  // REAL (não confiar só na memória da conversa): quando o usuário perguntar
-  // "quais lembretes eu tenho", ou ANTES de criar/cancelar, consulto aqui a
-  // verdade do banco. Assim, se algo mudou por fora, eu vejo ao consultar.
+  // Lists the owner's PENDING reminders. Important so I can see the REAL
+  // STATE (not just trust the conversation's memory): when the user asks
+  // "what reminders do I have", or BEFORE creating/canceling, I check here the
+  // database's truth. This way, if something changed from the outside, I see it when I query.
   registry.add({
     name: 'listar_lembretes',
     description: 'Looks up the user\'s reminders, one-time or recurring, with the next date and the last delivery result. Use it ALWAYS before cancelling/creating several and when they ask which reminders they have. To know whether a reminder was sent or failed, pass incluir_historico=true: it includes the processed and cancelled ones from the last 30 days (up to 200 records). Accepted by the channel does NOT prove delivery or reading. An uncertain result does NOT authorize resending automatically. This is the source of truth; do not rely only on the conversation\'s memory.',
@@ -4380,10 +4380,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     },
   });
   for (const tool of reminderManagementTools({userId,timeZone:userTz,list:listRemindersForUser,cancel:cancelReminder,reschedule:rescheduleReminder})) registry.add(tool);
-  // Rename do próprio assistente: o dono pode querer trocar o nome do agente.
-  // A troca vale já na próxima mensagem (o system prompt é montado do nome no
-  // banco a cada turno) e o nome antigo fica guardado em former_names, virando
-  // uma linha de "alias" no prompt pra ele não se confundir com o histórico.
+  // Renaming the assistant itself: the owner may want to change the agent's name.
+  // The change takes effect right on the next message (the system prompt is built from the name in the
+  // database every turn) and the old name is kept in former_names, becoming
+  // an "alias" line in the prompt so it doesn't get confused by the history.
   registry.add({
     name: 'renomear_assistente',
     description: 'Changes YOUR own name (this assistant\'s name) to whatever the user asks. Use it ONLY when they explicitly ask you to change your name ("muda seu nome pra X", "quero te chamar de Y", "seu nome agora é Z"). The change applies from the next message on: the system starts presenting you with the new name and keeps the old one so you recognize yourself in the history. Do NOT call it on your own nor suggest changing your name; only when they ask. After changing, confirm the new name to the user.',
@@ -4401,10 +4401,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Pronto, agora eu me chamo ${r.name}${r.old ? ` (antes ${r.old})` : ''}. Vale a partir da próxima mensagem; pode me chamar assim de agora em diante.`;
     },
   });
-  // Sugestões da tela inicial: quando o usuário pede pra ATUALIZAR/renovar as
-  // sugestões, o agente olha o contexto recente dele (e-mails, agenda, conversa)
-  // e reescreve o box "Sugestões" chamando esta tool. Substitui as sugestões
-  // atuais deste assistente pelas novas (não acumula).
+  // Home-screen suggestions: when the user asks to UPDATE/refresh the
+  // suggestions, the agent looks at their recent context (emails, calendar, conversation)
+  // and rewrites the "Suggestions" box by calling this tool. Replaces this
+  // assistant's current suggestions with the new ones (doesn't accumulate).
   registry.add({
     name: 'atualizar_sugestoes',
     description: 'Rewrites the "Sugestões" box on the user\'s home screen with new, concrete, actionable suggestions. Use it when the user asks to update/refresh the suggestions, or when you have grounds (emails, calendar, conversation) to propose something more useful than what is there. Replaces the current suggestions (does not accumulate). Pass 2 to 4 short suggestions, each a clear action they can act on (e.g.: "Responder o e-mail do fornecedor sobre a reunião de quinta").',
@@ -4427,9 +4427,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Tools the operator plugs in through the tools port (e.g. a feedback-to-team
   // or a store catalog tool). Each one's gate lives in ferramentas.vetar().
   for (const t of ferramentas.doTurno({ userId, agentId: agent.id })) registry.add(t);
-  // Consciência da conta: o agente enxerga o que está conectado/ligado (a mesma
-  // tela de Conexões que o usuário vê no app) e pode responder sobre isso pela
-  // conversa. Não-gated: só lê o estado da própria conta do dono.
+  // Account awareness: the agent sees what's connected/turned on (the same
+  // Connections screen the user sees in the app) and can answer about it through the
+  // conversation. Not gated: it only reads the state of the owner's own account.
   registry.add({
     name: 'status_conta',
     description: `Shows what is connected and turned on in the user's account: Google services (Gmail/Calendar/Drive/Docs) and the permission for AD-HOC sending through the user's Gmail, Microsoft (Hotmail/Outlook: email + calendar), GitHub, Slack, MCP connectors, Telegram, WhatsApp, media preferences and time zone. This tool does NOT report nor control the automatic email delivery of routines, which is done separately by the ${marca().nome} platform and does not use the user's Gmail. Use it ALWAYS when the user asks what they have connected/turned on ("meu Gmail tá conectado?", "posso enviar pelo meu Gmail?", "meu Slack tá conectado?", "o que eu já conectei?", "minhas configurações").`,
@@ -4439,9 +4439,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const gsvc = await connectedServices(userId, gEmail);
       if (gsvc.length) {
         const nome = { gmail: 'Gmail', calendar: 'Agenda', drive: 'Drive', docs: 'Docs' };
-        // NOMEIA a conta em uso. Sem isso, com duas contas conectadas o
-        // assistente só via "Google: conectado" e mandava o dono conectar uma
-        // conta que ele JÁ tinha conectado, num loop.
+        // NAMES the account in use. Without this, with two accounts connected the
+        // assistant would only see "Google: connected" and tell the owner to connect an
+        // account they had ALREADY connected, in a loop.
         lines.push(`• Google: conectado como ${gEmail || 'sua conta'} (${gsvc.map((s) => nome[s] || s).join(', ')}).`);
         const outras = gAccounts.filter((a) => a.google_email !== gEmail);
         if (outras.length) {
@@ -4452,9 +4452,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         } else if (caps.gmail?.read) {
           lines.push('  ↳ Gmail está só como leitura/rascunho; envio exige reconectar o Google com escopo de escrita.');
         }
-        // Marcadores/filtros do Gmail (gmail.labels/settings.basic) foram removidos
-        // dos escopos em 12/08 (verificação do Google). Só anuncia se por acaso o
-        // token ainda os tiver; não pede mais reconexão pra "liberar".
+        // Gmail labels/filters (gmail.labels/settings.basic) were removed
+        // from the scopes on 2026-08-12 (Google verification). Only announces it if by chance the
+        // token still has them; no longer asks for reconnection to "unlock" them.
         if (caps.gmail?.manage) lines.push('  ↳ Marcadores (ver/criar/editar/apagar): DISPONÍVEL.');
         if (caps.gmail?.settings) lines.push('  ↳ Regras de roteamento (filtros do Gmail): DISPONÍVEL.');
       } else {
@@ -4464,8 +4464,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       let provs = [];
       try { provs = await listOAuthProviders(userId); } catch { /* ignore */ }
       if (provs.includes('microsoft')) {
-        // O OneDrive entrou depois: quem conectou antes tem token SEM Files.ReadWrite.
-        // O `scope` guardado na conexão diz isso sem precisar chamar a Graph.
+        // OneDrive came later: whoever connected before has a token WITHOUT Files.ReadWrite.
+        // The `scope` saved on the connection tells us this without needing to call the Graph.
         let msScope = null;
         try { msScope = (await getOAuthToken(userId, 'microsoft'))?.scope ?? null; } catch { /* ignore */ }
         const semArquivos = !microsoftHasFiles(msScope);
@@ -4482,7 +4482,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           ? 'conectado (buscar/abrir/exportar designs pela tool canva; criar e alterar pelas canva_criar/canva_editar, que pedem confirmação)'
           : 'não conectado (conecte em Conexões › Canva no app)'}.`);
       }
-      // Notion aceita as duas conexões, então o status diz por qual delas está de pé.
+      // Notion accepts both connections, so the status says which one it's up through.
       const notionOAuth = provs.includes('notion');
       if (notionOAuth || vaultEnabled()) {
         const notionCofre = !notionOAuth && vaultEnabled() && !!(await vaultSecret(userId, 'notion'));
@@ -4502,10 +4502,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       lines.push(`• Telegram: ${bot && bot.chat_id ? `conectado (@${bot.bot_username || '?'})` : 'não conectado'}.`);
       const link = await getWhatsAppLinkForUser(userId);
       if (link && link.wa_phone && link.enabled !== false) {
-        // A janela de 24h faz parte do STATUS, não é detalhe interno: "conectado"
-        // sozinho contradiz "não recebi sua mensagem" e o assistente acaba
-        // improvisando suporte que não existe (já mandou gente "reconectar o QR
-        // Code"). Aqui ele vê o estado real e explica com base.
+        // The 24h window is part of the STATUS, not an internal detail: "connected"
+        // alone contradicts "I didn't receive your message" and the assistant ends up
+        // improvising support that doesn't exist (it has told people to "reconnect the QR
+        // Code"). Here it sees the real state and explains with grounding.
         let janela = '';
         try {
           const ultimoIn = await getWaLastInbound(link.wa_phone);
@@ -4513,7 +4513,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           janela = ultimoIn && h < 24
             ? ` Janela de 24h ABERTA (ele escreveu por lá há ${h}h), então dá pra mandar mensagem normal, formatada.`
             : ` Janela de 24h FECHADA (${ultimoIn ? `ele não escreve por lá há ${h}h` : 'ele nunca escreveu por lá'}), então mensagem proativa sai como NOTIFICAÇÃO (texto corrido, sem formatação) até ele responder no WhatsApp.`;
-        } catch { /* sem janela conhecida, reporta só a conexão */ }
+        } catch { /* no known window, report only the connection */ }
         lines.push(`• WhatsApp: conectado (${link.wa_phone}).${janela}`);
       } else {
         lines.push('• WhatsApp: não conectado (conecte o número em Conexões › WhatsApp no app).');
@@ -4524,11 +4524,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         + '\n\nPara conectar um serviço novo (Google, Microsoft/Outlook, GitHub, Slack), o usuário precisa fazer pelo app (em Conexões); ligar/desligar envio de e-mail e preferências de mídia dá pra fazer por aqui mesmo.';
     },
   });
-  // ── Trocar a conta Google DESTE assistente (multi-conta) ──
-  // Só existe pra quem tem mais de uma conta Google conectada: pra quem tem uma
-  // só, a tool não faz sentido e ainda custaria schema em todo turno.
-  // Não-gated: não vaza nem apaga nada, só escolhe em qual das caixas do PRÓPRIO
-  // dono este assistente trabalha, e é o dono quem está pedindo.
+  // ── Switching THIS assistant's Google account (multi-account) ──
+  // Only exists for whoever has more than one Google account connected: for whoever has
+  // just one, the tool makes no sense and would still cost schema on every turn.
+  // Not gated: it doesn't leak or delete anything, it just chooses which of the OWNER's OWN
+  // inboxes this assistant works on, and it's the owner who is asking.
   if (gAccounts.length > 1) {
     registry.add({
       name: 'usar_conta_google',
@@ -4546,7 +4546,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const r = await updateAgentFields(agent.id, userId, { google_email: alvo });
         if (!r.ok) return `Não consegui trocar a conta agora: ${r.error || 'falha ao salvar'}.`;
         const antes = gEmail;
-        gEmail = alvo; // vale JÁ neste turno: o gToken lê a variável na hora da chamada
+        gEmail = alvo; // takes effect RIGHT in this turn: gToken reads the variable at call time
         const novos = servicesFromScope(conta.scope);
         const nome = { gmail: 'Gmail', calendar: 'Agenda', drive: 'Drive', docs: 'Docs' };
         const falta = Object.keys(caps).filter((s) => !novos.includes(s));
@@ -4556,9 +4556,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Ligar/desligar o ENVIO de e-mail pelo Gmail do usuário. Não-gated: flipar a
-  // chave não dispara nada (cada envio real de e-mail segue passando pela trava
-  // de confirmação). Requer o Google conectado com escopo de escrita.
+  // Turn email SENDING via the user's Gmail on/off. Not gated: flipping the
+  // switch doesn't trigger anything (every actual email send still goes through the
+  // confirmation guard). Requires Google connected with write scope.
   registry.add({
     name: 'configurar_envio_email',
     description: `Turns on or off ONLY the permission for the assistant to send AD-HOC emails through the user's Gmail. Never use it to create, fix or run a routine: the routines' email channel is delivered by the ${marca().nome} platform, does not use Gmail, does not depend on this permission and does not create a draft. Even when on, each ad-hoc send is still confirmed before it goes out. Use it only when the user explicitly asks to turn on/off sending through their Gmail. Turning it on requires Google connected with write scope.`,
@@ -4577,9 +4577,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         : `Ok: desliguei o envio AVULSO pelo seu Gmail. Sigo podendo criar rascunhos. Isso não altera as entregas automáticas de rotinas pelo ${marca().nome}.`;
     },
   });
-  // Ligar/desligar preferências de mídia (gerar imagem, ler imagem, transcrever
-  // áudio, responder em voz). Não-gated: preferência do próprio dono. Vale a
-  // partir do PRÓXIMO turno (as prefs são lidas no início da conversa).
+  // Turn media preferences on/off (generate image, read image, transcribe
+  // audio, reply in voice). Not gated: the owner's own preference. Takes effect from
+  // the NEXT turn on (prefs are read at the start of the conversation).
   registry.add({
     name: 'configurar_midia',
     description: 'Turns one of the user\'s media preferences on or off: "imagem" (generate images), "visao" (read/understand images they send), "audio" (transcribe received audio), "voz" (reply with voice audio). Use it when they ask to turn one of these on/off. Takes effect on the next turn.',
@@ -4600,19 +4600,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Pronto, ${ligado ? 'liguei' : 'desliguei'}: ${label}. (Vale a partir da próxima mensagem.)`;
     },
   });
-  // Projeto ATIVO do agente (dev mode): se houver, o toolset de coding opera no
-  // workspace do projeto (via devexec), não no servidor do usuário (via SSH).
+  // Agent's ACTIVE project (dev mode): if there is one, the coding toolset operates on the
+  // project's workspace (via devexec), not on the user's server (via SSH).
   const activeProject = agent.active_project_id
     ? await getProject(agent.active_project_id, userId)
     : null;
   const getGithubToken = () => validProviderToken(userId, 'github');
-  // GUARDRAIL DE ROTEAMENTO (apps-processo-fix Fase 4): se o turno mira claramente
-  // um app BÁSICO do próprio usuário, suprime sandbox + coding-SSH DESTE turno pra
-  // o modelo não ter como se perder e vazar encanamento — o caminho certo são as
-  // tools de app (hosting), que seguem sempre disponíveis logo abaixo. Fora de um
-  // projeto, tira sandbox + coding-SSH + ssh; DENTRO de um projeto (contexto de
-  // dev), tira só o sandbox (o coding é o trabalho legítimo do projeto), pra não
-  // quebrar quem está de fato programando.
+  // ROUTING GUARDRAIL (apps-processo-fix Phase 4): if the turn clearly targets
+  // a BASIC app of the user's own, suppress sandbox + coding-SSH FOR THIS turn so
+  // the model has no way to get lost and leak plumbing; the right path is the
+  // app (hosting) tools, which stay always available right below. Outside a
+  // project, it removes sandbox + coding-SSH + ssh; INSIDE a project (dev
+  // context), it removes only the sandbox (coding is the project's legitimate work), so as not to
+  // break whoever is actually programming.
   const userApps = hostingEnabled() ? await listAppsForUser(userId).catch(() => []) : [];
   const { app: targetedApp, sticky: appFocusSticky } = userApps.length
     ? await resolveTargetedApp({ message, userApps, threadId: thread?.id })
@@ -4621,26 +4621,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (targetedApp) {
     console.log(`[route-guard] turno mira app básico "${targetedApp.system}"${appFocusSticky ? ' (foco herdado da conversa)' : ''} -> suprime sandbox${suppressCodingSSH ? ' + coding-SSH' : ''} (thread=${thread.id})`);
   }
-  // O manual COMPLETO de apps (o maior bloco do system, ~2,9k tokens) só entra
-  // quando o turno tem a ver com apps: usuário já tem app publicado, o turno mira
-  // um app dele, está num projeto (dev), ou a mensagem cita app/publicar/etc. Nos
-  // demais turnos (pesquisa, e-mail, lembrete, papo) o system leva só um ponteiro
-  // curto — as tools de app seguem disponíveis, então nada de capacidade se perde.
+  // The COMPLETE apps manual (the biggest block in the system, ~2.9k tokens) only comes in
+  // when the turn has to do with apps: the user already has a published app, the turn targets
+  // one of their apps, they're in a project (dev), or the message mentions app/publish/etc. In
+  // other turns (research, email, reminder, chat) the system carries only a short
+  // pointer; the app tools stay available, so no capability is lost.
   const appsManual = hostingEnabled() && (
     userApps.length > 0 || !!targetedApp || !!activeProject || appsIntentInMessage(message)
   );
-  // (Não existe mais "turno de build de app" no principal: o build inteiro roda
-  // no sub-agente `construir_app`, que já nasce com modelo forte, teto de saída
-  // de 32k e 40 passos. O principal fica permanentemente no modelo de conversa,
-  // com prefixo estável — é isso que devolve o cache. Ver
+  // (There is no more "app build turn" in the main agent: the whole build runs
+  // in the `construir_app` sub-agent, which is already born with a strong model, a 32k
+  // output ceiling and 40 steps. The main agent stays permanently on the conversation model,
+  // with a stable prefix; that's what gives back the cache. See
   // projetos/roteamento-modelo-dsh.md.)
-  // (As tools de sandbox/coding/servidor/projeto/hosting-build+admin foram pro
-  // grupo "codigo" — ver populateCodeTools mais abaixo. analisar_planilha segue
-  // inline: é uma capacidade de dados do dia a dia, não de build.)
-  // Meta-tool de ANÁLISE DE PLANILHA (swarm): delega a um sub-agente que roda
-  // pandas no sandbox e lê a planilha INTEIRA (sem truncar, qualquer tamanho).
-  // A planilha é carregada automaticamente no ambiente quando chega por anexo ou
-  // é aberta do Drive (ver loadSpreadsheetIntoSandbox). Só a síntese volta.
+  // (The sandbox/coding/server/project/hosting-build+admin tools went to the
+  // "codigo" group; see populateCodeTools further below. analisar_planilha stays
+  // inline: it's an everyday data capability, not a build one.)
+  // SPREADSHEET ANALYSIS meta-tool (swarm): delegates to a sub-agent that runs
+  // pandas in the sandbox and reads the WHOLE spreadsheet (no truncation, any size).
+  // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
+  // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
@@ -4665,12 +4665,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Meta-tool de EDIÇÃO DE PLANILHA (swarm, caminho de ESCRITA): pega a planilha
-  // canônica da biblioteca do usuário, grava no sandbox, um sub-agente a MUTA com
-  // openpyxl e os bytes voltam por sandboxReadBytes → novo asset na biblioteca +
-  // anexo no chat. O conteúdo da planilha NUNCA passa pelo contexto do principal.
-  // Substitui o "reescreve do zero" via gerar_documento, que truncava tabelas
-  // grandes no limitador de blob e comia linhas na regeneração (09/09/2026).
+  // SPREADSHEET EDITING meta-tool (swarm, WRITE path): takes the canonical
+  // spreadsheet from the user's library, writes it into the sandbox, a sub-agent MUTATES it with
+  // openpyxl and the bytes come back via sandboxReadBytes -> new asset in the library +
+  // attachment in the chat. The spreadsheet's content NEVER goes through the main agent's context.
+  // Replaces the "rewrite from scratch" via gerar_documento, which truncated large
+  // tables at the blob limiter and ate rows on regeneration (2026-09-09).
   if (sandboxEnabled() && s3Enabled()) {
     registry.add({
       name: 'editar_planilha',
@@ -4685,9 +4685,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       run: async ({ objetivo, arquivo_id } = {}) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        // Guarda do incidente: se a instrução já vem com o marcador de corte, ela
-        // é uma cópia de uma chamada truncada. Escrever isso na planilha grava
-        // conteúdo mutilado (e o próprio marcador) como dado.
+        // Incident guard: if the instruction already arrives with the truncation marker, it
+        // is a copy of a truncated call. Writing this into the spreadsheet saves
+        // mutilated content (and the marker itself) as data.
         if (hasCutMarker(objetivo)) {
           return 'ERRO: a instrução contém o marcador "…[cortado: N chars]…", ou seja, é um trecho TRUNCADO de uma chamada anterior. NÃO reescreva a planilha a partir dele. Descreva a mudança em poucas linhas (só o que muda), ou use analisar_planilha pra reler o conteúdo atual do arquivo.';
         }
@@ -4700,10 +4700,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               fetchBytes: (key) => fetchMedia(key),
               loadIntoSandbox: (uid, buf, name) => gravarPlanilhaNoSandbox(uid, buf, name),
               readBytes: (uid, p) => sandboxReadBytes(uid, p),
-              // inspect junta a leitura de conteúdo (abas/linhas) com o INVENTÁRIO
-              // interno do arquivo: a lista de peças do ZIP e a contagem de
-              // fórmulas. É isso que pega gráfico/imagem/macro apagados e fórmula
-              // achatada em valor — sem precisar enumerar recurso por recurso.
+              // inspect combines reading the content (sheets/rows) with the file's
+              // internal INVENTORY: the list of ZIP parts and the formula
+              // count. This is what catches a deleted chart/image/macro and a formula
+              // flattened into a value, without having to enumerate feature by feature.
               inspect: (buf) => {
                 const m = xlsxToText(buf, { maxChars: 1_000_000, maxRowsPerSheet: 100_000 });
                 let p = null;
@@ -4716,8 +4716,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               renameAsset: (uid, id, caption) => setMediaCaption(uid, id, caption),
             },
           });
-          // Ambiguidade não é erro: é pergunta. Devolver como ERRO faria o modelo
-          // tentar de novo sozinho (chutando) em vez de perguntar ao usuário.
+          // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
+          // try again on its own (guessing) instead of asking the user.
           if (!r.ok && r.clarificacao) {
             return [
               'A edição NÃO foi aplicada porque a instrução ficou ambígua, e nada foi gravado (a planilha do usuário está íntegra e com o mesmo nome).',
@@ -4769,7 +4769,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Conexões. Binding = device_tokens.active_agent_id (runnerBoundAgentId);
   // unset => first assistant, same default as device-chat. The agent list is
   // only resolved in the rare case of an unset binding with the runner online.
-  // The opt-in DIFFERS per transport (25/08):
+  // The opt-in DIFFERS per transport (2026-08-25):
   //  • SSH-in: still requires the 'super' category. The shell opens on a
   //    connected server with no confinement, and the category is the only brake.
   //  • Runner: the BINDING already IS the opt-in. To get here the owner installed
@@ -4787,24 +4787,24 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     else { const _ags = await listAgents(userId); runnerForThisAgent = !!_ags[0] && _ags[0].id === agent.id; }
   }
   const livreEnv = sandboxEnabled() && vaultEnabled() && !suppressCodingSSH;
-  // A chave no cofre decide DUAS coisas (por isso é uma consulta só, reusada):
-  // se o modo livre se aplica e se o toolset de coding-SSH tem alguma chance de
-  // funcionar. Antes só o agente super pagava a consulta; agora o registro do
-  // coding-SSH também depende dela (ver `codingSshUsable` em populateCodeTools).
+  // The key in the vault decides TWO things (that's why it's a single query, reused):
+  // whether free mode applies and whether the coding-SSH toolset has any chance of
+  // working. Before, only the super agent paid for the query; now the coding-SSH
+  // registration also depends on it (see `codingSshUsable` in populateCodeTools).
   const hasSshKey = livreEnv ? await userHasSshKey(userId) : false;
   const sshLivre = livreEnv && agentCategory === 'super' && hasSshKey;
   const livreActive = livreEnv && (runnerForThisAgent || sshLivre);
-  // ── Grupo "codigo" (Plano B): todo o ferramental de CÓDIGO/APP vai pra este
-  // populador. Ele NÃO roda no tool set inicial quando CODE_DEFER está ligado;
-  // fica atrás de abrir_ferramentas({grupo:'codigo'}) e AUTO-ABRE (sem custo de
-  // turno) quando codeInline (mira app do usuário, projeto ativo, ou terminal ao
-  // vivo de agente super). livreActive/suppressCodingSSH já foram calculados acima.
+  // ── "codigo" group (Plan B): all the CODE/APP tooling goes into this
+  // populator. It does NOT run in the initial tool set when CODE_DEFER is on;
+  // it stays behind abrir_ferramentas({grupo:'codigo'}) and AUTO-OPENS (at no
+  // turn cost) when codeInline (targets the user's app, active project, or a super
+  // agent's live terminal). livreActive/suppressCodingSSH were already computed above.
   const codeInline = !CODE_DEFER || !!targetedApp || !!activeProject || livreActive;
-  // #6: sink pra hosting mostrar link de app como CARD com botão "Abrir app" (mesmo
-  // mecanismo do mostrar_produtos, que já renderiza como botão em todo canal), em vez
-  // de URL crua no texto. Determinístico: independe do modelo. `attachments` só é
-  // inicializado mais abaixo (3217), mas este closure só é INVOCADO quando a tool roda,
-  // bem depois disso — então não bate no TDZ.
+  // #6: sink for hosting to show an app link as a CARD with an "Open app" button (the same
+  // mechanism as mostrar_produtos, which already renders as a button on every channel), instead
+  // of a raw URL in the text. Deterministic: independent of the model. `attachments` is only
+  // initialized further below (3217), but this closure is only INVOKED when the tool runs,
+  // well after that; so it doesn't hit the TDZ.
   const emitAppCard = (app) => {
     if (!app || !app.url || !/^https?:\/\//.test(String(app.url))) return;
     const card = {
@@ -4818,8 +4818,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     try { onAttachment?.(card); } catch {}
   };
   populateCodeTools = () => {
-    // Sandbox (execução de código no container isolado). Suprimido quando o turno
-    // mira um app básico (route-guard) pra não dar caminho paralelo ao modelo.
+    // Sandbox (code execution in the isolated container). Suppressed when the turn
+    // targets a basic app (route-guard) so as not to give the model a parallel path.
     if (!targetedApp) for (const t of sandboxTools(userId)) registry.add(t);
     // Server/terminal. Two possible paths, and they do NOT aim at the same target:
     //  • live terminal (free mode): SSH-in to a connected server (needs the
@@ -4847,16 +4847,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const subLivre = !activeProject && livreActive;
     const subCoding = (!!activeProject || !sshLivre) && !suppressCodingSSH && codingSshUsable && permMode === 'aceitar_edicoes';
     if (subLivre || subCoding) {
-      // ISOLAMENTO (codar): o loop de código vive DENTRO do sub-agente, com
-      // sessão própria por thread. Os dumps de comando/arquivo (até 12k chars por
-      // chamada) e o vai-e-vem do loop param de circular no contexto principal a
-      // cada passo; só o resumo textual volta. Vale pro modo livre (era o gap do
-      // caso de 08/2026; d1708c1 só cobria aceitar_edicoes) e pro coding-SSH em
-      // aceitar_edicoes: nesse modo as escritas já rodam INLINE (CODING_WRITE),
-      // então o sub pode ser dono do loop sem perder nenhuma trava (não há trava).
-      // gerar_chave_ssh fica no principal (é setup que o usuário aciona em
-      // conversa, não faz parte do loop). O build de app básico roda nas tools de
-      // hosting, que seguem gated inline no principal (gate não vive num sub).
+      // ISOLATION (codar): the code loop lives INSIDE the sub-agent, with its
+      // own session per thread. The command/file dumps (up to 12k chars per
+      // call) and the loop's back-and-forth stop circulating in the main context at
+      // every step; only the textual summary comes back. Applies to free mode (it was the gap in the
+      // 08/2026 case; d1708c1 only covered aceitar_edicoes) and to coding-SSH in
+      // aceitar_edicoes: in that mode the writes already run INLINE (CODING_WRITE),
+      // so the sub can own the loop without losing any guard (there is no guard).
+      // gerar_chave_ssh stays in the main agent (it's setup the user triggers in
+      // conversation, not part of the loop). A basic app's build runs on the hosting
+      // tools, which stay gated inline in the main agent (the gate doesn't live in a sub-agent).
       const buildCodingContext = async () => {
         const sub = new ToolRegistry();
         if (subLivre) for (const t of livreTools(userId, thread.id, runnerForThisAgent, sshLivre)) sub.add(t);
@@ -4867,16 +4867,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             getGithubToken,
           })) sub.add(t);
         }
-        // Coding = raciocínio pesado: primário robusto (ou o override Gemini do
-        // produto, quando setado), com teto de saída alto pra caber arquivo inteiro.
+        // Coding = heavy reasoning: robust primary (or the product's Gemini override,
+        // when set), with a high output ceiling to fit a whole file.
         const provider = makeHeavyProvider('codar', { maxOut: 32768 });
         return { tools: sub, provider };
       };
       registry.add(makeCodarTool({
         buildCodingContext, language: userLang,
-        // Com o Runner amarrado, esta MESMA tool é a porta pra MÁQUINA PESSOAL do
-        // dono (não só pra código): tem que aparecer na descrição, senão o
-        // principal não a enxerga como caminho pra "olha meu desktop".
+        // With the Runner bound, this SAME tool is the port to the owner's PERSONAL
+        // MACHINE (not just for code): it has to show up in the description, otherwise the
+        // main agent doesn't see it as a path for "look at my desktop".
         extra: runnerForThisAgent && !activeProject
           ? `IMPORTANT: this tool is also the way into your owner's PERSONAL MACHINE (${marca().nome} Runner active now). Use it for ANYTHING on their machine, not just programming: list/read files, look at the desktop, find a document, run a local command. Say in the goal that it is "on the owner's local machine, via the Runner". Reading is free; writing only in the authorized folders.`
           : undefined,
@@ -4898,13 +4898,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (subLivre) for (const t of sshTools(userId)) if (t.name === 'gerar_chave_ssh') registry.add(t);
       console.log(`[codar] sub montado (thread=${thread.id}, livre=${subLivre ? (sshLivre ? 'ssh' : 'runner') : 'nao'}, coding-ssh=${subCoding ? 'sim' : 'nao'})`);
     }
-    // Coding-SSH gated no principal: quando não foi pro sub (fora de
-    // aceitar_edicoes) e não está suprimido (livre por SSH, ou app mirado).
+    // Coding-SSH gated in the main agent: when it didn't go to the sub (outside
+    // aceitar_edicoes) and isn't suppressed (free via SSH, or a targeted app).
     if (!sshLivre && !suppressCodingSSH && permMode !== 'aceitar_edicoes') {
       if (codingSshUsable) {
         addGated(registry, sshTools(userId), thread.id, gateOpts);
-        // Coding (estilo Agent SDK) sobre o mesmo transporte SSH-do-sandbox: ler/
-        // listar/buscar/rodar_leitura inline; editar/escrever/rodar_comando gated.
+        // Coding (Agent SDK style) over the same sandbox-SSH transport: read/
+        // list/search/rodar_leitura inline; edit/write/rodar_comando gated.
         addGated(
           registry,
           codingTools(userId, {
@@ -4915,16 +4915,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           gateOpts,
         );
       } else {
-        // Sem chave conectada sobra a porta de ENTRADA do recurso: quem pedir
-        // "conecta meu servidor" continua conseguindo criar a chave, e no turno
-        // seguinte o toolset inteiro volta sozinho.
+        // With no key connected, the feature's ENTRY port remains: whoever asks
+        // "connect my server" can still create the key, and on the next
+        // turn the whole toolset comes back on its own.
         addGated(registry, sshTools(userId).filter((t) => t.name === 'gerar_chave_ssh'), thread.id, gateOpts);
       }
     }
-    // Projeto (dev mode): criar/entrar/listar/sair/deploy. Não-gated.
+    // Project (dev mode): create/enter/list/leave/deploy. Not gated.
     for (const t of projectTools(userId, agent.id, { getGithubToken })) registry.add(t);
-    // Modo de permissão + allowlist (não-gated: pedir JÁ é a autorização). Só com
-    // coding ligado (sandbox+cofre). Valem a partir da PRÓXIMA mensagem.
+    // Permission mode + allowlist (not gated: asking IS already the authorization). Only with
+    // coding on (sandbox+vault). Take effect from the NEXT message on.
     if (sandboxEnabled() && vaultEnabled()) {
       registry.add({
         name: 'definir_modo_permissao',
@@ -4973,38 +4973,38 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         },
       });
     }
-    // ── Build de app: DELEGAÇÃO (a troca de modelo acontece AQUI, nunca no
-    // turno principal) ──
-    // Era a única tarefa pesada do produto que rodava no turno principal, com as
-    // hosting tools no registry do pai. Consequência: pra dar o modelo bom pro
-    // build a gente trocava o modelo NO MEIO da thread, o que destrói o reuso de
-    // prefixo (~28k fixos + history) duas vezes por thread, e a decisão virava
-    // heurística de texto (errou ao vivo no naval-strike). Agora o build é um
-    // sub-agente: contexto novo, modelo forte, teto alto, sessão própria.
-    // No principal ficam só as ações que são decisão do dono (todas gated).
+    // ── App build: DELEGATION (the model switch happens HERE, never in the
+    // main turn) ──
+    // It used to be the only heavy product task that ran in the main turn, with the
+    // hosting tools in the parent's registry. Consequence: to give the build the good model,
+    // we'd switch models IN THE MIDDLE of the thread, which destroys prefix
+    // reuse (~28k fixed + history) twice per thread, and the decision became a
+    // text heuristic (it got it wrong live on naval-strike). Now the build is a
+    // sub-agent: new context, strong model, high ceiling, its own session.
+    // Only the actions that are the owner's decision stay in the main agent (all gated).
     const hostAll = hostingTools(userId, agent.id, { onAppLink: emitAppCard, appClient });
     const hostBuild = hostAll.filter((t) => APP_BUILD_TOOLS.has(t.name));
     if (hostBuild.length) {
       const buildAppContext = async () => {
         const sub = new ToolRegistry();
         for (const t of hostAll) if (APP_SUB_TOOLS.has(t.name)) sub.add(t);
-        // Mesmo provider fixo do `codar`, com teto alto pra caber arquivo inteiro.
+        // Same fixed provider as `codar`, with a high ceiling to fit a whole file.
         const provider = makeHeavyProvider('app', { maxOut: 32768 });
         if(typeof provider.completeDurable!=='function')throw new Error('Admissão de crédito do executor ainda não está integrada; nenhuma chamada de código foi iniciada.');
         return { tools: sub, provider };
       };
       registry.add(makeConstruirAppTool({
         buildAppContext, language: userLang,
-        // Sessão separada da do `codar` (mesmo motor, outra instância): o trabalho
-        // de app continua entre turnos sem misturar com o de dev/servidor.
+        // Session separate from `codar`'s (same engine, different instance): the app
+        // work continues across turns without mixing with dev/server work.
         sessionKey: `${userId}:${agent.id}:${thread.id}:app`,
         taskStore: appTaskStore,
         dispatch:['chat','telegram','whatsapp'].includes(kind)?args=>codingJobs.submit(codingIdentity,{kind:'basic',args,userRequest:message,channel:kind,policy:codingPolicySnapshot(agent)},codingSubmissionId):undefined,
         userRequest: message,
         shouldPause: async () => { const next=await pollNewUserMsgAtSafeBoundary?.(); if(next){appPendingInputs.push(next);return true;}return false; },
         onUsage: (e) => { const { kind, noBill, ...usage } = e; mediaUsages.push({ usage, kind: kind || 'subagent', noBill: kind === 'compact' && noBill === true }); },
-        // App alvo dito pelo principal vira o app corrente do hosting: a 1ª escrita
-        // do sub-agente já acerta sem ele repetir o slug (pedido de um usuário).
+        // Target app named by the main agent becomes hosting's current app: the sub-agent's
+        // 1st write already hits the right one without it having to repeat the slug (a user's request).
         onEvent: ev => {
           if (['loop_break','max_steps','empty_end','provider_protocol_error','turn_recovery_failed'].includes(ev?.type))
             console.log(`[app_builder] thread=${thread.id} event=${ev.type} step=${ev.step ?? '-'} code=${ev.code || '-'} tool=${ev.tool || '-'} reason=${ev.reason || '-'} repeats=${ev.repeatCount || 0} revisionAware=${!!ev.revisionAware}`);
@@ -5015,36 +5015,36 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         authorize:async(app,dono)=>await hostAll.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})})],thread.id,{codingApprovals,codingApprovalContext:{identity:codingIdentity,policy:codingPolicySnapshot(agent),channel:kind}});
       console.log(`[construir_app] sub montado (thread=${thread.id}, tools=${hostBuild.length})`);
     }
-    // Hosting ADMIN no principal (tudo menos a descoberta inline e o build, que
-    // foi pro sub): publicar, apagar, replicar, voltar versão, remover arquivo/
-    // segredo, visibilidade, lifecycle, home, colaboradores. As irreversíveis
-    // seguem gated — é o único lugar onde o gate funciona.
+    // Hosting ADMIN in the main agent (everything except inline discovery and the build, which
+    // went to the sub-agent): publish, delete, replicate, roll back version, remove file/
+    // secret, visibility, lifecycle, home, collaborators. The irreversible ones
+    // stay gated; it's the only place where the gate works.
     addGated(registry, hostAll.filter((t) => !APPS_INLINE.has(t.name) && !APP_BUILD_TOOLS.has(t.name)), thread.id);
   };
-  // Descoberta de apps SEMPRE inline (listar_sistemas + chamar_sistema, ~600 tok):
-  // barata e é o que mantém "abre/mostra meu app X" fluido antes de abrir o grupo.
+  // App discovery ALWAYS inline (listar_sistemas + chamar_sistema, ~600 tok):
+  // cheap, and it's what keeps "open/show my app X" smooth before the group is opened.
   addGated(registry, hostingTools(userId, agent.id, { onAppLink: emitAppCard, appClient }).filter((t) => APPS_INLINE.has(t.name)), thread.id);
-  // Auto-abre o grupo "codigo" quando o turno já é claramente de código, pra não
-  // custar um turno extra. Marca como carregado pra abrir_ferramentas não repetir.
+  // Auto-opens the "codigo" group when the turn is already clearly about code, so as not to
+  // cost an extra turn. Marks it as loaded so abrir_ferramentas doesn't repeat it.
   if (codeInline) { populateCodeTools(); loadedGroups.add('codigo'); }
-  // REABRE os grupos que já foram abertos em turnos anteriores DESTA thread.
-  // `registry` e `loadedGroups` vivem UM turno; o history não. Sem isso, o
-  // assistente lê no history que abriu o grupo ("carregadas e disponíveis agora:
-  // notion_search, ...") e no turno seguinte chama a tool direto, num registry
-  // novo que não a tem: o core devolve `ERRO: tool desconhecida` e ele conclui,
-  // com razão, que o conector não funciona (caso Notion, 31/08). O que o
-  // modelo acredita tem que bater com o que existe. Fonte da verdade é o próprio
-  // history: sobrevive a restart, e se a compactação comer a abertura o modelo
-  // perde a crença junto, então os dois continuam coerentes.
+  // RE-OPENS the groups that were already opened in previous turns of THIS thread.
+  // `registry` and `loadedGroups` live for ONE turn; the history doesn't. Without this, the
+  // assistant reads in the history that it opened the group ("loaded and available now:
+  // notion_search, ...") and on the next turn calls the tool directly, in a
+  // new registry that doesn't have it: the core returns `ERRO: tool desconhecida` and it concludes,
+  // correctly, that the connector doesn't work (Notion case, 2026-08-31). What the
+  // model believes has to match what exists. The source of truth is the
+  // history itself: it survives a restart, and if compaction eats the opening the model
+  // loses the belief along with it, so the two stay consistent.
   for (const grupo of gruposAbertosNoHistory(thread.history)) {
     if (loadedGroups.has(grupo) || !deferredGroups[grupo]) continue;
     try { deferredGroups[grupo].populate(); loadedGroups.add(grupo); }
     catch (e) { console.error('[reabrir grupo]', grupo, e?.message ?? e); }
   }
-  // Ponte sandbox -> Drive: sobe um ARQUIVO (binário) que o agente gerou no
-  // sandbox (PDF, imagem, planilha) pro Google Drive do usuário. A tool de texto
-  // (drive_upload) não serve pra binário. Só quando o usuário deu escopo de
-  // escrita do Drive E tem sandbox. Gated: pede confirmação antes de subir.
+  // Sandbox -> Drive bridge: uploads a FILE (binary) the agent generated in the
+  // sandbox (PDF, image, spreadsheet) to the user's Google Drive. The text tool
+  // (drive_upload) doesn't work for binary. Only when the user has given Drive write
+  // scope AND has a sandbox. Gated: asks for confirmation before uploading.
   if (caps.drive?.write && sandboxEnabled()) {
     addGated(registry, [{
       name: 'drive_upload_arquivo',
@@ -5070,12 +5070,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     }], thread.id);
   }
-  // Ponte biblioteca -> Drive: sobe pro Google Drive do usuário um arquivo que já
-  // está na biblioteca privada dele (gerado por gerar_documento ou recebido).
-  // É o caminho OPCIONAL de export: o arquivo já foi entregue no chat e guardado
-  // no bucket; isto só coloca uma cópia no Drive quando o usuário quer. Sem id =
-  // o arquivo mais recente da biblioteca (o que acabou de ser gerado). Só liga com
-  // escopo de escrita do Drive. Gated: confirma antes de subir.
+  // Library -> Drive bridge: uploads to the user's Google Drive a file that is already
+  // in their private library (generated by gerar_documento or received).
+  // It's the OPTIONAL export path: the file was already delivered in the chat and saved
+  // in the bucket; this just puts a copy in Drive when the user wants. No id =
+  // the most recent file in the library (the one just generated). Only works with
+  // Drive write scope. Gated: confirms before uploading.
   if (caps.drive?.write && s3Enabled()) {
     addGated(registry, [{
       name: 'enviar_para_drive',
@@ -5115,25 +5115,25 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     }], thread.id);
   }
-  // Tools de mídia (gerar imagem / gerar áudio). O custo de cada geração é
-  // gravado à parte (mediaUsages, com kind próprio) e o binário é entregue
-  // no canal via attachments.
+  // Media tools (generate image / generate audio). The cost of each generation is
+  // recorded separately (mediaUsages, with its own kind) and the binary is delivered
+  // on the channel via attachments.
   const attachments = [];
   if (anexoSelo) attachments.push(anexoSelo);
   const mediaUsageTurnId=randomUUID();
   const writeMediaUsage=e=>recordUsages([e.usage],{userId,agentId:agent.id,threadId:thread.id,turnId:mediaUsageTurnId,kind:e.kind},{noBill:e.kind==='compact'&&e.noBill===true,eventId:e.eventId,strict:true});
   const mediaUsages = createIncrementalUsageCollector({userId,pending:pendingUsageWrites,write:writeMediaUsage});
-  // Orçamento de buscas do turno inteiro (principal + sub-agentes de pesquisa).
+  // Search budget for the whole turn (main agent + research sub-agents).
   const searchBudget = createSearchBudget();
-  // Fontes que as ferramentas de busca de fato devolveram no turno; a lista do fim
-  // da resposta sai daqui, não do texto do modelo (ver citacoes.mjs).
+  // Sources the search tools actually returned in the turn; the list at the end
+  // of the reply comes from here, not from the model's text (see citacoes.mjs).
   const fontesDoTurno = registroDeFontes();
-  // Ids das imagens que o usuário anexou NESTE turno (preenchido logo abaixo, ao
-  // persistir os uploads). Existe porque ferramenta que manda foto do usuário pra
-  // FORA tem que operar sobre a foto que veio COM o pedido, nunca sobre "a última
-  // da biblioteca": a biblioteca guarda tudo que a pessoa já mandou um dia
-  // (documento, print de conta, passaporte) e pegar a mais recente é escolher um
-  // arquivo que ninguém apontou. Ver buscar_produto_por_imagem.
+  // Ids of the images the user attached IN THIS turn (filled in just below, when
+  // the uploads are persisted). Exists because a tool that sends the user's photo
+  // OUT has to operate on the photo that came WITH the request, never on "the latest
+  // one in the library": the library keeps everything the person has ever sent
+  // (document, account screenshot, passport) and grabbing the most recent one means picking a
+  // file nobody pointed to. See buscar_produto_por_imagem.
   const turnImageIds = [];
   // Ids of ALL this turn's attachments (image AND document), in arrival order.
   // `turnImageIds` won't do: it has one slot per IMAGE (the history marker and
@@ -5145,22 +5145,22 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // file never reached it.
   const turnAttachmentIds = [...(opts.confirmationRestore?.source?.attachmentIds || [])];
   if (confirmationSession) confirmationSession.captureSource = () => ({ attachmentIds:[...turnAttachmentIds], channel:kind });
-  // Legendas das imagens deste turno. A imagem em si NÃO fica no history (ver o
-  // strip mais abaixo), então sem isso um turno futuro não sabe nem que existiu
-  // foto: a conversa vira "E esses?" sem antecedente. A legenda já é gerada no
-  // recebimento pra biblioteca; aqui ela só é reaproveitada como marcador curto
-  // (~40 tokens) na mensagem salva. Nada de base64, nada de reler a imagem.
+  // Captions of this turn's images. The image itself does NOT stay in the history (see the
+  // strip further below), so without this a future turn wouldn't even know a
+  // photo existed: the conversation becomes "And these?" with no antecedent. The caption is already generated on
+  // receipt for the library; here it's just reused as a short marker
+  // (~40 tokens) in the saved message. No base64, no rereading the image.
   const turnImageCaptions = [];
-  // Cards são emitidos somente pela seleção explícita em mostrar_produtos.
-  // Buscar ou mencionar uma oferta não basta para recomendá-la ao usuário.
+  // Cards are only issued through explicit selection in mostrar_produtos.
+  // Searching for or mentioning an offer is not enough to recommend it to the user.
   const productCards = createProductCards({attachments,onAttachment,imageServed,productImageFromPage,cacheProductImage});
-  // Persistência de mídia: no S3 grava na PASTA DO DONO (<userId>/...) e registra
-  // na biblioteca (media_assets), pra o agente recuperar depois. No disco (modo
-  // legado) só grava o arquivo. O backend é o único caminho de leitura do bucket.
+  // Media persistence: on S3 it writes to the OWNER's FOLDER (<userId>/...) and registers
+  // it in the library (media_assets), so the agent can retrieve it later. On disk (legacy
+  // mode) it just saves the file. The backend is the only read path for the bucket.
   const saveBlob = async ({ buffer, ext, mime, kind = null, source = null, caption = '' }) => {
-    // Antivírus: só arquivos que o USUÁRIO trouxe (upload/link) passam pelo scan;
-    // mídia gerada pelo próprio app (source 'generated') é confiável. Detecção
-    // positiva rejeita a gravação. clamd indisponível/desligado não bloqueia.
+    // Antivirus: only files the USER brought (upload/link) go through the scan;
+    // media generated by the app itself (source 'generated') is trusted. A positive
+    // detection rejects the save. clamd unavailable/off does not block.
     if (avEnabled() && (source === 'upload' || source === 'link')) {
       const av = await scanBuffer(buffer);
       if (!av.clean) {
@@ -5170,8 +5170,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (av.skipped && av.error) console.warn(`[avscan] scan pulado (${av.error}) user=${userId} kind=${kind}`);
     }
     const { url, key } = await putMedia(userId, buffer, ext, mime);
-    // Devolve o id da linha em media_assets pra quem chamou poder amarrar o
-    // arquivo AO TURNO que o trouxe (ver turnImageIds).
+    // Returns the row's id in media_assets so the caller can tie the
+    // file TO THE TURN that brought it (see turnImageIds).
     let assetId = null;
     if (key) {
       try {
@@ -5181,34 +5181,34 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     }
     return { url, key, assetId };
   };
-  // Imagens que o usuário ENVIOU neste turno: no modo S3, guarda na biblioteca
-  // dele (pra usar "amanhã ou mês que vem"). São usadas na visão deste turno e
-  // não ficam no history; persistir aqui é o que dá permanência.
+  // Images the user SENT in this turn: in S3 mode, saved to their library
+  // (to use "tomorrow or next month"). They're used for this turn's vision and
+  // don't stay in the history; persisting here is what gives them permanence.
   let imageCreditPause = null;
   if (s3Enabled() && images?.length) {
     for (const im of images) {
-      // Uma posição por imagem, sempre, mesmo quando o passo falha: é o índice
-      // que amarra a legenda ao id da foto certa lá no marcador do histórico.
+      // One position per image, always, even when the step fails: it's the index
+      // that ties the caption to the right photo's id over in the history marker.
       let assetId = null, legenda = '';
       try {
         const ext = (im.mimeType?.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace('+xml', '');
         const buffer = Buffer.from(im.data, 'base64');
-        // Lê a imagem UMA vez, AQUI no recebimento. Essa leitura vira a legenda no
-        // banco E o texto que o assistente relê nas perguntas seguintes da thread
-        // ("e esses?", "assim?"), sem reenviar a imagem — o caminho barato.
+        // Reads the image ONCE, HERE on receipt. That reading becomes the caption in the
+        // database AND the text the assistant rereads on the thread's following questions
+        // ("and these?", "like this?"), without resending the image; the cheap path.
         //
-        // Era "um parágrafo de no máximo 3 frases" cortado em 600 caracteres, e as
-        // duas coisas cobravam pedágio na conversa real: a legenda cortava no meio
-        // da palavra e, principalmente, não dizia o ESTADO dos controles (onde o
-        // disco está posicionado, o que está selecionado), que é justo o que a
-        // pessoa pergunta quando manda print de uma tela ou de uma câmera.
-        // Este prompt é LITERALMENTE o que foi medido em 08/09 (variante A2,
-        // §3-D de projetos/custo-por-turno-franquia.md): 6 de 7 acertos, contra
-        // 4 de 7 do caminho caro de mandar a foto crua pro GPT-5.4 mini. Segue no
-        // gemini-3.5-flash, que foi o modelo da medição, e ganha teto de saída
-        // pra caber a leitura inteira (as 7 leituras ficaram entre 1,7k e 3,1k
-        // caracteres). Custa ~550 tokens de saída a mais por foto, uma vez só,
-        // contra ~62 créditos por foto que a troca de provider queimava.
+        // It used to be "a paragraph of at most 3 sentences" cut at 600 characters, and
+        // both things charged a toll in real conversation: the caption would cut off mid-
+        // word and, more importantly, didn't say the STATE of the controls (where the
+        // dial is positioned, what's selected), which is exactly what the
+        // person asks when they send a screenshot of a screen or a camera.
+        // This prompt is LITERALLY what was measured on 2026-09-08 (variant A2,
+        // §3-D of projetos/custo-por-turno-franquia.md): 6 out of 7 correct, against
+        // 4 out of 7 for the expensive path of sending the raw photo to GPT-5.4 mini. It stays on
+        // gemini-3.5-flash, which was the model used in the measurement, and gets a high output ceiling
+        // to fit the whole reading (the 7 readings came out between 1.7k and 3.1k
+        // characters). Costs ~550 extra output tokens per photo, once only,
+        // against the ~62 credits per photo the provider switch burned.
         let caption = '';
         try {
           if (imageCreditPause) throw imageCreditPause;
@@ -5260,19 +5260,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     return {text,attachments:anexoSelo ? [anexoSelo] : [],creditStop:creditPauseReason(imageCreditPause)};
   }
-  // PDFs anexados neste turno: extraímos o TEXTO e injetamos na mensagem pro
-  // assistente (igual ao áudio transcrito e à visão), pra funcionar com QUALQUER
-  // modelo (o primário GLM não recebe PDF inline). O ARQUIVO em si vai pro bucket
-  // privado do usuário (regra: toda mídia vai pra pasta do dono). O history guarda
-  // só um marcador curto (📎 nome), não o texto inteiro do PDF (incharia o banco).
+  // PDFs attached in this turn: we extract the TEXT and inject it into the message for the
+  // assistant (same as transcribed audio and vision), so it works with ANY
+  // model (the primary GLM doesn't receive inline PDF). The FILE itself goes to the user's
+  // private bucket (rule: all media goes to the owner's folder). The history keeps
+  // only a short marker (📎 name), not the PDF's whole text (would bloat the database).
   let userInput = message;
   let savedUserMsg = message;
-  // Anexo que a plataforma NÃO conseguiu transformar em texto (PDF escaneado,
-  // arquivo corrompido, planilha vazia). Quando isso acontece o modelo não
-  // recebeu conteúdo nenhum do arquivo, então descrever o que está nele só pode
-  // vir de uma ferramenta de leitura. É o gatilho do freio de fundamentação.
-  // Anexo lido com sucesso NÃO entra aqui: o conteúdo foi entregue no próprio
-  // turno, e acusá-lo seria falso positivo.
+  // Attachment the platform was NOT able to turn into text (scanned PDF,
+  // corrupted file, empty spreadsheet). When this happens the model
+  // received no content at all from the file, so describing what's in it can only
+  // come from a reading tool. It's the trigger for the grounding guard.
+  // An attachment read successfully does NOT go in here: the content was delivered in the
+  // same turn, and flagging it would be a false positive.
   let anexoSemTexto = false;
   if (files?.length) {
     const blocks = [];
@@ -5280,8 +5280,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     for (const f of files) {
       const kind = f.kind || docKind(f.name, f.mime) || 'pdf';
       const name = f.name || (kind === 'pdf' ? 'documento.pdf' : 'documento');
-      // Documento de texto (HTML/markdown/txt/json/xml/svg): lê direto em
-      // UTF-8. No HTML mantém a marcação crua (serve de referência de layout).
+      // Text document (HTML/markdown/txt/json/xml/svg): reads directly in
+      // UTF-8. For HTML it keeps the raw markup (serves as a layout reference).
       if (kind === 'text') {
         let raw = '';
         try { raw = f.buffer.toString('utf8'); } catch { raw = ''; }
@@ -5304,11 +5304,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         markers.push(`📎 ${name}`);
         continue;
       }
-      // Planilha (Excel, CSV ou TSV): vai pro pandas no ambiente de análise e o
-      // modelo recebe só a estrutura (abas, linhas, colunas), nunca as células.
-      // Qualquer pergunta sobre o conteúdo passa por analisar_planilha. Se o
-      // ambiente falhar, a nota diz que não deu pra ler; não existe volta pro
-      // texto (ver planilha.mjs). O arquivo cru vai pro bucket do dono.
+      // Spreadsheet (Excel, CSV or TSV): goes to pandas in the analysis environment and the
+      // model only receives the structure (sheets, rows, columns), never the cells.
+      // Any question about the content goes through analisar_planilha. If the
+      // environment fails, the note says it couldn't be read; there's no fallback to
+      // text (see planilha.mjs). The raw file goes to the owner's bucket.
       if (kind === 'planilha') {
         const tipo = tipoPlanilha(name, f.mime) || 'excel';
         if (s3Enabled()) {
@@ -5320,15 +5320,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const lr = await loadSpreadsheetIntoSandbox(userId, f.buffer, name, { tipo });
         if (!lr.ok) console.error('[planilha] carregar:', lr.error);
         blocks.push(`[Planilha anexada: "${name}"]\n${lr.note}`);
-        // O conteúdo não veio no turno: descrever a planilha exige a leitura
-        // por ferramenta, e o freio de fundamentação cobra isso.
+        // The content didn't come in this turn: describing the spreadsheet requires reading
+        // it with a tool, and the grounding guard enforces this.
         anexoSemTexto = true;
         markers.push(`📎 ${name}${lr.ok ? '' : ' (erro ao ler)'}`);
         continue;
       }
-      // PDF: salva na pasta do dono (biblioteca de mídia), como as imagens, e
-      // guarda o id no turno pra tool que precisa do ARQUIVO em si (envio de
-      // documento) achar o PDF que veio com o pedido.
+      // PDF: saves to the owner's folder (media library), like the images, and
+      // keeps the id in the turn so a tool that needs the FILE itself (sending a
+      // document) can find the PDF that came with the request.
       if (s3Enabled()) {
         try {
           const savedPdf = await saveBlob({ buffer: f.buffer, ext: 'pdf', mime: f.mime || 'application/pdf', kind: 'document', source: 'upload', caption: name });
@@ -5342,12 +5342,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (ptext) {
           blocks.push(`[Documento PDF anexado: "${name}"${pages ? ` (${pages} página(s))` : ''}${truncated ? ' — texto longo, mostrando o começo' : ''}]\n${ptext}`);
         } else {
-          // PDF sem camada de texto é arte, logo, papel timbrado ou documento
-          // escaneado. Isso era beco sem saída ("não consegui extrair texto"): o
-          // arquivo existia e o assistente não tinha como nem OLHAR nem USAR,
-          // que foi o que travou o caso do logo. Rasterizar as páginas põe o PDF
-          // na biblioteca como IMAGEM de verdade, então dá pra abrir com
-          // ver_midia e pra colar em compor_imagem sem redesenhar nada.
+          // A PDF with no text layer is artwork, meaning letterhead or a scanned
+          // document. This used to be a dead end ("couldn't extract text"): the
+          // file existed and the assistant had no way to even LOOK at it or USE it,
+          // which is what got the logo case stuck. Rasterizing the pages puts the PDF
+          // in the library as a real IMAGE, so it can be opened with
+          // ver_midia and pasted into compor_imagem without redrawing anything.
           const paginas = [];
           try {
             const { imagens } = await renderPdfPagesToPng(f.buffer, { pages: 3, width: 1600 });
@@ -5371,8 +5371,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       } catch (e) {
         const emsg = String(e?.message ?? e);
         console.error('[pdf] extract:', emsg);
-        // PDF corrompido/malformado (ex "Invalid Root reference", estrutura
-        // quebrada): dá uma explicação amigável em vez do erro técnico cru.
+        // Corrupted/malformed PDF (e.g. "Invalid Root reference", broken
+        // structure): gives a friendly explanation instead of the raw technical error.
         const corrupt = /invalid root|xref|structure|malformed|corrupt|not a pdf|invalid pdf|startxref|trailer/i.test(emsg);
         blocks.push(corrupt
           ? `[Documento PDF anexado: "${name}" — o arquivo parece estar corrompido ou incompleto e não pôde ser aberto. Peça ao usuário, de forma gentil, pra reenviar o PDF (por exemplo reexportando ou baixando de novo).]`
@@ -5385,29 +5385,29 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     savedUserMsg = message ? `${message} ${marker}` : marker;
     userInput = [message, ...blocks].filter(Boolean).join('\n\n');
   }
-  // Marcador de FOTO no history. A imagem é usada na visão DESTE turno e depois
-  // apagada da mensagem (não dá pra reenviar base64 a cada turno). Sem marcador,
-  // o turno some sem deixar rastro e o assistente responde "E esses?" no vazio.
-  // Grava só o texto: 🖼️ [foto id=N: <legenda já gerada no recebimento>]. Não vai
-  // pro userInput porque neste turno o modelo está VENDO a imagem de verdade.
-  // O id vai junto pra que, num turno DEPOIS, dá pra reabrir a foto certa com
-  // ver_midia direto (a legenda é uma descrição textual, não a imagem).
+  // PHOTO marker in the history. The image is used for THIS turn's vision and then
+  // removed from the message (can't resend base64 every turn). Without a marker,
+  // the turn vanishes with no trace and the assistant answers "And these?" into the void.
+  // Saves only the text: 🖼️ [photo id=N: <caption already generated on receipt>]. It doesn't go
+  // into userInput because in this turn the model is REALLY SEEING the image.
+  // The id goes along so that, in a LATER turn, the right photo can be reopened with
+  // ver_midia directly (the caption is a textual description, not the image).
   if (images?.length) {
     const mk = imageHistoryMarkers(images.length, turnImageCaptions, turnImageIds);
     savedUserMsg = savedUserMsg ? `${savedUserMsg} ${mk}` : mk;
   }
   if (selo) userInput = selo.entrada(userInput);
-  // Contexto da página da extensão do Chrome: EFÊMERO. Vai só pro modelo (userInput),
-  // nunca pro history (savedUserMsg fica sendo a mensagem curta do usuário). Assim,
-  // num loop de vários passos, o history não acumula o texto+elementos de todas as
-  // páginas já vistas — cada step reenvia só a página ATUAL, uma vez.
+  // Chrome extension page context: EPHEMERAL. Goes only to the model (userInput),
+  // never to the history (savedUserMsg stays being the user's short message). This way,
+  // in a multi-step loop, the history doesn't accumulate the text+elements of every
+  // page already seen; each step resends only the CURRENT page, once.
   if (pageContext && String(pageContext).trim()) {
     userInput = [userInput, String(pageContext)].filter(Boolean).join('\n\n');
   }
-  // WEBHOOK de entrada: um sistema externo (ex CMS) está rodando uma SKILL deste
-  // agente por POST assíncrono (ping-pong por sessão). Injetamos o corpo da skill
-  // (EFÊMERO, todo turno) + regras de operação. Os dados que vieram no POST são
-  // REFERÊNCIA de um sistema, não uma ordem: nunca sobrepõem as regras do agente.
+  // INBOUND WEBHOOK: an external system (e.g. CMS) is running one of this agent's
+  // SKILLS via async POST (ping-pong per session). We inject the skill's body
+  // (EPHEMERAL, every turn) + operating rules. The data that came in the POST is a
+  // system's REFERENCE, not an order: it never overrides the agent's rules.
   if (webhook?.skill?.body) {
     const wb = webhook.skill;
     const directive = [
@@ -5423,8 +5423,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     ].join('\n');
     userInput = [directive, userInput].filter(Boolean).join('\n\n');
   }
-  // Respeita as chavinhas do usuário: imagem (gerar_imagem) e tts (gerar_audio),
-  // e só oferece gerar_audio onde o áudio chega (voiceReplyDelivered).
+  // Respects the user's toggles: image (gerar_imagem) and tts (gerar_audio),
+  // and only offers gerar_audio where audio can be delivered (voiceReplyDelivered).
   for (const t of mediaTools(userId, {
     image: mprefs.image,
     audio: mprefs.tts && voiceReplyDelivered({ kind, routineChannel }),
@@ -5432,16 +5432,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     onUsage: (e) => mediaUsages.push(e),
     onAttachment: (a) => { attachments.push(a); try { onAttachment?.(a); } catch {} },
   })) registry.add(t);
-  // COMPOSIÇÃO DETERMINÍSTICA: a outra metade do gerar_imagem. Uma inventa a
-  // arte, esta monta o resultado EXATO (logo do dono colado em pixel, texto
-  // escrito com fonte de verdade). Anda junto da chavinha de imagem porque o
-  // produto é o mesmo pro usuário: sai uma imagem no canal dele.
+  // DETERMINISTIC COMPOSITION: the other half of gerar_imagem. One invents the
+  // artwork, this one assembles the EXACT result (owner's logo pasted pixel-for-pixel, text
+  // written with a real font). It goes along with the image toggle because the
+  // product is the same for the user: an image comes out on their channel.
   if (mprefs.image && s3Enabled()) {
     for (const t of comporTools(userId, {
       saveBlob,
       onAttachment: (a) => { attachments.push(a); try { onAttachment?.(a); } catch {} },
-      // Resolve o id SEMPRE na biblioteca do dono: uma pessoa não alcança
-      // arquivo de outra nem passando um id que não é dela.
+      // Always resolves the id in the owner's OWN library: one person can't reach
+      // another's file even by passing an id that isn't theirs.
       carregarAsset: async (id) => {
         const asset = await getMediaAsset(userId, id);
         if (!asset) return null;
@@ -5450,17 +5450,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     })) registry.add(t);
   }
-  // Cards de produto: cada item vira uma mensagem nativa no canal (foto + nome +
-  // botão "Ver produto" que abre o link). Renderizado no WhatsApp (cta_url),
-  // Telegram (sendPhoto + inline url) e app. É o jeito certo de mostrar produto
-  // com link de compra: em vez de colar URL solta no texto, o modelo chama isto.
+  // Product cards: each item becomes a native message on the channel (photo + name +
+  // "View product" button that opens the link). Rendered on WhatsApp (cta_url),
+  // Telegram (sendPhoto + inline url) and the app. It's the right way to show a product
+  // with a purchase link: instead of pasting a loose URL in the text, the model calls this.
   registry.add(productCards.tool);
-  // Gera um ARQUIVO (.xlsx/.docx/.pdf/.md/.txt/.html) a partir de texto/markdown, INDEPENDENTE
-  // de plataforma (não precisa de Google Drive). O arquivo cai no bucket do próprio
-  // usuário (saveBlob → media_assets) e é ENTREGUE nativo no canal via attachment
-  // do tipo 'document' (WhatsApp document, Telegram sendDocument, link no web). É o
-  // caminho PADRÃO pra "me manda um .doc/PDF disso" — nada de gerar .txt/.html pro
-  // usuário colar à mão nem falar de caminho de arquivo interno.
+  // Generates a FILE (.xlsx/.docx/.pdf/.md/.txt/.html) from text/markdown, INDEPENDENT
+  // of platform (doesn't need Google Drive). The file lands in the user's own
+  // bucket (saveBlob -> media_assets) and is DELIVERED natively on the channel via a 'document'
+  // attachment (WhatsApp document, Telegram sendDocument, link on web). It's the
+  // STANDARD path for "send me a .doc/PDF of this"; no generating .txt/.html for the
+  // user to paste by hand, and no talking about an internal file path.
   registry.add({
     name: 'gerar_documento',
     description:
@@ -5490,20 +5490,20 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     run: async ({ nome, formato = 'docx', conteudo } = {}) => {
       if (!conteudo || !String(conteudo).trim()) return 'ERRO: preciso do conteúdo do documento (campo conteudo).';
       if (!s3Enabled()) return 'ERRO: geração de arquivos indisponível (bucket não configurado). Avise que não dá pra gerar o arquivo agora.';
-      // Guarda determinística contra o incidente de 09/09/2026: o conteúdo veio
-      // com o marcador que o limitador de blob injeta, isto é, é uma CÓPIA de uma
-      // chamada anterior já truncada. Gerar assim grava um arquivo mutilado (e o
-      // próprio marcador virou linha de dados dentro do xlsx da usuária).
+      // Deterministic guard against the 2026-09-09 incident: the content came
+      // with the marker the blob limiter injects, meaning it is a COPY of a
+      // previous, already truncated call. Generating it like this saves a mutilated file (and the
+      // marker itself became a data row inside the user's xlsx).
       if (hasCutMarker(conteudo)) {
         return 'ERRO: o conteúdo contém o marcador "…[cortado: N chars]…" — você está copiando uma chamada ANTERIOR que foi truncada, então esse conteúdo está incompleto e o arquivo sairia faltando linhas. NÃO tente de novo por aqui. Pra MUDAR uma planilha que já existe, use editar_planilha (ela altera o arquivo por código, sem passar o conteúdo por você). Se for um arquivo novo, monte o conteúdo da fonte original, não da sua chamada anterior.';
       }
       const fmt = String(formato || 'docx').toLowerCase().replace(/^\.+/, '');
       if (!SUPPORTED_FORMATS.includes(fmt)) return `ERRO: formato "${formato}" não suportado. Use um de: ${SUPPORTED_FORMATS.join(', ')}.`;
       const base = String(nome || 'documento').replace(/[\/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'documento';
-      // `aviso` só vem preenchido quando o gerador teve que DESCARTAR parte do
-      // conteúdo (hoje: abas/linhas/colunas acima do teto do xlsx). Ele precisa
-      // chegar até aqui pro modelo não anunciar "planilha pronta" sobre um
-      // arquivo que saiu capado.
+      // `aviso` only comes filled in when the generator had to DISCARD part of the
+      // content (today: sheets/rows/columns above the xlsx ceiling). It needs to
+      // reach here so the model doesn't announce "spreadsheet ready" about a
+      // file that came out capped.
       let buffer, mime, ext, aviso;
       try { ({ buffer, mime, ext, aviso } = await generateDocument({ format: fmt, content: conteudo, title: base })); }
       catch (e) { console.error('[docgen]', e?.message ?? e); return 'ERRO: não consegui gerar o arquivo. Avise o usuário e tente de novo.'; }
@@ -5559,17 +5559,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Arquivo "${filename}" (${r.tamanho} bytes, ${mime}) veio da máquina do usuário, está guardado na biblioteca dele e já foi entregue como anexo no chat. Responda em uma frase curta.`;
     },
   });
-  // Geração de VÍDEO da própria pessoa (ComfyUI/H3, worker GPU externo). A face
-  // vem SEMPRE da foto-âncora verificada (user_likeness), nunca de upload na hora:
-  // a restrição "só a própria pessoa" é resolvida por construção. Assíncrono: a
-  // tool cria o job e responde "tô gerando"; o poller do scheduler entrega quando
-  // fica pronto. NÃO-gated: pedir vídeo de si mesmo já é a autorização; o guardrail
-  // é identidade verificada + moderação do pedido + cobrança por segundo, não um
-  // confirm de 2 turnos.
-  // EM REVISÃO (22/09/2026): com videoEmRevisao() a tool nem entra no registro. A
-  // promessa de "eu faço vídeo" nasce da DESCRIÇÃO da tool, então tirar ela daqui
-  // é o que faz o assistente parar de oferecer o recurso; freio dentro do run()
-  // chegaria tarde (a pessoa já teria ouvido que dá).
+  // VIDEO generation of the person themselves (ComfyUI/H3, external GPU worker). The face
+  // ALWAYS comes from the verified anchor photo (user_likeness), never from an upload on the spot:
+  // the "only the person themselves" restriction is solved by construction. Asynchronous: the
+  // tool creates the job and replies "generating"; the scheduler's poller delivers it when
+  // it's ready. NOT gated: asking for a video of oneself is already the authorization; the guardrail
+  // is verified identity + moderation of the request + per-second billing, not a
+  // 2-turn confirm.
+  // UNDER REVIEW (2026-09-22): with videoEmRevisao() the tool doesn't even enter the registry. The
+  // promise "I make video" is born from the tool's DESCRIPTION, so removing it from here
+  // is what makes the assistant stop offering the feature; a guard inside run()
+  // would arrive too late (the person would have already heard that it's possible).
   if (!videoEmRevisao()) registry.add({
     name: 'gerar_video',
     description:
@@ -5599,38 +5599,38 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const falaTxt = String(fala || '').trim();
       const wantsRecorded = usar_audio_gravado === true || usar_audio_gravado === 'true';
       if (!cenaTxt) return 'ERRO: preciso da descrição da cena do vídeo (campo cena).';
-      // Inalcançável enquanto o registro acima estiver condicionado; fica como
-      // trava de segurança pra qualquer caminho futuro que registre a tool.
+      // Unreachable while the registration above is conditional; stays as a
+      // safety guard for any future path that registers the tool.
       if (videoEmRevisao()) return `A geração de vídeo está em revisão pelo time do ${marca().nome} e não está disponível. Diga isso ao usuário, sem prometer prazo.`;
       if (!videoGenEnabled()) return 'A geração de vídeo ainda não está disponível. Avise que é um recurso que está chegando em breve.';
       if (!s3Enabled()) return 'ERRO: geração de vídeo indisponível (armazenamento não configurado). Avise que não dá pra gerar agora.';
-      // Cobrança é desacoplada da disponibilidade: com VIDEO_CREDITS_PER_SEC=0 a
-      // feature segue liberada (útil pra testes), só não debita crédito (ver poller).
-      // Identidade verificada é PRÉ-REQUISITO: a face sai da âncora verificada.
+      // Billing is decoupled from availability: with VIDEO_CREDITS_PER_SEC=0 the
+      // feature stays enabled (useful for testing), it just doesn't deduct credit (see poller).
+      // Verified identity is a PREREQUISITE: the face comes from the verified anchor.
       const lk = await getLikeness(userId);
       if (!lk || lk.status !== 'verified' || !lk.anchor_key) {
         return 'Pra gerar vídeo seu eu preciso da tua identidade verificada primeiro (a foto que vira base do vídeo). '
           + 'Avise o usuário que ele precisa concluir a verificação de identidade no app antes; não peça foto por aqui.';
       }
-      // Modo áudio gravado (V1 literal): exige o áudio gravado no app.
+      // Recorded audio mode (V1 literal): requires audio recorded in the app.
       if (wantsRecorded && !lk.speech_key) {
         return 'Pra usar o áudio gravado, o usuário precisa gravar/subir esse áudio no app antes (aba Configurações, "Áudio pra falar"). '
           + 'Avise ele disso com gentileza; não peça áudio por aqui. Se preferir, dá pra falar um texto (voz clonada) ou gerar sem fala.';
       }
-      // Falar por TEXTO exige voz de referência gravada (a voz é clonada dela). Não
-      // vale no modo áudio gravado (aí as palavras vêm do próprio áudio).
+      // Speaking via TEXT requires a recorded reference voice (the voice is cloned from it). Doesn't
+      // apply in recorded audio mode (there the words come from the audio itself).
       if (!wantsRecorded && falaTxt && !lk.voice_key) {
         return 'Pra você aparecer FALANDO, o usuário precisa gravar uma voz de referência no app antes (aba Configurações, "Voz de referência"). '
           + 'Avise ele disso com gentileza; não peça áudio por aqui. Se ele preferir, dá pra gerar o vídeo sem fala.';
       }
-      // Um vídeo por vez por usuário (job é caro/lento).
+      // One video at a time per user (job is expensive/slow).
       if ((await countActiveVideoJobsForUser(userId)) > 0) {
         return 'Você já tem um vídeo sendo gerado agora. Avise que assim que ele ficar pronto eu mando, e aí dá pra pedir o próximo.';
       }
       let dur = Number(duracao_segundos);
       if (!Number.isFinite(dur) || dur <= 0) dur = 8;
       dur = Math.min(Math.max(1, Math.round(dur)), MAX_VIDEO_SECONDS);
-      // Moderação do pedido (fail-closed): bloqueia antes de gastar GPU. Avalia cena+fala.
+      // Request moderation (fail-closed): blocks before spending GPU. Evaluates scene+speech.
       let mod;
       try { mod = await moderateVideoPrompt({ prompt: [cenaTxt, falaTxt].filter(Boolean).join(' — fala: ') }); }
       catch { mod = { allowed: false, reason: 'não consegui avaliar o pedido com segurança' }; }
@@ -5639,21 +5639,21 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const motivo = (mod.labels && mod.labels.length) ? mod.labels.join(', ') : (mod.reason || 'conteúdo não permitido');
         return `Esse pedido de vídeo não pode ser gerado (${motivo}). Explique ao usuário, com educação e sem julgar, que esse tipo de conteúdo não é permitido, e ofereça ajustar o pedido.`;
       }
-      // Âncora entregue ao worker como URL S3 pré-assinada (HTTPS, caduca em 15min).
+      // Anchor delivered to the worker as a pre-signed S3 URL (HTTPS, expires in 15min).
       const imageUrl = presignGet(lk.anchor_key, 900);
       if (!imageUrl) return 'ERRO: não consegui preparar a imagem base do vídeo. Avise que houve um problema e tente de novo daqui a pouco.';
       // Extra face photos (up to 2): improve feature reconstruction. Also
       // presigned; sent as face_ref_urls to the worker (contract of 07/08).
       const faceRefUrls = [lk.face2_key, lk.face3_key]
         .filter(Boolean).map((k) => presignGet(k, 900)).filter(Boolean);
-      // Rota de voz, por prioridade:
-      //  • V1 LITERAL (useLiteral): o vídeo faz lip-sync do áudio gravado no app
-      //    (audio_url sem voice_clone_only). As palavras/entonação são do próprio
-      //    áudio; a duração sai dele (não mandamos duration).
-      //  • V2 CLONE (useClone): fala digitada + voz de referência. A voz vira só
-      //    referência de TIMBRE (audio_url) e as palavras vêm de speech_text; a
-      //    duração é dimensionada pelo texto no server (não mandar duration).
-      //  • MUDO: sem áudio; duração manual.
+      // Voice route, by priority:
+      //  • V1 LITERAL (useLiteral): the video lip-syncs the audio recorded in the app
+      //    (audio_url without voice_clone_only). The words/intonation are from the
+      //    audio itself; the duration comes from it (we don't send duration).
+      //  • V2 CLONE (useClone): typed speech + reference voice. The voice becomes only a
+      //    TIMBRE reference (audio_url) and the words come from speech_text; the
+      //    duration is sized from the text on the server (don't send duration).
+      //  • MUTE: no audio; manual duration.
       const useLiteral = wantsRecorded && !!lk.speech_key;
       const useClone = !useLiteral && !!(falaTxt && lk.voice_key);
       const audioUrl = useLiteral
@@ -5677,18 +5677,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           userId, agentId: agent.id, remoteJobId: job.job_id,
           prompt: useLiteral ? `${cenaTxt} — (áudio gravado)` : useClone ? `${cenaTxt} — fala: ${falaTxt}` : cenaTxt,
           withAudio: useLiteral || useClone, durationReq: (useLiteral || useClone) ? null : dur,
-          // Canal de origem: por onde a resposta assíncrona volta. telegram/whatsapp/
-          // email = push; qualquer outro (web/extensão/chat) cai em 'web' e a entrega
-          // vai pra PRÓPRIA thread do pedido (não empurra pro Telegram). Ver poller.
+          // Origin channel: where the async reply goes back through. telegram/whatsapp/
+          // email = push; any other (web/extension/chat) falls back to 'web' and the delivery
+          // goes to the request's OWN thread (doesn't push to Telegram). See poller.
           originChannel: ['telegram', 'whatsapp', 'email'].includes(kind) ? kind : 'web',
           threadId: thread.id,
         });
       } catch (e) {
         console.error('[video] createVideoJob:', e?.message ?? e);
-        // O job já foi criado no worker; segue mesmo sem a linha local (raro).
+        // The job was already created on the worker; it proceeds even without the local row (rare).
       }
-      // Worker roda os renders em fila serial (1 por vez). queue_position conta
-      // quantos jobs há na frente (inclui o nosso); >1 = tem gente esperando.
+      // Worker runs renders in a serial queue (1 at a time). queue_position counts
+      // how many jobs are ahead (includes ours); >1 = someone is waiting.
       const qpos = Number(job?.queue_position);
       const filaNota = Number.isFinite(qpos) && qpos > 1
         ? ` Tem ${qpos - 1} vídeo(s) na frente na fila, então pode demorar um pouco mais.`
@@ -5696,9 +5696,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return `Vídeo em geração (uns minutos).${filaNota} NÃO diga que está pronto: avise o usuário que você começou a gerar o vídeo dele e que vai mandar aqui assim que ficar pronto, sem ele precisar ficar esperando.`;
     },
   });
-  // Biblioteca de mídia (só no modo S3, onde a mídia é persistente e o backend
-  // consegue reler os bytes): listar o que o usuário já mandou/gerou, reler uma
-  // imagem (releitura por visão -> texto) e anotar uma descrição pra achar depois.
+  // Media library (S3 mode only, where media is persistent and the backend
+  // can re-read the bytes): list what the user has already sent/generated, re-read an
+  // image (re-read via vision -> text) and jot down a description to find it later.
   const mediaLibrary = s3Enabled();
   if (mediaLibrary) {
     registry.add({
@@ -5711,18 +5711,18 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return rows.map((r) => {
           const when = new Date(r.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
           const orig = r.source === 'upload' ? 'enviada pelo usuário' : (r.source === 'generated' ? 'gerada por você' : '');
-          // Aqui a legenda é só pra ACHAR o arquivo pelo nome/assunto, não pra
-          // responder sobre ele: corta em 200 caracteres pra a lista de até 50
-          // itens não inchar agora que a legenda guardada é uma leitura completa.
+          // Here the caption is only to FIND the file by name/subject, not to
+          // answer about it: truncated to 200 characters so the list of up to 50
+          // items doesn't bloat now that the stored caption is a full reading.
           const cap = String(r.caption || '').trim().slice(0, 200);
           return `- id=${r.id} · ${r.kind || 'arquivo'} · ${when}${orig ? ' · ' + orig : ''}${cap ? ' · "' + cap + '"' : ''}`;
         }).join('\n');
       },
     });
-    // REENVIAR um arquivo que JÁ está na biblioteca (documento gerado ou mídia)
-    // sem gerar tudo de novo. Reancora o anexo no canal (getMedia lê os bytes pela
-    // key). Fecha o "cadê o arquivo que você fez": listar_midia acha o id, este
-    // reenvia. Não-gated: só devolve pro próprio dono um arquivo que já é dele.
+    // RESEND a file that's ALREADY in the library (generated document or media)
+    // without generating everything again. Re-anchors the attachment in the channel (getMedia reads the bytes by
+    // key). Closes the "where's the file you made": listar_midia finds the id, this
+    // resends it. Not gated: it only returns to the owner a file that's already theirs.
     registry.add({
       name: 'reenviar_arquivo',
       description: 'Resends to the chat a file that ALREADY exists in the user\'s library (a .docx/.pdf document you generated before, or a media item), without generating it again. Use it when they ask back for something you already created ("me manda de novo aquele .doc", "cadê o arquivo que você fez", "reenvia o PDF"): find the id with listar_midia and resend it. Without id, resends the most recent one in the library.',
@@ -5732,9 +5732,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (id != null) asset = await getMediaAsset(userId, id);
         else { const rows = await listMediaAssets(userId, { limit: 1 }); asset = rows[0] || null; }
         if (!asset) return id != null ? 'ERRO: não achei esse arquivo na biblioteca (id inválido ou de outro usuário). Use listar_midia pra achar o id certo.' : 'A biblioteca está vazia; não há arquivo pra reenviar.';
-        // Em documento a legenda É o nome do arquivo; em imagem ela é a leitura da
-        // foto (agora longa), então corta pra não virar um "nome" de mil caracteres
-        // no anexo entregue no canal.
+        // In a document the caption IS the file name; in an image it's the reading of the
+        // photo (now long), so it's truncated so it doesn't become a thousand-character "name"
+        // in the attachment delivered in the channel.
         const filename = String(asset.caption || '').trim().slice(0, 120) || `arquivo-${asset.id}`;
         const type = asset.kind === 'image' ? 'image' : ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio') ? 'audio' : 'document');
         const att = { type, url: '/api/media?key=' + encodeURIComponent(asset.s3_key), mime: asset.mime || 'application/octet-stream', key: asset.s3_key, filename, name: filename };
@@ -5743,13 +5743,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return `Arquivo "${filename}" reenviado ao usuário no chat. Responda em uma frase curta, sem colar o conteúdo.`;
       },
     });
-    // SALVAR o anexo de um e-mail como ARQUIVO de verdade. gmail_read_attachment
-    // só extrai TEXTO e descarta os bytes, então até aqui não havia como entregar
-    // o anexo em si (nem no chat, nem no Drive). Esta tool baixa os mesmos bytes,
-    // guarda na biblioteca (saveBlob -> S3 + media_assets) e ancora no chat, do
-    // mesmo jeito que gerar_documento. Depois disso o enviar_para_drive já leva a
-    // cópia pro Drive. source:'upload' porque o arquivo vem de fora: passa pelo
-    // antivírus. Não-gated: entrega ao próprio dono um arquivo que já é dele.
+    // SAVE an email attachment as an actual FILE. gmail_read_attachment
+    // only extracts TEXT and discards the bytes, so until now there was no way to deliver
+    // the attachment itself (neither in chat nor in Drive). This tool downloads the same bytes,
+    // stores them in the library (saveBlob -> S3 + media_assets) and anchors it in chat, the
+    // same way as gerar_documento. After this, enviar_para_drive already takes the
+    // copy to Drive. source:'upload' because the file comes from outside: it goes through
+    // antivirus. Not gated: delivers to the owner a file that's already theirs.
     if (caps.gmail?.read) {
       registry.add({
         name: 'salvar_anexo_email',
@@ -5813,12 +5813,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         onUsage:usage=>mediaUsages.push({usage,kind:'vision'}),
       }),
     });
-    // BUSCA REVERSA POR IMAGEM (SerpApi Google Lens): a partir de uma FOTO que o
-    // usuário mandou, acha o mesmo produto / parecidos à venda (lojas BR no topo).
-    // Reusa presignGet (URL temporária pública da imagem privada do usuário) — o
-    // Lens baixa a imagem pela URL, então o proxy /api/media autenticado não serve.
-    // NÃO busca preço a fundo (o Lens só às vezes traz preço): entrega loja+link+
-    // foto e o modelo cura + mostra com mostrar_produtos.
+    // REVERSE IMAGE SEARCH (SerpApi Google Lens): from a PHOTO the
+    // user sent, finds the same product / similar ones for sale (BR stores on top).
+    // Reuses presignGet (temporary public URL of the user's private image); the
+    // Lens downloads the image via the URL, so the authenticated /api/media proxy won't work.
+    // Does NOT dig deep for price (Lens only sometimes brings a price): delivers store+link+
+    // photo and the model curates + shows it with mostrar_produtos.
     if (serpapiEnabled()) {
       registry.add({
         name: 'buscar_produto_por_imagem',
@@ -5846,8 +5846,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           // documents included. No explicit target, refuse. (27/08/2026)
           let asset;
           if (id != null && String(id).trim()) asset = await getMediaAsset(userId, id);
-          // A lista tem uma posição por imagem do turno, com buraco onde o
-          // gravamento falhou: pega a última que REALMENTE tem id.
+          // The list has one slot per image of the turn, with a gap where the
+          // save failed: picks the last one that REALLY has an id.
           else if (turnImageIds.some((v) => v != null)) {
             asset = await getMediaAsset(userId, [...turnImageIds].reverse().find((v) => v != null));
           }
@@ -5856,9 +5856,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           if (!(asset.kind === 'image' || (asset.mime || '').startsWith('image'))) return 'Esse item não é uma imagem; a busca por imagem precisa de uma foto de produto.';
           const url = await presignGet(asset.s3_key, 900);
           if (!url) return 'ERRO: não consegui gerar o acesso temporário à imagem pra fazer a busca.';
-          // Toda saída de foto do usuário pra terceiro fica registrada, com a
-          // ORIGEM da escolha: sem isto não dá pra auditar depois qual arquivo saiu
-          // nem quem apontou. Só ids, nada de URL assinada nem legenda no log.
+          // Every outgoing user photo to a third party gets logged, with the
+          // ORIGIN of the choice: without this there's no way to audit later which file went out
+          // or who pointed to it. Only ids, no signed URL or caption in the log.
           console.log(`[egress] lens user=${userId} asset=${asset.id} origem=${id != null && String(id).trim() ? 'id-explicito' : 'foto-do-turno'}`);
           let matches;
           try { matches = await lensSearchByUrl(url, { max: 24 }); }
@@ -5914,11 +5914,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         },
       });
     }
-    // LER O TEXTO de um DOCUMENTO da biblioteca (docx/pdf/md/txt/html), pelo id.
-    // Antes o assistente sabia LISTAR e REENVIAR um arquivo, mas não conseguia ABRIR
-    // o conteúdo — pedia pro usuário reenviar. Isto lê os bytes do bucket e extrai o
-    // texto: pdf via pdf-parse; docx/texto via extractDocumentText (nosso docx é zip
-    // STORED, então o texto sai sem lib de zip). Fecha o "não consigo abrir o arquivo".
+    // READ THE TEXT of a library DOCUMENT (docx/pdf/md/txt/html), by id.
+    // Before, the assistant could LIST and RESEND a file, but couldn't OPEN
+    // the content — it asked the user to resend it. This reads the bytes from the bucket and extracts
+    // the text: pdf via pdf-parse; docx/text via extractDocumentText (our docx is a
+    // STORED zip, so the text comes out without a zip lib). Closes the "I can't open the file".
     registry.add({
       name: 'ler_arquivo',
       description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia. Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id, reads the most recent document in the library.',
@@ -5943,8 +5943,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const name = asset.caption || `arquivo-${asset.id}`;
         const ext = (String(asset.caption || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
         const mime = asset.mime || bytes.contentType || '';
-        // Planilha nunca vira texto pro modelo (ver planilha.mjs): carrega no
-        // pandas e devolve só a estrutura, ou a nota de que não deu pra abrir.
+        // Spreadsheet never becomes text for the model (see planilha.mjs): loads it in
+        // pandas and returns only the structure, or a note that it couldn't be opened.
         const tipo = tipoPlanilha(name, mime);
         if (tipo) {
           const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo });
@@ -5982,12 +5982,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         return ok ? 'Anotado.' : 'ERRO: mídia não encontrada.';
       },
     });
-    // Sobe uma mídia que o usuário mandou (ou que você gerou) DIRETO pra um app
-    // que você publicou no subdomínio do usuário, sem você precisar tocar em
-    // S3/AWS nem baixar o arquivo. O backend lê os bytes (fetchMedia) e faz o POST
-    // pro app com a imagem embutida como data URL base64. Os bytes NÃO passam pelo
-    // seu contexto (não estoura tokens). Ex: pôr a foto de uma planta no app
-    // "minhas-plantas" via POST /api/plants com o campo "photo".
+    // Uploads a media file the user sent (or that you generated) DIRECTLY to an app
+    // you published on the user's subdomain, without you needing to touch
+    // S3/AWS or download the file. The backend reads the bytes (fetchMedia) and does the POST
+    // to the app with the image embedded as a base64 data URL. The bytes do NOT pass through
+    // your context (doesn't blow up tokens). Ex: put a plant photo in the
+    // "minhas-plantas" app via POST /api/plants with the "photo" field.
     if (hostingEnabled()) {
       registry.add({
         name: 'enviar_midia_para_sistema',
@@ -6046,24 +6046,24 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       });
     }
   }
-  // Modelo SEM busca embutida (OpenAI): dá grounding via tool buscar_web, cujo
-  // backend é uma busca grounded no Gemini. O custo da busca entra como kind='search'.
+  // Model WITHOUT built-in search (OpenAI): grounds it via the buscar_web tool, whose
+  // backend is a grounded search on Gemini. The search cost is logged as kind='search'.
   if (useWebSearch) {
     registry.add(webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno }));
-    // Abrir link que o usuário manda (lê o conteúdo real da página em vez de
-    // deduzir/buscar por palavra-chave num link solto — fix do bug de 01/07).
-    // Se o link for um PDF, o texto é extraído e o arquivo vai pro bucket do dono.
+    // Opens a link the user sends (reads the actual content of the page instead of
+    // guessing/searching by keyword on a bare link — fix for the 2026-07-01 bug).
+    // If the link is a PDF, the text is extracted and the file goes to the owner's bucket.
     registry.add(openLinkTool({
       onUsage: (e) => mediaUsages.push(e), fontes: fontesDoTurno,
-      // Planilha por link (Google Sheets, .xlsx, .csv) vai pro pandas, como
-      // anexo e Drive; o modelo recebe só a estrutura.
+      // A spreadsheet by link (Google Sheets, .xlsx, .csv) goes to pandas, as
+      // attachment and Drive; the model receives only the structure.
       onSheetLoad: (buf, fname, mime) => loadSpreadsheetIntoSandbox(userId, buf, fname, { mime }),
       savePdf: async (buffer, name) => {
         if (s3Enabled()) await saveBlob({ buffer, ext: 'pdf', mime: 'application/pdf', kind: 'document', source: 'link', caption: name });
       },
     }));
-    // Sub-agente de pesquisa: delega uma investigação pesada (muitas buscas) a um
-    // agente isolado que devolve só a síntese — mantém o contexto do principal leve.
+    // Research sub-agent: delegates a heavy investigation (many searches) to an
+    // isolated agent that returns only the synthesis — keeps the main agent's context light.
     registry.add({
       name: 'pesquisar',
       description: 'Delegates a heavier RESEARCH task (one that requires several web searches and cross-referencing information) to a specialized sub-agent, which investigates on its own and returns ONLY the final synthesized answer. Use it for research/survey tasks with several parts, e.g.: "monte um roteiro de 3 dias em Floripa com lugares reais", "compare os planos de 4 operadoras", "levante as melhores opções de X com preço". For a one-off/quick fact, use buscar_web directly (it is cheaper). The sub-agent does NOT see the conversation, so pass a very complete goal.',
@@ -6077,11 +6077,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       run: async ({ objetivo, formato }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        // Freio por turno (caso de 28/09): o teto de buscas é do turno
-        // inteiro; já batido, não sobe outro sub-agente.
+        // Per-turn guard (2026-09-28 case): the search cap is for the whole
+        // turn; once hit, no more sub-agents spin up.
         if (searchBudget.exhausted) return SEARCH_LIMIT_MSG(searchBudget.max);
         try {
-          // A lista no fim mostra ao modelo principal de onde veio cada [n].
+          // The list at the end shows the main model where each [n] came from.
           const resumo = await runResearchSubagent({ objetivo, formato, onUsage: (e) => mediaUsages.push(e), language: userLang, searchBudget, fontes: fontesDoTurno });
           return citarFontes(resumo, fontesDoTurno, { language: userLang });
         } catch (e) {
@@ -6090,27 +6090,27 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     });
   }
-  // Busca de PASSAGEM AÉREA (Google Flights). Fica ao lado das tools de busca
-  // porque é isso que ela é: uma consulta de preço em fonte real, com cache e
-  // histórico próprios (ver voos.mjs). Sempre ativa quando a fonte está
-  // configurada — o gatilho é o dono pedir voo, não um assunto previsível pelo
-  // roteamento. O custo de cada busca real entra como kind='search'.
+  // FLIGHT search (Google Flights). Sits alongside the search tools
+  // because that's what it is: a price lookup on a real source, with its own cache and
+  // history (see voos.mjs). Always active when the source is
+  // configured — the trigger is the owner asking for a flight, not a subject predictable by
+  // routing. The cost of each real search is logged as kind='search'.
   if (voosEnabled()) {
     for (const t of voosTools(userId, agent.id, { onUsage: (e) => mediaUsages.push(e) })) registry.add(t);
   }
-  // Agente ↔ Agente: fala com o assistente de OUTRA pessoa (contato conectado)
-  // pra resolver um pedido pontual. Negociação curta e delimitada (teto de
-  // rodadas, intents estruturados, dedup, orçamento). Cada lado é cobrado no
-  // dono dele: o lado A (este usuário) entra no turno atual via mediaUsages; o
-  // lado B (o outro dono) é gravado à parte com turn próprio. Só disponível se há
-  // provider primário (GLM/GPT); os sub-agentes usam o mesmo provider.
+  // Agent ↔ Agent: talks to ANOTHER person's assistant (connected contact)
+  // to resolve a one-off request. Short, bounded negotiation (cap on
+  // rounds, structured intents, dedup, budget). Each side is billed to its
+  // own owner: side A (this user) enters the current turn via mediaUsages; side
+  // B (the other owner) is logged separately with its own turn. Only available if there's
+  // a primary provider (GLM/GPT); the sub-agents use the same provider.
   if (usePrimaryLLM) {
-    // Leitura pura: lista os contatos conectados do dono, pra o assistente
-    // consultar ANTES de afirmar/negar acesso a alguém (em vez de inventar).
+    // Pure read: lists the owner's connected contacts, for the assistant
+    // to check BEFORE confirming/denying access to someone (instead of making it up).
     registry.add(listContactsTool({ fromUser: userId }));
-    // Canal de ORIGEM deste pedido: é por onde a resposta assíncrona volta pro
-    // dono (notifyOwner). telegram/whatsapp/email vêm do canal do turno; web e o
-    // resto caem em 'web' (sem push → notifyOwner tenta os pushes disponíveis).
+    // SOURCE channel of this request: it's how the async reply comes back to the
+    // owner (notifyOwner). telegram/whatsapp/email come from the turn's channel; web and the
+    // rest fall into 'web' (no push → notifyOwner tries the available pushes).
     const originChannel = ['telegram', 'whatsapp', 'email'].includes(kind) ? kind : 'web';
     registry.add(agentToAgentTool({
       fromUser: userId,
@@ -6127,26 +6127,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         }
       },
     }));
-    // Ação com consequência do agente↔agente: fechar/aceitar uma proposta com o
-    // assistente do contato. Vai pela trava de confirmação (confirm.mjs): o
-    // assistente chama, nada acontece, o dono precisa dar o "ok" explícito, e só
-    // então a decisão é registrada e entregue ao lado B (que confirma com o dono
-    // dele). Human-in-the-loop nos DOIS lados.
+    // Action with consequences in agent↔agent: closing/accepting a proposal with the
+    // contact's assistant. Goes through the confirmation guard (confirm.mjs): the
+    // assistant calls it, nothing happens, the owner must give an explicit "ok", and only
+    // then is the decision logged and delivered to side B (who confirms with
+    // their own owner). Human-in-the-loop on BOTH sides.
     addGated(registry, [
       confirmAgentDecisionTool({ fromUser: userId, fromAgent: agent.id, originChannel, notifyOwner }),
       respondDecisionTool({ fromUser: userId, fromAgent: agent.id, notifyOwner }),
     ], thread.id);
-    // Ask-human loop (Fase 2): o dono responde uma pergunta que o assistente de um
-    // contato levantou. NÃO é gated (o dono digitando a resposta já é a
-    // autorização; a tool só repassa informação, não fecha compromisso).
+    // Ask-human loop (Phase 2): the owner answers a question raised by a
+    // contact's assistant. NOT gated (the owner typing the answer is already the
+    // authorization; the tool only passes along information, it doesn't close a commitment).
     registry.add(respondExternalQuestionTool({ fromUser: userId, fromAgent: agent.id, notifyOwner }));
-    // Pedido de amizade (conexão de contatos): aceitar/recusar por conversa com o
-    // próprio dono. NÃO é gated (o dono dizer "aceita" já é a autorização; é o
-    // ÚNICO caminho de aceite, sem link/token no e-mail de notificação).
+    // Friend request (contact connection): accept/decline via conversation with the
+    // owner themself. NOT gated (the owner saying "accept" is already the authorization; it's the
+    // ONLY acceptance path, with no link/token in the notification email).
     registry.add(acceptContactTool({ fromUser: userId }));
     registry.add(declineContactTool({ fromUser: userId }));
-    // Iniciar um convite de conexão por conversa. Mesma notificação da tela de
-    // Conexões (avisa o convidado por e-mail; o aceite é só pelo assistente dele).
+    // Start a connection invite via conversation. Same notification as the
+    // Connections screen (notifies the invitee by email; acceptance is only via their assistant).
     registry.add(inviteContactTool({
       fromUser: userId,
       notify: async (toUserId) => {
@@ -6182,71 +6182,71 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }, execute, creditScopeIdentity);
     } };
   }
-  // Memória de longo prazo do usuário (página perfil + índice) no prompt.
+  // User's long-term memory (profile page + index) in the prompt.
   const wiki = await wikiContext(userId, agent.owner);
-  // Subdomínio pessoal do usuário (fulano.<domínio dos apps>): entra no system prompt
-  // pra o agente saber que pode publicar sistemas / manter a home dele. É estável
-  // por usuário (só muda se ele trocar o username), então não fura o cache por turno.
+  // User's personal subdomain (someone.<apps domain>): goes into the system prompt
+  // so the agent knows it can publish systems / maintain their home. It's stable
+  // per user (only changes if they change their username), so it doesn't break the per-turn cache.
   const subdomain = await ensureUserSubdomain(userId).then((r) => r.label).catch(() => null);
-  // Panorama do que está rolando nas OUTRAS conversas/canais do usuário (o
-  // histórico segue isolado por thread; isto dá só a noção do contexto ao redor).
+  // Overview of what's going on in the user's OTHER conversations/channels (the
+  // history stays isolated per thread; this only gives a sense of the surrounding context).
   const crossChannel = ephemeral ? '' : await crossChannelDigest(userId, thread.id);
-  // Índice compacto dos espaços do usuário (assuntos vivos compartilhados). As
-  // anotações NÃO entram aqui; carregam sob demanda via ler_espaco (progressive
-  // disclosure). Só em turno não-efêmero, como os demais blocos voláteis.
+  // Compact index of the user's spaces (shared live subjects). The
+  // notes do NOT go in here; they load on demand via ler_espaco (progressive
+  // disclosure). Only in a non-ephemeral turn, like the other volatile blocks.
   const spaces = ephemeral ? '' : await spacesContext(userId);
-  // Índice compacto das Skills instaladas neste assistente (progressive
-  // disclosure: só título + gatilho + proveniência; o corpo carrega sob demanda
-  // via ler_skill). Só em turno não-efêmero, como os demais blocos voláteis.
+  // Compact index of the Skills installed on this assistant (progressive
+  // disclosure: only title + trigger + provenance; the body loads on demand
+  // via ler_skill). Only in a non-ephemeral turn, like the other volatile blocks.
   const skillsCtx = ephemeral ? null : await skillsContext(agent.id, userId, thread.id);
   const skills = skillsCtx?.text || '';
-  // Histórico sem a cópia CONGELADA das skills em curso (o corpo atual já vai no
-  // bloco acima, relido do banco). Sem isto o modelo veria as duas versões do
-  // mesmo procedimento, e a velha é justamente a que ele tende a seguir.
+  // History without the FROZEN copy of skills in progress (the current body already goes in the
+  // block above, reread from the database). Without this the model would see both versions of the
+  // same procedure, and the old one is exactly the one it tends to follow.
   const histParaModelo = stripStaleSkillReads(thread.history || [], skillsCtx?.ativas);
-  // Índice dos trackers do usuário + a regra de roteamento (usar registrar_evento
-  // pra dado contável, não memória em texto; contar via consultar_evento). Sempre
-  // presente em turno não-efêmero, mesmo sem tracker ainda, pra ancorar a escolha.
+  // Index of the user's trackers + the routing rule (use registrar_evento
+  // for countable data, not text memory; count via consultar_evento). Always
+  // present in a non-ephemeral turn, even without a tracker yet, to anchor the choice.
   const trackers = ephemeral ? '' : (await trackersContext(userId)) + '\n\n' + CHECKLIST_CONTEXT;
-  // Deixa pra oferecer um agendamento a quem ainda não tem. O bloco só existe pra
-  // quem está abaixo da meta E passa na régua do livro de ofertas (opt-out,
-  // cooldown, teto de tentativas), então o "bom senso" não é pedido ao modelo por
-  // adjetivo: quando não é hora, não há instrução nenhuma no prompt. Fora em turno
-  // efêmero e em assistente de grupo (canal com várias pessoas não é a deixa dele).
-  // Fora também no DISPARO de rotina: o nudge manda oferecer rotina quando o
-  // pedido "de agora" tem cara de recorrente ("todo dia"/"toda semana"), e o
-  // texto reinjetado num disparo começa exatamente assim ("Toda sexta às 10h,
-  // envie..."). Era combustível pro turno virar conversa sobre agendamento em
-  // vez de entrega, e ainda apontava pra oferecer_rotina, que some do disparo.
+  // Leaves it to offer a schedule to whoever doesn't have one yet. The block only exists for
+  // those below the target AND who pass the offer-book rule (opt-out,
+  // cooldown, attempt cap), so "good sense" isn't asked of the model via
+  // adjective: when it's not the time, there's no instruction at all in the prompt. Out in
+  // ephemeral turns and in a group assistant (a channel with several people isn't its cue).
+  // Also out on a routine DISPATCH: the nudge tells it to offer a routine when the
+  // "right now" request looks recurring ("every day"/"every week"), and the
+  // text reinjected in a dispatch starts exactly like that ("Every Friday at 10h,
+  // send..."). It was fuel for the turn to turn into a conversation about scheduling instead
+  // of delivery, and it still pointed to oferecer_rotina, which is absent from the dispatch.
   const rotinaNudge = (ephemeral || agentCategory === 'grupo' || kind === 'routine') ? '' : await routineNudgeContext(userId, { assuntosConversados: pecas.assuntosConversados });
-  // Estado do Runner também aparece offline/desconhecido: ausência de tool não
-  // significa inexistência da integração. O contexto não altera nenhum gate.
+  // Runner state can also show offline/unknown: absence of the tool doesn't
+  // mean the integration doesn't exist. The context doesn't change any gate.
   const runner = runnerContextForTurn(userId, {
     agentId:agent.id,agentCategory,ephemeral,runnerForThisAgent,
     terminalAvailable:runnerForThisAgent && livreEnv,
   });
-  // Caixa agente↔agente: decisões de outros donos aguardando resposta deste
-  // usuário + respostas que voltaram dos contatos dele. Fecha o ciclo assíncrono.
+  // Agent↔agent inbox: other owners' decisions awaiting this
+  // user's reply + replies that came back from their contacts. Closes the async cycle.
   const inbox = ephemeral ? { block: '', responseIds: [], questionIds: [] } : await agentInboxDigest(userId);
   const agentInbox = inbox.block;
-  // Seletor de provider (model-agnostic). Default: Gemini. MODEL_PROVIDER=nemotron
-  // usa o modelo proprietário na nossa máquina AWS (sem grounding de busca).
-  // No Gemini, respeita a escolha de modelo do usuário (econômico/equilibrado/avançado);
-  // o padrão é 'flash' (3.5 Flash fixo, sem subir pro Pro). modelById cai no default
-  // se o pref for inválido. Se a flag "Automático" estiver ligada, o modelo é
-  // escolhido por pergunta (pickAutoModel circula entre Lite/Flash), ignorando
-  // o pref fixo. (makeGeminiRouter fica de reserva.)
+  // Provider selector (model-agnostic). Default: Gemini. MODEL_PROVIDER=nemotron
+  // uses the proprietary model on our own AWS machine (no search grounding).
+  // On Gemini, it respects the user's model choice (economical/balanced/advanced);
+  // the default is 'flash' (3.5 Flash fixed, no upgrade to Pro). modelById falls back to the default
+  // if the pref is invalid. If the "Automatic" flag is on, the model is
+  // chosen per question (pickAutoModel cycles between Lite/Flash), ignoring
+  // the fixed pref. (makeGeminiRouter stays as a fallback.)
   let provider;
-  // O turno tem BUSCA NATIVA (google_search do Gemini)? É o caminho de produção
-  // hoje (PRIMARY_TEXT_MODEL=gemini-*): as fontes chegam sem passar por tool
-  // nenhuma, então `toolCounts` fica vazio e não serve pra saber se o "[1]" do
-  // texto é citação. Sem esta marca, a limpeza de marcador órfão nunca rodaria
-  // justo no caminho onde ela nasceu.
+  // Does the turn have NATIVE SEARCH (Gemini's google_search)? It's the production
+  // path today (PRIMARY_TEXT_MODEL=gemini-*): the sources arrive without going through any
+  // tool, so `toolCounts` stays empty and isn't useful for knowing whether the "[1]" in the
+  // text is a citation. Without this flag, the orphan-marker cleanup would never run
+  // exactly on the path where it originated.
   let buscaNativa = false;
   const hasImages = images?.length > 0;
-  // Modelo FIXO escolhido pelo dono (Kimi 3 / DeepSeek V4 Pro). Só vale em turno de
-  // TEXTO: com imagem, o caminho de visão abaixo vem primeiro (nenhum dos dois
-  // enxerga). null = agente em 'auto' → segue o roteamento normal.
+  // FIXED model chosen by the owner (Kimi 3 / DeepSeek V4 Pro). Only applies in a
+  // TEXT turn: with an image, the vision path below takes priority (neither of the two
+  // can see). null = agent on 'auto' → follows normal routing.
   const forcedProvider = isDeepSeekTurn() ? selectedDeepSeek() : (usePrimaryLLM && !hasImages ? forcedAgentProvider(agent?.model) : null);
   if (isDeepSeekTurn()) {
     provider = forcedProvider; // includes images and onboard; explicit selection beats all global overrides
@@ -6255,12 +6255,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   } else if (isNemotron) {
     provider = makeNemotron();
   } else if (kind === 'onboard' && !hasImages) {
-    // Momento wow / atualização da home no modelo BARATO, não no modelo do
-    // assistente. É turno de SISTEMA (ler e-mail/agenda e resumir em cartões),
-    // não conversa: rodar no modelo escolhido pelo dono fazia a MESMA tarefa
-    // custar 45 créditos no gemini-3.7-flash e 140 no Kimi K3, sem ninguém ter
-    // pedido. Como o tier de cobrança sai do MODELO, isso também derruba o
-    // crédito queimado (economico), não só o nosso custo.
+    // Wow moment / home update on the CHEAP model, not the assistant's
+    // model. It's a SYSTEM turn (reading email/calendar and summarizing into cards),
+    // not a conversation: running it on the model chosen by the owner made the SAME task
+    // cost 45 credits on gemini-3.7-flash and 140 on Kimi K3, without anyone having
+    // asked for that. Since the billing tier comes from the MODEL, this also lowers the
+    // credit burned (economical), not just our cost.
     console.log(`[router] onboard=barato thread=${thread.id}`);
     provider = makeSubagentProvider();
   } else if (usePrimaryLLM && hasImages) {
@@ -6279,9 +6279,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[router] vision=${modelosCfg ? provider.name : primaryIsTogetherFlash ? TOGETHER_FLASH_DEFAULT : 'gemini'} thread=${thread.id}`);
     buscaNativa = !modelosCfg && !primaryIsTogetherFlash && geminiEnabled(); // Together, modelos.yaml and their fallbacks use tool-based search.
   } else if (forcedProvider) {
-    // Modelo FIXO atribuído a este agente pelo dono (fora do roteamento). Vem ANTES
-    // do override do PRIMARY_TEXT_MODEL de propósito: a escolha explícita do dono
-    // manda mais que o primário global (senão a opção do dropdown não faria nada).
+    // FIXED model assigned to this agent by the owner (outside of routing). Comes BEFORE
+    // the PRIMARY_TEXT_MODEL override on purpose: the owner's explicit choice
+    // outranks the global primary (otherwise the dropdown option would do nothing).
     console.log(`[router] forced=${agent.model} thread=${thread.id} provider=${forcedProvider.name}`);
     provider = forcedProvider;
   } else if (modelosCfg) {
@@ -6291,24 +6291,24 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     provider = makeTogetherFlashPrimary({maxOut:32768});
     console.log(`[router] primary-override=${TOGETHER_FLASH_DEFAULT} thread=${thread.id}`);
   } else if (usePrimaryLLM && primaryIsGeminiOverride) {
-    // (Aqui, ANTES deste ramo, existia um desvio que trocava o modelo do turno
-    // principal pra DeepSeek quando o turno "parecia" build de app. Foi removido:
-    // trocar de modelo no meio da thread invalida o prefixo cacheado (~28k fixos
-    // + history) nas duas pontas, e o gatilho era heurística de texto, que erra.
-    // O modelo forte agora entra pela DELEGAÇÃO (`construir_app`), num contexto
-    // novo. Ver projetos/roteamento-modelo-dsh.md.)
-    // Override de teste: primário de texto no Gemini (ex.: gemini-3.7-flash),
-    // com grounding nativo do Google. Substitui o roteamento de tier GLM enquanto
-    // PRIMARY_TEXT_MODEL estiver setado no .env.
-    // TETO DE SAÍDA = 32k LISO (não gated). O antigo teto de 8192 CORTAVA a geração
-    // no meio em qualquer turno que produzisse artefato grande (HTML/app inteiro)
-    // sem ser detectado como build — ex.: usuário sem app publicado nem rascunho
-    // (appsManual=false) gerando um HTML: a geração batia em 8192, era cortada
-    // ANTES de emitir a resposta e o usuário via BRANCO (caso de 19/08,
-    // out=8190/8163 colados no teto). Output é cobrado por token GERADO, não pelo
-    // teto: subir o teto NÃO encarece turno normal (esse gera ~200 tok de qualquer
-    // jeito) e só destrava os turnos que de fato precisam. Loop/runaway seguem
-    // barrados por maxSteps + REPEAT_LIMIT + rede anti-silêncio no core.
+    // (Here, BEFORE this branch, there used to be a detour that swapped the main
+    // turn's model to DeepSeek when the turn "looked like" an app build. It was removed:
+    // swapping models mid-thread invalidates the cached prefix (~28k fixed
+    // + history) on both ends, and the trigger was a text heuristic, which gets it wrong.
+    // The strong model now comes in via DELEGATION (`construir_app`), in a fresh
+    // context. See projetos/roteamento-modelo-dsh.md.)
+    // Test override: text primary on Gemini (e.g. gemini-3.7-flash),
+    // with Google's native grounding. Replaces GLM tier routing while
+    // PRIMARY_TEXT_MODEL is set in the .env.
+    // OUTPUT CAP = flat 32k (not gated). The old cap of 8192 CUT the generation
+    // off mid-way on any turn that produced a large artifact (full HTML/app)
+    // without being detected as a build — e.g. a user with no published app or draft
+    // (appsManual=false) generating an HTML: generation hit 8192, was cut
+    // BEFORE emitting the response and the user saw BLANK (2026-08-19 case,
+    // out=8190/8163 stuck at the cap). Output is billed per token GENERATED, not by the
+    // cap: raising the cap does NOT make a normal turn more expensive (that one generates ~200 tok anyway)
+    // and only unblocks the turns that actually need it. Loop/runaway are still
+    // blocked by maxSteps + REPEAT_LIMIT + the anti-silence net in the core.
     console.log(`[router] primary-override=${PRIMARY_TEXT_MODEL} thread=${thread.id}`);
     provider = makeGeminiPrimary({ maxOut: 32768 });
     buscaNativa = true; // makeGemini({ search: true })
@@ -6322,51 +6322,51 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[router] primary=${PRIMARY_MODEL} thread=${thread.id} perm=${permMode}`);
     provider = makePrimaryProvider('robusto', appsManual ? { maxOut: 32768 } : {});
   } else {
-    // Nenhuma chave de GLM/GPT configurada → cai no Gemini (que tem busca nativa).
+    // No GLM/GPT key configured → falls back to Gemini (which has native search).
     provider = makeGeminiRouter({ search });
     buscaNativa = !!search;
   }
   const measurement = !ephemeral&&['chat','whatsapp','telegram','email'].includes(kind)
     ? {source:'conversation',id:turnId,userId,agentId:agent.id,threadId:thread.id,startedAt:Date.now(),version:0,state:'running',updatedAt:Date.now()} : null;
   if(measurement)await taskMetrics.observe(measurement);
-  // O "agora" (data+hora) vai no FIM da mensagem do usuário, não no system prompt:
-  // assim o prefixo system+tools fica byte-idêntico entre turnos e a Together
-  // reaproveita o cache (o timestamp por-minuto no system furava o cache). NÃO persiste no history.
+  // The "now" (date+time) goes at the END of the user's message, not in the system prompt:
+  // this way the system+tools prefix stays byte-identical across turns and Together
+  // reuses the cache (the per-minute timestamp in the system was breaking the cache). Does NOT persist in the history.
   const textoDoDono = kind === 'routine' ? '' : message;
   const agora = new Date().toLocaleString(userLang || 'pt-BR', {
     timeZone: userTz, dateStyle: 'full', timeStyle: 'short',
   });
   const tzLabel = userTz === 'America/Sao_Paulo' ? 'São Paulo time' : `time zone ${userTz}`;
   const nowLine = `(System context: it is now ${agora}, ${tzLabel}. Use it to interpret "today", "tomorrow", "this week". When creating calendar events, use this time zone (${userTz}) and the user's local wall-clock time, without embedding an offset in the ISO string. If it becomes clear that the user is in ANOTHER time zone (e.g. they mention a trip, or a meeting/time in another city/country), call the definir_meu_fuso tool with the correct IANA time zone as soon as you notice, so that this "now" stays consistent and past events are not treated as future ones; in criar_lembrete, also pass the fuso parameter in that case.)`
-    // Idioma lembrado a cada turno, perto da mensagem (ver lembreteDeIdioma e idiomaEscrito).
+    // Language reminder on every turn, near the message (see lembreteDeIdioma and idiomaEscrito).
     + (lembreteDeIdioma(userLang, textoDoDono) ? `\n${lembreteDeIdioma(userLang, textoDoDono)}` : '');
-  // Fix#3: os blocos voláteis (perfil/wiki, resumo, panorama, caixa) vão no FIM da
-  // mensagem do usuário (não no system) — mantém o prefixo cacheável estável.
-  // O resumo é o da THREAD, não o do agente. A compactação (compactIfNeeded ->
-  // saveThreadTurn) grava em threads.summary; agents.summary só teria valor se
-  // saveTurn() fosse chamado, e ele não é chamado em lugar nenhum desde que o
-  // history passou a viver por thread. Lendo de agents.summary, o prompt recebia
-  // sempre string vazia: em produção, 0 de 118 agentes têm resumo e 59 de 700
-  // threads têm. Ou seja, pagávamos a chamada de resumo, jogávamos fora os turnos
-  // crus e não entregávamos nada no lugar (a thread perdia o começo da conversa).
+  // Fix#3: the volatile blocks (profile/wiki, summary, overview, inbox) go at the END of the
+  // user's message (not in the system) — keeps the cacheable prefix stable.
+  // The summary is the THREAD's, not the agent's. Compaction (compactIfNeeded ->
+  // saveThreadTurn) writes to threads.summary; agents.summary would only have value if
+  // saveTurn() were called, and it isn't called anywhere anymore since the
+  // history started living per thread. Reading from agents.summary, the prompt always
+  // got an empty string: in production, 0 of 118 agents have a summary and 59 of 700
+  // threads do. In other words, we paid for the summary call, threw away the raw
+  // turns, and delivered nothing in their place (the thread lost the start of the conversation).
   const blocoCreditos = ephemeral ? '' : gasto.contextoDoTurno(credit);
   const tail = tailContext({ wiki, summary: thread.summary || '', crossChannel, agentInbox, spaces, skills, trackers, runner, rotinaNudge, compras: (ephemeral || agentCategory === 'grupo') ? '' : comprasContext(), creditos: blocoCreditos });
-  // DISPARO de rotina: o texto que reinjetamos aqui é o `prompt` salvo na rotina,
-  // e boa parte deles foi gravada na voz de QUEM PEDE agendamento ("Toda sexta às
-  // 10h, envie o cardápio..."). Sem nenhuma marca, o modelo relê isso como um
-  // pedido NOVO de agendamento e responde "já está configurada / confirma pra eu
-  // ativar?" em vez de fazer o trabalho — uma rotina nunca entregou um
-  // cardápio em 12 disparos, e outra falhou em 13 de 15 (auditoria 05/09).
-  // Das 28 rotinas, 9 guardam o prompt nessa voz, e TODOS os casos do sintoma
-  // saem dessas 9; nas outras 19 (prompt em voz de tarefa) não acontece nenhuma
-  // vez. Daí a moldura: dizer que isto é a EXECUÇÃO, agora, e que a cadência já
-  // está agendada pela plataforma. Vai só pro modelo (userInputForModel), não
-  // pro history — savedUserMsg segue sendo o prompt limpo da rotina.
-  // Rotina "busca_email": a PLATAFORMA roda a consulta gravada (paginando até o
-  // fim) ANTES do modelo, e entrega a lista pronta no frame. O modelo só resume;
-  // as tools de e-mail/web saem deste disparo (pruneEmailSearchTools abaixo).
-  // Sucesso marca routineCheck.completed (não há tool call pra marcar); falha da
-  // API marca failed + cobertura parcial, e o modelo avisa em vez de fingir.
+  // Routine DISPATCH: the text we reinject here is the `prompt` saved in the routine,
+  // and a good part of them was recorded in the voice of WHOEVER ASKED for the schedule ("Every Friday at
+  // 10h, send the menu..."). With no marker at all, the model rereads this as a
+  // NEW scheduling request and answers "it's already set up / confirm so I can
+  // activate it?" instead of doing the work — one routine never delivered a
+  // menu in 12 dispatches, and another failed 13 out of 15 times (2026-09-05 audit).
+  // Of the 28 routines, 9 store the prompt in that voice, and ALL the symptom cases
+  // come from those 9; in the other 19 (prompt in task voice) it never
+  // happens. Hence the framing: saying this is the EXECUTION, now, and that the cadence is
+  // already scheduled by the platform. Goes only to the model (userInputForModel), not
+  // to the history — savedUserMsg stays the clean routine prompt.
+  // "busca_email" routine: the PLATFORM runs the saved query (paginating to the
+  // end) BEFORE the model, and delivers the ready-made list in the frame. The model only summarizes;
+  // the email/web tools are removed from this dispatch (pruneEmailSearchTools below).
+  // Success marks routineCheck.completed (there's no tool call to mark it); an
+  // API failure marks failed + partial coverage, and the model warns instead of pretending.
   let emailSearchBlock = '';
   if (kind === 'routine' && opts.emailSearch) {
     const es = opts.emailSearch;
@@ -6396,16 +6396,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   });
   if (inventoryCalculation.enabled) registry.add(inventoryCalculation.tool);
   const userInputForModel = `${discoveryFrame}${routineFrame ? routineFrame + '\n\n' : ''}${userInput}\n\n${nowLine}${confirmFailureNote ? '\n\n' + confirmFailureNote : ''}${tail ? '\n\n' + tail : ''}${inventoryCalculation.promptBlock()}`;
-  // noTools: gera SÓ texto, sem NENHUMA tool disponível ao modelo. Blindagem pra
-  // fluxos que só rascunham (ex: preview de broadcast): mesmo que o prompt diga
-  // "mande agora", o modelo não tem como chamar enviar_mensagem/e-mail/etc. Nada
-  // sai de verdade sem uma etapa de entrega separada e consentida.
-  // Categoria 'grupo' (canal multi-pessoa): poda o registry pra allow-list dos
-  // grupos habilitados e tira as tools de auto-reconfiguração/pivot (deny-by-default,
-  // trilhos de segurança). 'pessoal' e 'super' mantêm o toolset como já era: o modo
-  // livre é montado acima (livreActive; SSH exige 'super', Runner exige o vínculo)
-  // e a auto-escalada por definir_modo_permissao já foi fechada tirando 'livre'
-  // do enum da tool. 'grupo' nunca chega no terminal: o gate lá em cima recusa.
+  // noTools: generates text ONLY, with NO tool available to the model. Shielding for
+  // flows that only draft (e.g. broadcast preview): even if the prompt says
+  // "send it now", the model has no way to call enviar_mensagem/email/etc. Nothing
+  // actually goes out without a separate, consented delivery step.
+  // 'grupo' category (multi-person channel): prunes the registry to the allow-list of
+  // enabled groups and removes the self-reconfiguration/pivot tools (deny-by-default,
+  // safety rails). 'pessoal' and 'super' keep the toolset as it was: the free
+  // mode is assembled above (livreActive; SSH requires 'super', Runner requires the link)
+  // and self-escalation via definir_modo_permissao has already been closed off by removing 'livre'
+  // from the tool's enum. 'grupo' never reaches the terminal: the gate above refuses it.
   if(approvedAppContinuation&&!noTools&&populateCodeTools)populateCodeTools();
   if (!noTools && kind === 'onboard') {
     const permitido = refreshHome ? REFRESH_TOOLS : ONBOARD_TOOLS;
@@ -6419,32 +6419,32 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const { removidas, mantidas, travadas, host } = podarRegistryGrupo(registry, toolConfig);
     console.log(`[categoria] grupo agent=${agent?.id}: registry podado, ${mantidas} tools mantidas, ${removidas} removidas, ${travadas} tools de SSH travadas no host=${host || '(nenhum)'}`);
   }
-  // Rotina COM canal de entrega: quem entrega o resultado é o deliverRoutine, com
-  // o TEXTO que o modelo gera. Se o modelo também chamar enviar_mensagem (o prompt
-  // "Mande uma mensagem pra fulano..." induz a isso), o conteúdo sai pela tool E o
-  // texto de confirmação ("Mensagem enviada ✅") sai pelo deliverRoutine = mensagem
-  // DUPLICADA no canal (caso de 20/08). Tiramos o envio imediato desse
-  // contexto: o conteúdo da rotina é a saída de texto, entregue uma vez só. Rotina
-  // channel='none' (age por conta própria, sem entrega) mantém a tool.
+  // Routine WITH a delivery channel: deliverRoutine is what delivers the result, with
+  // the TEXT the model generates. If the model also calls enviar_mensagem (the prompt
+  // "Send a message to so-and-so..." tempts it to), the content goes out via the tool AND the
+  // confirmation text ("Message sent ✅") goes out via deliverRoutine = DUPLICATE
+  // message in the channel (2026-08-20 case). We removed the immediate send from this
+  // context: the routine's content is the text output, delivered just once. A routine with
+  // channel='none' (acts on its own, no delivery) keeps the tool.
   if (!noTools && kind === 'routine' && routineChannel && routineChannel !== 'none') {
-    // Ferramentas de e-mail também duplicavam a entrega (ou deixavam rascunhos).
-    // Rotinas de ação channel=none e conversas normais preservam essas operações.
+    // Email tools also duplicated the delivery (or left drafts behind).
+    // channel=none action routines and normal conversations keep these operations.
     for (const name of ['gmail_create_draft', 'gmail_send', 'hotmail_send']) registry.map.delete(name);
     if (registry.map.delete('enviar_mensagem')) {
       console.log(`[rotina] enviar_mensagem removida do turno (canal=${routineChannel}) pra não duplicar a entrega.`);
     }
   }
-  // Segunda camada do fix acima, e a determinística: no disparo, o modelo não tem
-  // como MEXER na configuração da rotina. `criar_rotina`/`editar_rotina` são
-  // GATED (confirm.mjs), então quando o modelo relê o prompt como pedido de
-  // agendamento e chama uma delas, o texto que sai do turno é o CARTÃO de
-  // confirmação — e é ele que a rotina entrega no canal ("Confirma para eu
-  // ativar?" chegou 6 vezes no WhatsApp da pessoa no lugar do cardápio). Num
-  // disparo não existe ninguém pra clicar em confirmar, então a chamada é
-  // sempre inútil e sempre custa a entrega do dia. `oferecer_rotina` some pela
-  // mesma razão (oferecer rotina DENTRO de uma rotina é ruído). Ficam de pé
-  // `listar_rotinas` (leitura) e `cancelar_rotina` (rotina de janela fechada,
-  // tipo a quaresma de 15/08 a 29/09, tem que poder se encerrar sozinha).
+  // Second layer of the fix above, and the deterministic one: on a dispatch, the model has
+  // no way to CHANGE the routine's configuration. `criar_rotina`/`editar_rotina` are
+  // GATED (confirm.mjs), so when the model rereads the prompt as a scheduling
+  // request and calls one of them, the text that comes out of the turn is the confirmation
+  // CARD — and that's what the routine delivers in the channel ("Confirm so I can
+  // activate it?" arrived 6 times on the person's WhatsApp instead of the menu). On a
+  // dispatch there's nobody to click confirm, so the call is
+  // always useless and always costs the day's delivery. `oferecer_rotina` is removed for the
+  // same reason (offering a routine INSIDE a routine is noise). Still standing:
+  // `listar_rotinas` (read) and `cancelar_rotina` (a routine with a closed window,
+  // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself).
   if (!noTools && kind === 'routine') {
     const podadas = [];
     for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
@@ -6455,8 +6455,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const activeRegistry = noTools ? new ToolRegistry() : registry;
   if(!noTools && kind==='routine' && opts.curationConfig)pruneCurationTools(registry,opts.curationConfig.source||'web');
   if(!noTools && kind==='routine' && opts.emailSearch)pruneEmailSearchTools(registry);
-  // Contador de chamadas de tools deste turno (uma linha por tool → nº de vezes).
-  // Persistido depois do turno pra visibilidade no /metrics; nunca afeta o loop.
+  // Counter of this turn's tool calls (one line per tool → number of times).
+  // Persisted after the turn for visibility in /metrics; never affects the loop.
   const toolCounts = Object.create(null);
   // Free mode (perm=livre) runs long skills and multi-step shell work
   // (create a client, build an APK) that blows the default cap of 22, so it
@@ -6469,9 +6469,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const interjecoes = [];
   const appBuildJournal = createAppBuildJournal({ language:idiomaResposta, userRequest:message, failedPublication:confirmedToolLog.some(c => c.name === 'publicar_sistema'), publicationError:confirmedToolLog.find(c => c.name === 'publicar_sistema')?.usuario || '' });
   const previousAssistantText = [...baseHistory].reverse().find((m) => m?.role === 'assistant')?.content || '';
-  // Jev (#32): a memória permanente é escrita sem cartão, então o Jev só pode
-  // VETAR a regra (ela liberou, ele diz que é relato da jornada ou nada). Nunca
-  // libera sozinho uma escrita que a regra negou. Sem Jev, fica a regra.
+  // Jev (#32): permanent memory is written without a card, so Jev can only
+  // VETO the rule (it allowed it, he says it's a journey account or nothing). Never
+  // approves on its own a write the rule denied. Without Jev, the rule stands.
   let permanentMemoryVeto = false;
   if (discovery.source && jevEnabled() && explicitPermanentMemoryIntent(savedUserMsg, previousAssistantText)) {
     const jev = await jevPermanentMemory({ message: String(savedUserMsg || ''),
@@ -6484,7 +6484,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     revisionAware:name => activeRegistry.revisionAware(name),
     repetitionKey:(name,args) => activeRegistry.repetitionKey(name,args),
     run(name,args) {
-    // Webhook não tem dono presente pra confirmar: ação do portão nem vira pedido.
+    // Webhook has no owner present to confirm: the gated action doesn't even become a request.
     if (kind === 'webhook' && activeRegistry.map.get(name)?.confirmationTool)
       return `NÃO executei ${name}: numa execução por webhook não há o dono para confirmar, e essa ação exige confirmação dele. Diga no resultado o que ficaria pendente para ele fazer pelo chat.`;
     const blocked = name === 'publicar_sistema' ? appBuildJournal.blockPublish() : null;
@@ -6499,11 +6499,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     return blocked || activeRegistry.run(name,args);
   } };
   const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg });
-  // Tudo que as ferramentas devolveram NESTE turno. É a prova de origem do freio
-  // de fundamentação: um dado que não aparece aqui (nem na fala do dono) não foi
-  // consultado por ninguém. Entram também o que a plataforma entregou ao modelo
-  // (mensagem com material da rotina, histórico); teto por saída e no total
-  // (~4 MB) pra não segurar megabyte de planilha na memória do turno.
+  // Everything the tools returned in THIS turn. It's the origin proof for the
+  // grounding guard: data that doesn't show up here (nor in the owner's own words) wasn't
+  // looked up by anyone. Also included is what the platform delivered to the model
+  // (message with routine material, history); cap per output and in total
+  // (~4 MB) so as not to hold a spreadsheet's worth of megabytes in the turn's memory.
   const groundingPool = [];
   let groundingBytes = 0;
   const coletarGrounding = (out) => {
@@ -6511,11 +6511,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const txt = (typeof out === 'string' ? out : JSON.stringify(out))?.slice(0, 60000);
       if (!txt || groundingBytes + txt.length > 4e6) return;
       groundingBytes += txt.length; groundingPool.push(txt);
-    } catch { /* saída não serializável não vira prova, e não pode quebrar o turno */ }
+    } catch { /* non-serializable output doesn't become proof, and must not break the turn */ }
   };
   coletarGrounding(userInputForModel);
   for (const m of histParaModelo) coletarGrounding(m?.content);
-  // TEMPORÁRIO (30/09/2026): antes/depois dos 5 filtros de verificação.
+  // TEMPORARY (2026-09-30): before/after the 5 verification filters.
   const diag = pecas.diagnosticoDosFiltros?.({ userId, agentId: agent.id, threadId: thread.id, origem: kind === 'routine' ? 'rotina' : 'chat', toolCounts, saidas: groundingPool, estado: () => ({ buscaNativa }) }) ?? { removidas: [], corte() {} };
   searchCoverage.observeEmailGuard((a, d) => diag.corte('email_cobertura', a, d));
   actionJournal.observeDroppedClaims((frase, familia) => diag.removidas.push({ frase, familia }));
@@ -6544,7 +6544,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return r;
     },
     userInput: userInputForModel, images, history: histParaModelo, maxSteps: effectiveMaxSteps,
-    // Mensagem que chega no meio do turno (hoje só o WhatsApp fornece o canal).
+    // Message that arrives mid-turn (today only WhatsApp provides this channel).
     pollNewUserMsg: async () => appPendingInputs.shift() || await pollNewUserMsgAtSafeBoundary?.(),
     onEvent: (ev) => {
       if (ev?.type === 'tool_result') {
@@ -6561,17 +6561,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         console.log(`[turn_recovery] thread=${thread.id} agent=${agent.id} event=${ev.type} code=${ev.code || '-'} retry=${!!ev.retry}`);
       }
       if (ev?.type === 'tool_call' && ev.name) toolCounts[ev.name] = (toolCounts[ev.name] || 0) + 1;
-      // Mensagem que o usuário mandou no meio do turno: o core já injetou no
-      // contexto, aqui só guardamos o texto CRU pra gravar como fala dele na
-      // thread (senão a mensagem não apareceria em nenhuma conversa).
+      // Message the user sent mid-turn: the core already injected it into the
+      // context, here we just keep the RAW text to log as their own message in the
+      // thread (otherwise the message wouldn't appear in any conversation).
       if ((ev?.type === 'interject' || ev?.type === 'interject_predraft') && ev.text) {
         interjecoes.push(ev.text);
         inventoryCalculation.observeInterjection(ev.text);
       }
-      // Freio anti-loop: o corte acontece no core e some. Sem esta linha o turno
-      // acaba no salvage e nada em lugar nenhum diz que foi o freio que o cortou —
-      // não dá pra contar quantas vezes ele dispara nem se acerta o alvo. Logar é
-      // pré-requisito pra qualquer mudança na regra de assinatura da chamada.
+      // Anti-loop guard: the cut happens in the core and disappears. Without this line the turn
+      // ends up in salvage and nothing anywhere says it was the guard that cut it —
+      // there's no way to count how many times it fires nor whether it hits the target. Logging is a
+      // prerequisite for any change to the call-signature rule.
       if (ev?.type === 'loop_break') {
         console.log(`[loop_break] thread=${thread.id} agent=${agent.id} step=${ev.step}/${ev.steps} tool=${ev.tool} argsLen=${ev.argsLen} args=${maskSecrets(String(ev.args || '').replace(/\s+/g, ' '))}`);
       }
@@ -6592,16 +6592,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     },
   });
-  // ── FREIO DE FUNDAMENTAÇÃO / grounding brake (grounding-guard.mjs) ────────
+  // ── GROUNDING GUARD / grounding brake (grounding-guard.mjs) ────────
   // The action receipt answers "did the action happen?". This one answers the
   // question nobody owned: "was the stated fact LOOKED UP?". Coupon, link,
   // source name, price presented as researched, the owner's balance and
   // attachment content can only come from a tool output of THIS turn or from
   // what the owner wrote; coming from nowhere, the platform has no basis to
-  // deliver it as fact. Born from five real cases on 18/09/2026 where the
+  // deliver it as fact. Born from five real cases on 2026-09-18 where the
   // assistant stated balance, price, coupon, link and source with no lookup.
   //
-  // Decision (18/09): flagging isn't enough. When caught, REDO the turn once
+  // Decision (2026-09-18): flagging isn't enough. When caught, REDO the turn once
   // naming the missing tool, because the user is who loses with made-up data,
   // and deleting the passage leaves them without an answer. Only if the second
   // pass also yields no origin does the baseless line leave the text, with a notice.
@@ -6614,8 +6614,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (text && !approvedAppContinuation && process.env.FREIO_FUNDAMENTACAO !== '0') {
     try {
       const origemDoTurno = () => ({
-        // As fontes da busca nativa do Gemini não passam por tool call: sem elas
-        // no pool, toda resposta com busca nativa seria acusada à toa.
+        // Gemini's native search sources don't go through a tool call: without them
+        // in the pool, every native-search response would be flagged for nothing.
         toolOutputs: [...groundingPool, ...(fontesGrounding || [])],
         ownerText: kind === 'routine' ? '' : savedUserMsg,
         toolCounts,
@@ -6669,16 +6669,16 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     } catch (e) { console.error('[freio_fundamentacao]', e?.message ?? e); }
   }
-  // FREIO DE IDIOMA (freio-idioma.mjs): resposta em chinês sem a pessoa pedir é reescrita antes de entregar.
+  // LANGUAGE GUARD (freio-idioma.mjs): a response in Chinese without the person asking for it gets rewritten before delivery.
   if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: idiomaResposta, pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
   let curationResult = null;
   if (curationHistory !== null) {
     curationResult = await finalizeCuration({text,config:opts.curationConfig,userId,routineId:opts.routineId,
       history:curationHistory,partial:routineCheck.failed || searchCoverage.hasPartial()}, {sourceEvidence:curationEvidence || undefined,checkLinks:conferirLinks,...(opts.curationConfig.source==='gmail'?{checkMail:curationMailReader(userId,agent.google_email)}:{})});
-    // Uma saída inválida não vira e-mail vazio nem "sem novidades". Faz UMA
-    // correção somente de formato, sem tools e sem novas buscas, usando apenas o
-    // material já presente no histórico deste turno. Persistindo a falha, sai o
-    // aviso tipado e a execução registra conteúdo=failed, entrega separada.
+    // An invalid output doesn't become an empty email or "nothing new". Makes ONE
+    // format-only correction, with no tools and no new searches, using only the
+    // material already present in this turn's history. If the failure persists, the
+    // typed notice goes out and the execution logs conteúdo=failed, delivered separately.
     if (curationResult.repairable) {
       console.warn(`[curation] routine=${opts.routineId} validation=${curationResult.failureCode} diagnostic=${curationResult.diagnostic||'-'} repair=attempt`);
       try {
@@ -6709,17 +6709,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[email_review] thread=${thread.id} status=${reviewed.status}`);
     if (reviewed.usage) usages.push(reviewed.usage);
   }
-  // Rede de segurança: nunca deixar marcação crua de tool-call nem segredo vazar
-  // pro usuário/histórico (o parser do provider já tenta, isto é o último filtro).
-  // A limpeza de marcador de citação só entra se o turno chamou uma tool que
-  // devolve lista de fontes. Sem isso, "[1]" no texto é do assistente ou do dono.
+  // Safety net: never let raw tool-call markup or a secret leak
+  // to the user/history (the provider's parser already tries to, this is the last filter).
+  // The citation-marker cleanup only kicks in if the turn called a tool that
+  // returns a source list. Without that, a "[1]" in the text is from the assistant or the owner.
   text = sanitizeAssistantText(text, {
     comFontes: buscaNativa || Object.keys(toolCounts).some((n) => TOOLS_COM_FONTES.has(n)),
     fontes: fontesDoTurno, language: idiomaResposta,
   });
-  // Jev (#48): pega a alegação "verifiquei agora" que a regra perde, sobre o
-  // texto do modelo. Só acrescenta a correção, não tira nada (não dá pra saber a
-  // linha exata). A regra continua valendo mais abaixo, junto dos outros guardas.
+  // Jev (#48): catches the "I just checked" claim that the rule misses, about the
+  // model's text. Only adds the correction, never removes anything (there's no way to know the
+  // exact line). The rule still applies further below, alongside the other guards.
   if (!Object.keys(toolCounts).length && FRESH_CHECK_HINT.test(String(text || '')) && jevEnabled()
     && enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta }) === text
     && await jevFreshCheckClaim(String(text)) === 'alegacao_falsa') {
@@ -6728,23 +6728,23 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     diag.corte('conferi_agora', diagAntes, text, { via: 'jev' });
   }
   const routineFinal = routineFinalText(text, { kind, ...routineCheck, language: idiomaResposta });
-  // Preserva a origem do vazio: recibos de memória não podem reviver somente
-  // o silêncio solicitado por este protocolo validado. Vazio comum é distinto.
+  // Preserves the origin of the emptiness: memory receipts must not revive
+  // only the silence requested by this validated protocol. Ordinary emptiness is distinct.
   const routineNoNews = kind === 'routine' && String(text ?? '').trim() === ROUTINE_NO_NEWS && routineFinal === '';
   text = routineFinal;
-  // Fontes reais + conferência de link (fix 08/09, caso LinkedIn: 2 de 9 links
-  // entregues eram 404 numa mensagem que dizia "links validados"). Duas coisas:
-  //  - a busca NATIVA do Gemini é server-side e não vira tool call, então as URLs
-  //    que embasaram a resposta eram descartadas e sobrava o modelo escrevendo o
-  //    endereço de cabeça; agora a lista sai junto, resolvida pro destino real;
-  //  - todo link do texto leva um pedido de rede antes de sair. Só falha real
-  //    repetida num segundo pedido (404/410, 5xx, DNS inexistente, conexão
-  //    recusada) permite afirmar link quebrado; redirect, 401/403, 429 e timeout
-  //    não provam página morta, e acusar página viva seria pior.
+  // Real sources + link verification (fix 2026-09-08, LinkedIn case: 2 of 9 links
+  // delivered were 404 in a message that said "validated links"). Two things:
+  //  - Gemini's NATIVE search is server-side and doesn't become a tool call, so the URLs
+  //    that grounded the response were discarded and the model was left writing the
+  //    address from memory; now the list comes along too, resolved to its real destination;
+  //  - every link in the text gets a network request before going out. Only a real failure
+  //    repeated on a second request (404/410, 5xx, nonexistent DNS, connection
+  //    refused) allows calling a link broken; redirect, 401/403, 429 and timeout
+  //    don't prove a dead page, and flagging a live page would be worse.
   // Broken links are removed; unverified ones stay with no notice, routines too
-  // (since 06/10/2026). Full rule in links.mjs.
-  // Conferências em paralelo: teto de 8 links, 3s por pedido, sem refazer a busca.
-  // Desligável por FONTES_LINKS=0 sem tirar nada do lugar.
+  // (since 2026-10-06). Full rule in links.mjs.
+  // Parallel checks: cap of 8 links, 3s per request, without redoing the search.
+  // Can be turned off via FONTES_LINKS=0 without removing anything from its place.
   if (text && !curationResult && process.env.FONTES_LINKS !== '0') {
     try {
       const r = await fontesEConferencia(text, fontesGrounding || [], { mostrarFontes: buscaNativa, language: idiomaResposta, strictLinks: kind === 'routine', authenticatedEmailSources:searchCoverage.emailSourceLinks() });
@@ -6754,11 +6754,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       text = r.texto;
     } catch (e) { console.error('[fontes]', e?.message ?? e); }
   }
-  // Última camada textual: limitação vem de estado da tool, não da síntese LLM.
-  // Deve chegar ao retorno, transcript e memória recente com o mesmo texto.
-  // Curadoria guarda cobertura/filtros no audit tipado. Não repetir esse estado
-  // como aviso espontâneo no corpo que será entregue ao usuário; ele continua
-  // disponível para diagnóstico e explicação sob demanda.
+  // Last textual layer: the limitation comes from tool state, not LLM synthesis.
+  // Must reach the return, transcript and recent memory with the same text.
+  // Curation keeps coverage/filters in the typed audit. Don't repeat this state
+  // as a spontaneous notice in the body that will be delivered to the user; it stays
+  // available for diagnosis and explanation on demand.
   text = curationResult ? text : searchCoverage.finish(text, idiomaResposta, {suppressEmptyEmailSources: routineNoNews});
   // Real receipts and confirmations come in here via actionJournal. Unasked
   // offers, a "platform team" persona and invented nicknames are prompt rules:
@@ -6777,17 +6777,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const diagAntesRotina = text;
   text = enforceRoutineEmailContract(text, { language:idiomaResposta });
   diag.corte('rotina_email', diagAntesRotina, text);
-  // Resultados de tools no histórico continuam úteis, mas não provam o estado
-  // atual. Remove a alegação objetiva "verifiquei agora" quando nenhuma tool foi
-  // chamada neste turno (um assistente reciclou status_conta de quatro dias antes).
+  // Tool results in the history remain useful, but don't prove the
+  // current state. Removes the objective claim "I just checked" when no tool was
+  // called in this turn (one assistant recycled status_conta from four days earlier).
   const diagAntesConferi = text;
   text = enforceFreshCheckClaims(text, { toolCounts, language:idiomaResposta });
   diag.corte('conferi_agora', diagAntesConferi, text, { via: 'regra' });
   // Journals and prose guards must not replace the card used to bind the
   // channel receipt. Apply it after them, including coding lifecycle proposals.
-  // O texto do modelo fica acima do cartão: é onde está a resposta ao resto do
-  // pedido (até 29/09/2026 o cartão tomava o lugar dela). A cópia do cartão que o
-  // modelo traz do histórico sai, senão o cartão aparece duas vezes (caso de 03/10).
+  // The model's text stays above the card: that's where the answer to the rest of the
+  // request lives (until 2026-09-29 the card took its place). The copy of the card that the
+  // model brings from the history is removed, otherwise the card appears twice (2026-10-03 case).
   if (deterministicConfirmation) text = [String(text || '').split(deterministicConfirmation).join('').trim(), deterministicConfirmation].filter(Boolean).join('\n\n');
   // Inventory totals and row counts are rendered from the source-bound receipt,
   // after prose guards. A later model cannot turn 19 rows/units back into 13.
@@ -6795,13 +6795,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const calculated = inventoryCalculation.finish(text,{termination});
     if (calculated !== text) text = [calculated,renderCompletedActions(actionJournal.entries,idiomaResposta),deterministicConfirmation].filter(Boolean).join('\n\n');
   }
-  // Um assunto de e-mail pode conter "pedido enviado" e ser removido pelos
-  // guardas de prosa. Fontes consultadas voltam depois deles, sem tocar cartões.
+  // An email subject can contain "order sent" and get removed by the
+  // prose guards. Consulted sources come back after them, without touching cards.
   if (!deterministicConfirmation && !curationResult) text = searchCoverage.finishEmail(text, idiomaResposta, {suppressEmptyEmailSources: routineNoNews});
-  // A identificação institucional não fica por conta da síntese da LLM: entra
-  // por último, no texto que será entregue E persistido. O prompt acima pede
-  // que o modelo não a repita; a checagem protege contra um provider que a tenha
-  // devolvido literalmente mesmo assim.
+  // The institutional identification isn't left to the LLM's synthesis: it's added
+  // last, in the text that will be delivered AND persisted. The prompt above asks
+  // the model not to repeat it; the check guards against a provider that
+  // returned it verbatim anyway.
   if (selo) text = selo.comTexto(text);
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'assistant' && !messages[i].toolCalls?.length) {
@@ -6812,32 +6812,32 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       break;
     }
   }
-  // As imagens do turno NÃO ficam no history: foram usadas na chamada e bastam.
-  // Persistir base64 incharia o banco e reenviaria a imagem a cada turno (caro).
+  // The turn's images do NOT stay in the history: they were used in the call and that's enough.
+  // Persisting base64 would bloat the database and resend the image on every turn (expensive).
   for (const mm of messages) if (mm.images) delete mm.images;
-  // No history guardamos SEMPRE a versão limpa da mensagem do usuário
-  // (savedUserMsg): sem o relógio (nowLine) e, no caso de PDF, sem o texto inteiro
-  // do documento (só o marcador 📎 nome). O que foi pro modelo tinha esses extras.
-  // `meta` marca mensagem de role:'user' que NÃO é fala do usuário: nota de estado
-  // do turno cortado e mensagem que chegou no meio do turno (core.mjs). Sobrescrever
-  // essas com savedUserMsg apagava o conteúdo — a nota de estado, que existe pra o
-  // turno de "continua" saber o que já foi feito, vinha sendo destruída aqui.
+  // In the history we ALWAYS keep the clean version of the user's message
+  // (savedUserMsg): without the clock (nowLine) and, in the case of a PDF, without the full
+  // text of the document (just the 📎 name marker). What went to the model had these extras.
+  // `meta` flags a role:'user' message that is NOT the user's own words: the state note
+  // from a truncated turn and a message that arrived mid-turn (core.mjs). Overwriting
+  // those with savedUserMsg was erasing the content — the state note, which exists so the
+  // "continue" turn knows what's already been done, was being destroyed here.
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user' && !messages[i].meta) { messages[i].content = savedUserMsg; break; }
   }
-  // Interjeição: no history fica só a fala do usuário (`raw`), sem o invólucro de
-  // instrução nem o rascunho descartado. Sem isso, cada mensagem-no-meio-do-turno
-  // pagaria ~80 tokens de moldura (e até ~1.100 no caso do rascunho pré-entrega)
-  // em TODO turno seguinte da thread, até a compactação. O modelo deste turno já
-  // viu a versão completa — o que persiste é o que precisa ser lembrado.
+  // Interjection: only the user's own words (`raw`) stay in the history, without the
+  // instruction wrapper or the discarded draft. Without this, every mid-turn message
+  // would cost ~80 tokens of framing (and up to ~1,100 in the case of the pre-delivery draft)
+  // on EVERY following turn of the thread, until compaction. This turn's model already
+  // saw the full version — what persists is what needs to be remembered.
   for (const mm of messages) if (mm.meta === 'interject' && mm.raw) { mm.content = mm.raw; delete mm.raw; }
-  // Persiste o uso/custo de cada chamada do turno (uma linha por chamada).
+  // Persists the usage/cost of each call in the turn (one line per call).
   await recordUsages(usages, { userId, agentId: agent.id, threadId: thread.id, turnId, kind });
   if(measurement)await taskMetrics.observe({...measurement,version:1,updatedAt:Date.now(),finishedAt:Date.now(),
     state:measuredActionState(actionJournal.entries,termination),reason:termination,usageComplete:false});
-  // Contador de chamadas de tools (visibilidade no /metrics). Fire-and-forget:
-  // incrementa o que foi chamado e registra no catalogo tools novas vistas neste
-  // boot (dedup em memoria pra nao escrever o catalogo inteiro todo turno).
+  // Tool call counter (visibility in /metrics). Fire-and-forget:
+  // increments what was called and logs in the catalog new tools seen in this
+  // boot (in-memory dedup so as not to write the whole catalog every turn).
   if (Object.keys(toolCounts).length) {
     bumpToolCalls(toolCounts).catch((e) => console.error('[toolcalls]', e?.message ?? e));
   }
@@ -6848,15 +6848,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       recordToolCatalog(novos).catch((e) => console.error('[toolcatalog]', e?.message ?? e));
     }
   } catch { /* nunca quebra o turno */ }
-  // Custo das gerações de mídia (imagem/áudio), cada uma com seu kind/modelo.
+  // Cost of media generations (image/audio), each with its own kind/model.
   for (const e of mediaUsages) {
     await writeMediaUsage(e);
   }
-  // Mantém a página `perfil` do USUÁRIO em dia. Roda a cada 3 turnos (1º incluso)
-  // em vez de toda mensagem: a chamada de housekeeping custava uma ida ao Gemini
-  // por turno, e o perfil muda devagar. Compacta o history se preciso (sempre).
-  // Disparo SEM await (ver runProfileHousekeeping): a pessoa não espera a
-  // atualização do perfil pra receber a resposta que já está pronta.
+  // Keeps the USER's `perfil` page up to date. Runs every 3 turns (1st included)
+  // instead of every message: the housekeeping call used to cost a round trip to Gemini
+  // per turn, and the profile changes slowly. Compacts the history if needed (always).
+  // Fired WITHOUT await (see runProfileHousekeeping): the person doesn't wait for the
+  // profile update to receive the response that's already ready.
   const userTurns = messages.filter((m) => m.role === 'user').length;
   if (!discovery.source && (userTurns === 1 || userTurns % 3 === 0)) {
     runProfileHousekeeping({
@@ -6865,12 +6865,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     logDerivaIdioma(text, idiomaResposta, userId);
   }
-  // Onboarding "momento wow" é EFÊMERO: a saudação é mostrada na hora no wizard
-  // e o que importa (perfil/wiki + itens da home) já foi gravado pelas tools.
-  // NÃO persistimos o turno pra não deixar o prompt interno do onboarding visível
-  // como uma "conversa" na lista do usuário.
-  // Respostas de contatos que voltaram já foram surfaçadas neste turno: marca
-  // como vistas pra não reaparecerem na caixa entre assistentes nos próximos.
+  // Onboarding "wow moment" is EPHEMERAL: the greeting is shown right away in the wizard
+  // and what matters (profile/wiki + home items) has already been saved by the tools.
+  // We do NOT persist the turn so as not to leave the onboarding's internal prompt visible
+  // as a "conversation" in the user's list.
+  // Contact replies that came back were already surfaced in this turn: marks
+  // them as seen so they don't reappear in the inter-assistant inbox in the next ones.
   if (inbox.responseIds.length) {
     try { await markDecisionsSeenByA(userId, inbox.responseIds); }
     catch (e) { console.error('[agentinbox seen]', e?.message ?? e); }
@@ -6900,12 +6900,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     );
   }
   if (compacted) console.log(`[compact] thread=${thread.id} dropped=${droppedTurns} leaned=${leanedTok || 0}tok -> resumo`);
-  // Primeira mensagem da thread sem título -> nomeia pela mensagem.
+  // Thread's first message with no title -> names it from the message.
   const title = (!thread.title || !thread.title.trim()) ? deriveTitle(savedUserMsg) : undefined;
-  // Parada por crédito com o mesmo texto da anterior nesta conversa, em rajada
-  // (mensagens que estavam na fila rodando uma atrás da outra): a pergunta fica
-  // gravada, a resposta de saldo repetida não é gravada, enviada nem notificada.
-  // O app iOS fica de fora: ele não enfileira e mostraria uma bolha vazia.
+  // Credit stop with the same text as the previous one in this conversation, in a burst
+  // (messages that were queued running one after another): the question stays
+  // logged, the repeated balance reply isn't logged, sent, or notified.
+  // The iOS app is excluded: it doesn't queue and would show an empty bubble.
   const creditStopPush = CREDIT_STOP_REASONS.has(termination);
   const creditStopRepetida = creditStopPush && !appClient && !creditReplyGuard.allow(thread.id, termination, text);
   await saveThreadTurn(thread.id, agent.id, { baseHistory, history, summary, userMsg: savedUserMsg, assistantMsg: text, title, attachments, userMsgId, interjecoes, skipAssistant: creditStopRepetida });
@@ -6913,12 +6913,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[credit] resposta de saldo repetida suprimida thread=${thread.id} motivo=${termination}`);
     return { text: '', attachments: [], deviceAction, suppressed: true };
   }
-  // Push mobile pra resposta do assistente. Só no canal do app/web ('chat'): os
-  // canais externos (telegram/whatsapp/slack/email) já entregam na origem, e um
-  // push aqui duplicaria. Foreground na thread aberta é suprimido no cliente.
-  // Fire-and-forget: nunca bloqueia o retorno do turno.
-  // Parada por crédito repetida (mesmo motivo e texto em sequência) não gera
-  // push de novo: ver push-repeat-guard.mjs.
+  // Mobile push for the assistant's reply. Only on the app/web channel ('chat'): the
+  // external channels (telegram/whatsapp/slack/email) already deliver at the source, and a
+  // push here would duplicate it. Foreground in an open thread is suppressed on the client.
+  // Fire-and-forget: never blocks the turn's return.
+  // A repeated credit stop (same reason and text in sequence) doesn't generate a
+  // push again: see push-repeat-guard.mjs.
   if (kind === 'chat' && text && String(text).trim() && (!creditStopPush || creditPushGuard.allow(userId, termination, text))) {
     sendPush(userId, {
       title: agent?.name || marca().nome,
@@ -6932,26 +6932,26 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }} : {}) };
 }
 
-// Aviso de erro dos canais (aviso-canal.mjs): idioma da pessoa + histórico da thread do canal.
-// STT dos canais: transcreve o áudio e grava o custo (kind='stt'); chavinha desligada = STT_DISABLED (o canal avisa).
+// Channel error notice (aviso-canal.mjs): person's language + the channel's thread history.
+// Channel STT: transcribes the audio and logs the cost (kind='stt'); switch off = STT_DISABLED (the channel notifies).
 const transcreverDoCanal = async (buffer, mime, userId) => {
   if (!(await getUserMediaPrefs(userId)).stt) throw new Error('STT_DISABLED');
   const { text, usage } = await transcribeAudio(buffer, mime);
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-// Atendimento ao público (publico-canal.mjs): desconhecido no WhatsApp vai pro assistente que a instalação escolheu; o dono vê em /atendimento.
+// Public service (publico-canal.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /atendimento.
 const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, ganchos: pecas.atendimentoPublico,
   makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('conversa', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
-// Canal Telegram: roda um bot por usuário (token do BotFather dele). Injeta as
-// deps pra evitar import circular. Os pollers sobem no boot (listEnabledTelegramBots).
-// O Telegram é um fio contínuo só: usa uma thread fixa "Telegram" por agente.
+// Telegram channel: runs one bot per user (their BotFather token). Injects the
+// deps to avoid a circular import. The pollers start up at boot (listEnabledTelegramBots).
+// Telegram is a single continuous thread: uses one fixed "Telegram" thread per agent.
 const telegramMgr = createTelegramManager({
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'Telegram' });
     return withConfirmationReceipt(thread.id, await runConversationInThread(agent, thread, userId, message, { kind: 'telegram', images, files, confirmationTarget: extra.confirmationTarget, confirmationInputId:extra.confirmationInputId }));
   },
-  // Reaction 👍/👎 numa msg: confirma/cancela a ação pendente da thread SEM texto.
+  // Reaction 👍/👎 on a message: confirms/cancels the thread's pending action with NO text.
   reactionConfirm: createReactionConfirmationHandler({
     durable:true,
     channel: 'telegram',
@@ -6965,22 +6965,22 @@ const telegramMgr = createTelegramManager({
   loadAgent: getAgentOwned, // (agentId, userId) -> agent (valida ownership)
   db: { getTelegramBot, bindTelegramChat, setTelegramOffset },
   transcribe: transcreverDoCanal,
-  // No modo S3 não há link público: o servidor lê o byte e o canal faz upload
-  // direto. No disco (a.key null) devolve null -> canal usa o link estático.
+  // In S3 mode there's no public link: the server reads the byte and the channel uploads it
+  // directly. On disk (a.key null) returns null -> channel uses the static link.
   getMedia: getMediaBytes, avisoCanal: avisoCanal('Telegram'),
 });
 
-// Canal WhatsApp: número único compartilhado (WABA Cloud API). Webhook passivo,
-// roteia pelo telefone -> usuário, agente ativo trocável por @nome/menu. Cada
-// agente usa uma thread fixa "WhatsApp" (history isolado; memória de usuário compartilhada).
+// WhatsApp channel: single shared number (WABA Cloud API). Passive webhook,
+// routes by phone -> user, active agent switchable via @name/menu. Each
+// agent uses one fixed "WhatsApp" thread (isolated history; shared user memory).
 const waHandler = createWhatsAppHandler({
   inbox:waInbox, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
-    // pollNewUserMsg = canal da mensagem que chega no meio do turno (ver whatsapp.mjs).
+    // pollNewUserMsg = channel for the message that arrives mid-turn (see whatsapp.mjs).
     return withConfirmationReceipt(thread.id, await runConversationInThread(agent, thread, userId, message, { kind: 'whatsapp', images, files, pollNewUserMsg: extra.pollNewUserMsg || null, confirmationTarget: extra.confirmationTarget, confirmationInputId:extra.confirmationInputId }));
   },
-  // Reaction 👍/👎 numa msg: confirma/cancela a ação pendente da thread SEM texto.
+  // Reaction 👍/👎 on a message: confirms/cancels the thread's pending action WITHOUT text.
   reactionConfirm: createReactionConfirmationHandler({
     durable:true,
     channel: 'whatsapp',
@@ -6995,7 +6995,7 @@ const waHandler = createWhatsAppHandler({
   db: { getWhatsAppLink, listAgents, setWhatsAppActiveAgent, recordWaStatus, saveWaMsgRef, getWaMsgRef, touchWaInbound, claimWaMsg, consumeWaClaim },
   aoReprovar: (d) => eventos.emitir('whatsapp_reprovada', d), // e.g. a plugin marks the campaign send with this wamid as failed
   transcribe: transcreverDoCanal,
-  // Entrega de mídia: no modo S3, byte-upload (sem link público); no disco, link.
+  // Media delivery: in S3 mode, byte-upload (no public link); on disk, link.
   getMedia: getMediaBytes,
 });
 
@@ -7036,11 +7036,11 @@ const slackHandler = createSlackHandler({
   }, avisoCanal: avisoCanal('Slack'),
 });
 
-// ── Rotinas: o agente executa o prompt da rotina numa thread dedicada e o
-// resultado é entregue por e-mail (chegando como o próprio assistente). ──
-// `agendada` distingue o disparo do agendador do "rodar agora" que a pessoa
-// aperta no app. Só o agendado pode ficar em silêncio quando o crédito acabou
-// (ver o portão de franquia em runConversationTurn).
+// ── Routines: the agent runs the routine's prompt in a dedicated thread and the
+// result is delivered by email (arriving as the assistant itself). ──
+// `agendada` (scheduled) distinguishes the scheduler's trigger from the "run
+// now" the person taps in the app. Only the scheduled run can stay silent when
+// credit runs out (see the quota gate in runConversationTurn).
 function curationMailReader(userId,googleEmail) {
   const cache=new Map();let reader;
   return async id=>{
@@ -7059,12 +7059,12 @@ async function runRoutine(r, { agendada = false } = {}) {
   if (!agent) throw new Error('assistente da rotina sumiu');
   const monitor=r.config?.flight_monitor;
   const hasMonitor=Object.prototype.hasOwnProperty.call(r.config || {}, 'flight_monitor');
-  if (hasMonitor) normalizeFlightMonitor(monitor); // inválido falha fechado, nunca volta ao LLM
+  if (hasMonitor) normalizeFlightMonitor(monitor); // invalid fails closed, never goes back to the LLM
   const hasCuration=Object.prototype.hasOwnProperty.call(r.config || {}, 'curation');
   const curationConfig=hasCuration?normalizeCurationConfig(r.config.curation):null;
   if (hasCuration && (hasMonitor || !['email','telegram','whatsapp','none','app'].includes(r.channel))) throw Error('Canal de curadoria inválido ou combinação com monitor de voos.');
   const hasEmailSearch=Object.prototype.hasOwnProperty.call(r.config || {}, 'email_search');
-  const emailSearch=hasEmailSearch?normalizeEmailSearchConfig(r.config.email_search):null; // inválido falha fechado
+  const emailSearch=hasEmailSearch?normalizeEmailSearchConfig(r.config.email_search):null; // invalid fails closed
   if (hasEmailSearch && (hasMonitor || hasCuration)) throw Error('Busca de e-mail não combina com curadoria ou monitor de voos.');
   const thread = await getOrCreateThreadByTitle({
     agentId: agent.id, userId: r.user_id, title: `⏰ ${r.title}`,
@@ -7078,8 +7078,8 @@ async function runRoutine(r, { agendada = false } = {}) {
   if (hasCuration && result.curation) return {
     type:'curation-v1',userId:r.user_id,routineId:r.id,editionId:randomUUID(),channel:r.channel||'none',appThreadId:thread.id,configSnapshot:r.config,
     text:result.text,urls:result.curation.urls,audit:result.curation.audit,
-    // Conteúdo e transporte são eixos separados. Uma curadoria inválida ainda
-    // produz um aviso de falha que pode ser entregue com sucesso por e-mail.
+    // Content and transport are separate axes. An invalid curation still
+    // produces a failure notice that can be successfully delivered by email.
     contentStatus:({completed:'complete',partial:'partial',failed:'failed'})[result.curation.executionStatus]
       || (result.curation.coverageSatisfied?'complete':result.curation.urls?.length?'partial':'failed'),
     executionStatus:result.curation.executionStatus,
@@ -7089,17 +7089,17 @@ async function runRoutine(r, { agendada = false } = {}) {
     : result.text;
 }
 
-// Grava uma mensagem proativa (rotina/broadcast) no thread que o roteamento de
-// ENTRADA daquele canal usa, pra que a RESPOSTA da pessoa chegue já com o
-// contexto do que foi enviado. WhatsApp/Telegram têm thread fixa por canal;
-// e-mail roteia pelo assunto (= r.title). Só age quando dono+assistente estão
-// resolvidos (o broadcast de e-mail do admin não passa agent_id: no-op, seguro).
-// Best-effort: nunca derruba a entrega.
+// Writes a proactive message (routine/broadcast) into the thread that this
+// channel's INBOUND routing uses, so the person's REPLY already arrives with
+// the context of what was sent. WhatsApp/Telegram have a fixed thread per
+// channel; email routes by subject (= r.title). Only acts when owner+assistant
+// are resolved (the admin's email broadcast doesn't pass agent_id: no-op, safe).
+// Best-effort: never breaks delivery.
 async function persistProactiveToThread(r, body) {
   if (!r.agent_id || !r.user_id) return;
-  // E-mail: o roteamento de ENTRADA threadeia por `📧 {assunto normalizado}`
-  // (ver email.mjs). Pra que a resposta caia no MESMO thread, o título gravado
-  // aqui tem que bater exatamente com essa fórmula (r.title = assunto enviado).
+  // Email: INBOUND routing threads by `📧 {normalized subject}`
+  // (see email.mjs). For the reply to land in the SAME thread, the title saved
+  // here must match that formula exactly (r.title = subject sent).
   const title = r.channel === 'telegram' ? 'Telegram'
     : r.channel === 'whatsapp' ? 'WhatsApp'
     : r.channel === 'email' ? (r.title ? `📧 ${(normalizeSubject(r.title) || 'E-mail').slice(0, 80)}` : '📧 E-mail')
@@ -7124,9 +7124,9 @@ const reminderExecutor = createReminderExecutor({
   recoverExpired: recoverReminderDeliveries,
 }, { deliver: deliverReminder });
 
-// Caminho único do disparo manual, compartilhado pela API e pela tool do
-// assistente. Centralizar evita que um deles esqueça o carimbo/dedup ou use uma
-// entrega diferente da rotina agendada.
+// Single path for manual sending, shared by the API and the assistant's tool.
+// Centralizing it avoids one of them forgetting the stamp/dedup or using a
+// delivery different from the scheduled routine.
 async function executeRoutineNow(r) {
   const user = await getUserById(r.user_id);
   if (!user) throw new Error('usuário da rotina não encontrado');
@@ -7151,17 +7151,17 @@ async function executeRoutineNow(r) {
   });
 }
 
-// ── Poller de geração de vídeo ──
-// Roda a cada tick do scheduler: para cada job ativo (queued/processing),
-// consulta o worker. Quando 'done', baixa o mp4, guarda na biblioteca do dono,
-// COBRA pelos segundos REAIS gerados e ENTREGA (vídeo nativo no Telegram quando
-// a origem foi Telegram; senão, avisa por push que o vídeo está pronto na app).
-// Quando 'error', marca e avisa o dono. Best-effort: falha num job não derruba
-// os outros nem o tick.
-// Entrega uma mensagem de status do vídeo NO CANAL DE ORIGEM. Para origem 'web'
-// (pedido feito no app), a resposta cai na PRÓPRIA thread do pedido, aparecendo
-// na conversa onde o dono pediu, em vez de empurrar pro Telegram. Só cai no push
-// (notifyOwner) quando a origem é de push de fato ou a thread não existe mais.
+// ── Video generation poller ──
+// Runs on every scheduler tick: for each active job (queued/processing), checks
+// with the worker. When 'done', downloads the mp4, stores it in the owner's
+// library, CHARGES for the REAL seconds generated and DELIVERS (native video on
+// Telegram when the origin was Telegram; otherwise, pushes a notice that the video
+// is ready in the app). When 'error', marks it and notifies the owner. Best-effort:
+// a failed job doesn't break the others or the tick. Delivers a video status
+// message ON THE ORIGIN CHANNEL. For origin 'web' (request made in the app), the
+// reply lands in the request's OWN thread, showing up in the conversation where the
+// owner asked, instead of pushing to Telegram. Only falls back to push
+// (notifyOwner) when the origin is actually push or the thread no longer exists.
 async function deliverVideoMessage(job, text) {
   if (job.origin_channel === 'web' && job.thread_id) {
     try {
@@ -7192,12 +7192,12 @@ async function pollVideoJobs() {
       console.error(`[video-poll] job ${job.id} erro: ${r?.error}`);
       continue;
     }
-    if (status !== 'done') continue; // status desconhecido: espera o próximo tick
+    if (status !== 'done') continue; // unknown status: wait for the next tick
     // Pronto: baixa, guarda, cobra e entrega.
     try {
       const { buffer, contentType } = await fetchRenderVideo(job.remote_job_id);
       const { url, key } = await putMedia(job.user_id, buffer, 'mp4', contentType || 'video/mp4');
-      // Cobrança pelos SEGUNDOS REAIS gerados (fonte = GET done), teto 15s.
+      // Charges for the REAL seconds generated (source = GET done), cap 15s.
       const secs = Math.min(Math.max(0, Number(r?.video_seconds) || Number(job.duration_req) || 0), MAX_VIDEO_SECONDS);
       const credits = Math.max(0, Math.round(gasto.creditosDe({ tipo: 'video', segundos: secs })));
       const settlement = await videoBilling.settle({ jobId: job.id, userId: job.user_id,
@@ -7206,10 +7206,10 @@ async function pollVideoJobs() {
         const decisao = decidirCobrancaNaoConcluida(settlement.reason);
         if (decisao.acao === 'revisar') {
           console.error(`[video-poll] job ${job.id}: ${settlement.reason}; cobrança suspensa para revisão, sem repetir débito`);
-          // Sai da fila ativa (achado #25): com o job parado em 'queued' o poller
-          // rebaixava e resubia o mp4 a cada minuto pra sempre, e o dono ficava
-          // sem poder pedir outro vídeo. O arquivo já está no bucket, então
-          // guarda a chave junto pra revisão não perder o vídeo.
+          // Leaves the active queue (finding #25): with the job stuck in 'queued' the
+          // poller kept downgrading and re-uploading the mp4 every minute forever,
+          // and the owner couldn't request another video. The file is already in the
+          // bucket, so the key is kept too, so review doesn't lose the video.
           try { await updateVideoJob(job.id, { status: 'needs_review', videoKey: key, videoSeconds: secs, error: decisao.erro }); }
           catch (e) { console.error(`[video-poll] nao consegui marcar revisao do job ${job.id}:`, e?.message ?? e); }
         }
@@ -7225,7 +7225,7 @@ async function pollVideoJobs() {
         try { await addMediaAsset({ userId: job.user_id, agentId: job.agent_id, s3Key: key, kind: 'video', mime: contentType || 'video/mp4', source: 'generated', caption: nome }); }
         catch (e) { console.error('[video-poll] addMediaAsset:', e?.message ?? e); }
       }
-      // Entrega. Telegram → vídeo nativo (player inline); demais → push de aviso.
+      // Delivery. Telegram → native video (inline player); others → push notice.
       let deliveredNative = false;
       if (job.origin_channel === 'telegram') {
         try {
@@ -7243,12 +7243,12 @@ async function pollVideoJobs() {
       console.log(`[video-poll] job ${job.id} salvo e contabilizado (${secs}s, ${credits} créditos); aviso nativo=${deliveredNative}`);
     } catch (e) {
       console.error(`[video-poll] entrega ${job.id}:`, e?.message ?? e);
-      // Antes do commit: rollback permite nova tentativa sem novo débito. Depois
-      // do commit: não reabre job nem cobra de novo por falha de notificação.
-      // Tentar de novo é certo; tentar PRA SEMPRE não (achado #25). Passado o
-      // prazo, encerra o job e avisa o dono, que assim volta a poder pedir vídeo.
-      // O filtro de status do updateVideoJob garante que um job já entregue não
-      // é reaberto como erro por causa de uma falha depois da cobrança.
+      // Before commit: rollback allows a new attempt without a new charge. After
+      // commit: doesn't reopen the job nor charge again for a notification failure.
+      // Retrying is right; retrying FOREVER isn't (finding #25). Past the deadline,
+      // closes the job and notifies the owner, who can then request a video again.
+      // The status filter in updateVideoJob guarantees that an already-delivered
+      // job isn't reopened as an error because of a failure after the charge.
       const decisao = decidirFalhaNaEntrega({ idadeMs: Date.now() - new Date(job.created_at).getTime(), mensagem: e?.message ?? e });
       if (decisao.acao === 'desistir') {
         try { await updateVideoJob(job.id, { status: 'error', error: decisao.erro }); } catch {}
@@ -7258,13 +7258,13 @@ async function pollVideoJobs() {
   }
 }
 
-// Rascunho isolado: não cria/reutiliza thread nem entra no runner conversacional.
-// Mantém voz, perfil (somente leitura), idioma e contabilização do modelo. Os
-// reparos internos da devolutiva medem custo real sem nova cobrança ao dono;
-// o que NÃO pode ocorrer aqui é gravar conversa/perfil ou executar ações.
+// Isolated draft: doesn't create/reuse a thread nor enter the conversational
+// runner. Keeps voice, profile (read-only), language and model accounting. The
+// feedback's internal repairs measure real cost without a new charge to the owner;
+// what MUST NOT happen here is writing conversation/profile or running actions.
 async function isolatedAgentDraft(agent, userId, task, {discoveryDraft=false,repairDraft=false,adminDraft=false}={}) {
-  // Rascunho pedido pelo time (parados da semana) também não cobra a pessoa:
-  // ela não pediu nada, o custo é nosso e fica medido como os reparos.
+  // A draft requested by the team (week's leftovers) also doesn't charge the person:
+  // they didn't ask for anything, the cost is ours and is measured like the repairs.
   const noBill = repairDraft || adminDraft;
   return generateMessageDraft({
     task,
@@ -7300,9 +7300,9 @@ async function runAgentMessageDraft(target, task, opts = {}) {
   return isolatedAgentDraft(agent, target.user_id, task, opts);
 }
 
-// Detecta conteúdo "em lista" (bullets, numeração ou várias quebras). Fora da
-// janela de 24h o WhatsApp só deixa TEMPLATE, cujo parâmetro achata quebras numa
-// zona; então uma lista vira lixo. Isto marca o que precisa virar texto corrido.
+// Detects "list-like" content (bullets, numbering or several line breaks). Outside the
+// 24h window WhatsApp only allows TEMPLATE, whose parameter flattens line breaks into
+// one zone; so a list turns into garbage. This flags what needs to become flowing text.
 function isListishText(t) {
   const s = String(t || '');
   if (!/\n/.test(s)) return false;
@@ -7311,11 +7311,11 @@ function isListishText(t) {
   return bullety || manyLines;
 }
 
-// Reescreve conteúdo listado em TEXTO DESCRITIVO (um parágrafo corrido, sem
-// bullets/numeração/quebras) na voz do agente, pro caso de janela fechada onde só
-// cabe template. Se o texto já é prosa curta, devolve como está. Qualquer erro
-// cai no texto original (proseFallback trata como best-effort). `target` precisa
-// de agent_id + user_id.
+// Rewrites listed content into DESCRIPTIVE TEXT (a single flowing paragraph,
+// no bullets/numbering/line breaks) in the agent's voice, for the case of a
+// closed window where only a template fits. If the text is already short
+// prose, returns it as is. Any error falls back to the original text
+// (proseFallback treats it as best-effort). `target` needs agent_id + user_id.
 async function whatsappProse(target, text) {
   if (!isListishText(text)) return preserveSearchCoverageWarning(text, text);
   if (!target?.agent_id || !target?.user_id) return preserveSearchCoverageWarning(text, text);
@@ -7358,7 +7358,7 @@ async function agentForLifecycleChannel(userId, channel, agentId, agentName) {
   } catch { return keep; }
 }
 
-// Entrega VERBATIM (o texto já foi aprovado/editado na tela). Sem embrulho.
+// VERBATIM delivery (the text was already approved/edited on screen). No wrapping.
 async function deliverLifecycle(channel, r, subject, text) {
   const body = String(text || '').trim();
   if (!body) throw new Error('texto vazio');
@@ -7376,9 +7376,9 @@ async function deliverLifecycle(channel, r, subject, text) {
     if (!waEnabled()) throw new Error('WhatsApp não configurado');
     const link = await getWhatsAppLinkForUser(r.user_id);
     if (!link || !link.wa_phone) throw new Error('WhatsApp não conectado');
-    // Lifecycle (onboarding / reativação) é envio proativo NÃO solicitado → template
-    // MARKETING de engajamento ({{1}}=primeiro nome, {{2}}=conteúdo), sem o "conforme
-    // combinado" do de notificação. Sem primeiro nome, cai no padrão (não precisa de nome).
+    // Lifecycle (onboarding / reactivation) is an UNSOLICITED proactive send → engagement
+    // MARKETING template ({{1}}=first name, {{2}}=content), without the "as agreed" wording from
+    // the notification one. Without a first name, falls back to the default (doesn't need a name).
     const nome = firstNameOf(r.user_name);
     let response;
     if (nome) {
@@ -7395,21 +7395,21 @@ async function deliverLifecycle(channel, r, subject, text) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
-// Bind local por padrão: o tráfego público entra sempre via nginx (mesmo host).
-// Sobrescreva com HOST=0.0.0.0 só se algum ambiente precisar expor a porta direto.
+// Local bind by default: public traffic always enters via nginx (same host). Override
+// with HOST=0.0.0.0 only if some environment needs to expose the port directly.
 const HOST = process.env.HOST || '127.0.0.1';
 const PUBLIC = path.join(__dirname, 'public');
-// Onde o site procura página e arquivo (plugins, depois web/public; a marca vem antes) e o app já com os encaixes dos plugins.
+// Where the site looks for pages and files (plugins, then web/public; the brand comes first) and the app already with the plugins' slots.
 const PASTAS_DO_SITE = definirPastasDoSite([...pastasDoSite(plugins), PUBLIC]), lerPagina = leitorDoApp(plugins, path.join(PUBLIC, 'index.html'));
 
-// Instruções padrão quando o usuário cria um agente sem descrever o papel.
-// É só um fallback genérico — NÃO travado em nenhum domínio.
+// Default instructions when the user creates an agent without describing its role.
+// It's just a generic fallback — NOT locked into any domain.
 const DEFAULT_INSTRUCTIONS =
   'You are a versatile personal assistant. Help the user with whatever they need: researching, organizing, creating and solving problems. When you need current information (facts, prices, products, news), use web search.';
 
-// "Momento wow" do onboarding: logo após conectar o Google. O agente usa as
-// ferramentas conectadas pra investigar e-mails + agenda, infere o contexto do
-// usuário, salva na memória e responde com uma saudação PESSOAL e sugestões.
+// Onboarding's "wow moment": right after connecting Google. The agent uses the
+// connected tools to look into emails + calendar, infers the user's context,
+// saves it to memory and replies with a PERSONAL greeting and suggestions.
 const ONBOARD_PROMPT = (language) =>
   `This is your very first contact with this user, now that they have just connected their account(s) (it may be Google, Hotmail/Outlook, or both). Deliver a first piece of practical, verifiable help to organize the day. Do not try to show intimacy or guess the person's identity.
 
@@ -7427,7 +7427,7 @@ SUGESTOES:
 - <task 2>
 - <task 3>`;
 
-// Separa saudação, fatos "para lembrar" e as 3 sugestões dos blocos no fim.
+// Splits greeting, "to remember" facts and the 3 suggestions from the blocks at the end.
 function parseOnboard(text) {
   const all = text || '';
   const bullets = (chunk) => {
@@ -7438,7 +7438,7 @@ function parseOnboard(text) {
     }
     return out;
   };
-  // Quebra nos dois marcadores; o que vem antes do primeiro é a saudação.
+  // Splits on the two markers; what comes before the first one is the greeting.
   const sugSplit = all.split(/\n\s*SUGEST[ÕO]ES\s*:/i);
   const beforeSug = sugSplit[0] || all;
   const remSplit = beforeSug.split(/\n\s*PARA[_ ]LEMBRAR\s*:/i);
@@ -7450,10 +7450,10 @@ function parseOnboard(text) {
 
 // Estado/resultados do wizard agora persistidos por conta/assistente em onboardingStore.
 
-// Atualização automática dos boxes da home. Ao contrário do ONBOARD (primeiro
-// contato, com saudação), este é um refresh: o agente relê e-mails/agenda
-// recentes e reescreve "Para lembrar" + Sugestões com base no que há de novo.
-// Só usamos os dois blocos do fim; a saudação é descartada.
+// Automatic refresh of the home screen boxes. Unlike ONBOARD (first contact,
+// with greeting), this is a refresh: the agent re-reads recent emails/calendar
+// and rewrites "To remember" + Suggestions based on what's new. Only the two
+// final blocks are used; the greeting is discarded.
 const REFRESH_PROMPT =
   `Update what the user needs to know now, based on what is NEW. Use the 'google' tool (if available) to reread the most relevant recent e-mails and the upcoming calendar events; if the e-mail is Microsoft/Hotmail, use the 'microsoft' tool (pass a goal such as "summarize the most important recent e-mails with sender and subject"). Do NOT write to memory in this turn (memory maintenance takes care of that, via patch). Reply ONLY with the two blocks below, keeping their labels exactly as written, with no greeting and no extra text.
 
@@ -7468,10 +7468,10 @@ SUGESTOES:
 - <task 2>
 - <task 3>`;
 
-// Checagem BARATA (sem modelo) de conteúdo novo: pega o id do e-mail mais
-// recente da caixa de entrada. Se mudou desde a última atualização, há novidade.
-// Uma única chamada list (só ids), sem ler corpo. Retorna null em falha (não
-// dispara refresh por erro de API).
+// CHEAP check (no model) for new content: gets the id of the most recent
+// email in the inbox. If it changed since the last update, there's something
+// new. A single list call (ids only), no body read. Returns null on failure
+// (doesn't trigger a refresh on an API error).
 async function newestInboxId(userId, googleEmail = null) {
   try {
     const token = await validGoogleToken(userId, googleEmail);
@@ -7485,10 +7485,10 @@ async function newestInboxId(userId, googleEmail = null) {
   } catch { return null; }
 }
 
-// Versão AMIGÁVEL do prompt de um assistente pra mostrar ao próprio dono (aba
-// Memória & Prompt): só as partes que ELE define/entende (identidade, objetivo,
-// papel, tom/voz, nomes antigos), sem o encanamento de regras internas/tools. O
-// texto cru fica no "avançado" (systemFor), só-leitura.
+// FRIENDLY version of an assistant's prompt to show to the owner themselves
+// (Memory & Prompt tab): only the parts THEY define/understand (identity,
+// goal, role, tone/voice, old names), without the internal rules/tools
+// plumbing. The raw text stays in "advanced" (systemFor), read-only.
 function friendlyPrompt(agent) {
   const role = (agent.instructions && agent.instructions.trim()) || DEFAULT_INSTRUCTIONS;
   const style = (agent.style && agent.style.trim()) || '';
@@ -7505,14 +7505,14 @@ function friendlyPrompt(agent) {
   };
 }
 
-// Monta o system prompt do agente de forma GENÉRICA: identidade + instruções
-// livres (o que esse agente é, definido por quem o criou) + ferramentas
-// disponíveis + memória do usuário. Nada hardcoded de um domínio específico.
-// Fix#3 (cache Together): systemFor produz SÓ conteúdo ESTÁVEL. Os blocos
-// voláteis (perfil/wiki, panorama de outras conversas, caixa entre assistentes,
-// resumo do history) saíram daqui pro FIM da mensagem do usuário (ver tailContext
-// em runConversationInThread), pra o prefixo system+tools ficar byte-idêntico
-// entre turnos e a Together reaproveitar o cache implícito.
+// Builds the agent's system prompt GENERICALLY: identity + free-form
+// instructions (what this agent is, defined by whoever created it) + available
+// tools + user memory. Nothing hardcoded to a specific domain.
+// Fix#3 (Together cache): systemFor produces ONLY STABLE content. The volatile
+// blocks (profile/wiki, overview of other conversations, inter-assistant
+// inbox, history summary) moved from here to the END of the user message (see
+// tailContext in runConversationInThread), so the system+tools prefix stays
+// byte-identical between turns and Together can reuse the implicit cache.
 function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, project = null, appsManual = false, language = IDIOMA_PADRAO } = {}) {
   // The prompt is written in English; the language the assistant writes in is set
   // by the directive appended at the end (web/locale.mjs), for every language.
@@ -7826,9 +7826,9 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
   return lines.join('\n');
 }
 
-// Fix#3 (cache Together): monta os blocos VOLÁTEIS que saíram do system prompt.
-// Vão no FIM da mensagem do usuário (depois do nowLine) e NÃO persistem no history
-// (só a savedUserMsg limpa é gravada). Mantém o prefixo system+tools estável.
+// Fix#3 (Together cache): builds the VOLATILE blocks that moved out of the system
+// prompt. They go at the END of the user message (after nowLine) and do NOT persist in
+// history (only the clean savedUserMsg is stored). Keeps the system+tools prefix stable.
 function tailContext({ wiki = '', summary = '', crossChannel = '', agentInbox = '', spaces = '', skills = '', trackers = '', runner = '', compras = '', rotinaNudge = '', creditos = '' } = {}) {
   const parts = [];
   if (wiki && wiki.trim()) {
@@ -7876,8 +7876,8 @@ function tailContext({ wiki = '', summary = '', crossChannel = '', agentInbox = 
   return parts.join('\n\n');
 }
 
-// Extrai/atualiza um perfil curto e estável do usuário a partir da última troca.
-// Roda sem busca (só raciocínio barato) e devolve a versão atualizada do perfil.
+// Extracts/updates a short, stable user profile from the latest exchange.
+// Runs without search (cheap reasoning only) and returns the updated profile.
 async function updateProfile(agent, userMsg, assistantMsg) {
   const sys = [
     'Você mantém um PERFIL curto e estável do usuário de um assistente pessoal.',
@@ -7892,36 +7892,36 @@ async function updateProfile(agent, userMsg, assistantMsg) {
     });
     return r.text?.trim() || agent.profile || '';
   } catch {
-    return agent.profile || ''; // se falhar, mantém o perfil que já tinha
+    return agent.profile || ''; // if it fails, keeps the profile it already had
   }
 }
 
-// O idioma vem pendurado no `res` porque esta função só enxerga o `res`; quando
-// não houver (chamada fora do handler HTTP), `traduzResposta` cai em pt-BR e
-// devolve o MESMO objeto, então a resposta continua byte a byte a de hoje.
+// The language hangs off `res` because this function only sees `res`; when there
+// isn't one (call outside the HTTP handler), `traduzResposta` falls back to pt-BR and
+// returns the SAME object, so the response stays byte-for-byte the same as today.
 function send(res, code, obj, headers = {}) {
   res.writeHead(code, { 'content-type': 'application/json', ...headers });
   res.end(JSON.stringify(traduzResposta(obj, res.idiomaResposta, CATALOGOS_MSGS)));
 }
 
-// Responde um erro SEM vazar detalhe interno pro cliente (ASVS 7.4 / CASA): a
-// mensagem crua (que pode conter SQL, nome de coluna, stack) fica só no log do
-// servidor; o cliente recebe apenas `publicMsg` genérico.
+// Replies with an error WITHOUT leaking internal detail to the client (ASVS
+// 7.4 / CASA): the raw message (which may contain SQL, column name, stack)
+// stays only in the server log; the client gets only a generic `publicMsg`.
 function fail(res, code, publicMsg, e) {
   console.error(`[fail ${code}] ${publicMsg}`, e?.message ?? e);
   return send(res, code, { error: publicMsg });
 }
 
-// Bearer token de uma requisição (usado pela extensão do Chrome). '' se ausente.
+// Bearer token from a request (used by the Chrome extension). '' if absent.
 function readBearer(req) {
   const h = req.headers.authorization || '';
   return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
-// Monta a mensagem de um turno de WEBHOOK a partir do payload do sistema externo.
-// O conteúdo é DADO (referência), não instrução — o directive da skill já avisa o
-// modelo disso. `data` (início) pode ser objeto ou string; `reply` (continuação) é
-// a resposta do sistema à pergunta anterior do agente. Objetos viram k: v legível.
+// Builds a WEBHOOK turn's message from the external system's payload. The content is
+// DATA (reference), not instruction — the skill's directive already warns the model
+// of this. `data` (start) can be an object or string; `reply` (continuation) is the
+// system's answer to the agent's previous question. Objects become readable k: v.
 function composeWebhookMessage({ isFirst, data, reply }) {
   const asText = (v) => {
     if (v == null) return '';
@@ -7942,17 +7942,17 @@ function composeWebhookMessage({ isFirst, data, reply }) {
   return asText(reply).trim();
 }
 
-// Monta a mensagem do turno da EXTENSÃO do Chrome. O conteúdo da página é DADO
-// NÃO-CONFIÁVEL (pode conter texto malicioso tentando dar ordem ao assistente —
-// prompt injection): entra num bloco delimitado, explicitamente marcado como
-// referência, nunca como instrução. O assistente é orientado a ignorar comandos
-// escritos ali dentro.
-// Monta SÓ o bloco de contexto da página (+ protocolo de ações). Ele é EFÊMERO:
-// vai pro modelo no turno atual (via opt pageContext em runConversationInThread),
-// mas NÃO é persistido no history — senão, num loop de vários passos, cada step
-// acumularia o texto+elementos de TODAS as páginas anteriores e o custo por passo
-// só cresceria. A "Pergunta do usuário" NÃO entra aqui: ela é a mensagem normal
-// da thread (essa sim persiste, limpa e curta).
+// Builds the Chrome EXTENSION turn's message. The page content is UNTRUSTED DATA
+// (it may contain malicious text trying to give the assistant an order — prompt
+// injection): it goes into a delimited block, explicitly marked as reference,
+// never as instruction. The assistant is instructed to ignore any commands
+// written inside it. Builds ONLY the page context block (+ action protocol). It
+// is EPHEMERAL: it goes to the model in the current turn (via the pageContext opt
+// in runConversationInThread), but is NOT persisted in history — otherwise, in a
+// multi-step loop, each step would accumulate the text+elements of ALL previous
+// pages and the cost per step would only grow. The "User question" does NOT go
+// here: it's the thread's normal message (that one does persist, clean and
+// short).
 function composeExtPageContext(page) {
   if (!page || typeof page !== 'object') return '';
   const u = String(page.url || '').slice(0, 500);
@@ -7962,7 +7962,7 @@ function composeExtPageContext(page) {
   const els = rawEls
     .filter((e) => e && Number.isInteger(e.id))
     .map((e) => `#${e.id} ${String(e.kind || '').slice(0, 20)}${e.label ? ' — ' + String(e.label).slice(0, 80) : ''}${e.state ? ' [' + String(e.state).replace(/[\r\n]+/g, ' ').slice(0, 160) + ']' : ''}`);
-  // Extensão antiga (até 0.2.5) não manda o estado; aí o modelo não tem como saber o que já está preenchido.
+  // Old extension (up to 0.2.5) doesn't send the state; then the model has no way to know what's already filled in.
   const hasState = rawEls.some((e) => e && typeof e.state === 'string' && e.state);
   const rawHeads = Array.isArray(page.headings) ? page.headings.slice(0, 50) : [];
   const heads = rawHeads
@@ -7987,7 +7987,7 @@ function composeExtPageContext(page) {
   }
   parts.push('[FIM DO CONTEXTO DA PÁGINA]', '');
 
-  // Instrução CONFIÁVEL (fora do bloco não-confiável): escopo por seção.
+  // TRUSTED instruction (outside the untrusted block): scope per section.
   if (heads.length) {
     parts.push(
       'Se o usuário pedir o conteúdo/resumo de UMA seção específica (ex.: "resume a seção',
@@ -7999,7 +7999,7 @@ function composeExtPageContext(page) {
     );
   }
 
-  // Instrução CONFIÁVEL (fora do bloco não-confiável): protocolo de ações.
+  // TRUSTED instruction (outside the untrusted block): action protocol.
   if (els.length) {
     parts.push(
       'Se — e somente se — o usuário pedir para você EXECUTAR uma ação no navegador',
@@ -8057,8 +8057,8 @@ function composeExtPageContext(page) {
   return parts.filter((s) => s !== undefined && s !== null).join('\n');
 }
 
-// Página de conexão da extensão do Chrome. Servida same-origin, então o cookie de
-// sessão é enviado; ela busca um token em /api/ext/token e o mostra pra copiar.
+// Chrome extension's connection page. Served same-origin, so the session
+// cookie is sent; it fetches a token from /api/ext/token and shows it to copy.
 const EXTENSION_CONNECT_HTML = `<!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Conectar extensão · ${marca().nome}</title>
@@ -8093,21 +8093,21 @@ const EXTENSION_CONNECT_HTML = `<!doctype html><html lang="pt-BR"><head>
 </script>
 </body></html>`;
 
-// Assistente ATIVO por usuário na extensão do Chrome (roteamento `@nome`/`menu`).
-// Em memória (uma instância do harness viva por vez): sobrevive entre mensagens,
-// zera num restart — aí o usuário re-@menciona. Espelha o active_agent do WhatsApp.
+// ACTIVE assistant per user in the Chrome extension (`@name`/`menu` routing). In
+// memory (one live harness instance at a time): survives between messages, resets
+// on a restart — then the user re-@mentions. Mirrors WhatsApp's active_agent.
 const extActiveAgent = new Map();
-// Normaliza nome de assistente pra casar com @apelido (sem acento, minúsculo,
-// só alfanumérico). Mesma regra do slug() do whatsapp.mjs.
+// Normalizes an assistant's name to match @nickname (no accents, lowercase,
+// alphanumeric only). Same rule as whatsapp.mjs's slug().
 function extSlug(s) {
   return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 // ── Rate limiting / anti-brute-force (ASVS 2.2.1 / CASA) ──
-// Contador em memória por chave (uma instância do harness viva por vez, então basta).
-// rateLimit devolve false quando a janela estourou. Buckets expirados são podados
-// por um timer unref (não segura o processo vivo).
+// In-memory counter per key (one live harness instance at a time, so this is
+// enough). rateLimit returns false when the window is exceeded. Expired
+// buckets are pruned by an unref timer (doesn't keep the process alive).
 const rlBuckets = new Map();
 function rateLimit(key, max, windowMs) {
   const now = Date.now();
@@ -8122,9 +8122,9 @@ setInterval(() => {
   for (const [k, b] of rlBuckets) if (now > b.resetAt) rlBuckets.delete(k);
 }, 5 * 60_000).unref();
 
-// Dedupe durável dos webhooks do WhatsApp (whatsapp_seen): a Meta reentrega a
-// MESMA mensagem quando o 200 demora, e o Set em memória some no deploy. A tabela
-// só precisa da janela de retry da Meta — 7 dias é folga larga. 1x/dia.
+// Durable dedup for WhatsApp webhooks (whatsapp_seen): Meta redelivers the SAME
+// message when the 200 is slow, and the in-memory Set disappears on deploy. The
+// table only needs Meta's retry window — 7 days is ample slack. Once a day.
 {
   const seenTick = () => pruneWaSeen(7)
     .then((n) => { if (n) console.log(`[wa-seen] podados ${n} ids`); })
@@ -8133,12 +8133,12 @@ setInterval(() => {
   setInterval(seenTick, 24 * 3600_000).unref();
 }
 
-// ── Login Google no APP (deep link) ──
-// O app abre /api/auth/google/start?mobile=1 num ASWebAuthenticationSession.
-// O callback (flow login_mobile) NÃO devolve a sessão por cookie (o app não tem
-// cookie jar): cria a sessão, guarda um código de uso único aqui em memória e
-// redireciona pra brambs://auth?code=CODE. O app troca o código pela sessão em
-// POST /api/auth/mobile/exchange. Código expira em 2min e é consumido 1x.
+// ── Google login in the APP (deep link) ──
+// The app opens /api/auth/google/start?mobile=1 in an ASWebAuthenticationSession. The
+// callback (login_mobile flow) does NOT return the session via cookie (the app has no
+// cookie jar): it creates the session, stores a single-use code here in memory and
+// redirects to brambs://auth?code=CODE. The app exchanges the code for the session at
+// POST /api/auth/mobile/exchange. The code expires in 2min and is consumed once.
 const mobileAuthCodes = new Map(); // code -> { token, exp }
 function putMobileAuthCode(sessionToken) {
   const code = newToken();
@@ -8156,12 +8156,12 @@ setInterval(() => {
   for (const [k, e] of mobileAuthCodes) if (now > e.exp) mobileAuthCodes.delete(k);
 }, 5 * 60_000).unref();
 
-// ── Login Apple no APP (nativo) ──
-// Diferente do Google: o iOS mostra a folha de autorização dentro do app e
-// devolve o identity token direto, sem navegador e sem deep link. O app só
-// precisa de um nonce nosso antes de começar, pra que um identity token obtido
-// em outro lugar não valha sessão aqui (ver verifyAppleIdentityToken).
-// Nonce é de uso único e vale 5min — o mesmo prazo de vida do token da Apple.
+// ── Apple login in the APP (native) ──
+// Unlike Google: iOS shows the authorization sheet inside the app and returns
+// the identity token directly, with no browser and no deep link. The app just
+// needs one of our nonces before starting, so that an identity token obtained
+// elsewhere doesn't grant a session here (see verifyAppleIdentityToken).
+// The nonce is single-use and valid for 5min — the same lifetime as Apple's token.
 const appleNonces = new Map(); // nonce -> exp
 function putAppleNonce() {
   const nonce = newToken();
@@ -8218,17 +8218,17 @@ if (CALENDAR_WATCH_ON) {
   setInterval(calendarWatchTick, 10 * 60_000).unref();
 }
 
-// ── Destruição final de conta excluída (2ª metade do modelo de 30 dias) ──
-// closeUserAccount (db.mjs) FECHA a conta na hora do pedido; isto DESTRÓI o dado
-// 30 dias depois. Ordem importa: primeiro o S3, depois o banco. O CASCADE do
-// Postgres apaga a linha de media_assets/user_likeness/video_jobs, não o objeto
-// no bucket — se o DELETE viesse antes, a gente perderia a lista de keys e o
-// arquivo (inclusive rosto e voz) ficaria órfão pra sempre.
-// Falha em uma key não aborta o resto, e também não fica só no log: cada key vira
-// uma LÁPIDE (media_deletions) ANTES do primeiro delete, então o que o bucket não
-// aceitar agora continua registrado e o varredor tenta de novo. A lápide não tem FK
-// pra users justamente pra sobreviver ao DELETE da conta, que é o que apaga a lista
-// de keys. Deixar a conta viva por causa de um objeto seria pior.
+// ── Final destruction of a deleted account (2nd half of the 30-day model) ──
+// closeUserAccount (db.mjs) CLOSES the account right when requested; this DESTROYS
+// the data 30 days later. Order matters: S3 first, then the database. Postgres's
+// CASCADE deletes the media_assets/user_likeness/ video_jobs row, not the object in
+// the bucket — if the DELETE came first, we'd lose the list of keys and the file
+// (including face and voice) would stay orphaned forever. A failure on one key
+// doesn't abort the rest, and doesn't just stay in the log either: each key becomes a
+// TOMBSTONE (media_deletions) BEFORE the first delete, so whatever the bucket doesn't
+// accept right now stays recorded and the sweeper tries again. The tombstone has no
+// FK to users precisely so it survives the account's DELETE, which is what erases the
+// list of keys. Keeping the account alive because of one object would be worse.
 async function purgeUser(u) {
   const keys = s3Enabled() ? await collectUserAssetKeys(u.id) : [];
   const { total, apagados: apagadas, pendentes } = await purgarMidiaDaConta({
@@ -8246,12 +8246,12 @@ async function purgeUser(u) {
   console.log(`[purge] conta ${u.id} destruída (fechada em ${u.deleted_at?.toISOString?.() ?? u.deleted_at}, ${apagadas}/${total} arquivos apagados${pendentes ? `, ${pendentes} em lápide aberta pro varredor` : ''})`);
 }
 
-// Job diário: pega quem pediu exclusão há mais de 30 dias e destrói.
-// setInterval simples serve porque o server.mjs roda em processo único (não tem
-// cluster/fork), então não existe risco de dois processos purgando o mesmo dono.
-// Lote de 50 por rodada: se um dia acumular mais que isso, o resto sai na rodada
-// seguinte. Roda 5min depois do boot (não na hora, pra não competir com o start)
-// e a cada 24h.
+// Daily job: takes whoever requested deletion more than 30 days ago and
+// destroys the data. A plain setInterval is enough because server.mjs runs in
+// a single process (no cluster/fork), so there's no risk of two processes
+// purging the same owner. Batch of 50 per round: if one day piles up more
+// than that, the rest goes out in the next round. Runs 5min after boot (not
+// right away, so it doesn't compete with startup) and every 24h.
 const PURGE_DIAS = 30;
 const purgeTick = async () => {
   try {
@@ -8269,11 +8269,11 @@ const purgeTick = async () => {
 setTimeout(purgeTick, 5 * 60_000).unref();
 setInterval(purgeTick, 24 * 3600_000).unref();
 
-// ── Varredor das lápides de exclusão de arquivo (ver media-gc.mjs) ──
-// Toda exclusão já tenta apagar o objeto na hora; isto é a rede de segurança pro
-// caso de o S3 estar fora do ar naquele segundo. Sem ele, a lápide ficaria aberta
-// pra sempre e o arquivo da pessoa continuaria no bucket. Roda 9min depois do
-// boot e a cada 15min; lote de 100. Só faz sentido no modo S3.
+// ── Sweeper for file-deletion tombstones (see media-gc.mjs) ──
+// Every deletion already tries to erase the object right away; this is the safety
+// net for when S3 is down at that exact second. Without it, the tombstone would
+// stay open forever and the person's file would stay in the bucket. Runs 9min
+// after boot and every 15min; batch of 100. Only makes sense in S3 mode.
 const mediaGcTick = async () => {
   if (!s3Enabled()) return;
   try {
@@ -8290,14 +8290,14 @@ const mediaGcTick = async () => {
 setTimeout(mediaGcTick, 9 * 60_000).unref();
 setInterval(mediaGcTick, 15 * 60_000).unref();
 
-// ── Reconciliação diária da cota de disco dos apps (ver hosting.mjs) ──
-// A cota do XFS no host de apps só era aplicada quando alguém PUBLICAVA um app, e
-// vale por usuário. Trocar de plano, portanto, não mexia no disco: quem subia não
-// ganhava o espaço que passou a pagar e quem descia continuava com o espaço do plano
-// grande. Nem toda troca de plano passa por código nosso (a virada mensal e os
-// scripts de classificação fazem UPDATE direto no banco), então quem fecha o buraco
-// é esta varredura, não um gancho em cada caminho de escrita. Silenciosa quando está
-// tudo certo, que é o esperado; loga só quando de fato ajustou alguma coisa.
+// ── Daily reconciliation of the apps' disk quota (see hosting.mjs) ──
+// The XFS quota on the apps host was only applied when someone PUBLISHED an app, and
+// it's per user. Switching plans, therefore, didn't touch disk: those who upgraded
+// didn't get the space they started paying for, and those who downgraded kept the big
+// plan's space. Not every plan switch goes through our code (the monthly rollover and
+// the classification scripts do a direct UPDATE on the database), so what closes the
+// gap is this sweep, not a hook on every write path. Silent when everything's fine,
+// which is the expected case; only logs when it actually adjusted something.
 const cotaReconcileTick = async () => {
   try {
     const r = await reconciliarCotasDeDisco();
@@ -8308,13 +8308,13 @@ const cotaReconcileTick = async () => {
 setTimeout(cotaReconcileTick, 12 * 60_000).unref();
 setInterval(cotaReconcileTick, 24 * 3600_000).unref();
 
-// IP real do cliente, usado como chave de TODO rate-limit/anti-brute-force.
-// O Node escuta SÓ em 127.0.0.1 e o único hop na frente é o nginx, que aplica
-// `proxy_add_x_forwarded_for` (ANEXA o IP de quem conectou no FIM do header).
-// Logo o valor CONFIÁVEL é o ÚLTIMO da lista (posto pelo nginx); os anteriores
-// são controlados pelo cliente. Pegar o PRIMEIRO (como era antes) deixava o
-// cliente forjar o header e rotacionar o IP pra zerar o rate-limit. Confiamos
-// só no último hop.
+// The client's real IP, used as the key for EVERY rate-limit/anti-brute-force
+// check. Node listens ONLY on 127.0.0.1 and the only hop in front is nginx,
+// which applies `proxy_add_x_forwarded_for` (APPENDS the connecting IP at the
+// END of the header). So the TRUSTED value is the LAST one in the list (put
+// there by nginx); the earlier ones are controlled by the client. Taking the
+// FIRST one (as it used to be) let the client forge the header and rotate the
+// IP to reset the rate-limit. We trust only the last hop.
 function clientIp(req) {
   const xff = req.headers['x-forwarded-for'];
   if (xff) {
@@ -8361,27 +8361,27 @@ const idiomaDoCookie = (req) => {
 };
 const cookieIdioma = (lang) => `${COOKIE_IDIOMA}=${lang}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${365 * 86400}`;
 
-// Aplica o limite; se estourou, responde 429 e devolve true (chamador dá return).
+// Applies the limit; if it's exceeded, replies 429 and returns true (caller should return).
 function tooManyRequests(req, res, bucket, max, windowMs) {
   if (rateLimit(`${bucket}:${clientIp(req)}`, max, windowMs)) return false;
   send(res, 429, { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' });
   return true;
 }
 
-// ── CSRF: checagem de Origin/Referer em requisições que mudam estado (ASVS 4.2 / CASA) ──
-// O cookie de sessão é SameSite=Lax, o que já barra o pior. Como defesa em
-// profundidade a gente exige que POST/PUT/PATCH/DELETE venham de uma origem
-// conhecida (o próprio site). Webhooks server-to-server (Stripe, WhatsApp,
-// Nuvemshop) NÃO têm Origin de browser e são autenticados por assinatura HMAC,
-// então ficam isentos.
+// ── CSRF: Origin/Referer check on state-changing requests (ASVS 4.2 / CASA) ──
+// The session cookie is SameSite=Lax, which already blocks the worst of it. As
+// defense in depth we require POST/PUT/PATCH/DELETE to come from a known
+// origin (the site itself). Server-to-server webhooks (Stripe, WhatsApp,
+// Nuvemshop) have NO browser Origin and are authenticated by HMAC signature,
+// so they're exempt.
 function isWebhookPath(pathname) {
-  return semCsrfDosPlugins.has(pathname) // webhooks e descadastro que cada plugin declara (semCsrf)
+  return semCsrfDosPlugins.has(pathname) // webhooks and unsubscribe endpoints each plugin declares (semCsrf)
     || pathname === '/api/wa/webhook'
     || pathname === '/api/slack/events'
     || pathname.startsWith('/api/webhook/')
-    // Extensão do Chrome: origem é chrome-extension://<id>, nunca o site. É
-    // autenticada por Bearer (token de sessão), não por cookie, então o vetor de
-    // CSRF (cookie enviado automaticamente) não existe aqui.
+    // Chrome extension: origin is chrome-extension://<id>, never the site. It
+    // is authenticated by Bearer (session token), not by cookie, so the CSRF
+    // vector (cookie sent automatically) doesn't exist here.
     || pathname.startsWith('/api/ext/')
     // Device chat (OS/desktop client): authenticated by device Bearer, not cookie.
     // Token management (/api/device/tokens*) still requires login and is NOT here.
@@ -8390,8 +8390,8 @@ function isWebhookPath(pathname) {
     // authenticated by device Bearer, no cookie -> no CSRF vector. Token
     // management stays in /api/device/tokens* (requires login).
     || pathname.startsWith('/api/runner/')
-    // Telemetria do App Mobile: o app disca (outbound) reportando os próprios
-    // erros de JS, autenticado por Bearer de app (env), sem cookie -> sem CSRF.
+    // Mobile App telemetry: the app dials out (outbound) reporting its own JS
+    // errors, authenticated by an app Bearer (env), no cookie -> no CSRF.
     || pathname === '/api/mobile/telemetry';
 }
 function allowedOrigins(req) {
@@ -8413,16 +8413,16 @@ function csrfOk(req, pathname) {
   // Sem Origin (alguns browsers antigos): cai pro Referer.
   const ref = req.headers.referer;
   if (ref) { try { return allowed.has(new URL(ref).origin); } catch { return false; } }
-  // Nem Origin nem Referer numa requisição que muda estado: recusa.
+  // Neither Origin nor Referer on a state-changing request: reject.
   return false;
 }
 
-// ── Auth do dashboard de métricas (HTTP Basic, independente da sessão do app) ──
-// Credenciais via env METRICS_USER / METRICS_PASS. A tela e a API de métricas são
-// pra a equipe acompanhar consumo, não pro usuário final — por isso login próprio.
-// Segundo fator (TOTP): quando METRICS_TOTP_SECRET está setado, o campo de senha
-// do Basic auth precisa carregar o código de 6 dígitos ao final, no formato
-// "senha:123456". Sem o secret, comporta-se como antes (só usuário/senha).
+// ── Metrics dashboard auth (HTTP Basic, independent of the app's session) ──
+// Credentials via env METRICS_USER / METRICS_PASS. The metrics screen and API
+// are for the team to track usage, not for the end user — hence its own
+// login. Second factor (TOTP): when METRICS_TOTP_SECRET is set, the Basic
+// auth password field must carry the 6-digit code at the end, in the format
+// "password:123456". Without the secret, behaves as before (user/password only).
 function safeStrEq(a, b) {
   const ba = Buffer.from(String(a), 'utf8'), bb = Buffer.from(String(b), 'utf8');
   if (ba.length !== bb.length) return false;
@@ -8431,8 +8431,8 @@ function safeStrEq(a, b) {
 function metricsAuthOk(req) {
   const u = process.env.METRICS_USER, p = process.env.METRICS_PASS;
   if (!u || !p) return false; // sem credenciais configuradas = trancado
-  // Sessão do login em duas etapas (cookie assinado, estágio 'full'). Aceito aqui
-  // pra a API de métricas (fetch same-origin do dashboard) funcionar com o cookie.
+  // Two-step login session (signed cookie, 'full' stage). Accepted here so
+  // the metrics API (same-origin fetch from the dashboard) works with the cookie.
   if (verifyMetricsSession(readCookie(req, 'msess'), 'full')) return true;
   const h = req.headers.authorization || '';
   if (!h.startsWith('Basic ')) return false;
@@ -8445,7 +8445,7 @@ function metricsAuthOk(req) {
   const totpSecret = process.env.METRICS_TOTP_SECRET;
   if (totpSecret) {
     const m = /^(.*):(\d{6})$/.exec(pass);
-    if (!m) return false; // 2FA exigido mas código ausente/mal formado
+    if (!m) return false; // 2FA required but code missing/malformed
     pass = m[1];
     if (!verifyTotp(totpSecret, m[2])) return false;
   }
@@ -8455,16 +8455,16 @@ function metricsChallenge(res) {
   res.writeHead(401, { 'www-authenticate': `Basic realm="${marca().nome} Metrics", charset="UTF-8"`, 'content-type': 'text/plain; charset=utf-8' });
   res.end('Acesso restrito. Informe usuário e senha.');
 }
-// Gate do Basic auth de métricas/broadcast com anti-brute-force: conta só as
-// tentativas com credencial ERRADA (o 1º request sem credencial só desafia, não
-// conta), bloqueando após o limite por IP. Devolve true se autorizado.
+// Gate for the metrics/broadcast Basic auth with anti-brute-force: counts only attempts
+// with a WRONG credential (the 1st request with no credential only challenges, doesn't
+// count), blocking after the per-IP limit. Returns true if authorized.
 function metricsAuthGuard(req, res) {
   if (metricsAuthOk(req)) return true;
   const hasCreds = (req.headers.authorization || '').startsWith('Basic ');
   if (hasCreds && tooManyRequests(req, res, 'metrics-auth', 10, 15 * 60_000)) return false;
   metricsChallenge(res);
   return false;
-} // 12 h de sessão
+} // 12h session
 function metricsSessKey() {
   const material = `${process.env.METRICS_USER || ''}|${process.env.METRICS_PASS || ''}|${process.env.METRICS_TOTP_SECRET || ''}`;
   return createHmac('sha256', 'brambs-metrics-session-v1').update(material).digest();
@@ -8482,9 +8482,9 @@ function verifyMetricsSession(token, wantStage) {
   return Number.isFinite(exp) && Date.now() <= exp;
 }
 
-// Normaliza imagens recebidas do front pro shape do provider ({mimeType,data}).
-// Aceita data URLs ("data:image/png;base64,XXXX") ou objetos {mimeType,data}.
-// Cap conservador: até 4 imagens (o resto é ignorado).
+// Normalizes images received from the frontend into the provider's shape
+// ({mimeType,data}). Accepts data URLs ("data:image/png;base64,XXXX") or
+// {mimeType,data} objects. Conservative cap: up to 4 images (the rest is ignored).
 function normalizeImages(input) {
   if (!Array.isArray(input)) return [];
   const out = [];
@@ -8499,11 +8499,11 @@ function normalizeImages(input) {
   return out;
 }
 
-// Descobre o tipo da imagem pelos BYTES, não pelo que o cliente diz que mandou.
-// O `mimeType` do payload é texto livre: qualquer arquivo declarado 'image/png'
-// passava. Pra foto biométrica isso importa duas vezes (o que entra no bucket e
-// o que o worker de vídeo vai ler), então aqui o veredito é do conteúdo.
-// Devolve { mime, ext } ou null quando não é imagem de um formato que aceitamos.
+// Figures out the image type from the BYTES, not from what the client claims it
+// sent. The payload's `mimeType` is free text: any file declared 'image/png' used
+// to pass. For a biometric photo this matters twice (what goes into the bucket
+// and what the video worker will read), so here the content has the final say.
+// Returns { mime, ext } or null when it's not an image in a format we accept.
 function sniffImagem(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
   if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return { mime: 'image/jpeg', ext: 'jpg' };
@@ -8517,17 +8517,17 @@ function sniffImagem(buf) {
   return null;
 }
 
-// Arquivos anexados no chat web (hoje só PDF). Chegam como {name, mime, data(base64)}
-// ou data URL. Viram { name, mime, buffer } pro runConversationInThread.
-// Classifica um documento anexado pelo mime/nome. 'pdf' -> extraído via pdf.mjs;
-// 'text' -> lido direto em UTF-8 (HTML, markdown, txt, csv, json, xml, svg). Serve,
-// por ex., pra mandar um HTML como referência de LAYOUT. null = tipo não suportado.
+// Files attached in the web chat (today only PDF). Arrive as {name, mime, data(base64)}
+// or a data URL. Become { name, mime, buffer } for runConversationInThread. Classifies
+// an attached document by mime/name. 'pdf' -> extracted via pdf.mjs; 'text' -> read
+// directly as UTF-8 (HTML, markdown, txt, csv, json, xml, svg). Useful, e.g., for
+// sending an HTML as a LAYOUT reference. null = unsupported type.
 const TEXT_DOC_RE = /\.(html?|txt|md|markdown|csv|tsv|json|xml|svg)$/i;
-// mime PRECISO (âncora no começo) — evita casar "xml" dentro de mimes de Office
-// (ex: application/vnd.openxmlformats...docx/xlsx), que são zips binários.
+// PRECISE mime (anchored at the start) — avoids matching "xml" inside Office
+// mimes (e.g. application/vnd.openxmlformats...docx/xlsx), which are binary zips.
 const TEXT_MIME_RE = /^(text\/|application\/(json|xml|xhtml\+xml)|image\/svg\+xml)/i;
-// Planilha (xlsx/xlsm/xls/csv/tsv) é decidida por tipoPlanilha (planilha.mjs)
-// ANTES do texto: CSV não pode cair no caminho que despeja o arquivo como texto.
+// Spreadsheet (xlsx/xlsm/xls/csv/tsv) is decided by tipoPlanilha (planilha.mjs)
+// BEFORE text: CSV must not fall into the path that dumps the file as text.
 function docKind(name = '', mime = '') {
   if (/pdf/i.test(mime) || /\.pdf$/i.test(name)) return 'pdf';
   if (tipoPlanilha(name, mime)) return 'planilha';
@@ -8550,7 +8550,7 @@ function normalizeFiles(input) {
     }
     if (!b64) continue;
     const kind = docKind(name, mime);
-    if (!kind) continue; // tipo não suportado
+    if (!kind) continue; // unsupported type
     try { out.push({ name, mime, kind, buffer: Buffer.from(b64, 'base64') }); } catch { /* ignora */ }
   }
   return out;
@@ -8563,14 +8563,14 @@ const MIME = {
   '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg',
 };
 
-// CSP (csp.mjs): estrito; só um plugin amplia, de propósito, com o campo csp.
+// CSP (csp.mjs): strict; only a plugin widens it, on purpose, via the csp field.
 const buildCsp=criarCsp(cspDosPlugins(plugins));
 
-// Cabeçalhos de segurança aplicados a TODA resposta (ASVS L1 / CASA). Setados via
-// setHeader antes do roteamento; cada writeHead posterior só acrescenta os seus, sem
-// remover estes. O CSP default (sem nonce) é o estrito; as páginas HTML sobrescrevem
-// com a versão que carrega o nonce do request. HSTS é ignorado pelo browser fora de
-// HTTPS, então é seguro mandar sempre — não duplicar no nginx.
+// Security headers applied to EVERY response (ASVS L1 / CASA). Set via setHeader
+// before routing; each later writeHead only adds its own, without removing these.
+// The default CSP (no nonce) is the strict one; HTML pages override it with the
+// version carrying the request's nonce. HSTS is ignored by the browser outside
+// HTTPS, so it's safe to always send it — don't duplicate it in nginx.
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -8579,43 +8579,43 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': buildCsp(null),
 };
 
-// Serve um arquivo HTML injetando um nonce CSP por request: gera o nonce, troca o
-// placeholder __CSP_NONCE__ carimbado em cada <script>/<style> inline e sobrescreve
-// o header CSP com a versão que autoriza aquele nonce. Único caminho de saída de HTML.
-// Catálogos de tradução do site. Ficam FORA de public/ de propósito: são fonte,
-// não arquivo pra servir. Lidos uma vez na subida; deploy reinicia o processo.
+// Serves an HTML file injecting a per-request CSP nonce: generates the nonce, swaps
+// the __CSP_NONCE__ placeholder stamped on each inline <script>/<style> and overwrites
+// the CSP header with the version that authorizes that nonce. The only path for
+// serving HTML. Site translation catalogs. Kept OUTSIDE public/ on purpose: they're
+// source, not a file to serve. Read once at startup; deploy restarts the process.
 const CATALOGOS_SITE = carregaCatalogos([path.join(__dirname, 'site-textos'), ...textosDoSite(plugins), ...marca().siteTextos]);
-// Catálogo das MENSAGENS de resposta (o `error`/`message` do JSON). Separado do
-// site porque a origem é outra: aquele sai do HTML, este sai de literal de
-// código. Mesma leitura, núcleo + plugins, e mesmo fallback em português.
+// Catalog of response MESSAGES (the JSON's `error`/`message`). Separate from the
+// site's because the source is different: that one comes from HTML, this one from
+// code literals. Same reading, core + plugins, and same fallback in Portuguese.
 const CATALOGOS_MSGS = carregaCatalogos([path.join(__dirname, 'textos-servidor'), ...textosDoServidor(plugins)]);
 
 function sendHtml(res, full, status = 200, language = IDIOMA_PADRAO) {
   const nonce = randomBytes(16).toString('base64');
-  // `__IDIOMA__` é o estado do seletor do rodapé (qual dos três botões está
-  // ativo). Vai como ATRIBUTO, resolvido aqui no servidor, pra não precisar de
-  // JS lendo cookie: o cookie é HttpOnly e continua assim.
+  // `__IDIOMA__` is the footer selector's state (which of the three buttons
+  // is active). Goes as an ATTRIBUTE, resolved here on the server, so there's
+  // no need for JS reading a cookie: the cookie is HttpOnly and stays that way.
   const cru = lerPagina(full).split('__CSP_NONCE__').join(nonce).split('__IDIOMA__').join(language);
-  // Em pt-BR isto devolve a MESMA string, sem passar por parser nenhum, então a
-  // página continua byte a byte a de sempre. O padrão do parâmetro é pt-BR, o que
-  // faz de "não traduzir" o comportamento de quem não pediu nada.
+  // In pt-BR this returns the SAME string, without going through any parser, so the
+  // page stays byte-for-byte the same as always. The parameter's default is pt-BR,
+  // which makes "don't translate" the behavior for whoever didn't ask for anything.
   const html = marcaNaPagina(traduzPagina(cru, language, CATALOGOS_SITE), { __APPS__: dominioDosApps() });
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'Content-Security-Policy': buildCsp(nonce),
-    // Sem isto o browser guardava a página por conta própria (nem aqui nem no
-    // nginx havia diretiva de cache) e um deploy novo só aparecia com refresh
-    // forçado: em 26/08 o dono viu link já removido e versão antiga depois do
-    // deploy. HTML é sempre montado por request (nonce CSP), cachear não ganha nada.
+    // Without this the browser cached the page on its own (neither here nor in nginx was
+    // there a cache directive) and a new deploy only showed up with a forced refresh: on
+    // 2026-08-26 the owner saw an already-removed link and an old version after the
+    // deploy. HTML is always built per request (CSP nonce), caching gains nothing.
     'Cache-Control': 'no-store',
   });
   res.end(html);
 }
 
-// Rede final: o corpo do atendimento é async, então QUALQUER exceção dentro dele
-// vira rejeição não tratada e mata o processo Node inteiro (era assim que um
-// cookie malformado derrubava o serviço, achado #21). Aqui a rejeição vira 500 e
-// uma linha no log, que é o comportamento normal de servidor.
+// Final safety net: the handler's body is async, so ANY exception inside it
+// becomes an unhandled rejection and kills the whole Node process (that's how
+// a malformed cookie used to take down the service, finding #21). Here the
+// rejection becomes a 500 and a log line, which is normal server behavior.
 const server = http.createServer((req, res) => {
   // A disconnect can also arrive while authentication awaits the database,
   // before any body reader is attached. Readers report their own rejection.
@@ -8631,59 +8631,59 @@ const server = http.createServer((req, res) => {
 });
 
 async function atenderRequest(req, res) {
-  prepararResposta(req, res, SECURITY_HEADERS); // cookie-local.mjs: no mesmo computador o cookie sai sem Secure (Safari)
-  // Content-Type padrão para respostas que não o definem explicitamente (404, erros de
-  // assinatura de webhook, "ok", etc.). Cada writeHead posterior com content-type próprio
-  // (JSON via send(), HTML, mídia) sobrescreve este default. Fecha o achado "Content-Type
-  // Header Missing" do scan CASA sem tocar rota a rota.
+  prepararResposta(req, res, SECURITY_HEADERS); // cookie-local.mjs: on the same computer the cookie goes out without Secure (Safari)
+  // Default Content-Type for responses that don't set it explicitly (404, webhook
+  // signature errors, "ok", etc.). Each later writeHead with its own content-type (JSON
+  // via send(), HTML, media) overrides this default. Closes the CASA scan's "Content-Type
+  // Header Missing" finding without touching route by route.
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  // Impede que proxies/browsers guardem respostas (podem conter dado de sessão do
-  // usuário). Fecha os achados "Storable and Cacheable Content" e "Re-examine Cache-
-  // control Directives" do scan CASA. Assets estáticos também deixam de cachear, custo
-  // aceitável num beta; se virar gargalo, liberar cache só pra js/css/img com hash.
+  // Prevents proxies/browsers from storing responses (they may contain the user's session
+  // data). Closes the CASA scan's "Storable and Cacheable Content" and "Re-examine
+  // Cache-control Directives" findings. Static assets also stop caching, an acceptable
+  // cost in a beta; if it becomes a bottleneck, allow caching only for hashed js/css/img.
   res.setHeader('Cache-Control', 'no-store');
-  // Durante o shutdown gracioso, recusa requests NOVOS com 503 (sinal limpo pro
-  // nginx/cliente tentar de novo) em vez de começar um turno que seria cortado no
-  // meio. Requests já em andamento seguem até o fim (ver gracefulShutdown).
+  // During graceful shutdown, refuses NEW requests with 503 (a clean signal for
+  // nginx/client to retry) instead of starting a turn that would be cut off midway.
+  // Requests already in progress run through to completion (see gracefulShutdown).
   if (shuttingDown) { res.writeHead(503, { 'Retry-After': '5' }); res.end('reiniciando, tente em instantes'); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
-  // Idioma das mensagens desta resposta, resolvido UMA vez e pendurado no `res`
-  // porque `send()` só enxerga o `res`. Fica antes do csrfOk de propósito: até a
-  // recusa de origem sai no idioma de quem pediu. Não consulta o banco (ver
-  // idiomaDaRequisicao); a página já foi servida na preferência salva e a SPA
-  // devolve isso no X-Idioma, então o erro chega no idioma da tela que o causou.
+  // Language for this response's messages, resolved ONCE and hung off `res` because `send()`
+  // only sees `res`. Placed before csrfOk on purpose: even the origin rejection goes out in
+  // the requester's language. Doesn't query the database (see idiomaDaRequisicao); the page
+  // was already served in the saved preference and the SPA returns that in X-Idioma, so the
+  // error arrives in the language of the screen that caused it.
   res.idiomaResposta = idiomaDaRequisicao(req, (r) => ({ language: idiomaDoCookie(r) || idiomaDoHeader(r).language }));
 
   if (!csrfOk(req, url.pathname)) return send(res, 403, { error: 'Origem não autorizada.' });
 
-  // Resolve o usuário logado pela sessão (cookie). null se não logado.
+  // Resolves the logged-in user from the session (cookie). null if not logged in.
   async function currentUser() {
     try { return await getUserBySession(readSid(req)); } catch { return null; }
   }
 
-  // Idioma da PÁGINA. Ordem: escolha no seletor do rodapé (cookie) > preferência
-  // salva de quem está logado > Accept-Language do navegador. Escolha explícita
-  // ganha de palpite, e entre as duas explícitas ganha a que fala DESTA tela: o
-  // seletor do rodapé é literalmente "quero ver o site nesta língua". Isso NÃO
-  // muda a língua da conversa com a IA, que sai de `users.language` (ver
-  // COOKIE_IDIOMA). Quem nunca clicou em nada continua exatamente como antes,
-  // porque sem cookie a primeira regra some.
+  // PAGE language. Order: footer selector choice (cookie) > saved preference of
+  // whoever's logged in > browser's Accept-Language. An explicit choice beats a
+  // guess, and between the two explicit ones, the one that speaks to THIS screen
+  // wins: the footer selector is literally "I want to see the site in this language."
+  // This does NOT change the language of the conversation with the AI, which comes
+  // from `users.language` (see COOKIE_IDIOMA). Whoever never clicked anything stays
+  // exactly as before, because without a cookie the first rule disappears.
   async function idiomaDaPagina() {
     const escolhido = idiomaDoCookie(req);
     if (escolhido) return escolhido;
     try {
       const u = await currentUser();
       if (u) return (await getUserLocale(u.id)).language;
-    } catch { /* sessão inválida ou banco fora: o header ainda serve */ }
+    } catch { /* invalid session or database down: the header is still served */ }
     return idiomaDoHeader(req).language || IDIOMA_PADRAO;
   }
 
-  // Proxy/cache de imagem de produto: serve do NOSSO domínio a foto já baixada no
-  // bucket de campanha (ver cacheProductImage). Público (foto de produto não é dado
-  // de usuário), só GET/HEAD, chave = <sha256>.<ext> validada por regex (nunca
-  // aceita URL externa aqui — não é open proxy; o fetch externo só acontece no
-  // cache, pra URLs que a tool já decidiu). Content-Type vem do objeto; cacheável.
+  // Product image proxy/cache: serves from OUR domain the photo already downloaded into
+  // the campaign bucket (see cacheProductImage). Public (a product photo isn't user data),
+  // GET/HEAD only, key = <sha256>.<ext> validated by regex (never accepts an external URL
+  // here — it's not an open proxy; the external fetch only happens at cache time, for URLs
+  // the tool already decided on). Content-Type comes from the object; cacheable.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/api/img') {
     const k = url.searchParams.get('k') || '';
     if (!/^[a-f0-9]{64}\.[a-z0-9]{1,8}$/.test(k)) { res.writeHead(400); return res.end('bad key'); }
@@ -8691,30 +8691,30 @@ async function atenderRequest(req, res) {
       const obj = await getCampaignObject(IMG_CACHE_PREFIX + k);
       if (!obj) { res.writeHead(404); return res.end('not found'); }
       const ct = (obj.contentType || 'application/octet-stream').toLowerCase();
-      // defesa extra: só devolve se for mesmo imagem (o que gravamos sempre é)
+      // extra defense: only returns if it's really an image (what we store always is)
       if (!ct.startsWith('image/')) { res.writeHead(404); return res.end('not found'); }
       res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=604800, immutable' });
       return res.end(req.method === 'HEAD' ? undefined : obj.buffer);
     } catch (e) {
-      // getCampaignObject lança em resposta não-OK do S3. Chave inexistente/expirada
-      // volta 404 (NoSuchKey) OU 403 (AccessDenied, sem s3:ListBucket) => não é erro
-      // nosso => 404. Qualquer outra falha => 502.
+      // getCampaignObject throws on a non-OK S3 response. A missing/expired
+      // key returns 404 (NoSuchKey) OR 403 (AccessDenied, without
+      // s3:ListBucket) => not our error => 404. Any other failure => 502.
       const notFound = / (403|404):/.test(String(e && e.message || ''));
       res.writeHead(notFound ? 404 : 502); return res.end(notFound ? 'not found' : 'img error');
     }
   }
 
   // ── Auth ──
-  // O app é um cliente SEM cookie jar: o React Native não devolve o header
-  // `Set-Cookie` pro código, então o token de sessão que o login manda por lá
-  // simplesmente não chega no app. O sintoma é cruel porque o servidor responde
-  // 200 e cria a sessão: a pessoa digita a senha CERTA, nada acontece na tela, e
-  // ela tenta de novo (a conta de review da Apple criou 85 sessões entre 21/08 e
-  // 03/09 sem conseguir usar nenhuma). O login com Google no app já não depende
-  // do cookie: o /api/auth/mobile/exchange devolve o token no CORPO. Aqui damos o
-  // mesmo caminho pro e-mail+senha. O `Set-Cookie` continua saindo igual (é o que
-  // o site usa) e o token só vai no corpo quando o cliente se identifica como
-  // app, pra não expor o valor da sessão a JS de browser sem necessidade.
+  // The app is a client with NO cookie jar: React Native doesn't hand the `Set-Cookie`
+  // header back to the code, so the session token the login sends that way simply never
+  // reaches the app. The symptom is nasty because the server responds 200 and creates the
+  // session: the person types the RIGHT password, nothing happens on screen, and they try
+  // again (Apple's review account created 85 sessions between 2026-08-21 and 2026-09-03
+  // without managing to use a single one). Google login in the app no longer depends on
+  // the cookie: /api/auth/mobile/exchange returns the token in the BODY. Here we give the
+  // same path to e-mail+password. `Set-Cookie` still goes out the same way (that's what
+  // the site uses), and the token only goes in the body when the client identifies itself
+  // as the app, so we don't expose the session value to browser JS without need.
   const mobileClient = String(req.headers['x-brambs-mobile'] || '') === '1';
   if (req.method === 'POST' && url.pathname === '/api/signup') {
     if (tooManyRequests(req, res, 'signup', 5, 60 * 60_000)) return;
@@ -8725,11 +8725,11 @@ async function atenderRequest(req, res) {
     try {
       const existente = await getUserByEmail(em);
       if (existente && !existente.deleted_at) return send(res, 409, { error: 'Esse e-mail já tem conta. Faça login.' });
-      // Cadastro no MESMO e-mail de uma conta que pediu exclusão e ainda está na
-      // janela de 30 dias: `users.email` é UNIQUE, então ou destruímos a antiga
-      // agora ou a pessoa fica 30 dias sem poder voltar. Destruímos. Pedir cadastro
-      // de novo é desistir da janela de arrependimento, e o dado que ela mandou
-      // apagar não pode reaparecer dentro de uma conta nova.
+      // Sign-up with the SAME e-mail as an account that requested deletion and is
+      // still within the 30-day window: `users.email` is UNIQUE, so either we
+      // destroy the old one now or the person is stuck 30 days unable to come back.
+      // We destroy it. Asking them to sign up again would give up the regret window,
+      // and the data they asked to erase can't reappear inside a new account.
       if (existente) await purgeUser(existente);
 
       const code = /^\d{4}$/.test(String(referralCode || '').trim()) ? String(referralCode).trim() : '';
@@ -8741,7 +8741,7 @@ async function atenderRequest(req, res) {
         user = await criarConta(createReferredUserByCode, { name, email: em, passwordHash: hashPassword(password), code }, 'convite');
       }
       // No code (or a bad code) and the beta still has room: get in anyway.
-      // Rule of 28/08: sign-up is open up to the cap; the code isn't the
+      // Rule of 2026-08-28: sign-up is open up to the cap; the code isn't the
       // door. Since the free-first-month switch, EVERY new sign-up starts on
       // Básico for one cycle (conta_criada event), so what the code adds is
       // the 500-credit bonus for both sides when the referred user
@@ -8783,10 +8783,10 @@ async function atenderRequest(req, res) {
       const user = await getUserByEmail(email.toLowerCase());
       if (!user || !verifyPassword(password, user.password_hash))
         return send(res, 401, { error: 'E-mail ou senha incorretos.' });
-      // Conta fechada a pedido do dono: senha certa não entra. Só respondemos isto
-      // DEPOIS de conferir a senha, senão o login viraria um jeito de descobrir
-      // quais e-mails têm conta. Quem quer voltar refaz o cadastro (o /api/signup
-      // trata o e-mail repetido) ou fala com o suporte dentro dos 30 dias.
+      // Account closed at the owner's request: right password doesn't get in. We only
+      // answer this AFTER checking the password, otherwise login would become a way to find
+      // out which e-mails have an account. Anyone who wants to come back redoes the sign-up
+      // (/api/signup handles the repeated e-mail) or talks to support within the 30 days.
       if (user.deleted_at)
         return send(res, 401, { error: 'Essa conta foi excluída. Se foi engano, escreva pra __SUPORTE__.' });
       const token = newToken();
@@ -8868,8 +8868,8 @@ async function atenderRequest(req, res) {
         }
       }
       const fechada = await closeUserAccount(user.id);
-      // null = já estava fechada (duplo toque/retry do app). Resposta igual, sem
-      // reiniciar o prazo: pro cliente o resultado é o mesmo.
+      // null = was already closed (double tap/app retry). Same response,
+      // without restarting the window: to the client the result is the same.
       const closedAt = fechada?.deleted_at ? new Date(fechada.deleted_at) : new Date();
       console.log(`[account-delete] conta ${user.id} fechada`);
       const base = `Conta excluída. O acesso foi encerrado agora e os dados são apagados em definitivo em ${PURGE_DIAS} dias.`;
@@ -8884,8 +8884,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Esqueci minha senha ──
-  // Pede o reset. Resposta SEMPRE genérica (não revela se o e-mail existe).
+  // ── Forgot my password ──
+  // Requests the reset. Response is ALWAYS generic (doesn't reveal whether the e-mail exists).
   if (req.method === 'POST' && url.pathname === '/api/forgot') {
     if (tooManyRequests(req, res, 'forgot', 5, 60 * 60_000)) return;
     const { email } = await readBody(req);
@@ -8893,9 +8893,9 @@ async function atenderRequest(req, res) {
     if (!validEmail(email)) return send(res, 200, generic);
     try {
       const user = await getUserByEmail(email.toLowerCase());
-      // Conta excluída não recebe link de reset: o /api/login barra ela de qualquer
-      // jeito, então o e-mail só serviria pra confundir. A resposta continua a
-      // genérica de cima, que não conta se o e-mail existe ou não.
+      // A deleted account doesn't get a reset link: /api/login blocks it
+      // anyway, so the e-mail would only serve to confuse. The response stays
+      // the generic one above, which doesn't say whether the e-mail exists or not.
       if (user && !user.deleted_at) {
         const token = newToken();
         await createPasswordReset(token, user.id, 10); // expira em 10 min (ASVS L1: verificador OOB expira em <=10min)
@@ -8920,7 +8920,7 @@ async function atenderRequest(req, res) {
       }
       return send(res, 200, generic);
     } catch (e) {
-      // Mesmo em erro interno respondemos genérico pra não vazar nada.
+      // Even on an internal error we answer generically so nothing leaks.
       console.error('[forgot] erro:', e?.message ?? e);
       return send(res, 200, generic);
     }
@@ -8946,16 +8946,16 @@ async function atenderRequest(req, res) {
   // ── Login com Google ──
   if (req.method === 'GET' && url.pathname === '/api/auth/google/start') {
     if (!googleEnabled()) return send(res, 503, { error: 'Login com Google não configurado.' });
-    // mobile=1: mesmo escopo base de login (ZERO impacto na verificação OAuth);
-    // só muda o flow, que faz o callback entregar a sessão por deep link.
+    // mobile=1: same base login scope (ZERO impact on OAuth verification);
+    // it only changes the flow, which makes the callback deliver the session via deep link.
     const flow = url.searchParams.get('mobile') === '1' ? 'login_mobile' : 'login';
     const state = newToken();
     res.writeHead(302, { Location: googleAuthUrl(state), 'set-cookie': [stateCookie(state), flowCookie(flow)] });
     return res.end();
   }
 
-  // ── Conectar serviços Google (autorização INCREMENTAL, requer login) ──
-  // ?services=gmail,drive,docs  (padrão: todos). Pede offline+consent pro refresh_token.
+  // ── Connect Google services (INCREMENTAL authorization, requires login) ──
+  // ?services=gmail,drive,docs (default: all). Requests offline+consent for the refresh_token.
   if (req.method === 'GET' && url.pathname === '/api/connect/google/start') {
     if (!googleEnabled()) return send(res, 503, { error: 'Google não configurado.' });
     const user = await currentUser();
@@ -8963,7 +8963,7 @@ async function atenderRequest(req, res) {
     const req2 = (url.searchParams.get('services') || 'gmail,drive,docs,calendar').split(',').map((s) => s.trim());
     const scopes = scopesFor(req2);
     if (!scopes.length) return send(res, 400, { error: 'Nenhum serviço válido.' });
-    // hint = e-mail de uma conta já conectada (reconectar/revisar acesso).
+    // hint = e-mail of an account already connected (reconnect/review access).
     const loginHint = (url.searchParams.get('hint') || '').toLowerCase().trim();
     const state = newToken();
     res.writeHead(302, { Location: googleAuthUrl(state, { scopes, loginHint }), 'set-cookie': [stateCookie(state), flowCookie('connect')] });
@@ -8971,11 +8971,11 @@ async function atenderRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/auth/google/callback') {
-    // Volta sempre pra interface (raiz montada, ex: /new/); em erro, com ?e=google.
-    // Deriva a home da própria redirect URI pra funcionar atrás do nginx /new/.
+    // Always returns to the UI (mounted root, e.g. /new/); on error, with ?e=google.
+    // Derives the home from the redirect URI itself so it works behind nginx /new/.
     const home = (process.env.GOOGLE_REDIRECT_URI || '/').replace(/api\/auth\/google\/callback$/, '');
     const clearAll = [clearStateCookie(), clearFlowCookie()];
-    // Fluxo mobile (app): erros/sucesso voltam por deep link brambs://auth, não pela home web.
+    // Mobile (app) flow: errors/success return via deep link brambs://auth, not via the web home.
     const flow = readCookie(req, 'oflow') || 'login';
     const isMobile = flow === 'login_mobile';
     const failTo = (e) => isMobile ? `brambs://auth?e=${e}` : `${home}?e=${e}`;
@@ -8996,13 +8996,13 @@ async function atenderRequest(req, res) {
       const acct = { access_token: tok.access_token, refresh_token: tok.refresh_token, scope: tok.scope, expiry };
 
       if (flow === 'connect') {
-        // CONECTAR uma conta de DADOS. O usuário já está logado; a conta Google
-        // conectada pode ser DIFERENTE da conta de cadastro (multi-conta). Anexa
-        // o token ao usuário logado, sem resolver/criar um usuário por esse email.
+        // CONNECT a DATA account. The user is already logged in; the connected Google
+        // account can be DIFFERENT from the sign-up account (multi-account). Attaches the
+        // token to the logged-in user, without resolving/creating a user from that e-mail.
         const already = await currentUser();
-        if (!already) return fail(); // sessão expirou no meio do fluxo
-        // Conta empresarial: membro só conecta Google de domínio liberado pela
-        // empresa. Quem não é membro passa direto. O token recebido NÃO é gravado.
+        if (!already) return fail(); // session expired mid-flow
+        // Business account: a member can only connect a Google account from a domain the
+        // company allows. Non-members pass straight through. The token received is NOT stored.
         const perm = await empresaStore.conexaoPermitida(already.id, email);
         if (!perm.ok) {
           console.warn(`[empresa] conexão Google recusada: domínio fora da lista (usuário ${already.id})`);
@@ -9014,15 +9014,15 @@ async function atenderRequest(req, res) {
         return res.end();
       }
 
-      // LOGIN com Google: resolve/cria o usuário pela conta de cadastro.
+      // LOGIN with Google: resolves/creates the user from the sign-up account.
       let user = await getUserByEmail(email);
-      // Conta fechada a pedido do dono não loga. Aqui o "Continuar com Google" é
-      // login E cadastro ao mesmo tempo, então aplicamos a mesma regra do
-      // /api/signup: entrar de novo pelo mesmo e-mail destrói a conta fechada e
-      // começa uma nova, em vez de ressuscitar o dado que ela mandou apagar.
+      // An account closed at the owner's request doesn't log in. Here "Continue with
+      // Google" is login AND sign-up at the same time, so we apply the same rule as
+      // /api/signup: logging in again with the same e-mail destroys the closed account
+      // and starts a new one, instead of resurrecting the data they asked to erase.
       if (user?.deleted_at) { await purgeUser(user); user = null; }
       if (!user) {
-        // Same gate as /api/signup (28/08): while the beta has room, Google
+        // Same gate as /api/signup (2026-08-28): while the beta has room, Google
         // creates the account (with the free first month on Básico, like the
         // e-mail sign-up: conta_criada event). Once the cap is hit, only the
         // whitelist passes; with no code to type here, the rest go back to the
@@ -9032,25 +9032,25 @@ async function atenderRequest(req, res) {
           res.writeHead(302, { Location: isMobile ? 'brambs://auth?e=beta' : home + '?e=beta', 'set-cookie': clearAll });
           return res.end();
         }
-        // Conta nova via Google: sem senha utilizável (hash aleatório).
+        // New account via Google: no usable password (random hash).
         user = await criarConta(createUser, { name: info.name || email.split('@')[0], email, passwordHash: hashPassword(newToken()) }, 'google');
-        // Mesmo carimbo de idioma do cadastro por e-mail (seletor do site na
-        // frente, navegador atrás). Este caminho não tinha nenhum, então conta
-        // criada pelo Google nascia sem idioma e caía no padrão mesmo quem
-        // estava lendo o site em inglês. Nunca derruba o cadastro se falhar.
+        // Same language stamp as e-mail sign-up (site selector in front, browser
+        // behind). This path had none, so an account created via Google was born
+        // without a language and fell back to the default even for someone
+        // reading the site in English. Never breaks the sign-up if it fails.
         try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
         catch (e) { console.warn('[oauth] idioma inicial não gravado:', e?.message || e); }
       }
-      // Login com Google é só IDENTIDADE (online, escopo base, sem refresh). NÃO
-      // grava conta de dados: sobrescreveria o escopo/token de uma conta já
-      // conectada com o escopo mínimo de login. Conexão de dados é só no fluxo
-      // connect (/api/connect/google/start).
+      // Login with Google is just IDENTITY (online, base scope, no refresh).
+      // It does NOT write a data account: it would overwrite the scope/token
+      // of an account already connected with the minimal login scope. Data
+      // connection only happens in the connect flow (/api/connect/google/start).
 
       const token = newToken();
       await createSession(token, user.id);
       if (isMobile) {
-        // App: NÃO seta cookie de sessão (o app não tem cookie jar). Entrega a
-        // sessão por código de uso único no deep link; o app troca em /exchange.
+        // App: does NOT set a session cookie (the app has no cookie jar). Delivers the session
+        // via a one-time-use code in the deep link; the app exchanges it at /exchange.
         const oneTime = putMobileAuthCode(token);
         res.writeHead(302, { Location: `brambs://auth?code=${oneTime}`, 'set-cookie': clearAll });
         return res.end();
@@ -9063,7 +9063,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Troca o código de uso único (deep link do login mobile) pela sessão.
+  // Exchanges the one-time-use code (mobile login deep link) for the session.
   if (req.method === 'POST' && url.pathname === '/api/auth/mobile/exchange') {
     const body = await readBody(req);
     const token = takeMobileAuthCode(body?.code);
@@ -9071,23 +9071,23 @@ async function atenderRequest(req, res) {
     return send(res, 200, { token });
   }
 
-  // Nonce pro login com Apple. O app pede um antes de abrir a folha do iOS e
-  // manda pra Apple o SHA-256 dele; na volta conferimos o par. Sem sessão.
+  // Nonce for Sign in with Apple. The app requests one before opening the iOS
+  // sheet and sends Apple its SHA-256; on the way back we check the pair. No session.
   if (req.method === 'GET' && url.pathname === '/api/auth/apple/nonce') {
     if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
     return send(res, 200, { nonce: putAppleNonce() });
   }
 
-  // Login com Apple (app iOS, fluxo nativo). O app manda o identity token, o
-  // nonce cru que pegou acima e — só na PRIMEIRA autorização — nome e
-  // authorization code. Devolve a sessão direto no corpo, como o /exchange:
-  // não há navegador nem deep link neste fluxo.
+  // Sign in with Apple (iOS app, native flow). The app sends the identity
+  // token, the raw nonce it grabbed above and — only on the FIRST
+  // authorization — name and authorization code. Returns the session directly
+  // in the body, like /exchange: there's no browser or deep link in this flow.
   if (req.method === 'POST' && url.pathname === '/api/auth/apple') {
     if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
     const body = await readBody(req);
     try {
-      // Duas entradas possíveis: uma autorização nova da Apple, ou a retomada de
-      // uma que ficou pendurada esperando a pessoa responder "sou nova aqui".
+      // Two possible inputs: a new Apple authorization, or the resumption of
+      // one left hanging while waiting for the person to answer "I'm new here".
       let id, refreshToken = null, nomeApple = String(body?.fullName || '').trim();
       const retomada = body?.pending ? takeApplePending(String(body.pending)) : null;
       if (body?.pending) {
@@ -9100,27 +9100,27 @@ async function atenderRequest(req, res) {
         if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'Sessão de login expirada. Tente de novo.' });
         id = await verifyAppleIdentityToken(body?.identityToken, { expectedNonce: nonce });
 
-        // O refresh token só existe agora, na primeira autorização, e é o que
-        // permite revogar na exclusão da conta (5.1.1(v)). Falhar aqui não pode
-        // impedir a pessoa de entrar — a exclusão degrada, o login não.
+        // The refresh token only exists now, on the first authorization, and is what
+        // lets us revoke it when the account is deleted (5.1.1(v)). Failing here must
+        // not block the person from logging in; deletion degrades, login doesn't.
         if (body?.authorizationCode && appleRevokeReady()) {
           try { ({ refreshToken } = await appleExchangeCode(String(body.authorizationCode))); }
           catch (e) { console.warn('[apple] troca do authorization code falhou:', e?.message || e); }
         }
       }
 
-      // Identidade é o `sub`. E-mail entra só como contato, e pode ser um relay
-      // que muda com o tempo — por isso o `sub` vem primeiro na busca.
+      // Identity is the `sub`. E-mail is just contact info, and can be a relay
+      // that changes over time, which is why `sub` comes first in the lookup.
       let user = await getUserByAppleSub(id.sub);
-      // Mesma pessoa que já entrava por e-mail/Google: se a Apple revelou o
-      // endereço real e ele bate com uma conta existente, vincula em vez de
-      // criar uma segunda conta. Com relay isso não acontece (o endereço é
-      // exclusivo do app), e aí precisamos perguntar (ver abaixo).
+      // Same person who already logged in via e-mail/Google: if Apple
+      // revealed the real address and it matches an existing account, we link
+      // instead of creating a second account. With a relay this doesn't
+      // happen (the address is exclusive to the app), so then we need to ask (see below).
       if (!user && id.email && !id.isPrivateEmail) user = await getUserByEmail(id.email);
 
-      // Conta fechada a pedido do dono não loga: mesma regra do Google e do
-      // /api/signup — entrar de novo destrói a fechada e começa outra, em vez
-      // de ressuscitar o dado que a pessoa mandou apagar.
+      // An account closed at the owner's request doesn't log in: same rule as
+      // Google and /api/signup; logging in again destroys the closed one and
+      // starts another, instead of resurrecting the data the person asked to erase.
       if (user?.deleted_at) { await purgeUser(user); user = null; }
 
       // Unknown Apple ID: we do NOT create an account on our own.
@@ -9150,16 +9150,16 @@ async function atenderRequest(req, res) {
       }
 
       if (!user) {
-        // A Apple não garante e-mail em login posterior, mas na criação da conta
-        // ele vem sempre (relay ou real). Sem e-mail não há o que gravar: a
-        // coluna é UNIQUE NOT NULL e o suporte fica sem canal.
+        // Apple doesn't guarantee an e-mail on later logins, but at account creation
+        // it always comes (relay or real). With no e-mail there's nothing to store:
+        // the column is UNIQUE NOT NULL and support is left with no channel.
         if (!id.email) return send(res, 400, { error: 'Não recebemos seu e-mail da Apple. Tente novamente.' });
         const fila = await permissoes.filaDeEspera();
         if (fila && !await permissoes.liberadoNoCadastro(id.email) && !await empresaStore.temConvitePendente(id.email)) {
           return send(res, 403, { error: 'beta', message: 'Seu e-mail ainda não está liberado no beta.' });
         }
-        // O nome só chega na PRIMEIRA autorização e nunca mais. Quem já
-        // autorizou antes e apagou a conta volta sem nome — daí o fallback.
+        // The name only arrives on the FIRST authorization and never again. Anyone who already
+        // authorized before and deleted the account comes back without a name, hence the fallback.
         const nome = nomeApple || id.email.split('@')[0];
         user = await criarConta(createUser, { name: nome, email: id.email, passwordHash: hashPassword(newToken()) }, 'apple');
         try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
@@ -9222,11 +9222,11 @@ async function atenderRequest(req, res) {
       }
 
       const dono = await getUserByAppleSub(id.sub);
-      // Já é desta conta: repetir não é erro (toque duplo, retry do app).
+      // Already belongs to this account: repeating isn't an error (double tap, app retry).
       if (dono && dono.id === sess.id) return send(res, 200, { ok: true, already: true });
 
       if (dono) {
-        // Conta já fechada a pedido do dono: destrói e segue, mesma regra do login.
+        // Account already closed at the owner's request: destroy and proceed, same rule as login.
         if (dono.deleted_at) {
           await purgeUser(dono);
         } else {
@@ -9269,9 +9269,9 @@ async function atenderRequest(req, res) {
       }
       const token = await getAppleRefreshToken(user.id).catch(() => null);
       if (token && appleRevokeReady()) {
-        // Falha aqui não trava: o vínculo do nosso lado sai do mesmo jeito (é o
-        // que a pessoa pediu) e a sobra é uma linha em Ajustes do iPhone, que
-        // ela mesma pode remover.
+        // Failure here doesn't block: the link on our side goes away either
+        // way (that's what the person asked for), and the leftover is a line
+        // in iPhone Settings, which they can remove themselves.
         try { await appleRevoke(token); }
         catch (e) { console.error(`[apple-unlink] revogação user ${user.id}:`, e?.message ?? e); }
       }
@@ -9287,14 +9287,14 @@ async function atenderRequest(req, res) {
     return send(res, 200, { google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE });
   }
 
-  // ── Origem do cadastro (atribuição de campanha) ──
-  // O front captura gclid/utm_* no primeiro toque e chama isto quando a conta
-  // acabou de ser criada. Complementa a conversão do Google Ads, que diz
-  // "quantos cadastros o anúncio trouxe" mas não diz QUEM: aqui a origem fica
-  // no nosso banco, ligada ao usuário. Só campos conhecidos e curtos entram
-  // (a lista abaixo é a allowlist), então o front não consegue engordar a
-  // coluna com dado arbitrário. As travas de "primeiro toque" e "conta
-  // recém-criada" estão no SQL do setUserAttribution.
+  // ── Sign-up source (campaign attribution) ──
+  // The front captures gclid/utm_* on the first touch and calls this when the
+  // account was just created. Complements Google Ads conversion, which says
+  // "how many sign-ups the ad brought" but not WHO: here the source stays in
+  // our database, tied to the user. Only known, short fields are accepted
+  // (the list below is the allowlist), so the front can't fatten the column
+  // with arbitrary data. The "first touch" and "just-created account" guards
+  // are in setUserAttribution's SQL.
   if (req.method === 'POST' && url.pathname === '/api/atribuicao') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9309,7 +9309,7 @@ async function atenderRequest(req, res) {
     try {
       return send(res, 200, { ok: true, gravado: await setUserAttribution(user.id, attr) });
     } catch (e) {
-      // Medição nunca derruba cadastro: loga e devolve 200.
+      // Measurement never breaks sign-up: logs and returns 200.
       console.warn('[atribuicao] falha ao gravar:', e?.message || e);
       return send(res, 200, { ok: true, gravado: false });
     }
@@ -9323,19 +9323,19 @@ async function atenderRequest(req, res) {
     const wa = await getWhatsAppLinkForUser(user.id);
     const extLink = await getExtLink(user.id).catch(() => null);
     const rst = runnerStatus(user.id);
-    // subdomínio (= username): atribui um padrão a partir do nome/e-mail na 1ª vez.
+    // subdomain (= username): assigns a default from the name/e-mail the first time.
     let subdomain = null;
     try { subdomain = (await ensureUserSubdomain(user.id)).label; } catch { subdomain = await getUserSubdomain(user.id).catch(() => null); }
     const credits = await getCreditStatus(user.id);
     return send(res, 200, {
-      // O app iOS amarra a compra da App Store a esta conta pelo id
-      // (appAccountToken) e não inicia a compra sem ele.
+      // The iOS app ties the App Store purchase to this account via the id
+      // (appAccountToken) and won't start the purchase without it.
       id: user.id,
       name: user.name, agents, subdomain, apps: await listAppsForUser(user.id).catch(() => []),
-      // E-mail e estado do vínculo com a Apple: o app precisa dos dois pra
-      // escolher o que mostrar (vincular × desvincular) e pra saber quando a
-      // conta usa endereço de relay — caso em que pedir "digite seu e-mail"
-      // como confirmação não funciona.
+      // E-mail and Apple link status: the app needs both to choose what to
+      // show (link vs. unlink) and to know when the account uses a relay
+      // address, a case where asking "type your e-mail" as confirmation
+      // doesn't work.
       email: user.email,
       apple: { linked: !!user.apple_sub, privateEmail: !!user.apple_private_email },
       connected: await connectedServices(user.id),
@@ -9353,8 +9353,8 @@ async function atenderRequest(req, res) {
       locale: await getUserLocale(user.id),
       idiomas: IDIOMAS_OK,
       emailSend: await getEmailSendEnabled(user.id),
-      // Uso dos dados pra melhoria do produto: `paying` decide se a chave
-      // aparece na tela, `trainingOptOut` diz se está ligada agora.
+      // Data usage for product improvement: `paying` decides whether the
+      // option shows on screen, `trainingOptOut` says whether it's on right now.
       paying: await permissoes.podeRecusarTreino(user.id),
       trainingOptOut: await isOptedOutNow(user.id),
       invites: await getInviteStatus(user.id),
@@ -9363,21 +9363,21 @@ async function atenderRequest(req, res) {
       whatsapp: waEnabled() ? (wa ? { phone: wa.wa_phone, activeAgentId: wa.active_agent_id, linked: true, number: process.env.WA_BUSINESS_NUMBER || null } : { linked: false, number: process.env.WA_BUSINESS_NUMBER || null }) : null,
       ext: { activeAgentId: extLink?.active_agent_id || null },
       runner: { online: !!rst.online, activeAgentId: rst.activeAgentId || null, meta: rst.meta || null },
-      // Conta empresarial (F0): a empresa da pessoa (ou null) e os convites
-      // pendentes pro e-mail dela. Falha aqui nunca derruba o /api/me.
+      // Business account (F0): the person's company (or null) and the
+      // pending invites for their e-mail. A failure here never breaks /api/me.
       ...(await empresaStore.resumo(user).then((r) => ({ empresa: r.empresa, convitesEmpresa: r.convites }))
         .catch((e) => { console.warn('[empresa] resumo:', e?.message || e); return { empresa: null, convitesEmpresa: [] }; })),
     });
   }
 
-  // ── Conta empresarial (F0): empresa, domínios, convites e membros ──
-  // Sem cobrança aqui (F1). Convite é só dentro do app: nenhum e-mail sai.
+  // ── Business account (F0): company, domains, invites and members ──
+  // No billing here (F1). Invites are app-internal only: no e-mail goes out.
   if (url.pathname === '/api/empresa' || url.pathname.startsWith('/api/empresa/')) {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login.' });
     const responde = (r) => r.ok ? send(res, 200, r) : send(res, r.status || 400, r);
-    // Microsoft conectada antes de guardarmos o e-mail: tenta descobrir agora
-    // (Graph /me), senão a trava de domínio não tem como liberar a entrada.
+    // Microsoft connected before we stored the e-mail: tries to find it out
+    // now (Graph /me), otherwise the domain guard has no way to let the entry through.
     const backfillMicrosoft = async () => {
       try {
         if (!await empresaStore.microsoftSemEmail(user.id)) return;
@@ -9392,8 +9392,8 @@ async function atenderRequest(req, res) {
       if (url.pathname === '/api/empresa') {
         if (tooManyRequests(req, res, 'empresa-criar', 10, 60 * 60_000)) return;
         await backfillMicrosoft();
-        // O plano pessoal do criador acaba aqui (org-billing.mjs); o cancelamento
-        // no Stripe sai depois do commit, dentro do criar.
+        // The creator's personal plan ends here (org-billing.mjs); the Stripe
+        // cancellation goes out after the commit, inside create.
         return responde(await empresaStore.criar(user, body?.nome));
       }
       if (url.pathname === '/api/empresa/dominios') {
@@ -9427,14 +9427,14 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Escolha de modelo do usuário (qualidade × consumo de crédito).
+  // User's model choice (quality x credit consumption).
   if (req.method === 'POST' && url.pathname === '/api/prefs/model') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
     const body = await readBody(req);
     const choice = body?.model;
     if (!isValidModel(choice)) return send(res, 400, { error: 'Modelo inválido.' });
-    // Modelos de teste (OpenAI/DeepInfra) só o admin pode selecionar.
+    // Test models (OpenAI/DeepInfra) can only be selected by the admin.
     const isAdmin = (user.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase();
     if (isTestProvider(modelById(choice).provider) && !isAdmin) {
       return send(res, 403, { error: 'Modelo indisponível.' });
@@ -9443,9 +9443,9 @@ async function atenderRequest(req, res) {
     return send(res, 200, { model });
   }
 
-  // Fuso horário do usuário (IANA). Usado pra interpretar "hoje/amanhã" e
-  // marcar eventos na hora local dele. O front detecta pelo navegador e o
-  // agente também pode setar via a tool definir_meu_fuso.
+  // User's timezone (IANA). Used to interpret "today/tomorrow" and mark
+  // events at their local time. The front detects it via the browser, and the
+  // agent can also set it via the definir_meu_fuso tool.
   if (req.method === 'POST' && url.pathname === '/api/prefs/timezone') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9455,25 +9455,25 @@ async function atenderRequest(req, res) {
     return send(res, 200, { timezone });
   }
 
-  // Idioma escolhido pela PESSOA. Sobrescreve qualquer palpite anterior: aqui
-  // ela está dizendo, não a máquina adivinhando.
+  // Language chosen by the PERSON. Overrides any earlier guess: here they're
+  // telling us, not the machine guessing.
   if (req.method === 'POST' && url.pathname === '/api/prefs/idioma') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
     const body = await readBody(req);
     const language = await setUserLanguage(user.id, body?.language);
     if (!language) return send(res, 400, { error: 'Idioma não suportado.' });
-    // Sincroniza o cookie do site com a escolha de configurações. As duas coisas
-    // são separadas por decisão (tela x sistema), mas quem acabou de dizer "meu
-    // idioma é X" na tela de configurações não espera o site continuar em Y por
-    // causa de um clique antigo no rodapé. O contrário NÃO acontece: o rodapé
-    // nunca reescreve `users.language`.
+    // Syncs the site cookie with the settings choice. The two are separate by
+    // design (screen vs. system), but someone who just said "my language is
+    // X" on the settings screen doesn't expect the site to stay in Y because
+    // of an old click in the footer. The reverse does NOT happen: the footer
+    // never rewrites `users.language`.
     return send(res, 200, { language }, { 'set-cookie': cookieIdioma(language) });
   }
 
-  // Seletor de idioma do SITE (rodapé das páginas públicas). É `<form>` HTML
-  // puro: sem JS, sem script novo, sem ampliar CSP (`form-action 'self'` já
-  // cobre) e funciona deslogado. Só grava cookie; NUNCA toca em `users.language`.
+  // SITE language selector (footer of public pages). It's a plain HTML `<form>`: no JS,
+  // no new script, no CSP widening needed (`form-action 'self'` already covers it), and
+  // it works logged out. Only writes a cookie; NEVER touches `users.language`.
   if (req.method === 'POST' && url.pathname === '/api/site/idioma') {
     const raw = await new Promise((resolve) => {
       let b = '';
@@ -9482,27 +9482,27 @@ async function atenderRequest(req, res) {
     });
     const lang = new URLSearchParams(raw).get('lang') || '';
     if (!IDIOMAS_OK.includes(lang)) return send(res, 400, { error: 'Idioma não suportado.' });
-    // Volta pra página de onde veio. O destino sai do Referer e é reduzido ao
-    // CAMINHO de uma origem nossa: host de fora não vira redirect, e `//outro`
-    // (que o browser leria como URL absoluta) cai na home.
+    // Returns to the page it came from. The destination comes from the Referer and is reduced
+    // to the PATH of one of our origins: an outside host doesn't become a redirect, and
+    // `//other` (which the browser would read as an absolute URL) falls back to the home.
     let volta = '/';
     try {
       const r = new URL(String(req.headers.referer || ''));
       if (allowedOrigins(req).has(r.origin)) volta = r.pathname + r.search;
-    } catch { /* sem Referer ou Referer inválido: home */ }
+    } catch { /* no Referer or invalid Referer: home */ }
     if (!/^\/(?![/\\])/.test(volta)) volta = '/';
     res.writeHead(303, { Location: volta, 'set-cookie': cookieIdioma(lang) });
     return res.end();
   }
 
-  // Carimbo de IDIOMA do navegador pra quem já tinha conta antes do
-  // multi-idioma existir: o front manda uma vez e isto só preenche o que está
-  // VAZIO (COALESCE no SQL), então não desfaz escolha nenhuma.
+  // Browser LANGUAGE stamp for people who already had an account before
+  // multi-language existed: the front sends it once and this only fills in what's
+  // EMPTY (COALESCE in the SQL), so it never undoes a choice.
   //
-  // País NÃO entra por aqui, mesmo que o front mande: `body.country` é a região
-  // da tag de idioma do navegador (`new Intl.Locale(nav).region`), que é palpite
-  // e não evidência de residência. Ignorado de propósito, e ignorado no
-  // SERVIDOR pra não depender de o front ter sido atualizado.
+  // Country does NOT come in through here, even if the front sends it: `body.country`
+  // is the region of the browser's language tag (`new Intl.Locale(nav).region`),
+  // which is a guess, not evidence of residence. Ignored on purpose, and ignored on
+  // the SERVER so it doesn't depend on the front having been updated.
   if (req.method === 'POST' && url.pathname === '/api/prefs/locale-auto') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9513,8 +9513,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, locale);
   }
 
-  // Checa disponibilidade de um username (subdomínio) SEM gravar. Pra UI validar
-  // enquanto a pessoa digita. Devolve {available, reason?}.
+  // Checks availability of a username (subdomain) WITHOUT writing. For the UI
+  // to validate while the person types. Returns {available, reason?}.
   if (req.method === 'GET' && url.pathname === '/api/prefs/username/check') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9523,8 +9523,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { available: !!r.available, reason: r.error || null, label: r.label || null });
   }
 
-  // Troca o username (subdomínio) do usuário. Único e validado. Bloqueia se ele
-  // já tem sistemas publicados (renomear orfanaria os containers).
+  // Changes the user's username (subdomain). Unique and validated. Blocks if
+  // they already have published systems (renaming would orphan the containers).
   if (req.method === 'POST' && url.pathname === '/api/prefs/username') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9547,7 +9547,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { subdomain: r.subdomain });
   }
 
-  // Liga/desliga o modo "Automático" (backend escolhe o modelo por pergunta).
+  // Turns "Automatic" mode on/off (backend picks the model per question).
   if (req.method === 'POST' && url.pathname === '/api/prefs/model-auto') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9556,7 +9556,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { modelAuto });
   }
 
-  // Permissão pro assistente ENVIAR e-mail (padrão desligado; sem isso, só rascunho).
+  // Permission for the assistant to SEND e-mail (off by default; without it, draft only).
   if (req.method === 'POST' && url.pathname === '/api/prefs/email-send') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9565,8 +9565,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { emailSend });
   }
 
-  // Registra o token de push (Expo) do aparelho pro usuário logado. O app manda
-  // isso no login. Token não é segredo (só endereço de entrega), tabela normal.
+  // Registers the device's push token (Expo) for the logged-in user. The app
+  // sends this on login. The token isn't a secret (just a delivery address), regular table.
   if (req.method === 'POST' && url.pathname === '/api/push/register') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9619,7 +9619,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Liga/desliga recursos de mídia por usuário (imagem / stt / tts).
+  // Turns media features on/off per user (image / stt / tts).
   if (req.method === 'POST' && url.pathname === '/api/prefs/media') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9628,12 +9628,12 @@ async function atenderRequest(req, res) {
     return send(res, 200, { media });
   }
 
-  // ── Memória & Prompt (visão do dono) ──
-  // O dono vê e edita as páginas de memória (nível USUÁRIO, compartilhadas entre
-  // TODOS os assistentes dele) e vê o prompt de cada assistente (amigável + cru).
-  // Tudo escopado por sessão: user.id p/ memória, getAgentOwned p/ o assistente.
+  // ── Memory & Prompt (owner view) ──
+  // The owner sees and edits the memory pages (USER level, shared across ALL
+  // of their assistants) and sees each assistant's prompt (friendly + raw).
+  // Everything is scoped by session: user.id for memory, getAgentOwned for the assistant.
 
-  // Panorama: lista de assistentes do usuário + páginas de memória (sem corpo).
+  // Overview: list of the user's assistants + memory pages (no body).
   if (req.method === 'GET' && url.pathname === '/api/memory/overview') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9646,7 +9646,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha ao carregar memória.', e); }
   }
 
-  // Lê uma página de memória (com corpo).
+  // Reads a memory page (with body).
   if (req.method === 'GET' && url.pathname === '/api/memory/page') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9659,7 +9659,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha ao ler a página.', e); }
   }
 
-  // Cria/edita uma página de memória. Valida título/slug e limita o corpo.
+  // Creates/edits a memory page. Validates title/slug and limits the body.
   if (req.method === 'POST' && url.pathname === '/api/memory/page') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9676,7 +9676,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha ao salvar a página.', e); }
   }
 
-  // Apaga uma página de memória do usuário.
+  // Deletes a memory page of the user.
   if (req.method === 'POST' && url.pathname === '/api/memory/page/delete') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9689,8 +9689,8 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha ao apagar a página.', e); }
   }
 
-  // Prompt de um assistente do usuário: versão amigável + versão crua (avançado).
-  // getAgentOwned já trava por user.id, então só o dono vê o próprio assistente.
+  // Prompt of a user's assistant: friendly version + raw version (advanced).
+  // getAgentOwned already locks by user.id, so only the owner sees their own assistant.
   if (req.method === 'GET' && url.pathname === '/api/memory/prompt') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9700,18 +9700,18 @@ async function atenderRequest(req, res) {
       const agent = await getAgentOwned(agentId, user.id);
       if (!agent) return send(res, 404, { error: 'Assistente não encontrado.' });
       let raw = '';
-      // Visão de debug do prompt: mostra a versão que o dono realmente recebe,
-      // idioma incluído. Se a leitura do locale falhar, cai no padrão.
+      // Debug view of the prompt: shows the version the owner actually receives,
+      // language included. If reading the locale fails, falls back to the default.
       let promptLang = IDIOMA_PADRAO;
-      try { promptLang = (await getUserLocale(user.id)).language; } catch { /* padrão */ }
+      try { promptLang = (await getUserLocale(user.id)).language; } catch { /* default */ }
       try { raw = systemFor(agent, { language: promptLang }); } catch { raw = ''; }
       return send(res, 200, { friendly: friendlyPrompt(agent), raw });
     } catch (e) { return fail(res, 500, 'Falha ao montar o prompt.', e); }
   }
 
-  // ── Uso/custo (dashboard) ──
-  // Agregação por hora/dia/mês/turno/conversa/task/usuário/modelo. Admin
-  // (ADMIN_EMAIL) vê todos os usuários; qualquer outro logado vê só os próprios.
+  // ── Usage/cost (dashboard) ──
+  // Aggregation by hour/day/month/turn/conversation/task/user/model. Admin
+  // (ADMIN_EMAIL) sees all users; anyone else logged in sees only their own.
   if (req.method === 'GET' && url.pathname === '/api/usage') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9720,8 +9720,8 @@ async function atenderRequest(req, res) {
     const by = url.searchParams.get('by') || 'day';
     const from = url.searchParams.get('from') || undefined;
     const to = url.searchParams.get('to') || undefined;
-    // Admin pode pedir um usuário específico (?user=) ou todos (default). Não-admin
-    // fica travado no próprio id, sempre.
+    // Admin can request a specific user (?user=) or all (default). Non-admin
+    // is always locked to their own id.
     const userId = isAdmin ? (url.searchParams.get('user') || undefined) : user.id;
     try {
       const [rows, totals] = await Promise.all([
@@ -9734,14 +9734,14 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Créditos do usuário (barrinha de Uso + catálogo de planos) ──
+  // ── User credits (Usage bar + plan catalog) ──
   if (req.method === 'GET' && url.pathname === '/api/usage/credits') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
     try {
       const status = await getCreditStatus(user.id);
       const isAdmin = (user.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase();
-      // Modelos e mídia são do núcleo; saldo, plano e compra vêm da porta de gasto.
+      // Models and media belong to the core; balance, plan and purchase come from the spending port.
       const extras = { models: modelCatalog({ admin: isAdmin, enabled: { openai: openaiEnabled(), deepinfra: deepinfraEnabled(), together: togetherEnabled() } }), model: await getUserModelPref(user.id), modelAuto: await getUserModelAuto(user.id), media: await getUserMediaPrefs(user.id), mediaCosts: mediaEstimates() };
       return send(res, 200, await gasto.telaDeCreditos({ userId: user.id, status, extras }));
     } catch (e) {
@@ -9768,17 +9768,17 @@ async function atenderRequest(req, res) {
   // metrics dashboards.
   if (await rotas.atender(req, res, url, { currentUser, idiomaDaPagina })) return;
 
-  // ── Webhooks de LGPD da Nuvemshop (obrigatórios p/ app público). NÃO exigem login.
-  // A Nuvemshop chama estes 3 endpoints quando o lojista pede exclusão/dados.
-  // Como o conector é SÓ LEITURA (não persiste dados de cliente), respondemos 200
-  // e, no store/redact (loja saiu / pediu apagar), removemos o token guardado da loja.
+  // ── Nuvemshop LGPD webhooks (required for the public app). Do NOT require login.
+  // Nuvemshop calls these 3 endpoints when the merchant requests deletion/data.
+  // Since the connector is READ-ONLY (doesn't persist customer data), we
+  // respond 200 and, on store/redact (store left / asked to erase), remove the stored token for the store.
   if (req.method === 'POST' && url.pathname.startsWith('/api/webhook/nuvemshop/')) {
     const raw = await readRaw(req);
-    // Verificação HMAC-SHA256 (base64) com o client secret. FALHA FECHADA: sem o
-    // segredo configurado não há como distinguir a Nuvemshop de qualquer um na
-    // internet, e store/redact apaga o token OAuth da loja que o corpo indicar.
-    // Antes isso era 'if (secret)', ou seja, faltar a env var abria uma rota
-    // pública de exclusão. Comparação timing-safe pra não vazar o MAC byte a byte.
+    // HMAC-SHA256 (base64) verification with the client secret. FAILS CLOSED: without
+    // the configured secret there's no way to tell Nuvemshop apart from anyone else on
+    // the internet, and store/redact deletes the OAuth token of the store indicated in
+    // the body. It used to be 'if (secret)', meaning a missing env var opened a public
+    // deletion route. Timing-safe comparison so we don't leak the MAC byte by byte.
     const secret = process.env.NUVEMSHOP_CLIENT_SECRET;
     if (!secret) {
       console.error('[nuvemshop] NUVEMSHOP_CLIENT_SECRET ausente: webhook recusado (fail-closed)');
@@ -9799,7 +9799,7 @@ async function atenderRequest(req, res) {
         const n = await deleteOAuthTokenByStoreId('nuvemshop', storeId);
         console.log(`[nuvemshop] store/redact loja ${storeId}: ${n} token(s) removido(s)`);
       } else {
-        // customers/redact e customers/data_request: não guardamos PII de cliente (leitura sob demanda).
+        // customers/redact and customers/data_request: we don't store customer PII (on-demand reads).
         console.log(`[nuvemshop] webhook ${kind} loja ${storeId ?? '?'}: nada a fazer (sem PII persistida)`);
       }
     })().catch((e) => console.error('[nuvemshop] erro no webhook', kind, e?.message ?? e));
@@ -9820,8 +9820,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Exclui (arquiva) um agente. Soft-delete: o histórico (threads/mensagens) fica
-  // guardado na conta; o agente só some das listas e não pode mais ser usado.
+  // Deletes (archives) an agent. Soft delete: the history (threads/messages)
+  // stays stored on the account; the agent just disappears from lists and can no longer be used.
   if (req.method === 'POST' && url.pathname === '/api/agent/delete') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9838,8 +9838,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Renomeia um agente. O nome novo vale a partir do próximo turno (o system
-  // prompt é montado do nome no banco); o antigo é guardado em former_names.
+  // Renames an agent. The new name takes effect from the next turn (the
+  // system prompt is built from the name in the database); the old one is stored in former_names.
   if (req.method === 'POST' && url.pathname === '/api/agent/rename') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9857,7 +9857,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Devolve os campos editáveis de um agente (pra tela de edição prefillar).
+  // Returns an agent's editable fields (to prefill the edit screen).
   if (req.method === 'GET' && url.pathname === '/api/agent/get') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9867,8 +9867,8 @@ async function atenderRequest(req, res) {
       const ag = await getAgentOwned(agentId, user.id);
       if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
       const hasServer = await userHasSshKey(user.id).catch(() => false);
-      // Multi-conta Google: a tela mostra em qual conta ESTE assistente trabalha.
-      // '' = usa a principal do usuário (o padrão de quem tem uma conta só).
+      // Multi-account Google: the screen shows which account THIS assistant works on.
+      // '' = uses the user's main one (the default for anyone with a single account).
       const gAccts = await listGoogleAccounts(user.id).catch(() => []);
       return send(res, 200, {
         id: ag.id, name: ag.name, goal: ag.goal || '', instructions: ag.instructions || '',
@@ -9878,7 +9878,7 @@ async function atenderRequest(req, res) {
         google_email: ag.google_email || '',
         googleAccounts: gAccts.map((a) => ({ email: a.google_email, primary: !!a.is_primary })),
         toolGroups: AGENT_TOOL_GROUPS, categories: AGENT_CATEGORIES,
-        // 'super' só é selecionável se houver um servidor conectado (chave SSH).
+        // 'super' is only selectable if there's a connected server (SSH key).
         superAvailable: hasServer,
       });
     } catch (e) {
@@ -9886,9 +9886,9 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Edita os campos do agente (nome/objetivo/papel/estilo). O estilo é o tom/voz
-  // SÓ deste assistente (o "CLAUDE.local.md" dele), injetado no system dele todo
-  // turno. Mudanças valem a partir do próximo turno.
+  // Edits the agent's fields (name/goal/role/style). Style is the tone/voice
+  // of ONLY this assistant (its "CLAUDE.local.md"), injected into its system
+  // prompt every turn. Changes take effect from the next turn.
   if (req.method === 'POST' && url.pathname === '/api/agent/update') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9904,10 +9904,10 @@ async function atenderRequest(req, res) {
       if (style !== undefined) fields.style = style;
       if (category !== undefined) fields.category = category;
       if (tool_config !== undefined) {
-        // Ligar o grupo 'shell' sem dizer a máquina não é config válida: o trilho
-        // anti-pivot desse grupo É o host. Sem ele o servidor entrega só o que
-        // roda no sandbox, então é melhor dizer isso na cara do que salvar uma
-        // config que promete shell e não cumpre.
+        // Turning on the 'shell' group without saying the machine isn't valid
+        // config: that group's anti-pivot rail IS the host. Without it the
+        // server only delivers what runs in the sandbox, so it's better to
+        // say so outright than save a config that promises shell and doesn't deliver.
         const tcGroups = Array.isArray(tool_config?.groups) ? tool_config.groups : [];
         const tcHost = typeof tool_config?.host === 'string' ? tool_config.host.trim() : '';
         if (tcGroups.includes('shell') && !tcHost) {
@@ -9915,13 +9915,13 @@ async function atenderRequest(req, res) {
         }
         fields.tool_config = tool_config;
       }
-      // Conta Google deste assistente. '' = volta pra principal do usuário. O
-      // updateAgentFields recusa e-mail que não esteja no google_accounts DELE.
+      // Google account of this assistant. '' = falls back to the user's main
+      // one. updateAgentFields refuses an e-mail that isn't in THEIR google_accounts.
       if (google_email !== undefined) fields.google_email = google_email;
-      // Modelo fixo por agente: só aceita um id que o servidor está OFERECENDO agora
-      // (Kimi 3 / DeepSeek V4 Pro, cada um atrás do seu env); qualquer outra coisa
-      // vira 'auto' (roteamento padrão). Dupla trava (aqui + whitelist no
-      // updateAgentFields).
+      // Fixed model per agent: only accepts an id the server is currently
+      // OFFERING (Kimi 3 / DeepSeek V4 Pro, each behind its own env); anything
+      // else becomes 'auto' (default routing). Double guard (here + whitelist
+      // in updateAgentFields).
       if (model !== undefined) fields.model = normalizeAgentModel(model);
       const r = await updateAgentFields(agentId, user.id, fields);
       if (!r.ok) return send(res, 400, { error: r.error || 'Nada pra atualizar.' });
@@ -9931,8 +9931,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Webhook de entrada do agente (gestão pelo dono, na tela de configurações) ──
-  // Estado do webhook (sem o token, que só é mostrado uma vez ao gerar).
+  // ── Agent inbound webhook (managed by the owner, on the settings screen) ──
+  // Webhook status (without the token, which is only shown once when generated).
   if (req.method === 'GET' && url.pathname === '/api/agent/webhook/get') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -9956,8 +9956,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Gera/regenera o token do webhook do agente. Devolve o token CRU uma única vez
-  // (o servidor guarda só o hash). Regenerar invalida o token anterior.
+  // Generates/regenerates the agent's webhook token. Returns the RAW token
+  // only once (the server only stores the hash). Regenerating invalidates the previous token.
   if (req.method === 'POST' && url.pathname === '/api/agent/webhook/token') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10005,8 +10005,8 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Gera um token de device novo. Devolve o token CRU uma única vez (o servidor
-  // guarda só o hash). Optional label pra o dono reconhecer o aparelho.
+  // Generates a new device token. Returns the RAW token only once (the server
+  // only stores the hash). Optional label so the owner recognizes the device.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10035,7 +10035,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Revoga (apaga) um device. Irreversível.
+  // Revokes (deletes) a device. Irreversible.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens/revoke') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10066,7 +10066,7 @@ async function atenderRequest(req, res) {
     const msg = String(message || '').trim();
     if (!msg) return send(res, 400, { error: 'bad_request', detail: 'Mande message.' });
     try {
-      // Escolhe o agente: o fixado no device (se ainda existe) ou o 1º do dono.
+      // Picks the agent: the one fixed on the device (if it still exists) or the owner's 1st.
       const agents = await listAgents(dev.user_id);
       if (!agents.length) return send(res, 404, { error: 'no_agent', detail: 'Nenhum assistente na conta.' });
       const pick = agents.find((a) => a.id === dev.active_agent_id) || agents[0];
@@ -10075,7 +10075,7 @@ async function atenderRequest(req, res) {
       const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId: dev.user_id, title: `${marca().nome} OS` });
       const { text: reply, deviceAction } = await runConversationInThread(agent, thread, dev.user_id, msg, { kind: 'device' });
       const out = { reply, agent: { id: agent.id, name: agent.name } };
-      if (deviceAction) out.action = deviceAction; // {type, query} — ação nativa pro OS executar
+      if (deviceAction) out.action = deviceAction; // {type, query} — native action for the OS to execute
       return send(res, 200, out);
     } catch (e) {
       return fail(res, 500, 'Falha ao falar com o modelo.', e);
@@ -10097,16 +10097,16 @@ async function atenderRequest(req, res) {
       os: url.searchParams.get('os') || null,
       arch: url.searchParams.get('arch') || null,
       version: url.searchParams.get('v') || null,
-      // O daemon manda mode e confined desde a Fase 2 do Runner justamente pra
-      // o prompt poder dizer a VERDADE sobre a cerca de escrita. Ficavam de fora
-      // daqui, então o único consumidor (runnerContext) nunca via os dois e
-      // afirmava confinamento sempre, inclusive em Windows e Linux sem bwrap.
+      // The daemon has sent mode and confined since Runner Phase 2 precisely
+      // so the prompt can tell the TRUTH about the write fence. They were left
+      // out here, so the only consumer (runnerContext) never saw either of
+      // them and always claimed confinement, even on Windows and on Linux without bwrap.
       mode: url.searchParams.get('mode') || null,
       confined: url.searchParams.get('confined'),
     };
     try {
-      // Propaga o assistente amarrado (device_tokens.active_agent_id, config em
-      // Conexões) pra o modo livre saber qual assistente pode usar este runner.
+      // Propagates the bound assistant (device_tokens.active_agent_id,
+      // configured in Connections) so free mode knows which assistant can use this runner.
       const frame = await runnerPoll(dev.user_id, dev.id, meta, dev.active_agent_id || null);
       return send(res, 200, frame);
     } catch (e) {
@@ -10114,16 +10114,16 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Status do runner do usuário logado (pra página /runner: online/offline + meta).
-  // Autenticado por SESSÃO (cookie), não por device token — é o dono olhando.
+  // Status of the logged-in user's runner (for the /runner page: online/offline + metadata).
+  // Authenticated by SESSION (cookie), not by device token; it's the owner looking.
   if (req.method === 'GET' && url.pathname === '/api/runner/status') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
     const st = runnerStatus(user.id);
-    // Devolve QUAL assistente está amarrado (nome, não só id): a página ficava
-    // verde sem dizer quem opera a máquina, então o dono não tinha como perceber
-    // que amarrou o assistente errado. Binding vazio = primeiro assistente, o
-    // mesmo default que o turno usa.
+    // Returns WHICH assistant is bound (name, not just id): the page used to
+    // show green without saying who operates the machine, so the owner had no
+    // way to notice they'd bound the wrong assistant. Empty binding = first
+    // assistant, the same default the turn uses.
     if (st.online) {
       try {
         const ags = await listAgents(user.id);
@@ -10149,9 +10149,9 @@ async function atenderRequest(req, res) {
     if (agentId) {
       const ag = await getAgentOwned(agentId, user.id);
       if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
-      // Bloqueio duro: assistente de grupo roda em canal com várias pessoas e
-      // não pode ganhar shell na máquina pessoal do dono. Recusa AQUI pra a tela
-      // não confirmar um vínculo que nunca ia funcionar.
+      // Hard block: a group assistant runs in a channel with several people
+      // and can't gain shell access on the owner's personal machine. Refuses
+      // HERE so the screen doesn't confirm a binding that was never going to work.
       if (ag.category === 'grupo') {
         return send(res, 400, { error: 'Assistente de grupo não pode operar no Runner: grupo é um canal com várias pessoas e o Runner roda na sua máquina. Escolha um assistente pessoal.' });
       }
@@ -10161,8 +10161,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, activeAgentId: agentId || null });
   }
 
-  // Configura qual ÚNICO assistente atende a extensão do Chrome (ext_links).
-  // Session-authed. `@nome` no chat da extensão continua sobrepondo por mensagem.
+  // Configures which SINGLE assistant serves the Chrome extension (ext_links).
+  // Session-authed. `@name` in the extension chat still overrides it per message.
   if (req.method === 'POST' && url.pathname === '/api/ext/agent') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10176,7 +10176,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, activeAgentId: agentId || null });
   }
 
-  // O runner devolve os frames de saída ({ reqId, type, chunk?/exitCode?/cwd? }).
+  // The runner returns the output frames ({ reqId, type, chunk?/exitCode?/cwd? }).
   if (req.method === 'POST' && url.pathname === '/api/runner/result') {
     if (tooManyRequests(req, res, 'runner-result', 600, 60_000)) return;
     const token = readBearer(req);
@@ -10193,12 +10193,12 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Telemetria do App Mobile: ingestão de erros de JS do React (não-crash) ──
-  // O app faz POST aqui reportando um erro que NÃO derrubou o app. Autenticado por
-  // Bearer = MOBILE_TELEMETRY_TOKEN (env). Isento de CSRF (isWebhookPath): é uma
-  // chamada server-to-app, sem cookie. É telemetria de plataforma; o admin vê no
-  // /metrics. NÃO é feature de usuário e não expõe nada ao usuário. Inerte enquanto
-  // o token não estiver no .env (503).
+  // ── Mobile App telemetry: ingestion of React JS errors (non-crash) ──
+  // The app POSTs here reporting an error that did NOT crash the app.
+  // Authenticated by Bearer = MOBILE_TELEMETRY_TOKEN (env). Exempt from CSRF
+  // (isWebhookPath): it's a server-to-app call, no cookie. It's platform
+  // telemetry; the admin sees it in /metrics. It is NOT a user feature and
+  // exposes nothing to the user. Inert while the token isn't in .env (503).
   if (req.method === 'POST' && url.pathname === '/api/mobile/telemetry') {
     const expected = process.env.MOBILE_TELEMETRY_TOKEN;
     if (!expected) return send(res, 503, { error: 'telemetria desativada' });
@@ -10207,8 +10207,8 @@ async function atenderRequest(req, res) {
     if (!token || !safeStrEq(token, expected)) return send(res, 401, { error: 'unauthorized' });
     const b = await readBody(req).catch(() => null);
     if (!b || typeof b !== 'object') return send(res, 400, { error: 'bad_request' });
-    // Fingerprint determinístico pra AGRUPAR ocorrências iguais: nome + mensagem
-    // normalizada (sem números/endereços que variam) + primeiro frame do stack.
+    // Deterministic fingerprint to GROUP identical occurrences: name +
+    // normalized message (without numbers/addresses that vary) + first stack frame.
     const firstFrame = String(b.stack || '').split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
     const normMsg = String(b.message || '').replace(/0x[0-9a-f]+/gi, '').replace(/\d+/g, '#').slice(0, 300);
     const fingerprint = createHmac('sha256', 'brambs-mobile-err-fp-v1')
@@ -10225,14 +10225,14 @@ async function atenderRequest(req, res) {
     try {
       await insertMobileError(rec);
     } catch {
-      // user_id inexistente (FK) ou outro problema no user_id: grava sem o usuário.
+      // Nonexistent user_id (FK) or another issue with user_id: stores without the user.
       try { await insertMobileError({ ...rec, userId: null }); }
       catch (e) { return fail(res, 500, 'Falha ao gravar telemetria.', e); }
     }
     return send(res, 202, { ok: true, fingerprint });
   }
 
-  // Lista as threads (tópicos) do usuário, de todas as assistentes.
+  // Lists the user's threads (topics), across all assistants.
   if (req.method === 'GET' && url.pathname === '/api/threads') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10259,8 +10259,8 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // Apps do próprio usuário (os que ele usa/tem), pra seleção no compositor do
-  // feed. Exige login. Devolve nome/sistema/url no mesmo formato de /api/apps.
+  // The user's own apps (the ones they use/have), for selection in the feed
+  // composer. Requires login. Returns name/system/url in the same format as /api/apps.
   if (req.method === 'GET' && url.pathname === '/api/apps/mine') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10297,8 +10297,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, url: r.url, sistema: r.sistema, replicado_de: r.replicado_de });
   }
 
-  // Coloca/tira um app da biblioteca pública (pela lista "Suas aplicações").
-  // Tornar público exige snapshot de código (todo publish gera um) + descrição.
+  // Adds/removes an app from the public library (via the "Your applications" list).
+  // Making it public requires a code snapshot (every publish generates one) + a description.
   if (req.method === 'POST' && url.pathname === '/api/apps/visibility') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10321,8 +10321,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, visibility: vis });
   }
 
-  // Apaga de VERDADE uma aplicação (remove o container do host + a linha no
-  // banco). A UI pede confirmação antes de chamar, porque é irreversível.
+  // ACTUALLY deletes an application (removes the container from the host +
+  // the row in the database). The UI asks for confirmation before calling, because it's irreversible.
   if (req.method === 'POST' && url.pathname === '/api/apps/delete') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10338,8 +10338,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, sistema: r.sistema });
   }
 
-  // ══ Espaços (assunto vivo compartilhado) ══
-  // Lista os espaços do usuário (dono ou membro), com modo e nº de membros.
+  // ══ Spaces (shared live subject) ══
+  // Lists the user's spaces (owner or member), with mode and member count.
   if (req.method === 'GET' && url.pathname === '/api/spaces') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10359,7 +10359,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // Muda o modo de compartilhamento de um espaço (auto/manual). Só o dono.
+  // Changes a space's sharing mode (auto/manual). Owner only.
   if (req.method === 'POST' && url.pathname === '/api/spaces/mode') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10374,8 +10374,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, modo: r.mode });
   }
 
-  // ══ Skills (habilidade compartilhável) ══
-  // Autoradas por você + instaladas neste assistente. Read-only pra UI.
+  // ══ Skills (shareable skill) ══
+  // Authored by you + installed on this assistant. Read-only for the UI.
   if (req.method === 'GET' && url.pathname === '/api/skills') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10411,7 +10411,7 @@ async function atenderRequest(req, res) {
     const q = (url.searchParams.get('q') || '').trim();
     let jaInstaladas = new Set();
     let viewer = null;
-    // Se logado, marca quais o usuário já tem instaladas em algum assistente.
+    // If logged in, marks which ones the user already has installed on some assistant.
     try {
       const user = await currentUser();
       if (user) {
@@ -10420,7 +10420,7 @@ async function atenderRequest(req, res) {
           for (const s of await listInstalledSkills(a.id, user.id)) jaInstaladas.add(s.id);
         }
       }
-    } catch { /* melhor-esforço: sem marca de instalada */ }
+    } catch { /* best-effort: no "installed" mark */ }
     try {
       const skills = await listPublicSkills({ q, viewerId: viewer });
       const list = skills.map((s) => ({
@@ -10433,7 +10433,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // Avalia uma skill da biblioteca (nota 1-5). Exige conta; reavaliar sobrescreve.
+  // Rates a library skill (1-5 score). Requires an account; re-rating overwrites.
   if (req.method === 'POST' && url.pathname === '/api/skills/avaliar') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login no __MARCA__ pra avaliar esta habilidade.', precisa_login: true });
@@ -10448,7 +10448,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, votos: r.ratingCount, media: r.ratingAvg, minha_nota: r.myRating });
   }
 
-  // Instala uma skill da biblioteca no 1º assistente do usuário. Exige conta.
+  // Installs a library skill on the user's 1st assistant. Requires an account.
   if (req.method === 'POST' && url.pathname === '/api/skills/instalar') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Crie uma conta ou faça login no __MARCA__ pra instalar esta habilidade.', precisa_login: true });
@@ -10467,8 +10467,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, ja_instalada: !!r.already });
   }
 
-  // ══ Agente ↔ Agente: contatos (handshake entre duas pessoas) ══
-  // Lista meus contatos (conexões em qualquer estado), já resolvendo a outra pessoa.
+  // ══ Agent ↔ Agent: contacts (handshake between two people) ══
+  // Lists my contacts (connections in any state), already resolving the other person.
   if (req.method === 'GET' && url.pathname === '/api/contacts') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10476,7 +10476,7 @@ async function atenderRequest(req, res) {
     catch (e) { return fail(res, 500, 'Falha no banco.', e); }
   }
 
-  // Convida alguém (por e-mail de cadastro) a virar contato.
+  // Invites someone (by signup email) to become a contact.
   if (req.method === 'POST' && url.pathname === '/api/contacts/invite') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10493,9 +10493,9 @@ async function atenderRequest(req, res) {
       }[r.error] || 'Não consegui convidar.';
       return send(res, 400, { error: msg });
     }
-    // Notifica o convidado por e-mail (proativo). O e-mail só AVISA e manda abrir
-    // o assistente; o aceite acontece 100% na conversa com o assistente dele
-    // (tool aceitar_contato). Sem link de ação / token. Fire-and-forget.
+    // Notifies the invitee by email (proactive). The email only NOTIFIES and tells them
+    // to open the assistant; acceptance happens 100% in the conversation with their
+    // assistant (aceitar_contato tool). No action link / token. Fire-and-forget.
     try {
       const inviterName = user.name || 'Alguém';
       const appUrl = process.env.APP_BASE_URL || siteDaMarca() + '/';
@@ -10520,7 +10520,7 @@ async function atenderRequest(req, res) {
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
     const { connId, inboundAgentId } = await readBody(req);
     if (!connId) return send(res, 400, { error: 'Conexão inválida.' });
-    // valida que o assistente escolhido é meu (se veio)
+    // validates that the chosen assistant is mine (if provided)
     if (inboundAgentId) {
       let ag; try { ag = await getAgentOwned(inboundAgentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
       if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
@@ -10535,7 +10535,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // Recusa (ou desfaz) uma conexão.
+  // Declines (or undoes) a connection.
   if (req.method === 'POST' && url.pathname === '/api/contacts/decline') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10551,7 +10551,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // (Re)designa o assistente de entrada do MEU lado nessa conexão.
+  // (Re)assigns the inbound assistant on MY side of this connection.
   if (req.method === 'POST' && url.pathname === '/api/contacts/inbound') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10571,7 +10571,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // Cria uma thread nova pra uma assistente.
+  // Creates a new thread for an assistant.
   if (req.method === 'POST' && url.pathname === '/api/thread') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10588,7 +10588,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Mensagens de uma thread (resgate do histórico).
+  // Messages of a thread (history retrieval).
   if (req.method === 'GET' && url.pathname === '/api/thread') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10598,9 +10598,9 @@ async function atenderRequest(req, res) {
     if (!thread) return send(res, 404, { error: 'Conversa não encontrada.' });
     const agent = await getAgentOwned(thread.agent_id, user.id, { incluirArquivado: true });
     const messages = await getThreadMessages(id);
-    // Abrir a conversa (ou ressincronizar com ela na tela) = leu. Marca até a
-    // última mensagem ENTREGUE agora, não now(): o que chegar depois deste
-    // instante continua acendendo a bolinha de não lida na lista.
+    // Opening the conversation (or re-syncing with it on screen) = read. Marks up to the
+    // last message DELIVERED now, not now(): whatever arrives after this
+    // instant still lights up the unread dot in the list.
     const lastId = messages.length ? messages[messages.length - 1].id : null;
     try { await markThreadRead(id, user.id, lastId); } catch (e) { console.error('[thread] markRead', e.message); }
     return send(res, 200, {
@@ -10610,11 +10610,11 @@ async function atenderRequest(req, res) {
     });
   }
 
-  // Marcar conversa como lida. A interface chama isto quando ACABOU de mostrar a
-  // resposta na tela (envio inline, sem reabrir a thread). É de propósito que o
-  // servidor não marque sozinho no fim do /api/chat: quando a conexão cai no meio
-  // do turno (o 499 do nginx), a resposta fica salva mas o usuário não viu nada —
-  // aí a bolinha de não lida na lista é justamente o aviso de que tem algo lá.
+  // Mark conversation as read. The UI calls this when it's DONE showing the
+  // response on screen (inline send, without reopening the thread). It is intentional that
+  // the server does not mark it on its own at the end of /api/chat: when the connection drops
+  // mid-turn (nginx's 499), the response is saved but the user never saw anything;
+  // that's exactly when the unread dot in the list is the notice that something is there.
   if (req.method === 'POST' && url.pathname === '/api/thread/read') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -10624,9 +10624,9 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ── Extensão do Chrome (MVP: chat que lê a página) ──
-  // Preflight CORS de qualquer /api/ext/*. Com host_permissions a extensão já tem
-  // acesso cross-origin; respondemos o preflight por garantia.
+  // ── Chrome extension (MVP: chat that reads the page) ──
+  // CORS preflight for any /api/ext/*. With host_permissions the extension already has
+  // cross-origin access; we answer the preflight just to be safe.
   if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/ext/')) {
     const origin = req.headers.origin || '*';
     res.writeHead(204, {
@@ -10638,10 +10638,10 @@ async function atenderRequest(req, res) {
     return res.end();
   }
 
-  // Página de conexão da extensão (mostra o código pra copiar). Same-origin.
-  // Tem <script>/<style> inline, então carimba um nonce por request e sobrescreve
-  // o CSP default (estrito, sem inline) pela versão que autoriza esse nonce —
-  // senão o browser bloqueia o script e a página trava em "Gerando…".
+  // Extension connection page (shows the code to copy). Same-origin.
+  // Has inline <script>/<style>, so it stamps a per-request nonce and overrides
+  // the default CSP (strict, no inline) with the version that authorizes this nonce;
+  // otherwise the browser blocks the script and the page gets stuck on "Generating…".
   if (req.method === 'GET' && url.pathname === '/extension') {
     const nonce = randomBytes(16).toString('base64');
     const html = EXTENSION_CONNECT_HTML.split('__CSP_NONCE__').join(nonce);
@@ -10649,9 +10649,9 @@ async function atenderRequest(req, res) {
     return res.end(html);
   }
 
-  // Emite um token pra extensão. Exige sessão logada (cookie) — é GET, então
-  // isento de CSRF. A extensão nunca vê a senha: recebe um token de sessão que
-  // manda como Bearer nas chamadas seguintes.
+  // Issues a token for the extension. Requires a logged-in session (cookie); it's GET, so
+  // exempt from CSRF. The extension never sees the password: it receives a session token
+  // that it sends as Bearer in subsequent calls.
   if (req.method === 'GET' && url.pathname === '/api/ext/token') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login no __MARCA__ primeiro.' });
@@ -10661,9 +10661,9 @@ async function atenderRequest(req, res) {
     return send(res, 200, { token, name: user.name });
   }
 
-  // Chat da extensão. Autenticado por Bearer (token de /api/ext/token) — sem
-  // cookie, então isento de CSRF. Recebe a mensagem do usuário + o contexto da
-  // página (tratado como DADO NÃO-CONFIÁVEL em composeExtPageContext).
+  // Extension chat. Authenticated by Bearer (token from /api/ext/token); no
+  // cookie, so exempt from CSRF. Receives the user's message + the page
+  // context (treated as UNTRUSTED DATA in composeExtPageContext).
   if (req.method === 'POST' && url.pathname === '/api/ext/chat') {
     const origin = req.headers.origin;
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
@@ -10678,11 +10678,11 @@ async function atenderRequest(req, res) {
     const agents = await listAgents(user.id);
     if (!agents.length) return send(res, 400, { error: 'Você ainda não tem um assistente no __MARCA__.' });
 
-    // Assistente que atende a extensão: o CONFIGURADO em Conexões (ext_links,
-    // persistido) é o default; unset => primeiro assistente. `@nome ...` continua
-    // sobrepondo por mensagem e fica lembrado em memória (extActiveAgent) pras
-    // mensagens seguintes; num restart volta pro configurado. `menu`/`agentes`
-    // lista os assistentes. Tudo só-servidor: funciona sem republicar a extensão.
+    // Assistant that serves the extension: the one CONFIGURED in Connections (ext_links,
+    // persisted) is the default; unset => first assistant. `@name ...` still
+    // overrides per message and is remembered in memory (extActiveAgent) for
+    // subsequent messages; on a restart it goes back to the configured one. `menu`/`agentes`
+    // lists the assistants. All server-side only: works without republishing the extension.
     const extLink = await getExtLink(user.id).catch(() => null);
     const configuredId = (extLink?.active_agent_id && agents.some((a) => a.id === extLink.active_agent_id))
       ? extLink.active_agent_id : agents[0].id;
@@ -10704,7 +10704,7 @@ async function atenderRequest(req, res) {
         text = mm[2].trim();
         if (!text) return send(res, 200, { reply: `Agora falando com *${hit[0].name}*. Pode mandar.` });
       }
-      // Sem casar nenhum nome: deixa o texto como está (o próprio assistente responde).
+      // No name matches: leaves the text as is (the assistant itself answers).
     }
     if (!agents.some((a) => a.id === activeId)) activeId = agents[0].id;
 
@@ -10712,9 +10712,9 @@ async function atenderRequest(req, res) {
     if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
     try {
       const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId: user.id, title: '🧩 Extensão Chrome' });
-      // A pergunta do usuário é a mensagem NORMAL da thread (persiste, curta). O
-      // contexto da página (texto + elementos + protocolo de ações) vai como
-      // pageContext EFÊMERO: o modelo vê no turno atual, mas não fica no history.
+      // The user's question is the NORMAL thread message (persisted, short). The
+      // page context (text + elements + action protocol) goes as
+      // EPHEMERAL pageContext: the model sees it in the current turn, but it doesn't stay in history.
       const pageContext = composeExtPageContext(page);
       const { text: reply } = await runConversationInThread(agent, thread, user.id, text, { kind: 'chat', pageContext });
       return send(res, 200, { reply });
@@ -10742,9 +10742,9 @@ async function atenderRequest(req, res) {
     if (!agent) return send(res, 404, { error: 'agent_not_found' });
     try {
       let thread;
-      let webhookSkill = null;   // { title, body } — presente quando há corpo a injetar
+      let webhookSkill = null;   // { title, body } — present when there is a body to inject
       if (session_id) {
-        // Continuação de uma sessão já aberta: recupera a thread e a skill amarrada.
+        // Continuation of an already-open session: retrieves the thread and the bound skill.
         thread = await getThreadOwned(String(session_id), hook.user_id);
         if (!thread || thread.agent_id !== hook.agent_id) return send(res, 404, { error: 'session_not_found' });
         if (thread.webhook_skill) {
@@ -10752,8 +10752,8 @@ async function atenderRequest(req, res) {
           if (rs?.skill) webhookSkill = { title: rs.skill.title, body: rs.skill.body || '' };
         }
       } else {
-        // Início: a skill é nomeada explicitamente no POST e precisa existir e
-        // estar INSTALADA no agente escolhido (escopo intencional do dono).
+        // Start: the skill is explicitly named in the POST and needs to exist and
+        // be INSTALLED on the chosen agent (owner's intentional scope).
         const skillName = String(skill || '').trim();
         if (!skillName) return send(res, 400, { error: 'skill_required', detail: 'Informe a skill em "skill".' });
         const rs = await resolveSkill(hook.user_id, skillName);
@@ -10767,7 +10767,7 @@ async function atenderRequest(req, res) {
         thread = await createThread({ agentId: agent.id, userId: hook.user_id, title: `🪝 Webhook: ${rs.skill.title}`.slice(0, 80) });
         try { await setThreadWebhookSkill(thread.id, rs.skill.slug || skillName); } catch {}
       }
-      // Monta a mensagem do turno a partir do payload do sistema (dado, não ordem).
+      // Builds the turn message from the system payload (data, not a command).
       const message = composeWebhookMessage({ isFirst: !session_id, data, reply });
       if (!message.trim()) return send(res, 400, { error: session_id ? 'reply_required' : 'data_required', detail: 'Envie o conteúdo em "data" (início) ou "reply" (continuação).' });
       const ctl = { done: false, result: null };
@@ -10801,9 +10801,9 @@ async function atenderRequest(req, res) {
     if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
     try {
       const msg = message || notaMidiaSemTexto({ images: imgs.length, files: docs.length });
-      // mobileClient vem do cabeçalho X-Brambs-Mobile: 1 que o app manda em
-      // toda chamada. É o único jeito de separar app de site aqui: os dois usam
-      // esta mesma rota e o mesmo kind 'chat'. Ver appClient em runConversationTurn.
+      // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on
+      // every call. It's the only way to tell app from site here: both use
+      // this same route and the same 'chat' kind. See appClient in runConversationTurn.
       const { text, attachments } = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient });
       return send(res, 200, { reply: text, attachments });
     } catch (e) {
@@ -10811,9 +10811,9 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Transcrição de áudio do WEB (input de voz do chat, ex: chat dentro do node do
-  // cockpit). Recebe {audio:{mimeType,data(base64)}}, normaliza pra WAV e transcreve
-  // com o mesmo pipeline dos canais. Respeita a chavinha de STT do usuário.
+  // Audio transcription from the WEB (chat voice input, e.g. chat inside the cockpit
+  // node). Receives {audio:{mimeType,data(base64)}}, normalizes to WAV and transcribes
+  // with the same pipeline as the channels. Respects the user's STT toggle.
   if (req.method === 'POST' && url.pathname === '/api/transcribe') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10826,7 +10826,7 @@ async function atenderRequest(req, res) {
     try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
     if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler o áudio.' });
     if (buffer.length > 20 * 1024 * 1024) return send(res, 413, { error: 'Áudio grande demais. Grave um trecho mais curto.' });
-    // Normaliza pra WAV 16k mono; se o ffmpeg falhar, manda o original mesmo.
+    // Normalizes to WAV 16k mono; if ffmpeg fails, sends the original anyway.
     let outBuf = await audioToWav(buffer);
     let mime = 'audio/wav';
     if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; }
@@ -10837,7 +10837,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, 500, 'Falha ao transcrever o áudio.', e); }
   }
 
-  // Estado persistente, recuperação e telemetria sem conteúdo privado nos eventos.
+  // Persistent state, recovery and telemetry without private content in the events.
   if (req.method === 'GET' && url.pathname === '/api/onboard/status') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10910,7 +10910,7 @@ async function atenderRequest(req, res) {
             : (await runConversationInThread(agent, thread, user.id, prompt, { search: false, maxSteps: 6, kind: 'onboard', ephemeral: true, measurementTurnId: attempt })).text;
           const parsed = mode === 'starter' ? { welcome: text, suggestions: [], notes: [] } : parseOnboard(text);
           const accepted = await onboardingStore.finish(user.id, agent.id, attempt, parsed);
-          if (!accepted) return; // tentativa obsoleta não pode sobrescrever uma nova
+          if (!accepted) return; // a stale attempt must not overwrite a new one
           if (mode === 'connected') {
             try {
               await clearHomeItems(user.id, 'suggestion', agent.id);
@@ -10928,31 +10928,31 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, e instanceof OnboardingError ? e.status : 500, e instanceof OnboardingError ? e.message : 'Não consegui iniciar a análise.', e); }
   }
 
-  // Atualização automática dos boxes da home. O front chama isto ao abrir a
-  // home (fire-and-forget). Gate barato e em camadas pra NÃO gastar crédito à
-  // toa: (1) precisa ter Google conectado e ao menos um assistente; (2) cooldown
-  // mínimo entre atualizações; (3) checagem barata (sem modelo) se chegou e-mail
-  // novo desde a última vez. Só com novidade real é que aciona o modelo.
+  // Automatic refresh of the home boxes. The front end calls this when opening the
+  // home page (fire-and-forget). Cheap, layered gate to NOT waste credit for
+  // nothing: (1) needs Google connected and at least one assistant; (2) minimum
+  // cooldown between refreshes; (3) cheap check (no model) whether a new email
+  // has arrived since the last time. Only with real news does it trigger the model.
   if (req.method === 'POST' && url.pathname === '/api/home-refresh') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
     try {
       const agents = await listAgents(user.id);
       if (!agents.length) return send(res, 200, { refreshed: false, reason: 'no-agent' });
-      // A checagem olha a caixa do assistente que vai rodar (agents[0]), não a
-      // conta principal do dono: com multi-conta, olhar a caixa errada faz o
-      // refresh dizer "nada novo" justamente quando chegou algo na caixa certa.
+      // The check looks at the mailbox of the assistant that will run (agents[0]), not the
+      // owner's main account: with multiple accounts, checking the wrong mailbox makes the
+      // refresh say "nothing new" exactly when something arrived in the right mailbox.
       const gEmail0 = agents[0]?.google_email || null;
       const services = await connectedServices(user.id, gEmail0);
       if (!services.includes('gmail')) return send(res, 200, { refreshed: false, reason: 'no-google' });
 
-      // Cooldown de 24h: quem recebe e-mail o dia inteiro tinha o gate de
-      // novidade sempre verdadeiro, então o refresh rodava a cada 6h (3-4x/dia)
-      // sem o dono pedir, e cada rodada é um turno de LLM completo. A home é um
-      // resumo do dia, não um feed ao vivo: uma vez por dia basta. Quem quiser
-      // agora pede explicitamente (force), que pula o cooldown.
+      // 24h cooldown: whoever receives email all day long had the news gate
+      // always true, so the refresh ran every 6h (3-4x/day)
+      // without the owner asking, and each round is a full LLM turn. The home is a
+      // summary of the day, not a live feed: once a day is enough. Whoever wants
+      // it now asks explicitly (force), which skips the cooldown.
       const COOLDOWN_MS = Number(process.env.HOME_REFRESH_COOLDOWN_MS || 24 * 60 * 60 * 1000); // 24h
-      const FORCE_MIN_MS = 15 * 60 * 1000; // piso do pedido explícito (anti-abuso)
+      const FORCE_MIN_MS = 15 * 60 * 1000; // floor for the explicit request (anti-abuse)
       const { force = false } = await readBody(req);
       const { at, mark } = await getHomeRefresh(user.id);
       const desdeUltima = at ? Date.now() - new Date(at).getTime() : Infinity;
@@ -10960,24 +10960,24 @@ async function atenderRequest(req, res) {
         return send(res, 200, { refreshed: false, reason: 'cooldown' });
       }
 
-      // Checagem barata de novidade. mark null = nunca atualizou (primeira
-      // população de uma conta que já existia): trata como novidade. Pedido
-      // explícito atualiza mesmo sem e-mail novo (a agenda pode ter mudado).
+      // Cheap news check. mark null = never refreshed (first
+      // population of an account that already existed): treats it as news. Explicit
+      // request refreshes even without new email (the calendar may have changed).
       const newest = await newestInboxId(user.id, gEmail0);
       const hasNew = force || mark == null || (newest && newest !== mark);
-      // Marca SEMPRE antes de rodar o modelo: cooldown vale mesmo sem novidade e
-      // evita duas chamadas concorrentes (ex: dois reloads) rodarem o modelo.
+      // ALWAYS marks before running the model: cooldown applies even without news and
+      // prevents two concurrent calls (e.g. two reloads) from running the model.
       await setHomeRefresh(user.id, newest || mark);
       if (!hasNew) return send(res, 200, { refreshed: false, reason: 'nothing-new' });
 
-      // Há conteúdo novo: aciona o modelo pra reescrever os boxes do assistente
-      // principal (o mais recente). Mesma thread interna do onboarding.
+      // There is new content: triggers the model to rewrite the main assistant's
+      // boxes (the most recent one). Same internal thread as onboarding.
       const agent = await getAgentOwned(agents[0].id, user.id);
       if (!agent) return send(res, 200, { refreshed: false, reason: 'no-agent' });
-      // Responde JÁ e roda o modelo em BACKGROUND. Antes o fetch ficava pendente
-      // durante todo o turno de LLM (dezenas de s), e isso mantinha o spinner da
-      // aba do Chrome girando mesmo com a tela já carregada. O cooldown/mark já
-      // foi gravado acima, então reloads concorrentes não re-disparam o modelo.
+      // Responds RIGHT AWAY and runs the model in the BACKGROUND. Before, the fetch stayed
+      // pending during the whole LLM turn (tens of seconds), and that kept the Chrome
+      // tab's spinner spinning even with the screen already loaded. The cooldown/mark was
+      // already recorded above, so concurrent reloads don't re-trigger the model.
       send(res, 200, { refreshed: false, reason: 'queued' });
       (async () => {
         try {
@@ -10997,7 +10997,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Itens da tela inicial: "Need to know" (note) + sugestões personalizadas.
+  // Home screen items: "Need to know" (note) + personalized suggestions.
   if (req.method === 'GET' && url.pathname === '/api/home-items') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11016,7 +11016,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok });
   }
 
-  // Renomear / marcar status (aberta|concluída) de uma thread.
+  // Rename / mark status (open|done) of a thread.
   if (req.method === 'POST' && url.pathname === '/api/thread/update') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11031,9 +11031,9 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Apagar conversa. Aceita POST /api/thread/delete {id} (web) E
-  // DELETE /api/thread?id= (mobile). Mesmo efeito; o mobile já chamava o DELETE
-  // e tomava 405 porque só o POST existia.
+  // Delete conversation. Accepts POST /api/thread/delete {id} (web) AND
+  // DELETE /api/thread?id= (mobile). Same effect; mobile was already calling DELETE
+  // and getting a 405 because only POST existed.
   if ((req.method === 'POST' && url.pathname === '/api/thread/delete') ||
       (req.method === 'DELETE' && url.pathname === '/api/thread')) {
     const user = await currentUser();
@@ -11079,7 +11079,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Rotinas (tarefas recorrentes por horário, entrega por e-mail) ──
+  // ── Routines (scheduled recurring tasks, delivered by email) ──
   if (req.method === 'GET' && url.pathname === '/api/routines') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -11133,11 +11133,11 @@ async function atenderRequest(req, res) {
     catch (e) { if(e.code==='ROUTINE_CHANGED')return send(res,409,{error:e.message}); return fail(res, 500, 'Falha ao remover.', e); }
   }
 
-  // Dispara uma rotina AGORA. Não é preview: a entrega é REAL, pelo canal da
-  // rotina. Por isso carimba o disparo igual ao agendador faria — sem o carimbo,
-  // rodar 8h uma rotina marcada pras 9h entregava a MESMA coisa duas vezes no
-  // mesmo dia. Carimba a tentativa ANTES de efeitos; a saúde separada registra
-  // falha/interrupção sem transformar carimbo em recibo de entrega.
+  // Fires a routine RIGHT NOW. It's not a preview: the delivery is REAL, through the
+  // routine's channel. That's why it stamps the trigger the same way the scheduler would;
+  // without the stamp, running at 8h a routine set for 9h would deliver the SAME thing
+  // twice on the same day. Stamps the attempt BEFORE any effects; separate health tracking
+  // records failure/interruption without turning the stamp into a delivery receipt.
   if (req.method === 'POST' && url.pathname === '/api/routine/run') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11150,8 +11150,8 @@ async function atenderRequest(req, res) {
     } catch (e) { if(e.code==='ROUTINE_BUSY')return send(res,409,{error:e.message}); return fail(res, 500, 'Não consegui concluir a rotina. Veja o estado antes de tentar novamente; uma ação pode ter ocorrido.', e); }
   }
 
-  // ── Canal WhatsApp (webhook compartilhado da WABA Cloud API) ──
-  // GET: verificação do webhook no painel da Meta (devolve hub.challenge).
+  // ── WhatsApp channel (shared webhook of the WABA Cloud API) ──
+  // GET: webhook verification in the Meta panel (returns hub.challenge).
   if (req.method === 'GET' && url.pathname === '/api/wa/webhook') {
     const challenge = verifyChallenge(url.searchParams);
     if (challenge !== null) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end(challenge); }
@@ -11181,11 +11181,11 @@ async function atenderRequest(req, res) {
     return;
   }
 
-  // ── Canal Slack (Events API) ──
-  // POST único: valida a assinatura (Signing Secret) sobre o corpo CRU. O
-  // `url_verification` (challenge de configuração da URL de eventos) responde
-  // síncrono. Os demais eventos: responde 200 NA HORA (o Slack dá timeout/retry se
-  // demorar > 3s) e processa em background. Auth é por HMAC, não por cookie.
+  // ── Slack channel (Events API) ──
+  // Single POST: validates the signature (Signing Secret) over the RAW body. The
+  // `url_verification` (events URL setup challenge) responds
+  // synchronously. Other events: responds 200 RIGHT AWAY (Slack times out/retries if
+  // it takes > 3s) and processes in the background. Auth is by HMAC, not cookie.
   if (req.method === 'POST' && url.pathname === '/api/slack/events') {
     const raw = await readRaw(req);
     const rawStr = raw.toString('utf8');
@@ -11206,9 +11206,9 @@ async function atenderRequest(req, res) {
     return;
   }
 
-  // Slack: gera um CÓDIGO de pareamento pra um assistente específico. Logado, dono
-  // do agente. No Slack a pessoa manda "conectar <código>" no canal/DM onde quer esse
-  // assistente e o vínculo é criado por CANAL (assistente A num grupo, B em outro).
+  // Slack: generates a pairing CODE for a specific assistant. Logged in, agent
+  // owner. On Slack the person sends "conectar <código>" in the channel/DM where they want
+  // this assistant and the link is created PER CHANNEL (assistant A in one group, B in another).
   if (req.method === 'POST' && url.pathname === '/api/slack/pair-code') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11217,7 +11217,7 @@ async function atenderRequest(req, res) {
     let agent;
     try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
     if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
-    // Charset sem caracteres ambíguos (sem I, O, 0, 1). 8 chars. Uso único, TTL 15 min.
+    // Charset with no ambiguous characters (no I, O, 0, 1). 8 chars. Single use, 15 min TTL.
     const alph = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '', saved = null;
     for (let attempt = 0; attempt < 5 && !saved; attempt++) {
@@ -11237,14 +11237,14 @@ async function atenderRequest(req, res) {
     const { phone, agentId } = await readBody(req);
     const raw = String(phone || '').trim();
     let digits = raw.replace(/\D/g, '');
-    // Normaliza pra E.164 (sem '+'). Se digitou '+' (ex: +1... EUA/Canadá), ele já
-    // deu o país: respeita e não mexe. Sem '+', só prefixa 55 quando o número TEM
-    // CARA DE BR sem país, pra casar com o `from` do webhook (que sempre vem c/ país):
-    //  • 10 dígitos = fixo BR (DDD + 8);
-    //  • 11 dígitos = celular BR, que SEMPRE tem o 9 na 3ª casa (DDD + 9 + 8).
-    // Um número estrangeiro tipo +1 tem 11 dígitos mas SEM o 9 na 3ª casa (ex:
-    // 15482557776), então não é BR e fica intacto. Antes, prefixava 55 em qualquer
-    // 11 dígitos e transformava +1 num número BR inválido, quebrando a conexão.
+    // Normalizes to E.164 (no '+'). If '+' was typed (e.g. +1... US/Canada), it already gave the
+    // country: respect it and don't touch it. Without '+', only prefix 55 when the number LOOKS BR
+    // without a country code, to match the webhook's `from` (which always comes with a country code):
+    //  • 10 digits = BR landline (area code + 8);
+    //  • 11 digits = BR mobile, which ALWAYS has the 9 in the 3rd position (area code + 9 + 8).
+    // A foreign number like +1 has 11 digits but WITHOUT the 9 in the 3rd position (e.g.
+    // 15482557776), so it's not BR and stays intact. Before, it prefixed 55 on any
+    // 11-digit number and turned a +1 number into an invalid BR number, breaking the connection.
     if (!raw.startsWith('+') && !digits.startsWith('55')) {
       if (digits.length === 10) digits = '55' + digits;
       else if (digits.length === 11 && digits[2] === '9') digits = '55' + digits;
@@ -11257,13 +11257,13 @@ async function atenderRequest(req, res) {
       if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
       activeAgentId = agentId;
     }
-    // PROVA DE POSSE. Digitar um número não é prova de que ele é seu: o telefone é
-    // a chave de roteamento do inbound do WhatsApp, então amarrar na palavra de quem
-    // digitou deixava qualquer pessoa logada informar o número de outra e passar a
-    // receber as mensagens dela. Agora só existem dois desfechos aqui:
-    //  • o número JÁ é desta conta -> só troca o assistente que atende;
-    //  • qualquer outro caso -> devolve um CÓDIGO, e a amarração só acontece quando
-    //    chegar um inbound daquele telefone com ele (consumeWaClaim no webhook).
+    // PROOF OF OWNERSHIP. Typing a number is not proof that it's yours: the phone is
+    // the routing key for WhatsApp inbound, so binding it based on whoever
+    // typed it let any logged-in person enter someone else's number and start
+    // receiving their messages. Now there are only two outcomes here:
+    //  • the number is ALREADY on this account -> just swaps the assistant that handles it;
+    //  • any other case -> returns a CODE, and the binding only happens when
+    //    an inbound from that phone arrives with it (consumeWaClaim in the webhook).
     let atual = null;
     try { atual = await getWhatsAppLink(digits); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
     if (atual && String(atual.user_id) === String(user.id)) {
@@ -11273,7 +11273,7 @@ async function atenderRequest(req, res) {
       } catch (e) { return fail(res, 500, 'Falha ao conectar.', e); }
     }
     if (atual) return send(res, 409, { error: 'Esse número já está conectado a outra conta do __MARCA__. Desconecte nela antes de conectar aqui.' });
-    // Charset sem caracteres ambíguos (sem I, O, 0, 1). 8 chars, uso único, TTL 30 min.
+    // Charset with no ambiguous characters (no I, O, 0, 1). 8 chars, single use, 30 min TTL.
     const waAlph = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const waCode = Array.from(randomBytes(8)).map((b) => waAlph[b % waAlph.length]).join('');
     try { await createWaClaim({ phone: digits, userId: user.id, activeAgentId, code: waCode, ttlMin: 30 }); }
@@ -11291,8 +11291,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // Conectar Telegram: o usuário cola o token do bot dele (BotFather) e escolhe
-  // qual agente atende. Validamos o token, salvamos e subimos o poller.
+  // Connect Telegram: the user pastes their bot's token (BotFather) and chooses
+  // which agent handles it. We validate the token, save it and start the poller.
   if (req.method === 'POST' && url.pathname === '/api/connect/telegram') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11305,9 +11305,9 @@ async function atenderRequest(req, res) {
     try { info = await validateBotToken(token.trim()); }
     catch { return send(res, 400, { error: 'Token inválido. Confira o que o BotFather te deu.' }); }
     try {
-      // Um bot por AGENTE: se esse agente já tinha um bot com OUTRO token, troca
-      // (derruba o poller antigo). Bots de OUTROS agentes do usuário ficam de pé
-      // (é isso que permite vários agentes no Telegram, um por bot).
+      // One bot per AGENT: if this agent already had a bot with ANOTHER token, swap it
+      // (drop the old poller). Bots from the user's OTHER agents stay up
+      // (that's what allows several agents on Telegram, one per bot).
       const mine = await listTelegramBotsForUser(user.id);
       const dupToken = mine.find((b) => b.token === token.trim() && b.agent_id !== agentId);
       if (dupToken) return send(res, 409, { error: 'Esse bot já está conectado a outro agente. Crie um bot novo no BotFather pra este agente.' });
@@ -11324,12 +11324,12 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/disconnect/telegram') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    // Desconecta UM bot específico por token (posse checada). Sem token no corpo,
-    // cai no legado (desconecta o primeiro bot do usuário).
+    // Disconnects ONE specific bot by token (ownership checked). With no token in the body,
+    // falls back to legacy behavior (disconnects the user's first bot).
     const body = await readBody(req).catch(() => ({}));
     const token = (body?.token || '').trim();
     if (token) {
-      // A tela manda o hash; quem derruba o poller é o token real da linha.
+      // The screen sends the hash; what drops the poller is the row's real token.
       const removed = await deleteTelegramBotOwned(user.id, token);
       if (removed) telegramMgr.removeBot(removed.token || token);
       return send(res, 200, { ok: true });
@@ -11352,9 +11352,9 @@ async function atenderRequest(req, res) {
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
     const { label, url: serverUrl, token, agentId } = await readBody(req);
     if (!label || !serverUrl) return send(res, 400, { error: 'Informe um nome e a URL do servidor MCP.' });
-    // A URL é do usuário e quem vai buscar é o BACKEND, de dentro da VPC. Aqui
-    // a guarda roda ANTES de montar o Authorization, pra devolver o motivo real
-    // ('é rede interna', 'só https') em vez do genérico de falha de conexão.
+    // The URL belongs to the user and the BACKEND is what fetches it, from inside the VPC.
+    // Here the guard runs BEFORE building the Authorization, to return the real reason
+    // ('it's an internal network', 'https only') instead of the generic connection failure.
     try { await assertUrlPublica(serverUrl); }
     catch (e) { return send(res, 400, { error: e?.message || 'URL inválida.' }); }
     const headers = token ? { Authorization: `Bearer ${String(token).trim()}` } : {};
@@ -11380,13 +11380,13 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ── Conectar GitHub / Slack (OAuth por usuário, conectores próprios) ──
-  // Aceita tanto /api/connect/<prov>/... (canônico) quanto /api/auth/<prov>/... .
-  // Alguns painéis de app externo (ex: Nuvemshop) foram registrados com a redirect
-  // URL no formato /api/auth/<prov>/callback (padrão do login Google); como o
-  // provider decide o redirect pelo painel dele, o servidor tolera os dois prefixos
-  // pra o callback não cair em 404. Google/mobile têm handler próprio acima e não
-  // entram nesta lista, então não há colisão.
+  // ── Connect GitHub / Slack (per-user OAuth, own connectors) ──
+  // Accepts both /api/connect/<prov>/... (canonical) and /api/auth/<prov>/... .
+  // Some external app panels (e.g. Nuvemshop) were registered with the redirect
+  // URL in the /api/auth/<prov>/callback format (Google login's pattern); since the
+  // provider decides the redirect via its own panel, the server tolerates both prefixes
+  // so the callback doesn't fall into a 404. Google/mobile have their own handler above and
+  // aren't in this list, so there's no collision.
   const provMatch = url.pathname.match(/^\/api\/(?:connect|auth)\/(github|slack|nuvemshop|microsoft|linkedin|notion|canva)\/(start|callback)$/);
   if (req.method === 'GET' && provMatch) {
     const [, prov, step] = provMatch;
@@ -11400,7 +11400,7 @@ async function atenderRequest(req, res) {
         try { microsoftOnboardingScope(services); } catch { return send(res, 400, { error: 'Serviços inválidos para conectar a agenda.' }); }
       }
       const state = newToken();
-      // PKCE (OAuth 2.1): o verifier fica no cookie, só o desafio vai na URL.
+      // PKCE (OAuth 2.1): the verifier stays in the cookie, only the challenge goes in the URL.
       const verifier = providerUsesPkce(prov) ? newPkceVerifier() : null;
       const cookies = [stateCookie(state)];
       if (verifier) cookies.push(verifierCookie(verifier));
@@ -11413,10 +11413,10 @@ async function atenderRequest(req, res) {
 
     // callback
     const home = providerHome(prov);
-    // Toda recusa é LOGADA com o motivo. Antes só o catch escrevia, então uma
-    // conexão descartada por state expirado (cookie vencido) sumia sem rastro:
-    // a pessoa autorizava de verdade, voltava pro app e nada acontecia, e do
-    // lado de cá o journal não tinha uma linha sequer pra explicar.
+    // Every rejection is LOGGED with the reason. Before, only the catch wrote anything, so a
+    // connection dropped due to an expired state (expired cookie) vanished without a trace:
+    // the person really did authorize, came back to the app and nothing happened, and on
+    // this side the journal didn't have a single line to explain it.
     const limpaCookies = [clearStateCookie(), clearVerifierCookie()];
     const fail = (motivo, outcome = 'failed') => {
       console.error(`[oauth] ${prov} callback recusado: ${motivo}`);
@@ -11439,10 +11439,10 @@ async function atenderRequest(req, res) {
       if (providerUsesPkce(prov) && !codeVerifier) return fail('cookie overif (PKCE) ausente ou expirado');
       const tok = await providerExchange(prov, code, { codeVerifier });
       if (!tok.access_token) return fail('troca do code não devolveu access_token');
-      // Conta empresarial: o e-mail da conta Microsoft vem do Graph /me (escopo
-      // User.Read, já pedido). Membro só conecta conta de domínio liberado; sem
-      // e-mail legível, também recusa (não dá pra provar o domínio). Quem não é
-      // membro não passa por nada disto (nem a chamada ao Graph).
+      // Business account: the Microsoft account email comes from Graph /me (scope
+      // User.Read, already requested). A member can only connect an account from an allowed
+      // domain; with no readable email, it also rejects (can't prove the domain). Whoever
+      // isn't a member doesn't go through any of this (not even the call to Graph).
       let msEmail = null;
       if (prov === 'microsoft' && await empresaStore.ehMembro(user.id)) {
         msEmail = await microsoftAccountEmail(tok.access_token);
@@ -11471,8 +11471,8 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ── Cofre de credenciais (sistema próprio; segredo cifrado AES-256-GCM) ──
-  // GET lista SEM segredo; POST cifra e guarda; delete remove. Tudo escopado por user_id.
+  // ── Credential vault (own system; secret encrypted with AES-256-GCM) ──
+  // GET lists WITHOUT the secret; POST encrypts and stores; delete removes. Everything scoped by user_id.
   const VAULT_KINDS = ['apikey', 'token', 'basic', 'ssh_key'];
   if (req.method === 'GET' && url.pathname === '/api/connections') {
     const user = await currentUser();
@@ -11501,9 +11501,9 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ── Multi-conta Google ── lista as contas Google conectadas do usuário (por
-  // e-mail, com os serviços de cada uma) e permite remover uma. O vínculo de
-  // qual conta cada agente usa fica no editor do agente (agents.google_email).
+  // ── Multi-account Google ── lists the user's connected Google accounts (by
+  // email, with each one's services) and allows removing one. Which account
+  // each agent uses lives in the agent editor (agents.google_email).
   if (req.method === 'GET' && url.pathname === '/api/google/accounts') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11514,9 +11514,9 @@ async function atenderRequest(req, res) {
       services: servicesFromScope(a.scope),
     })) });
   }
-  // Define qual conta é a PRINCIPAL do usuário. É o fallback de todo assistente
-  // que não tem conta própria amarrada, e a conta usada pelos caminhos que
-  // operam no nível do usuário (não do agente).
+  // Sets which account is the user's MAIN one. It's the fallback for every assistant
+  // that doesn't have its own account bound, and the account used by the paths that
+  // operate at the user level (not the agent level).
   if (req.method === 'POST' && url.pathname === '/api/google/accounts/primary') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11538,14 +11538,14 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ── Proxy de mídia privada (modo S3) ──
-  // Único caminho de leitura do bucket. O padrão continua sendo DONO-ONLY: a key
-  // tem que estar na pasta do próprio usuário (<userId>/...). A única exceção é a
-  // key que um plugin diz que o dono PUBLICOU (porta midiaPublica; hoje a
-  // Comunidade: o post do feed é público, então a imagem dele precisa abrir pra
-  // quem vê o post). Apagar o post revoga de novo. Sem plugin, só o dono lê.
-  // O servidor lê o byte com a credencial dele e devolve; não há link público
-  // nem URL assinada em nenhum dos dois casos.
+  // ── Private media proxy (S3 mode) ──
+  // The only read path for the bucket. The default is still OWNER-ONLY: the key
+  // has to be in the user's own folder (<userId>/...). The only exception is a
+  // key that a plugin says the owner PUBLISHED (midiaPublica port; today that's
+  // Community: the feed post is public, so its image needs to open for
+  // whoever views the post). Deleting the post revokes it again. Without a plugin, only
+  // the owner can read it. The server reads the byte with its own credential and returns it;
+  // there is no public link nor signed URL in either case.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/api/media') {
     const user = await currentUser();
     const key = url.searchParams.get('key') || '';
@@ -11563,10 +11563,10 @@ async function atenderRequest(req, res) {
     try {
       const m = await fetchMedia(key);
       if (!m) return send(res, 404, { error: 'Mídia não encontrada.' });
-      // Defesa em profundidade: o mime do upload vem do cliente. Quando o byte sai
-      // pra OUTRA pessoa (caminho publicado), só passa mídia de verdade
-      // (imagem/áudio/vídeo, sem SVG); nada de HTML/SVG/script servido do nosso
-      // domínio. Pro próprio dono nada muda.
+      // Defense in depth: the upload's mime comes from the client. When the byte goes
+      // out to ANOTHER person (published path), only real media is allowed through
+      // (image/audio/video, no SVG); no HTML/SVG/script served from our
+      // domain. Nothing changes for the owner themselves.
       if (!mine) {
         const ct = String(m.contentType || '');
         if (!/^(image|audio|video)\//i.test(ct) || /svg/i.test(ct)) {
@@ -11574,9 +11574,9 @@ async function atenderRequest(req, res) {
         }
       }
       const total = m.buffer.length;
-      // Suporte a HTTP Range: o Safari (e o <audio>/<video> em iOS) EXIGE resposta
-      // 206 com Accept-Ranges pra tocar mídia; sem isso o player dá erro e não
-      // reproduz (bug da voz de referência: áudio audio/mp4 do Safari não tocava).
+      // HTTP Range support: Safari (and <audio>/<video> on iOS) REQUIRES a
+      // 206 response with Accept-Ranges to play media; without it the player errors out and
+      // doesn't play (reference voice bug: audio/mp4 audio from Safari wouldn't play).
       const rangeH = req.headers['range'];
       let status = 200, start = 0, end = total - 1;
       if (rangeH) {
@@ -11594,8 +11594,8 @@ async function atenderRequest(req, res) {
       const chunk = status === 206 ? m.buffer.subarray(start, end + 1) : m.buffer;
       const headers = {
         'content-type': m.contentType,
-        // Só a mídia publicada no feed pode ser cacheada por proxy compartilhado.
-        // O resto segue 'private' pra não vazar via cache intermediário.
+        // Only media published to the feed can be cached by a shared proxy.
+        // Everything else stays 'private' so it doesn't leak via an intermediate cache.
         'cache-control': published && !mine ? 'public, max-age=86400' : 'private, max-age=86400',
         'accept-ranges': 'bytes',
         'content-length': String(chunk.length),
@@ -11609,17 +11609,17 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Arquivos do usuário (bucket privado) ──
-  // Lista os assets do próprio usuário pra aba "Arquivos". Sem segredo; cada
-  // item aponta pro proxy /api/media (que revalida o dono na hora de baixar).
+  // ── User files (private bucket) ──
+  // Lists the user's own assets for the "Files" tab. No secret; each
+  // item points to the /api/media proxy (which revalidates the owner at download time).
   if (req.method === 'GET' && url.pathname === '/api/files') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
     const rows = await listMediaAssets(user.id, { limit: 100 });
     const files = rows.map((r) => ({
       id: r.id,
-      // Nome mostrado na aba Arquivos. Em imagem a legenda é a leitura da foto
-      // (longa), então entra cortada; em documento é o nome real e cabe inteiro.
+      // Name shown in the Files tab. For an image the caption is the photo's reading
+      // (long), so it comes in truncated; for a document it's the real name and fits whole.
       name: String(r.caption || '').trim().slice(0, 120) || null,
       kind: r.kind,
       mime: r.mime,
@@ -11629,7 +11629,7 @@ async function atenderRequest(req, res) {
     }));
     return send(res, 200, { enabled: s3Enabled(), files });
   }
-  // Apaga um arquivo da biblioteca (só o dono; remove a linha + o objeto no S3).
+  // Deletes a file from the library (owner only; removes the row + the object in S3).
   if (req.method === 'DELETE' && url.pathname === '/api/files') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11639,10 +11639,10 @@ async function atenderRequest(req, res) {
     try { removido = await deleteMediaAsset(user.id, id); }
     catch (e) { return fail(res, 500, 'Não consegui apagar o arquivo.', e); }
     if (removido === null) return send(res, 404, { error: 'Arquivo não encontrado.' });
-    // A linha do banco já saiu JUNTO com a lápide (mesma transação). Agora o
-    // objeto: se o S3 falhar, a lápide fica aberta e o varredor apaga depois, em
-    // vez de o arquivo virar órfão sem registro. O usuário não fica travado, e a
-    // resposta não afirma que o arquivo já sumiu do bucket quando não sumiu.
+    // The DB row already left TOGETHER with the tombstone (same transaction). Now the
+    // object: if S3 fails, the tombstone stays open and the sweeper deletes it later, instead
+    // of the file becoming an orphan with no record. The user isn't blocked, and the
+    // response doesn't claim the file is already gone from the bucket when it isn't.
     const purga = await apagarObjetoComLapide({
       key: removido.s3Key, tombstoneId: removido.tombstoneId, deleteMedia,
       settle: settleMediaDeletion,
@@ -11651,11 +11651,11 @@ async function atenderRequest(req, res) {
     return send(res, 200, purga.pendente ? { ok: true, purga: 'pendente' } : { ok: true });
   }
 
-  // ── Verificação de identidade (feature de geração de vídeo das pessoas) ──
-  // O dono da conta manda UMA foto-âncora de frente. Ela vira a "foto verdade"
-  // verificada na mão pelo time (fila no /metrics). A face de qualquer vídeo
-  // gerado sai SEMPRE dessa âncora verificada, nunca de upload na hora — é o que
-  // trava "só a própria pessoa" por construção. 1 identidade por conta.
+  // ── Identity verification (people's video generation feature) ──
+  // The account owner sends ONE front-facing anchor photo. It becomes the "ground truth
+  // photo", verified by hand by the team (queue in /metrics). The face in any generated
+  // video ALWAYS comes from this verified anchor, never from an upload on the spot; that's
+  // what locks "only the person themselves" by construction. 1 identity per account.
   if (req.method === 'GET' && url.pathname === '/api/likeness') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11696,13 +11696,13 @@ async function atenderRequest(req, res) {
       const { key } = await putMedia(user.id, buffer, ext, mime);
       if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
       await setLikenessAnchor({ userId: user.id, anchorKey: key, anchorMime: mime });
-      // A âncora é o que autoriza gerar vídeo COM AQUELE ROSTO, e o `gerar_video`
-      // promete que o rosto é o da própria pessoa. Quem sobe a foto é quem quiser:
-      // ninguém checa se o rosto da foto é o do dono da conta. Então aprovar a
-      // âncora sozinho transformava a promessa em "vídeo de qualquer rosto que eu
-      // subir". Por isso o padrão volta a ser a fila humana do /metrics (a tela e
-      // o status 'pending' já existem). LIKENESS_AUTO_VERIFY=1 no .env religa a
-      // aprovação automática da fase de testes, sem deploy.
+      // The anchor is what authorizes generating a video WITH THAT FACE, and `gerar_video`
+      // promises that the face is the person's own. Whoever uploads the photo can be anyone:
+      // nobody checks whether the face in the photo is the account owner's. So approving
+      // the anchor on its own turned the promise into "video with any face I
+      // upload". That's why the default goes back to the human queue in /metrics (the screen
+      // and the 'pending' status already exist). LIKENESS_AUTO_VERIFY=1 in .env re-enables
+      // the automatic approval from the testing phase, without a deploy.
       if (process.env.LIKENESS_AUTO_VERIFY === '1') {
         await setLikenessStatus({ userId: user.id, status: 'verified', verifiedBy: 'auto' });
         return send(res, 200, { ok: true, status: 'verified', anchorUrl: '/api/media?key=' + encodeURIComponent(key) });
@@ -11712,11 +11712,11 @@ async function atenderRequest(req, res) {
       return fail(res, 500, 'Falha ao salvar a foto.', e);
     }
   }
-  // ── Fotos de rosto EXTRA (feature de geração de vídeo das pessoas) ──
-  // Além da foto-âncora (verificação), a pessoa pode subir até +2 fotos de rosto
-  // da MESMA pessoa em ângulos diferentes. As 3 juntas melhoram a reconstrução do
-  // rosto no render (o worker H3 aceita múltiplas referências de face). Slot ∈ 2|3.
-  // Não mexem no status da identidade (a verificação é só da âncora).
+  // ── EXTRA face photos (people's video generation feature) ──
+  // Besides the anchor photo (verification), the person can upload up to +2 face photos
+  // of the SAME person at different angles. The 3 together improve the face
+  // reconstruction in the render (the H3 worker accepts multiple face references). Slot ∈ 2|3.
+  // They don't affect the identity status (verification is only for the anchor).
   if (req.method === 'POST' && url.pathname === '/api/likeness/face') {
     if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
     const user = await currentUser();
@@ -11730,15 +11730,15 @@ async function atenderRequest(req, res) {
     try { buffer = Buffer.from(img.data, 'base64'); } catch { buffer = null; }
     if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler a imagem.' });
     if (buffer.length > 8 * 1024 * 1024) return send(res, 413, { error: 'Imagem grande demais. Tente uma menor.' });
-    // Mesma checagem de bytes da âncora: as fotos extras também vão pro render.
+    // Same byte check as the anchor: the extra photos also go into the render.
     const tipo = sniffImagem(buffer);
     if (!tipo) return send(res, 400, { error: 'Esse arquivo não é uma foto (aceito JPEG, PNG, WebP ou HEIC).' });
     const { mime, ext } = tipo;
     try {
       const { key } = await putMedia(user.id, buffer, ext, mime);
       if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
-      // Trocar a foto do slot também aposenta a anterior: mesma foto biométrica,
-      // mesmo dever de sumir do bucket (setLikenessExtraFace devolve a key velha).
+      // Replacing the slot's photo also retires the previous one: same biometric photo,
+      // same duty to disappear from the bucket (setLikenessExtraFace returns the old key).
       const r = await setLikenessExtraFace({ userId: user.id, slot, faceKey: key, faceMime: mime });
       await apagarObjetoComLapide({
         key: r.previousKey, tombstoneId: r.tombstoneId, deleteMedia,
@@ -11756,9 +11756,9 @@ async function atenderRequest(req, res) {
     const slot = Number(url.searchParams.get('slot'));
     if (slot !== 2 && slot !== 3) return send(res, 400, { error: 'Slot de foto inválido.' });
     try {
-      // Soltar a referência não basta: é foto BIOMÉTRICA, tem que sair do bucket.
-      // A lápide sai na mesma transação que limpa a coluna, então mesmo que o S3
-      // falhe agora o objeto continua registrado e o varredor apaga depois.
+      // Dropping the reference isn't enough: it's a BIOMETRIC photo, it has to leave the bucket.
+      // The tombstone goes out in the same transaction that clears the column, so even if S3
+      // fails now the object stays recorded and the sweeper deletes it later.
       const r = await setLikenessExtraFace({ userId: user.id, slot, faceKey: null, faceMime: null });
       const purga = await apagarObjetoComLapide({
         key: r.previousKey, tombstoneId: r.tombstoneId, deleteMedia,
@@ -11770,9 +11770,9 @@ async function atenderRequest(req, res) {
       return fail(res, 500, 'Falha ao remover a foto.', e);
     }
   }
-  // ── Voz de referência (feature de geração de vídeo das pessoas) ──
-  // A pessoa grava um áudio curto no app; vira a voz das gerações quando o
-  // pedido não traz áudio próprio. Guardado no bucket privado (WAV 16k mono).
+  // ── Reference voice (people's video generation feature) ──
+  // The person records a short audio clip in the app; it becomes the voice for generations
+  // when the request doesn't bring its own audio. Stored in the private bucket (WAV 16k mono).
   if (req.method === 'POST' && url.pathname === '/api/likeness/voice') {
     if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
     const user = await currentUser();
@@ -11785,8 +11785,8 @@ async function atenderRequest(req, res) {
     try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
     if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler o áudio.' });
     if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'Áudio grande demais. Grave um trecho mais curto.' });
-    // Normaliza pra WAV 16k mono (formato universal pro worker). Se o ffmpeg
-    // falhar, guarda o original mesmo (o worker tenta decodificar).
+    // Normalizes to WAV 16k mono (universal format for the worker). If ffmpeg
+    // fails, stores the original anyway (the worker tries to decode it).
     let outBuf = await audioToWav(buffer);
     let mime = 'audio/wav', ext = 'wav';
     if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; ext = (mime.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm'; }
@@ -11809,10 +11809,10 @@ async function atenderRequest(req, res) {
       return fail(res, 500, 'Falha ao remover o áudio.', e);
     }
   }
-  // ── Áudio LITERAL pra falar (feature de geração de vídeo das pessoas) ──
-  // Distinto da voz de referência: aqui a pessoa grava/sobe o áudio EXATO que
-  // quer que o vídeo fale (as próprias palavras). Quando presente, o vídeo faz
-  // lip-sync desse áudio (modo V1 do worker). Guardado no bucket privado.
+  // ── LITERAL audio to speak (people's video generation feature) ──
+  // Distinct from the reference voice: here the person records/uploads the EXACT audio they
+  // want the video to speak (their own words). When present, the video does
+  // lip-sync on that audio (worker's V1 mode). Stored in the private bucket.
   if (req.method === 'POST' && url.pathname === '/api/likeness/speech') {
     if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
     const user = await currentUser();
@@ -11848,17 +11848,17 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Download dos binários NATIVOS do Runner (um por SO). Nomes fixos por chave (allowlist,
-  // sem path do usuário) com o prefixo da marca, em runner-bin das pastas do site.
-  // octet-stream + attachment; herda os SECURITY_HEADERS globais; GET/HEAD só. É
-  // download PÚBLICO por design (o binário não tem segredo; o token vem do passo 1).
+  // Download of the Runner's NATIVE binaries (one per OS). Fixed names by key (allowlist,
+  // no user path) with the brand prefix, in runner-bin under the site folders.
+  // octet-stream + attachment; inherits the global SECURITY_HEADERS; GET/HEAD only. It's
+  // a PUBLIC download by design (the binary has no secret; the token comes from step 1).
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname.startsWith('/runner/download/')) {
     const n = marca().nome, s = slugDaMarca();
     const RUNNER_BINS = {
-      // App pra LEIGO: um .app (Mac) que abre o painel no navegador. Duplo-clique,
-      // sem terminal. (Windows: o .exe roda em modo painel do mesmo jeito.)
+      // App for NON-TECHNICAL users: a .app (Mac) that opens the panel in the browser.
+      // Double-click, no terminal. (Windows: the .exe runs in panel mode the same way.)
       'mac-app': { file: `${n}-Runner-Mac.zip`, as: `${n} Runner (Mac).zip`, type: 'application/zip' },
-      // Executáveis crus por SO (usuário técnico, modo CLI via <SLUG>_RUNNER_TOKEN).
+      // Raw executables per OS (technical user, CLI mode via <SLUG>_RUNNER_TOKEN).
       'macos-arm64': { file: `${s}-runner-macos-arm64`, as: `${s}-runner` },
       'macos-intel': { file: `${s}-runner-macos-intel`, as: `${s}-runner` },
       'windows': { file: `${s}-runner-windows.exe`, as: `${n} Runner.exe` },
@@ -11875,20 +11875,20 @@ async function atenderRequest(req, res) {
     });
     return res.end(req.method === 'HEAD' ? undefined : buf);
   }
-  // /runner: página pra conectar o Runner (gerar token + instalar o daemon +
-  // ver o status). Exige sessão; sem login vai pro /login.
+  // /runner: page to connect the Runner (generate token + install the daemon +
+  // view status). Requires a session; without login goes to /login.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/runner') {
     if (!(await currentUser())) { res.writeHead(302, { location: '/login?modo=entrar' }); return res.end(); }
     return sendHtml(res, path.join(PUBLIC, 'runner.html'), 200, await idiomaDaPagina());
   }
-  // Área logada: /inicio + subrotas do menu. URL própria pra deep-link e pra separar
-  // a HOME pública (/) da área do app. Todas exigem sessão; sem sessão vai pro /login.
+  // Logged-in area: /inicio + menu subroutes. Own URL for deep-linking and to separate the
+  // public HOME (/) from the app area. All require a session; without a session goes to /login.
   const APP_ROUTES = new Set(['/conversas', '/inicio', '/nova', '/assistentes', '/memoria', '/habilidades-apps', '/conexoes', '/contatos', '/arquivos', '/creditos', '/config']);
   if ((req.method === 'GET' || req.method === 'HEAD') && APP_ROUTES.has(url.pathname)) {
-    // Preserva a query (ex: ?e=google) pra home pública ainda mostrar o aviso, e
-    // acrescenta modo=entrar: quem cai aqui já TEM conta e só perdeu a sessão, então
-    // a tela tem que abrir no login, não no cadastro. Sem isso o /login puro abre o
-    // formulário de criar conta.
+    // Preserves the query (e.g. ?e=google) so the public home still shows the notice, and
+    // adds modo=entrar: whoever lands here already HAS an account and just lost their
+    // session, so the screen has to open on login, not signup. Without this, plain /login
+    // opens the create-account form.
     if (!(await currentUser())) {
       const q = new URLSearchParams(url.search || '');
       q.set('modo', 'entrar');
@@ -11897,36 +11897,36 @@ async function atenderRequest(req, res) {
     }
     return sendHtml(res, path.join(PUBLIC, 'index.html'), 200, await idiomaDaPagina());
   }
-  // Home pública (/) é página PRÓPRIA (home.html): só marketing, sem formulário e
-  // sem SPA. Antes / e /login eram a mesma index.html, com metade da tela ocupada
-  // pelo login: quem chegava pela primeira vez lia um terço da página e já levava
-  // pedido de senha. Agora / vende e /login autentica. A home segue pública pra
-  // quem já tem sessão (o script dela só troca o rótulo do botão pra "Entrar no
-  // app"); a área logada continua em /inicio. Instalação sem home (ela vem de
-  // plugin) abre o app direto, como era antes da home existir.
+  // Public home (/) is its OWN page (home.html): marketing only, no form and
+  // no SPA. Before, / and /login were the same index.html, with half the screen taken
+  // up by login: first-time visitors would read a third of the page and already get
+  // a password prompt. Now / sells and /login authenticates. The home stays public for
+  // whoever already has a session (its script just swaps the button label to "Entrar no
+  // app"); the logged-in area stays at /inicio. An install without a home (it comes from a
+  // plugin) opens the app directly, as it was before the home existed.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/') {
     return sendHtml(res, arquivoDoSite('/home.html', PASTAS_DO_SITE) || path.join(PUBLIC, 'index.html'), 200, await idiomaDaPagina());
   }
-  // Login/cadastro: index.html sem exigir sessão (a SPA mostra o card de auth).
+  // Login/signup: index.html without requiring a session (the SPA shows the auth card).
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/login') {
     return sendHtml(res, path.join(PUBLIC, 'index.html'), 200, await idiomaDaPagina());
   }
-  // Estáticos só respondem a GET/HEAD. Métodos como OPTIONS/TRACE/PUT caem aqui em 405
-  // (fecha o achado "Proxy Disclosure" do scan CASA, que via OPTIONS/TRACK habilitados).
-  // Preflights CORS legítimos (extensão) já foram tratados antes, com Access-Control-*.
+  // Static files only respond to GET/HEAD. Methods like OPTIONS/TRACE/PUT land here as 405
+  // (closes the "Proxy Disclosure" finding from the CASA scan, which saw OPTIONS/TRACK enabled).
+  // Legitimate CORS preflights (extension) were already handled before, with Access-Control-*.
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Allow': 'GET, HEAD' });
     return res.end('method not allowed');
   }
-  // /reset (link do e-mail de redefinição) é servido pelo app (SPA detecta ?token=).
-  // Rota pública: não exige sessão (a pessoa está deslogada ao redefinir a senha).
+  // /reset (password reset email link) is served by the app (the SPA detects ?token=).
+  // Public route: doesn't require a session (the person is logged out while resetting the password).
   let file = (url.pathname === '/reset') ? '/index.html' : url.pathname;
-  // Pastas da marca (páginas legais, logos), depois as dos plugins (vitrines de /apps e /habilidades, /precos)
-  // e por último web/public; URL limpa: /privacidade → privacidade.html
+  // Brand folders (legal pages, logos), then the plugins' (showcase pages for /apps and
+  // /habilidades, /precos) and lastly web/public; clean URL: /privacidade → privacidade.html
   const full = arquivoDoSite(path.normalize(file).replace(/^(\.\.[/\\])+/, ''), PASTAS_DO_SITE);
   if (full) {
-    // Páginas de URL limpa (/precos, /suporte, /apps, /termos...) e o app
-    // (index.html, servido aqui por /reset). Todas seguem o idioma de quem pede.
+    // Clean URL pages (/precos, /suporte, /apps, /termos...) and the app
+    // (index.html, served here via /reset). All follow the language of whoever requests them.
     if (path.extname(full) === '.html') {
       return sendHtml(res, full, 200, await idiomaDaPagina());
     }
@@ -11944,8 +11944,8 @@ async function atenderRequest(req, res) {
   res.writeHead(404); res.end('not found');
 }
 
-// Plugins ligam aqui, e não junto das portas lá em cima, porque precisam de
-// coisas declaradas no meio do arquivo (jobs, flags, checagem de acesso do /metrics).
+// Plugins hook in here, not together with the ports further up, because they need
+// things declared partway through the file (jobs, flags, /metrics access check).
 const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification,
   runAgentMessageDraft, agentForLifecycleChannel, deliverLifecycle, deliverRoutine, persistProactiveToThread, firstNameOf, makePrimaryProvider,
   runConversationInThread, normalizeFiles, normalizeImages, codingJobs, PUBLIC, PUBLIC_BASE, SECURITY_HEADERS, buildCsp, safeStrEq,
@@ -11953,30 +11953,30 @@ const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, se
   CHEAP_MODEL, DEEPSEEK_MODEL, FALLBACK_TEXT_MODEL, PRIMARY_MODEL, PRIMARY_TEXT_MODEL };
 for (const p of plugins) p.ligar?.(servidor);
 
-// ── Shutdown gracioso ──
-// systemd manda SIGTERM no restart/stop. Sem tratamento, o Node morre na hora e
-// derruba qualquer turno em andamento; o nginx da frente devolve 502 pro usuário
-// (foi o que aconteceu num deploy que caiu em cima de uma conversa). Aqui a gente
-// para de aceitar requests novos (503) e ESPERA os ativos terminarem antes de sair.
+// ── Graceful shutdown ──
+// systemd sends SIGTERM on restart/stop. Without handling, Node dies instantly and
+// drops any turn in progress; the nginx in front returns a 502 to the user
+// (that's what happened on a deploy that landed on top of a conversation). Here we
+// stop accepting new requests (503) and WAIT for active ones to finish before exiting.
 let shuttingDown = false;
 let schedulerHandle=null;
 let asaasReceiptTimer=null;
 let asaasFinancialScheduler=null;
 
 const DISCOVERY_TITLE='Como foi seu dia?';
-// Thread fixa do canal app: a resposta da pessoa cai no mesmo fio em que o
-// check-in foi entregue.
+// Fixed thread for the app channel: the person's reply lands on the same thread the
+// check-in was delivered on.
 const DISCOVERY_APP_THREAD='Jornada de descoberta';
 
-// Push registrado é o que torna o app um canal de entrega de verdade. Sem token
-// a mensagem ficaria só no histórico, sem ninguém ser avisado.
+// A registered push token is what makes the app a real delivery channel. Without a token
+// the message would stay only in history, with nobody notified.
 async function hasPushToken(userId){
   const rows=await listPushTokensForUserDb(userId).catch(()=>[]);
   return (rows||[]).some(r=>typeof r?.token==='string'&&r.token.startsWith('ExponentPushToken'));
 }
 
-// Por onde esta conta consegue receber a jornada AGORA. Usado antes de criar o
-// participante: sem canal nenhum, a jornada não é proposta.
+// How this account can receive the journey RIGHT NOW. Used before creating the
+// participant: with no channel at all, the journey isn't offered.
 async function discoveryConnectedChannels(userId,agentId){
   const out=[];
   const bot=await getTelegramBotForDelivery(userId,agentId).catch(()=>null);
@@ -11992,8 +11992,8 @@ async function validateDiscoveryChannel(p, body) {
   if(body.channel==='app'&&!await hasPushToken(p.user_id))throw new DiscoveryError(400,`Ative as notificações do ${marca().nome} no celular antes de escolher o aplicativo como canal.`);
 }
 
-// Entrega pelo app: grava na conversa e avisa por push. A chave de entrega é o
-// id do evento, então uma repetição nunca duplica a mensagem no histórico.
+// Delivery via the app: saves to the conversation and notifies via push. The delivery key is
+// the event id, so a repeat never duplicates the message in history.
 async function deliverDiscoveryToApp(p,text){
   const agent=await getAgentOwned(p.agent_id,p.user_id);
   if(!agent)return {ok:false,definitive:true,reason:'assistente indisponível'};
@@ -12001,7 +12001,7 @@ async function deliverDiscoveryToApp(p,text){
   const saved=await appendAssistantToThread({threadId:thread.id,userId:p.user_id,text,deliveryKey:`discovery:${p.lease_token}`});
   if(!saved)return {ok:false,definitive:true,reason:'conversa do app indisponível'};
   const push=await sendPush(p.user_id,{title:agent.name||marca().nome,body:text,data:{kind:'chat',threadId:thread.id,agentId:p.agent_id}});
-  // Sem token o app deixou de ser canal: é recusa, não incerteza.
+  // Without a token the app stopped being a channel: it's a rejection, not uncertainty.
   if(push?.skipped)return {ok:false,definitive:push.reason==='sem_token',reason:`push não enviado: ${push.reason}`};
   if(!push?.ok||!push.ids?.length)return {ok:false,definitive:push?.definitive===true,reason:'push sem recibo de aceite'};
   return {ok:true,id:`expo:${push.ids[0]}`};
@@ -12015,8 +12015,8 @@ const discoveryRunner=createDiscoveryRunner(discoveryStore,{
     else {const link=await getWhatsAppLinkForUser(p.user_id);if(!waEnabled()||!link?.wa_phone)throw Error('channel_unavailable');}
   },
   generate:async(p,prompt)=>{const agent=await getAgentOwned(p.agent_id,p.user_id);if(!agent)throw Error('agent_unavailable');return isolatedAgentDraft(agent,p.user_id,prompt,{discoveryDraft:true});},
-  // O erro do provedor não some mais: volta classificado (recusa determinística
-  // x incerteza) e com o motivo, que o store guarda já sanitizado.
+  // The provider's error no longer disappears: it comes back classified (deterministic
+  // rejection vs. uncertainty) and with the reason, which the store saves already sanitized.
   send:async(p,text)=>{
     try{
       if(p.channel==='app')return await deliverDiscoveryToApp(p,text);
@@ -12026,14 +12026,14 @@ const discoveryRunner=createDiscoveryRunner(discoveryStore,{
       return {ok:false,definitive:e?.definitive===true,reason:e?.message??e};
     }
   },
-  // No app a própria entrega já gravou a conversa; persistir de novo duplicaria.
+  // On the app, the delivery itself already saved the conversation; persisting again would duplicate it.
   persist:async(p,text)=>{if(p.channel!=='app')await persistProactiveToThread({...p,title:DISCOVERY_TITLE},text);},
 });
 const DISCOVERY_REPORT_FILE='Jornada de descoberta.pdf';
-// O PDF da devolutiva nasce do markdown gravado junto com o relatório, vai pro
-// S3 na pasta do dono e entra na biblioteca de mídia, igual a um documento
-// gerado dentro de uma conversa. Devolve os bytes também, pra subir direto no
-// canal sem uma volta pelo storage.
+// The feedback PDF is born from the markdown saved together with the report, goes to
+// S3 in the owner's folder and enters the media library, same as a document
+// generated inside a conversation. Also returns the bytes, to upload directly to the
+// channel without a round trip through storage.
 async function buildDiscoveryDocument(p){
   if(!p.body_markdown)return null;
   const {buffer,mime,ext}=await generateDocument({format:'pdf',content:p.body_markdown,title:'Sua jornada de autodescoberta'});
@@ -12045,9 +12045,9 @@ async function buildDiscoveryDocument(p){
   }
   return {buffer,mime,filename:DISCOVERY_REPORT_FILE,attachment:{type:'document',url,mime,key,filename:DISCOVERY_REPORT_FILE,name:DISCOVERY_REPORT_FILE}};
 }
-// Sobe o PDF no canal do participante, com o mesmo cabeçalho que o envio de
-// texto proativo usa. Só telegram e whatsapp: no app o anexo da conversa é a
-// própria entrega.
+// Uploads the PDF to the participant's channel, with the same header that proactive
+// text sending uses. Telegram and WhatsApp only: on the app, the conversation's attachment is the
+// delivery itself.
 async function sendDiscoveryDocument(p,{buffer,mime,filename,caption}){
   if(p.channel==='telegram'){
     const bot=await getTelegramBotForDelivery(p.user_id,p.agent_id);
@@ -12070,8 +12070,8 @@ const discoveryClosingRunner=createClosingRunner(discoveryStore.closing,{brief:p
     baseUrl:PUBLIC_BASE,deliverToChannel,push:sendPush,
     buildDocument:buildDiscoveryDocument,
     sendDocument:sendDiscoveryDocument,
-    // Janela de 24h do WhatsApp: fora dela nenhum template aprovado carrega
-    // arquivo, então o PDF sai por e-mail e o canal recebe só o aviso.
+    // WhatsApp's 24h window: outside it no approved template carries an
+    // attachment, so the PDF goes out by email and the channel gets only the notice.
     whatsappWindowOpen:async p=>{
       const link=await getWhatsAppLinkForUser(p.user_id);
       if(!link?.wa_phone)return null;
@@ -12117,11 +12117,11 @@ function gracefulShutdown(signal) {
     console.log('[shutdown] requests e rotinas drenados, saindo limpo');
     process.exit(0);
   });
-  // Fecha keep-alives ociosos (senão seguram o server.close aberto à toa).
+  // Closes idle keep-alives (otherwise they hold server.close open for nothing).
   server.closeIdleConnections?.();
-  // Teto de segurança: se um turno demorar demais, sai mesmo assim antes do
-  // systemd mandar SIGKILL (TimeoutStopSec = 90s). 60s cobre a grande maioria
-  // dos turnos sem estourar esse limite.
+  // Safety ceiling: if a turn takes too long, it exits anyway before
+  // systemd sends SIGKILL (TimeoutStopSec = 90s). 60s covers the vast majority
+  // of turns without hitting that limit.
   const t = setTimeout(() => {
     console.warn('[shutdown] teto de drain atingido, forçando saída');
     const hard=setTimeout(()=>process.exit(0),5_000);
@@ -12139,9 +12139,9 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     await taskMetrics.init();
     // No wait: e.g. a plugin retrying what a company left pending.
     eventos.emitir('banco_pronto', {});
-    // Desembrulha a chave mestra do cofre ANTES de qualquer coisa que use
-    // credenciais cifradas (KMS > VAULT_KEY > chave local). Chave inválida,
-    // ausente ou KMS fora do ar não derrubam o servidor: só loga o alarme.
+    // Unwraps the vault's master key BEFORE anything that uses
+    // encrypted credentials (KMS > VAULT_KEY > local key). An invalid, missing
+    // or unreachable KMS key doesn't bring the server down: it just logs the alarm.
     if ((await initVaultNoBoot()).ok) {
       if (!/^(0|false|off)$/i.test(process.env.DEEPSEEK_FLASH_ENABLED || '')) {
         try { await chaveDeepSeek(); deepseekFlashReady = true; }
@@ -12149,9 +12149,9 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
       }
       console.log(`[vault] chave mestra ${vaultEnabled() ? 'pronta' : 'não configurada'}${process.env.VAULT_KEY_ENC ? ` (via ${nomeDaChaveExterna()})` : ''}`);
     }
-    // Cofre configurado que não abriu = servidor de pé sem conseguir cifrar. A
-    // gravacao de segredo agora falha fechada (encMaybe lanca), entao o alarme
-    // aqui é o que explica o erro que o usuário vai ver ao salvar credencial.
+    // A configured vault that didn't open = server up but unable to encrypt. Saving
+    // a secret now fails closed (encMaybe throws), so the alarm
+    // here is what explains the error the user will see when saving a credential.
     if (vaultConfigured() && !vaultEnabled()) {
       console.error('[vault] ALERTA: cofre configurado mas chave NÃO carregada; nenhum segredo novo será gravado (falha fechada) até isso ser resolvido');
     }
@@ -12179,14 +12179,14 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
       }
     }
     if(waEnabled()&&vaultEnabled())await waHandler.start();
-    // Sobe os pollers dos bots de Telegram já conectados.
+    // Starts the pollers for already-connected Telegram bots.
     try {
       const bots = await listEnabledTelegramBots();
       for (const b of bots) telegramMgr.addBot(b);
       if (bots.length) console.log(`[telegram] ${bots.length} bot(s) ativo(s)`);
     } catch (e) { console.error('[telegram] falha ao subir pollers:', e?.message ?? e); }
     console.log(`[whatsapp] webhook em /api/wa/webhook (${waEnabled() ? 'ativo' : 'aguardando creds'}${process.env.WA_VERIFY_TOKEN ? ', verify token ok' : ''})`);
-    // Scheduler de rotinas (dispara por horário, entrega por e-mail).
+    // Routine scheduler (fires by time, delivered by email).
     schedulerHandle=startScheduler({
       executeRoutine:routineExecutor.execute, recoverRoutineExecutions:routineExecutor.recover,
       listDueRoutines, markRoutineRun, markRoutineNext,
@@ -12196,8 +12196,8 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
       recoverReminderDeliveries: reminderExecutor.recover,
       pollVideoJobs,
     });
-    // Outbox durável dos comprovantes. O webhook tenta entregar na hora; esta
-    // drenagem recupera falha de canal e processo encerrado depois do HTTP 200.
+    // Durable outbox for receipts. The webhook tries to deliver right away; this
+    // drain recovers from channel failure and process termination after the HTTP 200.
     setTimeout(()=>void drainAsaasReceiptNotifications().catch(e=>console.error('[asaas-receipt-outbox]',e?.message||e)),5_000).unref?.();
     asaasReceiptTimer=setInterval(()=>void drainAsaasReceiptNotifications().catch(e=>console.error('[asaas-receipt-outbox]',e?.message||e)),60_000);
     asaasReceiptTimer.unref?.();
@@ -12231,7 +12231,7 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     console.log(`[mailer] envio de e-mail ${mailEnabled() ? 'ativo' : 'em stub (faltam RESEND_API_KEY/MAIL_FROM)'}`);
     // Canal e-mail (ingest por IMAP + resposta por SMTP como o assistente).
     try { emailPoller.start(); } catch (e) { console.error('[email] falha ao subir poller:', e?.message ?? e); }
-    startAwsCredentialRefresh(); // S3 pela role da instância (S3_INSTANCE_ROLE=1): aquece e renova a credencial.
+    startAwsCredentialRefresh(); // S3 via the instance role (S3_INSTANCE_ROLE=1): warms up and renews the credential.
     server.listen(PORT, HOST, () => console.log(`Beta em http://${HOST}:${PORT}  (GEMINI_API_KEY ${process.env.GEMINI_API_KEY ? 'ok' : 'FALTANDO'}, Postgres ok)`));
   })
   .catch((e) => { console.error('Falha ao inicializar o banco:', e?.message ?? e); process.exit(1); });

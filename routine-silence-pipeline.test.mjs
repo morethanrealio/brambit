@@ -1,5 +1,5 @@
-// Pipeline real da resposta até a persistência + executor real, inteiramente
-// offline. Nenhum julgamento semântico da condição da rotina é simulado aqui.
+// Real pipeline from the reply to persistence + real executor, entirely
+// offline. No semantic judgment of the routine's condition is simulated here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -21,7 +21,7 @@ const source = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8'
 const start = source.indexOf('  const routineFinal = routineFinalText(') >= 0
   ? source.indexOf('  const routineFinal = routineFinalText(')
   : source.indexOf('  text = routineFinalText(');
-const end = source.indexOf('  // As imagens do turno', start);
+const end = source.indexOf("  // The turn's images", start);
 assert.ok(start > 0 && end > start);
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
 const savedMemory = {name:'memoria_anotar',args:{pagina:'monitoramento'},out:'Memória atualizada: monitoramento'};
@@ -64,7 +64,7 @@ async function pipeline(text, {kind = 'routine', completed = true, failed = fals
 }
 
 test('identificador financeiro e pergunta de confirmação passam intactos no chat', async () => {
-  // Sem filtro de foco (29/09/2026): nada no pipeline corta oferta nem dado pedido.
+  // No focus filter (2026-09-29): nothing in the pipeline cuts the offer or the requested data.
   for (const text of ['Resultado da consulta.', 'Chave PIX: synthetic-private-id',
     'Rascunhei o e-mail pro João.\n\nQuer que eu envie agora?']) {
     assert.equal((await pipeline(text, {kind:'chat', receipts:[]})).text, text);
@@ -84,7 +84,7 @@ test('sinal exato validado preserva silêncio com memória salva/duplicada nos t
 test('core real conclui consulta e memória com termination completed e pipeline preserva silêncio', async () => {
   const journal = createActionJournal(), routineCheck = {completed:false,failed:false}, toolCounts = {};
   const eventStart = source.indexOf("      if (ev?.type === 'tool_result') {", source.indexOf('  const interjecoes = [];'));
-  const eventEnd = source.indexOf('      // Mensagem que o usuário', eventStart);
+  const eventEnd = source.indexOf('      // Message the user sent mid-turn', eventStart);
   assert.ok(eventStart > 0 && eventEnd > eventStart);
   const onEvent = new Function('ev', 'routineCheck', 'toolCounts', source.slice(eventStart,eventEnd));
   const tools = new ToolRegistry()
