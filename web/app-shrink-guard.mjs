@@ -1,17 +1,18 @@
-// Shrink-guard do publish (puro, sem I/O): compara o map de fonte que está no ar
-// (`prev`) com o que vai ser publicado (`files`), ambos { caminho: base64 }.
+// Publish shrink-guard (pure, no I/O): compares the source map that is live
+// (`prev`) with what is about to be published (`files`), both { path: base64 }.
 //
-// Bloqueia o pior modo de falha observado: reescrita de arquivo inteiro a partir de
-// uma versão VELHA no contexto do modelo → publish full-replace apaga código bom.
+// Blocks the worst failure mode observed: rewriting a whole file from an OLD
+// version in the model's context → full-replace publish wipes out good code.
 //
-// NÃO bloqueia reorganização: o modelo quebra um server.js grande em lib/*.js e o
-// arquivo original encolhe, mas nada se perdeu (caso de 25/09: server.js
-// 5,9→2,5 KB, app 20→110 KB, todas as rotas antigas presentes). Conta como
-// reorganização só quando as três coisas valem juntas:
-//   1) o app no total não encolheu;
-//   2) os arquivos NOVOS somam pelo menos os bytes que saíram dos que encolheram/sumiram;
-//   3) toda rota /api/... do servidor antigo continua no servidor novo.
-// A reescrita velha típica falha no (2) ou no (3).
+// Does NOT block reorganization: the model splits a big server.js into
+// lib/*.js and the original file shrinks, but nothing was lost (case of
+// 2026-09-25: server.js 5,9→2,5 KB, app 20→110 KB, all old routes still present).
+// Only counts as reorganization when all three hold together:
+//   1) the app's total size did not shrink;
+//   2) the NEW files add up to at least the bytes that left the ones that
+//      shrank/disappeared;
+//   3) every /api/... route from the old server is still in the new server.
+// The typical old-style rewrite fails at (2) or (3).
 
 const size = (b64) => { try { return Buffer.from(b64, 'base64').length; } catch { return 0; } };
 const text = (b64) => { try { return Buffer.from(b64, 'base64').toString('utf8'); } catch { return ''; } };

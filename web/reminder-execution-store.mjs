@@ -312,7 +312,7 @@ export function createReminderExecutionStore(pool, { leaseMs = 180_000 } = {}) {
         const active=await client.query(`SELECT status FROM mtr_harness.reminder_occurrences WHERE reminder_id=$1 AND user_id=$2 AND scheduled_at=$3 FOR UPDATE`,[id,userId,r.run_at]);
         if (active.rows.some(o=>['delivering','accepted','uncertain','failed'].includes(o.status))) return {ok:false,code:'DELIVERY_STARTED'};
         if (sameTime(when,expected)) return {ok:true,reminder:r,unchanged:true};
-        // Evita reutilizar um slot já processado/cancelado e sua identidade de envio.
+        // Avoids reusing an already processed/cancelled slot and its delivery identity.
         const used=await client.query('SELECT id FROM mtr_harness.reminder_occurrences WHERE reminder_id=$1 AND scheduled_at=$2',[id,when]);
         if (used.rows.length) return {ok:false,code:'SLOT_ALREADY_USED'};
         const resume=r.resume_run_at || nextReminderRun(r,r.run_at);

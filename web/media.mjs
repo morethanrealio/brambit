@@ -1,12 +1,12 @@
-// ── Mídia: geração de imagem, voz (TTS) e transcrição (STT) ──
-// Tudo via Gemini (mesma GEMINI_API_KEY do chat). Cada operação devolve
-// `usage` no MESMO shape do provider de texto ({ model, in, cached, out,
-// think, total }) pra cair no mesmo pipeline de custo/crédito (recordUsages
-// -> costOf -> usage_events). Os modelos têm linha própria em pricing.mjs.
+// ── Media: image generation, voice (TTS) and transcription (STT) ──
+// Everything via Gemini (same GEMINI_API_KEY as chat). Each operation returns
+// `usage` in the SAME shape as the text provider ({ model, in, cached, out,
+// think, total }) so it falls into the same cost/credit pipeline (recordUsages
+// -> costOf -> usage_events). The models have their own line in pricing.mjs.
 //
-// As tools seguem o shape do core (name/description/parameters/run). A entrega
-// do binário (mostrar no chat, mandar no WhatsApp/Telegram) é feita pelo caller
-// via callback onAttachment — aqui a gente só gera, salva e devolve a URL.
+// The tools follow the core's shape (name/description/parameters/run). Delivery
+// of the binary (showing it in chat, sending it on WhatsApp/Telegram) is done by the caller
+// via the onAttachment callback — here we only generate, save and return the URL.
 
 import {requireProviderContent} from './execution-credit-errors.mjs';
 import {makeTogether,togetherEnabled,TOGETHER_FLASH_MODEL} from '../core-proto/providers/together.mjs';
@@ -31,7 +31,7 @@ const MEDIA_DIR = path.join(__dirname, 'public', 'media');
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const STT_MODEL = 'gemini-3.5-flash';
-// Voz padrão do TTS (pt-BR soa bem na Kore; trocável por tool depois).
+// Default TTS voice (pt-BR sounds good on Kore; swappable via tool later).
 const DEFAULT_VOICE = 'Kore';
 
 export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
@@ -45,14 +45,14 @@ export function sttEnabled() { return !!process.env.GEMINI_API_KEY; }
 // `toUnits` converts the US$ cost to the displayed unit (e.g. a plugin's credits);
 // without it, the estimate is in US$.
 export function mediaEstimates(toUnits = (usd) => usd) {
-  // Gerar imagem: ~1290 tokens de saída no modelo de imagem (Nano Banana).
+  // Generate image: ~1290 output tokens on the image model (Nano Banana).
   const image = toUnits(costOf({ model: IMAGE_MODEL, in: 30, out: 1290, total: 1320 }));
-  // Ler/entender uma imagem: imagem entra como input (~1100 tok) + resposta curta
-  // (~300 tok) no modelo de chat. Uso o 3.5 Flash como referência (tier comum).
+  // Read/understand an image: image comes in as input (~1100 tok) + short response
+  // (~300 tok) on the chat model. Using 3.5 Flash as the reference (common tier).
   const vision = toUnits(costOf({ model: 'gemini-3.5-flash', in: 1100, out: 300, total: 1400 }));
-  // Transcrever áudio curto (~30s): áudio entra como input (~350 tok) no Flash.
+  // Transcribe short audio (~30s): audio comes in as input (~350 tok) on Flash.
   const stt = toUnits(costOf({ model: STT_MODEL, in: 350, out: 40, total: 390 }));
-  // Responder em voz (fala curta ~25s): ~600 tokens de áudio de saída no TTS.
+  // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS.
   const tts = toUnits(costOf({ model: TTS_MODEL, in: 40, out: 600, total: 640 }));
   return { image, vision, stt, tts };
 }
@@ -80,14 +80,14 @@ async function gen(model, body) {
   return res.json();
 }
 
-// ── Armazenamento S3 PRIVADO por usuário ─────────────────────────────────────
-// Se as 4 envs estiverem setadas, a mídia vai pro bucket — que é 100% FECHADO
-// ao público. Cada arquivo vive na pasta do dono: a key é "<user_id>/<uuid>.<ext>".
-// O backend é o ÚNICO caminho de acesso: lê o byte com a credencial do servidor e
-// entrega ao usuário pelo proxy /api/media (sessão + dono conferidos) ou injetando
-// o byte direto no canal (WhatsApp/Telegram). Não há link público nem URL assinada.
-// Sem as envs, cai no disco local (public/media), comportamento legado.
-// Upload/download por SigV4 na mão pra manter o backend zero-dependência.
+// ── PRIVATE per-user S3 storage ───────────────────────────────────────────────
+// If the 4 envs are set, media goes to the bucket — which is 100% CLOSED
+// to the public. Each file lives in the owner's folder: the key is "<user_id>/<uuid>.<ext>".
+// The backend is the ONLY access path: it reads the byte with the server's credential and
+// delivers it to the user via the /api/media proxy (session + owner checked) or by injecting
+// the byte directly into the channel (WhatsApp/Telegram). There is no public link nor signed URL.
+// Without the envs, it falls back to local disk (public/media), legacy behavior.
+// Upload/download by hand-rolled SigV4 to keep the backend zero-dependency.
 const S3_BUCKET = () => process.env.S3_BUCKET;
 const S3_REGION = () => process.env.S3_REGION || 'us-east-1';
 export function s3Enabled() {
@@ -97,14 +97,14 @@ export function s3Enabled() {
 const sha256hex = (data) => crypto.createHash('sha256').update(data).digest('hex');
 const EMPTY_HASH = sha256hex('');
 const hmac = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
-// Codifica cada segmento do path (mantém as barras), no esquema do S3/SigV4.
+// Encodes each path segment (keeps the slashes), per the S3/SigV4 scheme.
 const encodeKey = (key) => key.split('/').map((s) => encodeURIComponent(s)).join('/');
 
-// Assina e executa uma requisição S3 (SigV4). `payloadHash` já calculado pelo caller.
-// bucket/region são parametrizáveis (default = bucket privado do produto), pra
-// reusar a mesma assinatura em outro bucket (ex.: o dedicado de campanha/marketing).
-// Credencial: chave fixa do .env ou role da instância (ver aws-credentials.mjs);
-// com a role vem o session token, que entra assinado no x-amz-security-token.
+// Signs and executes an S3 request (SigV4). `payloadHash` already computed by the caller.
+// bucket/region are parameterizable (default = the product's private bucket), to
+// reuse the same signing in another bucket (e.g. the one dedicated to campaigns/marketing).
+// Credential: fixed key from .env or instance role (see aws-credentials.mjs);
+// with the role comes the session token, which is signed into x-amz-security-token.
 async function s3Request(method, key, { body = undefined, contentType = undefined, payloadHash, bucket = S3_BUCKET(), region = S3_REGION() } = {}) {
   const cred = await getAwsCredentials();
   if (!cred) throw new Error('s3: sem credencial AWS');
@@ -113,7 +113,7 @@ async function s3Request(method, key, { body = undefined, contentType = undefine
   const amzdate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
   const datestamp = amzdate.slice(0, 8);
   const canonicalUri = '/' + encodeKey(key);
-  // Headers canônicos em ordem alfabética; content-type só entra no PUT.
+  // Canonical headers in alphabetical order; content-type only goes in on PUT.
   const hdrs = [];
   if (contentType) hdrs.push(['content-type', contentType]);
   hdrs.push(['host', host]);
@@ -152,9 +152,9 @@ async function s3GetObject(key) {
   return { buffer, contentType };
 }
 
-// Salva um binário do usuário. No S3 a key fica sob a pasta do dono
-// (<userId>/<uuid>.<ext>) e a URL é o PROXY autenticado /api/media?key=...
-// (NÃO um link público). No disco cai em /media/<id>.<ext> (estático legado).
+// Saves a user's binary. In S3 the key sits under the owner's folder
+// (<userId>/<uuid>.<ext>) and the URL is the authenticated PROXY /api/media?key=...
+// (NOT a public link). On disk it falls to /media/<id>.<ext> (legacy static).
 export async function putMedia(userId, buffer, ext, mime) {
   const id = randomUUID();
   const name = `${id}.${ext}`;
@@ -168,15 +168,15 @@ export async function putMedia(userId, buffer, ext, mime) {
   return { key: null, url: `/media/${name}` };
 }
 
-// Recupera o byte de uma mídia guardada no S3 (só faz sentido no modo S3; no
-// modo disco a entrega é pelo estático, então devolve null).
+// Retrieves the byte of a media stored in S3 (only makes sense in S3 mode; in
+// disk mode delivery is via static files, so it returns null).
 export async function fetchMedia(key) {
   if (!s3Enabled() || !key) return null;
   return s3GetObject(key);
 }
 
-// Apaga um objeto do bucket. Best-effort: um 404 (já sumiu) conta como sucesso.
-// No modo disco tenta remover o arquivo estático correspondente.
+// Deletes an object from the bucket. Best-effort: a 404 (already gone) counts as success.
+// In disk mode it tries to remove the corresponding static file.
 export async function deleteMedia(key) {
   if (!key) return false;
   if (s3Enabled()) {
@@ -207,7 +207,7 @@ export function presignGet(key, expiresSec = 900, { bucket = S3_BUCKET(), region
   const scope = `${datestamp}/${region}/s3/aws4_request`;
   const expires = Math.min(Math.max(1, Math.round(expiresSec)), 604800); // teto S3 = 7d
   const signedHeaders = 'host';
-  // Query canônica em ordem alfabética, cada valor RFC3986-encoded.
+  // Canonical query in alphabetical order, each value RFC3986-encoded.
   const q = new Map([
     ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
     ['X-Amz-Credential', `${cred.accessKeyId}/${scope}`],
@@ -270,15 +270,15 @@ export async function deleteCampaignObject(key) {
   return true;
 }
 
-// Link HTTPS pré-assinado de GET pro asset de campanha (entrega temporária ao
-// admin / worker do ComfyUI sem expor o bucket).
+// Pre-signed HTTPS GET link for the campaign asset (temporary delivery to the
+// admin / ComfyUI worker without exposing the bucket).
 export function presignCampaignGet(key, expiresSec = 900) {
   if (!campaignS3Enabled() || !key) return null;
   return presignGet(key, expiresSec, { bucket: CAMPAIGN_BUCKET(), region: CAMPAIGN_REGION() });
 }
 
-// Compat: salva sem dono (usado só onde não há userId). Mantém o disco como
-// destino quando o S3 está ligado — evita gravar fora de uma pasta de usuário.
+// Compat: saves without an owner (used only where there is no userId). Keeps disk as the
+// destination when S3 is on — avoids writing outside a user folder.
 async function saveMedia(buffer, ext, mime) {
   const id = randomUUID();
   const name = `${id}.${ext}`;
@@ -287,10 +287,10 @@ async function saveMedia(buffer, ext, mime) {
   return { url: `/media/${name}` };
 }
 
-// ── Visão: relê uma imagem guardada e descreve/responde em texto ──
-// O resultado de uma tool no core é só texto, então pra o agente "ver de novo"
-// uma imagem antiga a gente faz uma releitura por visão (imagem -> texto). Devolve
-// { text, usage } no shape padrão pra cair no pipeline de crédito.
+// ── Vision: re-reads a stored image and describes/answers in text ──
+// A tool's result in the core is text only, so for the agent to "see again"
+// an old image we do a vision re-read (image -> text). Returns
+// { text, usage } in the standard shape so it falls into the credit pipeline.
 export async function describeImage(buffer, mime, question, { maxOut = 0 } = {}) {
   const q = (question && question.trim())
     ? question.trim()
@@ -328,9 +328,9 @@ export async function describeImage(buffer, mime, question, { maxOut = 0 } = {})
       { text: q },
       { inlineData: { mimeType: mime || 'image/jpeg', data: buffer.toString('base64') } },
     ] }],
-    // maxOut = teto de saída, pra leitura longa (a legenda rica do recebimento)
-    // caber inteira sem cortar no meio. Sem ele vale o default do modelo, que é o
-    // comportamento de todos os chamadores antigos.
+    // maxOut = output ceiling, so the long read (the rich caption of the receipt)
+    // fits in whole without cutting off midway. Without it, the model's default applies, which is the
+    // behavior of all the old callers.
     generationConfig: { thinkingConfig: { thinkingBudget: 0 }, ...(maxOut ? { maxOutputTokens: maxOut } : {}) },
   });
   const parts = data.candidates?.[0]?.content?.parts ?? [];
@@ -340,11 +340,11 @@ export async function describeImage(buffer, mime, question, { maxOut = 0 } = {})
   return { text, usage, truncated: data.candidates?.[0]?.finishReason === 'MAX_TOKENS' };
 }
 
-// OCR de PDF via Gemini: pro caso do pdf-parse voltar vazio (PDF escaneado, só
-// imagem, sem camada de texto). Manda os bytes do PDF direto pro Gemini (que lê
-// PDF nativamente) e pede o texto legível. Devolve { text, usage } no mesmo
-// shape do resto pra cair no pipeline de custo. Bom pra boleto/guia (DAS/DARF):
-// puxa a linha digitável, valores e datas que o pdf-parse não pega.
+// PDF OCR via Gemini: for when pdf-parse comes back empty (scanned PDF, image
+// only, no text layer). Sends the PDF bytes straight to Gemini (which reads
+// PDF natively) and asks for the readable text. Returns { text, usage } in the same
+// shape as the rest so it falls into the cost pipeline. Good for bills/tax forms (DAS/DARF):
+// pulls the typeable line, amounts and dates that pdf-parse misses.
 export async function ocrPdf(buffer, question) {
   const q = (question && question.trim())
     ? question.trim()
@@ -363,12 +363,12 @@ export async function ocrPdf(buffer, question) {
   return { text, usage };
 }
 
-// ── Imagem (Nano Banana) ──
-// Proporções que o modelo aceita. Sem pedir nada, ele escolhe sozinho e o
-// resultado costuma sair 16:9, que no WhatsApp/Instagram vira imagem com tarja
-// ou cortada. Como a composição depois cola o texto e o logo em cima de um
-// FUNDO, a proporção do fundo tem que ser a mesma da arte final, senão a peça
-// nasce torta.
+// ── Image (Nano Banana) ──
+// Aspect ratios the model accepts. Without asking for anything, it picks on its own and the
+// result usually comes out 16:9, which on WhatsApp/Instagram turns into an image with bars
+// or cropped. Since the composition later pastes the text and logo on top of a
+// BACKGROUND, the background's aspect ratio has to match the final artwork's, otherwise the piece
+// comes out crooked.
 export const PROPORCOES_IMAGEM = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
 export async function generateImage(prompt, { proporcao = '' } = {}) {
   const ar = PROPORCOES_IMAGEM.includes(String(proporcao).trim()) ? String(proporcao).trim() : null;
@@ -387,8 +387,8 @@ export async function generateImage(prompt, { proporcao = '' } = {}) {
   return { buffer, mime, ext, usage };
 }
 
-// ── Voz (TTS) ── Gemini devolve PCM 16-bit 24kHz mono (audio/L16); embrulhamos
-// num WAV (toca no navegador e converte fácil pros canais).
+// ── Voice (TTS) ── Gemini returns PCM 16-bit 24kHz mono (audio/L16); we wrap it
+// in a WAV (plays in the browser and converts easily for the channels).
 function pcmToWav(pcm, sampleRate = 24000, channels = 1, bits = 16) {
   const byteRate = (sampleRate * channels * bits) / 8;
   const blockAlign = (channels * bits) / 8;
@@ -409,15 +409,15 @@ function pcmToWav(pcm, sampleRate = 24000, channels = 1, bits = 16) {
   return Buffer.concat([header, pcm]);
 }
 
-// Lê o sampleRate do mimeType (ex: "audio/L16;codec=pcm;rate=24000").
+// Reads the sampleRate from the mimeType (e.g.: "audio/L16;codec=pcm;rate=24000").
 function rateFromMime(mime) {
   const m = /rate=(\d+)/.exec(mime || '');
   return m ? +m[1] : 24000;
 }
 
-// Converte um buffer (WAV) pra OGG/Opus via ffmpeg (stdin->stdout). É o formato
-// que WhatsApp e Telegram aceitam como nota de voz, e o navegador toca igual.
-// Se o ffmpeg não estiver disponível ou falhar, devolve null (caller cai no WAV).
+// Converts a buffer (WAV) to OGG/Opus via ffmpeg (stdin->stdout). It's the format
+// WhatsApp and Telegram accept as a voice note, and the browser plays it the same.
+// If ffmpeg isn't available or fails, returns null (caller falls back to WAV).
 function toOggOpus(wavBuffer) {
   return new Promise((resolve) => {
     let ff;
@@ -434,10 +434,10 @@ function toOggOpus(wavBuffer) {
   });
 }
 
-// Converte um áudio qualquer (webm/opus do navegador, ogg, mp3, etc.) pra WAV
-// PCM 16kHz mono via ffmpeg (stdin->stdout). É o formato mais universal pro
-// worker de vídeo consumir a voz de referência. Se o ffmpeg não estiver
-// disponível ou falhar, devolve null (o caller decide o fallback).
+// Converts any audio (webm/opus from the browser, ogg, mp3, etc.) to WAV
+// PCM 16kHz mono via ffmpeg (stdin->stdout). It's the most universal format for the
+// video worker to consume the reference voice. If ffmpeg isn't
+// available or fails, returns null (the caller decides the fallback).
 export function audioToWav(inputBuffer) {
   return new Promise((resolve) => {
     let ff;
@@ -469,16 +469,16 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
   const wav = pcmToWav(pcm, rateFromMime(aud.inlineData.mimeType));
   const usage = usageFrom(TTS_MODEL, data);
   console.log(`[media tts] in=${usage.in} out=${usage.out} total=${usage.total}`);
-  // Preferimos OGG/Opus (nota de voz nativa no WhatsApp/Telegram); WAV é fallback.
+  // We prefer OGG/Opus (native voice note on WhatsApp/Telegram); WAV is the fallback.
   const ogg = await toOggOpus(wav);
   if (ogg) return { buffer: ogg, mime: 'audio/ogg', ext: 'ogg', usage };
-  // WAV toca na web, mas o WhatsApp recusa (02/10/2026: prod sem ffmpeg, a voz
-  // nunca chegou no WhatsApp e o assistente confirmava "mandado em voz").
+  // WAV plays on the web, but WhatsApp rejects it (2026-10-02: prod without ffmpeg, the voice
+  // never reached WhatsApp and the assistant confirmed "mandado em voz" anyway).
   console.error('[media tts] ffmpeg indisponível ou falhou: áudio saiu em WAV, que o WhatsApp recusa');
   return { buffer: wav, mime: 'audio/wav', ext: 'wav', usage };
 }
 
-// ── Transcrição (STT) ── áudio entra como input multimodal no Flash.
+// ── Transcription (STT) ── audio comes in as multimodal input on Flash.
 export async function transcribeAudio(buffer, mime = 'audio/ogg') {
   const data = await gen(STT_MODEL, {
     contents: [{ role: 'user', parts: [
@@ -494,12 +494,12 @@ export async function transcribeAudio(buffer, mime = 'audio/ogg') {
   return { text, usage };
 }
 
-// ── Tools de mídia pro tool-loop ──
-// onUsage({usage, kind})  -> caller grava o custo (créditos) com o kind certo.
-// onAttachment({type,url,mime,key}) -> caller entrega o binário no canal (chat/WhatsApp/Telegram).
-// saveBlob({buffer,ext,mime,kind,caption}) -> persiste o binário (S3 na pasta do
-//   dono + registra na biblioteca) e devolve { url, key }. Se não vier, cai no
-//   putMedia direto (sem registrar na biblioteca).
+// ── Media tools for the tool-loop ──
+// onUsage({usage, kind})  -> caller records the cost (credits) with the right kind.
+// onAttachment({type,url,mime,key}) -> caller delivers the binary on the channel (chat/WhatsApp/Telegram).
+// saveBlob({buffer,ext,mime,kind,caption}) -> persists the binary (S3 in the
+//   owner's folder + registers it in the library) and returns { url, key }. If not provided, falls back to
+//   putMedia directly (without registering in the library).
 export function mediaTools(userId, { onUsage = () => {}, onAttachment = () => {}, audio = false, image = true, saveBlob = null } = {}) {
   const store = saveBlob || ((b) => putMedia(userId, b.buffer, b.ext, b.mime));
   const tools = [];
@@ -522,9 +522,9 @@ export function mediaTools(userId, { onUsage = () => {}, onAttachment = () => {}
       const saved = await store({ buffer, ext, mime, kind: 'image', source: 'generated', caption: prompt.slice(0, 200) });
       const { url, key, assetId } = saved;
       onAttachment({ type: 'image', url, mime, key });
-      // Devolve o id da biblioteca pra esta imagem poder virar CAMADA numa
-      // composição (fundo de um cartão, por exemplo) sem o usuário ter que
-      // reenviá-la; sem o id, compor_imagem não tem como referenciá-la.
+      // Returns the library id so this image can become a LAYER in a
+      // composition (the background of a card, for example) without the user having to
+      // resend it; without the id, compor_imagem has no way to reference it.
       const ref = assetId != null ? ` id na biblioteca: ${assetId} (use este id se for compor algo por cima dela com compor_imagem).` : '';
       return `Imagem gerada e já enviada ao usuário (URL: ${url}).${ref} Responda em uma frase curta.`;
     },
@@ -546,7 +546,7 @@ export function mediaTools(userId, { onUsage = () => {}, onAttachment = () => {}
         const { buffer, mime, ext, usage } = await synthesizeSpeech(texto.slice(0, 2000));
         onUsage({ usage, kind: 'tts' });
         const { url, key } = await store({ buffer, ext, mime, kind: 'audio', source: 'generated', caption: texto.slice(0, 120) });
-        // `fala` vai junto pro canal mandar o texto se o áudio não puder ser entregue.
+        // `fala` goes along so the channel can send the text if the audio can't be delivered.
         onAttachment({ type: 'audio', url, mime, key, fala: texto.slice(0, 2000) });
         return `Áudio gerado e já enviado ao usuário (URL: ${url}). Confirme em uma frase curta.`;
       },

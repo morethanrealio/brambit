@@ -26,7 +26,7 @@ export function slackEnabled() {
   return !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_SIGNING_SECRET);
 }
 
-// Normaliza um nome de agente pra casar com @apelido (sem acento, minúsculo, só alfanumérico).
+// Normalizes an agent name to match @nickname (no accent, lowercase, alphanumeric only).
 function slug(s) {
   return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -43,17 +43,17 @@ async function slackApi(method, body) {
   });
   const j = await r.json().catch(() => ({}));
   if (!j.ok) {
-    // Igual ao Telegram: recusa do Slack (canal inexistente, sem permissão) é
-    // determinística; limite de taxa e 5xx são incertos e valem nova tentativa.
+    // Same as Telegram: a Slack refusal (channel doesn't exist, no permission) is
+    // deterministic; rate limit and 5xx are uncertain and warrant a retry.
     throw Object.assign(new Error(`slack ${method}: ${j.error || r.status}`),
       { definitive: r.status < 500 && r.status !== 429 && j.error !== 'ratelimited' });
   }
   return j;
 }
 
-// Id do nosso bot no Slack: usado pra tirar a menção do texto e pra ignorar as
-// próprias mensagens (anti-loop). Vem do payload (authorizations) quando possível;
-// senão cai no auth.test cacheado.
+// Our bot's id on Slack: used to strip the mention from the text and to ignore its
+// own messages (anti-loop). Comes from the payload (authorizations) when possible;
+// otherwise falls back to the cached auth.test.
 let cachedBotUserId = null;
 async function getBotUserId() {
   if (cachedBotUserId) return cachedBotUserId;
@@ -70,13 +70,13 @@ async function slackEmail(slackUserId) {
   } catch { return null; }
 }
 
-// Slack aceita ~40k por mensagem, mas quebramos em pedaços de 3500 pra formatar
-// bem. Resposta longa vai em várias, na ordem, sem corte. Até 29/09/2026 havia
-// teto de 12k chars com o aviso "[…resposta muito longa, cortei o resto]" e a
-// quebra era seca a cada 3500; agora usa channel-split.mjs.
+// Slack accepts ~40k per message, but we break it into 3500-char pieces to format
+// well. A long response goes in several, in order, with no cuts. Until 2026-09-29 there was
+// a 12k-char ceiling with the notice "[…resposta muito longa, cortei o resto]" and the
+// split was a hard cut every 3500; now it uses channel-split.mjs.
 const SLACK_CHUNK = 3500;
 
-// `reenvio`: repete a parte que falhou com erro incerto, sem repetir as já aceitas.
+// `reenvio`: repeats the part that failed with an uncertain error, without repeating what was already accepted.
 async function postMessage(channel, text, threadTs, { reenvio = false } = {}) {
   const body = (text || '').trim() || '(sem resposta)';
   for (const parte of splitMessage(body, SLACK_CHUNK)) {
@@ -91,7 +91,7 @@ async function postMessage(channel, text, threadTs, { reenvio = false } = {}) {
   }
 }
 
-// Lista os assistentes em texto (o Slack MVP troca por "@nome", sem lista interativa).
+// Lists the assistants in text (the Slack MVP swaps for "@name", no interactive list).
 function agentListText(agents, header) {
   const lines = agents.slice(0, 10).map((a) => {
     const goal = (a.goal || '').trim();
@@ -100,11 +100,11 @@ function agentListText(agents, header) {
   return `${header || 'Seus assistentes:'}\n${lines.join('\n')}\n\nPra falar com um, comece a mensagem com \`@nome\` (ex: \`@${slug(agents[0].name) || 'assistente'} ...\`).`;
 }
 
-// ── Verificação de assinatura do Slack (Signing Secret) ──
-// Basestring `v0:${timestamp}:${rawBody}`; esperado = 'v0=' + HMAC-SHA256(secret)
-// hex; compara com X-Slack-Signature em timing-safe. Rejeita timestamp com mais de
-// 5 min (proteção de replay). Sem secret configurado, não bloqueia (dev), mesmo
-// padrão do WhatsApp.
+// ── Slack signature verification (Signing Secret) ──
+// Basestring `v0:${timestamp}:${rawBody}`; expected = 'v0=' + HMAC-SHA256(secret)
+// hex; compares with X-Slack-Signature in timing-safe. Rejects a timestamp more than
+// 5 min old (replay protection). Without a configured secret, doesn't block (dev), same
+// pattern as WhatsApp.
 export function verifySlackSignature(rawBody, timestamp, signature) {
   const secret = process.env.SLACK_SIGNING_SECRET;
   if (!secret) return true;
@@ -119,45 +119,45 @@ export function verifySlackSignature(rawBody, timestamp, signature) {
   } catch { return false; }
 }
 
-// Injeta as deps do server (evita import circular):
+// Injects the server's deps (avoids circular import):
 //   runConversation(agent, userId, text) -> reply
-//   loadAgent(agentId, userId) -> agent   (valida ownership)
+//   loadAgent(agentId, userId) -> agent   (validates ownership)
 //   db = { getSlackLink, upsertSlackLink, setSlackActiveAgent, listAgents, getUserByEmail }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
-// registro dele no histórico da thread Slack.
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// its recording in the Slack thread's history.
 export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal = {} }) {
   const avisar = criarAvisoCanal({ rotulo: 'slack', ...avisoCanal });
-  const seen = new Set(); // event_id já processados (dedup de retries do Slack)
-  const seenMsg = new Set(); // channel:ts já processados (colapsa app_mention + message)
+  const seen = new Set(); // event_id already processed (dedup of Slack retries)
+  const seenMsg = new Set(); // channel:ts already processed (collapses app_mention + message)
 
   async function handleEvent(evt, meta) {
     const type = evt.type;
     if (type !== 'app_mention' && type !== 'message') return;
-    // Ignora edição/remoção/join e mensagens de bot (subtype != undefined cobre
+    // Ignores edit/removal/join and bot messages (subtype != undefined covers
     // message_changed, message_deleted, bot_message, channel_join, etc.).
     if (evt.subtype) return;
     if (evt.bot_id) return;
-    // DM ('message' channel_type im) e app_mention seguem sempre. 'message' num
-    // canal/grupo é tratado mais abaixo, só se o canal estiver conectado por código.
+    // DM ('message' channel_type im) and app_mention always go through. A 'message' in a
+    // channel/group is handled further below, only if the channel is connected by code.
 
     const slackUser = evt.user;
     if (!slackUser) return;
     const botId = meta.authedUserId || await getBotUserId();
-    if (botId && slackUser === botId) return; // nossa própria mensagem (anti-loop)
+    if (botId && slackUser === botId) return; // our own message (anti-loop)
 
-    // Texto: tira QUALQUER menção (<@U123> ou <@U123|label>) e colapsa espaços.
-    // Importante remover todas, não só a do bot pelo id: o id do payload
-    // (authorizations) nem sempre bate com o da menção, e um resquício de
-    // `<@...>` no começo quebra o match de comandos como `conectar CÓDIGO`.
+    // Text: strips ANY mention (<@U123> or <@U123|label>) and collapses spaces.
+    // Important to remove all of them, not just the bot's by id: the payload's id
+    // (authorizations) doesn't always match the mention's, and a leftover
+    // `<@...>` at the start breaks the match of commands like `conectar CÓDIGO`.
     let text = (evt.text || '').trim();
     text = text.replace(/<@[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // app_mention responde na thread da menção; DM responde no topo (ou na thread
-    // se a pessoa mencionou dentro de uma).
+    // app_mention replies in the mention's thread; DM replies at the top (or in the thread
+    // if the person mentioned it inside one).
     const threadTs = type === 'app_mention' ? (evt.thread_ts || evt.ts) : evt.thread_ts;
     const reply = (t) => postMessage(evt.channel, t, threadTs).catch((e) => console.error('[slack] post:', e?.message ?? e));
-    // Roda o turno e entrega. Falha do turno e falha só da entrega têm avisos
-    // diferentes (aviso-canal.mjs); a resposta pronta é reenviada, nunca refeita.
+    // Runs the turn and delivers. Turn failure and delivery-only failure have
+    // different notices (aviso-canal.mjs); the ready response is resent, never redone.
     const responder = async (agent, userId) => {
       const enviarAviso = (t) => postMessage(evt.channel, t, threadTs);
       let res;
@@ -177,18 +177,18 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     const teamId = meta.teamId || evt.team || '';
     const channel = evt.channel;
 
-    // Canal/grupo (não-DM) via evento 'message': só responde se o canal está
-    // conectado por código (senão o bot viraria ruído em canal alheio). Sem
-    // binding, ignora sem marcar dedup, deixando o app_mention pedir o pareamento.
+    // Channel/group (non-DM) via the 'message' event: only responds if the channel is
+    // connected by code (otherwise the bot would become noise in someone else's channel). Without
+    // a binding, ignores without marking dedup, leaving app_mention to request the pairing.
     const isChannelMsg = type === 'message' && evt.channel_type !== 'im';
     if (isChannelMsg) {
       const bound = await db.getSlackChannelLink(teamId, channel);
       if (!bound) return;
-      if (!text) return; // não responde a post sem texto (anexo/imagem só)
+      if (!text) return; // doesn't reply to a post with no text (attachment/image only)
     }
 
-    // Dedup por mensagem: num canal conectado, uma menção ao bot dispara DOIS
-    // eventos (app_mention + message.channels) com o MESMO evt.ts. Processa uma vez.
+    // Dedup by message: in a connected channel, a mention to the bot fires TWO
+    // events (app_mention + message.channels) with the SAME evt.ts. Processes once.
     const msgKey = evt.ts ? `${teamId}:${channel}:${evt.ts}` : null;
     if (msgKey) {
       if (seenMsg.has(msgKey)) return;
@@ -212,7 +212,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       return;
     }
 
-    // ── Comando: desconectar — desfaz o vínculo deste canal ──
+    // ── Command: disconnect — undoes this channel's link ──
     if (/^desconectar\b/i.test(text)) {
       const cl = await db.getSlackChannelLink(teamId, channel);
       if (!cl) { await reply('Não tem assistente conectado aqui.'); return; }
@@ -221,7 +221,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       return;
     }
 
-    // ── Roteamento: vínculo por CANAL primeiro (assistente fixo por grupo/DM) ──
+    // ── Routing: link by CHANNEL first (fixed assistant per group/DM) ──
     const chLink = await db.getSlackChannelLink(teamId, channel);
     if (chLink) {
       const agent = await loadAgent(chLink.agent_id, chLink.user_id);
@@ -231,14 +231,14 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       return;
     }
 
-    // Menção em grupo SEM vínculo: peça o pareamento por código (não adivinha agente).
+    // Mention in a group WITHOUT a link: ask for the pairing code (doesn't guess the agent).
     if (type === 'app_mention') {
       await reply(`Ainda não tem assistente conectado aqui. No ${marca().nome}, em *Conexões › Slack*, escolha um assistente e gere um código; depois mande aqui: \`conectar CÓDIGO\`.`);
       return;
     }
 
-    // DM sem vínculo de canal: fallback por e-mail (conveniência) + escolha por @nome.
-    // Roteamento por identidade: link sticky, ou resolve pelo e-mail do Slack.
+    // DM without a channel link: fallback by email (convenience) + choice by @name.
+    // Routing by identity: sticky link, or resolves by the Slack email.
     let link = await db.getSlackLink(teamId, slackUser);
     let userId = link && link.enabled ? link.user_id : null;
     if (!userId) {
@@ -270,7 +270,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       return;
     }
 
-    // "@nome ..." no começo: troca o agente ativo e roteia o restante.
+    // "@name ..." at the start: swaps the active agent and routes the rest.
     let activeId = link.active_agent_id;
     const m = text.match(/^@(\S+)\s*([\s\S]*)$/);
     if (m) {
@@ -290,8 +290,8 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       }
     }
 
-    // Sem ativo definido: com 1 assistente usa ele; com vários, mostra a lista e
-    // espera a escolha (não cola sozinho no "mais novo").
+    // With no active one defined: with 1 assistant uses it; with several, shows the
+    // list and waits for the choice (doesn't just stick to the "newest").
     if (!activeId) {
       if (agents.length === 1) { activeId = agents[0].id; await db.setSlackActiveAgent(teamId, slackUser, activeId); }
       else { await reply(agentListText(agents, 'Você tem mais de um assistente. Com qual quer falar aqui no Slack?')); return; }
@@ -308,9 +308,9 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     await responder(agent, userId);
   }
 
-  // Processa o payload do webhook (já validado). NÃO bloqueia a resposta ao Slack:
-  // o server responde 200 na hora e chama isto em background. O `url_verification`
-  // (challenge) é tratado no server, síncrono, antes de chegar aqui.
+  // Processes the webhook payload (already validated). Does NOT block the response to Slack:
+  // the server replies 200 right away and calls this in the background. The `url_verification`
+  // (challenge) is handled in the server, synchronously, before reaching here.
   async function processPayload(payload) {
     try {
       if (payload.type !== 'event_callback') return;
@@ -318,7 +318,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       if (eventId) {
         if (seen.has(eventId)) return;
         seen.add(eventId);
-        if (seen.size > 5000) seen.clear(); // backstop de memória
+        if (seen.size > 5000) seen.clear(); // memory backstop
       }
       const evt = payload.event || {};
       const meta = {

@@ -1,4 +1,4 @@
-// Identidade da imagem por turno/thread. Nunca escolhe a última foto GLOBAL.
+// Image identity per turn/thread. Never picks the last GLOBAL photo.
 export const PARTIAL_IMAGE_NOTICE = 'LEITURA PARCIAL: descrição cortada; reabra a imagem com ver_midia usando o ID indicado antes de concluir sobre detalhes ausentes.';
 const uuid = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
 export function boundedImageCaption(text, limit=4000, incomplete=false) {
@@ -7,8 +7,9 @@ export function boundedImageCaption(text, limit=4000, incomplete=false) {
   const room=Math.max(0,limit-PARTIAL_IMAGE_NOTICE.length-3);
   return `${raw.slice(0,room)} … ${PARTIAL_IMAGE_NOTICE}`.trim();
 }
-// Legendas e IDs ficam alinhados por índice, inclusive quando salvar/ler uma foto falha.
-// Com muitas fotos, reduz o orçamento sem esconder que a leitura foi cortada.
+// Captions and IDs stay aligned by index, even when saving/reading a photo
+// fails. With many photos, reduces the budget without hiding that the read
+// was cut short.
 export function imageHistoryMarkers(count, captions=[], ids=[]) {
   const per=count<=2?4000:1200;
   return Array.from({length:count},(_,i)=>{
@@ -47,7 +48,8 @@ export function resolveImageReference({id,turnIds=[],imageCount=0,message='',his
 }
 export async function readContextImage(input,deps) {
   const ref=resolveImageReference(input);if(ref.error)return ref.error;
-  // getAsset precisa ser o lookup escopado pelo dono, inclusive para ID explícito.
+  // getAsset needs to be the owner-scoped lookup, including for an explicit
+  // ID.
   const asset=await deps.getAsset(ref.id);
   if (!asset) return 'ERRO: imagem não encontrada ou não pertence a este usuário. Não abri outra imagem.';
   if (!(asset.mime?String(asset.mime).startsWith('image/'):asset.kind==='image')) return 'ERRO: esse item não é uma imagem. Não abri outro arquivo.';

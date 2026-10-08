@@ -1,45 +1,47 @@
 import { tagIdioma } from './locale.mjs';
 import { marca } from './marca.mjs';
 
-// FREIO DE FUNDAMENTAÇÃO
+// GROUNDING GUARD
 //
-// O recibo de ação (action-evidence.mjs) responde "a ação aconteceu?". Este
-// módulo responde a outra pergunta, que era a que ficava sem dono: "o fato
-// afirmado foi CONSULTADO em algum lugar?".
+// The action receipt (action-evidence.mjs) answers "did the action happen?".
+// This module answers another question, one that had no owner: "was the
+// stated fact CONSULTED anywhere?".
 //
-// Origem (18/09/2026, achados de frustração do grupo 1): em cinco casos reais o
-// assistente afirmou saldo/plano, preço, cupom, link e fonte sem que nenhuma
-// ferramenta capaz de verificar aquilo tivesse rodado no turno. Não havia nada
-// no código que percebesse; o único freio era um pedido em prosa no prompt.
+// Origin (2026-09-18, frustration findings from group 1): in five real cases
+// the assistant stated a balance/plan, price, coupon, link or source without
+// any tool capable of verifying it having run in the turn. There was nothing
+// in the code that noticed; the only guard was a prose request in the
+// prompt.
 //
-// A regra aqui é deliberadamente burra e determinística: se a resposta contém um
-// dado que só pode vir de fora (URL, cupom, nome de fonte, valor em dinheiro
-// apresentado como pesquisado, saldo do próprio dono), esse dado precisa
-// aparecer em alguma saída de ferramenta DESTE turno, ou no que o próprio dono
-// escreveu. Não aparece em lugar nenhum = a plataforma não tem base pra entregar
-// aquilo como fato. Não é classificador semântico e não julga se o conteúdo é
-// verdadeiro: julga se existe origem.
+// The rule here is deliberately dumb and deterministic: if the response
+// contains data that can only come from outside (URL, coupon, source name, a
+// money value presented as researched, the owner's own balance), that data
+// needs to show up in some tool output from THIS turn, or in what the owner
+// themself wrote. Not showing up anywhere = the platform has no basis to
+// deliver it as fact. It isn't a semantic classifier and doesn't judge
+// whether the content is true: it judges whether there's an origin.
 
-// Ferramentas que provam consulta de saldo/plano do próprio dono.
+// Tools that prove a query of the owner's own balance/plan.
 const CREDIT_TOOLS = new Set(['consultar_creditos', 'consultar_gasto', 'status_conta']);
-// Ferramentas que provam leitura do conteúdo de um arquivo/anexo.
+// Tools that prove reading of a file/attachment's content.
 const READ_TOOLS = new Set([
   'ler_arquivo', 'ler_documento', 'baixar_corpo', 'analisar_planilha',
   'ler_arquivo_do_app', 'google_drive', 'gmail_get_message',
-  // ver_midia ABRE a imagem e olha de verdade pra ela. Desde que PDF sem camada
-  // de texto passou a virar página-imagem na biblioteca, é por ela que esse anexo
-  // é lido; fora desta lista, o freio acusaria 'arquivo não lido' numa resposta
-  // que consultou o anexo de verdade.
+  // ver_midia OPENS the image and actually looks at it. Since a PDF with no
+  // text layer started turning into an image page in the library, that's how
+  // this attachment gets read; outside this list, the guard would flag
+  // 'file not read' on a response that did consult the attachment for real.
   'ver_midia',
 ]);
 
 const fold = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-// Pool de origem: tudo vira um texto só, sem pontuação, pra o teste de presença
-// não depender de formatação (JSON, markdown, aspas).
+// Origin pool: everything becomes a single text, with no punctuation, so the
+// presence test doesn't depend on formatting (JSON, markdown, quotes).
 const flatten = value => fold(value).replace(/[^a-z0-9]+/g, ' ');
 
-// Domínios da própria plataforma (marca().hostsCitaveis): o assistente pode
-// citá-los de cabeça porque eles vêm do system prompt, não de uma busca.
+// The platform's own domains (marca().hostsCitaveis): the assistant can cite
+// them from memory because they come from the system prompt, not from a
+// search.
 
 function hostOf(url) {
   const m = /^https?:\/\/([^/?#\s]+)/i.exec(String(url || ''));
@@ -47,12 +49,14 @@ function hostOf(url) {
   return m[1].toLowerCase().replace(/^www\./, '').replace(/[.,;:)\]}>"']+$/, '');
 }
 
-// Endereço local ou de rede privada não é algo que se "consulta" na internet:
-// aparece quando o dono está montando um sistema (callback, porta de teste).
+// A local or private-network address isn't something you "look up" on the
+// internet: it shows up when the owner is building a system (callback, test
+// port).
 const HOST_LOCAL = /^(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?)/;
 const permitido = (host, hosts) => hosts.some(h => host === h || host.endsWith(`.${h}`));
-// Último pedaço do caminho que é um identificador (id de e-mail, slug longo):
-// se ele está no material do turno, o endereço foi montado a partir de algo lido.
+// The last path segment that's an identifier (e-mail id, long slug): if it's
+// in the turn's material, the address was built from something that was
+// read.
 function idDoCaminho(url) {
   const partes = String(url).replace(/^https?:\/\/[^/]+/i, '').split(/[/?#&=]+/).filter(Boolean);
   const ultimo = flatten(partes.at(-1) || '').trim();
@@ -61,14 +65,14 @@ function idDoCaminho(url) {
 
 const trecho = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 
-// ——— verificadores ———————————————————————————————————————————————
-// Cada um devolve zero ou mais achados. Todos recebem o mesmo contexto e
-// nenhum deles faz I/O.
+// ——— verifiers ———————————————————————————————————————————————
+// Each one returns zero or more findings. All receive the same context and
+// none of them does I/O.
 
-// Link cujo domínio não apareceu em nenhuma saída de ferramenta nem na fala do
-// dono. A conferência HTTP de links (fontesEConferencia) pega o endereço morto;
-// esta pega o endereço que nunca foi consultado, inclusive quando ele responde
-// 200 por acaso.
+// A link whose domain never showed up in any tool output or in the owner's
+// own words. The HTTP link check (fontesEConferencia) catches the dead
+// address; this one catches the address that was never looked up, even when
+// it happens to respond 200.
 function checkLinks(text, ctx) {
   const out = [];
   const vistos = new Set();
@@ -85,16 +89,17 @@ function checkLinks(text, ctx) {
   return out;
 }
 
-// Código de cupom/promoção. O contexto é de BLOCO, não de linha: o texto
-// costuma anunciar "achei estes cupons:" e listar os códigos nas linhas
-// seguintes. A janela abre na linha que fala de cupom e segue enquanto as linhas
-// forem itens de lista, fechando na primeira linha em branco ou fora da lista.
+// Coupon/promo code. The context is at the BLOCK level, not the line level:
+// the text usually announces "found these coupons:" and lists the codes on
+// the following lines. The window opens at the line that mentions a coupon
+// and continues while the lines are list items, closing at the first blank
+// line or the first one outside the list.
 const NAO_CUPOM = new Set(["CNPJ","CPF","RG","CEP","OAB","PDF","DOC","DOCX","XLSX","CSV","HTML","JSON","URL","LGPD","API","SKU","NFE","IPTU","PIX","IOF","CDB","ICMS"]);
-// Fronteira de palavra que entende acento: com \\b do JS, "DESCARTÁVEIS" virava
-// o código "DESCART" e "promoções" contava como "promo".
+// A word boundary that understands accents: with JS's \\b, "DESCARTÁVEIS"
+// turned into the code "DESCART" and "promoções" counted as "promo".
 const FALA_DE_CUPOM = /(?<![\p{L}\p{N}])(?:cupom|cupons|cup[oó]n|cupones|coupons?|promocode|promo|c[óo]digos? de desconto|discount codes?)(?![\p{L}\p{N}])/iu;
 const CODIGO = /(?<![\p{L}\p{N}])[A-Z][A-Z0-9]{3,19}(?![\p{L}\p{N}])/gu;
-// "não achei cupom", "no coupon": a linha nega, não oferece código.
+// "não achei cupom", "no coupon": the line denies, it doesn't offer a code.
 const NEGA_CUPOM = /(?<![\p{L}])(?:n[ãa]o|nenhum|sem|no|not|none|ning[uú]n|sin)(?![\p{L}])[^\n]{0,40}(?:cupo|coupon|c[óo]digo|code)/iu;
 function checkCupons(text, ctx) {
   const out = [];
@@ -106,7 +111,8 @@ function checkCupons(text, ctx) {
     if (falaDeCupom) janela = true;
     else if (!itemDeLista || !line.trim()) janela = falaDeCupom;
     if (!janela || NEGA_CUPOM.test(line)) continue;
-    // Pedaço de endereço (utm, slug) não é código: o link tem verificador próprio.
+    // A piece of an address (utm, slug) isn't a code: the link has its own
+    // verifier.
     for (const code of line.replace(/https?:\/\/\S+|\S+@\S+/gi, ' ').match(CODIGO) || []) {
       if (vistos.has(code) || NAO_CUPOM.has(code)) continue;
       vistos.add(code);
@@ -118,30 +124,34 @@ function checkCupons(text, ctx) {
   return out;
 }
 
-// Assinatura de fonte ("Fonte: X" / "Fontes: X"). É uma afirmação explícita de
-// leitura: o nome precisa ter aparecido em alguma saída real deste turno.
-// LIMITE DELIBERADO: só o bloco explícito. Atribuição solta em prosa ("de acordo
-// com a LGPD") também pode vir do conhecimento do modelo, e acusá-la dispararia
-// repasse em resposta legítima. Ampliar isso exige dado, não palpite.
-// Só vale em turno sem NENHUMA ferramenta: quando houve consulta, a lista de
-// fontes da resposta é montada pela plataforma a partir do que as ferramentas
-// devolveram (citacoes.mjs), e a prosa do modelo ao redor ("consultados agora",
-// "o vídeo está no Facebook") não é nome de fonte. Um achado por linha.
+// Source signature ("Fonte: X" / "Fontes: X"). It's an explicit claim of
+// reading: the name needs to have shown up in some real output from this
+// turn. DELIBERATE LIMIT: only the explicit block. Loose attribution in
+// prose ("according to the LGPD") can also come from the model's own
+// knowledge, and flagging it would trigger a false positive on a legitimate
+// response. Widening this needs data, not a guess.
+// Only applies to a turn with NO tool at all: when there was a query, the
+// response's source list is assembled by the platform from what the tools
+// returned (citacoes.mjs), and the model's surrounding prose ("just
+// checked", "the video is on Facebook") isn't a source name. One finding per
+// line.
 function checkFontes(text, ctx) {
   if (ctx.algumaFerramenta) return [];
   const out = [];
   const vistos = new Set();
   for (const line of String(text).split("\n")) {
-    // A linha quase nunca vem crua: chega como "*Fonte: X*", "**Fonte:** X",
-    // "- Fonte: X" ou "> Fonte: X". Ignorar a decoração de markdown era o
-    // suficiente pra assinatura inventada passar batido (caso de uma rotina real).
+    // The line almost never comes raw: it arrives as "*Fonte: X*",
+    // "**Fonte:** X", "- Fonte: X" or "> Fonte: X". Ignoring the markdown
+    // decoration was enough for a made-up signature to slip through (a real
+    // routine's case).
     const m = /^[\s>*_#-]*fontes?[\s*_]*:\s*(.+)$/i.exec(line);
     if (!m) continue;
     for (const nome of String(m[1]).split(/[;,|]|\s+e\s+/)) {
       const limpo = nome.replace(/^[-–\s*_]+|[.;,\s*_]+$/g, "").slice(0, 80);
-      if (/^https?:/i.test(limpo)) continue; // URL já é tratada em checkLinks
+      if (/^https?:/i.test(limpo)) continue; // URL is already handled in checkLinks
       const chave = flatten(limpo).trim();
-      // Nome curto demais vira substring de qualquer coisa e acusaria à toa.
+      // A name that's too short becomes a substring of anything and would
+      // flag for nothing.
       if (chave.length < 4 || vistos.has(chave)) continue;
       vistos.add(chave);
       if (ctx.pool.includes(chave)) continue;
@@ -152,9 +162,9 @@ function checkFontes(text, ctx) {
   return out;
 }
 
-// Valor em dinheiro apresentado como resultado de pesquisa. O gatilho é a
-// AFIRMAÇÃO de ter pesquisado: conta do dono, orçamento hipotético e preço do
-// próprio plano continuam livres.
+// A money value presented as a search result. The trigger is the CLAIM of
+// having searched: the owner's own account, a hypothetical budget and the
+// price of their own plan all stay unrestricted.
 const PESQUISA_CLAIM = /\b(?:pre[çc]os? reais|valores reais|com base (?:em|nos?) (?:pre[çc]os?|valores|uma? )?(?:reais|pesquisa|levantamento)|fiz (?:um|uma) (?:levantamento|pesquisa|cota[çc][ãa]o)|pesquisei|cotei|consultei os sites?|verifiquei (?:os )?pre[çc]os?)\b/i;
 function checkPrecos(text, ctx) {
   const value = String(text);
@@ -162,22 +172,24 @@ function checkPrecos(text, ctx) {
   const out = [];
   const vistos = new Set();
   for (const raw of value.match(/R\$\s?\d[\d.,]*/gi) || []) {
-    // Compara só os dígitos: a formatação do valor na saída da tool raramente é
-    // a mesma que o modelo escreve.
+    // Compares only the digits: the value's formatting in the tool output is
+    // rarely the same as what the model writes.
     const digits = raw.replace(/\D/g, '').replace(/0+$/, '') || raw.replace(/\D/g, '');
     if (!digits || digits.length < 3 || vistos.has(digits)) continue;
     vistos.add(digits);
     if (ctx.poolDigits.includes(digits)) continue;
-    // Conta feita em cima de valor consultado (2 pessoas, ida + volta) também
-    // tem origem: aceita k × valor ou k × (a + b), k até 6, com folga de R$ 1.
+    // A calculation made on top of a queried value (2 people, round trip)
+    // also has an origin: accepts k × value or k × (a + b), k up to 6, with
+    // R$ 1 slack.
     if (derivado(centavos(raw.replace(/^R\$\s?/i, '')), ctx)) continue;
     out.push({ kind: 'preco_sem_consulta', trecho: trecho(raw), dado: raw.trim() });
   }
   return out;
 }
 
-// Valor escrito em reais ("2.530", "998,93") ou vindo de JSON ("998.93") em
-// centavos. Ponto seguido de 3 dígitos é milhar; outro ponto é decimal.
+// A value written in reais ("2.530", "998,93") or coming from JSON ("998.93")
+// in cents. A dot followed by 3 digits is a thousands separator; another dot
+// is decimal.
 function centavos(v) {
   let t = String(v).replace(/[.,]+$/, '');
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
@@ -206,7 +218,7 @@ function derivado(alvo, ctx) {
   return false;
 }
 
-// Saldo/plano do próprio dono afirmado sem nenhuma consulta de crédito no turno.
+// The owner's own balance/plan stated without any credit query in the turn.
 const SALDO_CLAIM = /\b(?:seu|teu|sua|tua)\s+(?:saldo|plano|franquia|cr[ée]ditos?)\b|\bvoc[êe]\s+(?:tem|est[áa] no|possui|assinou)\b[^\n.!?]{0,60}\b(?:cr[ée]ditos?|plano|b[áa]sico|pro|ultra|super|free)\b/i;
 function checkSaldo(text, ctx) {
   if (ctx.creditToolRan) return [];
@@ -216,12 +228,12 @@ function checkSaldo(text, ctx) {
     if (!SALDO_CLAIM.test(line)) continue;
     if (!/\d/.test(line) && !/\b(?:b[áa]sico|pro|ultra|super|free|gratuito)\b/i.test(line)) continue;
     out.push({ kind: 'saldo_sem_consulta', trecho: trecho(line), dado: '' });
-    break; // um achado por turno basta: a causa e o remédio são os mesmos
+    break; // one finding per turn is enough: the cause and the fix are the same
   }
   return out;
 }
 
-// Conteúdo de anexo descrito sem que nenhuma ferramenta de leitura tenha rodado.
+// Attachment content described without any reading tool having run.
 const CONTEUDO_CLAIM = /\b(?:o (?:arquivo|documento|pdf|anexo)|a (?:planilha|apresenta[çc][ãa]o)|no (?:arquivo|documento|anexo)|segue o? ?(?:fichamento|resumo)|fichamento|resumo do (?:arquivo|documento|anexo|pdf))\b/i;
 function checkArquivo(text, ctx) {
   if (!ctx.hadAttachment || ctx.readToolRan) return [];
@@ -234,8 +246,9 @@ function checkArquivo(text, ctx) {
 const CHECKERS = [checkLinks, checkCupons, checkFontes, checkPrecos, checkSaldo, checkArquivo];
 
 /**
- * Confere se os fatos externos afirmados no texto têm origem neste turno.
- * Puro: não faz I/O, não depende de relógio, não olha histórico.
+ * Checks whether the external facts stated in the text have an origin in
+ * this turn.
+ * Pure: no I/O, no clock dependency, no looking at history.
  */
 export function checkGrounding(text, {
   toolOutputs = [],
@@ -248,8 +261,8 @@ export function checkGrounding(text, {
 } = {}) {
   const value = String(text || '');
   if (!value.trim()) return { findings: [] };
-  // O que o dono escreveu é origem legítima: repetir o link/código que ELE
-  // mandou não é invenção nossa.
+  // What the owner wrote is a legitimate origin: repeating the link/code THEY
+  // sent isn't our invention.
   const bruto = [...toolOutputs.map(o => (typeof o === 'string' ? o : safeJson(o))), String(ownerText || '')].join(' \n ');
   const ctx = {
     pool: ` ${flatten(bruto)} `,
@@ -258,9 +271,10 @@ export function checkGrounding(text, {
     algumaFerramenta: Object.keys(toolCounts).length > 0,
     allowHosts: [...marca().hostsCitaveis, ...allowHosts.map(h => String(h).toLowerCase())],
     allowTokens: allowTokens.map(t => String(t).toUpperCase()),
-    // O saldo/plano é dado NOSSO: quando a plataforma já entrega o número real
-    // no contexto do turno, não há o que inventar e exigir a tool seria acusar
-    // o assistente por usar a informação certa.
+    // The balance/plan is OUR data: when the platform already delivers the
+    // real number in the turn's context, there's nothing to invent, and
+    // requiring the tool would mean flagging the assistant for using the
+    // correct information.
     creditToolRan: creditDelivered || Object.keys(toolCounts).some(n => CREDIT_TOOLS.has(n)),
     readToolRan: Object.keys(toolCounts).some(n => READ_TOOLS.has(n)),
     hadAttachment: !!hadAttachment,
@@ -323,9 +337,9 @@ const AVISO = {
 };
 
 /**
- * Rede de baixo: quando nem o repasse produziu origem, a afirmação sem base não
- * é entregue como fato. Remove as LINHAS não fundamentadas e avisa uma vez.
- * Nunca deixa a resposta virar silêncio.
+ * Bottom-level safety net: when not even the hand-off produced an origin, the
+ * baseless claim isn't delivered as fact. Removes the ungrounded LINES and
+ * warns once. Never lets the response turn into silence.
  */
 export function applyGroundingFallback(text, findings, language = 'pt-BR') {
   const value = String(text || '');

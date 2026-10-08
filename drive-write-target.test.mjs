@@ -1,4 +1,4 @@
-// Offline: funções reais extraídas sem importar conectores/server nem abrir serviços.
+// Offline: real functions extracted without importing connectors/server or opening services.
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ for (const n of ['spawn','spawnSync','exec','execSync','execFile','execFileSync'
 syncBuiltinESMExports();
 const src = fs.readFileSync(new URL('./web/connectors.mjs', import.meta.url), 'utf8');
 const between = (a,b) => { const start=src.indexOf(a),end=src.indexOf(b,start); assert(start>=0&&end>start); return src.slice(start,end); };
-const code = [between('async function gget(', '// Uma busca anterior'), between('const validDriveId', '// PATCH JSON autenticado'),src.slice(src.indexOf('async function findFileInFolder('))].join('\n').replaceAll('export async function ', 'async function ');
+const code = [between('async function gget(', '// A search prior to a write'), between('const validDriveId', '// Authenticated JSON PATCH'),src.slice(src.indexOf('async function findFileInFolder('))].join('\n').replaceAll('export async function ', 'async function ');
 let count=0;
 const eq=(a,b)=>{assert.deepEqual(a,b);count++};
 const ok=x=>{assert(x);count++};
@@ -40,21 +40,21 @@ for(const f of failures)for(const stage of ['file','folder']) {
  try {await (stage==='file'?h.upload():h.flow())}catch(e){error=e}
  ok(error);ok(!error.message.includes('SYNTHETIC_PRIVATE'));eq(h.calls.filter(c=>c.method!=='GET').length,0);eq(h.calls.length,1);
 }
-// Nenhum erro de credencial no lookup vira criação, nem do arquivo nem da pasta.
+// No credential error in the lookup turns into creation, neither of the file nor the folder.
 for(const stage of ['file','folder']) {
  const h=harness([],{tokenError:true});await assert.rejects(stage==='file'?h.upload():h.flow());count++;eq(h.calls.length,0);
 }
-// Resultado único preserva bytes, pasta e ID/link; query pede prova de completude.
+// Single result preserves bytes, folder, and ID/link; query asks for proof of completeness.
 {
  const h=harness([good({files:[file()]}),good({id:'original',name:'fixture.xlsx',webViewLink:'https://example.invalid/original'})]);
  const r=await h.upload();eq(r.updated,true);eq(r.id,'original');eq(r.webViewLink,'https://example.invalid/original');eq(h.calls.map(c=>c.method),['GET','PATCH']);eq(h.calls[1].body,Buffer.from([0,10,255,66]));eq(h.calls[1].headers['content-type'],'application/test');
  const u=new URL(h.calls[0].url);eq(u.searchParams.get('pageSize'),'2');eq(u.searchParams.get('fields'),'nextPageToken,incompleteSearch,files(id,name,mimeType)');ok(u.searchParams.get('q').includes("'owned-folder' in parents"));ok(u.searchParams.get('q').includes('trashed = false'));eq(h.remaining(),0);
 }
-// Vazio confirmado é o único caminho normal para criar; multipart conserva bytes.
+// Confirmed empty is the only normal path to create; multipart preserves bytes.
 {
  const h=harness([good({files:[],nextPageToken:'',incompleteSearch:false}),good({id:'new',name:'fixture.xlsx'})]);const r=await h.upload();eq(r.updated,false);eq(h.calls.map(c=>c.method),['GET','POST']);ok(h.calls[1].body.includes(Buffer.from([0,10,255,66])));ok(h.calls[1].body.toString().includes('"parents":["owned-folder"]'));
 }
-// Escape da query e rejeição de IDs/localização sem emitir rede.
+// Query escaping and rejection of IDs/location without emitting network calls.
 {
  const name="A'B\\C.xlsx";const h=harness([good({files:[file('original',name)]}),good({id:'original'})]);await h.upload({name});const q=new URL(h.calls[0].url).searchParams.get('q');ok(q.includes("name = 'A\\'B\\\\C.xlsx'"));
 }
@@ -64,7 +64,7 @@ for(const args of [{folderId:null},{folderId:''},{folderId:"x' or true"},{folder
 for(const bad of [folder(),file('original','different.xlsx')]) {
  const h=harness([good({files:[bad]})]);await assert.rejects(h.upload());count++;eq(h.calls.filter(c=>c.method!=='GET').length,0);
 }
-// Pasta única reutilizada, pasta realmente ausente criada uma vez. Sem HTTP real.
+// Single folder reused, genuinely absent folder created once. No real HTTP.
 {
  const h=harness([good({files:[folder()]}),good({files:[file()]}),good({id:'original'})]);const r=await h.flow();eq(r.updated,true);eq(h.calls.map(c=>c.method),['GET','GET','PATCH']);ok(new URL(h.calls[0].url).searchParams.get('q').includes('appProperties has'));
 }
@@ -77,11 +77,11 @@ for(const bad of [folder(),file('original','different.xlsx')]) {
 for(const bad of [null,{}, {id:''},{id:'bad/id'}]) {
  const h=harness([good({files:[]}),good(bad)]);await assert.rejects(h.flow());count++;eq(h.calls.map(c=>c.method),['GET','POST']);
 }
-// HTTP de escrita falha: NÃO há fallback para POST nem retry automático.
+// Write HTTP fails: there is NO fallback to POST nor automatic retry.
 for(const status of [401,403,404,409,412,429,500,503])for(const exists of [true,false]) {
  const h=harness([good({files:exists?[file()]:[]}),{status}]);await assert.rejects(h.upload());count++;eq(h.calls.map(c=>c.method),['GET',exists?'PATCH':'POST']);
 }
-// Opção interna explícita de criar cópia continua sendo criação (sem lookup).
+// Explicit internal option to create a copy is still creation (without lookup).
 {
  const h=harness([good({id:'new'})]);const r=await h.upload({update:false});eq(r.updated,false);eq(h.calls.map(c=>c.method),['POST']);
 }

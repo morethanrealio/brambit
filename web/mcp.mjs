@@ -1,31 +1,31 @@
-// ── Cliente MCP (Model Context Protocol) ──
-// Conecta o core a um servidor MCP remoto pela transport "Streamable HTTP"
-// (um único endpoint, JSON-RPC 2.0 por POST; a resposta vem em application/json
-// OU text/event-stream). Lista as tools do servidor e devolve cada uma no
-// MESMO shape das tools do core ({ name, description, parameters, run }), então
-// elas entram no tool-loop sem nenhuma mudança no harness.
+// ── MCP client (Model Context Protocol) ──
+// Connects the core to a remote MCP server via the "Streamable HTTP" transport
+// (a single endpoint, JSON-RPC 2.0 over POST; the response comes as application/json
+// OR text/event-stream). Lists the server's tools and returns each one in the
+// SAME shape as the core's tools ({ name, description, parameters, run }), so
+// they enter the tool-loop with no change to the harness.
 //
-// Isso é o que permite plugar Slack/Notion/Trello/etc. sem codar cada um na mão:
-// o serviço expõe um servidor MCP, a gente só aponta a URL (e um header de auth
-// quando precisa).
+// This is what allows plugging in Slack/Notion/Trello/etc. without hand-coding each one:
+// the service exposes an MCP server, we just point to the URL (and an auth header
+// when needed).
 
 import { fetchExterno } from './net-guard.mjs';
 
 const PROTOCOL_VERSION = '2025-06-18';
 
-// Faz uma chamada JSON-RPC e devolve o `result` (ou lança no `error`).
-// Aceita resposta JSON pura ou SSE (pega o 1º data: com o id que pedimos).
+// Makes a JSON-RPC call and returns the `result` (or throws on `error`).
+// Accepts a plain JSON response or SSE (grabs the 1st data: with the id we requested).
 async function rpc(url, { id, method, params, headers = {}, notify = false }) {
   const body = notify
     ? { jsonrpc: '2.0', method, params }
     : { jsonrpc: '2.0', id, method, params };
-  // fetchExterno, não fetch: a URL aqui é do USUÁRIO (ele cola em Conexões) e
-  // esta chamada sai do backend, que está DENTRO da VPC. Sem guarda, apontar pro
-  // 169.254.169.254 ou pro 127.0.0.1 fazia o servidor buscar, pelo usuário,
-  // coisa que ele não alcança de fora, e ainda entregava o Bearer dele em texto
-  // puro se a URL fosse http. A guarda exige https + endereço público e
-  // revalida a cada redirect. Timeout junto: servidor MCP que não responde
-  // segurava o turno inteiro.
+  // fetchExterno, not fetch: the URL here belongs to the USER (they paste it in Connections) and
+  // this call goes out from the backend, which is INSIDE the VPC. Without a guard, pointing to
+  // 169.254.169.254 or 127.0.0.1 would make the server fetch, on the user's behalf,
+  // something they can't reach from outside, and it would still hand over their Bearer in plain
+  // text if the URL were http. The guard requires https + a public address and
+  // revalidates on every redirect. Timeout too: an MCP server that doesn't respond
+  // was holding up the whole turn.
   const r = await fetchExterno(url, {
     method: 'POST',
     headers: {
@@ -35,7 +35,7 @@ async function rpc(url, { id, method, params, headers = {}, notify = false }) {
     },
     body: JSON.stringify(body),
   }, { timeoutMs: 30_000 });
-  // Notificação (sem id): servidor responde 202 sem corpo. Só devolve a sessão.
+  // Notification (no id): server responds 202 with no body. Just returns the session.
   const session = r.headers.get('mcp-session-id') || headers['mcp-session-id'] || null;
   if (notify) return { session };
   if (!r.ok) throw new Error(`MCP ${method} ${r.status}: ${(await r.text()).slice(0, 300)}`);
@@ -64,12 +64,12 @@ function parseSseForId(text, id) {
     try {
       const obj = JSON.parse(data);
       if (obj.id === id) return obj;
-    } catch { /* ignora keep-alives e linhas não-JSON */ }
+    } catch { /* ignores keep-alives and non-JSON lines */ }
   }
   return null;
 }
 
-// Junta o conteúdo devolvido por tools/call num texto pro modelo ler.
+// Joins the content returned by tools/call into text for the model to read.
 function renderToolResult(result) {
   if (!result) return '';
   const parts = result.content || [];
@@ -83,8 +83,8 @@ function renderToolResult(result) {
   return JSON.stringify(result);
 }
 
-// Frase do cartão de confirmação de uma chamada MCP: qual ferramenta, de qual
-// conector e com quais argumentos (resumidos), pro dono saber o que aprova.
+// Confirmation card sentence for an MCP call: which tool, from which
+// connector and with which arguments (summarized), so the owner knows what they're approving.
 export function describeMcpCall(label, toolName, args = {}, lang = '') {
   let resumo = '';
   try { resumo = JSON.stringify(args ?? {}); } catch { resumo = ''; }
@@ -97,7 +97,7 @@ export function describeMcpCall(label, toolName, args = {}, lang = '') {
 }
 
 /**
- * Conecta a um servidor MCP e devolve suas tools já no shape do core.
+ * Connects to an MCP server and returns its tools already in the core's shape.
  * @param {{ url:string, headers?:object, label?:string }} cfg
  * @returns {Promise<{ tools:object[], serverInfo:object }>}
  */
@@ -120,7 +120,7 @@ export async function mcpConnect({ url, headers = {}, label = '' }) {
 
   // 2) notifications/initialized (handshake completo).
   try { await rpc(url, { method: 'notifications/initialized', notify: true, headers: sessionHeaders }); }
-  catch { /* alguns servidores não exigem; segue */ }
+  catch { /* some servers don't require it; proceeds */ }
 
   // 3) tools/list.
   const listed = await rpc(url, { id: 2, method: 'tools/list', params: {}, headers: sessionHeaders });
@@ -131,10 +131,10 @@ export async function mcpConnect({ url, headers = {}, label = '' }) {
     name: (prefix + t.name).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64),
     description: t.description || `Tool ${t.name} (via MCP${label ? ' ' + label : ''}).`,
     parameters: t.inputSchema || { type: 'object', properties: {} },
-    // Não sabemos o que uma ferramenta de servidor externo faz: ela pode gravar,
-    // apagar ou enviar. Toda chamada passa pelo cartão de confirmação (gateTool).
-    // A anotação readOnlyHint do próprio servidor não libera nada: é o servidor
-    // falando de si mesmo, e a decisão de pular o cartão tem que ser nossa.
+    // We don't know what an external server's tool does: it might write,
+    // delete or send. Every call goes through the confirmation card (gateTool).
+    // The server's own readOnlyHint annotation doesn't clear anything: it's the server
+    // talking about itself, and the decision to skip the card has to be ours.
     requiresConfirmation: true,
     describeConfirmation: (args, lang) => describeMcpCall(label, t.name, args, lang),
     async run(args) {
@@ -151,7 +151,7 @@ export async function mcpConnect({ url, headers = {}, label = '' }) {
   return { tools, serverInfo: init.result?.serverInfo || {} };
 }
 
-// Só lista as tools de um servidor (pra validar config sem rodar nada).
+// Just lists a server's tools (to validate config without running anything).
 export async function mcpListTools(cfg) {
   const { tools, serverInfo } = await mcpConnect(cfg);
   return { serverInfo, tools: tools.map((t) => ({ name: t.name, description: t.description })) };

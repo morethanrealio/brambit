@@ -1,5 +1,5 @@
-// Listas pessoais: estado confirmado no banco, separado de eventos contáveis.
-// Sem conexão/import de db aqui: o servidor injeta o pool e os testes usam SQL isolado.
+// Personal lists: confirmed state in the database, separate from countable events.
+// No db connection/import here: the server injects the pool and tests use isolated SQL.
 import { randomUUID, createHash } from 'node:crypto';
 
 export const CHECKLIST_SCHEMA = `
@@ -32,8 +32,8 @@ const unit = value => {
 const view = r => ({ id: r.id, nome: r.title, versao: r.revision, itens: r.items,
   pendentes: r.items.filter(i => !i.concluido).length, total: r.items.length,
   ...(r.finalizada_em ? { finalizada_em: new Date(r.finalizada_em).toISOString() } : {}) });
-// Lista finalizada sai do nome (name_key ganha o id) e só é achada pelo id:
-// assim "Supermercado" da próxima compra é uma lista nova, sem colidir.
+// A finished list leaves the name (name_key gets the id) and can only be found by id:
+// this way "Supermercado" from the next purchase is a new list, with no collision.
 const keyFinalizada = r => `${key(r.title)}#${r.id}`;
 const error = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 
@@ -46,7 +46,7 @@ export function createChecklistStore(pool) {
   }
   async function read(userId, name, db = pool, lock = false) {
     const { rows } = await db.query(`SELECT * FROM mtr_harness.checklists WHERE user_id=$1 AND (id::text=$2 OR name_key=$3)${lock ? ' FOR UPDATE' : ''}`, [userId, String(name), key(name)]);
-    return rows[0]; // Correspondência exata; nunca selecionar por substring.
+    return rows[0]; // Exact match; never select by substring.
   }
   return {
     init: () => pool.query(CHECKLIST_SCHEMA),

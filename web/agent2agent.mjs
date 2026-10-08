@@ -1,26 +1,27 @@
 import { createRespondDecisionTool } from './inbound-decision.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
-// ── Agente ↔ Agente: negociação delimitada entre assistentes de dois donos ──
+// ── Agent ↔ Agent: bounded negotiation between two owners' assistants ──
 //
-// NÃO é chat aberto. É uma tarefa/negociação com objetivo, teto de rodadas e fim.
-// O assistente do dono A chama a tool `falar_com_agente(contato, objetivo)`; a
-// tool resolve o contato (conexão ACEITA), abre uma conversa e roda uma
-// negociação sequencial e curta entre um lado SOLICITANTE (A) e um lado
-// RESPONDENTE (B), cada um num turno ISOLADO (padrão sub-agente: history vazio,
-// system enxuto, contexto próprio). No fim devolve ao dono A o resultado.
+// NOT open chat. It's a task/negotiation with a goal, a round cap, and an end.
+// Owner A's assistant calls the tool `falar_com_agente(contato, objetivo)`; the
+// tool resolves the contact (ACCEPTED connection), opens a conversation and runs
+// a short sequential negotiation between a REQUESTER side (A) and a RESPONDER
+// side (B), each in an ISOLATED turn (sub-agent pattern: empty history, lean
+// system, own context). At the end it returns the result to owner A.
 //
-// Guardrails anti-loop (o núcleo):
-//  1. Papéis assimétricos (A pede, B responde) — sem peer-chat de ida e volta.
-//  2. Teto rígido de rodadas (MAX_ROUNDS). Bateu sem fechar → encerra e reporta.
-//  3. Intents ESTRUTURADOS (ask|answer|propose|accept|decline|close) numa máquina
-//     de estado simples que detecta "acabou" e corta.
-//  4. Dedup: se um lado repete quase a mesma mensagem, encerra.
-//  5. Orçamento de crédito por conversa (teto de tokens). Estourou → auto-close.
-//  6. Sem iniciativa: a conversa só nasce quando o dono de A pede.
-//  7. Humano no loop pra consequência: B NUNCA compromete o dono (marcar, aceitar
-//     de verdade) sozinho — em v1 B não tem tools de ação; propõe e o dono decide.
+// Anti-loop guardrails (the core):
+//  1. Asymmetric roles (A asks, B answers) — no back-and-forth peer chat.
+//  2. Hard round cap (MAX_ROUNDS). Hit without closing → ends and reports.
+//  3. STRUCTURED intents (ask|answer|propose|accept|decline|close) in a simple
+//     state machine that detects "done" and cuts.
+//  4. Dedup: if one side repeats almost the same message, it ends.
+//  5. Credit budget per conversation (token cap). Exceeded → auto-close.
+//  6. No initiative: the conversation only starts when A's owner asks.
+//  7. Human in the loop for consequence: B NEVER commits its owner (booking,
+//     actually accepting) on its own — in v1 B has no action tools; it
+//     proposes and the owner decides.
 //
-// Cada lado é cobrado no dono dele (billA/billB), via o mesmo pipeline de crédito.
+// Each side is billed to its own owner (billA/billB), via the same credit pipeline.
 
 import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 import {
@@ -35,23 +36,24 @@ const MAX_ROUNDS = Number(process.env.A2A_MAX_ROUNDS || 3);      // rodadas (1 r
 const BUDGET_TOKENS = Number(process.env.A2A_BUDGET_TOKENS || 40000); // teto de tokens por conversa
 const INTENTS = ['ask', 'answer', 'propose', 'accept', 'decline', 'close', 'question'];
 
-// Normaliza texto pra comparar dedup (minúsculo, sem espaço/pontuação repetida).
+// Normalizes text to compare for dedup (lowercase, no repeated space/punctuation).
 function norm(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[.,;:!?]+/g, '').trim();
 }
 
-// Corta um texto num limite de chars (pra não estourar o contexto/orçamento).
+// Cuts a text at a char limit (so it does not blow the context/budget).
 function clip(s, n) {
   const t = String(s || '').trim();
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
-// Monta o "o que este assistente sabe" a partir do próprio agente (instruções que
-// o dono deu) + um texto de perfil JÁ RESOLVIDO pelo caller. O caller decide o
-// que entra em `profileText`: pro lado A (que fala do próprio dono) é o perfil
-// completo do dono A; pro lado B (respondente) é APENAS a allow-list pública que
-// o dono B curou — NUNCA o perfil privado, senão vaza dado pessoal de B pro dono
-// A (o transcript volta verbatim). Enforcement em código, não em prompt.
+// Builds "what this assistant knows" from the agent itself (instructions the
+// owner gave) + a profile text ALREADY RESOLVED by the caller. The caller
+// decides what goes into `profileText`: for side A (which speaks for its own
+// owner) it's owner A's full profile; for side B (responder) it's ONLY the
+// public allow-list that owner B curated — NEVER the private profile, or it
+// leaks B's personal data to owner A (the transcript comes back verbatim).
+// Enforcement in code, not in the prompt.
 function knowledgeBlock({ ownerName, agent, profileText }) {
   const parts = [];
   if (agent?.goal) parts.push(`Role: ${clip(agent.goal, 300)}`);
@@ -60,8 +62,9 @@ function knowledgeBlock({ ownerName, agent, profileText }) {
   return parts.join('\n\n');
 }
 
-// Extrai { intent, mensagem } da saída do modelo. Pede JSON, mas é tolerante:
-// se não vier JSON válido, infere o intent por palavras-chave e usa o texto todo.
+// Extracts { intent, mensagem } from the model's output. Asks for JSON, but
+// is tolerant: if valid JSON doesn't come back, it infers the intent by
+// keywords and uses the whole text.
 function parseTurn(raw, side) {
   const text = String(raw || '').trim();
   // tenta achar um bloco JSON
@@ -87,11 +90,12 @@ function inferIntent(msg, side) {
   return side === 'a' ? 'ask' : 'answer';
 }
 
-// System do lado B (respondente). B representa o dono B e responde SÓ sobre o
-// pedido; nunca despeja o perfil e nunca compromete o dono sozinho.
+// System for side B (responder). B represents owner B and only answers about
+// the request; never dumps the profile and never commits the owner on its own.
 export function systemB({ ownerBName, agentB, ownerAName, ownerBPublicText, language }) {
-  // profileText do lado B = SÓ a allow-list pública que o dono B curou. O perfil
-  // PRIVADO de B nunca entra aqui (vazava dado pessoal de B pro dono A via transcript).
+  // profileText for side B = ONLY the public allow-list that owner B
+  // curated. B's PRIVATE profile never enters here (it leaked B's personal
+  // data to owner A via the transcript).
   const know = knowledgeBlock({ ownerName: ownerBName, agent: agentB, profileText: ownerBPublicText });
   return `You are ${agentB.name}, ${ownerBName}'s personal assistant. ${ownerAName}'s assistant reached out with a one-off request.
 ${know ? `\nWHAT YOU CAN SHARE (only what is here is shareable; if the request needs something that is NOT here, use "question" to take it to ${ownerBName}):\n${know}\n` : ''}
@@ -117,8 +121,8 @@ ALWAYS reply in JSON, one line:
 Never use "accept" (only the owner truly accepts).`;
 }
 
-// System do lado A (solicitante). A já tem o objetivo do dono; conduz a conversa
-// pra fechar em poucas rodadas.
+// System for side A (requester). A already has the owner's goal; drives the
+// conversation to close in few rounds.
 export function systemA({ ownerAName, agentA, ownerBName, objetivo, ownerAProfileText, language }) {
   const know = knowledgeBlock({ ownerName: ownerAName, agent: agentA, profileText: ownerAProfileText });
   return `You are ${agentA.name}, ${ownerAName}'s personal assistant. You are talking to ${ownerBName}'s assistant to resolve a request from your owner.
@@ -142,7 +146,7 @@ ALWAYS reply in JSON, one line:
 
 // Roda um lado isolado (sem tools em v1) e devolve { intent, mensagem, usages }.
 async function runSide({ provider, system, userInput }) {
-  const reg = new ToolRegistry(); // v1: sem tools de ação (evita consequência sem dono)
+  const reg = new ToolRegistry(); // v1: no action tools (avoids consequence without the owner)
   const { text, usages } = await runAgent({
     provider, tools: reg, system, userInput, history: [], maxSteps: 2,
   });
@@ -153,10 +157,10 @@ function tokensOf(usages) {
   return (usages || []).reduce((n, u) => n + (u?.total || 0), 0);
 }
 
-// Constrói a tool `listar_contatos` pra o assistente saber, de FATO, quais
-// pessoas estão conectadas (conexões aceitas), quem ainda está pendente, e com
-// quais dá pra falar (o outro lado designou um assistente de entrada). Sem essa
-// tool o assistente não tinha como consultar a lista e acabava inventando.
+// Builds the `listar_contatos` tool so the assistant ACTUALLY knows which
+// people are connected (accepted connections), who is still pending, and who
+// it can talk to (the other side designated an inbound assistant). Without
+// this tool the assistant had no way to check the list and ended up making it up.
 export function listContactsTool({ fromUser }) {
   return {
     name: 'listar_contatos',
@@ -194,11 +198,11 @@ export function listContactsTool({ fromUser }) {
   };
 }
 
-// Constrói a tool `falar_com_agente` pra o assistente do dono A.
-//  fromUser/fromAgent: dono A e o assistente dele que está chamando.
-//  makeProvider: () => provider (injetado pelo server, ex makePrimaryProvider).
-//  bill: (userId, agentId, usages) => void — cobra cada lado no dono certo
-//        (A no dono A, B no dono B), via o mesmo pipeline de crédito.
+// Builds the `falar_com_agente` tool for owner A's assistant.
+//  fromUser/fromAgent: owner A and their assistant that's calling.
+//  makeProvider: () => provider (injected by the server, e.g. makePrimaryProvider).
+//  bill: (userId, agentId, usages) => void — charges each side to the right owner
+//        (A to owner A, B to owner B), via the same credit pipeline.
 export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, notifyOwner, originChannel }) {
   return {
     name: 'falar_com_agente',
@@ -214,10 +218,10 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
     },
     run: async ({ contato, objetivo, responder_em }) => {
       const obj = String(objetivo || '').trim();
-      // Canal de retorno: override do dono, senão o canal de origem do turno.
+      // Return channel: owner override, else the turn's origin channel.
       const replyChannel = ['telegram', 'whatsapp', 'email'].includes(responder_em) ? responder_em : originChannel;
       if (!obj) return 'ERRO: preciso de um objetivo claro pra falar com o assistente do contato.';
-      // 1) Resolve o contato → alvo (conexão aceita + inbound agent do outro lado).
+      // 1) Resolves the contact → target (accepted connection + the other side's inbound agent).
       const target = await resolveContactTarget(fromUser, contato);
       if (target.error === 'contato_nao_encontrado')
         return `Não achei "${contato}" na sua lista de contatos conectados. Você precisa ter uma conexão ACEITA com essa pessoa antes (peça pro dono conectar em Contatos).`;
@@ -228,7 +232,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
       if (target.error) return `Não consegui falar com o assistente de "${contato}" (${target.error}).`;
 
       const { toUser, toAgent, personName } = target;
-      // 2) Carrega os dois assistentes e os donos.
+      // 2) Loads both assistants and owners.
       const agentA = await getAgentOwned(fromAgent, fromUser);
       const agentB = await getAgentOwned(toAgent, toUser);
       if (!agentB) return `O assistente de ${personName} não está mais disponível.`;
@@ -237,33 +241,34 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
       const ownerAName = (ownerA?.name || 'o dono').split(' ')[0];
       const ownerBName = (ownerB?.name || personName || 'o contato').split(' ')[0];
 
-      // Perfil do lado A: é o PRÓPRIO dono A falando via seu assistente, então o
-      // perfil privado dele pode entrar (não é cross-owner leak — o dado é dele).
+      // Side A's profile: it's owner A HIMSELF speaking via his assistant, so
+      // his private profile can go in (it's not a cross-owner leak — the data is his).
       const ownerAProfileText = (await getWikiPage(fromUser, 'perfil').catch(() => null))?.body
         || (agentA && agentA.profile) || '';
-      // Perfil do lado B (respondente): NÃO injetamos o perfil PRIVADO de B. Isso
-      // vazava dado pessoal do dono B pro dono A (o transcript volta verbatim, e um
-      // objetivo malicioso extraía o perfil inteiro). Allow-list: só uma página
-      // 'perfil_publico' que o dono B curou explicitamente como compartilhável entre
-      // assistentes. Sem ela, B não tem perfil e escala pro próprio dono via "question".
+      // Side B's profile (responder): we do NOT inject B's PRIVATE profile.
+      // This leaked owner B's personal data to owner A (the transcript comes
+      // back verbatim, and a malicious goal could extract the whole
+      // profile). Allow-list: only a 'perfil_publico' page that owner B
+      // explicitly curated as shareable between assistants. Without it, B
+      // has no profile and escalates to its own owner via "question".
       const ownerBPublicText = (await getWikiPage(toUser, 'perfil_publico').catch(() => null))?.body || '';
 
       // 3) Abre a conversa.
       const convo = await createAgentConvo({ fromUser, fromAgent, toUser, toAgent, objetivo: obj });
       const providerA = makeProvider({userId:fromUser,agentId:fromAgent,threadId:null,kind:'agent2agent'});
       const providerB = makeProvider({userId:toUser,agentId:toAgent,threadId:null,kind:'agent2agent'});
-      // Cada lado fala no idioma do PRÓPRIO dono: o desfecho de A volta pro dono A
-      // e a "question" de B é entregue ao dono B.
+      // Each side speaks in its OWN owner's language: A's outcome goes back
+      // to owner A and B's "question" is delivered to owner B.
       const langA = (await getUserLocale(fromUser).catch(() => null))?.language;
       const langB = (await getUserLocale(toUser).catch(() => null))?.language;
       const sysA = comIdioma(systemA({ ownerAName, agentA: agentA || { name: 'Assistente' }, ownerBName, objetivo: obj, ownerAProfileText, language: langA }), langA);
       const sysB = comIdioma(systemB({ ownerBName, agentB, ownerAName, ownerBPublicText, language: langB }), langB);
 
-      // Primeira fala de A = o próprio objetivo (ask). Registra.
+      // A's first message = the goal itself (ask). Records it.
       let lastA = { intent: 'ask', mensagem: obj };
       await addConvoMsg({ convoId: convo.id, senderAgent: fromAgent, side: 'a', intent: 'ask', payload: obj });
 
-      const transcript = []; // pra montar o relatório final pro dono
+      const transcript = []; // to build the final report for the owner
       let status = 'open';
       let resultado = '';
       let spent = 0;
@@ -290,18 +295,20 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
         }
         prevBMsg = norm(b.mensagem);
 
-        // ESCALA PRO DONO B (ask-human loop): B não sabe, mas o dono B saberia.
-        // Abre uma conversa separada (status awaiting_owner_b) com a pergunta
-        // guardada como fala do lado A; o dono B vê na caixa e responde depois,
-        // e a resposta volta pro dono A pela caixa dele.
+        // ESCALATES TO OWNER B (ask-human loop): B does not know, but owner
+        // B would. Opens a separate conversation (status awaiting_owner_b)
+        // with the question stored as side A's message; owner B sees it in
+        // the inbox and answers later, and the answer goes back to owner A
+        // through his inbox.
         if (b.intent === 'question') {
-          // A qConvo guarda o canal de ORIGEM do pedido de A: é por ele que a
-          // resposta do dono B vai voltar pro dono A (answerExternalQuestion).
+          // The qConvo stores the ORIGIN channel of A's request: it's
+          // through it that owner B's answer goes back to owner A
+          // (answerExternalQuestion).
           const qConvo = await createAgentConvo({ fromUser, fromAgent, toUser, toAgent, objetivo: obj, originChannel: replyChannel });
           await addConvoMsg({ convoId: qConvo.id, senderAgent: fromAgent, side: 'a', intent: 'question', payload: b.mensagem });
           await updateAgentConvo(qConvo.id, { status: 'awaiting_owner_b' });
-          // notifyOwner: pinga o dono B na hora (direção A→B, sem canal de origem
-          // do lado dele → cai na resolução padrão de push).
+          // notifyOwner: pings owner B right away (direction A→B, with no
+          // origin channel on his side → falls back to the default push resolution).
           try { await notifyOwner?.(toUser, `O assistente de ${ownerAName} perguntou: ${b.mensagem}`); } catch {}
           resultado = `O assistente de ${ownerBName} não tinha essa informação, então levei a pergunta pro próprio ${ownerBName}: "${b.mensagem}". Assim que ${ownerBName} responder, a resposta chega pra você na sua caixa.`;
           status = 'escalated'; break;
@@ -316,7 +323,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
           resultado = b.mensagem;
           status = 'resolved'; break;
         }
-        // orçamento
+        // budget
         if (spent > BUDGET_TOKENS) {
           resultado = `Encerrei por limite da conversa. Última resposta de ${ownerBName}: "${b.mensagem}"`;
           status = 'resolved'; break;
@@ -358,20 +365,21 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
 
       await updateAgentConvo(convo.id, { status, rounds, resultado });
 
-      // Relatório pro dono A (a tool devolve isso pro assistente principal).
+      // Report for owner A (the tool returns this to the main assistant).
       const linhas = transcript.map((t) => `• ${t.who}: ${t.msg}`).join('\n');
       return `Conversa com o assistente de ${personName} sobre: "${obj}"\n\n${linhas}\n\nDesfecho: ${resultado}\n\n(Lembre: nada foi confirmado em nome de ninguém. Se o dono quiser fechar/aceitar algo, use a tool confirmar_com_agente — ela pede o ok explícito dele antes de valer.)`;
     },
   };
 }
 
-// Constrói a tool `confirmar_com_agente` — a AÇÃO COM CONSEQUÊNCIA (Parte 3).
-// Depois de uma conversa (falar_com_agente) que chegou numa proposta, é aqui que
-// o dono A FECHA/aceita algo com o assistente do contato. É uma ação REAL, então
-// entra na trava de confirmação (confirm.mjs / GATED_TOOLS): o assistente chama,
-// nada acontece, o dono precisa dar o "ok" explícito, e SÓ então a decisão é
-// registrada e entregue ao lado B. O lado B nunca é comprometido automaticamente:
-// o assistente de B leva a decisão pro dono B confirmar do lado dele.
+// Builds the `confirmar_com_agente` tool — the ACTION WITH CONSEQUENCE (Part 3).
+// After a conversation (falar_com_agente) that reached a proposal, this is
+// where owner A CLOSES/accepts something with the contact's assistant. It's a
+// REAL action, so it goes through the confirmation guard (confirm.mjs /
+// GATED_TOOLS): the assistant calls it, nothing happens, the owner needs to
+// give an explicit "ok", and ONLY THEN is the decision recorded and delivered
+// to side B. Side B is never automatically committed: B's assistant takes the
+// decision to owner B to confirm on his side.
 export function confirmAgentDecisionTool({ fromUser, fromAgent, originChannel, notifyOwner }) {
   return {
     name: 'confirmar_com_agente',
@@ -400,14 +408,15 @@ export function confirmAgentDecisionTool({ fromUser, fromAgent, originChannel, n
         return JSON.stringify({ ok: false, error: `Não consegui confirmar com o assistente de "${contato}" (${target.error}).` });
 
       const { toUser, toAgent, personName } = target;
-      // Registra a decisão como uma convo terminal (accept do lado A) e entrega
-      // ao lado B. O assistente de B vai levar isso pro dono B confirmar. O canal
-      // de retorno fica gravado na convo (por ele volta a resposta de B pro A).
+      // Records the decision as a terminal convo (side A's accept) and
+      // delivers it to side B. B's assistant will take this to owner B to
+      // confirm. The return channel is stored in the convo (through it B's
+      // answer goes back to A).
       const convo = await createAgentConvo({ fromUser, fromAgent, toUser, toAgent, objetivo: `Confirmação: ${dec}`, originChannel: replyChannel });
       await addConvoMsg({ convoId: convo.id, senderAgent: fromAgent, side: 'a', intent: 'accept', payload: dec });
       await updateAgentConvo(convo.id, { status: 'accepted', rounds: 1, resultado: dec });
-      // Pinga o dono B na hora: chegou uma decisão pra ele confirmar (direção A→B,
-      // resolução padrão de push).
+      // Pings owner B right away: a decision arrived for him to confirm
+      // (direction A→B, default push resolution).
       const ownerA = await getUserById(fromUser).catch(() => null);
       const ownerAName = (ownerA?.name || 'um contato').split(' ')[0];
       try { await notifyOwner?.(toUser, `${ownerAName} confirmou: ${dec}. Abra o ${marca().nome} pra aceitar ou recusar.`); } catch {}
@@ -420,25 +429,26 @@ export function confirmAgentDecisionTool({ fromUser, fromAgent, originChannel, n
   };
 }
 
-// ── Lado B: responder uma decisão que chegou de outro dono ──
+// ── Side B: answering a decision that arrived from another owner ──
 //
-// Fecha o ciclo. Quando o dono A confirma algo (confirmar_com_agente), a decisão
-// fica pendente na caixa do dono B (surfaçada no prompt via agentInbox). O dono B
-// então manda o assistente dele aceitar ou recusar. Esta tool é GATED: só executa
-// depois do "ok" explícito do dono B (confirm.mjs). A resposta volta pro dono A
-// pela caixa de respostas dele. Nada é imposto: é o dono B quem decide.
+// Closes the cycle. When owner A confirms something (confirmar_com_agente), the
+// decision stays pending in owner B's inbox (surfaced in the prompt via
+// agentInbox). Owner B then has his assistant accept or decline. This tool is
+// GATED: it only executes after owner B's explicit "ok" (confirm.mjs). The
+// answer goes back to owner A through his answer inbox. Nothing is imposed:
+// owner B is the one who decides.
 export function respondDecisionTool({ fromUser, notifyOwner }) {
   return createRespondDecisionTool({fromUser,list:listInboundDecisions,respond:respondToInboundDecision,owner:getUserById,notifyOwner});
 }
 
-// ── Lado B (dono): responder uma PERGUNTA que o assistente de um contato levantou ──
+// ── Side B (owner): answering a QUESTION that a contact's assistant raised ──
 //
-// Ask-human loop (Fase 2). Quando o assistente de A perguntou algo que o assistente
-// de B não sabia mas que o dono B saberia, a pergunta fica pendente na caixa do
-// dono B (surfaçada no prompt via agentInbox). O dono B responde aqui; a resposta
-// volta pro assistente de A pela caixa de respostas dele. NÃO é gated: o próprio
-// dono digitando a resposta já é a autorização, e a tool só repassa informação
-// (não fecha compromisso).
+// Ask-human loop (Phase 2). When A's assistant asked something that B's
+// assistant did not know but owner B would, the question stays pending in
+// owner B's inbox (surfaced in the prompt via agentInbox). Owner B answers
+// here; the answer goes back to A's assistant through his answer inbox. It is
+// NOT gated: the owner himself typing the answer is already the authorization,
+// and the tool only passes along information (it does not close a commitment).
 export function respondExternalQuestionTool({ fromUser, fromAgent, notifyOwner }) {
   return {
     name: 'responder_pergunta_externa',
@@ -468,8 +478,8 @@ export function respondExternalQuestionTool({ fromUser, fromAgent, notifyOwner }
         return JSON.stringify({ ok: false, error: 'Preciso da resposta pra repassar ao contato.' });
       if (r.error)
         return JSON.stringify({ ok: false, error: `Não consegui responder a pergunta (${r.error}).` });
-      // Pinga o dono A de volta, no canal de ORIGEM do pedido dele (direção B→A).
-      // Uma linha com a resposta que o assistente de A recebeu.
+      // Pings owner A back, on the ORIGIN channel of his request (direction B→A).
+      // One line with the answer that A's assistant received.
       const ownerB = await getUserById(fromUser).catch(() => null);
       const ownerBName = (ownerB?.name || r.from_name || 'seu contato').split(' ')[0];
       const linha = `${ownerBName} respondeu${r.pergunta ? ` "${r.pergunta}"` : ''}: ${r.resposta}`;
@@ -483,9 +493,10 @@ export function respondExternalQuestionTool({ fromUser, fromAgent, notifyOwner }
   };
 }
 
-// Aceitar/recusar um PEDIDO DE AMIZADE (conexão de contatos) pendente, por
-// conversa com o próprio dono. Não é gated: o dono dizer "aceita fulano" já É a
-// autorização. É o único caminho de aceite (não há link/token no e-mail).
+// Accepting/declining a pending FRIEND REQUEST (contact connection), through a
+// conversation with the owner himself. It's not gated: the owner saying
+// "aceita fulano" already IS the authorization. It's the only acceptance path
+// (there is no link/token in the email).
 export function acceptContactTool({ fromUser }) {
   return {
     name: 'aceitar_contato',
@@ -538,11 +549,12 @@ export function declineContactTool({ fromUser }) {
   };
 }
 
-// Iniciar um PEDIDO DE AMIZADE (conexão de contatos): o dono pede pra conectar
-// com alguém pelo e-mail de cadastro. Não é gated (só cria um convite pendente,
-// nada acontece até o outro aceitar). `notify` (opcional) avisa o convidado por
-// e-mail — mesma notificação da tela de Conexões; fica no server (onde o envio
-// de e-mail está em escopo) e é passado como callback.
+// Starting a FRIEND REQUEST (contact connection): the owner asks to connect
+// with someone by their signup email. It's not gated (it only creates a
+// pending invite, nothing happens until the other side accepts). `notify`
+// (optional) notifies the invitee by email — the same notification as the
+// Connections screen; it lives in the server (where sending email is in
+// scope) and is passed as a callback.
 export function inviteContactTool({ fromUser, notify }) {
   return {
     name: 'convidar_contato',
@@ -569,7 +581,7 @@ export function inviteContactTool({ fromUser, notify }) {
       }
       const toUserId = r.connection?.user_b;
       if (toUserId && typeof notify === 'function') {
-        try { await notify(toUserId); } catch { /* notificação é best-effort */ }
+        try { await notify(toUserId); } catch { /* notification is best-effort */ }
       }
       return JSON.stringify({ ok: true, note: 'Convite de conexão enviado. A pessoa vai receber um aviso e, quando aceitar (falando com o assistente dela), vocês ficam conectados.' });
     },

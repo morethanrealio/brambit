@@ -5,9 +5,10 @@ import { standaloneRefusal } from './turn-claim-guard.mjs';
 import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
 
-// Textos que o DONO lê neste fluxo. Saem no idioma gravado no próprio pedido
-// (row.language, o mesmo que já escolhe o "May I proceed?" do cartão), senão um
-// "cancel" em inglês recebia "Cancelei a ação de..." em português.
+// Texts the OWNER reads in this flow. They come out in the language recorded in
+// the request itself (row.language, the same one that already picks the card's
+// "May I proceed?"), otherwise an English "cancel" got back "Cancelei a ação
+// de..." in Portuguese.
 const TEXTOS = {
   'pt-BR': {
     none: 'Não há nenhuma ação aguardando confirmação.',
@@ -116,41 +117,43 @@ export function proposalList(rows, prefix, lang) {
 const displayedRows = (rows, ids) => ids.map(id => rows.find(r => r.id === id)).filter(Boolean);
 const sameRequest = rows => rows.length > 1 && !!rows[0].source?.ownerText
   && rows.every(r => r.source?.ownerText === rows[0].source.ownerText);
-// "realizar", "executar" e "ser" entram porque o próprio cartão pergunta "Posso
-// realizar essas ações?": "pode realizar sim" virava "qual dessas?" (caso de 03/10).
+// "realizar", "executar" and "ser" are included because the card itself asks
+// "Posso realizar essas ações?": "pode realizar sim" turned into "which ones?"
+// (case from 2026-10-03).
 const consentAtom = '(?:pode(?: sim| seguir| fazer| criar| enviar| mandar| realizar| executar| prosseguir| ser)?|sim|confirma|confirme|confirmar|confirmo|confirmado|autorizo|aprovo|aprovado|ok(?:ay)?|claro|beleza|blz|bora|manda|envia|envie|isso(?: mesmo)?|ta certo|esta certo|exactly|correct|that[\'’]?s (?:right|correct)|exacto|correct[oa]|eso(?: es)?|asi es|go ahead|yes(?: please)?|sure|confirm|approve|si|adelante|dale|perfecto|(?:yes|yeah|yep|ok)?[, ]*(?:do it|send it|go ahead|please do|proceed)|yeah|yep|yup|confirmed|sounds good|looks good|de acuerdo|esta bien|me parece bien|vale|(?:si|yes)[, ]+(?:por favor|please)|puede(?:s)?(?: hacerlo| seguir| continuar| hacer| crear| guardar| enviar| realizar| proceder)?)';
-// "Ok, pode seguir." e "isso, pode fazer" são o mesmo sim de "pode": até três
-// termos de consentimento puro em sequência, nada além deles.
+// "Ok, pode seguir." and "isso, pode fazer" are the same yes as "pode": up to
+// three pure-consent terms in a row, nothing beyond them.
 const plainConsentPattern = new RegExp(`^${consentAtom}(?:[, ]+${consentAtom}){0,2}[.! ]*$`);
 const plainConsent = text => plainConsentPattern.test(folded(text).trim())
   || esConsent(text);
-// Imperativo espanhol com pronome colado só vale COM acento, como no STRONG_ES
-// do confirm.mjs: sem acento "mandalo"/"envialo" é a grafia torta de "mandá-lo"
-// em português. Por isso esta parte olha o texto original, não o dobrado.
+// Spanish imperative with an attached pronoun only counts WITH an accent, same as
+// confirm.mjs's STRONG_ES: without the accent "mandalo"/"envialo" is the crooked
+// spelling of Portuguese's "mandá-lo"/"enviá-lo". That's why this part looks at
+// the original text, not the duplicated one.
 const esConsent = text => /^(?:s[íi][, ]+)?(?:hazlo|házlo|hágalo|envíalo|mándalo|publícalo|súbelo|créalo)(?:[, ]+por favor)?[.! ]*$/iu.test(String(text).trim());
 const naturalApproval = text => /^(?:por favor[, ]+)?(?:confirmo|confirma|confirme|confirmar|autorizo|aprovo|pode|sim|ok|yes|confirm|approve|go ahead|si|adelante)\b/.test(folded(text))
   && !/\b(?:se|if|caso|quando|when|menos|exceto|except|unless|talvez|maybe)\b/.test(folded(text));
 const QUANT = '(?:os dois|as duas|ambos|ambas|todos|todas|both|all|los dos|las dos)';
 const quantPattern = new RegExp(`\\b(?:as |os )?${QUANT}(?: (?:as |os )?(?:acoes|coisas|actions|acciones))?\\b`);
-// Verbo de ligação colado no quantificador: "do both", "go ahead with both", "haz las dos".
+// Linking verb attached to the quantifier: "do both", "go ahead with both", "haz las dos".
 const quantWithLink = new RegExp(`(?:\\b(?:do|with|haz|con)\\s+)?${quantPattern.source}`);
-// "as duas"/"todas" mais um sim puro, em qualquer ordem: "pode ser as duas",
-// "sim, as duas", "confirmo os dois". Qualquer outra palavra ("menos o B", "sem
-// convidados", "se der") continua fora, porque o resto tem que ser sim puro.
+// "as duas"/"todas" plus a pure yes, in any order: "pode ser as duas",
+// "sim, as duas", "confirmo os dois". Any other word ("menos o B", "sem
+// convidados", "se der") still stays out, because the rest has to be a pure yes.
 const allConsent = text => {
   const clean = folded(text).trim();
   if (!quantPattern.test(clean)) return false;
   const rest = clean.replace(quantWithLink, ' ').replace(/\b(?:por favor|please)\b/g, ' ').replace(/^[, ]+|[, ]+(?=[.! ]*$)/g, '').trim();
   return !rest.replace(/[.! ]/g, '') || plainConsent(rest);
 };
-// Resposta só com o quantificador ("as duas", "ambas") ao cartão que pergunta
+// Reply with only the quantifier ("as duas", "ambas") to the card that asks
 // "Posso realizar essas ações?".
 const bareAll = text => new RegExp(`^${quantPattern.source}[.! ]*$`).test(folded(text).trim());
 
-// A pessoa aponta a ação pelo começo do PRÓPRIO cartão, que é texto da
-// plataforma: "pode criar a rotina", "salvar o arquivo". O resto da frase tem que
-// ser só sim/preenchimento; qualquer palavra fora do cartão desfaz o casamento,
-// então condição nova ("a rotina às 8h") nunca aprova o pedido antigo.
+// The person points at the action by the beginning of the CARD ITSELF, which is
+// platform text: "pode criar a rotina", "salvar o arquivo". The rest of the
+// sentence has to be just yes/filler; any word outside the card breaks the
+// match, so a new condition ("a rotina às 8h") never approves the old request.
 const phraseLead = /^(?:(?:agora|entao|ok|okay|beleza|tambem|e|por favor|pode|sim|isso|confirmo|confirma|confirme|autorizo|aprovo|yes|yeah|yep|sure|please|go ahead and|and|then|now|also|si|vale|dale|adelante|y|ahora|puedes|puede)\s+)*/;
 const phraseWords = text => folded(String(text || '')).replace(/["“”'‘’,:;.!]/g, ' ').replace(/\s+/g, ' ').trim();
 function phraseSelection(rows, text) {
@@ -224,9 +227,9 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
   if (prior) return { kind:'replay', row:prior,
     ...(prior.decisionGroup ? {rows:rows.filter(r => r.decisionGroup === prior.decisionGroup)} : {}) };
   const explicit = [...new Set([...said.matchAll(numberPattern)].map(m => Number(m[1])))];
-  // Sem proposta pendente, "pode ir na seção de supermercado" é assunto do
-  // turno normal. Sinais amplos de consentimento não podem engolir um pedido
-  // novo. Referências explícitas e reações ainda precisam de validação/replay.
+  // Without a pending proposal, "pode ir na seção de supermercado" is a normal
+  // turn's topic. Broad consent signals can't swallow a new request. Explicit
+  // references and reactions still need validation/replay.
   if (!pending.length && !explicit.length && target === undefined && !viaReaction) return {kind:'continue'};
   const body = said.replace(numberPattern, '').replace(/\s+/g, ' ').trim();
   const confirm = isConfirmation(body) || /^(?:confirma|confirme|confirmar|confirm|approve)[.! ]*$/i.test(body)
@@ -271,12 +274,12 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       }
     }
   } else if (!selected.length) {
-    // Uma recusa inteira ("não precisa fazer nada") não cita pelo nome um
-    // evento chamado "Nada". Só o contexto visível ou uma referência o vincula.
+    // A full refusal ("não precisa fazer nada") doesn't name by name an event
+    // called "Nada". Only visible context or an explicit reference links it.
     const candidates = visible.length ? visible : pending;
     const phrased = plainCancel || (decision && decision !== 'confirm') ? null : phraseSelection(candidates, said);
-    // Sem palavra de sim, o começo do cartão só aprova o cartão que a pessoa
-    // acabou de ver ("salvar o arquivo" em resposta à lista).
+    // Without a yes word, the beginning of the card only approves the card the
+    // person just saw ("salvar o arquivo" in reply to the list).
     if (phrased?.rows.length === 1 && !decision && phrased.bare && visible.some(v => v.id === phrased.rows[0].id)) decision = 'confirm';
     if (!decision && (bareAll(body) || allConsent(body)) && visible.length > 1) decision = 'confirm';
     const matched = plainCancel ? [] : phrased && decision === 'confirm' && (phrased.consent || phrased.bare)
@@ -292,9 +295,9 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       selected = visible;
     } else if (decision) {
       if (decision === 'confirm' && !plainConsent(body) && !discoveryConsent) return {kind:'ambiguous',rows:pending};
-      // O consentimento simples vai para o único cartão que a pessoa acabou de
-      // ver, mesmo com pedidos antigos ainda pendentes; esses continuam abertos.
-      // Recusa sem alvo continua exigindo um único pendente.
+      // Simple consent goes to the single card the person just saw, even with
+      // older requests still pending; those stay open. A targetless refusal
+      // still requires a single pending one.
       if (visible.length === 1 && visible[0].state === 'pending' && (pending.length === 1 || decision === 'confirm')) selected = visible;
       else if (visible.length > 1 && sameRequest(visible) && decision === 'confirm') selected = visible;
       else if (pending.length) return {kind:'ambiguous',rows:pending};

@@ -20,11 +20,11 @@ import { mcpConnect } from './mcp.mjs';
 
 export const CANVA_MCP_URL = process.env.CANVA_MCP_URL || 'https://mcp.canva.com/mcp';
 
-// Nomes CRUS como a Canva expõe no tools/list. A classificação é por ALLOWLIST,
-// nunca por heurística de prefixo: chutar que "get-*" não escreve seria apostar
-// o gate de confirmação numa convenção de nome. Tool que não estiver em nenhuma
-// das três listas NÃO é exposta ao modelo, e o nome dela é logado (é assim que a
-// lista se completa quando a Canva mexer no catálogo).
+// RAW names as Canva exposes them in tools/list. Classification is by ALLOWLIST,
+// never by prefix heuristic: guessing that "get-*" doesn't write would be betting
+// the confirmation gate on a naming convention. A tool not on any of the three
+// lists is NOT exposed to the model, and its name is logged (that's how the
+// list gets completed when Canva changes its catalog).
 const READ = [
   'search-designs', 'get-design', 'get-design-content', 'get-design-pages',
   'get-presenter-notes', 'get-design-thumbnail', 'get-export-formats',
@@ -33,9 +33,9 @@ const READ = [
   'resolve-shortlink', 'get-user-profile', 'get-user', 'get-me',
   'search-brand-templates', 'list-brand-kits', 'get-brand-template',
   'get-brand-template-dataset',
-  // export-design NÃO altera nada na conta da pessoa: gera um link de download
-  // do design que já existe. Fica na leitura de propósito (é o que faz "me manda
-  // esse design em PDF" funcionar sem virar uma confirmação a cada pedido).
+  // export-design does NOT change anything in the person's account: it generates a download
+  // link for a design that already exists. It stays in reads on purpose (that's what makes "me manda
+  // esse design em PDF" work without turning into a confirmation for every request).
   'export-design',
 ];
 const CREATE = [
@@ -51,16 +51,16 @@ const EDIT = [
   'get-editing-transaction',
 ];
 
-// Mesma normalização que o mcp.mjs aplica ao nome antes de entregar a tool.
+// Same normalization that mcp.mjs applies to the name before delivering the tool.
 const san = (raw) => `canva_${raw}`.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64);
 const setOf = (list) => new Set(list.map(san));
 const READ_N = setOf(READ), CREATE_N = setOf(CREATE), EDIT_N = setOf(EDIT);
 
 let jaLogou = false;
 
-// Traduz falha de transporte em frase honesta. O que dá pra afirmar aqui é o
-// código HTTP (mcp.mjs joga o status na mensagem); a CAUSA de um 403 a gente não
-// sabe, então a frase diz "pode ser" em vez de inventar.
+// Translates a transport failure into an honest sentence. What can be stated here is the
+// HTTP code (mcp.mjs puts the status in the message); we don't know the CAUSE of
+// a 403, so the sentence says "pode ser" instead of making something up.
 function erroHumano(e) {
   const m = String(e?.message ?? e);
   if (/\b401\b/.test(m)) return 'Sessão do Canva expirada. Peça pro usuário reconectar o Canva em Conexões.';
@@ -69,10 +69,10 @@ function erroHumano(e) {
   return `Falha ao falar com o Canva: ${m}`;
 }
 
-// Conecta e devolve as tools já separadas por finalidade. Uma conexão por
-// EXECUÇÃO: as tools de um mesmo mcpConnect compartilham a sessão MCP (o
-// mcp-session-id fica no closure), que é o que permite a transação de edição
-// (start → perform → commit) rodar inteira dentro de uma chamada só.
+// Connects and returns the tools already split by purpose. One connection per
+// EXECUTION: tools from the same mcpConnect share the MCP session (the
+// mcp-session-id stays in the closure), which is what lets the edit transaction
+// (start → perform → commit) run entirely within a single call.
 async function conectar(token) {
   const { tools } = await mcpConnect({
     url: CANVA_MCP_URL,
@@ -121,11 +121,11 @@ Editing is transactional and the protocol must be followed to the end:
 Never end your answer with an open transaction. If you could not finish, cancel and explain what prevented it.`;
 
 /**
- * As três tools do Canva no agente principal.
+ * The three Canva tools on the main agent.
  * @param {{ tokenFn:()=>Promise<string>, runSubagent:Function }} deps
- *   tokenFn      → devolve um access_token vivo (validProviderToken).
- *   runSubagent  → runConnectorSubagent do server.mjs (roda o sub-agente e cobra o uso).
- * @returns {{ tools:object[], gated:object[] }} `gated` PRECISA passar pelo addGated.
+ *   tokenFn      → returns a live access_token (validProviderToken).
+ *   runSubagent  → runConnectorSubagent from server.mjs (runs the sub-agent and charges usage).
+ * @returns {{ tools:object[], gated:object[] }} `gated` MUST go through addGated.
  */
 export function canvaTools({ tokenFn, runSubagent }) {
   const meta = ({ nome, descricao, exemplo, grupo, system }) => ({

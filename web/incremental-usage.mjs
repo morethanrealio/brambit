@@ -12,8 +12,9 @@ export function createPendingUsageWrites(){
    const attempt=()=>{entry.promise=Promise.resolve().then(write).then(()=>{set.delete(entry);if(!set.size)accounts.delete(userId);},()=>{entry.promise=null;});};
    entry.retry=attempt;attempt();
   },
-  // Contas com gravação ainda pendente. Na conta empresarial o saldo é da
-  // empresa inteira, então a admissão de um membro drena também os colegas.
+  // Accounts with a write still pending. In a company account the balance
+  // belongs to the whole company, so admitting one member also drains their
+  // colleagues.
   pendingUsers(){return [...accounts.keys()];},
   async drain(userId){
    // Snapshot: do not wait indefinitely for unrelated new activity to stop.

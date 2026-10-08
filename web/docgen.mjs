@@ -24,7 +24,7 @@ function escapeXml(s) {
     .replace(/"/g, '&quot;');
 }
 
-// Decodifica as entidades HTML mais comuns (o modelo às vezes manda &amp; etc.).
+// Decodes the most common HTML entities (the model sometimes sends &amp; etc.).
 function decodeEntities(s) {
   return String(s || '')
     .replace(/&nbsp;/gi, ' ')
@@ -36,8 +36,8 @@ function decodeEntities(s) {
     .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(Number(n)); } catch { return ''; } });
 }
 
-// Se o conteúdo veio como HTML, normaliza pra pseudo-markdown (blocos viram
-// linhas; negrito/heading/lista viram marcação leve; o resto das tags some).
+// If the content came as HTML, normalizes it to pseudo-markdown (blocks become
+// lines; bold/heading/list become light markup; the rest of the tags disappear).
 function htmlToMd(html) {
   let s = String(html || '');
   s = s.replace(/<\s*(script|style)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
@@ -48,8 +48,8 @@ function htmlToMd(html) {
   s = s.replace(/<\s*li[^>]*>([\s\S]*?)<\s*\/\s*li\s*>/gi, (_, t) => `\n- ${t.trim()}`);
   s = s.replace(/<\s*(strong|b)[^>]*>([\s\S]*?)<\s*\/\s*\1\s*>/gi, (_, __, t) => `**${t.trim()}**`);
   s = s.replace(/<\s*(em|i)[^>]*>([\s\S]*?)<\s*\/\s*\1\s*>/gi, (_, __, t) => `_${t.trim()}_`);
-  // <img> vira markdown de imagem pra sobreviver até o gerador de PDF/DOCX
-  // (antes a tag era descartada junto com o resto → imagem sumia no doc).
+  // <img> becomes image markdown so it survives up to the PDF/DOCX generator
+  // (before the tag was discarded along with the rest → the image vanished from the doc).
   s = s.replace(/<\s*img\b[^>]*>/gi, (tag) => {
     const src = (tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || [])[1] || '';
     const alt = (tag.match(/\balt\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
@@ -66,8 +66,8 @@ function looksLikeHtml(s) {
   return /<\s*(html|body|p|div|h[1-6]|ul|ol|li|br|table|span|strong|b|em)\b[^>]*>/i.test(String(s || ''));
 }
 
-// Normaliza o conteúdo de entrada pra markdown simples, venha ele como markdown
-// ou como HTML.
+// Normalizes the input content to simple markdown, whether it comes as
+// markdown or as HTML.
 function toMarkdown(content) {
   const s = String(content == null ? '' : content);
   return looksLikeHtml(s) ? htmlToMd(s) : s;
@@ -93,11 +93,11 @@ function parseBlocks(md) {
   const out = [];
   const lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
   for (let raw of lines) {
-    // Asterisco solto pode ser DADO (Pix copia-e-cola, senha, token, conta).
-    // Não apagar caracteres da linha inteira para simular itálico: além de
-    // corromper esses valores, a regex antiga quebrava **negrito** e * listas.
-    // Itálico simples não é renderizado; preservamos seus marcadores literais.
-    // Negrito e marcadores de lista são tratados nas etapas específicas abaixo.
+    // A loose asterisk can be DATA (Pix copy-paste code, password, token, account
+    // number). Don't strip characters from the whole line to simulate italics:
+    // besides corrupting those values, the old regex broke **bold** and * lists.
+    // Plain italics isn't rendered; we preserve its literal markers. Bold and
+    // list markers are handled in the specific steps below.
     const line = raw;
     if (!line.trim()) { out.push({ type: 'blank', runs: [] }); continue; }
     let m;
@@ -111,7 +111,7 @@ function parseBlocks(md) {
   return out;
 }
 
-// ── ZIP mínimo (pro .docx) ──────────────────────────────────────────────────
+// ── Minimal ZIP (for .docx) ──────────────────────────────────────────────────
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -139,7 +139,7 @@ function zipStore(files) {
     lh.writeUInt32LE(0x04034b50, 0);
     lh.writeUInt16LE(20, 4);
     lh.writeUInt16LE(0, 6);
-    lh.writeUInt16LE(8, 8);   // método: deflate
+    lh.writeUInt16LE(8, 8);   // method: deflate
     lh.writeUInt16LE(0, 10);  // hora
     lh.writeUInt16LE(0x21, 12); // data (1980-01-01)
     lh.writeUInt32LE(crc, 14);
@@ -180,7 +180,7 @@ function zipStore(files) {
   return Buffer.concat([localBuf, centralBuf, eocd]);
 }
 
-// ── .docx (WordprocessingML mínimo, válido no Word/Google Docs/LibreOffice) ──
+// ── .docx (minimal WordprocessingML, valid in Word/Google Docs/LibreOffice) ──
 function runXml(text, { bold = false, sz = 22 } = {}) {
   const rpr = `<w:rPr>${bold ? '<w:b/>' : ''}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>`;
   return `<w:r>${rpr}<w:t xml:space="preserve">${escapeXml(xmlSafe(text))}</w:t></w:r>`;
@@ -193,7 +193,7 @@ function paraXml(block) {
   if (block.type === 'blank') return '<w:p/>';
   let runs;
   if (block.type === 'li') {
-    // Bullet como texto ("•  ") pra não precisar de numbering.xml.
+    // Bullet as text ("•  ") so we don't need numbering.xml.
     runs = runXml('•  ', { sz }) + block.runs.map((r) => runXml(r.text, { bold: r.bold, sz })).join('');
   } else {
     const forceBold = block.type.startsWith('h');
@@ -202,7 +202,7 @@ function paraXml(block) {
   const ind = block.type === 'li' ? '<w:ind w:left="360"/>' : '';
   return `<w:p><w:pPr>${spacing}${ind}</w:pPr>${runs}</w:p>`;
 }
-// Parágrafo com uma imagem embutida (inline drawing). cx/cy em EMU.
+// Paragraph with an embedded image (inline drawing). cx/cy in EMU.
 function docxDrawingPara(rec) {
   const { cx, cy, rid, id } = rec;
   return `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:drawing>`
@@ -223,7 +223,7 @@ function buildDocx(md, images) {
   const media = [];               // { name, data }
   const rels = [];                // { id, target }
   const byUrl = new Map();        // url → { rid, id, cx, cy }
-  const CONTENT_EMU = 5486400;    // ~6 pol de largura útil (A4, margens 1417)
+  const CONTENT_EMU = 5486400;    // ~6in of usable width (A4, 1417 margins)
   function ensureImage(url, img) {
     if (byUrl.has(url)) return byUrl.get(url);
     const ext = img.info.kind === 'jpeg' ? 'jpg' : 'png';
@@ -294,13 +294,13 @@ function buildDocx(md, images) {
   return zipStore(files);
 }
 
-// ── .xlsx (planilha DE VERDADE, no mesmo ZIP zero-dep do .docx) ─────────────
-// Um .xlsx também é um ZIP de XMLs, então reusa o zipStore acima: nenhuma
-// dependência nova. O conteúdo chega como markdown e cada TABELA de markdown
-// vira uma aba (cabeçalho em negrito e congelado; heading vira o nome da aba).
-// O ponto central: número, dinheiro, porcentagem e data são gravados como
-// VALOR, não como texto — planilha em que não dá pra somar nem ordenar não
-// resolve o problema de ninguém.
+// ── .xlsx (a REAL spreadsheet, in the same zero-dep ZIP as .docx) ─────────────
+// An .xlsx is also a ZIP of XMLs, so it reuses the zipStore above: no new
+// dependency. The content arrives as markdown and each markdown TABLE becomes
+// a sheet (bold, frozen header; the heading becomes the sheet's name).
+// The key point: number, money, percentage and date are written as a VALUE,
+// not as text — a spreadsheet where you can't sum or sort doesn't solve
+// anyone's problem.
 const XLSX_MAX_ROWS = 20000;   // teto por aba
 const XLSX_MAX_COLS = 200;
 
@@ -312,13 +312,13 @@ function colName(i) {
   return s;
 }
 
-// Tira os caracteres de controle que o XML 1.0 não aceita. Vêm de PDF/OCR sujo e
-// quebrariam o arquivo INTEIRO na hora de abrir.
+// Strips the control characters that XML 1.0 doesn't accept. They come from
+// dirty PDF/OCR and would break the WHOLE file when opening it.
 function xmlSafe(s) {
   return String(s == null ? '' : s).replace(/[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, '');
 }
 
-// Limpa a marcação de uma célula de tabela markdown (negrito, código, link).
+// Cleans the markup of a markdown table cell (bold, code, link).
 function cellText(v) {
   return String(v == null ? '' : v)
     .replace(/<br\s*\/?>/gi, ' ')
@@ -329,9 +329,9 @@ function cellText(v) {
     .trim();
 }
 
-// "12/03/2026" ou "2026-03-12" → serial do Excel (dias desde 1899-12-30).
-// dd/mm é o padrão pt-BR; se o mês passar de 12 (formato americano) devolve null
-// e a célula fica como TEXTO, que é honesto — melhor que inverter a data calado.
+// "12/03/2026" or "2026-03-12" → Excel serial (days since 1899-12-30).
+// dd/mm is the pt-BR default; if the month goes over 12 (US format) returns null
+// and the cell stays as TEXT, which is honest — better than silently flipping the date.
 function parseDateCell(s) {
   let y, mo, d, m;
   if ((m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/))) {
@@ -347,10 +347,10 @@ function parseDateCell(s) {
   return Math.round((ts - Date.UTC(1899, 11, 30)) / 86400000);
 }
 
-// "R$ 1.234,56" → 1234.56 (moeda) · "1.234" → 1234 · "12%" → 0.12 · "(50)" → -50.
-// NÃO converte o que é identificador disfarçado de número: zero à esquerda
-// (00336, senha/agência) e sequência longa de dígitos (CPF, conta, cartão)
-// continuam texto, senão a planilha destrói o dado.
+// "R$ 1.234,56" → 1234.56 (currency) · "1.234" → 1234 · "12%" → 0.12 · "(50)" → -50.
+// Does NOT convert what's an identifier disguised as a number: a leading zero
+// (00336, password/branch number) and a long digit sequence (CPF, account,
+// card) stay as text, otherwise the spreadsheet destroys the data.
 function parseNumberCell(input) {
   let s = String(input).trim();
   let kind = 'number';
@@ -361,18 +361,19 @@ function parseNumberCell(input) {
   if (/%$/.test(s)) { pct = true; s = s.slice(0, -1).trim(); }
   if (/^[-–—]/.test(s)) { neg = !neg; s = s.slice(1).trim(); }
   if (!/^\d[\d.,]*$/.test(s)) return null;
-  if (/^0\d/.test(s)) return null;                       // 00336 é identificador
+  if (/^0\d/.test(s)) return null;                       // 00336 is an identifier
   const digits = s.replace(/\D/g, '');
   if (!digits.length || digits.length > 15) return null;
-  // Sequência longa de dígitos SEM separador nenhum é identificador, não valor:
-  // CPF (11), CNPJ (14), cartão (16), telefone, conta. Virar número apagaria o
-  // dado. Com separador (1.234.567,89) é dinheiro de verdade e passa.
+  // A long digit sequence with NO separator at all is an identifier, not a
+  // value: CPF (11), CNPJ (14), card (16), phone, account. Turning it into a
+  // number would erase the data. With a separator (1.234.567,89) it's real
+  // money and passes.
   if (!/[.,]/.test(s) && digits.length >= 10) return null;
   const lastDot = s.lastIndexOf('.');
   const lastComma = s.lastIndexOf(',');
   let intPart = s, decPart = '';
   if (lastDot >= 0 && lastComma >= 0) {
-    // Os dois separadores presentes: o ÚLTIMO é o decimal (vale pra 1.234,56 e 1,234.56).
+    // Both separators present: the LAST one is the decimal one (works for 1.234,56 and 1,234.56).
     const dec = lastDot > lastComma ? '.' : ',';
     const thou = dec === '.' ? ',' : '.';
     const parts = s.split(dec);
@@ -385,8 +386,8 @@ function parseNumberCell(input) {
     if (parts.length > 2 && parts.slice(1).every((p) => p.length === 3)) {
       intPart = parts.join('');                          // 1.234.567 = milhar
     } else if (parts.length === 2) {
-      // Um separador só: no pt-BR o ponto separa milhar (1.234) e a vírgula é
-      // decimal (1,5). Ponto com 3 casas depois tratamos como milhar.
+      // Only one separator: in pt-BR the dot separates thousands (1.234) and the
+      // comma is the decimal (1,5). A dot followed by 3 digits is treated as a thousands separator.
       if (sep === '.' && parts[1].length === 3 && parts[0].length <= 3) intPart = parts.join('');
       else { intPart = parts[0]; decPart = parts[1]; }
     } else return null;
@@ -399,7 +400,7 @@ function parseNumberCell(input) {
   return { kind, value: num };
 }
 
-// Decide o tipo da célula. Ordem importa: data antes de número.
+// Decides the cell's type. Order matters: date before number.
 function xlsxCell(raw) {
   const s = cellText(raw);
   if (!s) return { kind: 'blank', text: '' };
@@ -427,8 +428,8 @@ function splitTableRow(l) {
   return out.map(cellText);
 }
 
-// Markdown → abas. Heading nomeia/abre uma aba; tabela vira linhas; linha solta
-// (um total, uma observação) entra na coluna A pra não sumir com informação.
+// Markdown → sheets. A heading names/opens a sheet; a table becomes rows; a
+// standalone line (a total, a note) goes into column A so information isn't lost.
 function parseSheets(md) {
   const lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
   const sheets = [];
@@ -466,8 +467,8 @@ function parseSheets(md) {
   return sheets.filter((s) => s.rows.length);
 }
 
-// Excel recusa nome de aba vazio, com mais de 31 chars ou com []:*?/\ — e recusa
-// o arquivo inteiro se dois nomes repetirem.
+// Excel rejects an empty sheet name, one over 31 chars, or with []:*?/\ — and
+// rejects the whole file if two names repeat.
 function sheetNameFor(raw, idx, used) {
   let n = String(raw || '').replace(/[\[\]:*?\/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31);
   if (!n) n = idx === 0 ? 'Planilha' : `Planilha ${idx + 1}`;
@@ -509,10 +510,11 @@ function xlsxSheetXml(rows) {
   const widths = [];
   const body = [];
   let maxCols = 1;
-  // Numa coluna de dinheiro raramente TODA célula traz o "R$" ("R$ 432,17" numa
-  // linha, "(58,90)" na outra). Se pelo menos uma célula da coluna é moeda, a
-  // coluna inteira ganha formato de moeda — senão a planilha sai com aparência
-  // remendada e a soma some do rodapé do Excel.
+  // In a money column it's rare for EVERY cell to carry the "R$" ("R$ 432,17" on
+  // one row, "(58,90)" on another). If at least one cell in the column is
+  // currency, the whole column gets currency formatting — otherwise the
+  // spreadsheet comes out looking patchy and the sum disappears from Excel's
+  // status bar.
   const moneyCol = [];
   for (const row of rows) {
     if (row.header) continue;
@@ -562,9 +564,10 @@ function xlsxSheetXml(rows) {
     + `</worksheet>`;
 }
 
-// Teto de abas do arquivo. Como os de linha e coluna, ele existe pra não gerar
-// um xlsx absurdo; o problema era estourar em SILÊNCIO, entregando um arquivo
-// que parece completo e não é. Agora o que ficou de fora volta como aviso.
+// Ceiling of sheets in the file. Like the row and column ones, it exists so we
+// don't generate an absurd xlsx; the problem was overflowing SILENTLY,
+// delivering a file that looks complete and isn't. Now what was left out comes
+// back as a warning.
 const XLSX_MAX_SHEETS = 20;
 
 function buildXlsx(md, title = '') {
@@ -630,9 +633,9 @@ function buildXlsx(md, title = '') {
   return { buffer, aviso };
 }
 
-// CSV existe só pra quando o usuário PEDE csv com todas as letras. Separador ";"
-// e BOM porque é assim que o Excel em pt-BR abre nas colunas certas (com vírgula
-// ele joga a linha inteira numa coluna só).
+// CSV only exists for when the user EXPLICITLY asks for csv. Separator ";"
+// and BOM because that's how Excel in pt-BR opens it in the right columns
+// (with a comma it dumps the whole line into a single column).
 function buildCsv(md) {
   const sheets = parseSheets(md);
   const esc = (v) => (/[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
@@ -643,12 +646,13 @@ function buildCsv(md) {
   return Buffer.from('﻿' + parts.join('\n\n'), 'utf8');
 }
 
-// ── .pdf (texto simples, uma ou mais páginas — layout aproximado, honesto) ──
+// ── .pdf (plain text, one or more pages — approximate, honest layout) ──
 function pdfEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
-// As fontes do PDF são declaradas com /WinAnsiEncoding, mas o content stream é
-// serializado em latin1: sem esta tabela, `Buffer.from('•','latin1')` trunca o
-// ponto de código (8226 % 256 = 34) e o bullet vira aspas. Os caracteres abaixo
-// existem no WinAnsi entre 0x80 e 0x9F, faixa que o latin1 não cobre.
+// The PDF's fonts are declared with /WinAnsiEncoding, but the content stream
+// is serialized in latin1: without this table, `Buffer.from('•','latin1')`
+// truncates the code point (8226 % 256 = 34) and the bullet becomes a quote
+// mark. The characters below exist in WinAnsi between 0x80 and 0x9F, a range
+// latin1 doesn't cover.
 const WIN_ANSI = new Map(Object.entries({
   '\u20AC': 0x80, '\u201A': 0x82, '\u0192': 0x83, '\u201E': 0x84, '\u2026': 0x85, '\u2020': 0x86,
   '\u2021': 0x87, '\u02C6': 0x88, '\u2030': 0x89, '\u0160': 0x8A, '\u2039': 0x8B, '\u0152': 0x8C,
@@ -656,8 +660,8 @@ const WIN_ANSI = new Map(Object.entries({
   '\u2013': 0x96, '\u2014': 0x97, '\u02DC': 0x98, '\u2122': 0x99, '\u0161': 0x9A, '\u203A': 0x9B,
   '\u0153': 0x9C, '\u017E': 0x9E, '\u0178': 0x9F,
 }));
-// Converte para uma string de bytes WinAnsi (cada char vira o byte final).
-// O que não existe na tabela de 8 bits vira '?', em vez de um byte aleatório.
+// Converts to a WinAnsi byte string (each char becomes its final byte).
+// What doesn't exist in the 8-bit table becomes '?', instead of a random byte.
 function winAnsi(s) {
   let out = '';
   for (const ch of String(s)) {
@@ -669,8 +673,8 @@ function winAnsi(s) {
   return out;
 }
 
-// Quebra um texto em linhas que cabem em `max` caracteres (aprox., fonte fixa
-// de largura média). Retorna array de strings.
+// Breaks a text into lines that fit within `max` characters (approx., fixed
+// average-width font). Returns an array of strings.
 function wrap(text, max) {
   const words = String(text).split(/\s+/);
   const lines = [];
@@ -688,7 +692,7 @@ function buildPdf(md, title, images) {
   const PAGE_H = 842, PAGE_W = 595, TOP = 792, LEFT = 56, LEADING = 15, BOTTOM = 56;
   const CONTENT_W = PAGE_W - 2 * LEFT;
 
-  // XObjects únicos (por url) que de fato entram no PDF.
+  // Unique XObjects (by url) that actually go into the PDF.
   const xobjs = [];            // [{ id, dict, stream, width, height }]
   const xobjByUrl = new Map();
   function ensureXobj(url, img) {
@@ -701,7 +705,7 @@ function buildPdf(md, title, images) {
     return xo;
   }
 
-  // Fluxo de itens: texto | imagem | espaço.
+  // Item flow: text | image | space.
   const items = [];
   if (title) { items.push({ type: 'text', text: title, size: 18, bold: true }); items.push({ type: 'gap', h: 12 }); }
   for (const b of blocks) {
@@ -714,9 +718,9 @@ function buildPdf(md, title, images) {
       const xo = img ? ensureXobj(url, img) : null;
       if (xo) {
         let dw = xo.width, dh = xo.height;
-        let scale = CONTENT_W / dw;                       // encaixa na largura útil
+        let scale = CONTENT_W / dw;                       // fits within the usable width
         const maxH = TOP - BOTTOM - 4;
-        if (dh * scale > maxH) scale = maxH / dh;          // não estoura a página
+        if (dh * scale > maxH) scale = maxH / dh;          // doesn't overflow the page
         items.push({ type: 'image', xo, w: dw * scale, h: dh * scale });
         if (alt) items.push({ type: 'text', text: alt, size: 9, bold: false });
       } else {
@@ -753,7 +757,7 @@ function buildPdf(md, title, images) {
   pages.push(cur);
   if (!pages.length || (pages.length === 1 && !pages[0].length)) { pages.length = 0; pages.push([{ type: 'text', text: '', size: 11, bold: false, y: TOP }]); }
 
-  // Content stream por página + imagens usadas em cada uma.
+  // Content stream per page + images used in each one.
   const contents = pages.map((list) => {
     let s = '';
     const used = new Set();
@@ -778,7 +782,7 @@ function buildPdf(md, title, images) {
   const fontF1Obj = pageObjStart + nPages;
   const fontF2Obj = fontF1Obj + 1;
   const contentStart = fontF2Obj + 1;
-  const imageObjStart = contentStart + nPages;   // 1 objeto por XObject único
+  const imageObjStart = contentStart + nPages;   // 1 object per unique XObject
 
   objs[1] = `<< /Type /Catalog /Pages 2 0 R >>`;
   const kids = [];
@@ -829,18 +833,19 @@ function buildPdf(md, title, images) {
   return pdf;
 }
 
-// ── Imagens embutidas (self-contained) ──────────────────────────────────────
-// Baixa imagens referenciadas por <img src="http(s)://..."> e as embute como
-// data: URI, pra o documento carregar sozinho (não depende de o link externo
-// continuar vivo — foi o problema do caso de 19/08: colar imagem de referência
-// numa apresentação e ela quebrar depois). SEM lib externa (fetch nativo).
+// ── Embedded (self-contained) images ──────────────────────────────────────
+// Downloads images referenced by <img src="http(s)://..."> and embeds them as
+// data: URIs, so the document loads on its own (doesn't depend on the external
+// link staying alive — that was the issue in the 2026-08-19 case: pasting a
+// reference image in a presentation and it breaking later). NO external lib
+// (native fetch).
 //
-// Guarda de SSRF (roda no servidor): só http/https, resolve o host e bloqueia
-// IP privado/loopback/link-local/metadata, segue redirect manualmente checando
-// cada salto, teto de tamanho por imagem e no total, timeout por requisição.
+// SSRF guard (runs on the server): only http/https, resolves the host and
+// blocks private/loopback/link-local/metadata IPs, follows redirects manually
+// checking each hop, size ceiling per image and in total, timeout per request.
 const MAX_IMG_BYTES = 8 * 1024 * 1024;      // 8 MB por imagem
 const MAX_IMG_TOTAL = 24 * 1024 * 1024;     // 24 MB somando todas
-const MAX_IMG_COUNT = 40;                    // no máximo 40 imagens por doc
+const MAX_IMG_COUNT = 40;                    // at most 40 images per doc
 const IMG_TIMEOUT_MS = 8000;
 
 function ipIsPrivate(ip) {
@@ -868,11 +873,12 @@ async function hostIsPublic(hostname) {
   return addrs.length > 0 && addrs.every((a) => !ipIsPrivate(a.address));
 }
 
-// Baixa uma imagem e devolve { mime, buf } ou null se falhar/for barrada.
-// Endurecido contra hotlink protection: manda user-agent de browser + Referer da
-// própria origem da imagem (foi o que quebrava as imagens do caso de 19/08 — hosts
-// tipo ND Mais/Wikimedia devolvem 403 pra bot sem UA de browser e sem Referer).
-// A guarda de SSRF (hostIsPublic por salto) continua valendo em cada redirect.
+// Downloads an image and returns { mime, buf } or null if it fails/is blocked.
+// Hardened against hotlink protection: sends a browser user-agent + Referer
+// from the image's own origin (that's what broke the images in the 2026-08-19
+// case — hosts like ND Mais/Wikimedia return 403 to a bot with no browser UA
+// and no Referer). The SSRF guard (hostIsPublic per hop) still applies on
+// every redirect.
 async function fetchImageBytes(startUrl, budget) {
   let url = startUrl;
   for (let hop = 0; hop < 5; hop++) {
@@ -884,10 +890,11 @@ async function fetchImageBytes(startUrl, budget) {
     const t = setTimeout(() => ctrl.abort(), IMG_TIMEOUT_MS);
     let r;
     try {
-      // fetchFixado resolve o host UMA vez e amarra a conexão nos IPs validados.
-      // Com o fetch nativo o DNS era resolvido de novo na hora de conectar, então
-      // um domínio com TTL curto passava no hostIsPublic e conectava no metadata
-      // da cloud (DNS rebinding). hostIsPublic acima fica como filtro barato.
+      // fetchFixado resolves the host ONCE and binds the connection to the
+      // validated IPs. With native fetch, DNS was resolved again at connect
+      // time, so a domain with a short TTL would pass hostIsPublic and then
+      // connect to the cloud's metadata endpoint (DNS rebinding). hostIsPublic
+      // above stays as a cheap filter.
       r = await fetchFixado(url, {
         signal: ctrl.signal,
         timeoutMs: IMG_TIMEOUT_MS,
@@ -912,8 +919,8 @@ async function fetchImageBytes(startUrl, budget) {
     let buf;
     try { buf = Buffer.from(await r.arrayBuffer()); } catch { return null; }
     if (!buf.length || buf.length > MAX_IMG_BYTES) return null;
-    // Aceita se o content-type é imagem OU se os magic bytes batem (alguns hosts
-    // servem imagem como application/octet-stream).
+    // Accepts if the content-type is an image OR if the magic bytes match (some
+    // hosts serve images as application/octet-stream).
     const ct = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
     const info = imageInfo(buf);
     let mime = ct.startsWith('image/') ? ct : (info ? (info.kind === 'jpeg' ? 'image/jpeg' : 'image/png') : null);
@@ -931,11 +938,11 @@ async function fetchImageAsDataUri(startUrl, budget) {
   return g ? `data:${g.mime};base64,${g.buf.toString('base64')}` : null;
 }
 
-// ── Decodificação de imagem (dimensões + PNG→RGB), sem lib externa ────────────
-// Lê largura/altura (e metadados) de PNG e JPEG a partir dos bytes crus.
+// ── Image decoding (dimensions + PNG→RGB), no external lib ────────────
+// Reads width/height (and metadata) of PNG and JPEG from the raw bytes.
 function imageInfo(buf) {
   if (!buf || buf.length < 24) return null;
-  // PNG: assinatura 89 50 4E 47 0D 0A 1A 0A, IHDR começa no byte 8.
+  // PNG: signature 89 50 4E 47 0D 0A 1A 0A, IHDR starts at byte 8.
   if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     return {
       kind: 'png',
@@ -946,7 +953,7 @@ function imageInfo(buf) {
       interlace: buf[28],
     };
   }
-  // JPEG: começa em FF D8; procura um marker SOF (dimensões + nº de componentes).
+  // JPEG: starts at FF D8; looks for an SOF marker (dimensions + number of components).
   if (buf[0] === 0xff && buf[1] === 0xd8) {
     let p = 2;
     while (p + 9 < buf.length) {
@@ -975,8 +982,8 @@ function imageInfo(buf) {
   return null;
 }
 
-// Reduz por vizinho-mais-próximo se a maior dimensão passa de `maxDim` (mantém o
-// PDF enxuto quando a origem manda imagem gigante). Devolve { rgb, w, h }.
+// Downscales by nearest-neighbor if the largest dimension exceeds `maxDim`
+// (keeps the PDF lean when the source sends a huge image). Returns { rgb, w, h }.
 function downscaleRgb(rgb, w, h, maxDim) {
   if (Math.max(w, h) <= maxDim) return { rgb, w, h };
   const scale = maxDim / Math.max(w, h);
@@ -995,9 +1002,9 @@ function downscaleRgb(rgb, w, h, maxDim) {
   return { rgb: out, w: nw, h: nh };
 }
 
-// Decodifica um PNG (não-entrelaçado) para RGB 8-bit, compondo alpha sobre branco.
-// Cobre color types 0/2/3/4/6, bit depths 8/16 (não-palette) e 1/2/4/8 (palette).
-// Retorna { width, height, rgb } ou null (entrelaçado/exótico → cai no fallback).
+// Decodes a (non-interlaced) PNG to 8-bit RGB, compositing alpha over white.
+// Covers color types 0/2/3/4/6, bit depths 8/16 (non-palette) and 1/2/4/8 (palette).
+// Returns { width, height, rgb } or null (interlaced/exotic → falls back).
 function pngToRgb(buf) {
   const info = imageInfo(buf);
   if (!info || info.kind !== 'png' || info.interlace !== 0) return null;
@@ -1058,7 +1065,7 @@ function pngToRgb(buf) {
     prev = cur;
     pos += rowBytes;
   }
-  // Expande para RGB compondo alpha sobre branco (255).
+  // Expands to RGB compositing alpha over white (255).
   const rgb = Buffer.alloc(width * height * 3);
   let oi = 0;
   const comp = (val, a) => Math.round(val * a / 255 + 255 * (255 - a) / 255);
@@ -1096,14 +1103,14 @@ function pngToRgb(buf) {
   return { width, height, rgb };
 }
 
-// Monta um XObject de imagem de PDF a partir de { info, buf }. JPEG entra direto
-// via DCTDecode; PNG é decodificado p/ RGB e re-comprimido com FlateDecode.
-// Retorna { dict, stream, width, height } ou null (formato não suportado).
+// Builds a PDF image XObject from { info, buf }. JPEG goes in directly via
+// DCTDecode; PNG is decoded to RGB and re-compressed with FlateDecode.
+// Returns { dict, stream, width, height } or null (unsupported format).
 const MAX_PDF_IMG_DIM = 1600;
 function pdfImageXObject(img) {
   const { info, buf } = img;
   if (info.kind === 'jpeg') {
-    if (info.components !== 1 && info.components !== 3) return null; // CMYK/exótico → fallback
+    if (info.components !== 1 && info.components !== 3) return null; // CMYK/exotic → fallback
     const cs = info.components === 1 ? '/DeviceGray' : '/DeviceRGB';
     const dict = `<< /Type /XObject /Subtype /Image /Width ${info.width} /Height ${info.height} `
       + `/ColorSpace ${cs} /BitsPerComponent 8 /Filter /DCTDecode /Length ${buf.length} >>`;
@@ -1145,9 +1152,10 @@ async function collectImages(md) {
   return out;
 }
 
-// Acha <img src="http(s)://..."> no HTML e troca o src por data: URI embutido.
-// Deduplica por URL, respeita os tetos e, se não conseguir baixar, MANTÉM o
-// link externo original (degradação suave, não some com a imagem).
+// Finds <img src="http(s)://..."> in the HTML and swaps the src for an embedded
+// data: URI. Deduplicates by URL, respects the ceilings and, if it can't
+// download it, KEEPS the original external link (graceful degradation, doesn't
+// make the image disappear).
 async function inlineRemoteImages(html) {
   const src = String(html || '');
   const imgRe = /<img\b[^>]*?\bsrc\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>/gi;
@@ -1162,7 +1170,7 @@ async function inlineRemoteImages(html) {
   if (!urls.length) return src;
   const budget = { used: 0 };
   const map = new Map();
-  // sequencial: o teto total (budget.used) precisa ser respeitado de forma determinística
+  // sequential: the total ceiling (budget.used) needs to be respected deterministically
   for (const u of urls) {
     const data = await fetchImageAsDataUri(u, budget).catch(() => null);
     if (data) map.set(u, data);
@@ -1174,7 +1182,7 @@ async function inlineRemoteImages(html) {
   });
 }
 
-// ── API pública ─────────────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────────
 const MIME = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1187,9 +1195,9 @@ const MIME = {
 
 export const SUPPORTED_FORMATS = Object.keys(MIME);
 
-// Gera { buffer, mime, ext } para o formato pedido a partir de `content`
-// (+ `aviso` no xlsx quando parte do conteúdo não coube e foi descartada)
-// (markdown simples ou HTML simples). `title` é opcional (vira cabeçalho no PDF).
+// Generates { buffer, mime, ext } for the requested format from `content`
+// (+ `aviso` in xlsx when part of the content didn't fit and was discarded)
+// (plain markdown or plain HTML). `title` is optional (becomes a heading in the PDF).
 export async function generateDocument({ format, content, title = '' } = {}) {
   const fmt = String(format || 'docx').toLowerCase().replace(/^\.+/, '');
   const md = toMarkdown(content);
@@ -1199,9 +1207,9 @@ export async function generateDocument({ format, content, title = '' } = {}) {
   }
   if (fmt === 'csv') return { buffer: buildCsv(md), mime: MIME.csv, ext: 'csv' };
   if (fmt === 'docx' || fmt === 'pdf') {
-    // Baixa e embute as imagens referenciadas (self-contained, não quebra quando o
-    // link externo cair). Se algum download falhar, o gerador cai num rótulo de
-    // "imagem indisponível" no lugar — nunca some silenciosamente.
+    // Downloads and embeds the referenced images (self-contained, doesn't break
+    // when the external link goes down). If a download fails, the generator
+    // falls back to an "image unavailable" label instead — never disappears silently.
     let images = new Map();
     try { images = await collectImages(md); } catch {}
     if (fmt === 'docx') return { buffer: buildDocx(md, images), mime: MIME.docx, ext: 'docx' };
@@ -1211,8 +1219,8 @@ export async function generateDocument({ format, content, title = '' } = {}) {
   if (fmt === 'html' || fmt === 'htm') {
     const raw = String(content || '');
     let html = looksLikeHtml(raw) ? raw : mdToHtml(md, title);
-    // Embute imagens externas como data: URI → HTML self-contained (não quebra
-    // quando o link de origem cair). Se o download falhar, mantém o link externo.
+    // Embeds external images as data: URIs → self-contained HTML (doesn't break
+    // when the source link goes down). If the download fails, keeps the external link.
     try { html = await inlineRemoteImages(html); } catch {}
     return { buffer: Buffer.from(html, 'utf8'), mime: MIME.html, ext: 'html' };
   }
@@ -1220,8 +1228,8 @@ export async function generateDocument({ format, content, title = '' } = {}) {
   return { buffer: Buffer.from(md, 'utf8'), mime: MIME.txt, ext: 'txt' };
 }
 
-// Decodifica as entidades XML/HTML básicas (o &amp; por último pra não desfazer
-// entidades já decodificadas por engano).
+// Decodes the basic XML/HTML entities (&amp; last so it doesn't accidentally
+// undo entities already decoded).
 function decodeXmlEntities(s) {
   return String(s)
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
@@ -1231,23 +1239,26 @@ function decodeXmlEntities(s) {
     .replace(/&amp;/g, '&');
 }
 
-// Extrai texto legível de um documento que ESTE módulo gerou (ou de texto simples).
-// docx: nossos zips são STORED (zipStore, sem compressão), então o word/document.xml
-// aparece cru no buffer — pegamos os runs <w:t> e quebramos linha por <w:p>. Para
-// md/txt/csv/json/xml é só decodificar UTF-8; no html tiramos as tags. PDF NÃO passa
-// por aqui (quem chama usa pdf-parse). Retorna string (vazia se não achar texto).
+// Extracts readable text from a document THIS module generated (or from plain
+// text). docx: our zips are STORED (zipStore, no compression), so
+// word/document.xml appears raw in the buffer — we grab the <w:t> runs and
+// break lines by <w:p>. For md/txt/csv/json/xml it's just UTF-8 decoding; in
+// html we strip the tags. PDF does NOT go through here (the caller uses
+// pdf-parse). Returns a string (empty if no text is found).
 export function extractDocumentText({ buffer, mime = '', ext = '' } = {}) {
   if (!buffer || !buffer.length) return '';
   const e = String(ext || '').toLowerCase().replace(/^\.+/, '');
   const m = String(mime || '').toLowerCase();
-  // Planilha: reusa o leitor zero-dep. Fecha o ciclo "gerei um .xlsx → o usuário
-  // pede pra mudar uma linha → eu releio o arquivo" sem pedir reenvio.
+  // Spreadsheet: reuses the zero-dep reader. Closes the loop of "I generated an
+  // .xlsx → the user asks to change a row → I re-read the file" without asking
+  // for a resend.
   if (e === 'xlsx' || m.includes('spreadsheetml')) {
     try { return xlsxToText(buffer).text; } catch { return ''; }
   }
   if (e === 'docx' || m.includes('wordprocessingml')) {
-    // O docx é um zip (entradas deflate, método 8). Percorre os local file headers
-    // até achar word/document.xml e infla — sem depender de lib de zip externa.
+    // The docx is a zip (deflate entries, method 8). Walks the local file
+    // headers until it finds word/document.xml and inflates it — without
+    // relying on an external zip lib.
     let xml = '';
     try {
       let p = 0;
@@ -1287,7 +1298,7 @@ export function extractDocumentText({ buffer, mime = '', ext = '' } = {}) {
   return text.trim();
 }
 
-// HTML simples (quando o pedido é .html mas o conteúdo veio em markdown).
+// Plain HTML (when the request is for .html but the content came as markdown).
 function mdToHtml(md, title) {
   const blocks = parseBlocks(md);
   const esc = (t) => escapeXml(t);

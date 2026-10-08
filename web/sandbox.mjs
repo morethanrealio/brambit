@@ -1,10 +1,10 @@
-// ── Tools de sandbox (execução de código por usuário) ──
-// Cada usuário tem um container isolado no host dedicado de sandbox. Estas tools
-// falam com o `runnerd` (HTTP, rede privada da VPC, Bearer token) que orquestra
-// o docker no host. O isolamento real está no host: container não-root, rootfs
-// só-leitura, limites de recurso, e firewall bloqueando a rede interna + metadata.
+// ── Sandbox tools (per-user code execution) ──
+// Each user has an isolated container on the dedicated sandbox host. These tools
+// talk to `runnerd` (HTTP, VPC private network, Bearer token), which orchestrates
+// docker on the host. The real isolation is on the host: non-root container, read-only
+// rootfs, resource limits, and a firewall blocking the internal network + metadata.
 //
-// Liga só se SANDBOX_URL + SANDBOX_TOKEN estiverem no ambiente (sandboxEnabled()).
+// Only turns on if SANDBOX_URL + SANDBOX_TOKEN are in the environment (sandboxEnabled()).
 
 import { tipoPlanilha } from './planilha.mjs';
 
@@ -28,8 +28,8 @@ async function call(path, body, { timeoutMs = 75_000 } = {}) {
   } finally { clearTimeout(t); }
 }
 
-// Helpers de baixo nível reusáveis por outros módulos (ex: ssh.mjs), presos ao
-// runnerd do usuário. Devolvem o objeto cru do runnerd.
+// Low-level helpers reusable by other modules (e.g. ssh.mjs), tied to the
+// user's runnerd. Return the raw runnerd object.
 export async function sandboxShell(userId, command, timeoutMs = 60_000) {
   return call('/shell', { userId, command, timeout: timeoutMs }, { timeoutMs: timeoutMs + 15_000 });
 }
@@ -39,9 +39,9 @@ export async function sandboxWrite(userId, path, content) {
 export async function sandboxRead(userId, path) {
   return call('/read', { userId, path });
 }
-// Grava BYTES crus num arquivo do sandbox (binário-seguro), via base64. O /write
-// do runnerd só aceita string, então mandamos o base64 e decodificamos no shell.
-// Cria a pasta se preciso. Devolve { ok, path, bytes } ou { ok:false, error }.
+// Writes RAW BYTES to a sandbox file (binary-safe), via base64. The runnerd's /write
+// only accepts a string, so we send the base64 and decode it in the shell.
+// Creates the folder if needed. Returns { ok, path, bytes } or { ok:false, error }.
 export async function sandboxWriteBytes(userId, path, buffer) {
   if (!sandboxEnabled()) return { ok: false, error: 'sandbox desligado' };
   const b64 = Buffer.from(buffer).toString('base64');
@@ -57,7 +57,7 @@ export async function sandboxWriteBytes(userId, path, buffer) {
   return { ok: true, path, bytes: Number((res.stdout || '').trim()) || null };
 }
 
-// Formata a saída de execução de forma curta e útil pro modelo.
+// Formats the execution output in a short and useful way for the model.
 function fmtRun(res) {
   const parts = [];
   if (res.timedOut) parts.push('[TIMEOUT: comando excedeu o tempo limite]');
@@ -68,13 +68,13 @@ function fmtRun(res) {
   return parts.join('\n');
 }
 
-// Lê os BYTES crus de um arquivo do sandbox do usuário (binário-seguro).
-// Usa o endpoint /readfile do runnerd, que streama os bytes crus direto
-// (application/octet-stream), numa ida só. O caminho antigo era `base64 -w0`
-// pelo /shell, que o runnerd matava acima de 200KB de stdout (qualquer binário
-// de tamanho real falhava com "arquivo não encontrado" enganoso). Aqui não há
-// inflação de base64 nem N chamadas: o runnerd faz `docker exec cat` e pipa.
-// Devolve { ok, buffer } ou { ok:false, error }.
+// Reads the RAW BYTES of a file from the user's sandbox (binary-safe).
+// Uses the runnerd's /readfile endpoint, which streams the raw bytes directly
+// (application/octet-stream), in a single round trip. The old path was `base64 -w0`
+// through /shell, which runnerd killed above 200KB of stdout (any binary
+// of real size failed with a misleading "file not found"). Here there's no
+// base64 inflation nor N calls: runnerd runs `docker exec cat` and pipes it.
+// Returns { ok, buffer } or { ok:false, error }.
 export async function sandboxReadBytes(userId, path) {
   if (!sandboxEnabled()) return { ok: false, error: 'sandbox desligado' };
   const ctrl = new AbortController();
@@ -88,7 +88,7 @@ export async function sandboxReadBytes(userId, path) {
     });
     if (!r.ok) {
       let msg = `falha ao ler no sandbox (${r.status})`;
-      try { const j = await r.json(); if (j && j.error) msg = j.error; } catch { /* corpo não-json */ }
+      try { const j = await r.json(); if (j && j.error) msg = j.error; } catch { /* non-json body */ }
       return { ok: false, error: String(msg).slice(0, 200) };
     }
     const buffer = Buffer.from(await r.arrayBuffer());
@@ -99,13 +99,13 @@ export async function sandboxReadBytes(userId, path) {
   } finally { clearTimeout(t); }
 }
 
-// A home do container é somente leitura: npm/npx, pip --user e CLIs que
-// guardam login em ~/.algo quebram. Nas tools do modelo a home passa a ser o
-// /workspace (persistente e só do usuário). Fica fora do sandboxShell de
-// propósito: o SSH depende da home padrão pra known_hosts.
+// The container's home is read-only: npm/npx, pip --user and CLIs that
+// store login in ~/.something break. In the model's tools the home becomes the
+// /workspace (persistent and user-only). This stays out of sandboxShell on
+// purpose: SSH depends on the default home for known_hosts.
 const USER_ENV = 'export HOME=/workspace XDG_CACHE_HOME=/workspace/.cache npm_config_cache=/workspace/.cache/npm; ';
 
-// Monta as tools de sandbox pra ESTE usuário (userId fica preso na closure).
+// Assembles the sandbox tools for THIS user (userId stays bound in the closure).
 export function sandboxTools(userId) {
   if (!sandboxEnabled()) return [];
   return [
@@ -168,8 +168,8 @@ export function sandboxTools(userId) {
         required: ['path'],
       },
       async run({ path }) {
-        // Planilha não vira texto pro modelo (ver planilha.mjs): o conteúdo se
-        // consulta por código, que lê o arquivo inteiro.
+        // Spreadsheet doesn't become text for the model (see planilha.mjs): the content
+        // is queried by code, which reads the whole file.
         if (tipoPlanilha(path, '')) return 'Este arquivo é uma planilha e não é lido como texto. Para consultar os dados use analisar_planilha, ou leia com pandas no sandbox_python.';
         const r = await call('/read', { userId, path });
         return r.ok ? r.content : `Falha: ${r.error || 'erro'}`;

@@ -1,22 +1,22 @@
-// ── Coleta de lixo do bucket (lápides de exclusão) ──
-// Apagar um arquivo do usuário são dois passos que não cabem na mesma transação:
-// (1) tirar a referência do banco, (2) tirar o objeto do S3. O passo 2 é rede e
-// pode falhar. O desenho antigo fazia 1 e engolia a falha de 2, então o objeto
-// (foto, documento, rosto biométrico) ficava no bucket pra sempre e SEM registro,
-// impossível de reenfileirar.
+// ── Bucket garbage collection (deletion tombstones) ──
+// Deleting a user's file is two steps that don't fit in the same transaction:
+// (1) remove the database reference, (2) remove the object from S3. Step 2 is network and
+// can fail. The old design did step 1 and swallowed step 2's failure, so the object
+// (photo, document, biometric face) stayed in the bucket forever and WITHOUT a record,
+// impossible to re-enqueue.
 //
-// Agora o passo 1 grava uma LÁPIDE (tabela media_deletions) na mesma transação.
-// A lápide é a memória do objeto entre os dois passos: só é fechada quando o
-// bucket confirma o delete, e enquanto estiver aberta o varredor tenta de novo.
+// Now step 1 writes a TOMBSTONE (media_deletions table) in the same transaction.
+// The tombstone is the object's memory between the two steps: it's only closed when the
+// bucket confirms the delete, and while it's open the sweeper keeps retrying.
 //
-// Este módulo é só a lógica, sem banco nem S3 dentro: as dependências entram por
-// parâmetro (deleteMedia/settle/claim). É o que deixa o comportamento testável.
+// This module is just the logic, with no database or S3 inside: the dependencies come in by
+// parameter (deleteMedia/settle/claim). That's what makes the behavior testable.
 
-// Tenta apagar o objeto e fechar a lápide. NUNCA lança: falha de bucket vira
-// { ok:false, pendente:true } e a lápide continua aberta pro varredor.
+// Tries to delete the object and close the tombstone. NEVER throws: a bucket failure becomes
+// { ok:false, pendente:true } and the tombstone stays open for the sweeper.
 export async function apagarObjetoComLapide({ key, tombstoneId, deleteMedia, settle, onErro }) {
-  // Sem key não há objeto no bucket (modo disco ou mídia sem arquivo): a lápide,
-  // se existir, já nasce cumprida.
+  // Without a key there's no object in the bucket (disk mode or media with no file): the tombstone,
+  // if it exists, is already born fulfilled.
   if (!key) {
     if (tombstoneId) await settle?.(tombstoneId, 'done');
     return { ok: true, pendente: false };
@@ -27,8 +27,8 @@ export async function apagarObjetoComLapide({ key, tombstoneId, deleteMedia, set
     onErro?.(e, key);
     return { ok: false, pendente: true, erro: e?.message ?? String(e) };
   }
-  // Só fecha DEPOIS do bucket confirmar. Se o fechamento falhar, a lápide fica
-  // aberta e o varredor repete o delete, que é idempotente (404 conta como ok).
+  // Only closes AFTER the bucket confirms. If closing fails, the tombstone stays
+  // open and the sweeper repeats the delete, which is idempotent (404 counts as ok).
   try {
     if (tombstoneId) await settle?.(tombstoneId, 'done');
   } catch (e) {
@@ -38,15 +38,15 @@ export async function apagarObjetoComLapide({ key, tombstoneId, deleteMedia, set
   return { ok: true, pendente: false };
 }
 
-// Destruição de conta: apaga TODA a mídia do dono do bucket, com lápide.
-// A ordem é o ponto: a lápide de todas as keys é gravada ANTES do primeiro delete,
-// porque logo depois vem o DELETE da conta, que leva por CASCADE justamente as
-// linhas (media_assets/user_likeness) que sabiam dessas keys. Sem esse registro,
-// uma falha do bucket deixaria a foto, a voz e o ROSTO biométrico de uma conta
-// EXCLUÍDA no bucket pra sempre e sem ninguém pra tentar de novo.
-// Falha de bucket nunca lança: o que não sair agora fica pendente pro varredor.
-// Falha ao GRAVAR a lápide, sim: destruir a conta sem registro das keys é
-// exatamente o que a lápide existe pra impedir, então a rodada seguinte tenta de novo.
+// Account destruction: deletes ALL of the bucket owner's media, with a tombstone.
+// The order is the point: the tombstone for all keys is written BEFORE the first delete,
+// because right after comes the account's DELETE, which takes down by CASCADE exactly the
+// rows (media_assets/user_likeness) that knew these keys. Without that record,
+// a bucket failure would leave the photo, voice and biometric FACE of a
+// DELETED account in the bucket forever with no one to retry.
+// A bucket failure never throws: whatever doesn't go out now stays pending for the sweeper.
+// Failing to WRITE the tombstone, though, does: destroying the account without a record of the keys is
+// exactly what the tombstone exists to prevent, so the next round retries.
 export async function purgarMidiaDaConta({ keys = [], registrarLapides, deleteMedia, settle, onErro }) {
   const uteis = [...new Set((keys || []).filter(Boolean))];
   if (!uteis.length) return { total: 0, apagados: 0, pendentes: 0 };
@@ -59,7 +59,7 @@ export async function purgarMidiaDaConta({ keys = [], registrarLapides, deleteMe
   return { total: uteis.length, apagados, pendentes };
 }
 
-// Varre as lápides abertas e tenta de novo. Falha de uma não para as outras.
+// Sweeps open tombstones and retries. One's failure doesn't stop the others.
 export async function varrerLapides({ claim, deleteMedia, settle, onErro, limite = 50 }) {
   const pendentes = await claim(limite);
   let apagados = 0, falhas = 0;

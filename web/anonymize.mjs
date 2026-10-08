@@ -1,20 +1,21 @@
-// ── Anonimização de snapshot no PUBLISH-para-biblioteca ──
-// Quando um app é tornado PÚBLICO (definir_visibilidade_sistema → público), o
-// snapshot de CÓDIGO que ficará copiável passa por uma limpeza única: um modelo
-// barato (Gemini Flash Lite) detecta conteúdo do dono (nome pessoal, cidade,
-// dados reais que sobraram no fonte, seed com registros reais) e devolve uma
-// lista de SUBSTITUIÇÕES literais {file, find, replace} por equivalentes
-// genéricos/de exemplo. Aplicamos as trocas por match EXATO de substring — nunca
-// reescrevemos o arquivo inteiro, então o modelo não tem como quebrar a sintaxe:
-// se um `find` não bater, a troca é simplesmente ignorada.
+// ── Snapshot anonymization on PUBLISH-to-library ──
+// When an app is made PUBLIC (definir_visibilidade_sistema → público), the CODE
+// snapshot that will become copyable goes through a one-time cleanup: a cheap
+// model (Gemini Flash Lite) detects owner content (personal name, city, real
+// data left over in the source, seed with real records) and returns a list of
+// literal SUBSTITUTIONS {file, find, replace} with generic/example equivalents.
+// We apply the swaps by EXACT substring match — we never rewrite the whole
+// file, so the model has no way to break the syntax: if a `find` does not
+// match, the swap is simply skipped.
 //
-// Roda 1x, no momento de publicar na biblioteca (não a cada deploy, não a cada
-// cópia). O resultado é gravado no próprio snapshot. É best-effort: se o modelo
-// falhar ou não devolver nada, o snapshot original segue intacto (não bloqueia
-// a publicação).
+// Runs once, at the moment of publishing to the library (not on every deploy,
+// not on every copy). The result is written into the snapshot itself. It's
+// best-effort: if the model fails or returns nothing, the original snapshot
+// stays intact (it does not block publishing).
 //
-// Escopo: só o CÓDIGO do snapshot. Segredo não vive aqui (cofre) e dado de
-// runtime não viaja (/app/data). Isto cuida do que sobra HARDCODED no fonte.
+// Scope: only the snapshot's CODE. Secrets do not live here (vault) and
+// runtime data does not travel (/app/data). This handles what's left
+// HARDCODED in the source.
 
 import zlib from 'node:zlib';
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
@@ -91,7 +92,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   if (!files || !Object.keys(files).length) return { blob, changed: false, applied: 0 };
   if (!process.env.GEMINI_API_KEY && !modeloPara('classificacao')) { log('[anon] sem GEMINI_API_KEY, pulando'); return { blob, changed: false, applied: 0 }; }
 
-  // Decodifica só os arquivos de texto.
+  // Decodes only the text files.
   const textFiles = [];
   const decoded = {};
   for (const [rel, b64] of Object.entries(files)) {
@@ -100,7 +101,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
       const txt = Buffer.from(b64, 'base64').toString('utf8');
       decoded[rel] = txt;
       textFiles.push([rel, txt]);
-    } catch { /* ignora binário/ilegível */ }
+    } catch { /* skips binary/unreadable */ }
   }
   if (!textFiles.length) return { blob, changed: false, applied: 0 };
 
@@ -119,8 +120,8 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   }
   if (!Array.isArray(arr) || !arr.length) return { blob, changed: false, applied: 0 };
 
-  // Aplica as trocas por match EXATO. Nunca quebra sintaxe: se o find não estiver
-  // no arquivo, a troca é ignorada. Guarda contra find vazio/curto demais.
+  // Applies the swaps by EXACT match. Never breaks syntax: if the find isn't
+  // in the file, the swap is skipped. Guards against an empty/too-short find.
   let applied = 0;
   for (const o of arr) {
     if (!o || typeof o.file !== 'string' || typeof o.find !== 'string') continue;
@@ -136,7 +137,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   }
   if (!applied) return { blob, changed: false, applied: 0 };
 
-  // Reconstrói o snapshot com os arquivos de texto atualizados (binários intactos).
+  // Rebuilds the snapshot with the updated text files (binaries untouched).
   const out = { ...files };
   for (const rel of Object.keys(decoded)) {
     out[rel] = Buffer.from(decoded[rel], 'utf8').toString('base64');

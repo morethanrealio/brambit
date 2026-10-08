@@ -8,7 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {conferirGasto} from './gasto.mjs';
 import {tagIdioma} from './locale.mjs';
 import {ferramentaConsultarGasto} from './credit-spend.mjs';
-// Sem crédito nem plano, o único motivo de barrar um turno é o teto em US$.
+// Without credit or a plan, the only reason to block a turn is the US$ cap.
 const SEM_SALDO={
  'pt-BR':{texto:t=>`Você chegou ao limite de uso deste mês (US$ ${t}). O limite volta no começo do mês que vem; quem administra esta instalação pode aumentá-lo.`,nota:'⚠️ Este foi um turno de emergência (só para recuperar app). O limite de uso deste mês acabou.'},
  en:{texto:t=>`You've reached this month's usage limit (US$ ${t}). It resets at the start of next month; whoever runs this installation can raise it.`,nota:"⚠️ This was an emergency turn (app recovery only). This month's usage limit has been reached."},
@@ -18,8 +18,8 @@ export function createGastoSimples({tetoUsd=null,gastoDoMes,gravarUso,deepseek=n
  if(tetoUsd!==null&&!(Number.isFinite(tetoUsd)&&tetoUsd>0))throw Error('tetoUsd precisa ser um número maior que zero');
  if(tetoUsd!==null&&typeof gastoDoMes!=='function')throw Error('Com teto, gastoDoMes(userId) é obrigatório');
  if(typeof gravarUso!=='function')throw Error('gravarUso é obrigatório');
- // Idempotência só dentro do processo: aqui não há dinheiro em jogo, então um
- // registro repetido depois de reiniciar custa uma linha a mais, não uma cobrança.
+ // Idempotency only within the process: there's no money at stake here, so a
+ // repeated record after a restart costs one extra row, not a charge.
  const registrados=new Map();
  return conferirGasto({
   vincular:({provider})=>provider,
@@ -27,7 +27,8 @@ export function createGastoSimples({tetoUsd=null,gastoDoMes,gravarUso,deepseek=n
    if(!deepseek)throw Error('DeepSeek oficial não configurado');
    return deepseek({maxTokens,secret});
   },
-  // Sem reserva e sem saldo em créditos: null diz "não há saldo pra mostrar".
+  // No reservation and no credit balance: null says "there's no balance to
+  // show".
   disponivel:async()=>null,
   async status(userId){
    if(tetoUsd===null)return {over:false,limitUsd:null,usedUsd:null};
@@ -45,7 +46,8 @@ export function createGastoSimples({tetoUsd=null,gastoDoMes,gravarUso,deepseek=n
   },
   limparCheckpoints:async()=>0,
   apagarConta:async()=>{},
-  // Sem crédito: nada é cobrado; o uso fica só com o custo real em US$.
+  // No credit: nothing is charged; usage is tracked only with the real US$
+  // cost.
   creditosDe:()=>0,
   dolarEmReais:()=>usdBrl,
   dolarPorCredito:()=>0,
@@ -55,13 +57,15 @@ export function createGastoSimples({tetoUsd=null,gastoDoMes,gravarUso,deepseek=n
    return {texto:t.texto(teto),notaEmergencia:t.nota};
   },
   contextoDoTurno:()=>'',
-  // Sem saldo pra consultar; só o gasto em US$, se houver de onde ler.
+  // No balance to query; only the US$ spend, if there's somewhere to read it
+  // from.
  ferramentas:({userId,agentId,turnId}={})=>spend?[ferramentaConsultarGasto({spend,unidade:'usd',userId,agentId,turnId})]:[],
-  // Sem plano nem pacote: a tela mostra o gasto do mês em US$ e o teto, se houver.
+  // No plan or package: the screen shows the month's spend in US$ and the
+  // cap, if there is one.
   telaDeCreditos:async({status,extras={}})=>({...status,...extras}),
-  // Sem empresa que pague: o saldo é sempre da própria pessoa.
+  // No company paying: the balance is always the person's own.
   conta:()=>({tipo:'pessoal'}),
-  // Nada à venda: o teto é do operador.
+  // Nothing for sale: the cap belongs to the operator.
   compraNaWeb:()=>false,
  });
 }

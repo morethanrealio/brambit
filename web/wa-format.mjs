@@ -1,19 +1,19 @@
-// O modelo escreve Markdown (**negrito**, # título, [texto](url)) mesmo com o
-// system prompt pedindo *negrito*: em 30 dias até 02/10/2026, 1249 de 1841
-// respostas em thread de WhatsApp tinham **, 591 tinham título # e 121 link
-// [texto](url). O WhatsApp não entende Markdown e mostrava os símbolos crus
-// (rotina de 01/10). Aqui o texto vira a formatação do WhatsApp logo
-// antes do envio; o que fica salvo na conversa continua Markdown (a web renderiza).
+// The model writes Markdown (**bold**, # heading, [text](url)) even with the
+// system prompt asking for *bold*: in the 30 days up to 2026-10-02, 1249 of 1841
+// WhatsApp thread replies had **, 591 had a # heading and 121 a
+// [text](url) link. WhatsApp doesn't understand Markdown and showed the raw symbols
+// (2026-10-01 routine). Here the text is converted to WhatsApp formatting right
+// before sending; what gets saved in the conversation stays Markdown (the web renders it).
 //
-// Bloco de código (```), código inline (`) e URL passam intactos: o WhatsApp
-// já entende ``` e `, e um __ ou ** dentro de URL não é formatação.
-// Tabela fica como está (não tem equivalente no WhatsApp).
+// Code block (```), inline code (`) and URLs pass through intact: WhatsApp
+// already understands ``` and `, and a __ or ** inside a URL isn't formatting.
+// Tables stay as they are (no WhatsApp equivalent).
 
 const PROTEGIDO = /```[\s\S]*?```|`[^`\n]+`/g;
-// URL termina antes de * ou ~ colados no fim: em **https://x.com** os asteriscos
-// são formatação, não parte do link.
+// URL ends before a * or ~ stuck to the end: in **https://x.com** the asterisks
+// are formatting, not part of the link.
 const URL = /https?:\/\/[^\s<>"'`)\]]+?(?=[*~]*(?:[\s<>"'`)\]]|$))/g;
-// CPF/CNPJ mascarado (***.365.199-**): os asteriscos são a máscara, não negrito.
+// Masked CPF/CNPJ (***.365.199-**): the asterisks are the mask, not bold.
 const MASCARA = /(?<![\w*])[\d*]{2,3}\.[\d*]{3}\.[\d*]{3}(?:\/[\d*]{4})?-[\d*]{2}(?![\w*])/g;
 
 export function markdownParaWa(text) {
@@ -22,8 +22,8 @@ export function markdownParaWa(text) {
 
   let t = String(text ?? '');
 
-  // Link vira "texto (url)"; se o texto já é a própria url, só a url. Precisa
-  // rodar antes de proteger as URLs, senão o ")" final do link se perde.
+  // Link becomes "text (url)"; if the text is already the url itself, just the url. Needs
+  // to run before protecting URLs, otherwise the link's final ")" gets lost.
   t = t.replace(/!?\[([^\]\n]*)\]\((https?:\/\/[^\s)]+)\)/g, (_, rotulo, url) => {
     const r = rotulo.trim();
     const nu = (s) => s.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -32,7 +32,7 @@ export function markdownParaWa(text) {
   });
 
   t = t.replace(PROTEGIDO, guardar).replace(MASCARA, guardar);
-  // Link sozinho entre marcas (**url**) vai sem a marca: o link fica clicável.
+  // A link alone between marks (**url**) goes out without the mark: the link stays clickable.
   const links = [];
   t = t.replace(URL, (u) => `\u0001${links.push(u) - 1}\u0001`)
     .replace(/(\*{1,3}|__|~~)(\u0001\d+\u0001)\1/g, '$2');

@@ -1,19 +1,19 @@
-// ── Oferta de rotina na CONVERSA (núcleo; C2, passo 11a4) ──────────────────────
-// O assistente oferta deixar algo rodando sozinho, na deixa dele, pela tool
-// oferecer_rotina. A régua (opt-out + 3 dias) e o livro de ofertas são do núcleo
-// (routineOfferGate e ${S}.routine_offers no db.mjs). O que a distribuição pode
-// somar é a EVIDÊNCIA de sobre o que a pessoa conversa: a porta
-// assuntosConversados(userId) → [{assunto, n, dias, ultimo, padroes}], em que
-// `padroes` são os ids do CATALOGO que aquele assunto sustenta. Sem a porta, a
-// lista vem vazia e o bloco usa a regra genérica. O painel que oferta em lote
-// (diagnóstico por modelo, foto do lote, rascunho) é da distribuição.
+// ── Routine offer in the CONVERSATION (core; C2, step 11a4) ──────────────────────
+// The assistant offers to leave something running on its own, on its own cue, via the
+// oferecer_rotina tool. The guardrail (opt-out + 3 days) and the offer log are the core's
+// (routineOfferGate and ${S}.routine_offers in db.mjs). What the distribution can
+// add is the EVIDENCE of what the person talks about: the
+// assuntosConversados(userId) port → [{assunto, n, dias, ultimo, padroes}], where
+// `padroes` are the CATALOG ids that subject supports. Without the port, the
+// list comes back empty and the block uses the generic rule. The panel that offers in bulk
+// (per-model diagnosis, batch snapshot, draft) belongs to the distribution.
 
 import { routineOfferGate, pool, S } from './db.mjs';
 
-// Fatos do lado CONVERSA da oferta de rotina (rotina-oferta.mjs): capacidade (o
-// que ela tem conectado) e o que já roda sozinho pra ela. Roda a cada turno de
-// quem passa na régua, então sai numa consulta só. Os assuntos conversados vêm
-// da porta assuntosConversados.
+// Facts from the CONVERSATION side of the routine offer (rotina-oferta.mjs): capability (what
+// they have connected) and what's already running on its own for them. Runs every turn of
+// whoever passes the guardrail, so it goes in a single query. The subjects talked about come
+// from the assuntosConversados port.
 async function getRoutineNudgeFacts(userId) {
   const vazio = { g_scope: '', ms_scope: '', tem_tracker: false, agendados: [] };
   if (!userId) return vazio;
@@ -43,8 +43,8 @@ async function getRoutineNudgeFacts(userId) {
 }
 
 
-// Catálogo de padrões, derivado das rotinas VIVAS de produção (01/09/2026), não
-// inventado. `requer` é a capacidade sem a qual a rotina nasceria quebrada.
+// Pattern catalog, derived from the LIVE production routines (2026-09-01), not
+// made up. `requer` is the capability without which the routine would be born broken.
 export const CATALOGO = [
   { id: 'digest_agenda',   o: 'Resumo da agenda do dia (o que vem, conflitos, o que preparar)',           requer: 'calendario' },
   { id: 'triagem_email',   o: 'Triagem da caixa de entrada: o que precisa de resposta e o que é ruído',   requer: 'email' },
@@ -56,10 +56,10 @@ export const CATALOGO = [
   { id: 'resumo_tracker',  o: 'Resumo periódico de algo que a pessoa já registra (tracker)',              requer: 'tracker' },
 ];
 
-// ── Força da EVIDÊNCIA: decidida por DADO, nunca pelo modelo ──
-// Contagem de turnos não separa hábito de episódio. O que separa é em quantos
-// DIAS DIFERENTES o assunto apareceu e quão recente foi o último. Caso 02/09:
-// 6 turnos num único dia, 40 dias atrás, voltaram como "confiança alta".
+// ── Strength of EVIDENCE: decided by DATA, never by the model ──
+// Turn count doesn't distinguish habit from episode. What distinguishes it is on how many
+// DIFFERENT DAYS the subject appeared and how recent the last one was. 2026-09-02 case:
+// 6 turns in a single day, 40 days ago, came back as "high confidence."
 export function forcaDoAssunto(a, hoje = new Date()) {
   const dias = Number(a?.dias || 0);
   const idade = diasAtras(a?.ultimo, hoje);
@@ -68,7 +68,7 @@ export function forcaDoAssunto(a, hoje = new Date()) {
   return 'baixa';
 }
 
-// Meio-dia BRT pra idade em dias não oscilar com o horário em que o lote roda.
+// BRT noon so age in days doesn't wobble with the time the batch runs.
 export function diasAtras(ymd, hoje = new Date()) {
   if (!ymd) return 999;
   const t = Date.parse(`${String(ymd).slice(0, 10)}T12:00:00-03:00`);
@@ -78,8 +78,8 @@ export function diasAtras(ymd, hoje = new Date()) {
 
 export const ORDEM_DA_FORCA = { alta: 3, media: 2, baixa: 1 };
 
-// Capacidade vem do ESCOPO concedido, não do fato de ter login Google: quem
-// entrou só com "entrar com Google" não tem agenda nem e-mail pra ler.
+// Capability comes from the GRANTED SCOPE, not from having a Google login: whoever
+// only signed in with "sign in with Google" has no calendar or email to read.
 export function capacidadesDe(c) {
   const out = [];
   const esc = `${c.g_scope || ''} ${c.ms_scope || ''}`.toLowerCase();
@@ -89,18 +89,18 @@ export function capacidadesDe(c) {
   return out;
 }
 
-// O bom senso NÃO é pedido ao modelo por adjetivo ("seja sensível"): ele vem de
-// (a) o bloco só existir pra quem passa na régua do livro
-// de ofertas, e (b) a única forma de ofertar ser a tool, que registra e fecha a
-// janela sozinha. Sobra pro prompt exatamente uma decisão: o MOMENTO.
-// O QUE ofertar sai daqui, não do modelo. Critério: o padrão do catálogo que a
-// pessoa (a) consegue executar — capacidade conectada — e (b) tem lastro num
-// assunto que ela de fato conversa, com força pelo menos MÉDIA (2+ dias
-// diferentes, recente). É a mesma régua de evidência do painel, só que aplicada
-// na hora, por pessoa.
-// Sem evidência suficiente devolve null de propósito: aí o prompt volta pra
-// regra genérica de antes. Preencher o buraco com um padrão qualquer só pra ter
-// o que oferecer é exatamente a oferta genérica que a gente não quer.
+// Good judgment is NOT asked of the model via an adjective ("be sensitive"): it comes
+// from (a) the block only existing for whoever passes the offer-log
+// guardrail, and (b) the only way to make an offer being the tool, which registers and closes the
+// window on its own. That leaves exactly one decision for the prompt: the MOMENT.
+// WHAT to offer comes from here, not from the model. Criterion: the catalog pattern the
+// person (a) can run — connected capability — and (b) has grounding in a
+// subject they actually talk about, with at least MEDIUM strength (2+ different
+// days, recent). It's the same evidence guardrail as the panel, just applied
+// on the spot, per person.
+// Returns null on purpose when there's not enough evidence: then the prompt falls back to
+// the earlier generic rule. Filling the gap with just any pattern to have
+// something to offer is exactly the generic offer we don't want.
 export function escolherPadraoDaVez(caps = [], assuntos = [], hoje = new Date()) {
   let melhor = null;
   for (const p of CATALOGO) {
@@ -130,9 +130,9 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
   const gate = await routineOfferGate(userId);
   if (!gate.pode) return '';
 
-  // Mais consultas só pra quem passou na régua acima (hoje ~3 de 4 das pessoas
-  // ativas). Se o banco falhar aqui, o turno NÃO cai: o bloco só perde a
-  // sugestão concreta e volta a ser o genérico.
+  // More queries only for whoever passed the ruler above (today ~3 of 4 active
+  // people). If the database fails here, the turn does NOT fall: the block only loses the
+  // concrete suggestion and goes back to being generic.
   let alvo = null;
   let agendados = [];
   try {
@@ -140,7 +140,7 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
     agendados = f.agendados;
     const assuntos = assuntosConversados ? await assuntosConversados(userId) : [];
     alvo = escolherPadraoDaVez(capacidadesDe(f), assuntos);
-  } catch { /* sem dado, segue no genérico */ }
+  } catch { /* no data, falls back to generic */ }
 
   const L = ['AGENDAMENTO AUTOMÁTICO (contexto interno, NUNCA comente isto):'];
   if (agendados.length) {
@@ -149,9 +149,9 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
     L.push('Este dono não tem NENHUMA rotina rodando: hoje você só age quando ele te chama.');
   }
   if (alvo) {
-    // A escolha vem pronta pra sobrar pro modelo só o MOMENTO e as palavras, que
-    // é onde ele é bom. Quando ele tinha que descobrir sozinho O QUE ofertar,
-    // saíram 3 ofertas em 433 turnos elegíveis (medido 10/09).
+    // The choice comes ready so only the MOMENT and the words are left to the model, which
+    // is where it's good. When it had to figure out by itself WHAT to offer,
+    // only 3 offers came out of 433 eligible turns (measured 2026-09-10).
     L.push(`O que mais faz sentido oferecer pra esta pessoa (já escolhido a partir do que ela conversa e do que ela tem conectado, não é chute): ${alvo.o}. Ao chamar a tool, use padrao="${alvo.padrao}".`);
     L.push(`Lastro: ${alvo.evidencia}.`);
     L.push('DEIXA: basta a conversa ENCOSTAR nesse assunto, não precisa vir um "todo dia". Aí chame a tool oferecer_rotina ANTES de escrever a resposta e, depois do retorno dela, escreva a sua resposta normal completa com a oferta emendada no fim, em uma ou duas linhas. Se surgir outra coisa repetitiva antes disso, ofereça essa outra.');
@@ -163,14 +163,14 @@ export async function routineNudgeContext(userId, { assuntosConversados } = {}) 
   return L.join('\n');
 }
 
-// Texto que a tool devolve depois de registrar a oferta. O convite em si é
-// escrito pelo assistente, na voz dele; aqui só ficam os limites de copy, os
-// mesmos do convite do painel.
-// oferecer_rotina é keepsStepText: o texto escrito no mesmo passo da chamada é
-// entregue antes do texto final. Até 06/10/2026 ele era descartado e o retorno
-// pedia só "faça o convite", então a resposta ao pedido sumia e só o convite
-// chegava (3 casos entre 03 e 05/10). Os retornos avisam que esse texto já vai
-// e pedem a resposta completa só se ela ainda não foi escrita.
+// Text the tool returns after registering the offer. The invitation itself is
+// written by the assistant, in its own voice; here only the copy limits stay, the
+// same ones as the panel's invitation.
+// oferecer_rotina is keepsStepText: the text written in the same step as the call is
+// delivered before the final text. Until 2026-10-06 it was discarded and the return
+// only asked "make the invitation," so the response to the request disappeared and only the invitation
+// arrived (3 cases between 2026-10-03 and 2026-10-05). The returns warn that this text is already
+// coming and ask for the complete response only if it hasn't been written yet.
 const JA_ESCRITO = 'O texto que você escreveu junto desta chamada já vai ser entregue a ele, antes do que você escrever agora: não repita nada dele.';
 
 export function ofertaRegistrada(titulo) {

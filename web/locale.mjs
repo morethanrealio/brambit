@@ -1,6 +1,6 @@
-// Idioma e país do usuário: só as funções PURAS, sem banco e sem HTTP, pra
-// poderem ser testadas sozinhas (`node locale.test.mjs`). Quem grava é o
-// db.mjs; quem lê header é o server.mjs. Aqui fica a regra.
+// User language and country: only PURE functions, no database and no HTTP, so
+// they can be tested on their own (`node locale.test.mjs`). db.mjs does the writing;
+// server.mjs reads the header. The rule lives here.
 
 // What the product REALLY supports today. While only Portuguese text exists,
 // letting 'fr' in here would translate nothing: it would just make the agent
@@ -9,10 +9,10 @@
 export const IDIOMAS_OK = ['pt-BR', 'en', 'es'];
 export const IDIOMA_PADRAO = 'pt-BR';
 
-// Normaliza o que vier do navegador/header pro nosso conjunto: 'pt', 'pt-PT' e
-// 'pt-br' viram 'pt-BR'; 'en-US' e 'en-GB' viram 'en'; 'es-419' vira 'es'.
-// Qualquer outra língua devolve null (o chamador decide o fallback), porque
-// "não sei" e "é português" são coisas diferentes e não podem virar a mesma.
+// Normalizes whatever comes from the browser/header into our set: 'pt', 'pt-PT' and
+// 'pt-br' become 'pt-BR'; 'en-US' and 'en-GB' become 'en'; 'es-419' becomes 'es'.
+// Any other language returns null (the caller decides the fallback), because
+// "I don't know" and "it's Portuguese" are different things and can't become the same.
 export function normalizaIdioma(v) {
   const s = String(v || '').trim().toLowerCase();
   if (!s) return null;
@@ -23,23 +23,23 @@ export function normalizaIdioma(v) {
   return null;
 }
 
-// País em ISO-3166 alfa-2 maiúsculo. Só formato, sem tabela de países: a lista
-// oficial muda e não vale manter cópia aqui.
+// Country in uppercase ISO-3166 alpha-2. Format only, no country table: the
+// official list changes and it's not worth keeping a copy here.
 export function normalizaPais(v) {
   const s = String(v || '').trim().toUpperCase();
   return /^[A-Z]{2}$/.test(s) ? s : null;
 }
 
-// Lê um Accept-Language e devolve { language, country } no nosso formato.
-// Header real: "es-AR,es;q=0.9,en-US;q=0.8". Percorre na ORDEM de preferência
-// declarada e para na primeira língua que a gente atende, então quem tem
-// "ja,en;q=0.9" e ainda não temos japonês cai em inglês, não em português. O
-// país sai da região da MESMA entrada escolhida (es-AR -> AR).
+// Reads an Accept-Language and returns { language, country } in our format.
+// Real header: "es-AR,es;q=0.9,en-US;q=0.8". Walks in the declared preference
+// ORDER and stops at the first language we support, so someone with
+// "ja,en;q=0.9" when we still don't have Japanese falls back to English, not Portuguese. The
+// country comes from the region of the SAME chosen entry (es-AR -> AR).
 //
-// Isso é um PALPITE, e é assim que tem que ser tratado: o idioma do navegador
-// não prova onde a pessoa mora (brasileiro com Chrome em inglês existe aos
-// montes). Serve pra escolher a primeira tela; regra de cobrança e de
-// disponibilidade por país precisa de sinal melhor que este.
+// This is a GUESS, and it must be treated as such: the browser's language
+// doesn't prove where the person lives (a Brazilian with Chrome in English exists in
+// droves). It serves to pick the first screen; billing and per-country
+// availability rules need a better signal than this.
 export function localeDoAcceptLanguage(raw) {
   const s = String(raw || '').trim();
   if (!s) return { language: null, country: null };
@@ -48,8 +48,8 @@ export function localeDoAcceptLanguage(raw) {
     const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
     return { tag: (tag || '').trim(), q: q ? Number(q.slice(2)) || 0 : 1 };
   }).filter((i) => i.tag && i.tag !== '*');
-  // sort estável no Node: empate de q preserva a ordem declarada, que é
-  // justamente o desempate certo do RFC 9110.
+  // stable sort in Node: a q tie preserves the declared order, which is
+  // exactly the correct tiebreaker per RFC 9110.
   itens.sort((a, b) => b.q - a.q);
   for (const { tag } of itens) {
     const lang = normalizaIdioma(tag);
@@ -60,8 +60,8 @@ export function localeDoAcceptLanguage(raw) {
   return { language: null, country: null };
 }
 
-// ── Idioma no prompt ────────────────────────────────────────────────────────
-// Tag curta pro prompt ('pt-BR' | 'en' | 'es'), sempre com fallback no padrão.
+// ── Language in the prompt ───────────────────────────────────────────────────
+// Short tag for the prompt ('pt-BR' | 'en' | 'es'), always with a fallback to the default.
 export function tagIdioma(language) {
   return normalizaIdioma(language) || IDIOMA_PADRAO;
 }
@@ -106,29 +106,29 @@ const DIRETRIZ = {
   ].join('\n'),
 };
 
-// Idioma desconhecido/não atendido continua devolvendo null (e não a diretriz de
-// pt-BR): "não sei qual é" e "é português" são coisas diferentes, e cair no
-// português por omissão é justamente o que a normalizaIdioma evita lá em cima.
+// Unknown/unsupported language keeps returning null (and not the pt-BR
+// directive): "I don't know which it is" and "it's Portuguese" are different things, and
+// falling back to Portuguese by default is exactly what normalizaIdioma avoids above.
 export function instrucaoDeIdioma(language) {
   const l = normalizaIdioma(language);
   if (!l) return null;
   return DIRETRIZ[l] || null;
 }
 
-// Cola a diretriz no fim de um system prompt. Sem idioma reconhecido devolve o
-// prompt ORIGINAL, sem concatenação nenhuma.
+// Appends the directive to the end of a system prompt. Without a recognized language it
+// returns the ORIGINAL prompt, with no concatenation at all.
 export function comIdioma(system, language) {
   const d = instrucaoDeIdioma(language);
   return d ? `${system}\n\n${d}` : system;
 }
 
-// Lembrete de idioma POR TURNO, colado no fim da mensagem do usuário (junto do
-// relógio, fora do prefixo cacheado e fora do history). A diretriz acima fica no
-// fim do SYSTEM, que numa thread longa está a dezenas de milhares de tokens da
-// última mensagem: em 30/09/2026 o DeepSeek respondeu em chinês a uma usuária
-// em pt-BR, a ~83k tokens do system, com a conversa inteira em português. Perto
-// do turno atual o modelo não perde a referência. Mesma regra da diretriz (o
-// espelhamento de quem escreve continua valendo); aqui só o lembrete curto.
+// PER-TURN language reminder, appended at the end of the user's message (next to the
+// clock, outside the cached prefix and outside the history). The directive above stays at
+// the end of the SYSTEM prompt, which in a long thread is tens of thousands of tokens from
+// the last message: on 2026-09-30 DeepSeek answered in Chinese to a user
+// in pt-BR, ~83k tokens from the system prompt, with the entire conversation in Portuguese. Close
+// to the current turn the model doesn't lose the reference. Same rule as the directive (the
+// mirroring of whoever is writing still applies); here it's just the short reminder.
 const LEMBRETE = {
   'pt-BR': '(Idioma: responda em português do Brasil, o idioma configurado desta pessoa, a menos que ela mesma tenha escrito esta mensagem em outra língua. Nunca mude de língua por conta própria.)',
   en: "(Language: reply in English, this person's configured language, unless they themselves wrote this message in another language. Never switch languages on your own.)",
@@ -216,39 +216,39 @@ const ESCRITO = {
   es: '(Idioma: este mensaje fue escrito en español. Responde en español, aunque las instrucciones y los resultados de las herramientas estén en otro idioma, salvo que la persona haya pedido otro idioma en esta conversación.)',
 };
 
-// ── Detector de deriva de idioma (só observa, NUNCA bloqueia) ───────────────
-// A diretriz acima é instrução MOLE: reduz o vazamento de português, não zera.
-// O problema é que hoje, se o modelo derrapar, ninguém fica sabendo: não existe
-// sinal nenhum, então a pergunta "a diretriz funciona?" só tem resposta de
-// opinião. Isto existe pra ter número.
+// ── Language drift detector (only observes, NEVER blocks) ──────────────────
+// The directive above is a SOFT instruction: it reduces Portuguese leakage, doesn't zero it out.
+// The problem is that today, if the model slips, nobody finds out: there is no
+// signal at all, so the question "does the directive work?" only has an
+// opinion-based answer. This exists to produce a number.
 //
-// É HEURÍSTICA, e está declarada como tal. Procura marcas que são de português
-// e NÃO de espanhol nem de inglês, porque o caso difícil é pt vs es: as duas
-// compartilham quase todo o vocabulário. O que separa barato é 'ã/õ/ç', os
-// dígrafos 'nh/lh' (es usa 'ñ/ll'), os sufixos '-ção/-ões' e um punhado de
-// palavras funcionais ('não', 'você', 'com', 'então', 'isso', 'muito').
+// It is a HEURISTIC, and declared as such. It looks for markers that are Portuguese
+// and NOT Spanish or English, because the hard case is pt vs es: the two
+// share almost all their vocabulary. What separates them cheaply is 'ã/õ/ç', the
+// digraphs 'nh/lh' (es uses 'ñ/ll'), the suffixes '-ção/-ões' and a handful of
+// function words ('não', 'você', 'com', 'então', 'isso', 'muito').
 const MARCAS_PT = [
-  /[ãõç]/gi,                                                    // es não tem; en não tem
+  /[ãõç]/gi,                                                    // es doesn't have it; en doesn't have it
   /\w(nh|lh)\w/gi,                                              // es escreve ñ / ll
-  /\B(ção|ções|ão|ões)\b/gi,                                    // sufixo típico
+  /\B(ção|ções|ão|ões)\b/gi,                                    // typical suffix
   /\b(não|você|vocês|então|isso|isto|também|muito|muita|obrigado|obrigada|amanhã|tem|têm|fazer|minha|até|já)\b/gi,
 ];
 
-// Devolve null quando não há nada pra medir (usuário em pt-BR, texto curto ou
-// vazio). Fora disso devolve o score, pra ir pro log SEMPRE, não só quando passa
-// do limiar: sem usuário en/es de verdade eu não tenho amostra pra calibrar, e
-// fingir que o corte está certo seria pior que medir. O limiar é palpite inicial
-// e está aqui pra ser ajustado com dado real depois.
+// Returns null when there's nothing to measure (user in pt-BR, short or
+// empty text). Otherwise it returns the score, so it ALWAYS goes to the log, not just when it
+// passes the threshold: without a real en/es user I have no sample to calibrate against, and
+// pretending the cutoff is right would be worse than measuring. The threshold is an initial guess
+// and is here to be adjusted with real data later.
 const MIN_PALAVRAS = 8;
 const LIMIAR = 0.06;
 
 export function derivaDeIdioma(texto, language) {
   const l = normalizaIdioma(language);
-  if (!l || l === IDIOMA_PADRAO) return null;   // em pt-BR português é o esperado
+  if (!l || l === IDIOMA_PADRAO) return null;   // in pt-BR Portuguese is expected
   const s = String(texto || '').trim();
   if (!s) return null;
   const palavras = (s.match(/\p{L}+/gu) || []).length;
-  if (palavras < MIN_PALAVRAS) return null;     // frase curta dá score sem sentido
+  if (palavras < MIN_PALAVRAS) return null;     // a short phrase gives a meaningless score
   let marcas = 0;
   for (const re of MARCAS_PT) marcas += (s.match(re) || []).length;
   const score = marcas / palavras;
@@ -261,21 +261,21 @@ export function derivaDeIdioma(texto, language) {
   };
 }
 
-// ── Freio de ideograma (este BLOQUEIA, ao contrário do detector acima) ──────
-// O lembrete por turno (30/09) não bastou: em 05/10/2026 o DeepSeek V4.1 Flash
-// respondeu em chinês de novo a um usuário em pt-BR, no WhatsApp, a ~114k
-// tokens, depois de cancelar 4 lembretes. Instrução é pedido, e o modelo às
-// vezes não atende; o que falta é a plataforma conferir a saída antes de
-// entregar. Todo idioma atendido (pt-BR, en, es) é escrito em alfabeto latino,
-// então resposta dominada por ideograma chinês é deriva, salvo dois casos
-// legítimos que existem em prod: japonês pedido de propósito (lista de tarefas
-// em japonês, sempre com kana) e pedido explícito de chinês/japonês/coreano.
+// ── Ideogram guard (this one BLOCKS, unlike the detector above) ────────────
+// The per-turn reminder (2026-09-30) wasn't enough: on 2026-10-05 DeepSeek V4.1 Flash
+// again replied in Chinese to a pt-BR user, on WhatsApp, at ~114k
+// tokens, after cancelling 4 reminders. An instruction is a request, and the model
+// sometimes doesn't comply; what's missing is the platform checking the output before
+// delivering it. Every supported language (pt-BR, en, es) is written in the Latin alphabet,
+// so a response dominated by Chinese ideograms is drift, except for two
+// legitimate cases that exist in prod: Japanese requested on purpose (a task list
+// in Japanese, always with kana) and an explicit request for Chinese/Japanese/Korean.
 //
-// Calibrado nas 79 respostas com ideograma gravadas em prod até 05/10/2026: só
-// 4 passam pela regra, e as 4 são deriva (17/07 e 14/08 no GLM, 30/09 e 05/10 no
-// DeepSeek), com 30% a 100% de ideograma entre as letras. As demais têm menos de
-// 20 ideogramas ou têm kana (japonês pedido pelo dono). O corte de 15% deixa
-// folga dos dois lados: nenhuma resposta legítima chega perto dele.
+// Calibrated on the 79 ideogram-containing responses recorded in prod through 2026-10-05: only
+// 4 pass the rule, and those 4 are drift (2026-07-17 and 2026-08-14 on GLM, 2026-09-30 and 2026-10-05 on
+// DeepSeek), with 30% to 100% ideograms among the letters. The rest have fewer than
+// 20 ideograms or have kana (Japanese requested by the owner). The 15% cutoff leaves
+// margin on both sides: no legitimate response comes close to it.
 const RE_HAN = /\p{Script=Han}/gu;
 const RE_KANA_HANGUL = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const RE_CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
@@ -295,9 +295,9 @@ export function ideogramaAcidental(texto, language, textoDoDono = '') {
   return { idioma: normalizaIdioma(language) || IDIOMA_PADRAO, han, parte: Number(parte.toFixed(2)) };
 }
 
-// Pedido de reescrita: chamada curta, SEM ferramentas e sem a conversa, então
-// nada do turno roda de novo (os lembretes cancelados não são cancelados duas
-// vezes) e custa uns poucos milhares de tokens.
+// Rewrite request: a short call, WITHOUT tools and without the conversation, so
+// nothing in the turn runs again (cancelled reminders aren't cancelled twice)
+// and it costs a few thousand tokens.
 export function reescritaNoIdioma(language) {
   const nome = idiomaPorExtenso(language);
   return {
@@ -306,15 +306,15 @@ export function reescritaNoIdioma(language) {
   };
 }
 
-// Se nem a reescrita sair no idioma, a pessoa recebe isto em vez de um texto
-// que não consegue ler. Os recibos de ação continuam indo logo abaixo.
+// If even the rewrite doesn't come out in the right language, the person receives this instead of a text
+// they can't read. Action receipts still go right below.
 const SEM_IDIOMA = {
   'pt-BR': 'Tive um problema ao escrever esta resposta no seu idioma. Pode me pedir de novo?',
   en: 'I had a problem writing this reply in your language. Could you ask me again?',
   es: 'Tuve un problema al escribir esta respuesta en tu idioma. ¿Me lo pides de nuevo?',
 };
-// Mesmo número de linhas com texto: a reescrita que pula uma linha (o título
-// "Lembretes cancelados", no teste de 05/10) perde informação sem ninguém ver.
+// Same number of lines with text: a rewrite that skips a line (the title
+// "Lembretes cancelados", in the 2026-10-05 test) loses information without anyone seeing it.
 export function mesmasLinhas(original, reescrito) {
   const n = (t) => String(t || '').split('\n').filter((l) => l.trim()).length;
   return n(original) === n(reescrito);

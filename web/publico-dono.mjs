@@ -1,10 +1,10 @@
-// Visão do dono do atendimento ao público (publico.mjs): configurar o modo
-// público de um assistente, ver os contatos e as conversas (só leitura), bloquear,
-// exportar e apagar um contato. A tela é web/public/atendimento.html (/atendimento).
+// Owner's view of public support (publico.mjs): configuring an assistant's
+// public mode, viewing contacts and conversations (read-only), blocking,
+// exporting and deleting a contact. The screen is web/public/atendimento.html (/atendimento).
 //
-// Toda rota exige sessão. O dono é conferido no SQL do store (agents.user_id), e
-// contato ou assistente de outra conta responde 404, igual a um id que não existe.
-// As que mudam estado são POST e passam pelo CSRF global do servidor.
+// Every route requires a session. The owner is checked in the store's SQL (agents.user_id), and
+// a contact or assistant from another account responds with 404, same as an id that doesn't exist.
+// The ones that change state are POST and go through the server's global CSRF.
 import { readBody } from './http-body.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -12,8 +12,8 @@ const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
 
-// O que vem do formulário vira campos do store.configurar; campo ausente fica
-// como está. Devolve {erro} se algum valor não vale.
+// What comes from the form becomes store.configurar fields; a missing field stays
+// as is. Returns {erro} if any value is invalid.
 export function camposDaConfig(b = {}) {
   const c = {};
   if (b.ativo !== undefined) { if (typeof b.ativo !== 'boolean') return { erro: 'ativo precisa ser verdadeiro ou falso.' }; c.ativo = b.ativo; }
@@ -34,10 +34,10 @@ export function camposDaConfig(b = {}) {
   return { campos: c };
 }
 
-// deps: rotas (rotas.mjs), store (createPublicoStore), send/fail/tooManyRequests
-// do servidor, agenteDoNumero() = id do assistente que atende o número da instalação.
+// deps: routes (rotas.mjs), store (createPublicoStore), send/fail/tooManyRequests
+// from the server, agenteDoNumero() = id of the assistant that serves the installation's number.
 export function registrarRotasDoDono({ rotas, store, send, fail, tooManyRequests, agenteDoNumero }) {
-  // Envolve cada rota: sessão, sem cache, limite de pedidos e erro sem detalhe.
+  // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
     const user = await ctx.currentUser?.();
@@ -47,7 +47,7 @@ export function registrarRotasDoDono({ rotas, store, send, fail, tooManyRequests
     catch (e) { return fail(res, 500, 'Falha no atendimento ao público.', e); }
   });
   const naoAchei = (res) => send(res, 404, { error: 'Não encontrado.' });
-  // Contato do pedido, só se for do dono.
+  // Contact from the request, only if it belongs to the owner.
   const contatoDoPedido = async (user, id) => { const c = uuid(id); return c && (await store.contatoDoDono(user.id, c)) ? c : null; };
 
   rota('GET', '/api/publico/agentes', async ({ res, user }) => {

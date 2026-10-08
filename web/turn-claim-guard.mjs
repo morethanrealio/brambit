@@ -4,14 +4,14 @@ import { marca } from './marca.mjs';
 const fold = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, ' ').trim();
 
-// A resposta curta e isolada a uma proposta deve encerrar a proposta. Não tenta
-// interpretar frases que tragam um pedido novo ("não, faça X em vez disso").
+// A short, isolated reply to a proposal should close the proposal. It doesn't try to
+// interpret sentences that bring a new request ("no, do X instead").
 export function standaloneRefusal(value) {
   if (/[?¿]/.test(String(value || ''))) return false;
   const text = fold(value);
-  // Frases completas: adicionar "precisa/fazer/nada" à lista de palavras
-  // aceitas abaixo também aceitaria pedidos novos ou condições por acidente.
-  // O seletor de confirmação continua responsável pelo alvo e pelo escopo.
+  // Full sentences: adding "precisa/fazer/nada" to the list of accepted
+  // words below would also accidentally accept new requests or conditions.
+  // The confirmation selector remains responsible for the target and the scope.
   if (/^(?:por favor )?nao (?:(?:precisa|e preciso|e necessario)(?: mais)? (?:fazer (?:mais )?(?:nada|isso)|continuar)|faca (?:mais )?nada)(?: por favor| obrigad[oa])?$/.test(text)
     || /^(?:please )?(?:no need to (?:do (?:anything(?: else)?|that)|continue|proceed)|(?:you )?(?:don t|do not) (?:need to )?do (?:anything(?: else)?|that)|do nothing)(?: please| thanks| thank you)?$/.test(text)
     || /^(?:por favor )?no (?:(?:hace falta|es necesario|necesitas) (?:hacer (?:nada|eso)|continuar)|hagas nada)(?: por favor| gracias)?$/.test(text)) return true;
@@ -29,8 +29,8 @@ export function refusalAcknowledgement(language = 'pt-BR') {
   })[tagIdioma(language)] || 'Entendido. Não vou fazer nem propor essa alteração novamente, a menos que você reabra o assunto.';
 }
 
-// Histórico contém resultados reais, mas antigos. Uma alegação temporal explícita
-// sem nenhuma consulta neste turno é objetivamente falsa e não pode ser entregue.
+// History contains real, but old, results. An explicit temporal claim
+// with no query in this turn is objectively false and can't be delivered.
 export function enforceFreshCheckClaims(text, { toolCounts = {}, language = 'pt-BR' } = {}) {
   const value = String(text || '');
   if (Object.keys(toolCounts || {}).length) return value;
@@ -48,14 +48,14 @@ export function freshCheckCorrection(language = 'pt-BR') {
   })[tagIdioma(language)] || 'Não consultei nenhuma ferramenta neste turno, então não posso apresentar esse estado como verificado agora.';
 }
 
-// Pré-filtro largo para o Jev (#48): só pergunta quando o texto tem verbo de
-// conferência. A regra acima exige "agora" e perde "Acabei de conferir sua agenda".
+// Broad pre-filter for Jev (#48): only asks when the text has a checking
+// verb. The rule above requires "agora" and misses "Acabei de conferir sua agenda".
 export const FRESH_CHECK_HINT = /\b(?:verific|confer|consult|chequ|chec|olhei|busquei|pesquisei|acessei|checked|verified|looked|consulted|comprob)\w*/iu;
 
-// Última barreira contra a colisão Gmail x mailer da plataforma. O histórico de
-// uma thread longa pode repetir a afirmação antiga mesmo com a regra correta no
-// system. Só remove linhas que afirmam positivamente uma dependência entre a
-// entrega da ROTINA e permissão/Gmail; frases corretas ("não depende") ficam.
+// Last barrier against the Gmail x platform-mailer collision. A long thread's
+// history can repeat the old claim even with the correct rule in the
+// system. Only removes lines that positively assert a dependency between
+// ROUTINE delivery and Gmail permission; correct sentences ("doesn't depend") stay.
 export function enforceRoutineEmailContract(text, { language='pt-BR' }={}) {
  const lines=String(text||'').split('\n');let removed=false;
  let kept=lines.filter(line=>{
@@ -66,9 +66,9 @@ export function enforceRoutineEmailContract(text, { language='pt-BR' }={}) {
   if(!falseDependency)return true;removed=true;return false;
  });
  if(!removed)return String(text||'');
- // A pergunta de ativar Gmail costuma vir na linha imediatamente seguinte à
- // justificativa falsa. Sem a justificativa ela ainda devolveria ao usuário a
- // mesma ação errada, então sai junto — somente quando a linha falsa existiu.
+ // The question to enable Gmail usually comes on the line immediately following the
+ // false justification. Without the justification it would still return the
+ // same wrong action to the user, so it goes out together — only when the false line existed.
  kept=kept.filter(line=>!/\b(?:posso|quer que eu|confirma).{0,80}\b(?:ligar|ativar|habilitar)\b/i.test(fold(line)));
  const out=kept.join('\n').replace(/\n{3,}/g,'\n\n').trim();
  const correction=({

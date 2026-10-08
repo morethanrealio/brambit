@@ -29,9 +29,9 @@
 
 import { lockCreditUser, lockCreditOrg } from './travas-de-conta.mjs';
 
-// Provedores de e-mail público: não identificam empresa nenhuma, então não
-// entram na lista de domínios e não servem pra criar empresa. Lista curta de
-// propósito (os grandes do Brasil e de fora); `yahoo.*` cobre os regionais.
+// Public email providers: don't identify any company, so they don't go into
+// the domain list and can't be used to create a company. Short list on
+// purpose (the big ones from Brazil and abroad); `yahoo.*` covers the regional ones.
 export const PUBLIC_MAIL_DOMAINS = new Set([
   'gmail.com', 'googlemail.com',
   'hotmail.com', 'hotmail.com.br', 'outlook.com', 'outlook.com.br', 'live.com', 'live.com.br', 'msn.com',
@@ -46,8 +46,8 @@ const YAHOO = /^yahoo\.[a-z.]+$/;
 const DOMINIO_RE = /^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-// Domínio em forma canônica: minúsculo, sem espaço, sem "@" na frente e sem
-// ponto no fim. Devolve '' se não for um domínio válido.
+// Domain in canonical form: lowercase, no spaces, no leading "@" and no
+// trailing dot. Returns '' if it isn't a valid domain.
 export function normalizeDomain(d) {
   const s = String(d || '').trim().toLowerCase().replace(/^@+/, '').replace(/\.+$/, '');
   return DOMINIO_RE.test(s) ? s : '';
@@ -59,8 +59,8 @@ export function emailDomain(email) {
 }
 export const isPublicDomain = (d) => { const n = normalizeDomain(d); return !!n && (PUBLIC_MAIL_DOMAINS.has(n) || YAHOO.test(n)); };
 
-// Comparação EXATA: sub.empresa.com.br não vale por empresa.com.br. Quem usa
-// subdomínio cadastra o subdomínio.
+// EXACT comparison: sub.empresa.com.br doesn't count as empresa.com.br.
+// Whoever uses a subdomain registers the subdomain.
 const noDominio = (email, dominios) => { const d = emailDomain(email); return !!d && dominios.includes(d); };
 
 export function empresaSchemaSql(S = 'mtr_harness') {
@@ -97,28 +97,31 @@ export function empresaSchemaSql(S = 'mtr_harness') {
 
 const erro = (status, error, extra = {}) => ({ ok: false, status, error, ...extra });
 
-// deps: S (schema, padrão mtr_harness) e os ganchos, que também podem ser
-// ligados depois com store.ligar({...}):
-//  - avisoAoConvidar(userId): texto (ou null) que vai no `aviso` do convite
-//    quando o e-mail convidado já tem conta.
-//  - impedeEntrada(userId): { error, code? } (ou null) que barra o aceite do
-//    convite com 409.
-//  - aoEntrar(client, { userId, orgId, origem }): roda na transação de quem
-//    acabou de virar membro, com as travas de crédito tomadas. origem é
-//    'criar' (quem cria a empresa) ou 'convite' (quem aceita convite).
-//  - aoCriar(client, { userId, orgId }): só na criação, depois do aoEntrar e
-//    na mesma transação. Encerra o plano pessoal do criador (org-billing.mjs:
-//    pessoa no Free, sobra do plano como crédito extra da empresa, assinatura
-//    marcada pra cancelar) e devolve { sobra, sobraVenceEm, cancelaAssinatura }
-//    quando havia plano, que o criar devolve em `planoPessoal`. Erro com
-//    `empresaErro` desfaz tudo e vira a resposta.
-//  - depoisDeEntrar({ userId, orgId, origem }): roda DEPOIS do commit da
-//    entrada (convite: reembolso no Stripe do pacote pago do convidado,
-//    org-join-refund.mjs; criar: cancelamento da assinatura pessoal do
-//    criador, org-billing.mjs). Falha dela só é logada: a entrada já valeu, e
-//    o que não saiu fica pendente pra nova tentativa.
-//  - linhaDoConvite(): frase (ou null) sobre como a conta da empresa funciona
-//    pra quem instala, que vai no e-mail do convite (empresa-convite-email.mjs).
+// deps: S (schema, default mtr_harness) and the hooks, which can also be
+// wired later with store.ligar({...}):
+//  - avisoAoConvidar(userId): text (or null) that goes in the invite's
+//    `aviso` when the invited e-mail already has an account.
+//  - impedeEntrada(userId): { error, code? } (or null) that blocks accepting
+//    the invite with 409.
+//  - aoEntrar(client, { userId, orgId, origem }): runs in the transaction of
+//    whoever just became a member, with the credit guards already taken.
+//    origem is 'criar' (whoever creates the company) or 'convite' (whoever
+//    accepts an invite).
+//  - aoCriar(client, { userId, orgId }): only on creation, after aoEntrar and
+//    in the same transaction. Ends the creator's personal plan (org-billing.mjs:
+//    person goes to Free, plan leftover becomes extra company credit,
+//    subscription marked to cancel) and returns { sobra, sobraVenceEm,
+//    cancelaAssinatura } when there was a plan, which the creator returns in
+//    `planoPessoal`. An error with `empresaErro` undoes everything and becomes
+//    the response.
+//  - depoisDeEntrar({ userId, orgId, origem }): runs AFTER the join commits
+//    (invite: Stripe refund of the invitee's paid package, org-join-refund.mjs;
+//    create: cancellation of the creator's personal subscription,
+//    org-billing.mjs). Its failure is only logged: the join already counted,
+//    and whatever didn't go through stays pending for a retry.
+//  - linhaDoConvite(): sentence (or null) about how the company account works
+//    for whoever installs it, which goes in the invite e-mail
+//    (empresa-convite-email.mjs).
 export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {}) {
   const gancho = {
     avisoAoConvidar: async () => null, impedeEntrada: async () => null,
@@ -153,12 +156,12 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
     const { rows } = await db.query(`SELECT domain FROM ${S}.org_domains WHERE org_id = $1 ORDER BY domain`, [orgId]);
     return rows.map((r) => r.domain);
   }
-  // Tranca a linha da empresa: toda mudança de domínio/membro/convite de uma
-  // empresa passa em fila, então "tirar domínio" e "aceitar convite" nunca se
-  // cruzam no meio. FOR NO KEY UPDATE (e não FOR UPDATE): a gravação de uso
-  // carimbada com a empresa (FK usage_events.org_id) pega FOR KEY SHARE nesta
-  // linha, e as duas não se bloqueiam; senão todo gasto de membro esperaria
-  // qualquer mudança de convite ou domínio.
+  // Locks the company row: every domain/member/invite change for a company
+  // goes through a queue, so "remove domain" and "accept invite" never cross
+  // mid-flight. FOR NO KEY UPDATE (not FOR UPDATE): the usage write stamped
+  // with the company (FK usage_events.org_id) takes FOR KEY SHARE on this
+  // row, and the two don't block each other; otherwise every member's spend
+  // would wait on any invite or domain change.
   const lockOrg = (db, orgId) => db.query(`SELECT id FROM ${S}.orgs WHERE id = $1 FOR NO KEY UPDATE`, [orgId]);
   async function adminDe(userId, db = pool) {
     const m = await membership(userId, db);
@@ -167,10 +170,10 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
     return { ok: true, ...m };
   }
 
-  // Contas de e-mail conectadas (Google/Microsoft) que NÃO são de um domínio da
-  // lista. Microsoft sem e-mail conhecido (conectada antes de guardarmos o
-  // e-mail) volta como `desconhecida`: não dá pra provar o domínio, então quem
-  // chama trata como fora.
+  // Connected e-mail accounts (Google/Microsoft) that are NOT from a domain on
+  // the list. Microsoft with no known e-mail (connected before we started
+  // storing it) comes back as `desconhecida`: there's no way to prove the
+  // domain, so the caller treats it as outside.
   async function contasForaDoDominio(userId, doms, db = pool) {
     const fora = [];
     const g = await db.query(`SELECT google_email FROM ${S}.google_accounts WHERE user_id = $1`, [userId]);
@@ -194,9 +197,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
     contasForaDoDominio,
     linhaDoConvite: () => gancho.linhaDoConvite(),
 
-    // E-mail da conta Microsoft conectada, guardado no meta do token (junta com
-    // o que já houver, nunca sobrescreve o meta inteiro). Serve à trava de
-    // domínio; o resto do app não lê.
+    // E-mail of the connected Microsoft account, stored in the token's meta
+    // (merges with whatever is already there, never overwrites the whole
+    // meta). Serves the domain guard; the rest of the app doesn't read it.
     async gravarEmailMicrosoft(userId, email) {
       const em = String(email || '').trim().toLowerCase();
       if (!EMAIL_RE.test(em)) return;
@@ -211,8 +214,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       return rows.length > 0;
     },
 
-    // Resumo pra /api/me e pra tela: a empresa da pessoa (ou null) e os convites
-    // pendentes pro e-mail dela. Quem já é membro não vê convite de outra empresa.
+    // Summary for /api/me and the screen: the person's company (or null) and
+    // the pending invites for their e-mail. Whoever is already a member
+    // doesn't see invites from another company.
     async resumo(user) {
       const m = await membership(user.id);
       if (m) return { empresa: { id: m.org_id, nome: m.name, papel: m.role, dominios: await dominios(m.org_id) }, convites: [] };
@@ -222,8 +226,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       return { empresa: null, convites: rows.map((r) => ({ id: r.id, empresa: r.empresa, criado_em: r.created_at })) };
     },
 
-    // Detalhe pro painel: domínios, e (só pro admin) membros e convites pendentes.
-    // Quem não é membro recebe os convites pendentes pro e-mail dele.
+    // Detail for the panel: domains, and (only for the admin) members and
+    // pending invites. Whoever isn't a member receives the pending invites
+    // for their e-mail.
     async detalhe(user) {
       const m = await membership(user.id);
       if (!m) return { empresa: null, convites: (await this.resumo(user)).convites };
@@ -240,8 +245,8 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       return { empresa: out };
     },
 
-    // Transforma a conta em empresa: cria a org, põe a pessoa como admin e já
-    // libera o domínio do e-mail de login dela.
+    // Turns the account into a company: creates the org, sets the person as
+    // admin and already allows the domain of their login e-mail.
     async criar(user, nome) {
       const name = String(nome || '').trim().replace(/\s+/g, ' ');
       if (name.length < 2 || name.length > 80 || /[\u0000-\u001f]/.test(name)) return erro(400, 'Informe o nome da empresa (de 2 a 80 caracteres).');
@@ -250,9 +255,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       if (isPublicDomain(dom)) return erro(400, `Conta empresarial precisa de um e-mail do domínio da empresa. ${dom} é um provedor público; entre com o e-mail da empresa pra criar.`);
       const conflito = () => erro(409, 'Você já faz parte de uma empresa.');
       return transaction(async (c) => {
-        // Trava de crédito da pessoa antes de tudo (ordem pessoa, empresa), e a
-        // linha do usuário: duas criações simultâneas da mesma pessoa passam uma
-        // de cada vez, e nenhuma reserva dela corre no meio da troca de conta.
+        // Person's credit guard before anything else (order: person, company),
+        // and the user row: two simultaneous creations by the same person go
+        // one at a time, and none of their reservations runs mid-account-swap.
         await lockCreditUser(c, user.id);
         await c.query(`SELECT id FROM ${S}.users WHERE id = $1 FOR UPDATE`, [user.id]);
         if (await membership(user.id, c)) return conflito();
@@ -260,13 +265,13 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
         if (fora.length) return erro(409, msgContasFora(fora), { contas_fora: fora });
         const { rows } = await c.query(`INSERT INTO ${S}.orgs (name, owner_user_id) VALUES ($1, $2) RETURNING id`, [name, user.id]);
         const orgId = rows[0].id;
-        // ON CONFLICT: aceite de convite concorrente. Quem chegou depois perde
-        // aqui (user_id é UNIQUE) e a transação inteira volta.
+        // ON CONFLICT: concurrent invite acceptance. Whoever arrives later
+        // loses here (user_id is UNIQUE) and the whole transaction rolls back.
         const ins = await c.query(
           `INSERT INTO ${S}.org_members (org_id, user_id, role) VALUES ($1, $2, 'admin') ON CONFLICT (user_id) DO NOTHING RETURNING user_id`, [orgId, user.id]);
         if (!ins.rows.length) throw Object.assign(new Error('já é membro'), { empresaConflito: true });
         await c.query(`INSERT INTO ${S}.org_domains (org_id, domain) VALUES ($1, $2)`, [orgId, dom]);
-        // Empresa recém-criada: ninguém mais tem a trava dela.
+        // Newly created company: no one else holds its lock.
         await lockCreditOrg(c, orgId);
         await gancho.aoEntrar(c, { userId: user.id, orgId, origem: 'criar' });
         const planoPessoal = await gancho.aoCriar(c, { userId: user.id, orgId });
@@ -291,10 +296,11 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       });
     },
 
-    // Ponto 7: domínio que ainda tem membro ou convite pendente NÃO sai da
-    // lista. Tirar à força deixaria membro "de fora" dentro da empresa, com
-    // Google/Microsoft conectados que a trava não aceitaria mais. O admin remove
-    // os membros e revoga os convites daquele domínio primeiro.
+    // Point 7: a domain that still has a member or a pending invite does NOT
+    // come off the list. Forcing it off would leave a member "outside" while
+    // inside the company, with Google/Microsoft connections the guard would
+    // no longer accept. The admin removes the members and revokes that
+    // domain's invites first.
     async removerDominio(userId, dominio) {
       const d = normalizeDomain(dominio);
       if (!d) return erro(400, 'Domínio inválido.');
@@ -317,9 +323,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       });
     },
 
-    // Convite. Aviso de plano pago: se o e-mail já tem conta com plano pessoal
-    // pago ATIVO, o convite é criado mesmo assim, mas o admin fica sabendo que a
-    // pessoa só consegue aceitar depois de cancelar.
+    // Invite. Paid-plan notice: if the e-mail already has an account with an
+    // ACTIVE paid personal plan, the invite is created anyway, but the admin
+    // is told the person can only accept after cancelling it.
     async convidar(userId, email) {
       const em = String(email || '').trim().toLowerCase();
       if (!EMAIL_RE.test(em) || em.length > 254) return erro(400, 'E-mail inválido.');
@@ -340,7 +346,8 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
         const out = { ok: true, convite: { id: convite.id, email: em, criado_em: convite.created_at }, ja_existia: !!existente.rows[0], empresa: a.name };
         const aviso = alvo ? await gancho.avisoAoConvidar(alvo.id) : null;
         if (aviso) out.aviso = aviso;
-        // O e-mail do convite sai na rota, depois do commit (empresa-convite-email.mjs).
+        // The invite e-mail goes out in the route, after the commit
+        // (empresa-convite-email.mjs).
         return out;
       });
     },
@@ -364,18 +371,20 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       });
     },
 
-    // Resposta do convidado. Aceitar tem portões, nesta ordem: o convite é dele
-    // e está pendente; ele não está em outra empresa; o domínio dele segue na
-    // lista; ele não tem plano pessoal pago ativo; e nenhuma conta Google/Microsoft
-    // conectada é de fora dos domínios (ponto 6: não entra "sujo").
+    // The invitee's response. Accepting has gates, in this order: the invite
+    // is theirs and is pending; they aren't in another company; their domain
+    // is still on the list; they have no active paid personal plan; and no
+    // connected Google/Microsoft account is outside the domains (point 6:
+    // doesn't come in "dirty").
     async responder(user, conviteId, aceitar) {
       const em = String(user.email || '').toLowerCase();
       const id = String(conviteId || '');
       const { rows: pre } = await pool.query(`SELECT org_id FROM ${S}.org_invites WHERE id::text = $1`, [id]);
       if (!pre[0]) return erro(404, 'Convite não encontrado.');
       return transaction(async (c) => {
-        // Travas de crédito (pessoa, depois a empresa do convite) antes da linha
-        // da empresa. org_id de um convite não muda, então a leitura de fora vale.
+        // Credit guards (person, then the invite's company) before the
+        // company row. An invite's org_id never changes, so reading it
+        // outside still holds.
         await lockCreditUser(c, user.id);
         await lockCreditOrg(c, pre[0].org_id);
         await lockOrg(c, pre[0].org_id);
@@ -410,9 +419,9 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       if (!pre) return adminDe(adminId);
       const membro = String(membroId || '');
       return transaction(async (c) => {
-        // Travas de crédito (quem sai, depois a empresa) antes da linha da
-        // empresa. A empresa do admin foi lida fora; se mudou até aqui, o
-        // adminDe abaixo não fecha com ela e nada é removido.
+        // Credit guards (whoever is leaving, then the company) before the
+        // company row. The admin's company was read outside; if it changed by
+        // now, the adminDe check below won't match it and nothing is removed.
         await lockCreditUser(c, membro);
         await lockCreditOrg(c, pre.org_id);
         const a = await adminDe(adminId, c); if (!a.ok) return a;
@@ -424,11 +433,12 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       });
     },
 
-    // Só pra decidir se vale o trabalho de ler o e-mail da conta conectada.
+    // Only to decide whether it's worth reading the connected account's e-mail.
     async ehMembro(userId) { return !!(await membership(userId)); },
 
-    // Ponto 6, na hora de CONECTAR: quem é membro só conecta Google/Microsoft de
-    // domínio da lista. Quem não é membro passa direto (nenhuma mudança).
+    // Point 6, at CONNECT time: a member can only connect Google/Microsoft
+    // from a domain on the list. A non-member passes straight through (no
+    // change).
     async conexaoPermitida(userId, email) {
       const m = await membership(userId);
       if (!m) return { ok: true };

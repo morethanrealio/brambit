@@ -33,9 +33,9 @@ function readPage(raw, query, chain) {
   return { page, account };
 }
 
-// Limites pertencem ao código, não aos argumentos produzidos pelo modelo.
-// A mesma instância autenticada executa todas as páginas; nenhum token/conta
-// ou URL de continuação é escolhido aqui. Só cursores recebidos são seguidos.
+// Limits belong to the code, not to arguments produced by the model.
+// The same authenticated instance runs every page; no token/account or
+// continuation URL is chosen here. Only cursors received are followed.
 export function withEmailSearchCompletion(readTools, { maxPages = 10, maxMessages = 200 } = {}) {
   if (!positive(maxPages) || !positive(maxMessages)) throw Error('Limites de conclusão de busca inválidos.');
   return readTools.map(tool => !EMAIL_SEARCH_TOOLS.has(tool.name) ? tool : {
@@ -54,7 +54,7 @@ export function withEmailSearchCompletion(readTools, { maxPages = 10, maxMessage
       if (!complete) return tool.run(originalArgs);
 
       const query = tool.name === 'gmail_search' ? originalArgs.query : (originalArgs.q ?? '');
-      // A primeira falha continua sendo uma falha da tool, nunca lista vazia.
+      // The first failure is still a tool failure, never an empty list.
       const firstRaw = await tool.run(originalArgs);
       let first;
       try { first = readPage(firstRaw, query); }

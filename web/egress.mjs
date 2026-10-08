@@ -1,36 +1,37 @@
-// ── Ponto único de saída (egress) ──
-// Envolve o `fetch` global e registra, uma vez por host, QUEM chamou e PRA ONDE
-// foi. Serve duas coisas:
+// ── Single egress point ──
+// Wraps the global `fetch` and logs, once per host, WHO called and WHERE it
+// went. Serves two purposes:
 //
-//   1. hoje: prova em execução do inventário de saídas (a lista abaixo). Host
-//      que aparece no log e não está na lista abaixo é achado.
-//   2. depois (Fase 4): a MESMA lista vira cerca de rede. `EGRESS_MODE=block`
-//      faz host fora da lista falhar em vez de sair.
+//   1. today: a running proof of the egress inventory (the list below). A host
+//      that shows up in the log and isn't in the list below is a finding.
+//   2. later (Phase 4): the SAME list becomes a network fence. `EGRESS_MODE=block`
+//      makes a host outside the list fail instead of going out.
 //
-// O log NUNCA inclui path, query, header, body nem token: só hostname, porta
-// (quando não é 443) e o módulo que chamou. URL assinada de S3 e chave de API
-// viajam no path/query, então logar URL inteira seria criar o vazamento que
-// este arquivo existe pra evitar.
+// The log NEVER includes path, query, header or body, nor a token: only
+// hostname, port (when it isn't 443) and the module that called. A signed S3
+// URL and an API key travel in the path/query, so logging the full URL would
+// create the exact leak this file exists to prevent.
 //
-// Cobertura: tudo que passa por `fetch()` (é o caso de ~todos os ~60 módulos e
-// dos providers). NÃO passa por aqui, por não usar fetch:
+// Coverage: everything that goes through `fetch()` (that's the case for
+// ~all ~60 modules and the providers). Does NOT go through here, since it
+// doesn't use fetch:
 //   - `web/kms.mjs` (IMDS + KMS via `https.request`)
 //   - `web/avscan.mjs` (clamd via `net.connect`)
-//   - SMTP/IMAP do `email.mjs`/`mailer.mjs` (socket do nodemailer/imap)
+//   - `email.mjs`/`mailer.mjs`'s SMTP/IMAP (nodemailer/imap socket)
 //   - Postgres (`pg`)
-// Esses quatro são destinos fixos e conhecidos, não roteados por modelo.
+// These four are fixed, known destinations, not model-routed.
 //
-// Importar UMA vez, o mais cedo possível, em `web/server.mjs`.
+// Import ONCE, as early as possible, in `web/server.mjs`.
 
 import path from 'path';
 import { assertDeepSeekEgress } from '../core-proto/deepseek/scope.mjs';
 import { marca } from './marca.mjs';
 
-// Hosts esperados, do inventário de 27/08/2026. Cada entrada casa com o host
-// exato OU com qualquer subdomínio dele. Integração nova entra aqui no mesmo
-// commit que a adiciona (e na linha correspondente do inventário). Os domínios
-// da própria instalação não ficam aqui: vêm da marca (hostsDeSaida), lidos na
-// hora do uso por hostsPermitidos().
+// Expected hosts, from the 2026-08-27 inventory. Each entry matches the exact
+// host OR any subdomain of it. A new integration goes in here in the same
+// commit that adds it (and in the inventory's corresponding line). The
+// installation's own domains don't go here: they come from the brand
+// (hostsDeSaida), read at use time by hostsPermitidos().
 export const EGRESS_ALLOW = [
   // infra
   'amazonaws.com',            // S3, KMS, IMDS
@@ -44,22 +45,22 @@ export const EGRESS_ALLOW = [
   'serpapi.com',
   'api.tavily.com',
   'vertexaisearch.cloud.google.com',
-  // thumbnail de resultado de busca, checado por `imageServed` (server.mjs:45)
-  // antes de virar foto de card. Sai a URL do resultado, nada do usuário.
+  // search result thumbnail, checked by `imageServed` (server.mjs:45)
+  // before becoming a card photo. Only the result's URL goes out, nothing from the user.
   'gstatic.com',
   // canais
   'graph.facebook.com',
-  // CDN da Meta de onde a mídia RECEBIDA no WhatsApp é baixada
-  // (`whatsapp.mjs:218`). Atenção: esse GET leva o nosso `WA_TOKEN`.
+  // Meta's CDN from where media RECEIVED on WhatsApp is downloaded
+  // (`whatsapp.mjs:218`). Attention: this GET carries our `WA_TOKEN`.
   'lookaside.fbsbx.com',
   'api.telegram.org',
   'api.resend.com',
   'exp.host',
-  // login e cobrança
+  // login and billing
   'accounts.google.com',
   'oauth2.googleapis.com',
   'api.stripe.com',
-  // conectores que o usuário liga
+  // connectors the user turns on
   'googleapis.com',
   'api.github.com',
   'github.com',
@@ -86,8 +87,9 @@ export const EGRESS_ALLOW = [
 
 const MODE = (process.env.EGRESS_MODE || 'log').toLowerCase();
 
-// Rede interna e localhost não são egress: sandbox runnerd, Postgres, Comfy e
-// painel local. Ficam fora do log pra ele não afogar o que importa.
+// Internal network and localhost aren't egress: sandbox runnerd, Postgres,
+// Comfy and the local panel. Stay out of the log so it doesn't drown out
+// what matters.
 function isInternal(host) {
   if (!host) return true;
   if (host === 'localhost' || host.endsWith('.local')) return true;
@@ -107,15 +109,15 @@ function isAllowed(host) {
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
-// Quem chamou: primeiro frame da pilha que é arquivo NOSSO e não é este módulo.
+// Who called: the first stack frame that is OUR file and isn't this module.
 function callerModule() {
   const limit = Error.stackTraceLimit;
   Error.stackTraceLimit = 30;
   const stack = new Error().stack || '';
   Error.stackTraceLimit = limit;
   for (const line of stack.split('\n').slice(2)) {
-    // Aceita as duas formas que o V8 usa: `(/caminho/x.mjs:1:2)` e
-    // `file:///caminho/x.mjs:1:2` (frame de topo de módulo ESM).
+    // Accepts both forms V8 uses: `(/path/x.mjs:1:2)` and
+    // `file:///path/x.mjs:1:2` (ESM module top-level frame).
     const m = line.match(/(?:file:\/\/)?(\/[^\s():]+\.mjs):\d+:\d+/);
     if (!m) continue;
     const file = m[1].replace(/^\/+/, '/');
@@ -156,7 +158,7 @@ export function installEgress() {
       host = u.hostname.toLowerCase();
       port = u.port && u.port !== '443' ? ':' + u.port : '';
     } catch {
-      // URL relativa ou objeto exótico: não é saída pra host externo.
+      // Relative URL or exotic object: not an egress to an external host.
       return orig.call(this, input, init);
     }
 
@@ -174,8 +176,8 @@ export function installEgress() {
       s.vias.add(via);
 
       if (!known) {
-        // Host fora do inventário: avisa sempre (com teto de 1/min por host,
-        // pra um laço não afogar o journal).
+        // Host outside the inventory: always warns (with a ceiling of 1/min per
+        // host, so a loop doesn't drown out the journal).
         const now = Date.now();
         if (now - s.lastWarn > 60_000) {
           s.lastWarn = now;
@@ -185,7 +187,7 @@ export function installEgress() {
           return Promise.reject(new Error(`[egress] host bloqueado: ${host} (via ${via}). Entre no inventário antes.`));
         }
       } else if (novoVia) {
-        // Host conhecido: uma linha por (host, módulo), só pra provar quem sai.
+        // Known host: one line per (host, module), just to prove who goes out.
         console.log(`[egress] host=${host}${port} via=${via}`);
       }
     }

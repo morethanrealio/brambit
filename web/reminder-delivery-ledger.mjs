@@ -95,8 +95,8 @@ export function createReminderDeliveryLedger({ transaction, ownedReminder, owned
       let parts;
       return {
         async start({ total, recipient }) {
-          // Teto de sanidade do manifesto. Era 8, o antigo teto de balões do
-          // WhatsApp; desde 29/09/2026 a resposta longa vai inteira (100k chars).
+          // Manifest sanity cap. Used to be 8, the old WhatsApp bubble cap;
+          // since 2026-09-29 a long response goes in full (100k chars).
           if (!Number.isSafeInteger(total) || total < 1 || total > 100 || !/^\+?\d{7,18}$/.test(String(recipient))) throw Error('Invalid delivery manifest');
           parts = await transaction(async client => {
             const parent = await ownedReminder(client, claim.reminderId, claim.userId);

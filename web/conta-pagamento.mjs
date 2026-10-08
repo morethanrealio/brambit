@@ -25,7 +25,7 @@ export function conferirContaPagamento(c){
  if(faltam.length)throw Error('Porta de conta de pagamento incompleta: '+faltam.join(', '));
  return c;
 }
-// Conexões Asaas do cofre, na ordem do cofre.
+// Vault Asaas connections, in vault order.
 export const conexoesAsaas=(conns)=>(conns||[]).filter((c)=>String(c?.provider||'').toLowerCase()==='asaas'
  &&['apikey','token','basic'].includes(c?.kind));
 export function createContaPagamentoSimples(){

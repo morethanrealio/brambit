@@ -1,15 +1,15 @@
-// ── Fetch com IP fixado (anti DNS rebinding) ─────────────────────────────────
-// Problema que este módulo resolve: a guarda clássica de SSRF resolve o hostname,
-// confere que o IP não é interno e depois chama fetch() com o MESMO hostname. O
-// fetch faz a própria resolução DNS, então um domínio com TTL curto pode devolver
-// um IP público na checagem e 169.254.169.254 (metadata) ou um IP da VPC na
-// conexão real. A janela entre validar e conectar é o bug (TOCTOU).
+// ── Fetch with pinned IP (anti DNS rebinding) ────────────────────────────────
+// Problem this module solves: the classic SSRF guard resolves the hostname,
+// checks that the IP isn't internal and then calls fetch() with the SAME hostname. The
+// fetch does its own DNS resolution, so a domain with a short TTL can return
+// a public IP at check time and 169.254.169.254 (metadata) or a VPC IP at the
+// real connection. The window between validating and connecting is the bug (TOCTOU).
 //
-// Aqui a resolução acontece UMA vez: validamos todos os endereços e amarramos a
-// conexão exatamente a eles, passando um `lookup` próprio para http/https (o
-// fetch nativo do Node não aceita lookup nem agente, por isso não dá pra usá-lo).
-// O hostname original continua indo no Host e no SNI do TLS, então certificado e
-// virtual host seguem funcionando normalmente.
+// Here resolution happens ONCE: we validate all the addresses and bind the
+// connection exactly to them, passing our own `lookup` for http/https (Node's
+// native fetch doesn't accept a lookup nor an agent, so it can't be used).
+// The original hostname still goes in the Host header and the TLS SNI, so the certificate and
+// virtual host keep working normally.
 import net from 'node:net';
 import dns from 'node:dns';
 import http from 'node:http';
@@ -38,8 +38,8 @@ export function ipPrivado(ip) {
   return false;
 }
 
-// Resolve o host e devolve a lista de endereços já validados. Lança se qualquer
-// um deles for interno: basta um para o atacante ganhar a conexão.
+// Resolves the host and returns the list of already-validated addresses. Throws if any
+// of them is internal: just one is enough for the attacker to win the connection.
 export async function resolverPublico(hostname) {
   if (net.isIP(hostname)) {
     if (ipPrivado(hostname)) throw new Error('destino interno bloqueado');
@@ -60,21 +60,21 @@ function lookupFixado(addrs) {
   };
 }
 
-// Agentes próprios, de propósito: o agente global do Node pode estar configurado
-// para sair por proxy (NODE_USE_ENV_PROXY / HTTP_PROXY), e aí quem resolve o nome
-// é o proxy, não a gente, o que anularia o IP fixado.
+// Own agents, on purpose: Node's global agent may be configured
+// to go out through a proxy (NODE_USE_ENV_PROXY / HTTP_PROXY), and then whoever resolves the name
+// is the proxy, not us, which would nullify the pinned IP.
 const agenteHttp = new http.Agent({ keepAlive: false });
 const agenteHttps = new https.Agent({ keepAlive: false });
 
 export const MAX_RESPOSTA_BYTES = 12 * 1024 * 1024;
 
-// Faz a requisição e devolve um Response padrão (status/headers/arrayBuffer/text/
-// json), então quem já usava fetch continua igual. NUNCA segue redirect sozinho:
-// cada salto tem que passar por aqui de novo, senão o Location reabre o buraco.
+// Makes the request and returns a standard Response (status/headers/arrayBuffer/text/
+// json), so whoever already used fetch stays the same. NEVER follows a redirect on its own:
+// every hop has to pass through here again, otherwise the Location header reopens the hole.
 export async function fetchFixado(rawUrl, opts = {}) {
   const url = new URL(rawUrl);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocolo não permitido');
-  // opts.resolver existe só pros testes fixarem o endereço sem depender de DNS.
+  // opts.resolver exists only so tests can pin the address without depending on DNS.
   const addrs = await (opts.resolver || resolverPublico)(url.hostname);
   const mod = url.protocol === 'https:' ? https : http;
   const maxBytes = opts.maxBytes || MAX_RESPOSTA_BYTES;
@@ -111,9 +111,9 @@ export async function fetchFixado(rawUrl, opts = {}) {
           else if (v != null) headers.set(k, String(v));
         }
         const semCorpo = res.statusCode === 204 || res.statusCode === 304 || opts.method === 'HEAD';
-        // Status fora de 200..599 (ex.: o 999 que o LinkedIn manda pra robô) faz
-        // o Response lançar. Aqui é callback de evento, fora do Promise: o erro
-        // escapava sem tratamento e derrubava o processo (22/09 e 30/09/2026).
+        // A status outside 200..599 (e.g. the 999 LinkedIn sends to bots) makes
+        // Response throw. This is an event callback, outside the Promise: the error
+        // used to escape unhandled and crash the process (2026-09-22 and 2026-09-30).
         let r;
         try {
           r = new Response(semCorpo ? null : Buffer.concat(pedacos), {

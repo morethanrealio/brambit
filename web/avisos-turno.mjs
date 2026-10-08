@@ -1,9 +1,9 @@
 import { tagIdioma } from './locale.mjs';
 
-// Textos fixos que o servidor entrega SEM passar pelo modelo (portão de crédito,
-// imagem desligada, confirmação resolvida sem modelo). Como nenhum modelo
-// traduz, eles precisam existir nos três idiomas. Em pt-BR as frases são byte a
-// byte as que já estavam no server.mjs.
+// Fixed texts the server delivers WITHOUT going through the model (credit
+// gate, image turned off, confirmation resolved with no model). Since no
+// model translates them, they need to exist in all three languages. In pt-BR
+// the sentences are byte-for-byte the ones that were already in server.mjs.
 
 const LOCALE = { 'pt-BR': 'pt-BR', en: 'en-US', es: 'es-ES' };
 const lang = l => (LOCALE[tagIdioma(l)] ? tagIdioma(l) : 'pt-BR');
@@ -17,8 +17,8 @@ export function imagensDesligadas(l) {
   }[lang(l)];
 }
 
-// Conta empresarial F1: nomes dos admins pra texto ("Ana", "Ana ou Bruno").
-// Sem nome conhecido, volta '' e o texto fica só com "o admin da empresa".
+// Business account F1: admin names for text ("Ana", "Ana ou Bruno"). With no
+// known name, returns '' and the text is left with just "o admin da empresa".
 function listaAdmins(nomes, l) {
   const ns = (Array.isArray(nomes) ? nomes : []).map((n) => String(n || '').trim()).filter(Boolean);
   if (!ns.length) return '';
@@ -26,14 +26,15 @@ function listaAdmins(nomes, l) {
   return ns.length === 1 ? ns[0] : `${ns.slice(0, -1).join(', ')}${ou}${ns[ns.length - 1]}`;
 }
 
-// Crédito da EMPRESA esgotado. O saldo é um só pra todos os membros, então todo
-// mundo fica parado junto. Membro comum nunca recebe link de compra (ele não
-// compra: a rota recusa); o texto manda falar com o admin. O admin recebe o
-// caminho de compra da empresa, que some no app iOS pela mesma regra 3.1.1.
-// Plano corporativo (29/09): nada de plano ou pacote pessoal pra empresa. O
-// admin aumenta o volume do corporativo (ou assina, se está no Free) ou compra
-// crédito avulso da empresa. planName do corporativo já é o rótulo inteiro, então
-// no meio da frase entra só "corporativo".
+// COMPANY credit exhausted. The balance is a single one for all members, so
+// everyone gets stuck together. A plain member never gets a purchase link (he
+// cannot buy: the route refuses); the text tells him to talk to the admin.
+// The admin gets the company's purchase path, which disappears in the iOS app
+// under the same 3.1.1 rule. Corporate plan (2026-09-29): no personal plan or
+// package for a company. The admin either increases the corporate volume (or
+// subscribes, if on Free) or buys the company's one-off credit. The
+// corporate planName is already the whole label, so only "corporativo" goes
+// in the middle of the sentence.
 function avisoCreditoEsgotadoEmpresa(credit, { l, link, appClient, adminNomes }) {
   const fr = num(credit.franchise, l);
   const cap = num(credit.capacity || credit.franchise, l);
@@ -73,8 +74,9 @@ function avisoCreditoEsgotadoEmpresa(credit, { l, link, appClient, adminNomes })
   return `${fato} O saldo é um só pra empresa toda, então pra continuar antes disso fale com o admin da empresa${nomes ? ` (${nomes})` : ''}, que é quem compra crédito pra todos.`;
 }
 
-// Nota do fim do turno de emergência (recuperação de app sem crédito). Fora de
-// empresa é a nota de sempre, byte a byte. Membro: fale com o admin, sem link.
+// End-of-turn note for the emergency case (app recovery with no credit).
+// Outside of a company it's the usual note, byte for byte. Member: talk to
+// the admin, no link.
 export function notaEmergenciaCredito(credit, { language, link, adminNomes = [] } = {}) {
   const l = lang(language);
   if (credit?.account?.kind !== 'org') return TEXTOS[l].notaEmergencia(link);
@@ -95,9 +97,9 @@ export function notaEmergenciaCredito(credit, { language, link, adminNomes = [] 
     : `⚠️ Esse foi um turno de emergência (só recuperação do app). O crédito da empresa acabou. Pra continuar normalmente, fale com o admin da empresa${nomes ? ` (${nomes})` : ''}.`;
 }
 
-// credit = retorno de getCreditStatus. `comprar` some no app iOS (regra 3.1.1
-// da Apple: nada de chamada pra compra fora do In-App Purchase).
-// adminNomes: só vale pra membro de empresa (credit.account.kind === 'org').
+// credit = getCreditStatus's return. `comprar` disappears in the iOS app
+// (Apple's rule 3.1.1: no call-to-purchase outside of In-App Purchase).
+// adminNomes: only applies to a company member (credit.account.kind === 'org').
 export function avisoCreditoEsgotado(credit, { language, link, appClient = false, adminNomes = [] } = {}) {
   const l = lang(language);
   if (credit?.account?.kind === 'org') return avisoCreditoEsgotadoEmpresa(credit, { l, link, appClient, adminNomes });
@@ -105,7 +107,7 @@ export function avisoCreditoEsgotado(credit, { language, link, appClient = false
   const cap = num(credit.capacity || credit.franchise, l);
   const extra = num(credit.extraAvailable, l);
   const plano = credit.planName;
-  // Data REAL da renovação: o ciclo é por aniversário da pessoa, não dia 1º.
+  // REAL renewal date: the cycle is by the person's anniversary, not the 1st.
   const renova = credit.periodEnd
     ? new Date(credit.periodEnd).toLocaleDateString(LOCALE[l], { day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
     : null;

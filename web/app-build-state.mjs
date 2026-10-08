@@ -46,8 +46,9 @@ const words = {
 // Deterministic status at the delivery boundary, not a semantic/regex promise detector.
 export function createAppBuildJournal({ language='pt-BR', failedPublication=false, publicationError='', userRequest='', technicalDetails=wantsTechnicalAppDetails(userRequest) } = {}) {
   const w = words[/^en\b/i.test(language) ? 'en' : /^es\b/i.test(language) ? 'es' : 'pt'];
-  // Só texto de campo `usuario` (escrito pela própria tool) vira recado ao dono.
-  // `error` é técnico e pode carregar valor vindo do modelo, então não entra aqui.
+  // Only text from the `usuario` field (written by the tool itself) becomes
+  // a message to the owner. `error` is technical and may carry a value
+  // coming from the model, so it does not go in here.
   const safeReason = t => String(t || '').replace(/[\u0000-\u001f\u007f<>`]/g, ' ').trim().slice(0, 400);
   let build = null, publication = failedPublication ? 'failed' : null, controlProposal = null, jobReceipt=null;
   let pubError = safeReason(publicationError);
@@ -59,10 +60,10 @@ export function createAppBuildJournal({ language='pt-BR', failedPublication=fals
       if (call.name === 'construir_app') {
         controlProposal=null;jobReceipt=out?.programming_job?out:null;
         build = [1,2].includes(out?.app_build?.version) ? out.app_build : { estado:'nao_validado' };
-        // Uma publicação BLOQUEADA não some porque o modelo voltou a mexer no
-        // rascunho no mesmo turno. Sem esta guarda o dono recebia só o recado da
-        // construção e nunca ficava sabendo que a publicação dele foi barrada,
-        // nem por quê (caso de 17/09).
+        // A BLOCKED publication does not disappear because the model went
+        // back to touch the draft in the same turn. Without this guard the
+        // owner only got the build message and never found out his
+        // publication was blocked, nor why (case of 2026-09-17).
         if (publication !== 'failed') publication = null;
       }
       if (call.name === 'publicar_sistema') {
@@ -74,8 +75,8 @@ export function createAppBuildJournal({ language='pt-BR', failedPublication=fals
     },
     finish(text, { proposalShown = false } = {}) {
       if(jobReceipt)return jobReceipt.text;
-      // Com o cartão da proposta logo abaixo, este pedido de confirmação seria
-      // a mesma pergunta duas vezes; o texto do modelo segue como está.
+      // With the proposal card right below, this confirmation request would
+      // be the same question twice; the model's text stays as is.
       if(controlProposal && !proposalShown)return controlProposal.replace(/^AÇÃO PENDENTE DE CONFIRMAÇÃO \(NÃO foi executada\)\. Registrei o pedido para /,'Preciso da sua confirmação para ').replace(/\. (?:Mostre ao usuário|O sistema mostra)[\s\S]*$/,'. Posso seguir?');
       if (publication === 'published') return text; // Actual publisher owns its receipt.
       if (!build) return publication === 'failed' ? failedText() : text;
@@ -86,8 +87,8 @@ export function createAppBuildJournal({ language='pt-BR', failedPublication=fals
         : build.estado === 'requer_correcao' ? w.failed : w.unvalidated;
       const questions = buildQuestions(Array.isArray(build.perguntas) ? build.perguntas.join('\n') : '').map(q => `“${q}”`).join(' ');
       const progress = buildProgress(build, language);
-      // Recibo antigo (app_build v1): sem isto uma publicação barrada também
-      // sumia neste caminho, pelo mesmo motivo do caso de 17/09.
+      // Old receipt (app_build v1): without this a blocked publication also
+      // disappeared on this path, for the same reason as the case of 2026-09-17.
       const pubLine = publication === 'pending' ? ' ' + w.pending : publication === 'failed' ? ' ' + failedText() : '';
       return `${status}${progress ? ' ' + progress : ''} ${w.unpublished}${pubLine}${questions ? '\n\n' + questions : ''}`;
     },

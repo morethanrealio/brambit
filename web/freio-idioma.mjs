@@ -1,12 +1,14 @@
-// Idioma da resposta na saída do turno: observabilidade (logDerivaIdioma) e o
-// freio que impede resposta em chinês para quem não pediu (freioDeIdioma).
+// Response language at turn output: observability (logDerivaIdioma) and the
+// guard that blocks a Chinese response for whoever didn't ask for it
+// (freioDeIdioma).
 import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 import { derivaDeIdioma, ideogramaAcidental, reescritaNoIdioma, mesmasLinhas, avisoSemIdioma } from './locale.mjs';
 
-// Observabilidade da diretriz de idioma. Em pt-BR não loga nada (é o esperado).
-// Fora dele sai UMA linha por turno com o score, mesmo quando está limpo: sem
-// número dos dois lados não dá pra dizer se a diretriz funciona nem pra calibrar
-// o limiar. NUNCA interfere na resposta, só escreve no log.
+// Observability for the language directive. In pt-BR it logs nothing (that's
+// expected). Outside it, ONE line per turn goes out with the score, even when
+// it's clean: without numbers on both sides there's no way to tell whether
+// the directive works or to calibrate the threshold. NEVER interferes with
+// the response, only writes to the log.
 export function logDerivaIdioma(texto, language, userId) {
   try {
     const d = derivaDeIdioma(texto, language);
@@ -15,22 +17,25 @@ export function logDerivaIdioma(texto, language, userId) {
   } catch { /* observabilidade nunca derruba turno */ }
 }
 
-// FREIO DE IDIOMA. O lembrete de idioma por turno (30/09) é instrução, e o modelo
-// às vezes não atende: em 05/10 o DeepSeek respondeu em chinês a um usuário em
-// pt-BR mesmo com ele. Aqui a plataforma confere a saída antes de entregar. A
-// conferência é só contagem de caracteres (sem LLM); pegou, pede ao mesmo modelo
-// a MESMA mensagem reescrita no idioma da pessoa, numa chamada curta sem
-// ferramentas (nada do turno roda de novo). Se nem assim sair, vai um aviso curto
-// no lugar de um texto que a pessoa não consegue ler.
-// pedido = mensagem da pessoa ('' em rotina); usages recebe o custo da reescrita.
-// Devolve o texto a entregar (o mesmo, se não houve deriva).
+// LANGUAGE GUARD. The per-turn language reminder (2026-09-30) is an instruction,
+// and the model sometimes doesn't follow it: on 2026-10-05 DeepSeek replied in
+// Chinese to a pt-BR user even with it in place. Here the platform checks the
+// output before delivering it. The check is just a character count (no LLM);
+// if it catches something, it asks the same model to rewrite the SAME message
+// in the person's language, in a short call with no tools (nothing from the
+// turn runs again). If it still doesn't come out right, a short notice goes
+// out instead of text the person can't read.
+// pedido = the person's message ('' in a routine); usages receives the cost
+// of the rewrite.
+// Returns the text to deliver (the same one, if there was no drift).
 export async function freioDeIdioma({ text, language, pedido = '', provider, usages, onde = '' }) {
   try {
     const deriva = ideogramaAcidental(text, language, pedido);
     if (!deriva) return text;
     let desfecho = 'aviso', saida = text, legivel = null;
-    // Até 2 tentativas: vale a primeira que sai no idioma com as mesmas linhas;
-    // sem nenhuma assim, a que saiu no idioma (pulou linha, mas é legível).
+    // Up to 2 attempts: the first one that comes out in the right language
+    // with the same lines wins; failing that, whichever came out in the
+    // right language (skipped a line, but is readable).
     const r = reescritaNoIdioma(language);
     for (let i = 0; i < 2 && desfecho === 'aviso'; i++) {
       try {

@@ -1,5 +1,6 @@
-// Monitoramento tipado de voos: não usa o LLM para escolher referência, calcular
-// variação ou redigir a entrega. Dependências externas são injetadas.
+// Typed flight monitoring: doesn't use the LLM to pick the reference,
+// calculate variation, or draft the delivery. External dependencies are
+// injected.
 import { createHash } from 'node:crypto';
 import { hostDaMarca } from './marca.mjs';
 import { flightPriceCents, percentageDrop } from './flight-alert-policy.mjs';
@@ -18,7 +19,8 @@ export function normalizeFlightMonitor(raw) {
     classe:q.classe ?? 'economica', paradas:q.paradas ?? 'qualquer' };
   if (!Number.isInteger(query.adultos) || query.adultos<1 || query.adultos>9 || !Number.isInteger(query.criancas) || query.criancas<0 || query.criancas>8) throw Error('Passageiros inválidos.');
   if (!['economica','premium','executiva','primeira'].includes(query.classe) || !['qualquer','direto','1_parada'].includes(query.paradas)) throw Error('Filtros inválidos.');
-  // Meta não é filtro da busca: acima do teto também há relatório diário.
+  // The target isn't a search filter: above the ceiling there's still a
+  // daily report.
   if (q.max_preco !== undefined) throw Error('Use targetPrice, não filtre resultados pela meta.');
   if (Object.keys(q).some(k => !['origem','destino','data_ida','data_volta','adultos','criancas','classe','paradas','companhias'].includes(k))) throw Error('Parâmetro de busca não suportado.');
   if (q.companhias !== undefined) {
@@ -72,7 +74,7 @@ export function renderFlightMonitor(config, current, comparison, {today,tz,stora
         parts.push(diff<0?`Abaixo da meta de ${money(c.targetPrice)} por ${money(-diff)}.`:diff>0?`${money(diff)} acima da meta de ${money(c.targetPrice)}.`:`Igual à meta de ${money(c.targetPrice)}; ainda não está abaixo dela.`);
       }
     }
-    // Detalhes de até três opções, não o HTML/texto livre da fonte.
+    // Details of up to three options, not the source's free HTML/text.
     for (const [i,o] of (current.options||[]).slice(0,3).entries()) {
       if (!Number.isFinite(o.price)||o.price<=0) continue;
       const airline=oneLine(o.airline||'Companhia não informada').replace(/[*_`]/g,'').slice(0,90);
@@ -81,9 +83,10 @@ export function renderFlightMonitor(config, current, comparison, {today,tz,stora
     const link=safeLink(current.link);if(link)parts.push(`Conferir e comprar: ${link}`);
   }
   if (!storageOk) parts.push('Histórico de comparação indisponível nesta execução.');
-  // O gateway legado corta variáveis em900 caracteres. Nunca depender desse
-  // corte: tira opções adicionais/link LONGO por inteiro, preservando preço,
-  // referência, delta, meta e idade. A versão completa continua no app.
+  // The legacy gateway truncates variables at 900 characters. Never depend on
+  // that truncation: it drops additional options/the LONG link in full, while
+  // preserving price, reference, delta, target and age. The full version is
+  // still in the app.
   let templateParts=[...parts];
   if (oneLine(templateParts.join(' ')).length>900) {
     templateParts=templateParts.filter(p=>!p.startsWith('Conferir e comprar:')&&!p.startsWith('Opção '));
@@ -99,13 +102,13 @@ export async function executeFlightMonitor({config,userId,routineId,tz,now=new D
   if (today>c.query.data_ida) return {type:'flight-monitor-v1',
     text:'A data de ida deste monitoramento já passou. Não consultei preços. Revise as datas da rotina no app.',
     templateText:'A data de ida deste monitoramento já passou. Não consultei preços. Revise as datas da rotina no app.'};
-  // Migração não aplicada ou indisponível: não iniciar uma rotina parcialmente
-  // ativada nem mascarar erro de banco como ausência de histórico.
+  // Migration not applied or unavailable: don't start a partially activated
+  // routine or mask a database error as an absence of history.
   let previous;
   try {previous=await deps.readPrevious({userId,routineId,key,day:previousFlightDay(today),tz});}
   catch {return renderFlightMonitor(c,null,{state:'unavailable'},{today,tz,storageOk:false});}
   let quote=null;
-  try {quote=await deps.search(c.query);} catch { /* falha vira aviso determinístico */ }
+  try {quote=await deps.search(c.query);} catch { /* failure becomes a deterministic notice */ }
   if (quote && (quote.currency!=='BRL'||!Number.isFinite(quote.price)||quote.price<=0||!quote.observedAt||!Number.isFinite(new Date(quote.observedAt).getTime())||new Date(quote.observedAt)>new Date(deps.now ? deps.now() : Date.now()))) quote=null;
   const cmp=flightComparison(quote,previous,{key,today,tz});
   let storageOk=true;
@@ -116,8 +119,8 @@ export async function executeFlightMonitor({config,userId,routineId,tz,now=new D
 }
 
 
-// V2 é opt-in e não migra v1/rotinas livres. Até três consultas por execução;
-// uma referência fixa precisa estar vinculada à MESMA query/unidade por hash.
+// V2 is opt-in and doesn't migrate v1/free-form routines. Up to three queries
+// per run; a fixed reference needs to be tied to the SAME query/unit by hash.
 export function flightAlertQueryKey(query) {
   const normalized = normalizeFlightMonitor({version:1,query}).query;
   return createHash('sha256').update(JSON.stringify({version:2,query:normalized,currency:'BRL',priceBasis:'provider_price'})).digest('hex');
@@ -142,7 +145,7 @@ function normalizeFlightAlerts(raw) {
 }
 const alertEnvelope = (lines, deliver = true) => {
   const text = lines.join('\n');
-  // O resumo curto nunca corta um número. Detalhes continuam no app.
+  // The short summary never truncates a number. Details stay in the app.
   const compact = oneLine(text);
   return {type:'flight-monitor-v1', text, templateText:compact.length<=900 ? compact
     : oneLine(lines.filter(l=>!l.startsWith('Conferir:')).join(' ')) + ` Relatório completo no app ${hostDaMarca()}.`, deliver};
@@ -167,19 +170,20 @@ async function executeFlightAlerts({config,userId,routineId,tz,now}, deps) {
     lines.push(`${label}: filtros ${q.adultos} adulto(s), ${q.criancas} criança(s), ${q.classe}, escalas ${q.paradas}, companhias ${q.companhias?.join(', ') || 'sem restrição'}.`);
     const brief=`${q.origem}–${q.destino}`;
     let quote=null;
-    try { quote=await deps.search(q,{fresh:true}); } catch { /* limitações abaixo */ }
+    try { quote=await deps.search(q,{fresh:true}); } catch { /* limitations below */ }
     const cents=flightPriceCents(quote?.price),stamp=new Date(quote?.observedAt).getTime();
-    // Cache nunca dispara o alerta. freshRequested deve vir do adapter, não da LLM.
+    // Cache never fires the alert. freshRequested should come from the
+    // adapter, not from the LLM.
     const valid=!!quote && cents!==null && quote.currency==='BRL' && quote.freshRequested===true && quote.fromCache===false && quote.stale===false
       && Number.isFinite(stamp) && stamp>=started-1000 && stamp<=new Date(deps.now?deps.now():Date.now()).getTime()
       && localFlightDay(quote.observedAt,tz)===today;
     if (!valid) {hasError=true;short.push(`${brief}: cotação indisponível.`);lines.push(`${label}: sem cotação nova válida; não concluí ausência de oportunidade.`);continue;}
     let refCents=r.reference.kind==='fixed'?r.reference.priceCents:null;
     if (r.reference.kind==='previous_day') {
-      // Histórico malformado/antigo é ausência de referência, nunca alerta.
+      // Malformed/old history counts as no reference, never an alert.
       try {
         if (['down','up','equal'].includes(flightComparison(quote,r.prev,{key:r.key,today,tz}).state)) refCents=flightPriceCents(Number(r.prev.price));
-      } catch { /* referência inválida */ }
+      } catch { /* invalid reference */ }
     }
     try {await deps.record({userId,routineId,key:r.key,day:today,query:q,quote,tz});}
     catch {hasError=true;short.push(`${brief}: histórico não gravado.`);lines.push(`${label}: falha ao guardar histórico; não refarei a busca/envio nesta execução.`);}
@@ -190,14 +194,16 @@ async function executeFlightAlerts({config,userId,routineId,tz,now}, deps) {
     const verdict=drop.triggered?'ALERTA acionado.':'Limiar não ultrapassado.';
     lines.push(`${label}: ${money(cents/100)}; referência ${r.reference.kind==='fixed'?'fixa confirmada':'de ontem'} ${money(refCents/100)}; ${change}. ${verdict} Comparação sem arredondar o percentual. Consulta ${new Date(stamp).toISOString()}.`);
     short.push(`${brief}: ${money(cents/100)}, ref. ${r.reference.kind==='fixed'?'fixa':'ontem'} ${money(refCents/100)}; ${change}. ${drop.triggered?'ALERTA.':'Sem alerta.'}`);
-    // Não inventa unidade por pessoa/grupo nem usa o preço como garantia de compra.
+    // Doesn't invent a per-person/group unit or use the price as a purchase
+    // guarantee.
     if (drop.triggered) {const link=safeLink(quote.link);if(link && link.length<=350)lines.push(`Conferir: ${link}`);}
   }
   lines.push('Valores da fonte para os passageiros/filtros configurados; não é confirmação de disponibilidade ou total de compra.');
   if (!hasAlert&&!hasError) lines.push('Nenhuma condição acionada; nenhuma mensagem será enviada.');
   const result=alertEnvelope(lines,hasAlert||hasError);
   if (result.templateText.length>900) {
-    // Resumo determinístico enxuto, sem truncar dados; lista completa no app.
+    // Lean deterministic summary, without truncating data; full list in the
+    // app.
     result.templateText=oneLine([...short,`Preço da fonte, sem garantia de disponibilidade/total. Filtros, datas e links no app ${hostDaMarca()}.`].join(' '));
     if (result.templateText.length>900) throw Error('Resumo de alerta excede o limite seguro do template.');
   }

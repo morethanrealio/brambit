@@ -158,7 +158,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       if(receipt.programming_job&&creditStatus){
         try{
           const value=await creditStatus(identity.userId);
-          // null = conta sem saldo em créditos (núcleo sem teto): não há o que mostrar.
+          // null = account with no credit balance (core with no cap): there's nothing to show.
           if(value===null){receipt.accountCredits=null;return receipt;}
           if(!value||!['remaining','held','available'].every(k=>Number.isFinite(value[k])&&value[k]>=0))throw Error('Credit snapshot unavailable');
           receipt.accountCredits={...value,at:now()};

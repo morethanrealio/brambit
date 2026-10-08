@@ -1,6 +1,6 @@
-// Início e fim do mês-calendário no fuso BR (franquias globais, janela padrão de
-// relatório). Reseta dia 1º.
-// Retorna ISO com offset -03:00 (BR não tem horário de verão desde 2019).
+// Start and end of the calendar month in the BR timezone (global franchises, default
+// report window). Resets on day 1.
+// Returns ISO with -03:00 offset (BR has had no daylight saving since 2019).
 export function currentPeriodBRT(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit',

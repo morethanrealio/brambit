@@ -1,30 +1,30 @@
-// ── Busca de passagens aéreas ────────────────────────────────────────────────
-// Uma tool: `buscar_voos`. Fonte = Google Flights via SerpApi (mesma chave que
-// já serve o google_lens da busca por imagem). Duas coisas ficam NOSSAS e são o
-// que faz a feature aguentar escala:
+// ── Flight search ────────────────────────────────────────────────────────
+// One tool: `buscar_voos`. Source = Google Flights via SerpApi (the same key that
+// already serves the image-search google_lens). Two things are OURS and are what
+// makes the feature hold up at scale:
 //
-//  1) CACHE (mtr_harness.flight_searches): a franquia de busca é o recurso
-//     escasso, e a mesma rota/data é reconsultada muito (a pessoa pergunta de
-//     novo, uma rotina de monitoramento roda todo dia). A resposta crua é
-//     guardada por FLIGHT_CACHE_MIN minutos, chaveada por hash dos parâmetros
-//     normalizados — então o cache é compartilhado entre usuários (ninguém
-//     "possui" o preço de um voo). Quando a API falha, servimos o cache VELHO
-//     dizendo a idade dele, em vez de mentir ou não responder.
+//  1) CACHE (mtr_harness.flight_searches): the search quota is the scarce
+//     resource, and the same route/date is re-queried a lot (the person asks
+//     again, a monitoring routine runs every day). The raw response is
+//     kept for FLIGHT_CACHE_MIN minutes, keyed by a hash of the normalized
+//     parameters — so the cache is shared across users (nobody
+//     "owns" a flight's price). When the API fails, we serve the OLD cache
+//     stating its age, instead of lying or not responding.
 //
-//  2) HISTÓRICO (mtr_harness.flight_prices): cada busca real grava o menor
-//     preço observado. Com o tempo isso vira base própria pra dizer "é bom
-//     preço" no mercado BR, sem depender do price_insights de terceiro (que só
-//     vem em algumas rotas). Hoje o veredito usa os dois: o que a fonte informa
-//     e o que a gente mesmo mediu.
+//  2) HISTORY (mtr_harness.flight_prices): each real search records the lowest
+//     price observed. Over time this becomes our own basis for saying "that's a good
+//     price" in the BR market, without depending on a third party's price_insights (which only
+//     comes on some routes). Today the verdict uses both: what the source reports
+//     and what we ourselves measured.
 //
-// NÃO fecha compra: a venda de bilhete exige acreditação (ver
-// projetos/compra-vtex-agente.md pro caso de e-commerce e o doc de voos pro
-// porquê da Duffel). A tool entrega o deep link do Google Flights pro dono
-// fechar onde quiser.
+// Does NOT close the purchase: selling a ticket requires accreditation (see
+// projetos/compra-vtex-agente.md for the e-commerce case and the flights doc for the
+// reasoning behind Duffel). The tool delivers the Google Flights deep link for the owner
+// to close wherever they want.
 //
-// Custo: cada busca REAL reporta um usage (model 'serpapi-flights') via
-// onUsage; quem cobra é o server (recordUsages), com a mesma franquia grátis
-// mensal que o Tavily tem. Cache hit não reporta nada (não custou nada).
+// Cost: each REAL search reports a usage (model 'serpapi-flights') via
+// onUsage; the server (recordUsages) is what charges for it, with the same free monthly
+// quota that Tavily has. A cache hit reports nothing (it cost nothing).
 
 import { createHash } from 'node:crypto';
 import {
@@ -36,9 +36,9 @@ const CACHE_MIN = Number(process.env.FLIGHT_CACHE_MIN || 180); // 3h
 
 export function voosEnabled() { return !!process.env.SERPAPI_KEY; }
 
-// Apelidos de cidade → aeroporto principal. Só o que o brasileiro digita no
-// chat; o modelo já sabe código IATA e a descrição da tool pede o código. Isto
-// é rede de segurança pra "voo de são paulo pra lisboa", não um catálogo.
+// City nicknames → main airport. Only what a Brazilian types in the
+// chat; the model already knows the IATA code and the tool description asks for the code. This
+// is a safety net for "voo de são paulo pra lisboa", not a catalog.
 const APELIDOS = {
   'sao paulo': 'GRU', 'são paulo': 'GRU', sp: 'GRU', sampa: 'GRU', guarulhos: 'GRU',
   congonhas: 'CGH', viracopos: 'VCP', campinas: 'VCP',
@@ -92,7 +92,7 @@ const dur = (min) => {
 
 const hora = (s) => String(s || '').slice(11, 16);
 
-// Uma opção de voo em uma linha.
+// One flight option on a line.
 function linhaVoo(o, i, cur) {
   const pernas = o.flights || [];
   const p0 = pernas[0] || {};
@@ -123,8 +123,8 @@ function bagagemObservada(option) {
 
 export const FLIGHT_ANSWER_CONTRACT = 'Compare itinerários concretos: cada opção deve conter uma ida e uma volta vinculadas pela fonte, aeroportos, datas e horários. Não agrupe horários alternativos como uma única opção nem invente a volta. Preço inicial de ida e volta não comprova um retorno escolhido. Não afirme tarifa sem bagagem só porque a cabine é econômica. Não acrescente taxas genéricas de artigos a uma oferta como se fossem cotação. Se faltar franquia/custo ou unidade do preço, informe o que não foi confirmado e não anuncie total fechado com malas. Preserve passageiros, datas, aeroportos e restrições do pedido até o link final. Compare médias somente quando tiver amostra comparável; não misture períodos, passageiros, tipo de viagem ou cabine.';
 
-// Veredito de preço: o que a fonte informa (price_insights) + o que NÓS medimos
-// (flight_prices). Nunca afirma sem base: sem os dois, diz que não tem base.
+// Price verdict: what the source reports (price_insights) + what WE measured
+// (flight_prices). Never asserts without a basis: without either, it says it has no basis.
 function veredito(insights, stats, menor, cur) {
   const partes = [];
   const nivel = { low: 'ABAIXO do normal', typical: 'na média', high: 'ACIMA do normal' };
@@ -186,7 +186,7 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
       const classe = CLASSES[classeKey] || 1;
       const paradasKey = String(a.paradas || 'qualquer').toLowerCase();
       const paradas = PARADAS[paradasKey] ?? 0;
-      const tipo = a.data_volta ? 1 : 2; // 1=ida e volta, 2=só ida
+      const tipo = a.data_volta ? 1 : 2; // 1=round trip, 2=one way
 
       const q = {
         engine: 'google_flights',
@@ -205,8 +205,8 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
         hl: 'pt-br',
         gl: 'br',
       };
-      // Chave de cache = parâmetros normalizados (sem a api_key). Estável entre
-      // usuários de propósito: preço de voo não é dado de ninguém.
+      // Cache key = normalized parameters (without the api_key). Deliberately stable
+      // across users: flight price isn't anyone's personal data.
       const cacheKey = createHash('sha256').update(JSON.stringify(q)).digest('hex').slice(0, 40);
 
       let data = null;
@@ -219,12 +219,12 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
         const url = 'https://serpapi.com/search.json?' +
           new URLSearchParams({ ...q, ...(fresh ? {no_cache:'true'} : {}), api_key: process.env.SERPAPI_KEY }).toString();
         let erro = null;
-        // Fresh não repete request incerto: cada tentativa pode custar créditos.
+        // Fresh doesn't retry an uncertain request: each attempt can cost credits.
         for (let i = 0; i < (fresh ? 1 : 3); i++) {
           try {
             const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
             const j = await r.json().catch(() => null);
-            if (j?.error) { erro = j.error; break; }         // erro de parâmetro: não insiste
+            if (j?.error) { erro = j.error; break; }         // parameter error: doesn't retry
             if (!r.ok) { erro = `HTTP ${r.status}`; await sleep(1200); continue; }
             data = j; buscouAgora = true; break;
           } catch (e) { erro = e?.message || String(e); await sleep(1200); }
@@ -254,7 +254,7 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
       const menor = Number(top[0]?.price) || null;
       const insights = data.price_insights || null;
 
-      // Só busca REAL alimenta o histórico e a cobrança (cache hit não custou).
+      // Only a REAL search feeds the history and billing (cache hit cost nothing).
       if (buscouAgora) {
         await putFlightCache(cacheKey, {
           origin: org, destination: dst, departDate: a.data_ida,
@@ -281,8 +281,8 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
         } catch {}
       }
 
-      // Canal interno de dados tipados: só observações da fonte, nunca texto do LLM.
-      // Cache preserva o timestamp original, inclusive no fallback antigo.
+      // Internal typed-data channel: only observations from the source, never LLM text.
+      // Cache preserves the original timestamp, including in the old fallback.
       if (onObservation) await onObservation({
         price: menor, currency: cur,
         observedAt: fresh ? data.search_metadata?.created_at : buscouAgora ? new Date().toISOString() : hit?.fetchedAt,
@@ -356,8 +356,8 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
         : `Valores retornados para uma busca com ${pax}. A API não informa aqui se a unidade é por pessoa ou pelo grupo: não multiplique, divida nem anuncie total fechado sem confirmar essa unidade na oferta.`);
       if (a.malas_despachadas_por_pessoa != null) out.push(`Exigência do pedido: ${a.malas_despachadas_por_pessoa} mala(s) despachada(s) por pessoa. Não confundir com bagagem de mão; falta de franquia/custo explícitos impede confirmar que a oferta cumpre a exigência e seu total.`);
       out.push(FLIGHT_ANSWER_CONTRACT);
-      // Idade só aparece quando é informação de verdade: "vistos há 0 min" é
-      // ruído, e preço de minutos atrás é o preço de agora.
+      // Age only shows up when it's genuinely informative: "seen 0 min ago" is
+      // noise, and a price from minutes ago is the price right now.
       if (idadeCache != null && idadeCache >= 10) {
         out.push(idadeCache < 60
           ? `Preços vistos há ${idadeCache} min.`

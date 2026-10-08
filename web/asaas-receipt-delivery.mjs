@@ -44,10 +44,11 @@ export function asaasReceiptText(n = {}) {
   return `A tentativa de ${name}${amount}${attemptStarted} não foi concluída${status ? ` (status ${status})` : ''}. ${scope}`;
 }
 
-// Uma operação financeira tem uma única conversa/canal de origem. Enquanto a
-// resposta do turno ainda pode entregar o comprovante inline, o webhook espera
-// a janela curta e relê o estado. Depois dela, a conversa vira a entrega
-// canônica; push só existe quando o próprio pedido veio de um canal de push.
+// A financial operation has a single conversation/origin channel. While the
+// turn's response can still deliver the receipt inline, the webhook waits the
+// short window and re-reads the state. After it, the conversation becomes the
+// canonical delivery; push only exists when the request itself came from a
+// push channel.
 export async function deliverAsaasReceipt(n, {
   getOperation,
   appendToThread,
@@ -66,8 +67,8 @@ export async function deliverAsaasReceipt(n, {
   try { current = await getOperation(userId, operationId); }
   catch (e) { logger.error('[asaas] não consegui conferir a operação do comprovante:', e?.message || e); }
 
-  // O DTO do webhook não carregava created_at e zerava essa espera. A fonte de
-  // verdade é a linha persistida, que também funciona para retomadas da outbox.
+  // The webhook's DTO did not carry created_at and zeroed out this wait. The
+  // source of truth is the persisted row, which also works for outbox resumes.
   const createdAt = new Date(current?.created_at || n?.created_at || 0).getTime();
   const waitLeft = Number.isFinite(createdAt)
     ? Math.max(0, createdAt + inlineWaitMs + 250 - now())
@@ -81,9 +82,9 @@ export async function deliverAsaasReceipt(n, {
     logger.error('[asaas] não consegui conferir deduplicação do comprovante:', e?.message || e);
   }
 
-  // O evento pode chegar muito depois e coexistir com outra tentativa do mesmo
-  // valor. O texto sempre usa o registro vinculado à conversa para identificar
-  // quando ESTA tentativa começou e se já existe uma tentativa posterior.
+  // The event can arrive much later and coexist with another attempt of the
+  // same value. The text always uses the record tied to the conversation to
+  // identify when THIS attempt started and whether a later attempt already exists.
   const text = asaasReceiptText({
     ...n,
     created_at: current?.created_at || n?.created_at || n?.createdAt || null,
@@ -106,8 +107,9 @@ export async function deliverAsaasReceipt(n, {
     } catch (e) { logger.error('[asaas] falha ao registrar comprovante na conversa:', e?.message || e); }
   }
 
-  // Pedido feito na web/app fica na própria thread. Para Telegram/WhatsApp/e-mail
-  // o push usa somente o mesmo canal; não cai em outro canal por fallback.
+  // A request made on the web/app stays in its own thread. For
+  // Telegram/WhatsApp/email, push only uses the same channel; it does not
+  // fall back to another channel.
   if (originChannel !== 'web') {
     try {
       const out = await notifyOwner(userId, text, {

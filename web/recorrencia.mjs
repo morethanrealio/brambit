@@ -1,23 +1,23 @@
-// ── Evento que se repete ──
+// ── Event that repeats ──
 //
-// Caso de 07/09/2026: a pessoa pediu um compromisso "todo dia 14" e recebeu
-// um evento ÚNICO no dia 14, com check verde de confirmação. Não foi alucinação:
-// os schemas de criar evento (Google e Outlook) simplesmente não tinham campo de
-// recorrência, então não havia como o pedido dela chegar na API. O assistente fez
-// o que dava e reportou como se tivesse feito o que ela pediu.
+// 2026-09-07 case: the person asked for an appointment "every day on the 14th" and received
+// a SINGLE event on the 14th, with a green confirmation check. It was not a hallucination:
+// the create-event schemas (Google and Outlook) simply had no
+// recurrence field, so there was no way for her request to reach the API. The assistant did
+// what it could and reported as if it had done what she asked.
 //
-// Este módulo é a peça que faltava, e é deliberadamente ESTRUTURADO em vez de
-// aceitar uma RRULE crua do modelo: recorrência é fácil de escrever errado
-// (BYMONTHDAY vs BYDAY, UNTIL em UTC, COUNT vs UNTIL) e um erro aqui só aparece
-// semanas depois, quando o evento não repetiu. Com campos nomeados, a validação
-// acontece ANTES da chamada e o pedido inválido é recusado em vez de virar
-// evento único silencioso.
+// This module is the missing piece, and it's deliberately STRUCTURED instead of
+// accepting a raw RRULE from the model: recurrence is easy to write wrong
+// (BYMONTHDAY vs BYDAY, UNTIL in UTC, COUNT vs UNTIL) and a mistake here only shows up
+// weeks later, when the event didn't repeat. With named fields, validation
+// happens BEFORE the call and an invalid request is rejected instead of becoming
+// a silent single event.
 //
-// Saída em dois formatos, do mesmo objeto normalizado:
-//   • Google Calendar -> array de RRULE (RFC 5545)
-//   • Microsoft Graph -> objeto {pattern, range}
-// e uma `descricao` em português que volta pro modelo no resultado da tool, pra
-// ele confirmar pro usuário o que de fato foi criado, não o que ele pediu.
+// Output in two formats, from the same normalized object:
+//   • Google Calendar -> RRULE array (RFC 5545)
+//   • Microsoft Graph -> {pattern, range} object
+// and a `descricao` in Portuguese that goes back to the model in the tool result, so
+// it can confirm to the user what was actually created, not what they asked for.
 
 const DIAS = {
   dom: { i: 0, rrule: 'SU', graph: 'sunday', nome: 'domingo' },
@@ -31,8 +31,8 @@ const DIAS = {
 const POR_INDICE = Object.values(DIAS).sort((a, b) => a.i - b.i);
 const FREQS = ['diaria', 'semanal', 'mensal', 'anual'];
 
-// Schema do parâmetro, compartilhado pelas tools do Google e do Outlook pra que
-// o modelo veja exatamente a mesma forma nos dois conectores.
+// Parameter schema, shared by the Google and Outlook tools so that
+// the model sees exactly the same shape in both connectors.
 export const REPETIR_SCHEMA = {
   type: 'object',
   description: 'OPTIONAL. Fill in ONLY when the event REPEATS ("toda segunda", "todo dia 14", "todo mês", "a cada 15 dias"). If the user asked for repetition and you do NOT pass this field, a single event will be created and their request will not have been fulfilled.',
@@ -51,9 +51,9 @@ const soData = (v) => String(v || '').slice(0, 10);
 const brData = (d) => { const [a, m, dia] = soData(d).split('-'); return dia ? `${dia}/${m}/${a}` : soData(d); };
 
 /**
- * Valida e normaliza o `repetir` vindo do modelo.
- * Devolve `{ erro }` quando o pedido não fecha, e nesse caso quem chama deve
- * RECUSAR a criação, nunca cair pra evento único.
+ * Validates and normalizes the `repetir` coming from the model.
+ * Returns `{ erro }` when the request doesn't add up, and in that case the caller must
+ * REFUSE the creation, never fall back to a single event.
  */
 export function normalizarRepeticao(repetir, inicioISO) {
   if (repetir == null) return null;
@@ -65,8 +65,8 @@ export function normalizarRepeticao(repetir, inicioISO) {
   const intervalo = Math.max(1, Math.floor(Number(repetir.intervalo) || 1));
   if (intervalo > 999) return { erro: '"intervalo" absurdo (máximo 999).' };
 
-  // A data de início manda nos defaults: dia da semana e dia do mês saem dela
-  // quando o usuário não especificou.
+  // The start date drives the defaults: day of week and day of month come from it
+  // when the user didn't specify them.
   const base = new Date(`${soData(inicioISO)}T12:00:00Z`);
   if (Number.isNaN(base.getTime())) return { erro: `Não entendi a data de início ("${inicioISO}"), então não dá pra montar a repetição.` };
 
@@ -89,8 +89,8 @@ export function normalizarRepeticao(repetir, inicioISO) {
   if (freq === 'mensal') {
     const d = repetir.dia_do_mes == null ? base.getUTCDate() : Math.floor(Number(repetir.dia_do_mes));
     if (!Number.isFinite(d) || d < 1 || d > 31) return { erro: '"dia_do_mes" precisa ser um número de 1 a 31.' };
-    // Dia 29/30/31 não existe em todo mês: o evento simplesmente some nos meses
-    // curtos. Melhor avisar agora do que a pessoa descobrir em fevereiro.
+    // Day 29/30/31 doesn't exist in every month: the event simply disappears in
+    // short months. Better to warn now than have the person find out in February.
     diaDoMes = d;
   } else if (repetir.dia_do_mes != null) {
     return { erro: '"dia_do_mes" só vale com frequencia=mensal. Pra anual, a data de início já define o dia.' };
@@ -127,9 +127,9 @@ function descreve({ freq, intervalo, dias, diaDoMes, ate, ocorrencias }) {
   return `${base}, sem data pra terminar`;
 }
 
-// Instante UTC do fim do dia `ate` no fuso do usuário. O UNTIL da RRULE é sempre
-// em UTC: sem essa conversão, quem está em São Paulo (UTC-3) perderia a última
-// ocorrência quando o evento é à noite.
+// UTC instant of the end of day `ate` in the user's timezone. The RRULE's UNTIL is always
+// in UTC: without this conversion, someone in São Paulo (UTC-3) would lose the last
+// occurrence when the event is at night.
 function untilUtc(ate, tz) {
   const [y, m, d] = ate.split('-').map(Number);
   const chute = Date.UTC(y, m - 1, d, 23, 59, 59);
@@ -138,7 +138,7 @@ function untilUtc(ate, tz) {
     const f = new Intl.DateTimeFormat('en-US', { timeZone: tz || 'America/Sao_Paulo', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const p = Object.fromEntries(f.formatToParts(new Date(chute)).map((x) => [x.type, x.value]));
     const comoLocal = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
-    off = comoLocal - chute; // quanto o fuso está à frente do UTC, em ms
+    off = comoLocal - chute; // how far the timezone is ahead of UTC, in ms
   } catch { off = 0; } // fuso desconhecido: cai no UTC puro em vez de quebrar
   const inst = new Date(chute - off);
   return `${inst.toISOString().slice(0, 19).replace(/[-:]/g, '')}Z`;
@@ -158,8 +158,8 @@ export function paraGoogle(n, tz) {
 /** Microsoft Graph: campo `recurrence` do evento ({pattern, range}). */
 export function paraGraph(n, tz) {
   const pattern = { type: { diaria: 'daily', semanal: 'weekly', mensal: 'absoluteMonthly', anual: 'absoluteYearly' }[n.freq], interval: n.intervalo };
-  // O Graph EXIGE daysOfWeek no weekly e dayOfMonth no absoluteMonthly; no
-  // absoluteYearly exige dayOfMonth E month, os dois vindos da data de início.
+  // The Graph REQUIRES daysOfWeek on weekly and dayOfMonth on absoluteMonthly; on
+  // absoluteYearly it requires dayOfMonth AND month, both coming from the start date.
   if (n.freq === 'semanal') pattern.daysOfWeek = (n.dias || []).map((i) => POR_INDICE[i].graph);
   if (n.freq === 'mensal') pattern.dayOfMonth = n.diaDoMes;
   if (n.freq === 'anual') {

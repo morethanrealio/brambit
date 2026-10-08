@@ -21,9 +21,9 @@ export function createVideoBillingStore(pool, schema = 'mtr_harness', { transaca
         if (!job || !['queued','processing'].includes(job.status)) {
           return {settled:false,reason:job?'already_final':'not_found'};
         }
-        // Compatibilidade conservadora: um débito legado sem chave de job não
-        // pode ser atribuído/cobrado novamente por aproximação. Só sinaliza para
-        // revisão; não estorna, altera cobrança antiga ou inventa vínculo.
+        // Conservative compatibility: a legacy debit with no job key can't
+        // be reattributed/recharged by approximation. Only flags it for
+        // review; doesn't refund, change the old charge, or invent a link.
         const legacy=await c.query(`SELECT 1 FROM ${schema}.usage_events u
           WHERE u.user_id=$1 AND u.kind='video' AND u.ts >= $2
             AND u.bill_credits > 0
@@ -32,7 +32,7 @@ export function createVideoBillingStore(pool, schema = 'mtr_harness', { transaca
         if (legacy.rows.length || Number(job.credits_charged)>0) {
           return {settled:false,reason:'legacy_charge_needs_review'};
         }
-        // Proteção complementar contra reentrada com registro estável já presente.
+        // Complementary protection against re-entry with a stable record already present.
         const billed=await c.query(`SELECT user_id,bill_credits FROM ${schema}.usage_events WHERE turn_id=$1 AND kind='video'`,[jobId]);
         if (billed.rows.length) {
           return {settled:false,reason:'inconsistent_charge_needs_review'};
@@ -44,8 +44,8 @@ export function createVideoBillingStore(pool, schema = 'mtr_harness', { transaca
         await c.query(`UPDATE ${schema}.video_jobs SET status='delivered', video_seconds=$3,
           video_key=$4, credits_charged=$5, updated_at=now() WHERE id=$1 AND user_id=$2`,
           [jobId,userId,videoSeconds,videoKey,credits]);
-        // 'delivered' é estado LOCAL legado (arquivo pronto). Não é recibo de
-        // Telegram/push. Apenas este vencedor pode tentar a notificação externa.
+        // 'delivered' is a legacy LOCAL state (file ready). It is not a
+        // Telegram/push receipt. Only this winner may attempt the external notification.
         return {settled:true,credits,videoKey};
       });
     },

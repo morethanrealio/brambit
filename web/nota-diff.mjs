@@ -1,19 +1,19 @@
-// Cartão de confirmação do editar_nota: mostra SÓ as linhas que mudam, não a
-// nota inteira. Motivo (30/09/2026, caso da lista de compras): o cartão
-// despejava a nota nova completa, a pessoa não achava no meio dela o que
-// estava aprovando e mandava a correção de novo, empilhando propostas.
+// editar_nota confirmation card: shows ONLY the lines that change, not the
+// whole note. Reason (2026-09-30, shopping-list case): the card
+// used to dump the entire new note, the person couldn't find what they were
+// approving in the middle of it and would send the correction again, stacking proposals.
 //
-// Continua exato: toda linha que sai e toda linha que entra aparece, na forma
-// literal. O que some é só o que fica igual. Função pura, sem banco, pra poder
-// ser testada sozinha.
+// Stays exact: every line that leaves and every line that enters shows up, in its
+// literal form. What's omitted is only what stays the same. Pure function, no database, so it can
+// be tested on its own.
 
-// Acima disso a tabela da comparação pesa demais; o cartão volta a mostrar a
-// nota nova inteira, que é o comportamento de antes e continua correto.
+// Above this, the comparison table weighs too much; the card goes back to showing
+// the whole new note, which is the previous behavior and is still correct.
 const LIMITE_CELULAS = 2_000_000;
 
-// Comparação de duas sequências (maior subsequência comum). Devolve [op, item]
-// com op '=' (igual), '-' (sai) ou '+' (entra), na ordem; null se grande demais
-// pra comparar.
+// Comparison of two sequences (longest common subsequence). Returns [op, item]
+// with op '=' (unchanged), '-' (leaves) or '+' (enters), in order; null if too big
+// to compare.
 function diffSeq(a, b) {
   let ini = 0;
   while (ini < a.length && ini < b.length && a[ini] === b[ini]) ini += 1;
@@ -40,7 +40,7 @@ function diffSeq(a, b) {
   return ops;
 }
 
-// Comparação por linha do texto inteiro.
+// Line-by-line comparison of the entire text.
 export function diffLinhas(antes, depois) {
   return diffSeq(String(antes ?? '').split('\n'), String(depois ?? '').split('\n'));
 }
@@ -78,13 +78,13 @@ const TEXTOS = {
   },
 };
 
-// Título markdown ("## Lista Atual") divide a nota em seções. A comparação é
-// feita seção por seção, casando cada uma pelo caminho de títulos ("Lista
-// Atual › Supermercado"), e não na nota corrida: numa lista em que a semana
-// inteira vai pro histórico, a comparação corrida acha mais curto dizer que os
-// títulos do histórico "subiram" por cima dos itens (exato, mas ilegível; caso
-// real da rotina de 30/09/2026). Por seção, o cartão diz o que a pessoa fez:
-// os itens saíram do Supermercado e entraram no histórico daquela data.
+// A markdown heading ("## Lista Atual") splits the note into sections. The comparison is
+// done section by section, matching each one by its title path ("Lista
+// Atual › Supermercado"), and not over the note as a running whole: in a list where the whole
+// week goes into the history, a running comparison finds it shorter to say that the
+// history titles "moved up" over the items (exact, but unreadable; a real
+// case from the 2026-09-30 routine). Per section, the card says what the person did:
+// the items left Supermercado and entered the history for that date.
 const titulo = (l) => { const m = /^(#{1,6})\s+(.*\S)\s*$/.exec(l); return m ? { nivel: m[1].length, nome: m[2] } : null; };
 
 function secoes(texto) {
@@ -96,8 +96,8 @@ function secoes(texto) {
     while (caminho.length && caminho.at(-1).nivel >= h.nivel) caminho.pop();
     const pai = caminho.at(-1) ? caminho.map((c) => c.nome) : null;
     caminho.push(h);
-    // Mesmo caminho repetido na nota (dois "### Supermercado" no mesmo lugar):
-    // a ocorrência entra na chave pra não casar uma com a outra.
+    // Same path repeated in the note (two "### Supermercado" in the same place):
+    // the occurrence goes into the key so one doesn't match the other.
     const base = caminho.map((c) => `${'#'.repeat(c.nivel)} ${c.nome}`).join('\u0001');
     const n = (vistas.get(base) || 0) + 1; vistas.set(base, n);
     lista.push({ chave: n > 1 ? `${base}\u0002${n}` : base, nome: caminho.map((c) => c.nome), pai, cabecalho: l, linhas: [] });
@@ -105,16 +105,16 @@ function secoes(texto) {
   return lista;
 }
 
-// Linhas que mudam, cada uma com a seção a que pertence: [rotulo, op, linha].
-// null se alguma comparação passar do limite.
+// Lines that change, each with the section it belongs to: [rotulo, op, linha].
+// null if some comparison exceeds the limit.
 function mudancas(antes, depois) {
   const A = secoes(antes), B = secoes(depois);
   const porChave = (lista) => new Map(lista.map((s) => [s.chave, s]));
   const mA = porChave(A), mB = porChave(B);
   const ordem = diffSeq(A.map((s) => s.chave), B.map((s) => s.chave));
   if (!ordem) return null;
-  // O cartão chama a seção pelo próprio título; só quando o mesmo título existe
-  // em mais de um lugar da nota é que ele vem com o caminho ("Casa › Mercado").
+  // The card calls the section by its own title; only when the same title exists
+  // in more than one place in the note does it come with the path ("Casa › Mercado").
   const usos = new Map();
   for (const sec of [...A, ...B]) if (sec.nome) usos.set(sec.nome.at(-1), (usos.get(sec.nome.at(-1)) || new Set()).add(sec.nome.join('\u0001')));
   const rotulo = (caminho) => !caminho ? null : usos.get(caminho.at(-1))?.size > 1 ? caminho.join(' › ') : caminho.at(-1);
@@ -126,7 +126,7 @@ function mudancas(antes, depois) {
       for (const [o, l] of ops) if (o !== '=') out.push([rotulo(mB.get(chave).nome), o, l]);
       continue;
     }
-    // Seção inteira que entra ou sai: o próprio título aparece, sob a seção-mãe.
+    // A whole section entering or leaving: the title itself shows up, under the parent section.
     const sec = (op === '+' ? mB : mA).get(chave);
     out.push([rotulo(sec.pai), op, sec.cabecalho]);
     for (const l of sec.linhas) out.push([rotulo(sec.pai), op, l]);
@@ -134,10 +134,10 @@ function mudancas(antes, depois) {
   return out.filter(([, , l]) => l.trim());
 }
 
-// Os mesmos ajustes que o updateSpaceEntry grava (trim), pra comparar o que
-// vai de fato pro banco. `depois` null = texto não muda (só a tag).
-// Lança erro quando não há nada pra mudar: o gate devolve isso ao modelo em
-// vez de pedir confirmação de uma edição vazia.
+// The same adjustments updateSpaceEntry writes (trim), so we compare what
+// actually goes into the database. `depois` null = text doesn't change (only the tag).
+// Throws an error when there's nothing to change: the gate returns this to the model
+// instead of asking for confirmation of an empty edit.
 export function cartaoEdicaoNota({ espaco, antes, depois, tagAntes, tagDepois }) {
   if (depois == null && tagDepois == null) throw Error('Diga o novo texto ou a nova tag pra eu editar.');
   const corpoAntes = String(antes ?? '').trim();

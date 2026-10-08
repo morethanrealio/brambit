@@ -1,10 +1,10 @@
-// ── MEMÓRIA v2, R2: busca pela demanda ──
-// A busca antiga (searchWikiPages) exige TODAS as palavras, literais, só nas páginas:
-// "escola Cadu horário" não acha "Ela busca o Cadu na escola sempre entre 13h e 13h30"
-// (falta "horário"), e "buscar Cadu" não acha "busca o Cadu". Esta procura linha a
-// linha nas páginas E nos fatos (inclusive os encerrados, que são o histórico), sem
-// acento, com QUALQUER palavra, e ranqueia: palavra rara pesa mais que palavra comum,
-// e a linha que junta mais palavras da busca sobe. Desligada por padrão: MEMORIA_BUSCA_V2=1.
+// ── MEMORY v2, R2: on-demand search ──
+// The old search (searchWikiPages) requires ALL words, literal, only in pages:
+// "escola Cadu horário" doesn't find "Ela busca o Cadu na escola sempre entre 13h e 13h30"
+// (missing "horário"), and "buscar Cadu" doesn't find "busca o Cadu". This one searches line by
+// line in both pages AND facts (including closed ones, which are the history), without
+// accents, with ANY word, and ranks: a rare word weighs more than a common one,
+// and the line that matches more search words rises. Off by default: MEMORIA_BUSCA_V2=1.
 import { termos } from './wiki-reconciliar.mjs';
 
 export const buscaV2Ligada = () => process.env.MEMORIA_BUSCA_V2 === '1';
@@ -13,13 +13,13 @@ const RESERVADAS = new Set(['atualizacoes']);
 const MARCA_LINKS = '## Mais detalhe';
 const limpa = (s) => String(s || '').replace(/^\s*[-*•]\s*/, '').replace(/\s+/g, ' ').trim();
 
-// Mesma palavra com outra terminação ("busca"/"buscar", "colégio"/"colégios"): casa
-// pelo começo quando as duas têm 5+ letras. Número só casa igual.
+// Same word with a different ending ("busca"/"buscar", "colégio"/"colégios"): matches
+// by the start when both have 5+ letters. A number only matches exactly.
 const RADICAL = 5;
 const POR_PAGINA = 3;
 const casa = (a, b) => a === b || (!/\d/.test(a) && a.length >= RADICAL && b.length >= RADICAL && a.slice(0, RADICAL) === b.slice(0, RADICAL));
 
-// Puro: recebe páginas {slug: {title, body}} e fatos, devolve os melhores trechos.
+// Pure: receives pages {slug: {title, body}} and facts, returns the best excerpts.
 export function buscarNaMemoria(paginas, fatos, consulta, { max = 10 } = {}) {
   const Q = [...termos(consulta).keys()];
   if (!Q.length) return [];
@@ -32,8 +32,8 @@ export function buscarNaMemoria(paginas, fatos, consulta, { max = 10 } = {}) {
       const t = l.trim();
       if (t.startsWith('#')) { secao = t.replace(/^#+\s*/, ''); continue; }
       if (!t) continue;
-      // O título da página e da seção contam (com meio peso): "Cadu" no título de
-      // cadu-familia torna a linha "horário da escola" achável por "Cadu".
+      // The page and section title count (at half weight): "Cadu" in the title of
+      // cadu-familia makes the line "horário da escola" findable by "Cadu".
       itens.push({ tipo: 'linha', pagina: slug, secao, texto: limpa(t), contexto: `${p?.title || slug} ${secao}` });
     }
   }
@@ -43,7 +43,7 @@ export function buscarNaMemoria(paginas, fatos, consulta, { max = 10 } = {}) {
       texto: f.assunto === 'historico' ? String(f.valor) : `${f.assunto}: ${f.valor}`, contexto: '', ate: encerrado ? new Date(f.valido_ate).toISOString().slice(0, 10) : null });
   }
   const T = itens.map((it) => ({ corpo: [...termos(it.texto).keys()], ctx: [...termos(it.contexto).keys()] }));
-  // Peso de cada palavra da busca: rara (em poucos itens) pesa mais (idf).
+  // Weight of each search word: rare (in few items) weighs more (idf).
   const df = Q.map((q) => T.filter((t) => t.corpo.some((w) => casa(q, w)) || t.ctx.some((w) => casa(q, w))).length);
   const idf = df.map((d) => (d ? Math.log(1 + itens.length / d) : 0));
   const pontos = itens.map((it, i) => {
@@ -52,12 +52,12 @@ export function buscarNaMemoria(paginas, fatos, consulta, { max = 10 } = {}) {
       if (T[i].corpo.some((w) => casa(q, w))) { s += idf[k]; n++; }
       else if (T[i].ctx.some((w) => casa(q, w))) s += idf[k] / 2;
     });
-    // Juntar mais palavras da busca na mesma linha vale mais que soma solta.
+    // Matching more search words on the same line is worth more than a loose sum.
     return { it, s: s * (1 + 0.25 * Math.max(0, n - 1)) };
   }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
-  // Mesma frase na página e no fato: mostra uma vez só.
-  // No máximo 3 linhas por página: busca por um contato não despeja a lista inteira
-  // (mesma regra de minimização da busca antiga, que dava 1 trecho por página).
+  // Same phrase in the page and in the fact: shows it only once.
+  // At most 3 lines per page: searching for a contact doesn't dump the whole list
+  // (same minimization rule as the old search, which gave 1 excerpt per page).
   const vistos = new Set(), porPagina = new Map(), out = [];
   for (const { it } of pontos) {
     const k = it.texto.toLowerCase().replace(/^[^:]{1,60}:\s*/, '');
@@ -68,7 +68,7 @@ export function buscarNaMemoria(paginas, fatos, consulta, { max = 10 } = {}) {
   return out;
 }
 
-// Texto pro modelo: uma linha por achado, com onde mora; histórico marcado como tal.
+// Text for the model: one line per hit, with where it lives; history marked as such.
 export function formatarAchados(achados) {
   if (!achados.length) return 'Nada encontrado na memória.';
   return achados.map((a) => a.tipo === 'linha'

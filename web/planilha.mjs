@@ -1,19 +1,19 @@
-// ── Planilha sempre via pandas (sandbox), nunca como texto pro modelo ────────
-// Toda planilha que chega (anexo no chat, Drive, OneDrive, Gmail, ler_arquivo)
-// é gravada no /workspace do container isolado do usuário, aberta com pandas e
-// REGISTRADA aqui. O modelo recebe só a ESTRUTURA (abas, linhas, nomes das
-// colunas), nunca as células; qualquer pergunta sobre o conteúdo passa pela
-// meta-tool `analisar_planilha` (server.mjs), que lê o arquivo INTEIRO por
-// código e devolve só a síntese.
+// ── Spreadsheet always via pandas (sandbox), never as text to the model ────────
+// Every spreadsheet that arrives (chat attachment, Drive, OneDrive, Gmail, ler_arquivo)
+// is written to the isolated container's /workspace for that user, opened with pandas and
+// REGISTERED here. The model receives only the STRUCTURE (sheets, rows, column
+// names), never the cells; any question about the content goes through the
+// `analisar_planilha` meta-tool (server.mjs), which reads the WHOLE file by
+// code and returns only the synthesis.
 //
-// Por quê (01/10/2026): a prévia em CSV (12k-40k caracteres) que ia junto
-// cortava planilhas grandes, e o modelo respondia "de cabeça" a partir do pedaço
-// que viu, inclusive dizendo que algo não existia quando estava nas linhas
-// cortadas. Por isso não existe mais caminho de volta pro texto: se o ambiente
-// de análise falhar, a nota diz que a planilha não pôde ser lida.
+// Why (2026-10-01): the CSV preview (12k-40k characters) that used to be sent along
+// truncated large spreadsheets, and the model answered "from memory" based on the part it
+// saw, including saying something didn't exist when it was in the
+// truncated rows. Because of that there is no longer any path back to text: if the
+// analysis environment fails, the note says the spreadsheet couldn't be read.
 import { sandboxEnabled, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 
-const TTL_MS = 6 * 60 * 60 * 1000; // 6h: dá pra fazer perguntas de acompanhamento
+const TTL_MS = 6 * 60 * 60 * 1000; // 6h: allows follow-up questions
 const MAX_PER_USER = 10;
 const loaded = new Map(); // userId -> [{ path, filename, sheets, rows, ts }]
 
@@ -24,7 +24,7 @@ function prune(list) {
 
 export function registerLoadedSheet(userId, entry) {
   const list = prune(loaded.get(userId) || []);
-  // Mesma planilha recarregada (mesmo path): substitui em vez de duplicar.
+  // Same spreadsheet reloaded (same path): replaces instead of duplicating.
   const filtered = list.filter((e) => e.path !== entry.path);
   filtered.push({ ...entry, ts: Date.now() });
   loaded.set(userId, filtered.slice(-MAX_PER_USER));
@@ -42,16 +42,16 @@ export function safeName(name) {
   return base || 'planilha';
 }
 
-// Caminho canônico da planilha dentro do sandbox do usuário. Exportado porque a
-// EDIÇÃO (planilha-edit.mjs) precisa do mesmo caminho que o carregamento usa —
-// se os dois divergirem, o sub-agente edita um arquivo e a gente lê outro.
+// Canonical path of the spreadsheet inside the user's sandbox. Exported because
+// EDITING (planilha-edit.mjs) needs the same path that loading uses —
+// if the two diverge, the sub-agent edits one file and we read another.
 export function sheetSandboxPath(filename) {
   return `/workspace/planilhas/${safeName(filename)}`;
 }
 
-// Tipo de planilha pelo nome e pelo mime: 'excel' (xlsx/xlsm/xls), 'csv', 'tsv'
-// ou null quando não é planilha. A extensão manda: o Windows costuma mandar CSV
-// com mime de Excel (application/vnd.ms-excel), e abrir um CSV como Excel falha.
+// Spreadsheet type by name and by mime: 'excel' (xlsx/xlsm/xls), 'csv', 'tsv'
+// or null when it's not a spreadsheet. The extension rules: Windows often sends CSV
+// with Excel's mime (application/vnd.ms-excel), and opening a CSV as Excel fails.
 const MIME_EXCEL = /officedocument\.spreadsheetml|ms-excel|google-apps\.spreadsheet/i;
 export function tipoPlanilha(name = '', mime = '') {
   const ext = /\.([a-z0-9]+)$/i.exec(String(name || ''))?.[1]?.toLowerCase();
@@ -65,18 +65,18 @@ export function tipoPlanilha(name = '', mime = '') {
   return null;
 }
 
-// Nome com a extensão que bate com o tipo: o pandas do sandbox e o sub-agente
-// precisam saber pelo nome se é CSV ou Excel (export do Google Sheets, anexo
-// sem extensão).
+// Name with the extension matching the type: the sandbox's pandas and the sub-agent
+// need to know from the name whether it's CSV or Excel (Google Sheets export, attachment
+// without an extension).
 function nomeComExtensao(filename, tipo) {
   const limpo = safeName(filename);
   if (tipoPlanilha(limpo) === tipo) return limpo;
   return `${limpo}.${tipo === 'excel' ? 'xlsx' : tipo}`;
 }
 
-// Script que roda no sandbox: abre a planilha inteira com pandas e imprime só
-// a estrutura em JSON. Nomes de coluna e de aba são cortados pra caberem numa
-// nota curta; as células nunca saem daqui.
+// Script that runs in the sandbox: opens the whole spreadsheet with pandas and
+// prints only the structure in JSON. Column and sheet names are truncated so
+// they fit a short note; the cells never leave here.
 const SONDA_PY = String.raw`
 import sys, json, csv
 import pandas as pd
@@ -135,14 +135,14 @@ function descreverAbas(abas) {
   }).join('\n');
 }
 
-// Nota de falha. Não existe plano B em texto, de propósito (ver topo do arquivo).
+// Failure note. There's no text fallback, on purpose (see top of the file).
 export function notaPlanilhaIlegivel(filename, motivo) {
   return `⚠️ A planilha "${filename}" não pôde ser aberta no ambiente de análise (${motivo}). O conteúdo dela NÃO está disponível por nenhum outro caminho: diga ao usuário que não conseguiu ler a planilha agora e não descreva, cite nem suponha nada do que ela contém.`;
 }
 
-// Grava os bytes no sandbox e registra pra análise, SEM ler a estrutura. É o
-// caminho da edição (planilha-edit.mjs), que tem a própria conferência e não
-// mostra a planilha ao modelo.
+// Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
+// structure. This is the edit path (planilha-edit.mjs), which has its own
+// verification and doesn't show the spreadsheet to the model.
 export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   if (!sandboxEnabled()) return { ok: false, error: 'ambiente de análise desligado' };
   const clean = safeName(filename);
@@ -155,9 +155,9 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   return { ok: true, path, filename: clean };
 }
 
-// Carrega uma planilha pra conversa: grava no sandbox, abre com pandas e
-// devolve a nota que vai pro modelo, só com a estrutura. Sempre devolve `note`
-// (também na falha), pra quem chama não ter tentação de mandar o texto.
+// Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and
+// returns the note that goes to the model, with only the structure. Always returns `note`
+// (even on failure), so the caller isn't tempted to send the text.
 // { ok, path, filename, sheets, rows, abas, note } | { ok:false, error, note }
 export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '' } = {}) {
   const t = tipo || tipoPlanilha(filename, mime) || 'excel';
@@ -176,9 +176,9 @@ export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tip
   };
 }
 
-// Pros conectores (Drive, OneDrive, Gmail): carrega pelo onSheetLoad que o
-// server injeta e devolve a nota que vai no campo "analise" do resultado. Sem
-// onSheetLoad, ou se ele falhar, a nota é a de falha; nunca o texto.
+// For connectors (Drive, OneDrive, Gmail): loads via the onSheetLoad that the
+// server injects and returns the note that goes in the result's "analise" field. Without
+// onSheetLoad, or if it fails, the note is the failure one; never the text.
 export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mime = '') {
   if (typeof onSheetLoad !== 'function') return notaPlanilhaIlegivel(filename, 'ambiente de análise indisponível');
   try {

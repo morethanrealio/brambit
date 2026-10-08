@@ -7,8 +7,8 @@ import { emailQueryCoverage, guardEmailCoverageClaims } from './email-search-cov
 export const EMAIL_PAGINATION_RULE = 'In email searches, messages contains only one page. If has_more=true, use next_cursor on the SAME tool/query to continue when needed, or declare the search partial. Do not claim absence or an exhaustive total from a single page; estimated_total is an estimate. Do not sweep the whole mailbox automatically in a broad search; a closed query (sender/subject/period) must be paginated to the end. When synthesizing, preserve any partial-search notice.';
 export const emailCursorSchema = { type: 'string', description: 'Copy next_cursor from the previous result to continue the SAME query in this run. Temporary cursor; do not invent one or use a URL.' };
 
-// Estado efêmero por instância autenticada da tool: não compartilha cursores
-// entre contas/usuários. Sem banco. O worker de leitura tem history isolado.
+// Ephemeral state per authenticated tool instance: doesn't share cursors
+// across accounts/users. No database. The reading worker has isolated history.
 export function emailPagination({ defaultMax, cap, now = Date.now }) {
   const cursors = new Map();
   const ttl = 15 * 60 * 1000;
@@ -50,8 +50,8 @@ export function emailPagination({ defaultMax, cap, now = Date.now }) {
   };
 }
 
-// Só usa nextLink recebido da API e guardado em cursor opaco. Defesa adicional:
-// mesma origem/caminho de listagem, sem credenciais/fragmentos/redirecionamento.
+// Only uses a nextLink received from the API and stored in an opaque cursor.
+// Extra defense: same origin/listing path, no credentials/fragments/redirect.
 export function graphEmailNextPath(link, expectedPath) {
   if (typeof link !== 'string' || !link.startsWith('https://graph.microsoft.com/') || link.length > 16384 || /[\s\\]/.test(link)) throw new Error('Continuação Microsoft inválida.');
   const url = new URL(link);
@@ -59,8 +59,9 @@ export function graphEmailNextPath(link, expectedPath) {
   return url.pathname.slice('/v1.0'.length) + url.search;
 }
 
-// Resultados crus ficam no worker; anexa aviso determinístico à síntese para
-// que o principal também receba a limitação, mesmo se o worker a omitir.
+// Raw results stay in the worker; attaches a deterministic notice to the
+// synthesis so the main assistant also gets the limitation, even if the
+// worker omits it.
 export function trackEmailPagination(readTools, { account = '', language = 'pt-BR' } = {}) {
   const coverage = emailQueryCoverage();
   const partial = new Map();

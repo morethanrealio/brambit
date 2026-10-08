@@ -1,13 +1,14 @@
-// Núcleo puro, ainda NÃO conectado ao runner/scheduler. Não faz I/O nem decide
-// se uma fonte foi lida: proveniência e confirmação de entrega são do chamador.
+// Pure core, NOT yet wired to the runner/scheduler. Does no I/O and doesn't
+// decide whether a source was read: provenance and delivery confirmation belong
+// to the caller.
 const TRACKING = /^(?:utm_[a-z0-9_]+|gclid|fbclid)$/i;
 export function curationArticleKey(value) {
   if (typeof value !== 'string' || value.length > 4096 || /[\u0000-\u0020]/.test(value)) return null;
   try {
     const u = new URL(value);
     if (!['http:', 'https:'].includes(u.protocol) || !u.hostname || u.username || u.password) return null;
-    // Não funde HTTP/HTTPS, www/apex, query de conteúdo ou versões de paper.
-    // Rotas hash de SPAs podem identificar artigos diferentes: preservá-las.
+    // Doesn't merge HTTP/HTTPS, www/apex, a content query string, or paper
+    // versions. SPA hash routes may identify different articles: preserve them.
     if (!(u.hostname==='mail.google.com'&&/^#all\/[a-f0-9]{8,40}$/i.test(u.hash)) && !/^#(?:\/|!)/.test(u.hash)) u.hash = '';
     for (const name of [...u.searchParams.keys()]) if (TRACKING.test(name)) u.searchParams.delete(name);
     u.searchParams.sort();
@@ -24,11 +25,12 @@ export function normalizeCurationSections(sections) {
   });
 }
 /**
- * `delivered` é um histórico CONFIRMADO pelo transporte/armazenamento, nunca
- * texto gerado nem declaração do modelo. Não grava nada: integração futura deve
- * registrar só depois do sucesso, distinguindo falha, timeout e resultado incerto.
- * Resultado mede contagem e repetição por URL; NÃO prova leitura, recência,
- * pertinência da seção, veracidade do resumo nem esgotamento das fontes.
+ * `delivered` is a history CONFIRMED by the transport/storage layer, never
+ * generated text nor a model statement. Writes nothing: any future integration
+ * must record only after success, distinguishing failure, timeout, and
+ * uncertain outcome. The result measures count and repetition by URL; it does
+ * NOT prove reading, recency, section relevance, summary accuracy, or source
+ * exhaustion.
  */
 export function evaluateCuration({ userId, routineId, sections, items, delivered, historyAvailable }) {
   if (typeof userId !== 'string' || !userId || typeof routineId !== 'string' || !routineId) throw Error('Escopo inválido.');
@@ -40,8 +42,8 @@ export function evaluateCuration({ userId, routineId, sections, items, delivered
   for (const row of delivered) {
     if (!row || row.userId !== userId || row.routineId !== routineId || row.confirmed !== true) continue;
     const key = curationArticleKey(row.url);
-    // Registro confirmado do nosso escopo com chave inválida não pode sumir
-    // silenciosamente e fazer o motor classificar repetição como novidade.
+    // A confirmed record from our own scope with an invalid key cannot
+    // disappear silently and make the engine classify a repeat as novelty.
     if (!key) return { state: 'blocked', reason: 'invalid_history', accepted: [], rejected: [], coverage: [], coverageSatisfied: false };
     previous.add(key);
   }
@@ -55,7 +57,7 @@ export function evaluateCuration({ userId, routineId, sections, items, delivered
       : counts.get(item.section) >= limits.get(item.section) ? 'section_limit' : null;
     if (reason) { rejected.push({ index, key, reason }); continue; }
     seen.add(key); counts.set(item.section, counts.get(item.section) + 1);
-    // Dados originais intactos, não reescreve URL de compra/acesso para entregar.
+    // Original data stays intact, doesn't rewrite a purchase/access URL for delivery.
     accepted.push({ index, key, section: item.section });
   }
   const coverage = specs.map(s => ({ ...s, count: counts.get(s.id), missing: Math.max(0, s.min - counts.get(s.id)) }));

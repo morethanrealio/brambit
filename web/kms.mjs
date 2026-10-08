@@ -1,12 +1,13 @@
-// Cliente AWS KMS mínimo, dependency-free (só node:crypto/http/https). Faz
-// Encrypt e Decrypt assinando na mão (SigV4) com as credenciais da IAM role do
-// EC2, obtidas via IMDSv2. Usado no boot pra desembrulhar a chave mestra do cofre
-// (envelope encryption): VAULT_KEY_ENC (blob cifrado pela CMK do KMS) volta a ser
-// a chave crua de 32 bytes, que nunca é persistida em texto puro.
+// Minimal, dependency-free AWS KMS client (only node:crypto/http/https). Does
+// Encrypt and Decrypt by signing by hand (SigV4) with the EC2 IAM role's
+// credentials, obtained via IMDSv2. Used at boot to unwrap the vault's
+// master key (envelope encryption): VAULT_KEY_ENC (a blob encrypted by the
+// KMS CMK) turns back into the raw 32-byte key, which is never persisted in
+// plaintext.
 //
-// Roda NO HOST do harness (que tem a instance role), não no container do gateway.
-// A conexão com o KMS é direta (não passa por proxy) — o endpoint regional é
-// alcançável da rede da instância.
+// Runs ON the harness HOST (which has the instance role), not in the
+// gateway's container. The connection to KMS is direct (doesn't go through a
+// proxy) — the regional endpoint is reachable from the instance's network.
 import crypto from 'crypto';
 import http from 'http';
 import https from 'https';
@@ -19,12 +20,13 @@ const IMDS = '169.254.169.254';
 const sha256hex = (d) => crypto.createHash('sha256').update(d).digest('hex');
 const hmac = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
 
-// Lê o corpo de uma resposta HTTP inteira. O listener de 'error' aqui NÃO é
-// enfeite: se o socket cai DEPOIS dos headers (reset de rede, servidor que
-// desiste no meio), o stream da resposta emite 'error'; um EventEmitter sem
-// listener de 'error' JOGA a exceção, e como isso acontece fora de qualquer
-// try/catch, virava uncaughtException e matava o processo inteiro (achado #22).
-// Com o listener, a falha de rede vira uma rejeição comum, que quem chamou trata.
+// Reads an entire HTTP response body. The 'error' listener here is NOT
+// decoration: if the socket drops AFTER the headers (network reset, server
+// giving up mid-way), the response stream emits 'error'; an EventEmitter
+// with no 'error' listener THROWS the exception, and since this happens
+// outside any try/catch, it used to become an uncaughtException and kill
+// the whole process (finding #22). With the listener, the network failure
+// becomes an ordinary rejection, which the caller handles.
 export function lerCorpo(res) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -34,7 +36,7 @@ export function lerCorpo(res) {
   });
 }
 
-// GET/PUT no serviço de metadados (IMDSv2). HTTP puro, timeout curto.
+// GET/PUT to the metadata service (IMDSv2). Plain HTTP, short timeout.
 function imds(method, path, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: IMDS, method, path, headers, timeout: 3000 }, (res) => {

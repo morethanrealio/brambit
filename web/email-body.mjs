@@ -1,7 +1,7 @@
 import { compile } from 'html-to-text';
 
-// O limite de leitura incide sobre conteúdo útil, nunca sobre CSS/markup.
-// Limites de parsing são separados e também tornam a leitura parcial.
+// The reading limit applies to useful content, never to CSS/markup.
+// Parsing limits are separate and also make reading partial.
 export const EMAIL_BODY_INPUT_LIMIT = 1_000_000;
 const OMITTED = '[conteúdo omitido por limite de leitura]';
 const clean = s => String(s || '').replace(/\r/g,'').replace(/\u00a0/g,' ')
@@ -40,8 +40,8 @@ const htmlText=compile({
       if (!url) return;
       const label=clean(labelOf(element) || element.attribs?.title).replace(/\s+/g,' ').slice(0,180);
       if (!builder.metadata.links.has(url)) builder.metadata.links.set(url,{label:label || 'Link no e-mail',url});
-      // URLs ficam no campo links: rodapés e redirecionamentos compridos não
-      // consomem novamente o limite do texto nem escondem o prazo da compra.
+      // URLs stay in the links field: long footers and redirects don't eat
+      // into the text limit again nor hide the purchase's deadline.
       if (!label) builder.addInline('[link no e-mail]');
     },
   },
@@ -62,7 +62,7 @@ export function normalizeEmailBody(value, mimeType='text/plain') {
 export function limitEmailBody(content, maxChars=6000) {
   const text=content.text || '';
   const unique=new Map((content.links || []).map(link=>[link.url,link]));
-  // Botões úteis à tarefa sobrevivem mesmo quando o template tem muito rodapé.
+  // Buttons useful to the task survive even when the template has a lot of footer.
   const relevant=link=>/acompanh|rastrei|tracking|track[-_/ ]|pedido|orders?|entrega|shipment/i.test(link.label+' '+link.url);
   const links=[...unique.values()].sort((a,b)=>Number(relevant(b))-Number(relevant(a)));
   return {body:text.slice(0,maxChars),chars:text.length,truncated:!!content.partial || text.length>maxChars,

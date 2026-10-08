@@ -1,30 +1,30 @@
-// Citação por referência: o modelo marca o fato com [n], a PLATAFORMA monta a
-// lista de fontes.
+// Citation by reference: the model marks the fact with [n], the PLATFORM builds the
+// source list.
 //
-// Por que existe (06/10/2026): o modelo escrevia a própria lista ("Fonte: X"),
-// copiando, encurtando e às vezes trocando nomes e endereços. O freio de
-// fundamentação (grounding-guard.mjs) então comparava texto com texto e errava
-// dos dois lados: acusava fonte real que o modelo resumiu e não tinha como
-// provar de onde vinha cada fato. Aqui a origem é garantida por construção:
-//  1. cada fonte que uma ferramenta de busca/leitura mostra ao modelo ganha um
-//     número fixo no turno (registroDeFontes), na própria saída da ferramenta;
-//  2. o modelo só escreve o número junto do fato;
-//  3. citarFontes troca número por fonte real: número que nenhuma ferramenta
-//     mostrou some, e a lista que a pessoa lê sai do registro, nunca da memória
-//     do modelo.
+// Why this exists (2026-10-06): the model used to write its own list ("Fonte: X"),
+// copying, shortening and sometimes swapping names and addresses. The grounding
+// guard (grounding-guard.mjs) then compared text to text and got it wrong on
+// both sides: it flagged a real source that the model had summarized and had no way to
+// prove where each fact came from. Here the origin is guaranteed by construction:
+//  1. each source that a search/read tool shows the model gets a fixed
+//     number in the turn (registroDeFontes), in the tool's own output;
+//  2. the model only writes the number next to the fact;
+//  3. citarFontes swaps the number for the real source: a number that no tool
+//     showed disappears, and the list the person reads comes from the registry, never from the
+//     model's memory.
 //
-// Também moram aqui os outros consertos puros do texto final (marcador órfão,
-// tool-call vazado, pontuação grudada em link), que antes ficavam no server.mjs.
-// Módulo puro: sem I/O, sem banco.
+// The other pure fixes to the final text also live here (orphan marker,
+// leaked tool-call, punctuation stuck to a link), which used to live in server.mjs.
+// Pure module: no I/O, no database.
 import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
 
 const ROTULO = { 'pt-BR': 'Fontes:', en: 'Sources:', es: 'Fuentes:' };
 const rotuloDe = language => ROTULO[tagIdioma(language)] || ROTULO[IDIOMA_PADRAO] || 'Fontes:';
 
 /**
- * Registro das fontes que o modelo viu neste turno. A mesma URL recebe sempre o
- * mesmo número, então duas buscas que acham a mesma página não geram duas
- * fontes. Só entra endereço http(s): sem endereço, a fonte não serve de prova.
+ * Registry of the sources the model saw in this turn. The same URL always receives the
+ * same number, so two searches that find the same page don't generate two
+ * sources. Only http(s) addresses are included: without an address, the source doesn't serve as proof.
  */
 export function registroDeFontes() {
   const lista = [];
@@ -43,20 +43,20 @@ export function registroDeFontes() {
   };
 }
 
-// ——— marcadores ———————————————————————————————————————————————
-// Mexer no texto final acerta 100% das respostas de todo mundo, então a troca
-// de marcador é cercada por portões, e fora deles o texto sai byte a byte:
-//  - o marcador tem que estar DENTRO da frase, nunca abrindo linha (senão a
-//    gente apagaria o menu que o próprio assistente ofereceu: "[1] Sim");
-//  - tem que parecer citação: números a partir de 1 (intervalo "[0, 1]" fica) e
-//    nada de dígito logo depois (DDD "[11] 98888-7777" fica);
-//  - bloco de código (``` ou `) passa intacto: lá "[0]" é código.
+// ——— markers ———————————————————————————————————————————————
+// Touching the final text affects 100% of everyone's responses, so marker
+// swapping is fenced by gates, and outside them the text comes out byte for byte:
+//  - the marker has to be INSIDE the sentence, never opening a line (otherwise
+//    we'd erase the menu the assistant itself offered: "[1] Sim");
+//  - it has to look like a citation: numbers starting from 1 (the range "[0, 1]" stays) and
+//    no digit right after (area code "[11] 98888-7777" stays);
+//  - code block (``` or `) passes through intact: there "[0]" is code.
 const CITACAO = String.raw`\[\s*[1-9]\d*(?:\s*[,;]\s*[1-9]\d*)*\s*\]`;
 const RE_CITACAO = new RegExp(
   String.raw`[ \t]*(?<![\w\]])(?:\(\s*${CITACAO}\s*\)|${CITACAO})(?!\()[ \t]*`,
   'g',
 );
-// Na citação por referência o grupo "[1][3]" é um marcador só.
+// In reference citation, the group "[1][3]" is a single marker.
 const RE_GRUPO = new RegExp(
   String.raw`[ \t]*(?<![\w\]])(?:\(\s*${CITACAO}\s*\)|${CITACAO}(?:[ \t]*${CITACAO})*)(?!\()[ \t]*`,
   'g',
@@ -64,8 +64,8 @@ const RE_GRUPO = new RegExp(
 const RE_LISTA = /(^|\n)\s*(fontes|sources|fuentes)\s*:/i;
 const RE_ITEM_LISTA = /^\s*\[\d+\]\s+\S.*https?:\/\//m;
 
-// Lixo que não é conteúdo em nenhum caso: "[cite: 1]" e o identificador da
-// própria chamada de tool que alguns modelos usam como citação.
+// Junk that is never content: "[cite: 1]" and the tool call's own
+// identifier that some models use as a citation.
 function limparLixo(s) {
   return s.replace(/[ \t]*\[cite:\s*\d+(?:[.,;\s]+\d+)*\s*\][ \t]*/gi, (m, off, str) => {
     const next = str[off + m.length] || '';
@@ -73,13 +73,13 @@ function limparLixo(s) {
   }).replace(/default_api[:.][A-Za-z0-9_.-]+(?:\s*:\s*\d+)?/g, '');
 }
 
-// Abrindo linha (com ou sem bullet/título markdown) é item de lista ou menu.
+// Opening a line (with or without a markdown bullet/heading) is a list or menu item.
 function abreLinha(str, off, m) {
   const linha = str.slice(str.lastIndexOf('\n', off - 1) + 1, off + m.length - m.trimStart().length);
   return /^\s*(?:[-*•>#]+\s*)*$/.test(linha);
 }
 
-// Espaço do marcador removido: só volta se ele separava duas palavras.
+// Space from the removed marker: only comes back if it was separating two words.
 function semMarcador(m, off, str) {
   const antes = str[off - 1] || '';
   const depois = str[off + m.length] || '';
@@ -87,8 +87,8 @@ function semMarcador(m, off, str) {
   return ' ';
 }
 
-// Aplica fn só na prosa: fora de ``` (cerca sem fechamento conta como aberta até
-// o fim, caso de resposta cortada no teto) e fora de `inline`.
+// Applies fn only to prose: outside of ``` (an unclosed fence counts as open until
+// the end, the case of a response cut off at the cap) and outside of `inline`.
 function naProsa(texto, fn) {
   const partes = String(texto).split(/(```[\s\S]*?```)/g);
   const abertaEm = partes.findIndex((p, i) => i % 2 === 0 && p.includes('```'));
@@ -98,8 +98,8 @@ function naProsa(texto, fn) {
 const prosaDe = texto => { const out = []; naProsa(texto, p => { out.push(p); return p; }); return out.join('\n'); };
 
 /**
- * Turno SEM registro de fontes (nenhuma busca nossa rodou, ou só a busca nativa
- * do Gemini): tira marcador órfão. Com lista no texto, o [n] resolve e fica.
+ * Turn WITHOUT a source registry (none of our searches ran, or only Gemini's
+ * native search did): removes orphan markers. With a list in the text, the [n] resolves and stays.
  */
 export function stripCitationMarkers(s) {
   const temLista = (t) => RE_LISTA.test(t) || RE_ITEM_LISTA.test(t);
@@ -117,9 +117,9 @@ export function stripCitationMarkers(s) {
 
 const numerosDe = m => (m.match(/\d+/g) || []).map(Number);
 
-// Lista que o próprio modelo escreveu: a ÚLTIMA linha "Fontes:" fora de código e
-// os itens logo abaixo dela (linhas com [n], bullet ou endereço; uma linha em
-// branco só não fecha a lista se o próximo é item). Devolve as posições no texto.
+// List the model wrote itself: the LAST "Fontes:" line outside of code and
+// the items right below it (lines with [n], bullet or address; a blank
+// line only doesn't close the list if the next one is an item). Returns the positions in the text.
 const RE_CABECA = /^[ \t>*_#-]*(?:fontes|sources|fuentes)[\s*_]*:/i;
 const RE_ITEM = /^\s*(?:[-*•+]|\d+[.)]|\[\d+\])\s+\S|https?:\/\//;
 function blocoDoModelo(texto) {
@@ -143,9 +143,9 @@ function blocoDoModelo(texto) {
   return { ini, fim: end, texto: texto.slice(ini, end) };
 }
 const semPontaFinal = u => u.replace(/[.,;:!?)\]>*_]+$/, '');
-// A lista do modelo só pode ser trocada pela nossa se ela fala das MESMAS
-// fontes: todo endereço dela está no registro, e todo "[n] ... url" usa o
-// mesmo número que o registro deu àquele endereço.
+// The model's list can only be replaced by ours if it talks about the SAME
+// sources: every address in it is in the registry, and every "[n] ... url" uses the
+// same number the registry gave that address.
 function trocavel(bloco, registro) {
   const conhecidas = new Map();
   for (let n = 1; n <= registro.size; n++) conhecidas.set(registro.get(n).uri, n);
@@ -160,24 +160,24 @@ function trocavel(bloco, registro) {
 }
 
 /**
- * Troca os [n] do texto pelas fontes reais do registro do turno.
- *  - número que alguma ferramenta mostrou fica, e a fonte entra na lista;
- *  - número que nenhuma ferramenta mostrou some (não existe fonte pra ele);
- *  - a lista "Fontes:" é montada AQUI, só com o que foi citado. Se o modelo
- *    escreveu a dele com as mesmas fontes, a nossa entra no lugar dela; se a
- *    dele traz outra coisa (numeração própria, endereço que o registro não
- *    conhece), o texto fica como ele escreveu, porque os números apontam pra
- *    lista dele;
- *  - sem nenhuma citação válida, nada é anexado e a linha "Fonte: X" que o
- *    modelo tenha escrito fica intacta.
- * Na lista, as fontes citadas viram 1, 2, 3... na ordem em que aparecem no
- * texto, e todas entram (o registro do turno pode passar de 100 fontes e o
- * modelo cita só algumas). Exceção: se sobrou no texto um [n] que os portões
- * não trocaram (abrindo linha, colado em dígito) e esse n existe no registro,
- * a numeração do registro fica, pra esse [n] não passar a apontar pra outra
- * linha da lista.
- * `comLista: false` só troca os marcadores, com os números do registro (uso:
- * resumo do subagente, que volta pro modelo e é citado de novo).
+ * Swaps the [n] in the text for the real sources from the turn's registry.
+ *  - a number some tool showed stays, and the source enters the list;
+ *  - a number no tool showed disappears (there's no source for it);
+ *  - the "Fontes:" list is built HERE, only with what was cited. If the model
+ *    wrote its own with the same sources, ours takes its place; if
+ *    its own brings something else (its own numbering, an address the registry doesn't
+ *    know), the text stays as it wrote it, because the numbers point to
+ *    its list;
+ *  - with no valid citation, nothing is appended and the "Fonte: X" line the
+ *    model may have written stays intact.
+ * In the list, the cited sources become 1, 2, 3... in the order they appear in the
+ * text, and all of them are included (the turn's registry can have over 100 sources and the
+ * model cites only some). Exception: if an [n] is left in the text that the gates
+ * didn't swap (opening a line, stuck to a digit) and that n exists in the registry,
+ * the registry's numbering stays, so that [n] doesn't end up pointing to another
+ * line in the list.
+ * `comLista: false` only swaps the markers, with the registry's numbers (used for:
+ * sub-agent summary, which goes back to the model and is cited again).
  * @returns {string}
  */
 export function citarFontes(texto, registro, { language, comLista = true } = {}) {
@@ -187,10 +187,10 @@ export function citarFontes(texto, registro, { language, comLista = true } = {})
   if (bloco && !trocavel(bloco.texto, registro)) return naProsa(base, limparLixo);
   const antes = bloco ? base.slice(0, bloco.ini) : base;
   const depois = bloco ? base.slice(bloco.fim) : '';
-  // Ordem de inserção = ordem da primeira citação no texto.
+  // Insertion order = order of the first citation in the text.
   const citados = new Set();
   let escapou = false;
-  // O número do registro vai entre \u0000 e \u0001 até decidir a numeração final.
+  // The registry number goes between \u0000 and \u0001 until the final numbering is decided.
   const trocar = (p) => limparLixo(p).replace(RE_GRUPO, (m, off, str) => {
     if (abreLinha(str, off, m) || /\d/.test(str[off + m.length] || '')) {
       if (numerosDe(m).some(n => registro.get(n))) escapou = true;
@@ -211,7 +211,7 @@ export function citarFontes(texto, registro, { language, comLista = true } = {})
     `[${numerosDe(g).map(n => novo.get(n)).sort((a, b) => a - b).join(', ')}]`);
   const corpo = numerar(corpoBruto);
   const resto = numerar(restoBruto);
-  // Nenhuma citação válida: o texto volta como veio, só sem marcador órfão.
+  // No valid citation: the text goes back as it came, just without the orphan marker.
   if (!citados.size) return bloco ? naProsa(base, limparLixo) : corpo;
   if (!comLista) return [corpo, resto].filter(Boolean).join('\n\n');
   const linhas = ordem.map(n => `[${novo.get(n)}] ${registro.get(n).title} — ${registro.get(n).uri}`);
@@ -220,10 +220,10 @@ export function citarFontes(texto, registro, { language, comLista = true } = {})
 
 // ——— outros consertos do texto final ———————————————————————————
 
-// Bloco <tool_call>…</tool_call> (formato GLM: nome + pares <arg_key>/<arg_value>)
-// sai inteiro. Sem fechamento, sai até o último </arg_value> do bloco ou, sem
-// argumentos, até o fim da linha da tag. Espaço em volta do buraco vira um
-// espaço (ou um parágrafo, se havia quebra de linha).
+// The <tool_call>…</tool_call> block (GLM format: name + <arg_key>/<arg_value> pairs)
+// comes out whole. Without a closing tag, it comes out up to the block's last </arg_value> or, with no
+// arguments, up to the end of the tag's line. Space around the hole becomes a
+// space (or a paragraph, if there was a line break).
 export function removerToolCallVazado(s) {
   if (!s.includes('<tool_call>')) return s;
   const BURACO = '\u0000';
@@ -243,11 +243,11 @@ export function removerToolCallVazado(s) {
   });
 }
 
-// Ponto final colado numa URL vira 404: o linkificador do WhatsApp/Telegram (e o
-// nosso, no web) engole o "." dentro do href. Não controlamos o cliente, então
-// tiramos a pontuação da frase quando ela está grudada num link no fim da linha.
-// Só mexe em URL COM caminho (tem "/"), pra não estragar frase que termina em
-// nome de arquivo ("veja o config.yaml."), e ignora link markdown (fecha em ")").
+// A period stuck to a URL turns into a 404: the WhatsApp/Telegram linkifier (and
+// ours, on web) swallows the "." inside the href. We don't control the client, so
+// we strip the punctuation from the sentence when it's stuck to a link at the end of the line.
+// Only touches a URL WITH a path (has "/"), so it doesn't break a sentence that ends in a
+// file name ("veja o config.yaml."), and ignores markdown links (close with ")").
 export function desgrudarPontuacaoDeLink(s) {
   return String(s ?? '').replace(
     /((?:https?:\/\/|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\/)[^\s<>()[\]]*[^\s<>()[\].,;:!?])[.,;:!?]+(?=\s*$)/gm,
@@ -256,17 +256,17 @@ export function desgrudarPontuacaoDeLink(s) {
 }
 
 /**
- * Rede de segurança do texto FINAL do assistente, independente de provider:
- *  1) tira marcação crua de tool-call que escapa quando o parser do modelo falha;
- *  2) citações: com registro de fontes do turno, troca [n] por fonte real
- *     (citarFontes); sem registro mas com busca no turno, tira marcador órfão.
- * O mascaramento de segredo e o desgrude de pontuação ficam com quem chama
- * (o mascarador mora num módulo com banco).
+ * Safety net for the assistant's FINAL text, independent of provider:
+ *  1) strips raw tool-call markup that leaks when the model's parser fails;
+ *  2) citations: with the turn's source registry, swaps [n] for the real source
+ *     (citarFontes); without a registry but with a search in the turn, strips the orphan marker.
+ * Secret masking and punctuation un-sticking are left to the caller
+ * (the masker lives in a module with database access).
  */
 export function limparTextoFinal(t, { comFontes = false, fontes = null, language } = {}) {
-  // Tira só o pedaço técnico vazado; o texto pro usuário antes E depois dele
-  // fica. Antes cortava tudo do primeiro <tool_call> em diante e perdia a
-  // resposta que vinha depois (29/09/2026).
+  // Strips only the leaked technical piece; the text for the user before AND after it
+  // stays. Before, it used to cut everything from the first <tool_call> onward and lost the
+  // response that came after it (2026-09-29).
   let s = removerToolCallVazado(String(t ?? ''));
   // Limpa fragmentos soltos de arg (caso o modelo emita sem o <tool_call> de abertura).
   s = s.replace(/<\/?(?:tool_call|arg_key|arg_value)>/g, '');

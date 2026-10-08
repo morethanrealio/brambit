@@ -1,17 +1,17 @@
-// Atendimento ao público: um assistente do dono responde a quem NÃO é o dono
-// (cliente que chega pelo WhatsApp da instalação, sem conta). Desenho em
-// docs do projeto "atendimento ao público" (v2, 05/10/2026).
+// Public support: an owner's assistant answers someone who is NOT the owner
+// (a customer who arrives via the installation's WhatsApp, without an account). Design in
+// the "public support" project docs (v2, 2026-10-05).
 //
-// O turno daqui é PRÓPRIO, não o turno do dono com coisas tiradas. O isolamento
-// vem da construção: este módulo não importa nem recebe nada que leia a memória,
-// os e-mails, a agenda, os arquivos, os outros canais ou as rotinas do dono. As
-// únicas ferramentas são as do próprio contato (lembrar/consultar) e as de plugin
-// marcadas `publico: true`. Do agente, o turno lê só o nome: instruções, perfil e
-// resumo do agente podem ter dado pessoal do dono, então o atendimento tem as
-// instruções dele em public_agents.
+// The turn here is its OWN, not the owner's turn with things removed. Isolation
+// comes from the construction: this module doesn't import nor receive anything that reads memory,
+// emails, calendar, files, other channels or the owner's routines. The
+// only tools are the contact's own (lembrar/consultar) and the plugin ones
+// marked `publico: true`. From the agent, the turn reads only the name: instructions, profile and
+// agent summary may have the owner's personal data, so support has its
+// own instructions in public_agents.
 //
-// Contato = (assistente, canal, endereço). O endereço (telefone) fica cifrado pelo
-// cofre e a busca é pelo índice cego; sem cofre o modo público não liga.
+// Contact = (assistant, channel, address). The address (phone) is encrypted via the
+// vault and the lookup is by blind index; without the vault, public mode doesn't turn on.
 import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
 import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
@@ -20,7 +20,7 @@ import { normalizarSaidas, textoDasSaidas } from './publico-saidas.mjs';
 export const CANAIS_PUBLICOS = ['whatsapp'];
 export const HISTORICO_MAX = 40;      // mensagens do contato que voltam pro modelo
 export const MENSAGEM_MAX = 4000;     // chars da mensagem recebida
-export const ESTADO_MAX_CHAVES = 50;  // memória curta por contato
+export const ESTADO_MAX_CHAVES = 50;  // short-term memory per contact
 export const ESTADO_MAX_VALOR = 500;
 export const PASSOS_MAX = 8;
 export const LIMITE_POR_HORA = 30;    // mensagens de um contato por hora que chegam ao modelo
@@ -65,7 +65,7 @@ const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0,
 const chaveDoContato = (canal, endereco) => indiceCego(`${canal}:${endereco}`, 'contato-publico');
 const COLUNAS_AGENTE = 'agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd::float AS teto_diario_usd';
 
-// fuso: o "dia" do teto de gasto começa à meia-noite deste fuso.
+// timezone: the "day" of the spend cap starts at midnight of this timezone.
 export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sao_Paulo' } = {}) {
   async function transacao(fn) {
     const c = await pool.connect();
@@ -76,8 +76,8 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
   return {
     init: () => pool.query(esquemaPublico(S)),
 
-    // Só o dono do agente configura: o UPDATE/INSERT confere agents.user_id.
-    // Campo ausente fica como está; tetoDiarioUsd: null tira o teto.
+    // Only the agent's owner configures: the UPDATE/INSERT checks agents.user_id.
+    // A missing field stays as is; tetoDiarioUsd: null removes the cap.
     async configurar(agentId, userId, { ativo, instrucoes, retencaoDias, limitePorHora, tetoDiarioUsd } = {}) {
       const { rows } = await pool.query(
         `INSERT INTO ${S}.public_agents (agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd)
@@ -121,17 +121,17 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em, bloqueadoEm: r.bloqueado_em };
     },
 
-    // "parar": o assistente para de responder esse contato até ele mandar "voltar".
+    // "parar": the assistant stops answering this contact until they send "voltar".
     async parar(contatoId, parado) {
       await pool.query(`UPDATE ${S}.public_contacts SET parado_em = ${parado ? 'now()' : 'NULL'} WHERE id = $1`, [contatoId]);
     },
 
-    // Bloqueio é do dono (só ele desfaz); "parar" é do contato.
+    // Blocking is the owner's (only they undo it); "parar" is the contact's.
     async bloquear(contatoId, bloqueado) {
       await pool.query(`UPDATE ${S}.public_contacts SET bloqueado_em = ${bloqueado ? 'now()' : 'NULL'} WHERE id = $1`, [contatoId]);
     },
 
-    // Mensagens do contato na última hora (as que foram ao modelo ficam gravadas).
+    // Contact's messages in the last hour (the ones sent to the model are recorded).
     async mensagensNaUltimaHora(contatoId) {
       const { rows } = await pool.query(
         `SELECT count(*)::int AS n FROM ${S}.public_messages
@@ -139,7 +139,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return rows[0].n;
     },
 
-    // Marca o aviso de limite; devolve true só pra quem marcou agora (1 aviso por hora).
+    // Marks the limit warning; returns true only for whoever marked it just now (1 warning per hour).
     async avisarLimite(contatoId) {
       const { rows } = await pool.query(
         `UPDATE ${S}.public_contacts SET limite_avisado_em = now()
@@ -147,7 +147,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return rows.length > 0;
     },
 
-    // Custo de modelo do atendimento público deste assistente desde a meia-noite (fuso).
+    // This assistant's public-support model cost since midnight (timezone).
     async gastoDoDia(agentId) {
       const { rows } = await pool.query(
         `SELECT coalesce(sum(cost_usd), 0)::float AS usd FROM ${S}.usage_events
@@ -172,7 +172,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       };
     },
 
-    // Apaga mensagens e anotações e mantém o contato (o bloqueio sobrevive).
+    // Deletes messages and notes and keeps the contact (the block survives).
     async apagarConversa(contatoId) {
       await transacao(async (c) => {
         await c.query(`DELETE FROM ${S}.public_messages WHERE contact_id = $1`, [contatoId]);
@@ -180,8 +180,8 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       });
     },
 
-    // Visão do dono. Toda consulta daqui confere o dono no próprio SQL
-    // (agents.user_id), então um id de outra conta devolve vazio, e não o dado.
+    // Owner's view. Every query here checks the owner in its own SQL
+    // (agents.user_id), so an id from another account returns empty, not the data.
     async agentesDoDono(userId) {
       const { rows } = await pool.query(
         `SELECT a.id AS agent_id, a.name AS nome, p.agent_id IS NOT NULL AS configurado, coalesce(p.ativo, false) AS ativo,
@@ -200,8 +200,8 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return !!rows[0];
     },
 
-    // Contatos de um assistente do dono, do mais recente pro mais antigo.
-    // antes = ultima_em do último da página anterior.
+    // An owner's assistant's contacts, from newest to oldest.
+    // antes = ultima_em of the last one on the previous page.
     async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
         `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
@@ -213,7 +213,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
         paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens }));
     },
 
-    // Conversa de um contato do dono, em ordem; antes = id da mensagem mais velha já vista.
+    // An owner's contact's conversation, in order; antes = id of the oldest message already seen.
     async conversaDoDono(userId, contatoId, { antes = null, limite = CONVERSA_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
         `SELECT id, role, content, criado_em FROM (
@@ -225,16 +225,16 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return rows.map((r) => ({ id: Number(r.id), role: r.role, content: r.content, criadoEm: r.criado_em }));
     },
 
-    // LGPD: apaga o contato, as mensagens e as anotações (cascata).
+    // LGPD: deletes the contact, the messages and the notes (cascade).
     async apagarContato(contatoId) {
       const { rowCount } = await pool.query(`DELETE FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
       return rowCount > 0;
     },
 
-    // Retenção (retencao_dias de cada assistente): apaga mensagem e anotação mais
-    // velhas que o prazo e o contato sem conversa no prazo (com o telefone junto).
-    // Contato bloqueado fica: sem a linha, o bloqueio sumiria e ele voltaria a ser atendido.
-    // Em lotes, pra não segurar o banco; roda até esvaziar.
+    // Retention (retencao_dias of each assistant): deletes message and note
+    // older than the deadline and a contact with no conversation within the deadline (along with the phone).
+    // A blocked contact stays: without the row, the block would disappear and they'd go back to being served.
+    // In batches, so as not to hold up the database. Runs until empty.
     async limparVencidos() {
       const total = { mensagens: 0, anotacoes: 0, contatos: 0 };
       const lote = async (sql) => { let n = 0, r; do { r = await pool.query(sql, []); n += r.rowCount ?? r.affectedRows ?? 0; } while ((r.rowCount ?? r.affectedRows) === LIMPEZA_LOTE); return n; };
@@ -330,9 +330,9 @@ export const RESPOSTA_VOLTOU = 'Oi de novo! Pode mandar sua mensagem.';
 export const RESPOSTA_APAGADO = 'Apaguei as mensagens e as anotações desta conversa. Se você escrever de novo, começamos do zero.';
 export const RESPOSTA_LIMITE = 'Recebi muitas mensagens em pouco tempo. Daqui a pouco volto a responder.';
 
-// Comandos do contato, resolvidos ANTES do modelo (o modelo pode errar ou ser
-// convencido a ignorar; isto não). Só a mensagem inteira conta: "quero parar de
-// receber promoção" vai pro modelo, "parar" sozinho para.
+// Contact commands, resolved BEFORE the model (the model can make mistakes or be
+// talked into ignoring them; this can't). Only the whole message counts: "I want to stop
+// receiving promos" goes to the model, "stop" alone stops it.
 const COMANDOS = {
   parar: ['parar', 'pare', 'sair', 'stop', 'unsubscribe'],
   voltar: ['voltar', 'start'],
@@ -345,32 +345,32 @@ export function comandoDoContato(mensagem) {
   return null;
 }
 
-// deps (o servidor injeta):
+// deps (the server injects):
 //  store: createPublicoStore.
-//  makeProvider({userId,agentId,contatoId}) → provider já preso ao gasto do dono.
-//  recordUsage(usages,{userId,agentId,contatoId}) → grava o uso do turno.
-//  saldo(userId) → {over}. over=true: responde a mensagem neutra, sem chamar modelo.
-//  ferramentas: porta de ferramentas (doTurno/vetar/instrucoes); só entram as
-//   tools com publico:true, e doTurno recebe o contato e estado()/lembrar() dele.
-//  agora() → data e hora por extenso pro prompt.
-//  gastoDoDia(agentId) → US$ do atendimento público hoje (padrão: store.gastoDoDia).
-//  ganchos: porta atendimentoPublico de plugin (roteiro de quem atende), opcional:
-//   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes troca as do
-//    dono só neste turno; pular com saidas responde sem chamar o modelo (abertura,
-//    resposta fixa).
-//   depoisDoModelo({...ctx, texto}) → {saidas?}: troca o texto do modelo por
-//    saídas ricas (publico-saidas.mjs).
+//  makeProvider({userId,agentId,contatoId}) → provider already tied to the owner's spend.
+//  recordUsage(usages,{userId,agentId,contatoId}) → records the turn's usage.
+//  saldo(userId) → {over}. over=true: answers with a neutral message, without calling the model.
+//  ferramentas: tools port (doTurno/vetar/instrucoes); only tools with
+//   publico:true are included, and doTurno receives the contact and its estado()/lembrar().
+//  agora() → date and time spelled out, for the prompt.
+//  gastoDoDia(agentId) → US$ of public support today (default: store.gastoDoDia).
+//  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
+//   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes replaces the
+//    owner's only for this turn; pular with saidas answers without calling the model (opening,
+//    fixed response).
+//   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
+//    rich outputs (publico-saidas.mjs).
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
-//    primeira (histórico vazio), estado(), lembrar(chave,valor)}.
-//   Gancho que falha ou devolve lixo é ignorado: o turno segue como sem plugin.
+//    primeira (empty history), estado(), lembrar(chave,valor)}.
+//   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
-// O turno devolve {text, saidas?, motivo?, userId, agentId, contatoId}. Com
-// saidas, text é a versão em texto delas (canal que não entrega o tipo rico).
+// The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
+// saidas, text is their text version (for a channel that doesn't deliver the rich type).
 //
-// Ordem dos freios, antes do modelo: contato bloqueado pelo dono (silêncio) →
-// comando do contato (parar/voltar/apagar) →
-// contato parado (silêncio, nada gravado) → limite por hora do contato (1 aviso
-// por hora, depois silêncio) → saldo do dono → teto diário do assistente.
+// Order of the guards, before the model: contact blocked by the owner (silence) →
+// contact command (stop/resume/delete) →
+// stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
+// per hour, then silence) → owner's balance → assistant's daily cap.
 export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, log = console }) {
   async function gancho(nome, ctx) {
     if (typeof ganchos?.[nome] !== 'function') return null;
@@ -378,7 +378,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     catch (e) { log.error?.(`[publico] gancho ${nome} falhou:`, e?.message ?? e); return null; }
   }
 
-  const filas = new Map(); // contato (assistente+canal+endereço) → turno em andamento (1 por contato)
+  const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
   function emFila(id, fn) {
     const antes = filas.get(id) || Promise.resolve();
     const atual = antes.catch(() => {}).then(fn);
@@ -390,8 +390,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   function registro(agente, contato, mensagem) {
     const reg = new ToolRegistry();
     for (const t of ferramentasDoContato(store, contato.id)) reg.add(t);
-    // estado/lembrar já presos a este contato: a tool do plugin guarda o que precisa
-    // pro próximo turno (ex.: a lista que mostrou) sem poder ler outro contato.
+    // estado/lembrar already tied to this contact: the plugin's tool stores what it needs
+    // for the next turn (e.g. the list it showed) without being able to read another contact.
     const doPlugin = (ferramentas?.doTurno({ userId: agente.user_id, agentId: agente.agent_id, contato: { ...contato },
       estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) }) || [])
       .filter((t) => t?.publico === true && !reg.map.has(t.name));
@@ -408,15 +408,15 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     const agente = await store.agente(agentId);
     if (!agente?.ativo) return { text: null, motivo: 'inativo' };
     const msg = texto(mensagem, MENSAGEM_MAX);
-    // O contato é lido DENTRO da fila: um "apagar meus dados" na frente apaga a
-    // linha, e o turno seguinte começa num contato novo.
+    // The contact is read INSIDE the queue: an "erase my data" ahead of it deletes
+    // the row, and the next turn starts on a new contact.
     return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
       const contato = await store.contato(agentId, canal, endereco);
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
       const comando = comandoDoContato(msg);
-      // Bloqueado pelo dono: silêncio e nada gravado. O pedido de apagar ainda
-      // vale (apaga a conversa), mas o contato fica, senão o bloqueio sumiria junto.
+      // Blocked by the owner: silence and nothing recorded. The delete request still
+      // applies (deletes the conversation), but the contact stays, otherwise the block would disappear with it.
       if (contato.bloqueadoEm) {
         if (comando === 'apagar') await store.apagarConversa(contato.id);
         return { text: null, motivo: 'bloqueado', ...ident };

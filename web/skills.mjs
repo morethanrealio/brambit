@@ -1,10 +1,10 @@
-// ── Skills: comportamento/conhecimento puro, sem dado vivo nem runtime ──
-// O degrau mais leve da escada de primitivas (Skill / Space / App). Uma Skill =
-// um "SKILL.md": instruções em linguagem natural (`body`) + um gatilho de
-// "quando usar" (`trigger`). SEM dado compartilhado (isso é Space) e SEM
-// runtime/UI (isso é App). Autorada pelo usuário, instalável POR ASSISTENTE
-// (progressive disclosure no prompt), e (Fase 2) compartilhável entre conexões.
-// Ver projetos/skill-implementacao.md.
+// ── Skills: pure behavior/knowledge, no live data nor runtime ──
+// The lightest step of the primitive ladder (Skill / Space / App). A Skill =
+// a "SKILL.md": natural-language instructions (`body`) + a "when to
+// use" trigger (`trigger`). WITHOUT shared data (that's a Space) and WITHOUT
+// runtime/UI (that's an App). Authored by the user, installable PER ASSISTANT
+// (progressive disclosure in the prompt), and (Phase 2) shareable between connections.
+// See projetos/skill-implementacao.md.
 
 import { comAviso } from './recorte.mjs';
 import {
@@ -15,10 +15,10 @@ import {
 } from './db.mjs';
 import { sandboxEnabled, sandboxShell, sandboxWrite } from './sandbox.mjs';
 
-// Tools do assistente pra ESTE usuário/assistente (entram no registry por
-// requisição). `instalar_skill` e `compartilhar_skill` (Fase 2) saem daqui e são
-// registradas GATED em server.mjs. `threadId` (opcional) é o que deixa a skill
-// lida ficar EM CURSO na conversa — ver skillsContext.
+// Assistant tools for THIS user/assistant (enter the registry on request).
+// `instalar_skill` and `compartilhar_skill` (Phase 2) come out of here and are
+// registered GATED in server.mjs. `threadId` (optional) is what lets the read
+// skill stay IN PROGRESS in the conversation — see skillsContext.
 export function skillsTools(userId, agentId, threadId = null) {
   return [
     {
@@ -63,7 +63,7 @@ export function skillsTools(userId, agentId, threadId = null) {
             quando_usar: s.trigger || undefined,
             origem: s.isOwn ? 'sua' : `de ${s.ownerName}`,
           })),
-          // autoradas por você que NÃO estão instaladas neste assistente
+          // authored by you that are NOT installed in this assistant
           autoradas_nao_instaladas: authored
             .filter((s) => !installedIds.has(s.id))
             .map((s) => ({ nome: s.title, quando_usar: s.trigger || undefined })),
@@ -87,14 +87,14 @@ export function skillsTools(userId, agentId, threadId = null) {
         if (r.error === 'ambiguo') return `Tem mais de uma Skill parecida: ${r.options.map((o) => `"${o.title}" (de ${o.owner})`).join(', ')}. Diga o dono.`;
         if (r.error) return `Não consegui abrir a Skill (${r.error}).`;
         const s = r.skill;
-        // Uso da skill = ela foi ACIONADA (o gatilho bateu e o assistente puxou o
-        // SKILL.md). Conta pro /metrics. Fire-and-forget, nunca bloqueia a leitura.
+        // Skill use = it was TRIGGERED (the trigger matched and the assistant pulled the
+        // SKILL.md). Counts for /metrics. Fire-and-forget, never blocks the read.
         bumpSkillUse(s.id, userId).catch(() => {});
-        // ...e passa a valer NOS PRÓXIMOS TURNOS desta conversa: o corpo entra no
-        // prompt pelo skillsContext enquanto o procedimento estiver em curso. Sem
-        // isto a instrução morria no fim deste turno (o resultado da tool não vai
-        // pro histórico) e o modelo seguia o fluxo de memória, imitando as
-        // próprias mensagens anteriores.
+        // ...and starts applying in the NEXT TURNS of this conversation: the body enters the
+        // prompt via skillsContext while the procedure is in progress. Without
+        // this the instruction would die at the end of this turn (the tool's result doesn't go
+        // into the history) and the model would follow the memory flow, imitating its
+        // own earlier messages.
         activateSkillInThread(threadId, s.id).catch(() => {});
         const temScript = !!(s.script && s.script.trim());
         return JSON.stringify({
@@ -212,9 +212,9 @@ export function skillsTools(userId, agentId, threadId = null) {
   ];
 }
 
-// Tool GATED (adiciona comportamento ao assistente) — registrada via addGated em
-// server.mjs. Reversível (dá pra desinstalar) → 👍-confirmável. Instalar =
-// carregar instruções de alguém no seu assistente; o 👍 deixa o dono ciente.
+// GATED tool (adds behavior to the assistant) — registered via addGated in
+// server.mjs. Reversible (can be uninstalled) → 👍-confirmable. Installing =
+// loading someone's instructions into your assistant; the 👍 makes the owner aware.
 export function skillInstallTool(userId, agentId) {
   return {
     name: 'instalar_skill',
@@ -245,10 +245,10 @@ export function skillInstallTool(userId, agentId) {
   };
 }
 
-// Tool GATED (alcança outra pessoa) — registrada via addGated em server.mjs.
-// Compartilhar = marcar a Skill SUA como visível pras suas conexões e avisar o
-// contato que ela está disponível pra instalar. Reversível (dá pra voltar a
-// privada / o contato pode não instalar) → 👍-confirmável, igual convidar_para_espaco.
+// GATED tool (reaches another person) — registered via addGated in server.mjs.
+// Sharing = marking YOUR Skill as visible to your connections and notifying the
+// contact that it's available to install. Reversible (can go back to
+// private / the contact might not install it) → 👍-confirmable, same as convidar_para_espaco.
 export function skillShareTool(userId, agentId) {
   return {
     name: 'compartilhar_skill',
@@ -271,7 +271,7 @@ export function skillShareTool(userId, agentId) {
       if (who.error === 'contato_nao_encontrado') return `Não achei "${contato}" entre seus contatos conectados. Conecte-se primeiro.`;
       if (who.error === 'contato_ambiguo') return contatoAmbiguoMsg(contato, who.opcoes);
       if (who.error) return `Não consegui resolver o contato (${who.error}).`;
-      // Torna a Skill visível pras conexões (idempotente).
+      // Makes the Skill visible to connections (idempotent).
       if (r.skill.visibility !== 'connections') {
         await updateSkill(r.skill.id, userId, { visibility: 'connections' });
       }
@@ -279,18 +279,18 @@ export function skillShareTool(userId, agentId) {
       try {
         const { notifyOwner } = await import('./notify.mjs').catch(() => ({}));
         await notifyOwner?.(who.userId, `Um contato compartilhou a Skill "${r.skill.title}" com você. Seu assistente pode instalá-la.`);
-      } catch { /* silencioso: o compartilhamento vale mesmo sem push */ }
+      } catch { /* silent: the sharing counts even without a push */ }
       return `Pronto, a Skill "${r.skill.title}" está disponível pra ${who.name} instalar. O assistente dele consegue ver com "ver_skills_de" e instalar num toque.`;
     },
   };
 }
 
-// Tool GATED (executa código) — registrada via addGated em server.mjs, só quando
-// o sandbox está ligado. v1 do passo executável: SÓ O AUTOR roda o script da
-// PRÓPRIA Skill (resolveSkill sem `de` já restringe a skills suas). Skill de
-// terceiro segue só-texto — instalar comportamento de outro NÃO traz o direito de
-// rodar código dele. Roda no sandbox isolado (sem rede interna/metadata, sem
-// credencial), gated (👍 com o comando à vista). Reversível → 👍-confirmável.
+// GATED tool (runs code) — registered via addGated in server.mjs, only when
+// the sandbox is on. v1 of the executable step: ONLY THE AUTHOR runs the script of their
+// OWN Skill (resolveSkill without `de` already restricts to your own skills). A third party's
+// Skill stays text-only — installing someone else's behavior does NOT bring the right to
+// run their code. Runs in the isolated sandbox (no internal network/metadata, no
+// credential), gated (👍 with the command in view). Reversible → 👍-confirmable.
 export function skillRunTool(userId, agentId) {
   return {
     name: 'rodar_skill',
@@ -305,7 +305,7 @@ export function skillRunTool(userId, agentId) {
     },
     async run({ skill, argumento }) {
       if (!sandboxEnabled()) return 'O ambiente de execução (sandbox) está desligado agora; não dá pra rodar o script.';
-      const r = await resolveSkill(userId, skill); // sem `de`: só resolve skill SUA
+      const r = await resolveSkill(userId, skill); // without `de`: only resolves YOUR OWN skill
       if (r.error === 'skill_nao_encontrada') return `Não achei uma Skill "${skill}" sua. Só dá pra rodar o script de uma Skill que você autorou.`;
       if (r.error === 'ambiguo') return `Tem mais de uma Skill parecida: ${r.options.map((o) => `"${o.title}"`).join(', ')}. Seja específico.`;
       if (r.error) return `Não consegui abrir a Skill (${r.error}).`;
@@ -319,7 +319,7 @@ export function skillRunTool(userId, agentId) {
       const path = `/workspace/.skills/${s.id}.${ext}`;
       const w = await sandboxWrite(userId, path, code);
       if (!w || w.ok === false) return `Não consegui preparar o script no sandbox: ${w?.error || 'erro'}`;
-      // Argumento vai por env (SKILL_ARG) e como argv[1]; escapado pra shell.
+      // Argument goes via env (SKILL_ARG) and as argv[1]; escaped for the shell.
       const arg = String(argumento || '');
       const argQ = `'${arg.replace(/'/g, `'\\''`)}'`;
       const cmd = `cd /workspace && SKILL_ARG=${argQ} ${rt} ${path} ${argQ}`;
@@ -327,8 +327,8 @@ export function skillRunTool(userId, agentId) {
       const parts = [];
       if (res.timedOut) parts.push('[TIMEOUT: o script excedeu o tempo limite de 90s]');
       parts.push(`exit=${res.exitCode}`);
-      // Script que imprime muito tinha a saída cortada em silêncio, e o modelo
-      // então resumia "o resultado" tendo visto só o começo. Agora o corte é dito.
+      // A script that prints a lot had its output silently cut, and the model
+      // then summarized "the result" having seen only the beginning. Now the cut is stated.
       if (res.stdout) parts.push(`--- saída ---\n${comAviso(res.stdout, 6000, 'saída')}`);
       if (res.stderr) parts.push(`--- erros ---\n${comAviso(res.stderr, 2000, 'saída de erro')}`);
       if (!res.stdout && !res.stderr) parts.push('(sem saída)');
@@ -337,19 +337,19 @@ export function skillRunTool(userId, agentId) {
   };
 }
 
-// Texto pro system prompt: índice compacto das Skills INSTALADAS+enabled deste
-// assistente (progressive disclosure). O corpo (instruções) NÃO entra aqui;
-// carrega sob demanda via ler_skill quando o gatilho bate.
+// Text for the system prompt: compact index of this assistant's INSTALLED+enabled
+// Skills (progressive disclosure). The body (instructions) does NOT go in here;
+// it loads on demand via ler_skill when the trigger matches.
 //
-// Exceção: skill EM CURSO. Uma vez que ler_skill puxou o SKILL.md nesta conversa,
-// o corpo passa a ir no prompt de todo turno seguinte, RELIDO do banco. O
-// resultado da ler_skill continua no histórico, mas congelado na versão lida, e
-// o modelo praticamente nunca relê a mesma skill: então uma edição no meio do
-// fluxo não chegava nele (seguia a cópia velha) e, quando a compactação comia
-// aquele trecho, o procedimento sumia no meio do caminho. Pra não ficarem DUAS
-// versões no contexto, a leitura antiga é APAGADA do histórico
-// (stripStaleSkillReads): existe uma skill, existe uma cópia dela, esta.
-// Ver db.mjs skill_active.
+// Exception: skill IN PROGRESS. Once ler_skill has pulled the SKILL.md in this conversation,
+// the body starts going into the prompt on every following turn, RE-READ from the database. The
+// ler_skill result stays in the history, but frozen at the version read, and
+// the model practically never rereads the same skill: so a mid-flow edit
+// wouldn't reach it (it would follow the old copy) and, when compaction ate
+// that chunk, the procedure would vanish midway through. To avoid having TWO
+// versions in the context, the old read is ERASED from the history
+// (stripStaleSkillReads): there is one skill, there is one copy of it, this one.
+// See db.mjs skill_active.
 export async function skillsContext(agentId, userId, threadId = null) {
   const [skills, ativas] = await Promise.all([
     listInstalledSkills(agentId, userId),
@@ -377,29 +377,29 @@ export async function skillsContext(agentId, userId, threadId = null) {
   return { text: lines.join('\n'), ativas };
 }
 
-// APAGA do histórico a leitura antiga das skills que estão em curso. A ler_skill
-// deixou o corpo gravado na conversa, congelado na versão daquele momento; com o
-// corpo atual indo no prompt, ficariam duas versões do mesmo procedimento no
-// contexto. Existe UMA skill, então tem que existir UMA cópia dela: a do banco.
-// A leitura velha sai inteira (o resultado da tool E a chamada que o gerou), sem
-// ponteiro nem sobra. Determinístico, não é pedido ao modelo.
+// ERASES from the history the old read of skills that are in progress. ler_skill
+// left the body recorded in the conversation, frozen at that moment's version; with the
+// current body going into the prompt, there would be two versions of the same procedure in the
+// context. There is ONE skill, so there has to be ONE copy of it: the database's.
+// The old read comes out entirely (the tool's result AND the call that generated it), with no
+// pointer nor leftover. Deterministic, not left to the model to decide.
 //
-// Só mexe em skill EM CURSO: ler_skill de skill fora de curso segue intacta,
-// porque aí não há cópia nova no prompt pra substituí-la.
+// Only touches a skill IN PROGRESS: ler_skill of a skill not in progress stays intact,
+// because then there's no new copy in the prompt to replace it.
 //
-// Cuidado de pareamento: provider nenhum aceita chamada de tool sem resultado (e
-// vice-versa). Por isso a chamada sai junto do resultado, e a mensagem do
-// assistente só é descartada quando fica sem NENHUMA chamada e sem texto; se ela
-// pediu outras tools no mesmo turno, elas continuam lá, intactas.
+// Pairing care: no provider accepts a tool call without a result (and
+// vice versa). That's why the call comes out together with the result, and the assistant's
+// message is only discarded when it ends up with NO call at all and no text; if it
+// requested other tools in the same turn, they stay there, intact.
 //
-// O array devolvido é novo, e é ele que vai pro modelo e o que o server grava no
-// fim do turno: a cópia velha não volta. Mesma lógica do enxugamento de
-// interjeição em server.mjs.
+// The returned array is new, and it's the one that goes to the model and the one the server records at
+// the end of the turn: the old copy doesn't come back. Same logic as the
+// interjection trimming in server.mjs.
 export function stripStaleSkillReads(history, ativas) {
   if (!Array.isArray(history) || !history.length || !ativas?.length) return history || [];
   const emCurso = (txt) => typeof txt === 'string' && ativas.some((a) => a.title && txt.includes(a.title));
-  // 1ª passada: quais leituras saem. Sem toolCallId eu não acho a chamada que a
-  // gerou, e tirar o resultado sozinho quebraria o par: nesse caso deixo quieto.
+  // 1st pass: which reads go out. Without toolCallId I can't find the call that
+  // generated it, and removing the result alone would break the pair: in that case I leave it be.
   const idsFora = new Set();
   for (const m of history) {
     if (m?.role === 'tool' && m?.name === 'ler_skill' && m.toolCallId && emCurso(m.content)) idsFora.add(m.toolCallId);

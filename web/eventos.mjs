@@ -40,7 +40,7 @@ export function createEventos({log=console.error}={}){
    if(typeof fn!=='function')throw Error('Inscrição sem função: '+nome);
    inscritos.get(nome).push(fn);
   },
-  // Nome desconhecido aqui só loga: quem emite está no meio de um turno.
+  // An unknown name here just logs: whoever emits it is mid-turn.
   emitir(nome,dados){
    const fns=inscritos.get(nome);
    if(!fns){log('[eventos] evento desconhecido:',nome);return Promise.resolve([]);}
@@ -54,8 +54,8 @@ export function createEventos({log=console.error}={}){
   },
  };
 }
-// Liga a implementação plugada: {inscricoes:{evento:[fn]}, tarefas:[...]}.
-// Evento desconhecido falha aqui, no boot, e não no primeiro uso.
+// Wires the plugged-in implementation: {inscricoes:{evento:[fn]}, tarefas:[...]}.
+// An unknown event fails here, at boot, not on first use.
 export function ligarCicloDeVida(eventos,{inscricoes={},tarefas=[]}={}){
  for(const [nome,fns] of Object.entries(inscricoes))for(const fn of [].concat(fns))eventos.inscrever(nome,fn);
  for(const t of tarefas)eventos.agendar(t);

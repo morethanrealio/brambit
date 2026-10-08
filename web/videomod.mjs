@@ -16,7 +16,7 @@ import { modeloPara } from '../core-proto/modelos.mjs';
 
 const MODEL = 'gemini-3.1-flash-lite';
 
-// Categorias canônicas (chave interna → rótulo pt-BR pro usuário).
+// Canonical categories (internal key → pt-BR label for the user).
 export const BANNED_CATEGORIES = {
   sexual: 'conteúdo sexual',
   violencia: 'violência',
@@ -50,8 +50,8 @@ function parseJson(t) {
   try { return JSON.parse(t.slice(i, j + 1)); } catch { return null; }
 }
 
-// Modera o pedido. Retorna { allowed, categories:[chaves], labels:[rótulos],
-// reason, usage, model, failClosed }. NUNCA lança: em erro, bloqueia.
+// Moderates the request. Returns { allowed, categories:[keys], labels:[labels],
+// reason, usage, model, failClosed }. NEVER throws: on error, it blocks.
 export async function moderateVideoPrompt({ prompt = '', audioText = '' } = {}) {
   const text = [String(prompt || '').trim(), String(audioText || '').trim()].filter(Boolean).join('\n\n');
   if (!text) {
@@ -71,7 +71,7 @@ export async function moderateVideoPrompt({ prompt = '', audioText = '' } = {}) 
   const cats = Array.isArray(parsed.categories)
     ? parsed.categories.map((c) => String(c || '').trim()).filter((c) => BANNED_CATEGORIES[c])
     : [];
-  // Consistência: se marcou categorias, não pode estar allowed.
+  // Consistency: if categories were flagged, it can't be allowed.
   const allowed = parsed.allowed === true && cats.length === 0;
   return {
     allowed,

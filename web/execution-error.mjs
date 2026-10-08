@@ -1,7 +1,7 @@
-// Erro de parada de execução por limite de gasto. Mora aqui, fora de
-// execution-credit.mjs, para o núcleo poder lançar e reconhecer o erro sem
-// importar a implementação de crédito. O nome da classe é contrato:
-// core-proto/core.mjs e provider-attempt.mjs comparam constructor.name.
+// Execution-stop error for hitting the spend limit. Lives here, outside
+// execution-credit.mjs, so the core can throw and recognize the error without
+// importing the credit implementation. The class name is a contract:
+// core-proto/core.mjs and provider-attempt.mjs compare constructor.name.
 export class ExecutionCreditError extends Error {
   constructor(code){super(code);this.code=code;}
 }

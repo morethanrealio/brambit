@@ -1,47 +1,47 @@
-// Formato de plugin (C2, passo 11b). O núcleo não importa nada da distribuição:
-// quem instala põe a lista de plugins em web/plugins/ativos.mjs ou no arquivo
-// de BRAMBIT_PLUGINS (`export default [plugin, ...]`), e o servidor carrega essa
-// lista no boot. Sem o arquivo, o núcleo sobe sozinho com cada porta no padrão (createXSimples).
-// Plugin = objeto com:
-//  nome: texto curto, aparece no log e no erro de boot.
-//  esquema({pool,S}): tabelas e colunas do plugin; o initDb roda depois das do
-//   núcleo, na ordem da lista. Opcional.
-//  portas(nucleo) → peças que respondem às portas do núcleo, todas opcionais:
+// Plugin format (C2, step 11b). The core doesn't import anything from the distribution:
+// whoever installs it puts the plugin list in web/plugins/ativos.mjs or in the
+// BRAMBIT_PLUGINS file (`export default [plugin, ...]`), and the server loads that
+// list at boot. Without the file, the core comes up on its own with each port at default (createXSimples).
+// Plugin = object with:
+//  nome: short text, shows up in the log and in the boot error.
+//  esquema({pool,S}): the plugin's tables and columns; initDb runs after the
+//   core's, in the list's order. Optional.
+//  portas(nucleo) → pieces that answer the core's ports, all optional:
 //   permissoes (permissoes.mjs), contaPagadora (conta-pagadora.mjs), gasto
 //   (gasto.mjs), ferramentas (ferramentas.mjs), contaPagamento
 //   (conta-pagamento.mjs), ganchosDaEmpresa (empresa.mjs, store.ligar),
-//   premiacaoDoConvite() → linha sobre o prêmio da indicação ou null,
-//   assuntosConversados(userId) → assuntos da pessoa pra oferta de rotina
-//   (rotina-oferta.mjs), diagnosticoDosFiltros(turno) → {removidas, corte}, que
-//   observa o antes/depois dos filtros de verificação do turno, e
-//   briefDaJornada() → texto que troca o brief padrão da devolutiva da jornada
-//   (discovery/report-instructions.mts), e chaveDeepSeek() → chave da API oficial
-//   do DeepSeek do modelo escolhível (sem a porta, vem de DEEPSEEK_API_KEY), e
-//   atendimentoPublico → ganchos do roteiro do atendimento ao público
-//   (publico.mjs: antesDoModelo, depoisDoModelo). Roda no começo do boot; nucleo traz só
-//   o que já existe nessa hora (publicBase, notifyOwner).
-//  ligar(servidor): rotas (rotas.mjs), inscrições e tarefas (eventos.mjs) e
-//   mídia publicada (midia-publica.mjs). Roda com o servidor montado; servidor
-//   traz as portas e os ajudantes de HTTP e de envio que o plugin usa.
-//  semCsrf: caminhos EXATOS que chegam sem Origin de navegador (webhook com
-//   assinatura, descadastro de um clique). A autenticação é do próprio plugin.
-//  publico: pastas (caminho absoluto) com páginas e arquivos do site do plugin,
-//   servidos como os de web/public: URL limpa, nonce e tradução (sendHtml), só
-//   GET/HEAD. O servidor procura nas pastas da marca, depois nas dos plugins na
-//   ordem da lista, e por último em web/public.
-//  siteTextos: pastas com os catálogos de tradução (en.json, es.json) dessas
-//   páginas, no formato de web/site-textos; completam o catálogo do núcleo.
-//  textosServidor: pastas com os catálogos (en.json, es.json) das mensagens que
-//   os módulos do plugin respondem por send/fail, no formato de web/textos-servidor;
-//   completam o do núcleo. fontesMensagens: esses módulos (caminho absoluto), de
-//   onde a conferência dos catálogos e o mensagens-i18n-pendentes tiram as chaves.
-//  app: pastas com pedaços de tela do app logado (estilo, menu, painéis,
-//   script), um arquivo por encaixe do index.html (ver app-encaixes.mjs).
-//  csp: origens externas que as páginas do plugin carregam (analytics, tag de
-//   conversão), {diretiva: [https://host, ...]}; só script-src, img-src,
-//   connect-src e frame-src (csp.mjs). O núcleo sozinho não carrega nada de fora.
-// Duas peças pra mesma porta, porta desconhecida ou plugin sem nome falham no
-// boot, e não no primeiro uso.
+//   premiacaoDoConvite() → line about the referral reward or null,
+//   assuntosConversados(userId) → the person's subjects for the routine offer
+//   (rotina-oferta.mjs), diagnosticoDosFiltros(turno) → {removidas, corte}, which
+//   observes the before/after of the turn's verification filters, and
+//   briefDaJornada() → text that replaces the default brief of the journey
+//   feedback (discovery/report-instructions.mts), and chaveDeepSeek() → key for the official
+//   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and
+//   atendimentoPublico → hooks for the public-support script
+//   (publico.mjs: antesDoModelo, depoisDoModelo). Runs at the start of boot; the core brings only
+//   what already exists at that time (publicBase, notifyOwner).
+//  ligar(servidor): routes (rotas.mjs), subscriptions and tasks (eventos.mjs) and
+//   published media (midia-publica.mjs). Runs with the server mounted; the server
+//   brings the ports and the HTTP and sending helpers the plugin uses.
+//  semCsrf: EXACT paths that arrive without a browser Origin (webhook with
+//   signature, one-click unsubscribe). Authentication is the plugin's own.
+//  publico: folders (absolute path) with pages and files of the plugin's site,
+//   served like web/public's: clean URL, nonce and translation (sendHtml), only
+//   GET/HEAD. The server looks in the brand folders, then the plugin ones in
+//   list order, and last in web/public.
+//  siteTextos: folders with the translation catalogs (en.json, es.json) of these
+//   pages, in the web/site-textos format; they complete the core's catalog.
+//  textosServidor: folders with the catalogs (en.json, es.json) of the messages that
+//   the plugin's modules answer via send/fail, in the web/textos-servidor format;
+//   they complete the core's. fontesMensagens: those modules (absolute path), from
+//   which the catalog check and mensagens-i18n-pendentes pull the keys.
+//  app: folders with pieces of the logged-in app's screen (style, menu, panels,
+//   script), one file per index.html slot (see app-encaixes.mjs).
+//  csp: external origins the plugin's pages load (analytics, conversion tag),
+//   {diretiva: [https://host, ...]}; only script-src, img-src,
+//   connect-src and frame-src (csp.mjs). The core alone loads nothing from outside.
+// Two pieces for the same port, an unknown port, or a plugin without a name fail at
+// boot, not on first use.
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
@@ -62,16 +62,16 @@ export function conferirPlugin(p){
  return p;
 }
 
-// Onde está a lista: BRAMBIT_PLUGINS (caminho absoluto, ou relativo à pasta de
-// onde o servidor sobe) pra quem instala o núcleo como pacote e guarda os plugins
-// no próprio repositório; sem ela, web/plugins/ativos.mjs.
+// Where the list is: BRAMBIT_PLUGINS (absolute path, or relative to the folder
+// the server boots from) for whoever installs the core as a package and keeps the plugins
+// in their own repository; without it, web/plugins/ativos.mjs.
 export function arquivoDosPlugins(env=process.env){
  return env.BRAMBIT_PLUGINS?pathToFileURL(path.resolve(env.BRAMBIT_PLUGINS)):new URL('./plugins/ativos.mjs',import.meta.url);
 }
 
-// arquivo existe = a lista tem que carregar; erro dentro dela derruba o boot. Com
-// BRAMBIT_PLUGINS, o arquivo tem que existir: lista pedida e não achada não sobe
-// em silêncio sem os plugins.
+// file exists = the list has to load; an error inside it brings down the boot. With
+// BRAMBIT_PLUGINS, the file has to exist: a requested list not found doesn't come up
+// silently without the plugins.
 export async function carregarPlugins(arquivo=arquivoDosPlugins()){
  if(!fs.existsSync(arquivo)){
   if(process.env.BRAMBIT_PLUGINS&&arquivo.href===arquivoDosPlugins().href)throw Error('BRAMBIT_PLUGINS aponta pra um arquivo que não existe: '+process.env.BRAMBIT_PLUGINS);
@@ -105,7 +105,7 @@ export function caminhosSemCsrf(plugins){
  return new Set(plugins.flatMap(p=>p.semCsrf||[]));
 }
 
-// Pastas do site e dos catálogos que os plugins trazem, na ordem da lista.
+// Site and catalog folders brought by the plugins, in the list's order.
 export function pastasDoSite(plugins){
  return plugins.flatMap(p=>p.publico||[]);
 }
@@ -129,7 +129,7 @@ export function pastasDoApp(plugins){
  return plugins.flatMap(p=>p.app||[]);
 }
 
-// Lê página do site; o app (index.html) já vem com os pedaços dos plugins.
+// Reads a site page; the app (index.html) already comes with the plugins' pieces.
 export function leitorDoApp(plugins,app){
  return leitorDePagina(app,pastasDoApp(plugins));
 }

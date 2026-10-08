@@ -1,24 +1,28 @@
-// ── Lint determinístico de consistência de apps (custo zero de tokens) ──
-// Roda no HOST dentro do publicar_sistema, antes do publish. Pega as classes de
-// bug que geraram o pior modo de falha observado (incidente KhaosClass, ago/2026):
-// o agente edita um arquivo grande, esquece uma função que o HTML referencia, o
-// publish passa (o boot não executa handler de clique) e o usuário gasta turnos
-// caçando "botão que não faz nada". As 3 regras são as mesmas pré-registradas no
-// ESPECIFICACAO.md do app resgatado:
-//   1. Todo handler on*(onclick/onchange/...) referenciado em HTML/templates tem
-//      função definida em algum .js do app.                       → ERRO (bloqueia)
-//   2. Toda chamada api()/fetch() do cliente tem rota no servidor. → AVISO (não bloqueia:
-//      casar caminho literal com regex de rota é heurístico demais pra bloquear)
-//   3. Nenhuma função declarada em dois arquivos de CLIENTE.       → ERRO (bloqueia)
-//      (só cliente: módulos require() do Node têm escopo próprio, duplicar lá é legal)
-//   4. Nome chamado que não existe no app e é quase idêntico a um nome
-//      declarado (typo de digitação).                              → AVISO (não bloqueia:
-//      é insumo pro MODELO revisar, nunca texto pro dono do app; ver app-typo-hunt.mjs)
-// Funções puras (files = {caminho: texto}) pra dar pra testar sem harness.
+// ── Deterministic app consistency lint (zero token cost) ──
+// Runs on the HOST inside publicar_sistema, before the publish. Catches the
+// bug classes that caused the worst failure mode observed (KhaosClass
+// incident, Aug/2026): the agent edits a big file, forgets a function the
+// HTML references, the publish goes through (boot doesn't run the click
+// handler) and the user spends turns hunting a "button that does nothing".
+// The 3 rules are the same ones pre-registered in the rescued app's
+// ESPECIFICACAO.md:
+//   1. Every on*(onclick/onchange/...) handler referenced in HTML/templates
+//      has a function defined in some .js of the app.              → ERROR (blocks)
+//   2. Every client api()/fetch() call has a route on the server.   → WARNING (does
+//      not block: matching a literal path against a route regex is too
+//      heuristic to block on)
+//   3. No function declared in two CLIENT files.                   → ERROR (blocks)
+//      (client only: Node's require() modules have their own scope, duplicating
+//      there is fine)
+//   4. A called name that does not exist in the app and is almost identical
+//      to a declared name (typo).                                   → WARNING (does
+//      not block: it's input for the MODEL to review, never text for the
+//      app's owner; see app-typo-hunt.mjs)
+// Pure functions (files = {caminho: texto}) so they can be tested without the harness.
 
 import { huntTypos } from './app-typo-hunt.mjs';
 
-// Nomes globais do browser/JS que um handler pode chamar sem definir.
+// Global browser/JS names a handler can call without defining.
 const BUILTIN_NAMES = new Set([
   'alert', 'confirm', 'prompt', 'open', 'close', 'print', 'focus', 'blur',
   'scrollTo', 'scrollBy', 'requestAnimationFrame', 'setTimeout', 'setInterval',
@@ -36,13 +40,14 @@ const JS_EXTS = /\.(js|mjs|cjs)$/i;
 function isClientPath(rel, htmlSrcSet) {
   if (/^(public|static|templates)\//i.test(rel)) return true;
   if (htmlSrcSet.has(rel)) return true;
-  // Match por basename SÓ pra arquivo na raiz (index.html referencia "portal.js"
-  // servido de public/; lib/routes/portal.js NÃO pode virar cliente por homônimo).
+  // Basename match ONLY for a root-level file (index.html references
+  // "portal.js" served from public/; lib/routes/portal.js must NOT become a
+  // client file by namesake).
   return !rel.includes('/') && htmlSrcSet.has(rel.split('/').pop());
 }
 
-// Conta linhas de um texto (métrica do guarda de tamanho: linhas, não bytes —
-// vendor minificado é 1 linha gigante e é legítimo).
+// Counts lines in a text (size-guard metric: lines, not bytes — a minified
+// vendor file is 1 giant line and is legitimate).
 export function countLines(text) {
   if (!text) return 0;
   let n = 1;
@@ -50,20 +55,20 @@ export function countLines(text) {
   return n;
 }
 
-// Decodifica {caminho: base64} → {caminho: texto} só dos arquivos de código.
+// Decodes {caminho: base64} → {caminho: texto} only for code files.
 export function decodeCodeFiles(filesB64) {
   const out = {};
   for (const [rel, b64] of Object.entries(filesB64 || {})) {
     if (!CODE_EXTS.test(rel)) continue;
-    try { out[rel] = Buffer.from(b64, 'base64').toString('utf8'); } catch { /* binário: ignora */ }
+    try { out[rel] = Buffer.from(b64, 'base64').toString('utf8'); } catch { /* binary: skip */ }
   }
   return out;
 }
 
-// Extrai os nomes de função chamados em atributos on* (onclick="fn(...)"),
-// tanto em HTML quanto em template string de JS (é onde o bug clássico mora).
+// Extracts the function names called in on* attributes (onclick="fn(...)"),
+// both in HTML and in JS template strings (where the classic bug lives).
 function collectHandlerRefs(files) {
-  const refs = new Map(); // nome -> Set de arquivos onde é referenciado
+  const refs = new Map(); // name -> Set of files where it's referenced
   const attrRe = /\bon[a-z]{2,20}\s*=\s*(["'])([\s\S]*?)\1/gi;
   const callRe = /([A-Za-z_$][\w$]*)\s*\(/g;
   for (const [rel, txt] of Object.entries(files)) {
@@ -76,7 +81,7 @@ function collectHandlerRefs(files) {
       while ((c = callRe.exec(val)) !== null) {
         const name = c[1];
         const prev = c.index > 0 ? val[c.index - 1] : '';
-        if (prev === '.' || prev === '$') continue;          // método/interpolação, não global
+        if (prev === '.' || prev === '$') continue;          // method/interpolation, not global
         if (BUILTIN_NAMES.has(name)) continue;
         if (!refs.has(name)) refs.set(name, new Set());
         refs.get(name).add(rel);
@@ -86,9 +91,9 @@ function collectHandlerRefs(files) {
   return refs;
 }
 
-// Testa se `name` tem definição em algum arquivo. GENEROSO de propósito: falso
-// "definido" é melhor que bloquear publish bom; o orfão de verdade (zero matches
-// em todo o app) é o que interessa.
+// Tests whether `name` has a definition in some file. Deliberately GENEROUS:
+// a false "defined" is better than blocking a good publish; the real orphan
+// (zero matches across the whole app) is what matters.
 function isDefined(name, files) {
   const esc = name.replace(/\$/g, '\\$');
   const pats = [
@@ -106,11 +111,12 @@ function isDefined(name, files) {
   return false;
 }
 
-// Regra 2: caminhos literais de api()/fetch() do cliente vs texto do servidor.
-// Server routes costumam ser regex (\/api\/turmas\/(\d+)\/...), então o texto do
-// servidor é normalizado (\/ → /) e o caminho do cliente vira "trechos literais"
-// (segmentos consecutivos sem ${...}); a rota é dada como presente se QUALQUER
-// trecho não-trivial aparecer no servidor. Só aponta quando claramente não existe.
+// Rule 2: literal client api()/fetch() paths vs. the server's text. Server
+// routes tend to be regex (\/api\/turmas\/(\d+)\/...), so the server's text
+// is normalized (\/ → /) and the client's path becomes "literal chunks"
+// (consecutive segments with no ${...}); the route is considered present if
+// ANY non-trivial chunk shows up on the server. Only flags when it clearly
+// does not exist.
 function collectApiCallIssues(files, htmlSrcSet, serverBlob) {
   const avisos = [];
   const seen = new Set();
@@ -121,7 +127,7 @@ function collectApiCallIssues(files, htmlSrcSet, serverBlob) {
     callRe.lastIndex = 0;
     while ((m = callRe.exec(txt)) !== null) {
       let p = m[2].split('?')[0].replace(/^\.?\//, '');
-      if (p.startsWith('http') || !/(^|\/)api\//.test('/' + p)) continue; // só rotas de API
+      if (p.startsWith('http') || !/(^|\/)api\//.test('/' + p)) continue; // API routes only
       const segs = p.split('/');
       const runs = [];
       let cur = [];
@@ -133,7 +139,7 @@ function collectApiCallIssues(files, htmlSrcSet, serverBlob) {
       const candidates = runs
         .map((r) => r.replace(/^api\/?/, ''))
         .filter((r) => r.length > 1);
-      if (!candidates.length) continue; // só "api/${x}": nada literal pra conferir
+      if (!candidates.length) continue; // just "api/${x}": nothing literal to check
       const found = candidates.some((r) => serverBlob.includes(r));
       if (!found) {
         const key = p;
@@ -146,8 +152,8 @@ function collectApiCallIssues(files, htmlSrcSet, serverBlob) {
   return avisos;
 }
 
-// Regra 3: mesma função DECLARADA em dois arquivos de cliente (escopo global
-// compartilhado → a última carregada vence silenciosamente).
+// Rule 3: same function DECLARED in two client files (shared global scope →
+// the last one loaded silently wins).
 function collectDuplicateFunctions(files, htmlSrcSet) {
   const decl = new Map(); // nome -> Set de arquivos
   const fnRe = /\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
@@ -167,8 +173,8 @@ function collectDuplicateFunctions(files, htmlSrcSet) {
   return erros;
 }
 
-// Lint completo. files = {caminho: texto} (use decodeCodeFiles pra vir de b64).
-// Devolve { erros, avisos }: erros bloqueiam o publish, avisos só informam.
+// Full lint. files = {caminho: texto} (use decodeCodeFiles to come from b64).
+// Returns { erros, avisos }: errors block the publish, warnings just inform.
 export function lintApp(files) {
   const erros = [];
   const avisos = [];
@@ -187,7 +193,7 @@ export function lintApp(files) {
     }
   }
 
-  // Regra 1: handlers on* órfãos.
+  // Rule 1: orphaned on* handlers.
   const refs = collectHandlerRefs(files);
   for (const [name, where] of refs) {
     if (!isDefined(name, files)) {
@@ -195,7 +201,7 @@ export function lintApp(files) {
     }
   }
 
-  // Regra 3: função declarada em dois arquivos de cliente.
+  // Rule 3: function declared in two client files.
   erros.push(...collectDuplicateFunctions(files, htmlSrcSet));
 
   // Regra 2: api()/fetch() sem rota no servidor (aviso).
@@ -209,13 +215,14 @@ export function lintApp(files) {
     .map(([, txt]) => txt).join('\n');
   avisos.push(...collectApiCallIssues(files, htmlSrcSet, serverBlob + '\n' + pyBlob));
 
-  // Regra 4: nome chamado que não existe e é quase igual a um declarado (aviso).
+  // Rule 4: called name that does not exist and is almost the same as a
+  // declared one (warning).
   avisos.push(...huntTypos(files));
 
   return { erros, avisos };
 }
 
-// Conveniência pro hosting.mjs: recebe {caminho: base64} direto.
+// Convenience for hosting.mjs: takes {caminho: base64} directly.
 export function lintAppB64(filesB64) {
   return lintApp(decodeCodeFiles(filesB64));
 }

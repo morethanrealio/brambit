@@ -4,32 +4,32 @@ import { currentConfirmationSession } from './confirmation-session.mjs';
 import { confirmedAction, actionEvidenceFor } from './action-evidence.mjs';
 import { connectorActionReceipt, shareableLink } from './connector-action-evidence.mjs';
 import { calendarRecurrence, recurrenceLabel, recurrenceOccurrences } from './calendar-recurrence.mjs';
-// ── Trava de confirmação para ações que ALTERAM o mundo do usuário ──
+// ── Confirmation guard for actions that CHANGE the user's world ──
 //
-// Ações de escrita/destrutivas (enviar e-mail, criar evento, subir arquivo,
-// criar issue, comentar, postar) NUNCA executam direto. Quando o modelo chama
-// uma dessas tools, ela apenas REGISTRA uma ação pendente e devolve um pedido
-// de confirmação. A execução de verdade só acontece no turno SEGUINTE, quando o
-// CÓDIGO (não o modelo) detecta uma confirmação explícita do usuário na
-// mensagem crua dele. Assim a trava independe do raciocínio do modelo e resiste
-// a prompt injection vindo de conteúdo lido (e-mail, documento, etc.).
+// Write/destructive actions (send email, create event, upload file,
+// create issue, comment, post) NEVER execute directly. When the model calls
+// one of these tools, it only REGISTERS a pending action and returns a confirmation
+// request. The actual execution only happens on the NEXT turn, when
+// CODE (not the model) detects an explicit confirmation from the user in
+// their raw message. This way the guard doesn't depend on the model's reasoning and resists
+// prompt injection coming from content it read (email, document, etc.).
 //
-// Na dúvida, a ação não executa. Sessões persistentes mantêm os pedidos
-// independentes e pedem esclarecimento; o mapa abaixo atende o caminho legado.
+// When in doubt, the action doesn't execute. Persistent sessions keep requests
+// independent and ask for clarification; the map below serves the legacy path.
 
-// O texto de confirmação de uma COMPRA tem que trazer o valor REAL do carrinho
-// montado na loja, não um número que o modelo repetiu: é esse valor que o dono
-// está aprovando. Por isso a frase vem do próprio compras.mjs, montada em cima
-// do carrinho guardado, e não dos args da chamada.
+// The confirmation text for a PURCHASE has to bring the REAL value of the cart
+// built at the store, not a number the model repeated: that's the value the owner
+// is approving. That's why the sentence comes from compras.mjs itself, built on top
+// of the stored cart, and not from the call's args.
 import { descreverCarrinho, plataformaDoCarrinho } from './compras.mjs';
-// A cadência da rotina é lida pelo MESMO normalizador que a tool usa pra gravar,
-// senão o cartão de confirmação descreveria um dia diferente do que vai ser salvo
-// (o dono confirmaria uma coisa e a plataforma agendaria outra).
+// The routine's cadence is read by the SAME normalizer the tool uses to save,
+// otherwise the confirmation card would describe a day different from what's going to be saved
+// (the owner would confirm one thing and the platform would schedule another).
 import { normalizeRoutineDays, routineDaysLabel, intervalLabel } from './scheduler.mjs';
 import { routineArgsTimeLabel } from './routine-time.mjs';
-// Textos do cartão em inglês e espanhol. O pt-BR abaixo fica INTACTO: as
-// tabelas de en/es são consultadas antes e, quando não têm a frase, o caminho
-// cai no português de sempre. Ver o cabeçalho do confirm-textos.mjs.
+// Card texts in English and Spanish. The pt-BR below stays INTACT: the
+// en/es tables are consulted first and, when they don't have the sentence, the path
+// falls back to the usual Portuguese. See the header of confirm-textos.mjs.
 import { pedidoEm, feitoEm, molduraEm, copiaLabel, camposInfinity } from './confirm-textos.mjs';
 import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
 import { PORTAO_TEXTOS, PORTAO_IRREVERSIVEIS, portaoTexto } from './confirm-textos-portao.mjs';
@@ -39,12 +39,12 @@ const pending = new Map(); // Legacy callers/tests only. threadId -> { id, name,
 
 const idiomaDaThread = new Map(); // threadId -> 'pt-BR' | 'en' | 'es'
 
-// Idioma do dono desta thread. Guardado por thread, e não passado por
-// parâmetro, pelo mesmo motivo do setOwnerText: `addGated` é chamado em ~20
-// pontos do server.mjs, quase todos só com (registry, tools, thread.id), e
-// enfiar o idioma em cada um deles é justamente o tipo de mudança onde um
-// esquecimento passa em silêncio — o cartão sairia em português pra um usuário
-// só naquele caminho, sem erro nenhum aparecendo.
+// Language of this thread's owner. Stored per thread, and not passed as a
+// parameter, for the same reason as setOwnerText: `addGated` is called in ~20
+// places in server.mjs, almost all with just (registry, tools, thread.id), and
+// stuffing the language into each of them is exactly the kind of change where an
+// oversight slips by silently — the card would come out in Portuguese for a user
+// only on that path, with no error appearing at all.
 export function setThreadLanguage(threadId, language) {
   if (!threadId) return;
   const k = String(threadId);
@@ -53,16 +53,16 @@ export function setThreadLanguage(threadId, language) {
   if (idiomaDaThread.size > 500) idiomaDaThread.delete(idiomaDaThread.keys().next().value);
 }
 
-// Idioma pra usar no cartão. Sem registro, cai no padrão, que é o pt-BR de
-// hoje: uma thread cujo idioma não foi anotado se comporta exatamente como
-// antes desta mudança.
+// Language to use on the card. With no record, it falls back to the default, which is
+// today's pt-BR: a thread whose language wasn't recorded behaves exactly as
+// it did before this change.
 function idiomaDoCartao(threadId) {
   return idiomaDaThread.get(String(threadId)) || IDIOMA_PADRAO;
 }
 
-// Como o cartão de confirmação descreve o canal pedido. "app" (= sem empurrar em
-// canal nenhum) precisa virar frase: "entregar no app" não deixa claro pro dono
-// que é justamente o pedido de PARAR de receber no WhatsApp/Telegram/e-mail.
+// How the confirmation card describes the requested channel. "app" (= not pushed on any
+// channel) needs to become a sentence: "entregar no app" doesn't make clear to the owner
+// that this is exactly the request to STOP receiving it on WhatsApp/Telegram/email.
 function canalLabel(canal, { verbo = 'entregar', detalhe = true } = {}) {
   const c = String(canal || '').toLowerCase().trim();
   if (!c) return '';
@@ -72,18 +72,19 @@ function canalLabel(canal, { verbo = 'entregar', detalhe = true } = {}) {
   return `${verbo} no ${canal}`;
 }
 
-// Texto da cadência a partir dos args da tool (criar_rotina/editar_rotina).
-// Devolve '' quando a chamada não mexe em cadência (edição só de horário, p.ex.).
+// Cadence text built from the tool's args (criar_rotina/editar_rotina).
+// Returns '' when the call doesn't touch cadence (an edit of just the time, e.g.).
 function cadenciaLabel(args = {}) {
   const cad = normalizeRoutineDays(args);
   if (cad.error || !cad.days) return '';
   return routineDaysLabel(cad.days);
 }
 
-// Cadência COMPLETA da rotina pro cartão ("todo domingo às 18h", "a cada 30 min
-// até ..."). Existe porque a rotina tem dois modos e o cartão só sabia descrever
-// um: no modo INTERVALO não há hora nem dia, e a frase saía "roda todo dia às
-// 0?h", ou seja, o dono confirmava uma rotina que não era a que ia ser criada.
+// FULL cadence of the routine for the card ("every Sunday at 6pm", "every 30 min
+// until ..."). Exists because the routine has two modes and the card only knew how
+// to describe one: in INTERVAL mode there is no time or day, and the sentence came
+// out "runs every day at 0?h", meaning the owner was confirming a routine that
+// wasn't the one that was going to be created.
 function cadenciaFrase(args = {}) {
   const n = Number(args.repetir_cada_min);
   if (Number.isFinite(n) && n > 0) {
@@ -94,7 +95,7 @@ function cadenciaFrase(args = {}) {
   return `${cadenciaLabel(args) || 'todo dia'} às ${hora}`;
 }
 
-// Tools que exigem confirmação humana explícita antes de executar.
+// Tools that require explicit human confirmation before executing.
 export const GATED_TOOLS = new Set([
   'jornada_configurar', 'jornada_editar_nota', 'jornada_concluir', 'jornada_refazer_devolutiva',
   'gerenciar_tarefa_de_app',
@@ -114,17 +115,18 @@ export const GATED_TOOLS = new Set([
   'enviar_para_drive',
   'onedrive_upload',
   'onedrive_upload_arquivo',
-  // Também escrevem no Drive da pessoa, e o export por cima de um PDF de mesmo
-  // nome substitui o conteúdo do que já estava lá. Ficavam de fora só porque a
-  // description pedia "confirme antes", o que é pedido ao modelo, não portão.
+  // They also write to the person's Drive, and exporting over a PDF with the same
+  // name replaces the content that was already there. They were left out only
+  // because the description asked "confirm before", which is a request to the
+  // model, not a gate.
   'docs_create',
   'drive_export_pdf',
   'github_create_issue',
   'github_comment_issue',
   'slack_post_message',
-  // Publica no perfil PÚBLICO da pessoa, no nome dela. Estava de fora: a única
-  // trava era uma frase na description pedindo pro modelo confirmar, o que é
-  // pedido, não portão.
+  // Posts to the person's PUBLIC profile, in their name. It was left out: the only
+  // guard was a sentence in the description asking the model to confirm, which is
+  // a request, not a gate.
   'linkedin_post',
   'confirmar_com_agente',
   'responder_decisao',
@@ -155,10 +157,10 @@ export const GATED_TOOLS = new Set([
   'infinity_criar_item',
   'infinity_editar_item',
   'infinity_comentar',
-  // Embora receber dinheiro não debite saldo, esta tool pode CADASTRAR uma
-  // chave Pix real e criar um QR de cobrança. Isso é uma ação financeira, não
-  // uma consulta: nunca pode rodar só porque o modelo interpretou uma pergunta
-  // como pedido de execução.
+  // Although receiving money doesn't debit the balance, this tool can REGISTER a
+  // real Pix key and create a charge QR code. This is a financial action, not
+  // a query: it can never run just because the model interpreted a question
+  // as a request to execute.
   'asaas_receber_pix',
   'asaas_pagar_conta',
   'asaas_cancelar_pagamento_conta',
@@ -193,8 +195,8 @@ export const IRREVERSIBLE_TOOLS = new Set([
   'github_create_issue',
   'github_comment_issue',
   'slack_post_message',
-  // Post público no nome da pessoa, indexado por buscador. Apagar depois não
-  // desfaz quem já viu: confirmação por texto, joinha não basta.
+  // Public post in the person's name, indexed by search engines. Deleting it later
+  // doesn't undo who already saw it: confirmation by text, a thumbs-up isn't enough.
   'linkedin_post',
   'confirmar_com_agente',
   'responder_decisao',
@@ -202,32 +204,32 @@ export const IRREVERSIBLE_TOOLS = new Set([
   'rodar_no_servidor',
   'git_push',
   'splitwise_add_expense',
-  // Comentário no Infinity fica visível pra equipe inteira do board.
+  // A comment on Infinity is visible to the entire board team.
   'infinity_comentar',
-  // Toda ação financeira exige confirmação por TEXTO, inclusive gerar uma
-  // chave/QR para receber dinheiro. Reação e automação não substituem o aceite.
+  // Every financial action requires TEXT confirmation, including generating a
+  // key/QR to receive money. Reaction and automation don't replace acceptance.
   'asaas_receber_pix',
   'asaas_pagar_conta',
   'asaas_cancelar_pagamento_conta',
   'asaas_transferir_pix',
   'asaas_enviar_comprovante_email',
-  // Cria um pedido de verdade, no nome do dono, numa loja de verdade. Dinheiro
-  // sai. Um 👍 não fecha compra: tem que ser confirmação por texto.
+  // Creates a real order, in the owner's name, at a real store. Money
+  // goes out. A 👍 doesn't close a purchase: it has to be text confirmation.
   'fechar_pedido',
-  // Abre uma conta de pagamento REAL numa instituição financeira, no nome e com
-  // o CPF/CNPJ do dono. Não dá pra "desabrir", e os dados vão pra análise
-  // cadastral de terceiro: exige confirmação por texto, nunca joinha.
+  // Opens a REAL payment account at a financial institution, in the owner's name and
+  // with their CPF/CNPJ. There's no "un-opening" it, and the data goes to a third
+  // party's credit analysis: requires text confirmation, never a thumbs-up.
   'criar_conta_brambs',
   ...PORTAO_IRREVERSIVEIS,
 ]);
 
-// Uma ação gated pode ser confirmada por REACTION (👍) só se NÃO for irreversível.
+// A gated action can be confirmed by REACTION (👍) only if it is NOT irreversible.
 export function isReactionConfirmable(name) {
   return GATED_TOOLS.has(name) && !IRREVERSIBLE_TOOLS.has(name);
 }
 
-// O cartão entregue é do mesmo pedido que o gate guardou. O modelo não pode
-// trocar o alvo na redação nem oferecer 👍 quando a ação exige aceite por texto.
+// The delivered card is for the same request the gate guarded. The model cannot
+// swap the target in the wording nor offer 👍 when the action requires text acceptance.
 function confirmationCard(name, label, language, numbered = false) {
   if (numbered) return label;
   if (name === 'jornada_configurar') return label;
@@ -238,21 +240,23 @@ function confirmationCard(name, label, language, numbered = false) {
   return `${label}\n\nPara confirmar, responda “pode”${reaction ? ' ou reaja com 👍' : ' por texto'}.`;
 }
 
-// ── Destinatário de e-mail: o que o dono ESCREVEU vs o que vai ser enviado ──
+// ── Email recipient: what the owner WROTE vs what is going to be sent ──
 //
-// O portão de confirmação só protege de verdade se o cartão mostrar a ação REAL.
-// Quando o endereço sai da chamada diferente do que a pessoa digitou (uma letra
-// trocada, um domínio "arrumado"), o cartão exibia o endereço já alterado como se
-// fosse o dela: confirmar não tinha como pegar o erro, e o e-mail ia pro lugar
-// errado com o "pode" do dono. Aqui o cartão passa a dizer a diferença.
+// The confirmation gate only really protects when the card shows the REAL action.
+// When the address coming out of the call differs from what the person typed (a
+// swapped letter, a "fixed" domain), the card displayed the already-changed address
+// as if it were theirs: confirming had no way to catch the mistake, and the email
+// went to the wrong place with the owner's "go ahead". Here the card now states
+// the difference.
 const MAIL_TOOLS = new Set(['gmail_send', 'hotmail_send', 'asaas_enviar_comprovante_email']);
 const RE_EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const textoDoDono = new Map(); // threadId -> texto cru das últimas mensagens dele
+const textoDoDono = new Map(); // threadId -> raw text of its most recent messages
 const textoAtualDoDono = new Map(); // threadId -> somente o pedido deste turno
 
-// Texto que o DONO escreveu nesta thread (turno atual + histórico recente).
-// Guardado por thread porque `describe` só recebe os args da tool, e a conversa
-// é justamente o lado que falta pra saber se o endereço foi alterado.
+// Text that the OWNER wrote in this thread (current turn + recent history).
+// Stored by thread because `describe` only receives the tool's args, and the
+// conversation is exactly the side that's missing to know whether the address
+// was altered.
 export function setOwnerText(threadId, texto, atual = null) {
   if (!threadId) return;
   const k = String(threadId);
@@ -271,7 +275,7 @@ function enderecos(s) {
   return [...new Set(String(s || '').toLowerCase().match(RE_EMAIL) || [])];
 }
 
-// Distância de edição (Levenshtein). Uma letra trocada/faltando = 1.
+// Edit distance (Levenshtein). One swapped/missing letter = 1.
 function distancia(a, b) {
   const m = a.length, n = b.length;
   if (!m || !n) return Math.max(m, n);
@@ -286,12 +290,12 @@ function distancia(a, b) {
   return prev[n];
 }
 
-// Avisa quando o destinatário não é igual a um endereço que o dono escreveu, mas
-// é QUASE (até 2 letras de diferença) — a assinatura de um endereço "corrigido"
-// no caminho. Deliberadamente estreito, pra não virar ruído em cima de envio
-// legítimo: fica calado quando o dono não escreveu endereço nenhum (veio dos
-// contatos/do histórico, uso normal) e quando o endereço é claramente outro
-// (destinatário diferente de propósito).
+// Warns when the recipient isn't the same as an address the owner wrote, but is
+// ALMOST the same (up to 2 letters different) — the signature of a "corrected"
+// address along the way. Deliberately narrow, so it doesn't become noise on top
+// of a legitimate send: it stays quiet when the owner didn't write any address
+// at all (it came from contacts/history, normal use) and when the address is
+// clearly a different one (recipient different on purpose).
 export function avisoEnderecoTrocado(destinos, texto, language = null) {
   const escritos = enderecos(texto);
   if (!escritos.length) return '';
@@ -312,21 +316,21 @@ export function avisoEnderecoTrocado(destinos, texto, language = null) {
   if (!avisos.length) return '';
   if (lang === 'en') return `CHECK THE ADDRESS: ${avisos.join('; ')}`;
   if (lang === 'es') return `REVISA LA DIRECCIÓN: ${avisos.join('; ')}`;
-  // Frase FACTUAL, nunca instrução pro modelo: o label é impresso cru pro
-  // usuário em alguns caminhos (ação irreversível, erro na execução), então ele
-  // tem que ler bem tanto pra pessoa quanto pro modelo. Sendo um alerta suave,
-  // um falso positivo (dois endereços parecidos de pessoas diferentes) custa
-  // uma conferida, não um susto.
+  // FACTUAL sentence, never an instruction to the model: the label is printed raw
+  // to the user in some paths (irreversible action, execution error), so it has
+  // to read well both for the person and for the model. Being a mild alert,
+  // a false positive (two similar addresses belonging to different people) costs
+  // a double-check, not a scare.
   return `CONFIRA O ENDEREÇO: ${avisos.join('; ')}`;
 }
 
-// Resumo legível da ação, pro agente mostrar ao usuário antes de confirmar.
+// Readable summary of the action, for the agent to show the user before confirming.
 //
-// `language` é opcional: sem ele, ou em pt-BR, o caminho é o de sempre (o
-// switch em português abaixo). Em en/es tenta a tabela traduzida primeiro e,
-// se aquela tool ainda não tem frase na língua, cai no português em vez de
-// devolver vazio — num cartão que autoriza gastar dinheiro, texto faltando é
-// pior que texto na língua errada.
+// `language` is optional: without it, or in pt-BR, the path is the usual one (the
+// switch in Portuguese below). In en/es it tries the translated table first and,
+// if that tool doesn't have a sentence in that language yet, falls back to
+// Portuguese instead of returning empty — on a card that authorizes spending
+// money, missing text is worse than text in the wrong language.
 export function describe(name, args = {}, language = null) {
   if (['calendar_create', 'outlook_calendar_create'].includes(name) && args.recorrencia !== undefined) {
     const { recorrencia, ...once } = args;
@@ -445,8 +449,9 @@ export function describe(name, args = {}, language = null) {
       if (cad) partes.push(cad);
       if (args.o_que_fazer) partes.push('mudar o que ela faz');
       if (args.testar_agora === true) partes.push('aplicar as alterações e testar agora, com entrega no canal configurado');
-      // A rotina pode vir identificada pelo CÓDIGO (#xxxx) em vez do título, quando
-      // o dono tem duas com o mesmo nome; nesse caso é o código que vai na pergunta.
+      // The routine may come identified by its CODE (#xxxx) instead of its title,
+      // when the owner has two with the same name; in that case the code is what
+      // goes into the question.
       const alvo = args.titulo ? `"${args.titulo}"` : args.id ? `#${String(args.id).replace(/^#/, '')}` : '"(sem título)"';
       return `alterar a rotina ${alvo}${partes.length ? ` (${partes.join(', ')})` : ''} — a rotina atual continua valendo até você confirmar`;
     }
@@ -460,9 +465,9 @@ export function describe(name, args = {}, language = null) {
       return `compartilhar sua Skill "${args.skill || '(sem nome)'}" com ${args.contato || '(contato?)'} (ele poderá instalá-la no assistente dele)`;
     case 'rodar_skill':
       return `rodar o script da sua Skill "${args.skill || '(sem nome)'}" no ambiente isolado (sandbox)${args.argumento ? ` com o argumento "${args.argumento}"` : ''}`;
-    // Canva: a confirmação mostra o OBJETIVO na íntegra, porque é ele que o
-    // sub-agente vai executar. Resumir aqui esconderia do dono exatamente o
-    // texto que autoriza a ação.
+    // Canva: the confirmation shows the FULL objective, because that's what the
+    // sub-agent is going to execute. Summarizing here would hide from the owner
+    // exactly the text that authorizes the action.
     case 'canva_criar':
       return `criar isto no seu Canva: ${args.objetivo || '(sem objetivo)'}`;
     case 'canva_editar':
@@ -493,8 +498,8 @@ export function describe(name, args = {}, language = null) {
       return `enviar para ${args.para || '(destinatário?)'} o comprovante oficial da operação ${args.id || '(?)'} na Asaas`;
     case 'salvar_credencial':
       return `guardar sua API key de ${args.servico || '(serviço?)'} no Cofre de credenciais (fica cifrada; não aparece no chat)`;
-    // O dono precisa ver exatamente com que dados a conta vai nascer: é o
-    // CPF/CNPJ dele indo pra uma análise cadastral que não dá pra desfazer.
+    // The owner needs to see exactly what data the account is going to be born
+    // with: it's their CPF/CNPJ going to a credit analysis that can't be undone.
     case 'criar_conta_brambs':
       return [
         `ABRIR SUA CONTA ${marca().nome.toUpperCase()} de verdade, no seu nome:`,
@@ -512,19 +517,21 @@ export function describe(name, args = {}, language = null) {
       ].join('\n');
     case 'fechar_pedido': {
       const resumo = descreverCarrinho(args.carrinho_id);
-      // Sem carrinho não dá pra dizer o valor, e sem valor não existe aprovação
-      // informada: o texto tem que deixar isso explícito em vez de inventar.
+      // Without a cart there's no way to state the amount, and without an amount
+      // there's no informed approval: the text has to make this explicit instead
+      // of making it up.
       if (!resumo) return 'FECHAR UM PEDIDO DE VERDADE na loja (mas o carrinho não existe mais, então precisa ser montado de novo antes)';
-      // Loja fora da VTEX não me deixa fechar: o pagamento é na tela dela. Pedir
-      // autorização pra "criar pedido real" ali seria prometer o que não acontece.
+      // A store outside VTEX won't let me close the sale: payment happens on its
+      // own screen. Asking for authorization to "create a real order" there would
+      // be promising something that doesn't happen.
       if (plataformaDoCarrinho(args.carrinho_id) !== 'vtex') {
         return `abrir o checkout da loja com esse carrinho pronto (${resumo}). Nessa loja quem finaliza o pagamento é você, na tela dela; eu não crio o pedido nem cobro nada`;
       }
       return `FECHAR O PEDIDO DE VERDADE: ${resumo}. Isso cria um pedido real no seu nome e gera a cobrança; não dá pra desfazer por aqui`;
     }
     case 'apagar_sistema':
-      // O detalhe do que existe dentro do app (nº de registros) é acrescentado
-      // pelo `preflight` da tool, que consulta o host — aqui só temos os args.
+      // The detail of what exists inside the app (number of records) is added by
+      // the tool's `preflight`, which queries the host — here we only have the args.
       return `apagar DE VEZ o sistema "${args.nome_do_sistema || '(sem nome)'}": container, código, histórico de versões E os dados que o app guardou, incluindo segredos do cofre e acessos de colaboradores. Não tem backup nem como voltar`;
     case 'replicar_sistema':
       return `replicar o app público "${args.origem || '(origem?)'}" no seu subdomínio${args.novo_nome ? ` como "${args.novo_nome}"` : ''}`;
@@ -535,24 +542,25 @@ export function describe(name, args = {}, language = null) {
     case 'remover_segredo':
       return `remover o segredo "${args.chave || '(?)'}" do sistema "${args.nome_do_sistema || '(sem nome)'}" (o app reinicia sem essa variável; não dá pra recuperar o valor)`;
     default:
-      // Tool no portão sem frase própria em nenhuma língua: aqui o pt-BR também
-      // é genérico, então traduzir o genérico não esconde informação nenhuma.
+      // A tool in the gate with no sentence of its own in any language: here the
+      // pt-BR is also generic, so translating the generic one doesn't hide any
+      // information.
       return lang === IDIOMA_PADRAO ? `executar a ação "${name}"` : molduraEm(lang).acaoPedido(name);
   }
 }
 
-// Formata uma data/hora ISO num texto curto pt-BR (ou devolve o original).
-// IMPORTANTE: mostra o horário de PAREDE exatamente como veio no ISO (sem
-// converter de fuso). Ex: "2026-07-09T11:30:00+02:00" -> "09/07/2026, 11:30".
-// Antes convertia pra America/Sao_Paulo e distorcia o horário de quem está em
-// outro fuso (ex: usuário em Basileia via "06:30" em vez de "11:30").
+// Formats an ISO date/time into a short pt-BR text (or returns the original).
+// IMPORTANT: shows the WALL-CLOCK time exactly as it came in the ISO (without
+// converting timezone). E.g.: "2026-07-09T11:30:00+02:00" -> "09/07/2026, 11:30".
+// It used to convert to America/Sao_Paulo and distort the time for whoever is in
+// another timezone (e.g. a user in Basel saw "06:30" instead of "11:30").
 function formatWhen(s) {
   if (!s || typeof s !== 'string') return '';
   const str = s.trim();
-  // Só data (evento de dia inteiro): "2026-07-09" -> "09/07/2026".
+  // Date only (all-day event): "2026-07-09" -> "09/07/2026".
   const dOnly = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dOnly) return `${dOnly[3]}/${dOnly[2]}/${dOnly[1]}`;
-  // Data + hora: extrai os tokens de parede literais, sem conversão de fuso.
+  // Date + time: extracts the literal wall-clock tokens, without timezone conversion.
   const dt = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   if (dt) return `${dt[3]}/${dt[2]}/${dt[1]}, ${dt[4]}:${dt[5]}`;
   // Fallback: formato inesperado.
@@ -563,13 +571,13 @@ function formatWhen(s) {
   } catch { return str; }
 }
 
-// Frase no passado, legível, pro usuário ver o que FOI feito (sem JSON cru).
+// Past-tense, readable sentence, for the user to see what WAS done (no raw JSON).
 //
-// Este é o texto MAIS crítico do arquivo pra quem não fala português: ao
-// contrário do `describe`, que o modelo reescreve ao mostrar o cartão, esta
-// frase é impressa DIRETO pro usuário pelo renderConfirmed. Sem tradução, quem
-// pediu inglês confirma em inglês e recebe "E-mail enviado para ..." em
-// português.
+// This is the MOST critical text in the file for whoever doesn't speak Portuguese:
+// unlike `describe`, which the model rewrites when showing the card, this
+// sentence is printed DIRECTLY to the user by renderConfirmed. Without translation,
+// whoever asked in English confirms in English and gets "E-mail enviado para ..."
+// in Portuguese back.
 export function describeDone(name, args = {}, language = null) {
   if (name === 'jornada_concluir' && (!language || tagIdioma(language) === IDIOMA_PADRAO)) return `Jornada concluída. Estou preparando suas sugestões de uso do ${marca().nome} e aviso aqui quando estiverem prontas.`;
   if (name === 'jornada_refazer_devolutiva' && (!language || tagIdioma(language) === IDIOMA_PADRAO)) return 'Estou preparando sua devolutiva novamente. Aviso aqui quando estiver pronta.';
@@ -718,13 +726,13 @@ export function describeDone(name, args = {}, language = null) {
       return `Comprovante enviado por e-mail para ${args.para || 'o destinatário'}.`;
     case 'salvar_credencial':
       return `API key de ${args.servico || 'serviço'} guardada no Cofre (cifrada).`;
-    // Só o cabeçalho: o detalhe do pedido (número, total, Pix) vem no corpo que
-    // a própria tool devolve e o renderConfirmed cola aqui embaixo.
+    // Header only: the request detail (number, total, Pix) comes in the body that
+    // the tool itself returns and renderConfirmed glues in below.
     case 'fechar_pedido':
       return 'Pedido feito na loja. Falta só o pagamento:';
-    // Idem: o corpo (titular, agência/conta e o PRÓXIMO passo, um só) vem da
-    // própria tool. O cabeçalho não repete "Asaas" nem anuncia lista de
-    // pendência: o processo já foi explicado antes de abrir.
+    // Same idea: the body (account holder, branch/account and the NEXT step, just
+    // one) comes from the tool itself. The header doesn't repeat "Asaas" nor
+    // announce a pending list: the process was already explained before it opened.
     case 'criar_conta_brambs':
       return `Conta ${marca().nome} aberta no seu nome.`;
     default:
@@ -732,16 +740,17 @@ export function describeDone(name, args = {}, language = null) {
   }
 }
 
-// Monta a resposta LIMPA depois de executar uma ação confirmada. Nunca expõe o
-// retorno cru da tool (JSON) ao usuário: extrai só o que importa (sucesso/erro
-// e um eventual link) e redige no idioma do dono.
+// Builds the CLEAN response after executing a confirmed action. Never exposes the
+// tool's raw return (JSON) to the user: extracts only what matters (success/error
+// and a possible link) and writes it in the owner's language.
 //
-// O idioma vem de `pend.language`, gravado quando a ação foi REGISTRADA, não
-// lido agora: a confirmação acontece num turno posterior, e o par
-// pedido/resultado tem que sair na mesma língua mesmo que o dono troque o
-// idioma no meio. Pendência antiga (gravada antes desta mudança, ou restaurada
-// do banco) não tem o campo e cai no pt-BR, o comportamento de hoje.
-// Tools com confirmação cuja saída é uma frase de sucesso fixa em pt-BR.
+// The language comes from `pend.language`, recorded when the action was
+// REGISTERED, not read now: the confirmation happens in a later turn, and the
+// request/result pair has to come out in the same language even if the owner
+// switches language in between. An older pending action (recorded before this
+// change, or restored from the database) doesn't have the field and falls back
+// to pt-BR, today's default behavior.
+// Tools with confirmation whose output is a fixed pt-BR success sentence.
 const FRASE_PRONTA_PT = new Set(['criar_rotina']);
 export function renderConfirmed(pend, r) {
   const lang = pend?.language ? tagIdioma(pend.language) : IDIOMA_PADRAO;
@@ -752,16 +761,17 @@ export function renderConfirmed(pend, r) {
   else if (typeof r === 'string') {
     const t = r.trim();
     if (t[0] === '{' || t[0] === '[') { try { data = JSON.parse(t); } catch {} }
-    // Texto puro não-JSON: a própria tool já devolveu algo legível.
+    // Plain non-JSON text: the tool itself already returned something readable.
     if (!data && t) {
-      // Erros textuais continuam acionáveis. Sucesso de e-mail precisa de ID.
+      // Textual errors stay actionable. Email success needs an ID.
       if (/^(?:ERRO|Não|Nao|Error|No |I couldn't)/i.test(t)) return t;
       const recibo = confirmedAction(pend.name, pend.args, r, lang);
       if (recibo) return recibo;
-      // A frase pronta da tool é pt-BR ("Rotina X criada: roda..."): quem
-      // confirmou em inglês ou espanhol recebe a mesma ação no idioma dele.
-      // Só onde a frase traduzida diz exatamente o mesmo fato; em tool de envio
-      // o texto pode dizer "agendado" e a tradução diria "enviado".
+      // The tool's ready-made sentence is pt-BR ("Rotina X criada: roda..."):
+      // whoever confirmed in English or Spanish gets the same action in their
+      // language. Only where the translated sentence says exactly the same fact;
+      // for a sending tool the text might say "scheduled" and the translation
+      // would say "sent".
       const traduzido = m18n && FRASE_PRONTA_PT.has(pend.name) ? feitoEm(lang, pend.name, pend.args) : null;
       return traduzido || t;
     }
@@ -770,10 +780,10 @@ export function renderConfirmed(pend, r) {
   if (data?.action_evidence) return confirmedAction(pend.name, pend.args, r, lang) || uncertain;
   if (!data || (data.ok !== true && data.ok !== false)) return uncertain;
   if (data.ok !== false && data.skipped) return `${uncertain}${data.aviso ? '\n' + data.aviso : ''}`;
-  // PENDING conhecido é um estado verificável da instituição, não uma falha
-  // incerta. Para Pix, o webhook fecha o ciclo na própria conversa. Incerteza
-  // de transporte continua no caminho separado (`incerto:true`) e mantém o
-  // aviso forte de não repetição.
+  // A known PENDING is a verifiable state of the institution, not an uncertain
+  // failure. For Pix, the webhook closes the loop within the same conversation.
+  // Transport uncertainty stays on the separate path (`incerto:true`) and keeps
+  // the strong non-repetition warning.
   if (data.ok !== false && data.incerto) return `${uncertain}${data.aviso ? '\n' + data.aviso : ''}`;
   if (data.ok !== false && (data.saiu === false || data.pending || String(data.status || '').toUpperCase() === 'PENDING')) {
     if (data.aviso) return data.aviso;
@@ -815,7 +825,7 @@ export function renderConfirmed(pend, r) {
     }
     return uncertain;
   }
-  // Saída de comando (ex: rodar_no_servidor): mostra stdout/stderr quando houver.
+  // Command output (e.g. rodar_no_servidor): shows stdout/stderr when present.
   const out = data && (data.saida || data.output);
   const err = data && data.stderr;
   if (data && data.ok === false) {
@@ -874,10 +884,11 @@ export function renderConfirmed(pend, r) {
     const updatedLink = rawUpdated && (shareableLink(rawUpdated) || rawUpdated);
     return `${text}${updatedLink ? `\n${updatedLink}` : ''}`;
   }
-  // Conector confirmado pelo serviço: a frase diz o que foi feito com os dados
-  // que a pessoa aprovou (nome, valor), em vez de "Registro criado no serviço"
-  // com o ID interno do grupo ou quadro (Splitwise, 28/09/2026). Parcial e
-  // "aceito pelo serviço" seguem no recibo genérico, que é mais preciso.
+  // Connector confirmed by the service: the sentence states what was done with
+  // the data the person approved (name, amount), instead of "Record created in
+  // the service" with the group or board's internal ID (Splitwise, 2026-09-28).
+  // Partial and "accepted by the service" still go through the generic receipt,
+  // which is more precise.
   if (connectorActionReceipt(pend.name, {}, null)
       && ['created','updated','deleted','saved_file','commented'].includes(evidence?.state)) {
     const args = pend.name === 'splitwise_add_expense'
@@ -891,8 +902,9 @@ export function renderConfirmed(pend, r) {
   const rawLink = data && (data.link || data.url || data.htmlLink || data.comprovante);
   const link = rawLink && (shareableLink(rawLink) || rawLink);
   if (link && !receiptText?.includes(link)) msg += `\n${link}`;
-  // App privado: o recibo é determinístico e o modelo só repete a referência,
-  // então usuário e senha precisam sair aqui ou a pessoa nunca os recebe.
+  // Private app: the receipt is deterministic and the model just repeats the
+  // reference, so username and password need to come out here or the person
+  // never receives them.
   if (['publicar_sistema','replicar_sistema'].includes(pend?.name)) msg += appAccessLines(data, lang);
   return msg;
 }
@@ -908,8 +920,8 @@ function appAccessLines(data, lang) {
         ? `\n\nLa app es privada; el navegador pedirá este acceso:\nUsuario: ${c.usuario}\nContraseña: ${c.senha}\nPuedes compartirlo con quien quieras dar acceso.`
         : `\n\nO app é privado; o navegador vai pedir este login:\nUsuário: ${c.usuario}\nSenha: ${c.senha}\nVocê pode passar pra quem quiser dar acesso.`;
   }
-  // Portão falhou = sem credencial. Com credencial, o aviso é de registro
-  // (replicar_sistema usa aviso_acesso para os dois casos).
+  // Gate failed = no credential. With a credential, the warning is about
+  // registration (replicar_sistema uses aviso_acesso for both cases).
   if (data?.aviso_acesso && !temLogin) out += lang === 'en'
     ? '\n\n⚠️ The app was published but the platform could not lock the link yet: for now anyone with it can open the app.'
     : lang === 'es'
@@ -923,22 +935,23 @@ function appAccessLines(data, lang) {
   return out;
 }
 
-// Tools de ESCRITA/mutação (código + shell no servidor): no modo "aceitar_edicoes"
-// rodam INLINE (sem a cerimônia de confirmação); no modo "plano" são recusadas (só leitura).
+// WRITE/mutation tools (code + server shell): in "aceitar_edicoes" mode they run
+// INLINE (without the confirmation ceremony); in "plano" mode they are refused
+// (read-only).
 const CODING_WRITE = new Set(['editar_arquivo', 'escrever_arquivo', 'rodar_comando', 'rodar_no_servidor', 'git_commit', 'git_push', 'git_branch', 'git_checkout']);
-// Tools que rodam comando de shell: podem ser pré-autorizadas por prefixo (allowlist).
+// Tools that run shell commands: can be pre-authorized by prefix (allowlist).
 const CMD_TOOLS = new Set(['rodar_comando', 'rodar_no_servidor']);
 
-// Metacaracteres que o shell remoto interpreta. Com qualquer um deles no resto do
-// comando, o que roda deixa de ser "o comando que o dono autorizou" e vira uma
-// cadeia arbitraria ("git status && rm -rf /pasta"). Nesse caso a pre-autorizacao
-// nao vale: a acao NAO e recusada, so perde o atalho e volta pro fluxo normal de
-// confirmacao.
+// Metacharacters that the remote shell interprets. With any of them in the rest
+// of the command, what runs stops being "the command the owner authorized" and
+// becomes an arbitrary chain ("git status && rm -rf /folder"). In that case the
+// pre-authorization doesn't apply: the action is NOT refused, it just loses the
+// shortcut and goes back to the normal confirmation flow.
 const SHELL_META = /[;&|`$(){}<>\n\r\\]/;
 
-// Um comando casa a allowlist se for exatamente um prefixo autorizado, ou se começar
-// com "<prefixo> " (fronteira de palavra, pra "git" não liberar "github...") E o
-// restante não trouxer metacaractere de shell.
+// A command matches the allowlist if it's exactly an authorized prefix, or if it
+// starts with "<prefix> " (word boundary, so "git" doesn't allow "github...") AND
+// the rest doesn't carry a shell metacharacter.
 export function cmdAllowed(comando, allowlist) {
   const c = String(comando || '').trim();
   if (!c) return false;
@@ -951,15 +964,15 @@ export function cmdAllowed(comando, allowlist) {
   });
 }
 
-// Envolve uma tool "perigosa". Comportamento depende do MODO de permissão do
-// agente (opts.mode) e da allowlist de comandos (opts.allowlist):
-//  • padrao          -> registra ação pendente e exige confirmação (default seguro).
-//  • aceitar_edicoes -> tools de coding-write rodam INLINE, resultado no mesmo turno.
-//  • plano           -> tools de coding-write são recusadas (nada é alterado).
-//  • allowlist       -> comando pré-autorizado roda INLINE em qualquer modo.
-// Tools fora do GATED_TOOLS passam intactas, exceto as de nome dinâmico que
-// chegam marcadas com `requiresConfirmation: true` (ex.: conectores MCP, cujo
-// nome só se conhece em tempo de execução).
+// Wraps a "dangerous" tool. Behavior depends on the agent's permission MODE
+// (opts.mode) and the command allowlist (opts.allowlist):
+//  • padrao          -> registers a pending action and requires confirmation (safe default).
+//  • aceitar_edicoes -> coding-write tools run INLINE, result in the same turn.
+//  • plano           -> coding-write tools are refused (nothing is changed).
+//  • allowlist       -> pre-authorized command runs INLINE in any mode.
+// Tools outside GATED_TOOLS pass through untouched, except dynamically-named ones
+// that arrive marked with `requiresConfirmation: true` (e.g. MCP connectors, whose
+// name is only known at execution time).
 export function gateTool(tool, threadId, opts = {}) {
   if (!GATED_TOOLS.has(tool.name) && tool.requiresConfirmation !== true) return tool;
   const mode = opts.mode || 'padrao';
@@ -975,44 +988,47 @@ export function gateTool(tool, threadId, opts = {}) {
       ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. When called, it normally does NOT execute right away: the system records the request and only executes it after the user explicitly confirms in the next turn. Describe alongside what will be done. (Exception: if the user turned on the "aceitar edições" (accept edits) mode or pre-authorized the command, it runs directly and you get the result right away.)]',
     parameters: tool.parameters,
     async run(args) {
-      // Todo gate guarda seu próprio retrato dos argumentos, não só as tools
-      // com preparo especial. O chamador pode reutilizar/mutar o objeto enquanto
-      // um preflight espera; isso não pode mudar o pedido que será confirmado.
+      // Every gate keeps its own snapshot of the arguments, not just tools with
+      // special preparation. The caller might reuse/mutate the object while a
+      // preflight is waiting; that must not change the request that is going to
+      // be confirmed.
       try { args = JSON.parse(JSON.stringify(args || {})); }
       catch { return 'NÃO registrei o pedido: parâmetros inválidos. Nenhuma ação foi executada.'; }
-      // Valida ANTES de criar pendência: erro nunca vira evento único nem pedido
-      // de confirmação enganoso. O conector repete a validação antes do HTTP.
+      // Validates BEFORE creating the pending action: an error never becomes a
+      // one-off event nor a misleading confirmation request. The connector
+      // repeats the validation before the HTTP call.
       if (['calendar_create', 'outlook_calendar_create'].includes(tool.name)) {
         try { calendarRecurrence(args?.recorrencia, args?.start || args?.inicio, args?.timezone || args?.fuso); }
         catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
       }
 
-      // Modo plano: não altera nada.
+      // Plan mode: changes nothing.
       if (mode === 'plano' && CODING_WRITE.has(tool.name)) {
         return `MODO PLANO ativo: não altero nada agora. Descreva o que faria (arquivo/comando) e peça pro usuário liberar (ex: "pode aplicar" ou trocar pra o modo padrão/aceitar edições) antes de executar.`;
       }
-      // Execução inline (pula a confirmação): modo aceitar_edicoes p/ coding-write,
-      // ou comando pré-autorizado na allowlist.
+      // Inline execution (skips confirmation): aceitar_edicoes mode for
+      // coding-write, or a pre-authorized command in the allowlist.
       const inlineByMode = (mode === 'aceitar_edicoes' || mode === 'livre') && CODING_WRITE.has(tool.name);
       const inlineByAllow = CMD_TOOLS.has(tool.name) && cmdAllowed(args?.comando, allowlist);
       if (!opts.confirmationPreview && (inlineByMode || inlineByAllow)) {
         return tool.run(args);
       }
-      // Algumas mutacoes sao estritamente redutoras de risco e reversiveis
-      // (hoje: apenas PAUSAR uma rotina, sem mudar mais nada). A propria tool
-      // declara essa excecao de forma estreita; nunca inferimos pelo nome nem
-      // pelo texto do modelo. Ela ainda passa pelo preflight abaixo antes de
-      // executar, para validar e resolver o alvo real.
+      // Some mutations are strictly risk-reducing and reversible
+      // (today: only PAUSING a routine, without changing anything else). The
+      // tool itself declares this narrow exception; we never infer it from the
+      // name nor from the model's text. It still goes through the preflight
+      // below before executing, to validate and resolve the real target.
       const inlineByPolicy = typeof tool.runWithoutConfirmation === 'function'
         && tool.runWithoutConfirmation(args) === true;
-      // O caminho legado mantém uma pendência; a sessão persistente suporta várias.
+      // The legacy path keeps a single pending action; the persistent session
+      // supports several.
       if (!opts.confirmationPreview && !currentConfirmationSession(threadId) && pending.has(threadId)) {
         return 'Já existe uma ação aguardando a confirmação do usuário nesta conversa. Trate uma de cada vez: confirme (ou cancele) a anterior antes de propor outra.';
       }
       const lang = idiomaDoCartao(threadId);
-      // Algumas ferramentas precisam confrontar argumentos do modelo com a
-      // intenção literal DESTE turno antes de montar a confirmação. Exemplo:
-      // vencimento de boleto não autoriza o modelo a inventar um agendamento.
+      // Some tools need to cross-check the model's arguments against this
+      // turn's literal intent before building the confirmation. Example: a
+      // boleto's due date doesn't authorize the model to invent a schedule.
       if (!opts.confirmationPreview && typeof tool.normalizeConfirmationArgs === 'function') {
         let normalized, cloned;
         try {
@@ -1029,11 +1045,13 @@ export function gateTool(tool, threadId, opts = {}) {
       }
       const restored = opts.restoreDescriptor && typeof tool.restoreConfirmation === 'function'
         ? await tool.restoreConfirmation(args, opts.restoreDescriptor) : null;
-      // Tool de nome dinâmico não tem frase no describe(): ela mesma descreve o pedido.
+      // Dynamically-named tool has no sentence in describe(): it describes the
+      // request itself.
       let label = (typeof tool.describeConfirmation === 'function' && tool.describeConfirmation(args, lang)) || describe(tool.name, args, lang);
       let mailAddressWarning = '';
-      // E-mail: se o destinatário divergir do que o dono escreveu, isso entra no
-      // cartão. Sem isso o cartão exibia o endereço alterado como se fosse o dele.
+      // Email: if the recipient diverges from what the owner wrote, this goes
+      // into the card. Without this the card displayed the altered address as
+      // if it were theirs.
       if (MAIL_TOOLS.has(tool.name)) {
         const destinatarios = tool.name === 'asaas_enviar_comprovante_email'
           ? args?.para
@@ -1045,17 +1063,17 @@ export function gateTool(tool, threadId, opts = {}) {
         );
         if (aviso) { mailAddressWarning = aviso; label = `${label}. ${aviso}`; }
       }
-      // Enriquecimento opcional: a tool pode oferecer um `preflight(args)` que
-      // consulta o estado REAL antes da confirmação, pra o usuário não confirmar
-      // no escuro (ex: quantos registros morrem ao apagar um app). Contrato:
-      // READ-ONLY, devolve `{ aviso }`, `{ erro }` ou nada. Best-effort — se
-      // falhar ou demorar, o gate continua valendo com o label básico.
+      // Optional enrichment: the tool can offer a `preflight(args)` that queries
+      // the REAL state before confirmation, so the user doesn't confirm blind
+      // (e.g. how many records die when deleting an app). Contract:
+      // READ-ONLY, returns `{ aviso }`, `{ erro }` or nothing. Best-effort — if
+      // it fails or is slow, the gate still stands with the basic label.
       //
-      // `erro` = argumento que a tool JÁ SABE que vai recusar (hora 25, dia da
-      // semana que não existe). Sem isso o pedido virava cartão de confirmação
-      // descrevendo o valor arredondado, o dono confirmava, e só então a tool
-      // recusava: ele tinha confirmado uma coisa que nunca existiu. Voltando
-      // agora, o modelo corrige no mesmo turno.
+      // `erro` = an argument the tool ALREADY KNOWS it's going to reject (hour 25,
+      // a weekday that doesn't exist). Without this, the request became a
+      // confirmation card describing the rounded value, the owner confirmed, and
+      // only then did the tool refuse: they had confirmed something that never
+      // existed. Going back now, the model corrects it in the same turn.
       let recusa = null;
       try {
         const extra = await (restored?.preflight || tool.preflight)?.(args);
@@ -1063,7 +1081,7 @@ export function gateTool(tool, threadId, opts = {}) {
         else if (extra && extra.aviso) label = `${label}. ${extra.aviso}`;
       } catch (e) {
         if (opts.confirmationPreview || currentConfirmationSession(threadId)) throw Error('Não consegui conferir novamente o alvo da confirmação.');
-        /* segue com o label básico */
+        /* continues with the basic label */
       }
       if (recusa) return `NÃO registrei o pedido: ${recusa} Corrija o argumento e chame a tool de novo (não peça confirmação de algo que não foi registrado).`;
       if (!opts.confirmationPreview && inlineByPolicy) return tool.run(args);
@@ -1084,10 +1102,10 @@ export function gateTool(tool, threadId, opts = {}) {
           const prepared=await tool.prepareConfirmation(confirmedArgs);
           if(typeof prepared?.run!=='function')throw Error('Vínculo de confirmação indisponível.');
           confirmedRun=prepared.run;preparedDescriptor=prepared.descriptor;
-          // Algumas ações críticas só conhecem o efeito REAL depois de uma
-          // consulta read-only ao provedor. O texto mostrado ao dono precisa
-          // vir desse mesmo preparo vinculado, nunca dos argumentos inventados
-          // pelo modelo (ex.: titular real de uma chave Pix ou valor do boleto).
+          // Some critical actions only know the REAL effect after a read-only
+          // query to the provider. The text shown to the owner needs to come
+          // from that same bound preparation, never from arguments invented
+          // by the model (e.g. a Pix key's real holder or a boleto's amount).
           const preparedLabel = prepared?.labels?.[lang] || prepared?.label;
           if (typeof preparedLabel === 'string' && preparedLabel.trim()) {
             label = preparedLabel.trim();
@@ -1099,8 +1117,9 @@ export function gateTool(tool, threadId, opts = {}) {
       }
       // Another async proposal may have won while the target was being checked.
       if(!opts.confirmationPreview && !currentConfirmationSession(threadId) && pending.has(threadId))return 'Já existe uma ação aguardando confirmação nesta conversa. Nenhuma proposta foi substituída.';
-      // O idioma vai GRAVADO na pendência, não relido na confirmação: o
-      // resultado tem que sair na mesma língua do pedido que o dono aprovou.
+      // The language gets RECORDED in the pending action, not re-read at
+      // confirmation time: the result has to come out in the same language as
+      // the request the owner approved.
       let durableId=null;
       if(!opts.confirmationPreview && !currentConfirmationSession(threadId) && tool.name==='gerenciar_tarefa_de_app' && preparedDescriptor&&opts.codingApprovals){
         try{
@@ -1120,10 +1139,11 @@ export function gateTool(tool, threadId, opts = {}) {
             binding: preparedDescriptor, confirmationText, language: lang,
             source: { ownerText: textoAtualDoDono.get(String(threadId)) || '',
               ownerHistory: textoDoDono.get(String(threadId)) || '', ...session.captureSource?.() } });
-          // A tool pode dizer qual é o ALVO da proposta (ex.: a nota que
-          // editar_nota vai trocar). Uma proposta nova pro mesmo alvo substitui
-          // a anterior ainda pendente, em vez de empilhar cartões que brigam
-          // entre si. Só depois de a nova estar gravada: se falhar, nada some.
+          // The tool can state what the TARGET of the proposal is (e.g. the note
+          // that editar_nota is going to change). A new proposal for the same
+          // target replaces the previous still-pending one, instead of stacking
+          // cards that conflict with each other. Only after the new one is
+          // recorded: if it fails, nothing disappears.
           const alvo = typeof tool.supersedeKey === 'function' ? tool.supersedeKey(confirmedArgs) : null;
           if (alvo) {
             for (const old of session.pending()) {
@@ -1140,28 +1160,28 @@ export function gateTool(tool, threadId, opts = {}) {
       if (tool.name === 'jornada_configurar') {
         return `JORNADA AGUARDANDO CONFIRMAÇÃO (ainda não começou). Faça um convite curto e acolhedor usando estas informações: ${label} Diga que a pessoa pode confirmar com “sim” ou 👍. Não transforme isso em checklist e não acrescente avisos técnicos, jurídicos ou de privacidade.`;
       }
-      // O cartão com os detalhes e a pergunta vai logo abaixo da resposta do
-      // modelo (server.mjs). Pedir a confirmação aqui gerava duas perguntas e um
-      // "prontinho" antes da hora (teste no dev, 29/09/2026).
+      // The card with the details and the question goes right below the model's
+      // response (server.mjs). Asking for confirmation here produced two
+      // questions and an early "all done" (tested on dev, 2026-09-29).
       return `AÇÃO PENDENTE DE CONFIRMAÇÃO (NÃO foi executada). Registrei o pedido para ${label}. O sistema mostra logo abaixo da sua resposta um cartão com os detalhes e a única pergunta de confirmação. Não repita esses detalhes, não peça confirmação em prosa e não diga nem insinue que a ação já foi feita; responda só ao restante da mensagem (explicação, dúvida, formato pedido). Se não houver mais nada a responder, escreva uma frase curta, sem pergunta. A ação só roda quando a pessoa confirmar; se ela disser qualquer outra coisa, ela é cancelada.`;
     },
   };
 }
 
-// Adiciona ao registry uma lista de tools, envolvendo as perigosas com a trava.
-// opts (mode/allowlist) é opcional: sem ele, comportamento = modo padrão (seguro).
+// Adds a list of tools to the registry, wrapping the dangerous ones with the gate.
+// opts (mode/allowlist) is optional: without it, behavior = default mode (safe).
 export function addGated(registry, tools, threadId, opts = {}) {
   for (const t of tools) registry.add(gateTool(t, threadId, opts));
 }
 
 export function hasPending(threadId) { return currentConfirmationSession(threadId)?.pending().length > 0 || pending.has(threadId); }
-// A confirmação de uma ação perigosa precisa ser resolvida na fronteira de
-// um turno, pelo gate determinístico do server. Se o canal entregar um "pode"
-// enquanto o turno que criou a pendência ainda está aberto, não consumimos a
-// mensagem como interjeição do modelo: o adaptador do canal a mantém na fila e
-// ela vira o próximo turno. Sem isso o modelo tentava chamar a tool de novo e
-// recebia "já existe uma ação aguardando confirmação", embora o dono tivesse
-// acabado de confirmar.
+// Confirming a dangerous action needs to be resolved at a turn boundary, by the
+// server's deterministic gate. If the channel delivers a "go ahead" while the turn
+// that created the pending action is still open, we don't consume the message as
+// an interjection from the model: the channel adapter keeps it queued and it
+// becomes the next turn. Without this the model would try calling the tool again
+// and get "there's already an action waiting for confirmation", even though the
+// owner had just confirmed.
 export function deferIncomingWhileConfirmationPending(threadId, poll) {
   if (typeof poll !== 'function') return null;
   return async () => hasPending(threadId) ? null : await poll();
@@ -1180,22 +1200,23 @@ export function takePending(threadId) {
   if (p) pending.delete(threadId);
   return p;
 }
-// Recoloca uma pendência (ex: reaction 👍 numa ação irreversível: a gente tira,
-// vê que precisa de texto e devolve pra thread pra o usuário confirmar escrevendo).
+// Restores a pending action (e.g. 👍 reaction on an irreversible action: we take
+// it back, see it needs text, and return it to the thread for the user to confirm
+// by writing).
 export function restorePending(threadId, pend) {
   if (currentConfirmationSession(threadId)) return;
   if (!pend) return;
-  // Pendências anteriores ao vínculo por mensagem recebem identidade nova.
-  // Referências herdadas não podem autorizar essa restauração por coincidência;
-  // o cartão reenviado poderá ser vinculado normalmente à identidade nova.
+  // Pending actions from before the per-message link get a new identity.
+  // Inherited references can't authorize this restoration by coincidence;
+  // the resent card can be linked normally to the new identity.
   if (!pend.id) pend = { ...pend, id: randomUUID(), messageRefs: [] };
   if (!pend.confirmationText) pend = { ...pend, confirmationText: confirmationCard(pend.name, pend.label || '', pend.language) };
   pending.set(threadId, pend);
 }
 
-// A referência vem do transporte (ID da mensagem enviada/citada), nunca do
-// texto do usuário ou do modelo. O ID da proposta evita que uma resposta cujo
-// envio terminou tarde vincule a mensagem de A à pendência mais recente B.
+// The reference comes from the transport (ID of the sent/quoted message), never
+// from the user's or model's text. The proposal's ID avoids a reply whose sending
+// finished late linking message A's response to the more recent pending action B.
 function messageReference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const { channel, messageId } = value;
@@ -1215,10 +1236,10 @@ export function bindPendingMessage(threadId, pendingId, reference) {
   return true;
 }
 
-// Sem referência: mantém a confirmação textual simples. Referência explícita
-// mas desconhecida/incompleta: falha fechada e NÃO consome a pendência. O canal
-// deve passar um objeto mesmo quando uma citação/reação não puder ser resolvida.
-// Serve também para recusa por reação: só cancelar depois de conferir o alvo.
+// No reference: keeps the simple textual confirmation. Explicit but
+// unknown/incomplete reference: fails closed and does NOT consume the pending
+// action. The channel must pass an object even when a quote/reaction can't be
+// resolved. Also used for refusal by reaction: only cancel after checking the target.
 export function confirmationTargetMatches(pend, target) {
   if (!pend) return false;
   if (target === undefined) return true;
@@ -1227,9 +1248,10 @@ export function confirmationTargetMatches(pend, target) {
   return pend.messageRefs.some((r) => r.channel === ref.channel && r.messageId === ref.messageId);
 }
 
-// Devolve o cartão atual sem pedir ao modelo que o reconstrua ou execute outra
-// ação. O transporte pode vincular o novo envio à MESMA proposta, para a pessoa
-// responder a ele. Não afirma que a ação citada anteriormente foi cancelada.
+// Returns the current card without asking the model to rebuild it or execute
+// another action. The transport can link the new send to the SAME proposal, for
+// the person to reply to it. It does not claim that the previously cited action
+// was cancelled.
 export function confirmationTargetNotice(pend) {
   const lang = tagIdioma(pend?.language || IDIOMA_PADRAO);
   if (!pend) return lang === 'en'
@@ -1252,16 +1274,18 @@ export function confirmsPending(pend, message, target) {
       || (pend?.name === 'jornada_configurar' && configurationConfirmation(String(message || ''))));
 }
 
-// Detecta confirmação explícita do usuário na mensagem CRUA (no código, não no
-// modelo). Conservador de propósito: na dúvida retorna false (ação cancelada).
-// ATENÇÃO: essas regras valem pra QUALQUER idioma que o usuário fale, não só
-// pt-BR. Enquanto só existia a lista em português, quem falava inglês dizia
-// "yes"/"yeah" e a ação era cancelada em silêncio (o modelo ainda respondia
-// "Done ✅" por cima). Ao mexer aqui, mantenha o viés conservador: na dúvida,
-// false — negativa nova pode entrar solta, positiva nova só se não colidir com
-// palavra comum de outra língua (ex: "vale" em pt/es executaria escrita à toa).
+// Detects explicit user confirmation in the RAW message (in code, not in the
+// model). Deliberately conservative: when in doubt returns false (action
+// cancelled).
+// ATTENTION: these rules apply to ANY language the user speaks, not just
+// pt-BR. While only the Portuguese list existed, English speakers would say
+// "yes"/"yeah" and the action was cancelled silently (the model would still
+// reply "Done ✅" on top of it). When touching this, keep the conservative bias:
+// when in doubt, false — a new negative can go in freely, a new positive only if
+// it doesn't collide with a common word from another language (e.g. "vale" in
+// pt/es would execute a write for no reason).
 const NEG = /\b(n[ãa]o|nao|cancela|cancelar|espera|esquece|deixa pra?\s*(l[áa]|depois)?|pare|nem|melhor n[ãa]o|aguarda|peraí|pera[íi])\b/i;
-// "para" left the list above and got its own rule (07/09/2026). As \bpara\b
+// "para" left the list above and got its own rule (2026-09-07). As \bpara\b
 // it matched the PREPOSITION, not the verb "parar" (stop): "sim, manda para o
 // João" and even "confirmo, manda para ele" fell into the negative and
 // cancelled SILENTLY, in pt and es ("sí, para el cliente"). The negative is
@@ -1273,138 +1297,146 @@ const NEG = /\b(n[ãa]o|nao|cancela|cancelar|espera|esquece|deixa pra?\s*(l[áa]
 // Removing "para" from the negative executes NOTHING by itself: without NEG the
 // phrase still needs a positive match to confirm. The conservative bias holds.
 const PARA_STOP = /(?:^|[\s,;:])para\s*[!.…]*$|(?:^|[\s,;:])para\s+(?:com\s+isso|com\s+essa|tudo|agora|a[íi]|de\s+\w)/i;
-// Fronteira do "no" inicial por \p{L}, não por \b: o \b do JS é ASCII, então
-// uma palavra que começa com "no" e continua com letra ACENTUADA fecha fronteira
-// pra ele. "noções alinhadas, pode enviar" casava `^no\b` (porque o "ç" conta
-// como não-palavra) e virava negativa, cancelando em silêncio. Mesmo gênero de
-// defeito do "para": fronteira ASCII sobre texto acentuado.
+// Boundary of the initial "no" by \p{L}, not by \b: JS's \b is ASCII, so
+// a word that starts with "no" and continues with an ACCENTED letter closes the
+// boundary for it. "noções alinhadas, pode enviar" matched `^no\b` (because the
+// "ç" counts as a non-word character) and became a negative, cancelling silently.
+// Same kind of bug as "para": ASCII boundary over accented text.
 const NEG_EN = /^no(?!\p{L})|\b(nope|not|dont|cancel|cancels|canceled|cancelled|wait|stop|hold on|hold off|never ?mind|forget it|later|not yet)\b|do(es)?n['’]t/iu;
-// Espanhol. Até aqui NÃO EXISTIA nenhuma negativa em espanhol: o dicionário es
-// eram duas palavras ('sí' e 'adelante') penduradas dentro da regex de inglês.
-// Um "no, cancela" só era pego por acaso, pelo `^no` do inglês; qualquer recusa
-// em outra forma ("olvídalo", "mejor no", "todavía no") passava batido e a
-// pessoa podia acabar confirmando o que quis recusar.
+// Spanish. Until now there was NO negative in Spanish at all: the es
+// dictionary was just two words ('sí' and 'adelante') hanging inside the
+// English regex. A "no, cancela" was only caught by chance, by English's `^no`;
+// any refusal in another form ("olvídalo", "mejor no", "todavía no") went
+// through unnoticed and the person could end up confirming what they meant to
+// refuse.
 //
-// O "no" solto do espanhol NÃO pode entrar aqui: em português "no" é a contração
-// em+o ("publica no LinkedIn", "sobe no servidor"), então `no` solto cancelaria
-// confirmações legítimas em pt. É a mesma armadilha do "para". Fica o `^no` do
-// inglês (que pega "no, cancela") mais as formas em que o "no" espanhol vem
-// seguido de pronome/verbo, combinação que não existe em português.
+// Spanish's standalone "no" CANNOT go in here: in Portuguese "no" is the
+// contraction of em+o ("publica no LinkedIn", "sobe no servidor"), so a
+// standalone `no` would cancel legitimate confirmations in pt. Same trap as
+// "para". English's `^no` stays (which catches "no, cancela") plus the forms
+// where Spanish's "no" is followed by a pronoun/verb, a combination that doesn't
+// exist in Portuguese.
 //
-// "nunca" NÃO pode entrar solto aqui, pelo mesmo motivo do "para": é palavra
-// comum do português em frase que CONFIRMA ("isso nunca falha, pode enviar",
-// "nunca deu problema, pode subir"). Repare que ele nem está na NEG do português
-// logo acima, justamente por isso. Fica valendo só quando é a fala inteira ou
-// quando vem seguido de pronome/verbo espanhol que não existe em pt ("nunca lo
-// hagas"). De fora ficam "nunca te" e "nunca se", que são português corrente
-// ("nunca se sabe", "nunca te falei").
+// "nunca" CANNOT go in standalone here either, for the same reason as "para": it's
+// a common Portuguese word in a sentence that CONFIRMS ("isso nunca falha, pode
+// enviar", "nunca deu problema, pode subir"). Note it isn't even in Portuguese's
+// NEG right above, exactly for that reason. It only counts when it's the whole
+// message or when followed by a Spanish pronoun/verb that doesn't exist in pt
+// ("nunca lo hagas"). Left out are "nunca te" and "nunca se", which are everyday
+// Portuguese ("nunca se sabe", "nunca te falei").
 const NEG_ES = /\b(olv[íi]dalo|olv[íi]date|d[ée]jalo|d[ée]jame|todav[íi]a no|a[úu]n no|ahora no|mejor no|det[ée]nte|p[áa]rate|para nada|de ninguna manera)\b|^nunca\s*[!.…]*$|\bnunca\s+(lo|la|los|las|les|hagas|hagan|env[íi]es|mandes|publiques|subas)(?!\p{L})/iu;
-// O "no" espanhol seguido de PRONOME ("no lo hagas") colide com a contração
-// em+o do português quando o que vem depois é nome próprio: "manda no La Nación",
-// "publica no Los Angeles Times" viravam negativa e cancelavam em silêncio. Em
-// espanhol o pronome é sempre seguido de VERBO em minúscula; em português vem um
-// nome próprio em maiúscula. Por isso esta parte é a única testada SEM /i: o
-// pronome tem que estar em minúscula e a palavra seguinte também. O "No" com
-// inicial maiúscula segue coberto pelo `[Nn]o` explícito.
+// Spanish's "no" followed by a PRONOUN ("no lo hagas") collides with
+// Portuguese's em+o contraction when what follows is a proper name: "manda no
+// La Nación", "publica no Los Angeles Times" became a negative and cancelled
+// silently. In Spanish the pronoun is always followed by a lowercase VERB; in
+// Portuguese it's followed by a capitalized proper name. That's why this part
+// is the only one tested WITHOUT /i: the pronoun has to be lowercase and the
+// following word too. The capitalized "No" is still covered by the explicit
+// `[Nn]o`.
 const NEG_ES_NO = /(?<!\p{L})[Nn]o\s+(?:lo|la|los|las|le|les|te|se)\s+[a-záéíóúñü]|(?<!\p{L})[Nn]o\s+(?:hagas|hagan|env[íi]es|mandes|publiques|subas|crees|quiero|hace falta)(?!\p{L})/u;
 const STRONG = /(confirmo|confirmar|confirmado|confirmei|autorizo|autorizado|pode (enviar|mandar|criar|subir|postar|comentar|fazer|seguir|ir|sim)|manda ver|manda a[íi]|envia a[íi]|pode sim|isso mesmo|t[áa] certo|est[áa] certo)/i;
 const STRONG_EN = /(go ahead|please do|do it|send it|make it so|proceed|i (confirm|approve|authorize)|confirm(ed|s)?\b|approved?\b|authoriz(e|ed)\b|that(['’]s| is| s) (right|correct)|sounds good|looks good|lgtm|yes please|please go)/i;
-// Autorização explícita em espanhol, equivalente ao "go ahead"/"do it" do
-// STRONG_EN: vale em frase de qualquer tamanho.
+// Explicit authorization in Spanish, equivalent to STRONG_EN's "go ahead"/"do
+// it": valid in a sentence of any length.
 //
-// A fronteira (?<!\p{L})…(?!\p{L}) NÃO é decoração. Sem ela, e como esta regex é
-// testada ANTES do limite de 4 palavras, as formas sem acento casavam DENTRO de
-// palavra portuguesa e executavam ação irreversível: "o mandaloriano é minha
-// série favorita" contém "mandalo" e confirmava. \b não serve aqui porque o \b
-// do JS é ASCII e não fecha fronteira depois de letra acentuada ("hazlo" tudo
-// bem, mas "hágalo" não).
-// Ainda com a fronteira, os imperativos com pronome colado EXIGEM o acento, e
-// isso também é regra e não capricho: sem acento, "mandalo" e "envialo" são o
-// jeito (torto, sem hífen) de escrever "mandá-lo" e "enviá-lo" em português, e
-// "preciso pensar antes de mandalo" executava a ação. Em espanhol o acento
-// nessas formas é OBRIGATÓRIO (mándalo, envíalo, publícalo, súbelo, créalo,
-// hágalo), então exigir a forma certa não perde espanhol escrito direito. Quem
-// digita sem acento cai no viés conservador: não confirma, e a ação é cancelada
-// em vez de disparada.
+// The boundary (?<!\p{L})…(?!\p{L}) is NOT decoration. Without it, and since
+// this regex is tested BEFORE the 4-word limit, the unaccented forms would
+// match INSIDE a Portuguese word and execute an irreversible action: "o
+// mandaloriano é minha série favorita" contains "mandalo" and would confirm.
+// \b doesn't work here because JS's \b is ASCII and doesn't close a boundary
+// after an accented letter ("hazlo" is fine, but "hágalo" is not).
+// Even with the boundary, imperatives with an attached pronoun REQUIRE the
+// accent, and that is also a rule, not a whim: without the accent, "mandalo"
+// and "envialo" are the (crooked, hyphen-less) way of writing "mandá-lo" and
+// "enviá-lo" in Portuguese, and "preciso pensar antes de mandalo" would execute
+// the action. In Spanish the accent on these forms is MANDATORY (mándalo,
+// envíalo, publícalo, súbelo, créalo, hágalo), so requiring the correct form
+// doesn't lose properly-written Spanish. Whoever types without the accent falls
+// into the conservative bias: it doesn't confirm, and the action is cancelled
+// instead of triggered.
 const STRONG_ES = /(?<!\p{L})(hazlo|házlo|hágalo|envíalo|mándalo|publícalo|súbelo|créalo|adelante|lo apruebo|apruebo|estoy de acuerdo|est[áa] bien|me parece bien|puedes? (enviar|mandar|crear|subir|publicar|hacer|seguir)(l[oa]s?|le|les)?)(?!\p{L})/iu;
 const POS = /\b(sim|claro|isso|ok|okay|okk|beleza|blz|positivo|aprovo|aprovado|bora|manda|envia|envie|pode)\b|^(👍|✅|👌)/iu;
-// Fronteira por \p{L} (não \b): "sí" termina em letra acentuada, e o \b do JS
-// é ASCII, então \b não casaria depois do "í".
-// "exactly" é o "isso" do inglês (frustração 25/09: "isso" não valia como sim).
+// Boundary by \p{L} (not \b): "sí" ends in an accented letter, and JS's \b
+// is ASCII, so \b wouldn't match after the "í".
+// "exactly" is English's "isso" (frustration on 2026-09-25: "isso" didn't
+// count as a yes).
 const POS_EN = /(?<!\p{L})(yes|yeah|yeh|yep|yup|yessir|sure|correct|exactly|affirmative)(?!\p{L})/iu;
-// Positivas curtas em espanhol (só valem em frase de até 4 palavras).
-// "correcto"/"correcta" precisam de entrada própria: o `correct` do POS_EN tem
-// (?!\p{L}) na frente, então trava justamente nas formas com sufixo.
-// Fora da lista de propósito: "vale" (colide com o "vale" do português e
-// executaria escrita à toa) e "venga" (também é subjuntivo de venir, "que venga
-// mañana" viraria confirmação).
+// Short Spanish positives (only valid in a sentence of up to 4 words).
+// "correcto"/"correcta" need their own entry: POS_EN's `correct` has
+// (?!\p{L}) in front, which specifically blocks the suffixed forms.
+// Left out on purpose: "vale" (collides with Portuguese's "vale" and would
+// execute a write for no reason) and "venga" (also venir's subjunctive, "que
+// venga mañana" would become a confirmation).
 const POS_ES = /(?<!\p{L})(sí|de acuerdo|dale|perfecto|as[íi] es|eso es|exacto|por supuesto|correct[oa]|hecho)(?!\p{L})/iu;
-// "si" SEM acento é ambíguo: em espanhol é o "se" condicional ("si puedes",
-// "si quieres"), e com o limite de 4 palavras isso executaria uma ação real em
-// cima de uma frase que não confirma nada. Então o "si" sem acento só conta
-// quando é a fala INTEIRA. O "sí" acentuado não tem essa ambiguidade e continua
-// valendo em qualquer posição (está no POS_ES).
+// "si" WITHOUT an accent is ambiguous: in Spanish it's the conditional "se"
+// ("si puedes", "si quieres"), and with the 4-word limit this would execute a
+// real action on top of a sentence that doesn't confirm anything. So unaccented
+// "si" only counts when it's the WHOLE message. Accented "sí" doesn't have this
+// ambiguity and still counts in any position (it's in POS_ES).
 const SI_SOZINHO = /^si\s*[!.…]*$/i;
-// "eso" é o "isso" do espanhol, mas também abre frase que não confirma
-// ("eso depende", "eso lo vemos después"). Por isso só vale sozinho ou
-// colado num "sí": "eso", "sí, eso", "eso, sí".
+// "eso" is Spanish's "isso", but it also opens a sentence that doesn't confirm
+// ("eso depende", "eso lo vemos después"). So it only counts alone or attached
+// to a "sí": "eso", "sí, eso", "eso, sí".
 const ESO_SOZINHO = /^(?:s[íi][, ]+)?eso(?:[, ]+s[íi])?\s*[!.…]*$/iu;
-// Verbo de ação no imperativo: só vale como confirmação em frase CURTA (junto
-// com a regra de <= 4 palavras), senão "quando publicar o app" executaria.
+// Action verb in the imperative: only counts as confirmation in a SHORT sentence
+// (together with the <= 4-word rule), otherwise "quando publicar o app" would execute.
 const ACT = /\b(publica|publicar|publique|sobe|suba|cria|crie|faz|faça|manda|envia)\b/i;
 
-// ── Confirmação COM RESSALVA (achado #15) ──
-// "pode sim, mas manda pro outro endereço" batia no STRONG ("pode sim") e
-// executava a ação PENDENTE, com os dados ANTIGOS: a pessoa autorizou, só que
-// autorizou OUTRA coisa. Agora isso não conta como confirmação; a pendência cai
-// e o assistente propõe de novo já com a mudança, pedindo confirmação de novo.
-// Só vale quando há ressalva E sinal de TROCA. Adversativa sozinha continua
-// confirmando ("nunca se sabe, mas pode mandar"), que é português corrente.
+// ── Confirmation WITH A CAVEAT (finding #15) ──
+// "pode sim, mas manda pro outro endereço" matched STRONG ("pode sim") and
+// executed the PENDING action, with the OLD data: the person authorized, except
+// they authorized something ELSE. Now this doesn't count as confirmation; the
+// pending action drops and the assistant proposes again already with the change,
+// asking for confirmation again. Only counts when there's both a caveat AND a
+// sign of CHANGE. A standalone adversative still confirms ("nunca se sabe, mas
+// pode mandar"), which is everyday Portuguese.
 const RESSALVA = /(?<!\p{L})(mas|por[ée]m|s[óo] que|no entanto|contudo|entretanto|todavia|but|however|pero|sin embargo|aunque)(?!\p{L})/iu;
 const TROCA = /(?<!\p{L})(troc|mud|alter|corrig|chang|cambi|swap|replace|outr[oa]|otr[oa]|other|another|distint|difer|differ)/iu;
-// Locução que POR SI só diz que é outra coisa: não precisa de adversativa.
+// A phrase that BY ITSELF says it's something else: doesn't need an adversative.
 const TROCA_SOZINHA = /(?<!\p{L})((em vez|ao inv[ée]s|no lugar|en vez|en lugar) d[eoa]s?|instead of)(?!\p{L})/iu;
 
-// A mensagem autoriza, mas mudando o pedido? A troca tem que vir DEPOIS da
-// ressalva; senão "troquei de ideia ontem, mas pode mandar" cancelaria à toa.
+// Does the message authorize, but changing the request? The change has to come
+// AFTER the caveat; otherwise "troquei de ideia ontem, mas pode mandar" would
+// cancel for no reason.
 function mudaOPedido(t) {
   if (TROCA_SOZINHA.test(t)) return true;
   const m = RESSALVA.exec(t);
   return !!m && TROCA.test(t.slice(m.index + m[0].length));
 }
 
-// Pra quem cancelou: a pessoa CONFIRMOU, só que pedindo outra coisa. Quem chama
-// usa isso pra explicar ao modelo que ele tem que repropor com a mudança, e não
-// dizer "você não confirmou".
+// For whoever cancelled: the person DID CONFIRM, just asking for something else.
+// The caller uses this to explain to the model that it has to re-propose with the
+// change, and not say "you didn't confirm".
 export function confirmacaoComRessalva(text) {
   const said = userSaid(text);
   if (!said) return false;
   const parts = said.split('\n').map((s2) => s2.trim()).filter(Boolean);
   if (parts.some((p2) => NEG.test(p2) || NEG_EN.test(p2) || NEG_ES.test(p2) || NEG_ES_NO.test(p2) || PARA_STOP.test(p2))) return false;
-  // Sinal de "sim" SEM o limite de 4 palavras do confirmsPart: aqui nada é
-  // executado, só se escolhe a explicação que vai pro modelo, e a frase com
-  // ressalva é longa por natureza ("pode, mas manda para outro e-mail").
+  // Signal of "yes" WITHOUT confirmsPart's 4-word limit: nothing is executed
+  // here, it only picks which explanation goes to the model, and the sentence
+  // with a caveat is naturally long ("pode, mas manda para outro e-mail").
   const pareceSim = (t) => !t.endsWith('?') && (STRONG.test(t) || STRONG_EN.test(t) || STRONG_ES.test(t)
     || POS.test(t) || POS_EN.test(t) || POS_ES.test(t) || SI_SOZINHO.test(t) || ESO_SOZINHO.test(t) || ACT.test(t));
   return parts.some(mudaOPedido) && parts.some(pareceSim);
 }
 
-// Marcador do fim de um bloco de contexto injetado pelo CANAL (não é fala do
-// usuário). Char invisível U+2063: o modelo lê o bloco normalmente, e a gente
-// tem um âncora determinístico de onde ele termina. Não dá pra confiar no "]"
-// porque o texto citado pelo usuário pode conter "]".
+// Marker for the end of a context block injected by the CHANNEL (not the user's
+// speech). Invisible char U+2063: the model reads the block normally, and we
+// have a deterministic anchor for where it ends. Can't rely on "]" because the
+// text the user quoted might contain "]".
 export const CHANNEL_CTX_END = '⁣';
 
-// Devolve só o que a PESSOA escreveu, sem o envelope do canal. O WhatsApp
-// injeta um bloco de contexto antes da mensagem quando ela usa "responder/
-// citar", e esse bloco não pode participar da decisão de confirmar: a palavra
-// "para" do PRÓPRIO bloco caía na lista de negativas e cancelava, em silêncio,
-// QUALQUER confirmação feita por citação, em qualquer ação gated (caso real
-// 18/08: "sim"/"confirmado"/👍 cancelados 8 vezes seguidas).
-// Linha que o canal põe antes da transcrição de um áudio (voice-input.mjs).
-// Não usa o CHANNEL_CTX_END de propósito: o canal junta mensagens seguidas, e
-// num "não" digitado seguido de um áudio "sim" o lastIndexOf jogaria fora o
-// "não". Sai linha por linha, então o resto do lote continua valendo.
+// Returns only what the PERSON wrote, without the channel's envelope. WhatsApp
+// injects a context block before the message when it uses "reply/quote", and
+// that block can't take part in the confirmation decision: the word "para" from
+// the block ITSELF fell into the list of negatives and cancelled, silently, ANY
+// confirmation made by quoting, in any gated action (real case on 2026-08-18:
+// "sim"/"confirmado"/👍 cancelled 8 times in a row).
+// Line the channel places before an audio transcription (voice-input.mjs).
+// Doesn't use CHANNEL_CTX_END on purpose: the channel joins consecutive
+// messages, and in a typed "não" followed by a "sim" audio, lastIndexOf would
+// throw away the "não". It goes line by line, so the rest of the batch still
+// counts.
 export const VOICE_INPUT_NOTE = '[Mensagem de VOZ: o usuário mandou um áudio; abaixo vai a transcrição automática do que ele falou]';
 
 export function userSaid(text) {
@@ -1414,28 +1446,29 @@ export function userSaid(text) {
     .split('\n').filter((l) => l.trim() !== VOICE_INPUT_NOTE).join('\n').trim();
 }
 
-// Uma parte (uma mensagem) confirma?
+// Does a part (a message) confirm?
 function confirmsPart(t) {
-  // Pergunta não é confirmação ("deu certo?", "pode?").
+  // A question is not a confirmation ("deu certo?", "pode?").
   if (t.endsWith('?')) return false;
-  if (STRONG.test(t) || STRONG_EN.test(t) || STRONG_ES.test(t)) return true;  // autorização explícita
+  if (STRONG.test(t) || STRONG_EN.test(t) || STRONG_ES.test(t)) return true;  // explicit authorization
   const words = t.split(/\s+/).length;
-  // Afirmativa curta ("sim", "pode", "ok", "yes", "sure", "sí", "dale", "publica").
+  // Short affirmative ("sim", "pode", "ok", "yes", "sure", "sí", "dale", "publica").
   return words <= 4 && (POS.test(t) || POS_EN.test(t) || POS_ES.test(t) || SI_SOZINHO.test(t) || ESO_SOZINHO.test(t) || ACT.test(t));
 }
 
 export function isConfirmation(text) {
   const said = userSaid(text);
   if (!said) return false;
-  // O canal agrupa mensagens seguidas da mesma pessoa juntando com "\n" (o
-  // debounce do WhatsApp), então uma linha longa aqui pode ser só o vizinho de
-  // um "sim". Avalia parte por parte, com o mesmo viés conservador.
+  // The channel groups consecutive messages from the same person by joining them
+  // with "\n" (WhatsApp's debounce), so a long line here can just be the
+  // neighbor of a "sim". Evaluates part by part, with the same conservative bias.
   const parts = said.split('\n').map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return false;
-  // Negação em qualquer idioma vem primeiro, e em QUALQUER parte: "não
-  // confirma" e "don't send it" cancelam mesmo com uma positiva ao lado.
+  // Negation in any language comes first, and in ANY part: "não confirma" and
+  // "don't send it" cancel even with a positive right next to it.
   if (parts.some((p) => NEG.test(p) || NEG_EN.test(p) || NEG_ES.test(p) || NEG_ES_NO.test(p) || PARA_STOP.test(p))) return false;
-  // Autorizou mudando o pedido: não confirma a ação PENDENTE (essa é a antiga).
+  // Authorized while changing the request: doesn't confirm the PENDING action
+  // (that one is the old one).
   if (parts.some(mudaOPedido)) return false;
   return parts.some(confirmsPart);
 }

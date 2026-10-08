@@ -1,4 +1,4 @@
-// Leitura textual paginada: preserva tabelas e declara estruturas não textuais.
+// Paginated text reading: preserves tables and states non-text structures.
 import { createHash } from 'node:crypto';
 export function readGoogleDocument(doc, { offset = 0, max_chars = 8000, revision = null } = {}) {
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('offset inválido');
@@ -30,7 +30,7 @@ export function readGoogleDocument(doc, { offset = 0, max_chars = 8000, revision
   if (offset && (!revision || revision !== version)) return {title:doc.title, text:'', changed:true, partial:true, restart_offset:0, warning:'Para continuar, use revision da primeira página. Se mudou, releia desde offset 0; não misture versões.'};
   if (offset > all.length) throw new Error('offset além do texto');
   let end=Math.min(all.length,offset+max_chars);
-  // Não quebrar um caractere suplementar entre páginas UTF-16.
+  // Don't split a UTF-16 surrogate pair character between pages.
   if(end<all.length && /[\uD800-\uDBFF]/.test(all[end-1])) end--;
   if(end===offset && end<all.length) end=Math.min(all.length,offset+2);
   const has_more=end<all.length;

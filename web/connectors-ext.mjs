@@ -5,16 +5,16 @@ import { recortar } from './recorte.mjs';
 import { searchPagination, searchCursorSchema, SEARCH_PAGINATION_RULE, searchItems, githubSearchMeta, slackSearchMeta, graphSearchNextPath } from './search-pagination.mjs';
 import { emailPagination, emailCursorSchema, EMAIL_PAGINATION_RULE, graphEmailNextPath } from './email-pagination.mjs';
 import { recurrenceSchema, calendarRecurrence, recurrenceDefaultEnd, calendarWindow } from './calendar-recurrence.mjs';
-// ── Conectores externos (GitHub, Slack) como tools do core ──
-// Mesmo shape das tools do Google (connectors.mjs): recebem um `token()` async
-// que devolve um access_token válido e viram tools no tool-loop do harness.
-// Leitura sempre; escrita (abrir issue, comentar, postar no Slack) com aviso pra
-// confirmar com o usuário antes.
+// ── External connectors (GitHub, Slack) as core tools ──
+// Same shape as Google's tools (connectors.mjs): they receive an async `token()`
+// that returns a valid access_token and become tools in the harness tool-loop.
+// Reading is always allowed; writing (opening an issue, commenting, posting to
+// Slack) comes with a notice to confirm with the user first.
 
 import { linkedinIdentity } from './providers.mjs';
-// Leitura de conteúdo do OneDrive reusa o MESMO pipeline dos arquivos do Google
-// Drive/anexos (extrator de PDF, conversor de planilha, OCR de imagem), pra o
-// usuário ter a mesma resposta independente de onde o arquivo mora.
+// Reading OneDrive content reuses the SAME pipeline as Google Drive files/
+// attachments (PDF extractor, spreadsheet converter, image OCR), so the user
+// gets the same response regardless of where the file lives.
 import { extractPdfText } from './pdf.mjs';
 import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
 import { ocrPdf, describeImage } from './media.mjs';
@@ -122,10 +122,11 @@ export function githubTools({ token }) {
       async run({ owner, repo, number }) {
         const i = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}`);
         let comments = [];
-        // Só a PRIMEIRA página de comentários é lida. Numa issue de discussão
-        // longa (que é justo onde mora a conclusão) o resto sumia sem sinal, e o
-        // modelo respondia "a issue terminou em X" olhando os 20 primeiros.
-        // `i.comments` é o total de verdade, então dá pra declarar o que faltou.
+        // Only the FIRST page of comments is read. In a long discussion issue
+        // (which is exactly where the conclusion lives) the rest would vanish
+        // without a trace, and the model would answer "the issue ended at X"
+        // looking only at the first 20. `i.comments` is the real total, so we
+        // can state what was missing.
         const PAGINA_COMENTARIOS = 20;
         if (i.comments) {
           const c = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}/comments?per_page=${PAGINA_COMENTARIOS}`);
@@ -170,7 +171,7 @@ export function githubTools({ token }) {
   ];
 }
 
-// ── Slack (token de usuário) ──
+// ── Slack (user token) ──
 const SL = 'https://slack.com/api';
 
 async function slReq(token, method, params = {}, post = false) {
@@ -241,12 +242,12 @@ export function slackTools({ token }) {
       parameters: { type: 'object', properties: { channel: { type: 'string', description: 'Channel id (C...), user id for a DM (U...), or "me" for oneself. Never make one up.' }, text: { type: 'string' } }, required: ['channel', 'text'] },
       async run({ channel, text }) {
         let ch = String(channel || '').trim();
-        // "me"/"eu"/"self" -> resolve o próprio usuário (dono do token).
+        // "me"/"eu"/"self" -> resolves to the user themselves (token owner).
         if (/^(me|self|eu|mim)$/i.test(ch)) {
           const who = await slReq(token, 'auth.test', {});
           ch = who.user_id;
         }
-        // Id de usuário (U.../W...) -> abre a DM e usa o canal retornado (D...).
+        // User id (U.../W...) -> opens the DM and uses the returned channel (D...).
         if (/^[UW][A-Z0-9]{6,}$/.test(ch)) {
           const dm = await slReq(token, 'conversations.open', { users: ch }, true);
           ch = dm.channel?.id || ch;
@@ -278,20 +279,21 @@ async function msReq(token, path, { method = 'GET', body, headers, redirect } = 
 }
 
 // ── OneDrive (Microsoft Graph /me/drive) ──
-// Escopo delegado `Files.ReadWrite`: alcança o drive DA PESSOA (é o menos
-// privilegiado que serve). Quem conectou o Outlook antes deste escopo existir
-// segue com o token velho, então TODA tool daqui checa o `scope` guardado antes
-// de chamar a API e pede reconexão em vez de estourar um 403 opaco.
+// Delegated scope `Files.ReadWrite`: reaches THE PERSON's drive (the least
+// privileged one that works). Whoever connected Outlook before this scope
+// existed keeps the old token, so EVERY tool here checks the stored `scope`
+// before calling the API and asks for reconnection instead of blowing up with
+// an opaque 403.
 const FILES_SCOPE_RE = /Files\.(ReadWrite|Read)(\.All)?/i;
-// null/'' = conexão antiga sem o campo `scope` guardado: não dá pra afirmar nada,
-// deixa a API decidir. Com o campo, a resposta é determinística.
+// null/'' = old connection with no `scope` field stored: there's no way to state
+// anything, lets the API decide. With the field, the response is deterministic.
 export const microsoftHasFiles = (scope) => scope == null || scope === '' || FILES_SCOPE_RE.test(String(scope));
 export const RECONECTAR_MSG ='A conexão Microsoft desta pessoa foi feita ANTES de o OneDrive existir aqui, então o token dela não tem permissão de arquivos. Diga a ela pra reconectar em Conexões > Hotmail/Outlook (clicar em conectar de novo; e-mail e agenda continuam funcionando igual). Sem essa reconexão não dá pra ler nem subir arquivo no OneDrive.';
 
-// GET de BYTES no Graph (download de conteúdo). O /content responde 302 pra um
-// host de download pré-autenticado (*.sharepoint.com em conta corporativa,
-// *.files.1drv.com em conta pessoal); o fetch segue o redirect sozinho e o
-// token NÃO viaja pro segundo host (a URL já vem assinada).
+// GET of BYTES from Graph (content download). /content responds with a 302 to a
+// pre-authenticated download host (*.sharepoint.com on a work account,
+// *.files.1drv.com on a personal account); fetch follows the redirect on its own
+// and the token does NOT travel to the second host (the URL is already signed).
 async function msGetBytes(token, path) {
   const r = await fetch(GRAPH + path, { headers: { Authorization: `Bearer ${await token()}` } });
   if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 300)}`);
@@ -307,21 +309,22 @@ const driveItemBrief = (i) => ({
   link: i.webUrl,
 });
 
-// Nome de arquivo/pasta aceito pelo OneDrive (os mesmos proibidos do Windows).
+// File/folder name accepted by OneDrive (the same ones forbidden by Windows).
 const odSafeName = (s, fallback = 'arquivo') =>
   String(s ?? '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 120) || fallback;
 
-// Garante a pasta do assistente na raiz do OneDrive e devolve o id. Mesma
-// política do Google Drive: tudo que o assistente grava cai numa pasta só,
-// nunca solto na raiz nem dentro das pastas da pessoa. Aqui a pasta é achada
-// por CAMINHO (o Graph não tem appProperties), então renomear a pasta faz o
-// assistente criar outra — é o preço de não ter marcador próprio.
+// Ensures the assistant's folder at the root of OneDrive and returns its id. Same
+// policy as Google Drive: everything the assistant saves falls into a single
+// folder, never loose at the root nor inside the person's folders. Here the
+// folder is found by PATH (Graph has no appProperties), so renaming the folder
+// makes the assistant create another one — that's the price of not having its
+// own marker.
 export async function ensureOneDriveFolder(token, folderName = marca().nome) {
   const name = odSafeName(folderName, marca().nome);
   try {
     const found = await msReq(token, `/me/drive/root:/${encodeURIComponent(name)}?$select=id,name,folder`);
     if (found?.id && found.folder) return found.id;
-  } catch { /* 404 = ainda não existe */ }
+  } catch { /* 404 = doesn't exist yet */ }
   try {
     const created = await msReq(token, '/me/drive/root/children', {
       method: 'POST',
@@ -329,20 +332,21 @@ export async function ensureOneDriveFolder(token, folderName = marca().nome) {
     });
     return created.id;
   } catch (e) {
-    // 409 = alguém criou entre o GET e o POST (ou existe um ARQUIVO com esse
-    // nome): relê pra devolver o id certo em vez de falhar a gravação.
+    // 409 = someone created it between the GET and the POST (or a FILE with that
+    // name already exists): re-reads to return the right id instead of failing
+    // the write.
     const again = await msReq(token, `/me/drive/root:/${encodeURIComponent(name)}?$select=id,name,folder`);
     if (again?.id) return again.id;
     throw e;
   }
 }
 
-// Sobe um arquivo pro OneDrive por upload SIMPLES (PUT .../content), que vale
-// até 250 MB; acima disso o Graph exige sessão de upload em pedaços, que não
-// implementamos — melhor recusar com aviso do que estourar um erro cru.
-// Nome repetido SUBSTITUI o conteúdo do arquivo que já está lá (o link não
-// muda), igual ao uploadBinaryToDrive do Google: é o que faz "atualiza a mesma
-// planilha" funcionar sem gerar cópia nova a cada vez.
+// Uploads a file to OneDrive via SIMPLE upload (PUT .../content), which works up
+// to 250 MB; above that Graph requires a chunked upload session, which we don't
+// implement — better to refuse with a notice than to throw a raw error.
+// Repeated name REPLACES the content of the file already there (the link doesn't
+// change), same as Google's uploadBinaryToDrive: it's what makes "update the same
+// spreadsheet" work without generating a new copy every time.
 const OD_SIMPLE_MAX = 250 * 1024 * 1024;
 export async function uploadToOneDrive({ token, name, buffer, mimeType = 'application/octet-stream', folderId = null }) {
   const safe = odSafeName(name);
@@ -355,7 +359,7 @@ export async function uploadToOneDrive({ token, name, buffer, mimeType = 'applic
   try {
     const prev = await msReq(token, `${itemPath}?$select=id`);
     existed = !!prev?.id;
-  } catch { /* não existe ainda */ }
+  } catch { /* doesn't exist yet */ }
   const r = await fetch(`${GRAPH}${itemPath}:/content`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${await token()}`, 'content-type': mimeType },
@@ -368,10 +372,11 @@ export async function uploadToOneDrive({ token, name, buffer, mimeType = 'applic
 
 // ── Agenda do Outlook (Microsoft Graph /me/events) ──
 const DEFAULT_TZ = 'America/Sao_Paulo';
-// Monta o objeto start/end do Graph. Aceita ISO ("2026-08-12T15:00") e manda o
-// fuso junto; o Graph interpreta o horário nesse fuso (evita o bug de cair em UTC).
-// Normaliza pro RFC3339 completo (mesmo motivo do calTime do Google): o modelo às
-// vezes manda só HH:MM e o Graph rejeita/interpreta errado sem segundos.
+// Builds Graph's start/end object. Accepts ISO ("2026-08-12T15:00") and sends the
+// timezone along; Graph interprets the time in that timezone (avoids the bug of
+// falling back to UTC). Normalizes to full RFC3339 (same reason as Google's
+// calTime): the model sometimes sends only HH:MM and Graph rejects/misinterprets
+// it without seconds.
 const gRfc3339 = (v) => {
   const s = String(v ?? '').trim();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})(?::(\d{2}))?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
@@ -400,13 +405,15 @@ const eventBrief = (e) => ({
   status: e.responseStatus?.response || undefined,
 });
 
-// ── Agendas do Outlook ──────────────────────────────────────────────────────
-// Mesmo buraco do Google (auditoria 04/09): `/me/calendarView` lê SÓ a agenda
-// padrão da caixa, então quem separa trabalho e pessoal em duas agendas recebia
-// meia resposta e a tool nem sabia do que faltava. Aqui as agendas passam a ser
-// descobertas. Nenhum escopo novo: Calendars.ReadWrite já vale pra caixa toda.
-// (Editar/apagar segue em /me/events/{id}: no Graph o id do evento é único na
-// caixa, não precisa saber a agenda. Só a criação precisa escolher.)
+// ── Outlook calendars ──────────────────────────────────────────────────────
+// Same gap as Google's (audit 2026-09-04): `/me/calendarView` only reads the
+// mailbox's DEFAULT calendar, so whoever separates work and personal into two
+// calendars got half an answer and the tool didn't even know what was missing.
+// Here calendars start being discovered. No new scope: Calendars.ReadWrite already
+// covers the whole mailbox.
+// (Editing/deleting still goes through /me/events/{id}: in Graph the event id is
+// unique across the mailbox, no need to know the calendar. Only creation needs
+// to choose.)
 const msSemAcento = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 async function msListCalendars(token) {
@@ -446,14 +453,14 @@ const mailBrief = (m) => ({
 });
 
 export function microsoftTools({ token, scopes = null, folderName = marca().nome, onSheetLoad = null, onUsage = () => {} }) {
-  // `scopes` = o que a Microsoft de fato concedeu nesta conexão (guardado no
-  // token). null = não sabemos (conexão antiga sem o campo): deixa passar e o
-  // erro da API resolve. Com o campo, a resposta é determinística e explica o
-  // que fazer, sem gastar chamada.
+  // `scopes` = what Microsoft actually granted on this connection (stored in the
+  // token). null = we don't know (old connection without the field): lets it
+  // through and the API's error sorts it out. With the field, the response is
+  // deterministic and explains what to do, without spending a call.
   const semArquivos = () => !microsoftHasFiles(scopes);
-  // Mesmo pipeline de leitura do Google Drive: texto do PDF e, se o PDF for
-  // escaneado (sem camada de texto), OCR por visão. Uso de visão é cobrado, por
-  // isso passa pelo onUsage.
+  // Same read pipeline as Google Drive: PDF text and, if the PDF is scanned
+  // (no text layer), OCR by vision. Vision usage is billed, which is why it
+  // goes through onUsage.
   const lerPdf = async (buf, nome, mime) => {
     let text = '', pages, truncated;
     try { ({ text, pages, truncated } = await extractPdfText(buf, { maxChars: 20000 })); }
@@ -466,8 +473,8 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     } catch (e) { console.error('[onedrive] ocrPdf falhou:', e?.message ?? e); }
     return JSON.stringify({ nome, mimeType: mime, note: 'PDF sem texto extraível (escaneado); o OCR também não conseguiu ler.' });
   };
-  // Teto de download na leitura: acima disso não faz sentido puxar o arquivo
-  // inteiro pra dentro do turno (e a resposta seria truncada de qualquer jeito).
+  // Download ceiling on reads: above this it doesn't make sense to pull the
+  // whole file into the turn (and the response would be truncated anyway).
   const OD_READ_MAX = 25 * 1024 * 1024;
   const ODSELECT = 'id,name,size,lastModifiedDateTime,webUrl,file,folder';
   const drivePages = searchPagination({ defaultMax: 10, cap: 25 });
@@ -484,7 +491,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         const select = 'id,subject,from,sender,receivedDateTime,bodyPreview,isRead,hasAttachments,webLink';
         let path;
         if (q) {
-          // $search não combina com $orderby no Graph.
+          // $search doesn't combine with $orderby in Graph.
           path = `/me/messages?$search="${encodeURIComponent(q)}"&$top=${top}&$select=${select}`;
         } else {
           path = `/me/mailFolders/inbox/messages?$orderby=receivedDateTime%20desc&$top=${top}&$select=${select}`;
@@ -547,12 +554,12 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         const select = 'id,subject,start,end,location,isAllDay,isOnlineMeeting,onlineMeeting,organizer,attendees,responseStatus,seriesMasterId,type';
         const qs = `startDateTime=${encodeURIComponent(startISO)}&endDateTime=${encodeURIComponent(endISO)}`
           + `&$orderby=start/dateTime&$top=${top}&$select=${select}`;
-        // Prefer faz o Graph devolver os horários já convertidos pro fuso pedido.
+        // Prefer makes Graph return times already converted to the requested timezone.
         const opts = { headers: { Prefer: `outlook.timezone="${tz}"` } };
         const cals = await msListCalendars(token);
-        // Sem agendas descobertas (permissão antiga, erro do Graph), segue como
-        // antes: a caixa padrão. Meia resposta é melhor que nenhuma, mas o dono
-        // vê em `cobertura` que só a padrão foi lida.
+        // Without discovered calendars (old permission, Graph error), keeps the
+        // previous behavior: the default mailbox. Half an answer is better than
+        // none, but the owner sees in `cobertura` that only the default one was read.
         if (!cals.length) {
           const j = await msReq(token, `/me/calendarView?${qs}`, opts);
           const out = (j.value || []).map(eventBrief);
@@ -571,13 +578,14 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
             if (j['@odata.nextLink']) incompletas.push(c.nome);
             return (j.value || []).map((e) => ({ ...eventBrief(e), agenda: c.nome }));
           } catch {
-            // Uma agenda quebrada não derruba a resposta, mas não some em silêncio.
+            // A broken calendar doesn't bring down the response, but it doesn't
+            // disappear silently either.
             falhas.push(c.nome);
             return [];
           }
         }));
-        // Ordenar por texto aqui é seguro: o header Prefer faz o Graph devolver
-        // TODAS as agendas já no mesmo fuso, então o ISO não tem offset variando.
+        // Sorting by text here is safe: the Prefer header makes Graph return
+        // ALL calendars already in the same timezone, so the ISO offset doesn't vary.
         const todos = listas.flat().sort((a, b) => String(a.inicio || '').localeCompare(String(b.inicio || '')));
         const out = todos.slice(0, top);
         const cobertura = {
@@ -587,8 +595,9 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
           agendas_lidas: lidas.map((c) => c.nome),
           ...(alvos.length > lidas.length ? { agendas_nao_lidas: alvos.slice(8).map((c) => c.nome) } : {}),
           ...(falhas.length ? { agendas_com_erro: falhas } : {}),
-          // Idem Google: com várias agendas o teto é dividido e a lista pode parar
-          // no meio da janela. Dizer isso evita "não tem nada" sobre o que não veio.
+          // Same as Google: with several calendars the ceiling gets split and the
+          // list might stop in the middle of the window. Stating this avoids
+          // "there's nothing" about what didn't come in.
           ...(todos.length > out.length ? {
             corte: `Couberam só os ${out.length} eventos mais próximos (${todos.length - out.length} ficaram de fora). A lista cobre até ${out[out.length - 1]?.inicio || '?'}, e NÃO diz nada sobre o resto da janela: peça um período menor, uma agenda só, ou um max maior.`,
           } : {}),
@@ -625,7 +634,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         const att = recipients(convidados);
         if (att.length) ev.attendees = att.map((a) => ({ ...a, type: 'required' }));
         if (online) { ev.isOnlineMeeting = true; ev.onlineMeetingProvider = 'teamsForBusiness'; }
-        // Sem `agenda`, /me/events cai na padrão (comportamento de sempre).
+        // Without `agenda`, /me/events falls back to the default one (usual behavior).
         let alvo = null;
         if (agenda) {
           const cals = await msListCalendars(token);
@@ -719,23 +728,23 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
           } catch (e) { console.error('[onedrive] describeImage falhou:', e?.message ?? e); }
           return JSON.stringify({ nome, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
-        // Planilha (Excel, CSV): vai pro ambiente de análise e o resultado leva
-        // só a estrutura, nunca as células (ver planilha.mjs).
+        // Spreadsheet (Excel, CSV): goes to the analysis environment and the
+        // result only carries the structure, never the cells (see planilha.mjs).
         if (tipoPlanilha(nome, mime)) {
           const buf = await msGetBytes(token, `/me/drive/items/${item}/content`);
           return JSON.stringify({ nome, mimeType: mime, analise: await analisePlanilhaConector(onSheetLoad, buf, nome || 'planilha.xlsx', mime) });
         }
-        // Word/PowerPoint: o Graph converte o arquivo pra PDF na hora
-        // (?format=pdf) e daí sai o texto pelo mesmo extrator. É o equivalente
-        // do export do Google Docs.
+        // Word/PowerPoint: Graph converts the file to PDF on the fly
+        // (?format=pdf) and the text comes out through the same extractor from
+        // there. It's the equivalent of Google Docs' export.
         if (/wordprocessingml|presentationml|msword|ms-powerpoint/i.test(mime) || /\.(docx?|pptx?)$/i.test(nome)) {
           const buf = await msGetBytes(token, `/me/drive/items/${item}/content?format=pdf`);
           return await lerPdf(buf, nome, mime || 'application/pdf');
         }
         if (mime.startsWith('text/') || /^application\/(json|xml)/i.test(mime) || /\.(txt|md|json|xml|log|ya?ml)$/i.test(nome)) {
           const buf = await msGetBytes(token, `/me/drive/items/${item}/content`);
-          // Arquivo de texto grande saía cortado calado, ao contrário do PDF e
-          // da planilha logo acima, que já dizem `truncated`.
+          // A large text file came out silently truncated, unlike the PDF and
+          // the spreadsheet right above, which already say `truncated`.
           const arq = recortar(buf.toString('utf8'), 12000, 'arquivo');
           return JSON.stringify({ nome, mimeType: mime, text: arq.corpo, truncated: arq.truncado || undefined });
         }
@@ -752,9 +761,9 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
       }, required: ['nome', 'conteudo'] },
       async run({ nome, conteudo, mimeType = 'text/plain' }) {
         if (semArquivos()) return JSON.stringify({ ok: false, error: RECONECTAR_MSG });
-        // GUARD anti "undefined": conteúdo que não chegou (arg cortado numa
-        // geração longa) NUNCA vira arquivo, senão o OneDrive fica com a string
-        // literal "undefined" (mesmo bug que o drive_upload já barra).
+        // GUARD against "undefined": content that didn't arrive (arg cut off in a
+        // long generation) must NEVER become a file, otherwise OneDrive ends up
+        // with the literal string "undefined" (the same bug drive_upload already blocks).
         if (conteudo == null || String(conteudo).trim() === '' || String(conteudo).trim() === 'undefined') {
           return JSON.stringify({ ok: false, error: 'Não recebi o conteúdo do arquivo (veio vazio/undefined). Não gravei nada. Se o texto for longo, ele pode ter sido cortado na chamada: reenvie, quebre em partes menores, ou salve num arquivo do sandbox e use onedrive_upload_arquivo.' });
         }
@@ -774,9 +783,9 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
   ].filter(tool => microsoftToolAllowed(tool.name, scopes));
 }
 
-// ── Nuvemshop / Tiendanube (só leitura por ora) ──
-// API por loja: https://api.nuvemshop.com.br/v1/{store_id}/... com header
-// Authentication: bearer <token> e User-Agent OBRIGATÓRIO.
+// ── Nuvemshop / Tiendanube (read-only for now) ──
+// Per-store API: https://api.nuvemshop.com.br/v1/{store_id}/... with header
+// Authentication: bearer <token> and a REQUIRED User-Agent.
 const NUV = 'https://api.nuvemshop.com.br/v1';
 
 async function nuvReq(storeId, token, path) {
@@ -822,10 +831,11 @@ const orderBrief = (o) => ({
   criado: o.created_at,
 });
 
-// Pagina TODOS os pedidos de uma janela (não trunca). O bug do relatório da loja
-// (dias suprimidos) veio de puxar só a 1ª página em ordem decrescente e somar no
-// modelo: acima de 200 pedidos/mês os dias mais antigos sumiam em silêncio. Aqui
-// varremos página a página em ordem CRESCENTE até esgotar, com teto de segurança.
+// Pages through ALL orders in a window (no truncation). The store report's bug
+// (suppressed days) came from pulling only the 1st page in descending order and
+// summing in the model: above 200 orders/month the oldest days vanished silently.
+// Here we sweep page by page in ASCENDING order until exhausted, with a safety
+// ceiling.
 async function nuvFetchOrders(storeId, token, { desde, ate, status, payment_status, maxPages = 80 } = {}) {
   const orders = [];
   let truncado = false;
@@ -839,13 +849,13 @@ async function nuvFetchOrders(storeId, token, { desde, ate, status, payment_stat
     try {
       batch = await nuvReq(storeId, token, `/orders?${params.toString()}`);
     } catch (e) {
-      // Página além do fim volta 404 em algumas versões: trata como fim, não erro.
+      // A page past the end returns 404 in some versions: treated as the end, not an error.
       if (String(e?.message || '').startsWith('404')) break;
       throw e;
     }
     if (!Array.isArray(batch) || batch.length === 0) break;
     orders.push(...batch);
-    if (batch.length < 200) break; // última página
+    if (batch.length < 200) break; // last page
     if (page === maxPages) truncado = true; // bateu o teto: pode faltar
   }
   return { orders, truncado };
@@ -901,9 +911,10 @@ export function nuvemshopTools({ token, storeId }) {
         const arr = Array.isArray(j) ? j : [];
         const out = arr.map(orderBrief);
         if (!out.length) return 'Nenhum pedido encontrado.';
-        // Se veio cheio até o teto, PODE haver mais pedidos no período — nunca
-        // silenciar isso (foi a causa do relatório com dias faltando). Avisa e
-        // aponta o resumo, que pagina tudo e soma no código.
+        // If it came back full up to the ceiling, there MAY be more orders in the
+        // period — never hide this (it was the cause of the report with missing
+        // days). Warns and points to the summary, which pages through everything
+        // and sums it in code.
         if (arr.length >= per) {
           return JSON.stringify({ truncado: true, vieram: out.length, aviso: `Listagem PARCIAL (só os ${out.length} mais recentes). Para total/faturamento de um período use nuvemshop_resumo_vendas (pagina tudo e soma no código).`, pedidos: out });
         }
@@ -923,8 +934,9 @@ export function nuvemshopTools({ token, storeId }) {
         const ini = desde;
         const fim = ate || hoje;
         const { orders, truncado } = await nuvFetchOrders(storeId, token, { desde: ini, ate: fim, payment_status });
-        // Filtro de janela no CÓDIGO (fonte da verdade, robusto ao fuso da API):
-        // compara só a parte AAAA-MM-DD do created_at (já vem no fuso da loja).
+        // Window filter in CODE (source of truth, robust to the API's timezone):
+        // compares only the YYYY-MM-DD part of created_at (already comes in the
+        // store's timezone).
         const inWin = orders.filter((o) => {
           const d = String(o.created_at || '').slice(0, 10);
           return d && d >= ini && d <= fim;
@@ -934,7 +946,7 @@ export function nuvemshopTools({ token, storeId }) {
         const soma = (arr) => round2(arr.reduce((s, o) => s + num(o.total), 0));
         const naoCancel = inWin.filter((o) => o.status !== 'cancelled');
         const pagos = inWin.filter((o) => o.payment_status === 'paid');
-        // Por dia (base = pedidos não cancelados).
+        // Per day (base = non-cancelled orders).
         const porDiaMap = {};
         for (const o of naoCancel) {
           const d = String(o.created_at).slice(0, 10);
@@ -944,7 +956,7 @@ export function nuvemshopTools({ token, storeId }) {
         const por_dia = Object.values(porDiaMap)
           .sort((a, b) => a.dia.localeCompare(b.dia))
           .map((x) => ({ ...x, faturamento: round2(x.faturamento) }));
-        // Por status de pagamento (base = todos os pedidos da janela).
+        // Per payment status (base = all orders in the window).
         const por_status_pagamento = {};
         for (const o of inWin) {
           const k = o.payment_status || 'sem_status';
@@ -960,8 +972,8 @@ export function nuvemshopTools({ token, storeId }) {
           pedidos_no_periodo: inWin.length,
           pedidos_considerados: naoCancel.length,
           cancelados: inWin.length - naoCancel.length,
-          faturamento_bruto: bruto,          // todos do período, exceto cancelados
-          faturamento_pago: soma(pagos),     // só payment_status = paid
+          faturamento_bruto: bruto,          // all from the period, except cancelled
+          faturamento_pago: soma(pagos),     // only payment_status = paid
           ticket_medio: naoCancel.length ? round2(bruto / naoCancel.length) : 0,
           por_status_pagamento,
           por_dia,
@@ -987,15 +999,17 @@ export function nuvemshopTools({ token, storeId }) {
   ];
 }
 
-// ── LinkedIn (token de usuário; publicar posts no perfil do membro) ──
-// Escopos: openid profile (identidade -> author URN) + w_member_social (escrita).
-// author URN vem do connect (meta.member_urn); se faltar, resolve na hora.
-// NOTA: a API do LinkedIn pra app comum SÓ libera identidade (userinfo) + publicar
-// share no próprio perfil (ugcPosts). Comentar e ler engajamento/estatísticas caem
-// em 403 ACCESS_DENIED no /v2/socialActions (exige o produto Community Management
-// API, que só sai com aprovação de parceiro do LinkedIn). Também não há leitura de
-// feed/mensagens/conexões pra app comum. Por isso só expomos me + post: oferecer
-// comentar/stats fazia o modelo tentar e falhar, parecendo quebrado.
+// ── LinkedIn (user token; post to the member's own profile) ──
+// Scopes: openid profile (identity -> author URN) + w_member_social (write).
+// author URN comes from the connect step (meta.member_urn); if missing, resolves
+// it on the fly.
+// NOTE: LinkedIn's API for a regular app ONLY grants identity (userinfo) + posting
+// a share to one's own profile (ugcPosts). Commenting and reading engagement/
+// statistics fall into 403 ACCESS_DENIED at /v2/socialActions (requires LinkedIn's
+// Community Management API product, which only ships with partner approval).
+// There's also no reading of feed/messages/connections for a regular app. That's
+// why we only expose me + post: offering comment/stats made the model try and
+// fail, looking broken.
 const LI = 'https://api.linkedin.com';
 
 async function liReq(token, path, { method = 'GET', body, headers } = {}) {
@@ -1012,12 +1026,13 @@ async function liReq(token, path, { method = 'GET', body, headers } = {}) {
   const txt = await r.text();
   if (!r.ok) throw new Error(`${r.status}: ${txt.slice(0, 300)}`);
   const json = txt ? JSON.parse(txt) : {};
-  // O id do post criado costuma vir só no header, não no corpo.
+  // The id of the created post usually comes only in the header, not in the body.
   return { json, restliId: r.headers.get('x-restli-id') || r.headers.get('x-linkedin-id') || null };
 }
 
 export function linkedinTools({ token, memberUrn }) {
-  // Resolve o author URN: usa o do connect ou busca na hora via /userinfo|/me.
+  // Resolves the author URN: uses the one from connect or fetches it on the fly
+  // via /userinfo|/me.
   let cached = memberUrn || null;
   async function author() {
     if (cached) return cached;

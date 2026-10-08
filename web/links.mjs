@@ -1,34 +1,38 @@
-// Fontes reais + conferência de link, aplicadas no texto FINAL do turno.
+// Real sources + link checking, applied to the turn's FINAL text.
 //
-// Nasceu do caso LinkedIn (08/09/2026): 2 dos 9 links entregues eram 404, em
-// mensagens que diziam "links diretos e validados". Duas causas, os dois remédios
-// daqui:
-//  1. a busca NATIVA do Gemini roda no servidor do Google e não aparece como tool
-//     call, então as URLs reais que embasaram a resposta eram descartadas e sobrava
-//     o modelo escrevendo o endereço de memória -> `blocoDeFontes` mostra as reais;
-//  2. ninguém, em lugar nenhum do código, chegava a ABRIR um link antes de mandar
-//     -> `conferirLinks` bate um pedido em cada um.
+// Born from the LinkedIn case (2026-09-08): 2 of the 9 links delivered were
+// 404, in messages that said "direct, validated links". Two causes, the two
+// fixes here:
+//  1. Gemini's NATIVE search runs on Google's server and doesn't show up as a
+//     tool call, so the real URLs that backed the response were discarded and
+//     the model was left writing the address from memory -> `blocoDeFontes`
+//     shows the real ones;
+//  2. nowhere in the code did anyone actually OPEN a link before sending it
+//     -> `conferirLinks` makes a request to each one.
 //
-// Regra de ouro da conferência (29/09/2026): link só sai do texto com falha
-// REAL comprovada em dois pedidos seguidos (HEAD e depois GET): domínio que não
-// existe (DNS ENOTFOUND), conexão recusada, `404`/`410` ou `5xx` que se repete.
-// Fica no texto: redirecionamento (`3xx`, seguido até 5 saltos; `200` no fim é
-// link bom), `401`/`403` (login ou bloqueio de robô em IP de datacenter:
-// mckinsey, gartner, rand fazem isso com a página no ar), `429` (limite de taxa)
-// e timeout ou outro erro de rede. Nesses casos a gente avisa que não conseguiu
-// verificar, sem acusar uma página viva de estar morta.
+// Golden rule of the check (2026-09-29): a link only comes out of the text
+// with a REAL failure proven across two requests in a row (HEAD and then
+// GET): a domain that doesn't exist (DNS ENOTFOUND), connection refused,
+// `404`/`410`, or a repeating `5xx`. Stays in the text: a redirect (`3xx`,
+// followed up to 5 hops; `200` at the end is a good link), `401`/`403`
+// (login or bot blocking on a datacenter IP: mckinsey, gartner, rand do this
+// with the page still live), `429` (rate limit), and a timeout or other
+// network error. In those cases we say we couldn't verify it, instead of
+// accusing a live page of being dead.
 //
-// Regra antiga, pra referência: HEAD com `redirect: 'error'`; só `404`/`410` no
-// HEAD confirmado por `404`/`410` no GET contava como quebrado. Todo `3xx` (até
-// um redirect pra página boa), DNS inexistente, conexão recusada e `5xx` viravam
-// "não verificado". Na resposta comum isso só gerava o aviso; em rotina
-// (`strictLinks`) o link "não verificado" também era tirado do texto, inclusive
-// o link bom que redirecionava, o `403` e o que passou do teto de 8 conferências.
+// Old rule, for reference: HEAD with `redirect: 'error'`; only a `404`/`410`
+// on HEAD confirmed by a `404`/`410` on GET counted as broken. Every `3xx`
+// (even a redirect to a good page), a nonexistent DNS, a refused connection
+// and `5xx` all turned into "unverified". In a regular response this only
+// produced the notice; in a routine (`strictLinks`) an "unverified" link was
+// also stripped from the text, including a good link that redirected, a
+// `403`, and one that went over the cap of 8 checks.
 //
-// Este módulo roda no caminho de TODO turno, então não puxa dependência pesada.
-// A única importação é `locale.mjs`, que é puro (sem banco, sem HTTP) e já está
-// carregado pelo server: duplicar aqui a normalização de idioma sairia mais caro
-// que importá-la, porque duas cópias divergem na primeira mudança.
+// This module runs on the path of EVERY turn, so it doesn't pull in a heavy
+// dependency. The only import is `locale.mjs`, which is pure (no database, no
+// HTTP) and is already loaded by the server: duplicating the language
+// normalization here would cost more than importing it, because two copies
+// drift apart the first time one of them changes.
 import { uaBot } from './marca.mjs';
 import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
 
@@ -64,34 +68,36 @@ const TEXTOS = {
 };
 const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[IDIOMA_PADRAO];
 
-const TIMEOUT_MS = 3000;       // por pedido (HEAD ou GET), somando os saltos de redirect
+const TIMEOUT_MS = 3000;       // per request (HEAD or GET), counting the redirect hops
 const MAX_REDIRECTS = 5;
-const MAX_LINKS = 8;          // teto de conferências por turno (latência)
+const MAX_LINKS = 8;          // cap on checks per turn (latency)
 const MAX_FONTES = 5;         // teto de fontes mostradas
 const UA = () => uaBot();
 
-// Cache curto por URL: uma thread que repete o mesmo link em turnos seguidos não
-// paga a rede de novo, e o mesmo link citado por várias pessoas confere uma vez.
+// Short per-URL cache: a thread that repeats the same link across
+// consecutive turns doesn't pay the network cost again, and the same link
+// cited by several people only gets checked once.
 const cache = new Map(); // url -> { veredito, ts }
 const CACHE_TTL = 10 * 60 * 1000;
 const CACHE_MAX = 500;
 
-// URLs http(s) do texto. O linkificador dos canais para nos mesmos caracteres, e a
-// classe abaixo (sem espaço, sem <>()[]"'`) já derruba o caso comum de link
-// markdown `[texto](url)`. Pontuação final da frase sai fora.
-// Link SEM "https://" também conta (caso de 02/10/2026: o modelo escreveu
-// `panelinha.com.br/receita/<nome inventado>` e a conferência nem viu, porque só
-// procurava endereço com esquema; o WhatsApp mostra esse texto como link). Pra não
-// confundir com nome de arquivo ou e-mail, o endereço sem esquema precisa de
-// caminho (`dominio.tld/...`) ou começar com `www.`, não pode vir colado em `@`,
-// `/` ou `.`, e o final do domínio não pode ser extensão de arquivo
-// (`server.mjs/x`). Ele é conferido como https.
+// http(s) URLs in the text. The channels' linkifier stops at the same
+// characters, and the class below (no space, no <>()[]"'`) already handles
+// the common markdown link case `[text](url)`. Trailing sentence punctuation
+// is excluded.
+// A link WITHOUT "https://" also counts (case from 2026-10-02: the model
+// wrote `panelinha.com.br/receita/<made-up name>` and the check didn't even
+// see it, because it only looked for an address with a scheme; WhatsApp
+// shows that text as a link). To avoid confusing it with a filename or an
+// e-mail, a schemeless address needs a path (`domain.tld/...`) or to start
+// with "www.", can't be glued to `@`, `/` or `.`, and the domain's ending
+// can't be a file extension (`server.mjs/x`). It's checked as https.
 const RE_URL = /https?:\/\/[^\s<>()[\]"'`]+|(?<![A-Za-z0-9@./:-])(?:www\.(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}(?:\/[^\s<>()[\]"'`]*)?|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}\/[^\s<>()[\]"'`]*)/g;
 const EXTENSAO = /\.(?:m?js|cjs|ts|tsx|jsx|json|md|py|sh|txt|pdf|csv|html?|png|jpe?g|gif|svg|webp|ya?ml|xml|zip|docx?|xlsx?|pptx?|log|env|lock|rs|go|rb|java|css|sql|ini|toml)$/i;
 const semEsquema = u => !/^https?:\/\//.test(u);
 const paraConferir = u => semEsquema(u) ? 'https://' + u : u;
-// Pontuação de fim de frase sai; no endereço sem esquema, também a marcação do
-// canal em volta dele (*negrito*, _itálico_, ~riscado~).
+// Trailing sentence punctuation is excluded; for a schemeless address, so is
+// the channel's markup around it (*bold*, _italic_, ~strikethrough~).
 const limpaFim = u => u.replace(semEsquema(u) ? /[.,;:!?*_~]+$/ : /[.,;:!?]+$/, '');
 function aceitaSemEsquema(u) {
   const host = u.split('/')[0];
@@ -105,8 +111,8 @@ function mapProse(text, fn) {
     : p.split(/(`[^`\n]*`)/g).map((v, j) => j % 2 ? v : fn(v)).join('')).join('');
 }
 
-// Também vale pra cada salto de redirect: um link público não pode levar o
-// verificador pra rede interna (ex.: metadata da EC2 em 169.254.169.254).
+// Also applies to every redirect hop: a public link can't lead the verifier
+// into the internal network (e.g. EC2 metadata at 169.254.169.254).
 const hostInterno = host => /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0$|\[?::1\]?$|\[?f[cd][0-9a-f]{2}:|\[?fe80:)/i.test(host);
 
 function extrairUrls(texto) {
@@ -115,11 +121,13 @@ function extrairUrls(texto) {
   const prose = []; mapProse(texto, p => { prose.push(p); return p; });
   for (const m of prose.join('\n').matchAll(RE_URL)) {
     let u = limpaFim(m[0]);
-    // Parêntese no caminho (Wikipédia: /wiki/Foo_(bar)) é cortado pela regex e o
-    // pedaço truncado responderia 404: seria acusar de quebrado um link bom. Fora.
+    // A parenthesis in the path (Wikipedia: /wiki/Foo_(bar)) gets cut by
+    // the regex and the truncated piece would respond 404: that would be
+    // accusing a good link of being broken. Excluded.
     if (m.input[m.index + m[0].length] === '(') continue;
-    // URL assinada (S3 presign) responde 403 a HEAD por causa da assinatura: não
-    // dá pra conferir e não vale gastar rede.
+    // A signed URL (S3 presign) responds 403 to HEAD because of the
+    // signature: there's no way to check it and it's not worth spending the
+    // network call.
     if (/[?&]X-Amz-Signature=/i.test(u)) continue;
     if (semEsquema(u) && !aceitaSemEsquema(u)) continue;
     let host = '';
@@ -133,21 +141,22 @@ function extrairUrls(texto) {
   return out;
 }
 
-// Códigos de erro de rede que provam falha real: o domínio não existe ou o
-// servidor recusou a conexão. Timeout, reset, TLS e bloqueio do egress não provam
-// nada sobre a página.
+// Network error codes that prove a real failure: the domain doesn't exist or
+// the server refused the connection. Timeout, reset, TLS and egress blocking
+// prove nothing about the page.
 const REDE_PROVA = new Set(['ENOTFOUND', 'ECONNREFUSED']);
 function codigoDeRede(error) {
   const cause = error?.cause;
   const codes = [error?.code, cause?.code, ...(Array.isArray(cause?.errors) ? cause.errors.map(e => e?.code) : [])].filter(Boolean);
   if (codes.includes('ENOTFOUND')) return 'ENOTFOUND';
-  // Com mais de um endereço (IPv4 e IPv6) todos precisam ter recusado.
+  // With more than one address (IPv4 and IPv6) all of them need to have
+  // refused.
   if (Array.isArray(cause?.errors) && cause.errors.length) return cause.errors.every(e => e?.code === 'ECONNREFUSED') ? 'ECONNREFUSED' : null;
   return codes.includes('ECONNREFUSED') ? 'ECONNREFUSED' : null;
 }
 
-// Um pedido, seguindo redirect na mão (até MAX_REDIRECTS, nunca pra host
-// interno). Devolve { status, redirecionou } ou { rede: código|null }.
+// One request, following redirects by hand (up to MAX_REDIRECTS, never to
+// an internal host). Returns { status, redirecionou } or { rede: código|null }.
 async function pedir(url, method) {
   const signal = AbortSignal.timeout(TIMEOUT_MS);
   let atual = url;
@@ -169,8 +178,9 @@ async function pedir(url, method) {
   }
 }
 
-// 'ok' | 'falha' | 'indefinido' pra um pedido. Falha só com prova: 404/410/5xx
-// sem redirect no meio, ou DNS inexistente / conexão recusada.
+// 'ok' | 'falha' | 'indefinido' for a single request. Failure only with
+// proof: 404/410/5xx with no redirect in between, or a nonexistent DNS /
+// refused connection.
 function avaliar(r) {
   if (r.rede !== undefined) return r.rede && REDE_PROVA.has(r.rede) ? 'falha' : 'indefinido';
   if (r.status >= 200 && r.status < 300) return 'ok';
@@ -179,10 +189,10 @@ function avaliar(r) {
   return 'indefinido';
 }
 
-// 'ok' | 'quebrado' | 'indefinido'. Um HEAD resolve a maioria; a falha só é dada
-// como certa depois de um GET repetir, porque servidor que responde errado a
-// HEAD existe, 5xx pode ser passageiro e um falso "link quebrado" é pior que não
-// conferir.
+// 'ok' | 'quebrado' | 'indefinido'. A HEAD resolves most cases; the failure
+// is only taken as certain after a GET repeats it, because servers that
+// respond wrong to HEAD do exist, a 5xx can be transient, and a false
+// "broken link" is worse than not checking at all.
 async function conferirUma(url) {
   const cached = cache.get(url);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.veredito;
@@ -196,9 +206,9 @@ async function conferirUma(url) {
   return veredito;
 }
 
-// Somente links exatos de mensagens observadas nas ferramentas deste turno.
-// A API autenticada comprova a fonte; não comprova que uma URL abre sem login.
-// Não aplicar esta exceção a links no corpo do e-mail ou a um domínio inteiro.
+// Only exact links from tool messages observed in this turn.
+// The authenticated API proves the source; it does not prove a URL opens without login.
+// Do not apply this exception to links in the email body or to an entire domain.
 function isAuthenticatedEmailSource(value, observed) {
   if (!observed.has(value)) return false;
   let u;
@@ -219,9 +229,9 @@ function isAuthenticatedEmailSource(value, observed) {
 }
 
 /**
- * Confere todos os links do texto (em paralelo) e devolve os que estão QUEBRADOS.
- * Não mexe no texto: quem chama decide o que fazer com a lista.
- * authenticatedSources são fontes observadas pela API, NÃO URLs HTTP validadas.
+ * Checks all links in the text (in parallel) and returns the ones that are BROKEN.
+ * Does not touch the text: the caller decides what to do with the list.
+ * authenticatedSources are sources observed via the API, NOT validated HTTP URLs.
  * @returns {Promise<{quebrados:string[], indefinidos:string[], naoChecados:string[], checados:number, authenticatedSources:string[]}>}
  */
 export async function conferirLinks(texto, { authenticatedEmailSources = [] } = {}) {
@@ -239,9 +249,9 @@ export async function conferirLinks(texto, { authenticatedEmailSources = [] } = 
 }
 
 /**
- * A URI que a busca nativa devolve é um redirect OPACO do vertexaisearch, que
- * expira e não diz nada pro usuário. Segue o primeiro salto pra achar o endereço
- * real. Devolve '' quando não resolve (aí a fonte não é mostrada).
+ * The URI the native search returns is an OPAQUE redirect from vertexaisearch, that
+ * expires and tells the user nothing. Follows the first hop to find the real
+ * address. Returns '' when it doesn't resolve (then the source is not shown).
  */
 export async function resolveGroundingUri(uri) {
   const u = String(uri || '');
@@ -260,11 +270,11 @@ export async function resolveGroundingUri(uri) {
 }
 
 /**
- * Lista numerada "[1] título — url", com os redirects já resolvidos.
- * Com `registro` (registroDeFontes do turno, citacoes.mjs) o número é o do
- * registro: fixo no turno inteiro, é o que o modelo escreve na resposta e o que a
- * plataforma troca pela fonte real. Fonte sem endereço resolvido fica sem número,
- * porque não tem como ser citada.
+ * Numbered list "[1] title — url", with redirects already resolved.
+ * With `registro` (the turn's registroDeFontes, citacoes.mjs) the number is the
+ * registry's: fixed for the whole turn, it's what the model writes in the response and
+ * what the platform swaps for the real source. A source without a resolved address has
+ * no number, because it cannot be cited.
  */
 export async function renderFontes(sources, registro = null) {
   const arr = (sources || []).slice(0, 10);
@@ -276,17 +286,17 @@ export async function renderFontes(sources, registro = null) {
 }
 
 /**
- * Bloco "Fontes:" no mesmo formato do `buscar_web` (renderFontes), a
- * partir das fontes de grounding da busca nativa. Resolve o redirect opaco do
- * vertexaisearch pro endereço real e descarta o que não resolver.
- * @returns {Promise<string>} bloco pronto, ou '' se não sobrar nada pra mostrar
+ * "Sources:" block in the same format as `buscar_web` (renderFontes), from
+ * the native search's grounding sources. Resolves the vertexaisearch opaque redirect
+ * to the real address and discards what doesn't resolve.
+ * @returns {Promise<string>} ready-made block, or '' if nothing is left to show
  */
 export async function blocoDeFontes(sources, language) {
   const arr = (sources || []).slice(0, MAX_FONTES);
   if (!arr.length) return '';
   const lista = await renderFontes(arr);
-  // renderFontes deixa a linha sem URL quando o redirect não resolveu; sem
-  // endereço a "fonte" não serve pra nada aqui, então some.
+  // renderFontes leaves the line without a URL when the redirect didn't resolve; without
+  // an address the "source" is useless here, so it's dropped.
   const linhas = lista.split('\n').filter((l) => /https?:\/\//.test(l));
   if (!linhas.length) return '';
   const rotulo = textosDe(language)?.fontes || 'Fontes:';
@@ -294,25 +304,25 @@ export async function blocoDeFontes(sources, language) {
 }
 
 /**
- * Costura os dois no texto final do turno.
- *  - `sources`: grounding da busca nativa (pode vir vazio);
- *  - anexa "Fontes:" quando a busca rodou e a resposta ainda não traz uma lista;
- *  - avisa, com honestidade, quando algum link entregue não abriu.
- * Retira links comprovadamente quebrados, sem inventar substitutos.
+ * Stitches the two into the turn's final text.
+ *  - `sources`: native search grounding (may come empty);
+ *  - appends "Sources:" when the search ran and the response doesn't already bring a list;
+ *  - honestly warns when some delivered link didn't open.
+ * Removes links proven broken, without inventing substitutes.
  * @returns {Promise<{texto:string, quebrados:string[], fontes:number}>}
  */
 export async function fontesEConferencia(texto, sources = [], { mostrarFontes = true, language, strictLinks = false, authenticatedEmailSources = [] } = {}) {
   const base = String(texto ?? '');
-  // O modelo responde no idioma da pessoa, então a lista que ele já escreveu
-  // pode vir como "Sources:" ou "Fuentes:". Reconhecer as três evita anexar um
-  // bloco de fontes em cima de outro que já está lá.
+  // The model responds in the person's language, so the list it already wrote
+  // may come as "Sources:" or "Fuentes:". Recognizing all three avoids appending a
+  // sources block on top of another that's already there.
   const jaTemLista = /(^|\n)\s*(fontes|sources|fuentes)\s*:/i.test(base);
   const t = textosDe(language);
   const bloco = mostrarFontes && !jaTemLista ? await blocoDeFontes(sources, language).catch(() => '') : '';
-  // Conferir também as fontes anexadas: antes elas passavam fora do verificador.
+  // Also check the appended sources: before, they passed outside the verifier.
   let out = base + (bloco ? `\n\n${bloco}` : '');
-  // A política estrita de rotinas continua exigindo verificação HTTP pública;
-  // sua confirmação autenticada de mensagens é tratada pela curadoria própria.
+  // The strict routine policy still requires public HTTP verification;
+  // its authenticated message confirmation is handled by its own curation.
   const { quebrados, indefinidos, naoChecados, authenticatedSources } = await conferirLinks(out, {
     authenticatedEmailSources: strictLinks ? [] : authenticatedEmailSources,
   });
@@ -328,9 +338,9 @@ export async function fontesEConferencia(texto, sources = [], { mostrarFontes = 
   return { texto: out, quebrados, indefinidos, naoChecados, authenticatedSources, fontes: bloco ? bloco.split('\n').length - 1 : 0 };
 }
 
-// Não inventa URL substituta nem manda outra vez o endereço sabidamente quebrado.
-// Em listas simples omite a linha do item e suas continuações; em prosa/tabelas
-// preserva o texto e retira só o endereço. Código literal passa intacto.
+// Does not invent a substitute URL nor resend the address known to be broken.
+// In simple lists it omits the item's line and its continuations; in prose/tables
+// it preserves the text and removes only the address. Literal code passes through intact.
 export function omitBrokenLinks(text, broken, language, { unverified = false } = {}) {
   const bad = new Set(broken), t = textosDe(language);
   const itemLabel = unverified ? t.itemNaoVerificado : t.item;
@@ -347,7 +357,7 @@ export function omitBrokenLinks(text, broken, language, { unverified = false } =
         dropping = true;
         return line.match(item)[0] + itemLabel;
       }
-      // Retira também o invólucro markdown do endereço, sem deixar link falso.
+      // Also removes the markdown wrapper around the address, without leaving a fake link.
       let out = line.replace(/\[([^\]\n]*)\]\(((?:https?:\/\/)?[^\s()]+)\)/g,
         (all, label, url) => bad.has(url) ? `${label} ${linkLabel}` : all);
       return out.replace(RE_URL, raw => {

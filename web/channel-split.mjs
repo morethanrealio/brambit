@@ -1,14 +1,14 @@
-// Quebra uma resposta em mensagens de no máximo `max` chars pra canais com teto
-// por mensagem (WhatsApp, Telegram, Slack). Nada é descartado: a resposta longa
-// vira várias mensagens, na ordem. Antes (até 29/09/2026) cada canal cortava a
-// partir de um teto total (8 balões no WhatsApp, 12k chars no Telegram e no
-// Slack) e colava "[…resposta muito longa, cortei o resto]".
+// Splits a response into messages of at most `max` chars for channels with a cap
+// per message (WhatsApp, Telegram, Slack). Nothing is discarded: the long response
+// becomes several messages, in order. Before (until 2026-09-29) each channel cut
+// based on a total cap (8 bubbles on WhatsApp, 12k chars on Telegram and
+// Slack) and appended "[…resposta muito longa, cortei o resto]".
 //
-// Fronteira preferida: parágrafo, depois linha, depois espaço (pra não partir
-// palavra), e só então corte seco. Uma fronteira só vale se estiver na segunda
-// metade do pedaço, senão sairia uma mensagem curtinha. O corte seco nunca parte
-// um emoji (par substituto) e não cai dentro de uma URL: recua pro começo dela,
-// a não ser que a URL sozinha passe do teto.
+// Preferred boundary: paragraph, then line, then space (to not split a
+// word), and only then a hard cut. A boundary only counts if it's in the second
+// half of the chunk, otherwise it would produce a tiny message. The hard cut never splits
+// an emoji (surrogate pair) and doesn't fall inside a URL: it backs off to the start
+// of it, unless the URL alone exceeds the cap.
 
 const URL_RE = /https?:\/\/[^\s<>"'`]+/g;
 

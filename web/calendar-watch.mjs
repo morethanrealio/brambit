@@ -40,8 +40,8 @@ export const SCHEMA = `
     PRIMARY KEY (user_id, key)
   );`;
 
-// ── Normalização ────────────────────────────────────────────────────────────
-// Foto mínima de um evento: só o que decide se houve mudança que interessa.
+// ── Normalization ────────────────────────────────────────────────────────────
+// Minimal snapshot of an event: only what decides whether a relevant change happened.
 const ms = (v) => { const t = Date.parse(v || ''); return Number.isFinite(t) ? t : null; };
 
 export function fotoGoogle(e) {
@@ -54,7 +54,7 @@ export function fotoGoogle(e) {
     dia_inteiro: dia,
     local: e.location || '',
     cancelado: e.status === 'cancelled',
-    // organizer.self = o organizador é a dona desta agenda.
+    // organizer.self = the organizer is the owner of this calendar.
     de_outra_pessoa: e.organizer ? !e.organizer.self : false,
     recusei: self?.responseStatus === 'declined',
   };
@@ -75,8 +75,8 @@ export function fotoOutlook(e) {
   };
 }
 
-// ── Diferença entre duas fotos ──────────────────────────────────────────────
-// `atual` null = o evento não existe mais (apagado/removido da agenda).
+// ── Difference between two snapshots ──────────────────────────────────────────
+// `atual` null = the event no longer exists (deleted/removed from the calendar).
 export function mudancas(antes, atual) {
   if (!antes || !antes.de_outra_pessoa || antes.recusei || antes.cancelado) return [];
   if (!atual || atual.cancelado) return [{ tipo: 'cancelado' }];
@@ -130,9 +130,9 @@ async function getJson(fetchImpl, url, bearer, headers = {}) {
   return r.json();
 }
 
-// Devolve { eventos: Map(key -> foto), completas: Set(prefixo de agenda) }.
-// Uma agenda só entra em `completas` se foi lida inteira, sem erro e sem página
-// sobrando: só nelas a AUSÊNCIA de um evento vale como "sumiu".
+// Returns { eventos: Map(key -> snapshot), completas: Set(calendar prefix) }.
+// A calendar only enters `completas` if it was read in full, with no error and no
+// leftover page: only for those does the ABSENCE of an event count as "gone".
 async function lerGoogle({ fetchImpl, token, account, de, ate }) {
   const bearer = await token();
   const lista = await getJson(fetchImpl, `${CAL}/users/me/calendarList?minAccessRole=owner&maxResults=50`, bearer);
@@ -148,7 +148,7 @@ async function lerGoogle({ fetchImpl, token, account, de, ate }) {
       const r = await getJson(fetchImpl, `${CAL}/calendars/${encodeURIComponent(c.id)}/events?${p}`, bearer);
       for (const e of r.items || []) eventos.set(prefixo + e.id, fotoGoogle(e));
       if (!r.nextPageToken) completas.add(prefixo);
-    } catch { /* agenda fora deste ciclo; ausência nela não conta */ }
+    } catch { /* calendar outside this cycle; its absence doesn't count */ }
     buscar[prefixo] = async (id) => {
       try { return fotoGoogle(await getJson(fetchImpl, `${CAL}/calendars/${encodeURIComponent(c.id)}/events/${encodeURIComponent(id)}`, bearer)); }
       catch (e) { if (e.status === 404 || e.status === 410) return null; throw e; }
@@ -191,8 +191,8 @@ export function createCalendarWatch(deps) {
        ON CONFLICT (user_id) DO UPDATE SET enabled = EXCLUDED.enabled, agent_id = COALESCE(EXCLUDED.agent_id, ${S}.calendar_watch.agent_id), updated_at = now()`,
       [userId, agentId || null, !!enabled],
     );
-    // Desligar joga fora a foto: ao religar, a primeira leitura vira base nova e
-    // não dispara aviso de tudo que mudou enquanto esteve desligado.
+    // Turning it off discards the snapshot: when turned back on, the first read becomes the new baseline and
+    // doesn't trigger a notice for everything that changed while it was off.
     if (!enabled) await pool.query(`DELETE FROM ${S}.calendar_watch_snap WHERE user_id = $1`, [userId]);
   }
 
@@ -202,7 +202,7 @@ export function createCalendarWatch(deps) {
     return rows[0] || { enabled: true };
   }
 
-  // Um ciclo de uma pessoa. Devolve os itens avisados (ou que seriam, em dryRun).
+  // One cycle for a person. Returns the items that were notified (or would be, in dryRun).
   async function checarUsuario(userId, { dryRun = false } = {}) {
     await schema();
     const t0 = now();
@@ -212,7 +212,7 @@ export function createCalendarWatch(deps) {
     for (const a of (await deps.googleAccounts(userId)) || []) fontes.push(() => lerGoogle({ fetchImpl, token: a.token, account: a.email, de, ate }));
     const msToken = await deps.microsoftToken(userId);
     if (msToken) fontes.push(() => lerOutlook({ fetchImpl, token: msToken, de, ate }));
-    // Candidato sem nenhuma agenda legível (ex.: só Gmail concedido): nada a fazer.
+    // Candidate with no readable calendar at all (e.g.: only Gmail granted): nothing to do.
     if (!fontes.length) return { itens: [], erros: [] };
 
     const eventos = new Map();
@@ -238,13 +238,13 @@ export function createCalendarWatch(deps) {
     for (const [key, foto] of antes) {
       let atual = eventos.get(key);
       if (atual === undefined) {
-        // Já terminou: saiu da janela porque passou, não porque mudou.
+        // Already ended: left the window because it passed, not because it changed.
         const fim = foto.dia_inteiro ? ms(`${foto.fim}T23:59:59Z`) : ms(foto.fim);
         if (fim != null && fim <= t0) { apagar.push(key); continue; }
         const p = prefixoDe(key);
-        // Agenda não lida por inteiro neste ciclo: não dá pra afirmar que sumiu.
+        // Calendar not read in full this cycle: can't claim it's gone.
         if (!p || !completas.has(p)) continue;
-        // Sumiu da janela: pode ter sido apagado ou remarcado pra fora dela.
+        // Disappeared from the window: it may have been deleted or rescheduled outside it.
         try { atual = await buscar[p](key.slice(p.length)); } catch { continue; }
       }
       const lista = mudancas(foto, atual);
@@ -253,7 +253,7 @@ export function createCalendarWatch(deps) {
       else if (ms(atual.fim || atual.inicio) != null && ms(atual.fim || atual.inicio) < t0 - 86400_000) apagar.push(key);
       else if (JSON.stringify(atual) !== JSON.stringify(foto)) gravar.set(key, atual);
     }
-    // Evento novo entra na foto calado: a primeira vez é base, não mudança.
+    // New event enters the snapshot silently: the first time is baseline, not a change.
     for (const [key, foto] of eventos) if (!antes.has(key) && !foto.cancelado) gravar.set(key, foto);
 
     if (dryRun) return { itens, erros };
@@ -284,9 +284,9 @@ export function createCalendarWatch(deps) {
     let avisos = 0;
     try {
       await schema();
-      // Quem tem agenda conectada (Google com escopo de agenda ou Outlook com
-      // Calendars.*; token antigo sem scope gravado conta), menos quem desligou.
-      // O filtro fino por conta fica em deps.googleAccounts/microsoftToken.
+      // Whoever has a connected calendar (Google with calendar scope or Outlook with
+      // Calendars.*; an old token with no recorded scope counts), minus whoever turned it off.
+      // The fine-grained per-account filter lives in deps.googleAccounts/microsoftToken.
       const { rows } = await pool.query(
         `SELECT c.user_id FROM (
            SELECT user_id FROM ${S}.google_accounts WHERE scope ~ 'auth/calendar'

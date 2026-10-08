@@ -1,112 +1,112 @@
-// i18n das páginas públicas: tradução em tempo de RESPOSTA, sem tocar no HTML.
+// i18n of the public pages: translation at RESPONSE time, without touching the HTML.
 //
-// Por que não `data-i18n` em cada elemento (o plano original): marcar ~740
-// strings à mão significa editar todas as páginas que hoje estão certas e no ar,
-// e cada marcação esquecida vira um pedaço em português no meio da página
-// traduzida, sem erro nenhum aparecendo. Aqui o HTML fica INTACTO e o catálogo é
-// um arquivo à parte; o que falta tradução continua em português, que é o
-// fallback honesto.
+// Why not `data-i18n` on every element (the original plan): marking ~740
+// strings by hand means editing every page that is currently correct and live,
+// and every forgotten mark becomes a chunk in Portuguese in the middle of the
+// translated page, with no error showing up at all. Here the HTML stays INTACT and the catalog is
+// a separate file; whatever is missing translation stays in Portuguese, which is the
+// honest fallback.
 //
-// A propriedade que sustenta tudo: em pt-BR `traduzPagina` devolve a MESMA
-// string, por early return, e com catálogo vazio a caminhada devolve o arquivo
-// BYTE A BYTE. Ou seja, os 99 usuários de hoje não têm como regredir por causa
-// disto, e isso está provado em teste sobre as páginas reais, não afirmado.
+// The property that holds everything up: in pt-BR `traduzPagina` returns the SAME
+// string, by early return, and with an empty catalog the walk returns the file
+// BYTE FOR BYTE. In other words, today's 99 users have no way to regress because of
+// this, and that is proven in a test against the real pages, not just asserted.
 //
-// LIMITE DECLARADO: isto traduz o que está NO ARQUIVO. Texto que o JavaScript
-// da página monta a partir de dado vindo da API (nome de plano, mensagem de erro
-// do servidor) não passa por aqui — quem traduz aquilo é o backend.
+// DECLARED LIMIT: this translates what is IN THE FILE. Text that the page's
+// JavaScript assembles from data coming from the API (plan name, server error
+// message) does not go through here; whoever translates that is the backend.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { tagIdioma, IDIOMA_PADRAO, IDIOMAS_OK } from './locale.mjs';
 
-// Atributos cujo valor o usuário LÊ. `value` fica de fora de propósito: em
-// <input type=hidden> e <option value=...> ele é dado, não texto, e traduzir
-// quebraria o form. Botão com texto em `value` não existe nestas páginas
-// (verificado por grep antes de decidir).
+// Attributes whose value the user READS. `value` is left out on purpose: in
+// <input type=hidden> and <option value=...> it is data, not text, and translating
+// would break the form. A button with text in `value` doesn't exist on these
+// pages (verified by grep before deciding).
 const ATRIBUTOS_DE_TEXTO = new Set(['placeholder', 'title', 'alt', 'aria-label', 'aria-placeholder']);
 
-// <meta content="..."> só é texto em alguns nomes; nos outros é máquina
-// (viewport, charset, theme-color) e traduzir seria estrago.
+// <meta content="..."> is only text for some names; for others it is machine
+// (viewport, charset, theme-color) data and translating it would be damage.
 const META_DE_TEXTO = new Set(['description', 'og:description', 'og:title', 'og:site_name', 'twitter:title', 'twitter:description', 'apple-mobile-web-app-title']);
 
-// Tem letra? Serve pra descartar candidato que é só número, pontuação ou emoji
-// ("→", "•", "1", "R$"), que não tem o que traduzir e só sujaria o catálogo.
+// Has a letter? Serves to discard a candidate that is just a number, punctuation or emoji
+// ("→", "•", "1", "R$"), which has nothing to translate and would only clutter the catalog.
 const TEM_LETRA = /\p{L}{2}/u;
 
 function ehTraduzivel(s) {
-  // `${...}` no meio: é texto MONTADO em tempo de execução. Traduzir o molde
-  // inteiro exigiria mexer na ordem dos pedaços e resolver plural, e o que sai
-  // do buraco continua vindo do backend em português. Fica fora, declarado.
+  // `${...}` in the middle: it's text ASSEMBLED at runtime. Translating the whole
+  // template would require reordering the pieces and resolving plurals, and what comes
+  // out of the hole still comes from the backend in Portuguese. Left out, declared.
   return TEM_LETRA.test(s) && !s.includes('${');
 }
 
-// Dentro de <script> a maioria das strings NÃO é texto de usuário: é seletor
-// ('.aviso'), rota ('/api/creditos'), chave ('content-type'), constante de DOM
-// ('Enter'). Traduzir qualquer uma dessas não deixa a página feia, deixa
-// QUEBRADA, e em silêncio. Então aqui a regra é o contrário da do HTML: só
-// passa o que tem cara de frase.
+// Inside <script> most strings are NOT user text: they are a selector
+// ('.aviso'), a route ('/api/creditos'), a key ('content-type'), a DOM constant
+// ('Enter'). Translating any of these doesn't leave the page ugly, it leaves it
+// BROKEN, and silently. So here the rule is the opposite of the HTML's: only
+// what looks like a sentence goes through.
 //
-// Passa se tiver espaço (frase) ou acento (prova de que é português escrito
-// pra gente ler). Palavra ASCII solta fica de fora mesmo sendo texto de
-// verdade: perde-se um 'Salvar' que continua em português, e em troca não se
-// arrisca traduzir o 'Enter' de `e.key === 'Enter'`. Fallback em português é
-// defeito visível; tecla que parou de funcionar, não.
+// Passes if it has a space (sentence) or an accent (proof that it's Portuguese written
+// for people to read). A loose ASCII word is left out even if it's real
+// text: a 'Salvar' that stays in Portuguese is lost, and in exchange there's no
+// risk of translating the 'Enter' in `e.key === 'Enter'`. A Portuguese fallback is a
+// visible defect; a key that stopped working is not.
 function ehFraseDeScript(s) {
   if (ehCss(s)) return false;
   return /\s/.test(s) || /[^\x00-\x7F]/.test(s);
 }
 
-// CSS posto no `style` de um elemento ('font-size:12px;margin:2px 0 4px;') tem
-// espaço e por isso passaria como frase. É código: traduzido, quebra o layout.
-// Reconhece pelo formato, todo pedaço separado por ';' sendo um
-// `propriedade: valor` com nome de propriedade CSS (minúscula com hífen).
+// CSS put in an element's `style` ('font-size:12px;margin:2px 0 4px;') has
+// a space and would therefore pass as a sentence. It's code: translated, it breaks the layout.
+// Recognized by the format, every piece separated by ';' being a
+// `property: value` with a CSS property name (lowercase with hyphen).
 function ehCss(s) {
-  // Seletor ('#routines .rcard', '.tabs .tab'): tem espaço, então passaria como
-  // frase. Nenhuma frase de português começa com # ou ponto.
+  // Selector ('#routines .rcard', '.tabs .tab'): has a space, so it would pass as a
+  // sentence. No Portuguese sentence starts with # or a dot.
   if (/^[#.[]/.test(s)) return true;
   const partes = s.split(';').map((p) => p.trim()).filter(Boolean);
   return partes.length > 0 && partes.every((p) => /^[a-z-]+\s*:\s*\S/.test(p));
 }
 
-// Segundo filtro pro script: olha o que vem ANTES do literal. Tem string que
-// parece frase de tela por todos os lados ('app-open lib', '1 1 auto',
-// 'BEGIN PRIVATE KEY') e é valor de máquina; o que denuncia não é o conteúdo, é
-// quem está recebendo. Traduzir uma dessas não deixa a tela feia, deixa
-// QUEBRADA em silêncio, que é o defeito que este arquivo inteiro existe pra
-// evitar.
+// Second filter for the script: looks at what comes BEFORE the literal. There is a string that
+// looks like screen text on all sides ('app-open lib', '1 1 auto',
+// 'BEGIN PRIVATE KEY') and is a machine value; what gives it away is not the content, it's
+// who is receiving it. Translating one of these doesn't leave the screen ugly, it leaves it
+// BROKEN silently, which is the defect this whole file exists to
+// avoid.
 //
-// Cada linha abaixo saiu de uma ocorrência REAL medida no index.html, não de
-// precaução genérica: nome de classe montado em `className =`, medida em
-// `style.flex`/`style.padding`, e o `p8.includes('BEGIN PRIVATE KEY')` que
-// detecta chave privada colada pelo usuário.
+// Each line below came from a REAL occurrence measured in index.html, not from
+// generic caution: a class name assembled in `className =`, a measurement in
+// `style.flex`/`style.padding`, and the `p8.includes('BEGIN PRIVATE KEY')` that
+// detects a private key pasted by the user.
 const CONTEXTO_DE_MAQUINA = new RegExp(`(?:${[
-  '(?:===?|!==?|\\bcase)',                                     // comparação direta
+  '(?:===?|!==?|\\bcase)',                                     // direct comparison
   '\\.(?:includes|indexOf|lastIndexOf|startsWith|endsWith|split)\\s*\\(',
   '\\.(?:className|cssText)\\s*\\+?=',                         // classe / style inteiro
   '\\.style\\.[A-Za-z]+\\s*=',                                 // style.flex, style.padding
   'classList\\.(?:add|remove|toggle|contains|replace)\\s*\\(',
   '(?:querySelector|querySelectorAll|closest|matches|getElementById)\\s*\\(',
-  '(?:get|set|has|remove)Attribute\\s*\\(',                    // 1º arg é NOME de atributo
-  'setAttribute\\s*\\(\\s*[\'"]class[\'"]\\s*,',               // e o 2º arg de class também
+  '(?:get|set|has|remove)Attribute\\s*\\(',                    // 1st arg is the attribute NAME
+  'setAttribute\\s*\\(\\s*[\'"]class[\'"]\\s*,',               // and the 2nd arg of class too
   '(?:localStorage|sessionStorage)\\.\\w+\\s*\\(',
 ].join('|')})\\s*$`);
 
-// ── Caminhada ───────────────────────────────────────────────────────────────
-// Um único percurso serve pra EXTRAIR (montar o catálogo) e pra APLICAR
-// (traduzir). É de propósito: se fossem dois percursos diferentes, a chave
-// extraída poderia não ser a chave procurada, e o sintoma seria página em
-// português sem erro nenhum. Aqui, se extraiu, acha.
+// ── Walk ───────────────────────────────────────────────────────────────
+// A single pass serves both to EXTRACT (build the catalog) and to APPLY
+// (translate). It's on purpose: if they were two different passes, the
+// extracted key might not be the key being looked up, and the symptom would be a page in
+// Portuguese with no error at all. Here, if it was extracted, it's found.
 //
-// `troca(texto, tipo)` devolve a substituição ou null pra deixar como está.
+// `troca(texto, tipo)` returns the replacement or null to leave it as is.
 function caminha(html, troca) {
   let out = '';
   let i = 0;
   const n = html.length;
 
   const emite = (bruto, tipo) => {
-    // Preserva o espaço em volta: o trim é só pra casar a chave, o HTML volta
-    // com a mesma indentação de antes.
+    // Preserves the surrounding space: the trim is only to match the key, the HTML comes back
+    // with the same indentation as before.
     const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(bruto);
     const [, antes, miolo, depois] = m;
     if (!miolo || !ehTraduzivel(miolo)) return bruto;
@@ -119,7 +119,7 @@ function caminha(html, troca) {
     if (lt < 0) { out += emite(html.slice(i), 'texto'); break; }
     out += emite(html.slice(i, lt), 'texto');
 
-    // Comentário: copiado cru. Comentário de código não é texto de usuário.
+    // Comment: copied raw. A code comment is not user text.
     if (html.startsWith('<!--', lt)) {
       const fim = html.indexOf('-->', lt + 4);
       const ate = fim < 0 ? n : fim + 3;
@@ -128,8 +128,8 @@ function caminha(html, troca) {
       continue;
     }
 
-    // Fim da tag de abertura, ignorando '>' que esteja DENTRO de valor de
-    // atributo (acontece em onclick e em SVG).
+    // End of the opening tag, ignoring a '>' that is INSIDE an attribute
+    // value (happens in onclick and in SVG).
     let j = lt + 1, aspas = null;
     while (j < n) {
       const c = html[j];
@@ -144,9 +144,9 @@ function caminha(html, troca) {
     out += traduzTag(tag, troca);
     i = j + 1;
 
-    // <script> e <style>: o conteúdo NÃO é HTML, então a caminhada não pode
-    // entrar nele. Vai inteiro pro tratamento de literal de JS (script) ou é
-    // copiado cru (style).
+    // <script> and <style>: the content is NOT HTML, so the walk cannot
+    // enter it. It goes whole into the JS literal handling (script) or is
+    // copied raw (style).
     const nome = /^<\s*([a-zA-Z][\w:-]*)/.exec(tag)?.[1]?.toLowerCase();
     if ((nome === 'script' || nome === 'style') && !/\/\s*>$/.test(tag)) {
       const fecha = new RegExp(`</\\s*${nome}\\s*>`, 'i');
@@ -175,41 +175,41 @@ function traduzTag(tag, troca) {
     const alvo = ATRIBUTOS_DE_TEXTO.has(attr) || (ehMeta && attr === 'content' && META_DE_TEXTO.has(metaNome));
     if (!alvo || !valor || !ehTraduzivel(valor)) return todo;
     const novo = troca(valor.trim(), 'atributo');
-    // Aspas no meio do valor quebrariam o atributo. Não é hipótese remota: em
-    // espanhol «"sí"» aparece. Na dúvida, mantém o português.
+    // Quotes in the middle of the value would break the attribute. Not a remote hypothesis: in
+    // Spanish «"sí"» shows up. When in doubt, keep the Portuguese.
     if (novo == null || novo.includes(aspa)) return todo;
     return `${nome}=${aspa}${novo}${aspa}`;
   });
 }
 
-// ── Lexer de JavaScript ─────────────────────────────────────────────────────
-// Achar string com regex NÃO funciona, e o jeito que não funciona é traiçoeiro.
-// Nestas páginas existe `/[.,;:!?)\]}"]$/`: a aspa dentro do literal de regex
-// abre uma "string" falsa que engole código até a próxima aspa, e o extrator
-// cospe pedaços de função como se fossem frase. Foi exatamente o que aconteceu
-// na primeira versão (medido, não suposto). Daí o lexer: ele precisa conhecer
-// comentário, regex e template pra saber o que NÃO é string.
+// ── JavaScript lexer ─────────────────────────────────────────────────────
+// Finding a string with regex does NOT work, and the way it fails is treacherous.
+// On these pages `/[.,;:!?)\]}"]$/` exists: the quote inside the regex literal
+// opens a fake "string" that swallows code up to the next quote, and the extractor
+// spits out pieces of function as if they were a sentence. This is exactly what happened
+// in the first version (measured, not assumed). Hence the lexer: it needs to know
+// comment, regex and template to know what is NOT a string.
 const PALAVRAS_ANTES_DE_REGEX = new Set(['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await', 'instanceof', 'throw']);
 
-// Fatia o código em pedaços rotulados, cobrindo o texto inteiro sem buraco nem
-// sobreposição (o teste confirma que remontar os pedaços devolve a entrada).
+// Slices the code into labeled pieces, covering the whole text with no gap nor
+// overlap (the test confirms that reassembling the pieces returns the input).
 export function fatiaJs(js) {
   const out = [];
   const n = js.length;
   let i = 0;
-  let anterior = '';        // último caractere significativo
-  let palavra = '';         // último identificador, pra `return /re/`
-  // Contexto aninhado: {tipo:'tpl'} dentro de template, {tipo:'expr'} dentro do
-  // ${} de um template. Precisa de pilha de verdade porque template dentro de
-  // ${} de outro template acontece nestas páginas.
+  let anterior = '';        // last meaningful character
+  let palavra = '';         // last identifier, for `return /re/`
+  // Nested context: {tipo:'tpl'} inside a template, {tipo:'expr'} inside the
+  // ${} of a template. Needs a real stack because a template inside the
+  // ${} of another template happens on these pages.
   const pilha = [];
   const topo = () => pilha[pilha.length - 1];
 
   const podeSerRegex = () => {
     if (!anterior) return true;
     if (/[A-Za-z0-9_$]/.test(anterior)) return PALAVRAS_ANTES_DE_REGEX.has(palavra);
-    // depois de ) ou ] vem divisão (`(a+b)/2`); depois de operador, vírgula,
-    // abre-chaves etc. vem regex.
+    // after ) or ] comes division (`(a+b)/2`); after operator, comma,
+    // open brace, etc. comes regex.
     return anterior !== ')' && anterior !== ']';
   };
 
@@ -219,7 +219,7 @@ export function fatiaJs(js) {
       const c = js[j];
       if (c === '\\') { j += 2; continue; }
       if (c === aspa) return j + 1;
-      if (c === '\n') return -1;   // string não fecha em outra linha: era outra coisa
+      if (c === '\n') return -1;   // string doesn't close on another line: it was something else
       j++;
     }
     return -1;
@@ -228,9 +228,9 @@ export function fatiaJs(js) {
   while (i < n) {
     const c = js[i];
 
-    // Dentro de template o conteúdo é TEXTO, não código: só ` e ${ têm
-    // significado. Tem que vir antes de tudo, senão uma aspa ou uma barra no
-    // meio do texto vira string/regex e os pedaços se sobrepõem.
+    // Inside a template the content is TEXT, not code: only ` and ${ have
+    // meaning. It has to come before everything else, otherwise a quote or a slash in the
+    // middle of the text becomes a string/regex and the pieces overlap.
     if (topo()?.tipo === 'tpl') {
       if (c === '\\') { i += 2; continue; }
       if (c === '`') {
@@ -275,7 +275,7 @@ export function fatiaJs(js) {
         i = j;
         continue;
       }
-      // não fechou: era divisão mesmo, segue como código
+      // didn't close: it really was division, keeps going as code
     }
     if (c === '"' || c === "'") {
       const fim = fimDeString(i, c);
@@ -285,7 +285,7 @@ export function fatiaJs(js) {
         i = fim;
         continue;
       }
-      // aspa solta (dentro de regex mal detectada, por ex.): trata como código
+      // stray quote (inside a badly detected regex, for example): treat as code
     }
     if (c === '`') {
       pilha.push({ tipo: 'tpl', ini: i });
@@ -293,7 +293,7 @@ export function fatiaJs(js) {
       i++;
       continue;
     }
-    // Fechamento do ${}: a chave que casa com a abertura devolve pro template.
+    // Closing of ${}: the brace that matches the opening returns to the template.
     if (topo()?.tipo === 'expr') {
       if (c === '{') topo().chaves++;
       else if (c === '}') {
@@ -307,29 +307,29 @@ export function fatiaJs(js) {
     }
     i++;
   }
-  // Template que não fecha (script truncado): emite o que sobrou pra cobertura
-  // continuar completa em vez de sumir com o resto do arquivo.
+  // Template that doesn't close (truncated script): emits what's left so coverage
+  // stays complete instead of disappearing along with the rest of the file.
   const aberto = pilha.find((c) => c.tipo === 'tpl');
   if (aberto) out.push({ tipo: 'template', ini: aberto.ini, fim: n, aspa: '`' });
   return out;
 }
 
-// Tem tag HTML dentro? Aí a string é um pedaço de página montado em JS, e quem
-// sabe achar texto nela é a própria caminhada de HTML, recursivamente. Assim
-// 'Baixe o <b>__MARCA__ Runner.exe</b> (botão acima)' é traduzido pelos pedaços de
-// texto, com as tags intactas, em vez de virar uma chave gigante de catálogo.
+// Has an HTML tag inside? Then the string is a piece of page assembled in JS, and whoever
+// knows how to find text in it is the HTML walk itself, recursively. This way
+// 'Baixe o <b>__MARCA__ Runner.exe</b> (botão acima)' is translated piece by
+// piece of text, with the tags intact, instead of becoming one giant catalog key.
 const TEM_TAG = /<[a-zA-Z][^>]*>/;
 
-// Lista de palavras soltas, vizinhas, com pelo menos uma acentuada: é a forma
-// de `['domingo','segunda','terça',...]`. Sem isto o filtro de frase pega só
-// 'terça' e 'sábado' (as acentuadas) e a tela em inglês mostra "domingo,
-// segunda, Tuesday" — pior do que tudo em português, porque parece defeito e
-// não falta de tradução. Então ou o grupo inteiro entra, ou nenhum entra.
+// List of loose, neighboring words, with at least one accented: it's the shape
+// of `['domingo','segunda','terça',...]`. Without this the sentence filter only catches
+// 'terça' and 'sábado' (the accented ones) and the English screen shows "domingo,
+// segunda, Tuesday" — worse than everything in Portuguese, because it looks like a defect and
+// not a lack of translation. So either the whole group goes in, or none does.
 //
-// Exige TODAS as palavras soltas pra não confundir com argumento de função, e
-// pelo menos uma acentuada como prova de que a lista é português escrito pra
-// ler. Lista sem acento nenhum ('jan','fev','mar') fica fora inteira, que é
-// consistente.
+// Requires ALL the loose words so as not to confuse it with a function argument, and
+// at least one accented one as proof that the list is Portuguese written to
+// be read. A list with no accent at all ('jan','fev','mar') is left out entirely, which is
+// consistent.
 const UMA_PALAVRA = /^\p{L}[\p{L}\p{M}]*$/u;
 
 function irmaosDeLista(js, pedacos) {
@@ -366,9 +366,9 @@ function traduzScript(js, troca) {
     const corpo = js.slice(p.ini + 1, p.fim - 1);
 
     if (TEM_TAG.test(corpo)) {
-      // Recursão: só os textos de dentro do fragmento são trocados. Qualquer
-      // troca que traga a aspa de fechamento ou barra invertida é recusada lá
-      // embaixo, então o literal continua válido.
+      // Recursion: only the texts inside the fragment are swapped. Any
+      // swap that brings a closing quote or backslash is rejected down
+      // below, so the literal stays valid.
       const novo = caminha(corpo, (t, tipo) => {
         const r = troca(t, tipo);
         return r == null || r.includes(aspa) || r.includes('\\') || r.includes('`') ? null : r;
@@ -378,15 +378,15 @@ function traduzScript(js, troca) {
     }
     if (!corpo || !ehTraduzivel(corpo)) { out += bruto; continue; }
     if (!daLista.has(p.ini) && !ehFraseDeScript(corpo.trim())) { out += bruto; continue; }
-    // 40 caracteres porque o gatilho mais longo ('setAttribute("class", ') não
-    // cabe em menos; janela curta deixaria passar justamente o caso perigoso.
+    // 40 characters because the longest trigger ('setAttribute("class", ') doesn't
+    // fit in less; a shorter window would let exactly the dangerous case through.
     if (CONTEXTO_DE_MAQUINA.test(js.slice(Math.max(0, p.ini - 40), p.ini))) { out += bruto; continue; }
     const novo = troca(corpo.trim(), 'script');
-    // A string volta com a MESMA aspa, então a tradução não pode conter a aspa
-    // nem barra invertida solta. Aspa simples em espanhol/inglês é comum
-    // ("don't", "qué'"), e escapar aqui seria fácil de errar: melhor recusar.
+    // The string comes back with the SAME quote, so the translation can't contain the quote
+    // nor a stray backslash. A single quote in Spanish/English is common
+    // ("don't", "qué'"), and escaping here would be easy to get wrong: better to reject.
     if (novo == null || novo.includes(aspa) || novo.includes('\\')) { out += bruto; continue; }
-    // preserva o espaço em volta que o trim tirou
+    // preserves the surrounding space the trim removed
     const m = /^(\s*)[\s\S]*?(\s*)$/.exec(corpo);
     out += aspa + m[1] + novo + m[2] + aspa;
   }
@@ -395,9 +395,9 @@ function traduzScript(js, troca) {
 
 // ── API ─────────────────────────────────────────────────────────────────────
 
-// Todos os textos que a caminhada considera traduzíveis, na ordem em que
-// aparecem, sem repetição. É a lista que alimenta o catálogo — e, por ser o
-// MESMO percurso da tradução, é também a lista do que dá pra traduzir.
+// All the texts the walk considers translatable, in the order they
+// appear, without repetition. It's the list that feeds the catalog — and, being the
+// SAME pass as the translation, it's also the list of what can be translated.
 export function extraiTextos(html) {
   const vistos = new Set();
   const fora = [];
@@ -408,8 +408,8 @@ export function extraiTextos(html) {
   return fora;
 }
 
-// Aplica um catálogo { 'texto em português': 'tradução' }. Chave ausente = fica
-// em português, de propósito.
+// Applies a catalog { 'text in Portuguese': 'translation' }. Missing key = stays
+// in Portuguese, on purpose.
 export function aplicaCatalogo(html, catalogo) {
   if (!catalogo) return html;
   return caminha(html, (texto) => {
@@ -418,8 +418,8 @@ export function aplicaCatalogo(html, catalogo) {
   });
 }
 
-// Troca o lang= da tag <html>, pra leitor de tela e corretor do navegador não
-// continuarem achando que a página é portuguesa.
+// Swaps the lang= of the <html> tag, so the screen reader and the browser's
+// spell checker stop thinking the page is Portuguese.
 function trocaLangDoHtml(html, tag) {
   return html.replace(/<html\b[^>]*>/i, (m) => (
     /\blang\s*=\s*["'][^"']*["']/i.test(m)
@@ -428,20 +428,20 @@ function trocaLangDoHtml(html, tag) {
   ));
 }
 
-// Lê os catálogos do disco, um JSON por idioma. Arquivo faltando ou quebrado NÃO
-// derruba o processo: sem catálogo o site inteiro sai em português, que é o
-// mesmo comportamento de antes desta mudança existir. Um site em português é um
-// site; um site que não sobe, não.
+// Reads the catalogs from disk, one JSON per language. A missing or broken file does NOT
+// bring down the process: without a catalog the whole site comes out in Portuguese, which is the
+// same behavior as before this change existed. A site in Portuguese is a
+// site; a site that doesn't come up is not.
 export function carregaCatalogos(dir) {
   const fora = {};
-  // Várias pastas (a do núcleo e as da marca): as de depois completam as de antes.
+  // Several folders (the core's and the brand's): the later ones complete the earlier ones.
   for (const tag of IDIOMAS_OK) for (const d of [].concat(dir)) {
     if (tag === IDIOMA_PADRAO) continue;
     const arq = path.join(d, `${tag}.json`);
     try {
       const j = JSON.parse(fs.readFileSync(arq, 'utf8'));
-      // Só string não-vazia entra: chave com null/número no JSON viraria
-      // substituição inesperada lá na frente.
+      // Only a non-empty string goes in: a key with null/number in the JSON would become
+      // an unexpected replacement down the line.
       const limpo = {};
       for (const [k, v] of Object.entries(j)) if (typeof v === 'string' && v.trim()) limpo[k] = v;
       fora[tag] = { ...fora[tag], ...limpo };
@@ -452,8 +452,8 @@ export function carregaCatalogos(dir) {
   return fora;
 }
 
-// Ponto único chamado pelo servidor. Em pt-BR devolve a MESMA string, sem passar
-// pela caminhada: é o que garante que a página de hoje não muda um byte.
+// Single entry point called by the server. In pt-BR returns the SAME string, without going
+// through the walk: that's what guarantees today's page doesn't change a byte.
 export function traduzPagina(html, language, catalogos) {
   const tag = tagIdioma(language);
   if (tag === IDIOMA_PADRAO) return html;

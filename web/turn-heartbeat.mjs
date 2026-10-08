@@ -1,8 +1,8 @@
 export const TURN_HEARTBEAT_TEXT = 'Ainda estou trabalhando nisso, já te respondo.';
 
-// Agenda um único recibo de andamento e devolve uma função idempotente que
-// encerra o relógio. Se o envio já começou, finish() espera ele terminar para a
-// resposta final não ultrapassar o recibo no canal.
+// Schedules a single progress receipt and returns an idempotent function that
+// stops the clock. If the send has already started, finish() waits for it to finish so the
+// final reply doesn't overtake the receipt on the channel.
 export function startTurnHeartbeat({ afterMs = 60000, send, onError = () => {} }) {
   const delay = Number(afterMs);
   let finished = false;

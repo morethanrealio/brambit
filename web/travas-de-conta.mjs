@@ -1,8 +1,8 @@
-// Travas da conta de uma pessoa e de uma empresa (advisory lock do Postgres, por
-// transação). Quem mexe em QUAL conta paga o consumo de alguém (entrar, criar e
-// sair de empresa, em empresa.mjs) e quem grava consumo (conta-pagadora.mjs)
-// pegam as mesmas travas, nesta ordem SEMPRE: pessoa, depois empresa. Nunca
-// segurar a conexão durante chamada HTTP.
+// Locks on a person's account and a company's (Postgres advisory lock, per
+// transaction). Whoever changes WHICH account pays for someone's usage (joining, creating and
+// leaving a company, in empresa.mjs) and whoever records usage (conta-pagadora.mjs)
+// take the same locks, ALWAYS in this order: person, then company. Never
+// hold the connection during an HTTP call.
 const LOCK_SQL='SELECT pg_advisory_xact_lock(hashtextextended($1, 0))';
 export const creditUserLockKey=userId=>'execution-credit:'+userId;
 export const creditOrgLockKey=orgId=>'execution-credit:org:'+orgId;

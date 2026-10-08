@@ -1,21 +1,21 @@
-// ── Scheduler de rotinas ──
-// Loop simples (1x/min) que dispara rotinas baseadas em HORÁRIO. Cada rotina
-// pertence a (usuário + assistente), tem um horário local (hora + minuto), dias e um prompt que o
-// agente executa; o resultado vai pro usuário por e-mail (canal escolhido: email).
+// ── Routine scheduler ──
+// Simple loop (1x/min) that fires routines based on TIME. Each routine
+// belongs to (user + assistant), has a local time (hour + minute), days and a prompt the
+// agent executes; the result goes to the user by email (chosen channel: email).
 //
-// Dedup: grava o DIA local em que rodou (last_run_day). Só roda 1x por dia. A
-// janela aceita atraso de até 3h: além de tolerar um tick atrasado, recupera uma
-// fila que ficou esperando outra rotina longa ou um restart curto do serviço.
-// Sem cron externo: só Node.
+// Dedup: records the local DAY it ran (last_run_day). Only runs 1x per day. The
+// window accepts up to 3h of delay: besides tolerating a late tick, it recovers a
+// queue that was waiting on another long routine or a short service restart.
+// No external cron: just Node.
 
 import { routineMinuteOfDay } from './routine-time.mjs';
 
 export const ROUTINE_LATE_GRACE_MIN = 180;
 
-// Pausar, sem mudar mais nada, e uma operacao reversivel que reduz automacao e
-// custo. Ela pode rodar assim que o dono pede; retomada e qualquer edicao
-// combinada continuam sujeitas a confirmacao. A lista fechada evita que uma
-// mudanca de horario, canal, prompt ou titulo viaje escondida junto da pausa.
+// Pausing, without changing anything else, is a reversible operation that reduces automation and
+// cost. It can run as soon as the owner asks; resuming and any combined edit
+// still require confirmation. The closed list prevents a
+// change of time, channel, prompt or title from traveling hidden along with the pause.
 export function isPauseOnlyRoutineChange(args = {}) {
   return args.ativa === false
     && Object.keys(args).every((key) => ['ativa', 'titulo', 'id'].includes(key));
@@ -33,25 +33,25 @@ export function localParts(tz, at = new Date()) {
   const hour = Number(p.hour === '24' ? '0' : p.hour);
   const minute = Number(p.minute);
   const dow = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[p.weekday];
-  const dom = Number(p.day);                                    // dia do mês (1..31)
-  const dim = new Date(Date.UTC(Number(p.year), Number(p.month), 0)).getUTCDate(); // dias no mês
+  const dom = Number(p.day);                                    // day of the month (1..31)
+  const dim = new Date(Date.UTC(Number(p.year), Number(p.month), 0)).getUTCDate(); // days in the month
   return { day, hour, minute, dow, dom, dim };
 }
 
-// ── Cadência da rotina (coluna `routines.days`, texto) ──────────────────────
-// A coluna guarda a cadência inteira, sem migração de schema. Formas aceitas:
-//   'daily' | 'weekdays' | 'weekends'   baldes legados (seguem valendo)
-//   '[1,4]'                             dias da semana (0=dom .. 6=sáb)
-//   '{"mes":[1,15]}'                    dias do mês (-1 = último dia do mês)
-//   '{"nth":2,"dow":[1]}'               a Nª ocorrência do dia no mês (-1 = última)
-// Existia só o trio de baldes, e por isso "todo domingo às 18h" virava weekends
-// (chegava sábado também) e "a segunda da 2ª semana do mês" não era exprimível —
-// a condição de data acabava DENTRO do texto da rotina e ela disparava em dia
-// errado (auditoria 04/09, dois casos). Aqui a cadência volta a ser dado.
+// ── Routine cadence (`routines.days` column, text) ──────────────────────
+// The column stores the whole cadence, without a schema migration. Accepted forms:
+//   'daily' | 'weekdays' | 'weekends'   legacy buckets (still valid)
+//   '[1,4]'                             days of the week (0=sun .. 6=sat)
+//   '{"mes":[1,15]}'                    days of the month (-1 = last day of the month)
+//   '{"nth":2,"dow":[1]}'               the Nth occurrence of the day in the month (-1 = last)
+// Only the trio of buckets used to exist, and because of that "every Sunday at 6pm" became weekends
+// (Saturday came too) and "the second Monday of the month" wasn't expressible —
+// the date condition ended up INSIDE the routine's text and it fired on the
+// wrong day (audit 2026-09-04, two cases). Here the cadence goes back to being data.
 export const DOW_KEYS = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
 const DOW_NOMES = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
-// Texto guardado -> forma estruturada. Nunca lança: valor estragado vira 'daily'.
+// Stored text -> structured form. Never throws: a corrupted value becomes 'daily'.
 export function parseRoutineDays(days) {
   let d = days ?? 'daily';
   if (typeof d === 'string') {
@@ -80,43 +80,43 @@ export function parseRoutineDays(days) {
   return 'daily';
 }
 
-// A cadência inclui ESTE dia local? (dow 0=dom, dom = dia do mês, dim = dias no mês)
+// Does the cadence include THIS local day? (dow 0=sun, dom = day of month, dim = days in month)
 export function daysMatch(days, { dow, dom, dim }) {
   const d = parseRoutineDays(days);
   if (d === 'weekdays') return dow !== 0 && dow !== 6;
   if (d === 'weekends') return dow === 0 || dow === 6;
   if (Array.isArray(d)) return d.includes(dow);
   if (d && typeof d === 'object' && Array.isArray(d.mes)) {
-    // -1 = último dia do mês (fevereiro/meses de 30 dias entram certo).
-    // "Todo dia 31" num mês de 30 cai no dia 30, e "dia 30" em fevereiro cai no
-    // 28/29: o dia pedido não existe, e pular o mês inteiro em silêncio é pior
-    // que entregar no último dia (é o que a pessoa quer dizer com "todo mês").
-    // Dispara uma vez só, porque só o último dia satisfaz a condição.
+    // -1 = last day of the month (February/30-day months come in correctly).
+    // "Every day 31" in a 30-day month falls on day 30, and "day 30" in February falls on
+    // the 28th/29th: the requested day doesn't exist, and silently skipping the whole month is worse
+    // than delivering on the last day (that's what the person means by "every month").
+    // Fires only once, because only the last day satisfies the condition.
     return d.mes.some((n) => (n === -1 || n > dim ? dom === dim : n === dom));
   }
   if (d && typeof d === 'object' && Array.isArray(d.dow)) {
     if (!d.dow.includes(dow)) return false;
-    // A Nª ocorrência de um dia da semana no mês: a 1ª cai entre 1 e 7, a 2ª entre
-    // 8 e 14, e assim por diante. A ÚLTIMA é aquela sem outra igual 7 dias depois.
+    // The Nth occurrence of a weekday in the month: the 1st falls between 1 and 7, the 2nd between
+    // 8 and 14, and so on. The LAST is the one without another equal one 7 days later.
     return d.nth === -1 ? dom + 7 > dim : Math.ceil(dom / 7) === d.nth;
   }
   return true; // 'daily'
 }
 
-// Argumentos da tool -> valor canônico pra coluna. Devolve { days } ou { error }
-// (texto pronto pro dono). Precedência: dia do mês > Nª semana > dia da semana >
-// balde. Uma cadência só, pra não existir rotina com duas regras conflitantes.
+// Tool arguments -> canonical value for the column. Returns { days } or { error }
+// (ready-made text for the owner). Precedence: day of month > Nth week > day of week >
+// bucket. A single cadence, so no routine exists with two conflicting rules.
 export function normalizeRoutineDays({ dias, dias_da_semana, dias_do_mes, semana_do_mes } = {}) {
   const listaDow = (v) => {
     const out = [];
     for (const item of (Array.isArray(v) ? v : [v])) {
       if (item === undefined || item === null || item === '') continue;
-      // Aceita nome ("seg", "segunda", "Segunda-feira") e também o número do dow,
-      // porque o modelo às vezes manda 0..6 direto.
+      // Accepts a name ("seg", "segunda", "Segunda-feira") and also the dow number,
+      // because the model sometimes sends 0..6 directly.
       const n = Number(item);
       if (Number.isInteger(n) && n >= 0 && n <= 6 && String(item).trim() === String(n)) { out.push(n); continue; }
-      // Tira o acento ANTES de cortar em 3: "s\u00e1bado" decomposto ("sa" + acento +
-      // "bado") perderia o "b" no corte e n\u00e3o casaria mais com sab.
+      // Strips the accent BEFORE cutting to 3: "sábado" decomposed ("sa" + accent +
+      // "bado") would lose the "b" in the cut and would no longer match "sab".
       const k = String(item).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .toLowerCase().trim().slice(0, 3);
       if (!(k in DOW_KEYS)) return null;
@@ -154,9 +154,9 @@ export function normalizeRoutineDays({ dias, dias_da_semana, dias_do_mes, semana
   return { days: null }; // nada informado: quem chama decide o default
 }
 
-// Rótulo pt-BR de um intervalo em minutos: "5 min", "1 hora", "2 horas", "1 dia".
-// Mora aqui (e não no server) porque o cartão de confirmação precisa dizer a
-// MESMA cadência que vai ser gravada.
+// pt-BR label of an interval in minutes: "5 min", "1 hora", "2 horas", "1 dia".
+// Lives here (and not in the server) because the confirmation card needs to say the
+// SAME cadence that will be stored.
 export function intervalLabel(min) {
   const m = Number(min);
   if (m % 1440 === 0) { const d = m / 1440; return d === 1 ? '1 dia' : `${d} dias`; }
@@ -164,7 +164,7 @@ export function intervalLabel(min) {
   return `${m} min`;
 }
 
-// Cadência (valor guardado OU args da tool já normalizados) em português.
+// Cadence (stored value OR already-normalized tool args) in Portuguese.
 export function routineDaysLabel(days) {
   const d = parseRoutineDays(days);
   if (d === 'weekdays') return 'seg–sex';
@@ -179,8 +179,8 @@ export function routineDaysLabel(days) {
   if (d && typeof d === 'object' && Array.isArray(d.mes)) {
     const nomes = d.mes.map((n) => (n === -1 ? 'último dia' : `dia ${n}`));
     const lista = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
-    // Diz o que a plataforma vai fazer quando o dia não existir no mês, senão o
-    // dono confirma "todo dia 31" achando que fevereiro não recebe nada.
+    // Says what the platform will do when the day doesn't exist in the month, otherwise the
+    // owner confirms "every day 31" thinking February gets nothing.
     const curto = d.mes.some((n) => n > 28) ? ' (nos meses mais curtos, no último dia)' : '';
     return `todo mês no ${lista}${curto}`;
   }
@@ -192,66 +192,66 @@ export function routineDaysLabel(days) {
   return 'todo dia';
 }
 
-// A rotina deve rodar AGORA? (hora local bate, dia certo, ainda não rodou hoje.)
+// Should the routine run NOW? (local hour matches, right day, hasn't run today yet.)
 export function isDue(routine, at = new Date()) {
   if (!routine.enabled) return false;
-  // Modo INTERVALO (recorrência de granularidade livre): dispara quando next_run já
-  // passou. A janela (repeat_until) é garantida na hora de gravar o next_run — quando
-  // o próximo passaria do fim, a rotina é DESLIGADA em vez de ganhar um next_run fora
-  // da janela; então aqui basta checar next_run <= agora.
+  // INTERVAL mode (free-granularity recurrence): fires when next_run has already
+  // passed. The window (repeat_until) is guaranteed at the moment of storing next_run — when
+  // the next one would pass the end, the routine is TURNED OFF instead of getting a next_run outside
+  // the window; so here it's enough to check next_run <= now.
   if (routine.repeat_every_min) {
     if (!routine.next_run) return false;
     return new Date(routine.next_run).getTime() <= at.getTime();
   }
   const parts = localParts(routine.tz, at);
-  if (routine.last_run_day === parts.day) return false;     // já rodou hoje
+  if (routine.last_run_day === parts.day) return false;     // already ran today
   if (!daysMatch(routine.days || 'daily', parts)) return false;
   const atrasoMin = parts.hour * 60 + parts.minute - routineMinuteOfDay(routine);
   return atrasoMin >= 0 && atrasoMin <= ROUTINE_LATE_GRACE_MIN;
 }
 
-// Sobe o loop. Injeta deps pra evitar import circular com server/db.
+// Boots the loop. Injects deps to avoid a circular import with server/db.
 //   deps.listDueRoutines()  -> [{ ...routine, email, agent_name, user_name }]
 //   deps.markRoutineRun(id, day)
-//   deps.runRoutine(routine) -> texto gerado pelo agente
-//   deps.deliver(routine, text) -> entrega (e-mail)
+//   deps.runRoutine(routine) -> text generated by the agent
+//   deps.deliver(routine, text) -> delivery (email)
 //   deps.listDueRoutineOneShots()/claimRoutineOneShot()/finishRoutineOneShot()
-//      -> execução futura única da rotina, sem mudar a cadência normal
+//      -> single future execution of the routine, without changing the normal cadence
 //   deps.listDueReminders()      -> [{ ...reminder, email, user_name, agent_name }] (run_at<=now, pending)
-//   deps.executeReminder(reminder) -> claim, envio e resultado persistente
-//   deps.recoverReminderDeliveries() -> recupera claims anteriores ao envio;
-//      envios interrompidos ficam incertos e nunca são repetidos automaticamente
+//   deps.executeReminder(reminder) -> claim, sending and persistent result
+//   deps.recoverReminderDeliveries() -> recovers claims prior to sending;
+//      interrupted sends become uncertain and are never automatically repeated
 export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date() } = {}) {
   let running = false, stopped=false;
   let drained;let drainPromise=Promise.resolve();
   async function tick() {
-    if (running || stopped) return;            // evita sobreposição se um tick demora
+    if (running || stopped) return;            // avoids overlap if a tick takes long
     running = true;
     drainPromise=new Promise(resolve=>{drained=resolve;});
     try {
-      // Uma foto só do relógio pro lote inteiro. Antes, isDue() lia Date a cada
-      // item: se a primeira rotina das 8h levasse 11 minutos, as seguintes eram
-      // reavaliadas depois da janela e simplesmente puladas.
+      // A single snapshot of the clock for the whole batch. Before, isDue() read Date for every
+      // item: if the first 8am routine took 11 minutes, the following ones were
+      // re-evaluated after the window and simply skipped.
       const tickAt = now();
       if(deps.recoverRoutineExecutions)await deps.recoverRoutineExecutions();
       const routines = await deps.listDueRoutines();
       for (const r of routines) {
         if(stopped)break;
-        // Fim de janela (repeat_until) vale nos DOIS modos. Antes só o modo
-        // INTERVALO olhava essa data, então rotina por HORÁRIO com fim natural
-        // ("todo dia às 5h durante a Quaresma") não tinha como parar: disparava
-        // pra sempre e sobrava pro dono cancelar na mão.
+        // Window end (repeat_until) applies in BOTH modes. Before, only INTERVAL
+        // mode looked at this date, so a TIME-based routine with a natural end
+        // ("every day at 5am during Lent") had no way to stop: it would fire
+        // forever and it fell to the owner to cancel it by hand.
         if (!r.repeat_every_min && r.repeat_until && tickAt.getTime() > new Date(r.repeat_until).getTime()) {
-          await deps.markRoutineNext(r.id, null);                  // desliga, não apaga
+          await deps.markRoutineNext(r.id, null);                  // turns off, doesn't delete
           console.log(`[rotina] ${r.id} (${r.title}) encerrada: passou de repeat_until`);
           continue;
         }
         if (!isDue(r, tickAt)) continue;
         const prepare=async()=>{
-        // Marca ANTES de rodar: se a geração falhar, não fica re-disparando.
+        // Marks BEFORE running: if generation fails, it doesn't keep re-firing.
         if (r.repeat_every_min) {
-          // Modo INTERVALO: agenda o próximo disparo (pulando slots perdidos p/ não
-          // disparar em rajada). Se o próximo passa da janela, ESTE é o último: encerra.
+          // INTERVAL mode: schedules the next firing (skipping missed slots so as not to
+          // fire in a burst). If the next one passes the window, THIS is the last one: it ends.
           const stepMs = Number(r.repeat_every_min) * 60_000;
           let next = new Date(r.next_run).getTime() + stepMs;
           const now = Date.now();
@@ -276,9 +276,9 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
 
         try {
           const text = await deps.runRoutine(r);
-          // Texto vazio = rodou e não tem o que entregar (ex.: dono sem crédito
-          // já avisado nesta semana). Não mentir "entregue" no log: é justamente
-          // aqui que se diagnostica rotina que sumiu do canal da pessoa.
+          // Empty text = it ran and there's nothing to deliver (e.g. owner with no credit
+          // already warned this week). Don't lie "delivered" in the log: this is exactly
+          // where a routine that vanished from the person's channel gets diagnosed.
           const typed = text?.type === 'flight-monitor-v1' || text?.type === 'curation-v1';
           const body = typed ? text.text : text;
           if (body && body.trim()) {
@@ -291,10 +291,10 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
           console.error(`[rotina] ${r.id} falhou:`, e?.message ?? e);
         }
       }
-      // Execução EXTRA futura de uma rotina existente. É uma fila própria: um
-      // lembrete só envia texto fixo e nunca pode fingir que executará a rotina.
-      // Claim acontece antes de gerar; worker interrompido vira uncertain e não
-      // é repetido automaticamente (a geração pode ter efeitos externos).
+      // EXTRA future execution of an existing routine. It's its own queue: a
+      // reminder only sends fixed text and can never pretend it will execute the routine.
+      // Claim happens before generating; an interrupted worker becomes uncertain and
+      // is not automatically repeated (generation may have external effects).
       if (!stopped && deps.listDueRoutineOneShots) {
         if(deps.recoverRoutineOneShots)await deps.recoverRoutineOneShots();
         const jobs=await deps.listDueRoutineOneShots();
@@ -314,14 +314,14 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
           }
         }
       }
-      // Jobs de geração de vídeo (async): avança/entrega os que ficaram prontos.
-      // Best-effort; erro aqui não derruba o resto do tick.
+      // Video generation jobs (async): advances/delivers the ones that became ready.
+      // Best-effort; an error here doesn't bring down the rest of the tick.
       if (!stopped && deps.pollVideoJobs) {
         try { await deps.pollVideoJobs(); }
         catch (e) { console.error('[scheduler] pollVideoJobs falhou:', e?.message ?? e); }
       }
-      // O executor registra uma ocorrência e obtém o claim atômico antes do
-      // envio. Aceite e reagendamento são persistidos juntos só DEPOIS do canal.
+      // The executor records an occurrence and gets the atomic claim before
+      // sending. Acceptance and rescheduling are persisted together only AFTER the channel.
       if (!stopped && deps.listDueReminders) {
         if (deps.recoverReminderDeliveries) await deps.recoverReminderDeliveries();
         const reminders = await deps.listDueReminders();

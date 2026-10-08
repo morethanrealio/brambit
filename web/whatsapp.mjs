@@ -1,15 +1,15 @@
 import { hostDaMarca, marca, siteDaMarca } from './marca.mjs';
 import { batchedConfirmationTarget, channelReplyParts } from './confirmation-target.mjs';
-// ── Canal WhatsApp (WABA Cloud API, número único compartilhado) ──
-// Um número de negócio atende VÁRIOS usuários. Diferente do Telegram (1 bot por
-// usuário), aqui o webhook é compartilhado: roteamos pelo telefone do remetente
-// -> usuário, e dentro do chat o usuário escolhe qual assistente fala.
+// ── WhatsApp channel (WABA Cloud API, single shared number) ──
+// One business number serves MULTIPLE users. Unlike Telegram (1 bot per
+// user), here the webhook is shared: we route by the sender's phone number
+// -> user, and inside the chat the user chooses which assistant speaks.
 //
-// Modelo: AGENTE ATIVO fixo por telefone (sticky). Mensagem normal vai pro ativo.
-//   "@nome ..."  troca o ativo e roteia aquela mensagem pra ele.
-//   "menu" / "/agentes"  mostra a lista interativa pra escolher.
-// Cada agente tem sua própria thread "WhatsApp" (history isolado); a memória de
-// USUÁRIO (wiki/perfil) segue compartilhada entre os assistentes da pessoa.
+// Model: fixed ACTIVE AGENT per phone (sticky). A normal message goes to the active one.
+//   "@name ..."  switches the active one and routes that message to it.
+//   "menu" / "/agentes"  shows the interactive list to choose from.
+// Each agent has its own "WhatsApp" thread (isolated history); USER
+// memory (wiki/profile) remains shared across the person's assistants.
 
 import crypto from 'crypto';
 import { CHANNEL_CTX_END } from './confirm.mjs';
@@ -24,26 +24,26 @@ import { avisarEntrega, esperarEntrega } from './wa-entrega.mjs';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const PHONE_ID = () => process.env.WA_PHONE_NUMBER_ID;
-// Base pública pra montar a URL absoluta dos anexos (a Meta busca a URL via link).
+// Public base to build the absolute URL of attachments (Meta fetches the URL via link).
 const PUBLIC_BASE = () => (process.env.PUBLIC_BASE_URL || siteDaMarca()).replace(/\/$/, '');
 const absUrl = (u) => (/^https?:\/\//.test(u) ? u : `${PUBLIC_BASE()}${u}`);
 
-// Canal pronto (precisa de token + phone id + verify token + app secret). O app
-// secret entra aqui porque sem ele o webhook de entrada não tem como ser
-// autenticado, e meio canal ligado é pior que canal desligado.
+// Channel ready (needs token + phone id + verify token + app secret). The app
+// secret goes in here because without it the inbound webhook can't be
+// authenticated, and a half-enabled channel is worse than a disabled one.
 export function waEnabled() {
   return !!(process.env.WA_TOKEN && process.env.WA_PHONE_NUMBER_ID && process.env.WA_VERIFY_TOKEN && process.env.WA_APP_SECRET);
 }
 
-// Normaliza um nome de agente pra casar com @apelido (sem acento, minúsculo, só alfanumérico).
+// Normalizes an agent name to match @nickname (no accents, lowercase, alphanumeric only).
 function slug(s) {
   return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-// A Meta manda a mensagem genérica em error.message ("(#131009) Parameter value
-// is not valid") e diz QUAL parâmetro recusou em error.error_data.details. Sem
-// esse detalhe o journal não permite depurar a recusa, então guardamos os dois.
+// Meta sends the generic message in error.message ("(#131009) Parameter value
+// is not valid") and says WHICH parameter it rejected in error.error_data.details. Without
+// that detail the journal doesn't allow debugging the rejection, so we keep both.
 function graphErr(j, status) {
   const e = j?.error || {};
   const extra = [
@@ -70,31 +70,31 @@ async function graph(path, body) {
   return j;
 }
 
-// Teto de UM balão de texto na Cloud API. Era 4096 e a Meta passou a recusar
-// acima de 1024 (erro "(#131009) Parameter value is not valid", com
+// Ceiling for ONE text bubble in the Cloud API. It used to be 4096 and Meta started refusing
+// anything above 1024 (error "(#131009) Parameter value is not valid", with
 // error_data.details = "body['text'] length is N. It cannot exceed 1024"),
-// verificado ao vivo em 18/09/2026: às 00:11 SP uma mensagem de 2670 chars ainda
-// passou, às 06:58 SP a de 2401 já foi recusada. Não é limite nosso: se a Meta
-// voltar atrás, basta subir esta constante.
+// verified live on 2026-09-18: at 00:11 SP time a 2670-char message still
+// got through, at 06:58 SP time a 2401-char one was already refused. This isn't our limit: if Meta
+// reverses course, it's enough to raise this constant.
 const WA_CHUNK = 1024;
 
-// Resposta longa vira vários balões, na ordem, sem corte. Até 29/09/2026 havia
-// teto de 8 balões (8192 chars): o excesso sumia e o último balão levava
-// "[…resposta muito longa, cortei o resto]". A quebra em si mora em
-// channel-split.mjs (parágrafo > linha > espaço > corte seco fora de URL).
-// Exportada porque é a regra que decide quantas notificações a pessoa recebe.
-// Markdown do modelo vira formatação do WhatsApp aqui (wa-format.mjs).
+// A long reply becomes several bubbles, in order, with no truncation. Until 2026-09-29 there was
+// an 8-bubble ceiling (8192 chars): the excess disappeared and the last bubble carried
+// "[…resposta muito longa, cortei o resto]". The split itself lives in
+// channel-split.mjs (paragraph > line > space > blunt cut outside a URL).
+// Exported because it's the rule that decides how many notifications the person gets.
+// The model's Markdown becomes WhatsApp formatting here (wa-format.mjs).
 export function prepararTextoWa(text) {
   const body = markdownParaWa((text || '').trim()) || '(sem resposta)';
   return splitMessage(body, WA_CHUNK);
 }
 
-// Texto puro, cortado em pedaços de WA_CHUNK chars.
-// Devolve os wamids das partes enviadas (pra indexar a resposta e permitir que
-// o usuário "responda/cite" ela depois). Callers que ignoram o retorno seguem ok.
-// `reenvio`: repete cada parte que falhou com erro incerto (aviso-canal.mjs), por
-// parte, pra não mandar de novo as que a Meta já aceitou. No erro, `error.wamids`
-// traz as partes que saíram (cobrança e citação continuam valendo pra elas).
+// Plain text, cut into WA_CHUNK-char pieces.
+// Returns the wamids of the parts that were sent (to index the reply and allow
+// the user to "reply/quote" it later). Callers that ignore the return value remain fine.
+// `reenvio`: retries each part that failed with an uncertain error (aviso-canal.mjs), per
+// part, so as not to resend the ones Meta already accepted. On error, `error.wamids`
+// carries the parts that went out (billing and quoting still apply to them).
 async function sendText(to, text, { requireReceipt = false, tracking, reenvio = false } = {}) {
   const wamids = [];
   const parts = prepararTextoWa(text);
@@ -124,19 +124,19 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
   return wamids;
 }
 
-// Saídas ricas do atendimento ao público (publico-saidas.mjs, já normalizadas),
-// uma mensagem da Meta por saída, na ordem. Texto segue por sendText (quebra em
-// balões); imagem, botão de link (cta_url) e template aprovado vão direto, com
-// as imagens subidas antes como JPEG/PNG (wa-imagem.mjs). Saída com imagem que
-// tem outra depois espera a Meta confirmar a entrega (wa-entrega.mjs), senão o
-// texto seguinte chega antes da foto. Saída com `reserva` que a Meta recusa,
-// na hora ou depois pelo webhook, vira esse texto. Sem reserva, o erro é igual
-// ao do sendText: `error.wamids` traz o que já saiu.
+// Rich outputs from public-facing support (publico-saidas.mjs, already normalized),
+// one Meta message per output, in order. Text goes through sendText (split into
+// bubbles); image, link button (cta_url) and approved template go out directly, with
+// images uploaded beforehand as JPEG/PNG (wa-imagem.mjs). An output with an image that
+// has another one after it waits for Meta to confirm delivery (wa-entrega.mjs), otherwise the
+// next text arrives before the photo. An output with a `reserva` that Meta rejects,
+// right away or later via the webhook, becomes this text. Without a reserve, the error is the same
+// as sendText's: `error.wamids` carries what already went out.
 const ESPERA_ENTREGA_MS = () => Number(process.env.WA_ESPERA_ENTREGA_MS ?? 15000);
 const RESERVA_TARDIA_MS = 5 * 60 * 1000;
 const subirImagem = (url) => imagemParaWa(url, (buf, mime) => uploadMedia(buf, mime, mime === 'image/png' ? 'imagem.png' : 'imagem.jpg'));
-// Troca todo {type:'image', image:{link}} dos componentes de um template pela
-// imagem já subida (cabeçalho de template e cartões de carrossel).
+// Replaces every {type:'image', image:{link}} in a template's components with the
+// already-uploaded image (template header and carousel cards).
 async function imagensDoTemplate(v) {
   if (Array.isArray(v)) return Promise.all(v.map(imagensDoTemplate));
   if (!v || typeof v !== 'object') return v;
@@ -185,13 +185,13 @@ async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false 
   return wamids;
 }
 
-// Tamanho máximo de um parâmetro de template; acima disso o texto é cortado.
+// Maximum size of a template parameter; above this the text is truncated.
 export const WA_TEMPLATE_MAX = 900;
 
-// Normaliza UM parâmetro de corpo de template. A Cloud API REJEITA parâmetro com
-// quebra de linha, tab ou 4+ espaços seguidos (erro "(#100) Invalid parameter").
-// Lembretes multi-linha (ex: lista de tarefas) batiam nisso e não eram entregues.
-// Normaliza: quebras viram " · ", tabs viram espaço, runs de espaço colapsam.
+// Normalizes ONE template body parameter. The Cloud API REJECTS a parameter with a
+// line break, tab, or 4+ consecutive spaces (error "(#100) Invalid parameter").
+// Multi-line reminders (e.g. a task list) used to hit this and weren't delivered.
+// Normalizes: line breaks become " · ", tabs become a space, runs of spaces collapse.
 function normTemplateParam(v) {
   let text = markdownParaWa((v == null ? '' : String(v)).trim()) || '(sem conteúdo)';
   text = text
@@ -200,9 +200,9 @@ function normTemplateParam(v) {
     .replace(/\t+/g, ' ')
     .replace(/ {2,}/g, ' ')
     .replace(/(?: ?· ?){2,}/g, ' · ') // linhas em branco viravam " · · "; colapsa
-    .replace(/^ ?· ?| ?· ?$/g, '')    // separador sobrando no início/fim
+    .replace(/^ ?· ?| ?· ?$/g, '')    // leftover separator at the start/end
     .trim();
-  if (text.length > WA_TEMPLATE_MAX) text = text.slice(0, WA_TEMPLATE_MAX).trimEnd() + '…'; // corpo de template é curto
+  if (text.length > WA_TEMPLATE_MAX) text = text.slice(0, WA_TEMPLATE_MAX).trimEnd() + '…'; // template body is short
   return text;
 }
 
@@ -228,27 +228,27 @@ export async function sendWhatsAppTemplate(to, bodyText, { name = marca().templa
   });
 }
 
-// Hooks de banco injetados no boot (server.mjs chama setWaHooks). whatsapp.mjs
-// NÃO importa db.mjs de propósito: o handler do webhook já recebe `db` por
-// injeção, mas o envio PROATIVO roda fora do webhook e precisa consultar a
-// janela de 24h, então pega o que precisa por aqui.
+// Database hooks injected at boot (server.mjs calls setWaHooks). whatsapp.mjs
+// does NOT import db.mjs on purpose: the webhook handler already receives `db` via
+// injection, but PROACTIVE sending runs outside the webhook and needs to check the
+// 24h window, so it gets what it needs through here.
 let waHooks = { lastInboundAt: null, billMessages: null };
 export function setWaHooks(h) { waHooks = { ...waHooks, ...(h || {}) }; }
 
-// ── Cobrança por MENSAGEM entregue (categoria `service` da Meta) ──
-// A Meta passa a cobrar mensagem de serviço em 1/10/26 (R$0,035 cada, com 1.000
-// grátis/mês por número). Quem paga é o usuário, em créditos (WA_MSG_CREDITS),
-// contando MENSAGEM DA META: uma resposta longa vira várias (4000 chars cada) e
-// cada anexo é uma mensagem própria.
+// ── Billing per MESSAGE delivered (Meta's `service` category) ──
+// Meta starts charging for service messages on 2026-10-01 (R$0.035 each, with 1,000
+// free/month per number). The user pays, in credits (WA_MSG_CREDITS),
+// counting META MESSAGES: a long reply becomes several (4000 chars each) and
+// each attachment is its own message.
 //
-// ⚠️ Quem decide cobrar é o CHAMADOR, nunca o `graph()`: dentro da janela de 24h
-// um disparo de ciclo de vida/marketing sai como mensagem de SESSÃO (type:text),
-// então inferir a cobrança pelo tipo do corpo cobraria do usuário a NOSSA campanha.
-// Por isso só os pontos de RESPOSTA ao usuário chamam isto — mensagem de sistema
-// (heartbeat, erro, menu, mídia não suportada) e template não cobram.
+// ⚠️ The CALLER decides whether to charge, never `graph()`: inside the 24h window
+// a lifecycle/marketing send goes out as a SESSION message (type:text),
+// so inferring the charge from the body type would charge the user for OUR campaign.
+// That's why only the points that REPLY to the user call this — system messages
+// (heartbeat, error, menu, unsupported media) and templates don't charge.
 //
-// Fire-and-forget de propósito: falha de cobrança nunca atrasa nem derruba a
-// entrega da mensagem (o lançamento é gravado depois do envio, de qualquer forma).
+// Deliberately fire-and-forget: a billing failure never delays or brings down the
+// message delivery (the charge is recorded after sending, either way).
 const PUBLICO_SO_TEXTO = 'Por enquanto só consigo ler mensagens de texto por aqui. Pode escrever, por favor?';
 
 function billWa(userId, n, meta = {}) {
@@ -259,43 +259,43 @@ function billWa(userId, n, meta = {}) {
   } catch (e) { console.warn('[whatsapp] cobrança:', e?.message ?? e); }
 }
 
-// Margem de 5 min na borda: o relógio da Meta não é o nosso, e uma mensagem de
-// sessão mandada a 23h59 do limite chega como falha assíncrona.
+// 5-min margin at the edge: Meta's clock isn't ours, and a session message
+// sent at 23:59 of the limit arrives as an async failure.
 const WA_WINDOW_MS = 24 * 3600_000 - 5 * 60_000;
 
-// Envio PROATIVO com a MELHOR formatação possível. Dentro da janela de 24h (o
-// usuário mandou mensagem há menos de 24h), a Cloud API deixa mandar mensagem de
-// SESSÃO (type:text), que preserva quebra de linha, listas e *negrito*. Fora da
-// janela só rola TEMPLATE aprovado, cujo parâmetro NÃO aceita quebra de linha
-// (normTemplateParam achata tudo numa linha só).
+// PROACTIVE send with the BEST possible formatting. Inside the 24h window (the
+// user sent a message less than 24h ago), the Cloud API allows sending a SESSION
+// message (type:text), which preserves line breaks, lists and *bold*. Outside the
+// window only an approved TEMPLATE works, whose parameter does NOT accept line breaks
+// (normTemplateParam flattens everything into a single line).
 //
-// ⚠️ A Meta NÃO recusa na hora: ela ACEITA o texto fora da janela (HTTP 200 +
-// wamid) e reprova DEPOIS, em silêncio, pelo webhook de status (erro 131047
-// "Re-engagement message"). Ou seja, `try/catch` no envio nunca via essa falha e
-// o fallback de template era código morto justamente no caso pra que foi escrito
-// (202 mensagens perdidas em 30 dias, quase todas de rotina). Por isso a janela
-// agora é decidida por dado NOSSO (whatsapp_links.last_inbound_at) ANTES de
-// mandar, e o webhook de status ainda faz o reenvio por template como rede de
-// segurança. `templateName`/`params` controlam o template (default: o de
-// notificação da marca, 1 variável).
+// ⚠️ Meta does NOT refuse right away: it ACCEPTS the text outside the window (HTTP 200 +
+// wamid) and rejects it LATER, silently, via the status webhook (error 131047
+// "Re-engagement message"). In other words, `try/catch` on the send never saw this failure and
+// the template fallback was dead code for exactly the case it was written for
+// (202 messages lost in 30 days, almost all from routines). That's why the window
+// is now decided by data of OUR OWN (whatsapp_links.last_inbound_at) BEFORE
+// sending, and the status webhook still does the template resend as a safety
+// net. `templateName`/`params` control the template (default: the brand
+// notification one, 1 variable).
 //
-// `proseFallback(text) => string`: callback assíncrono chamado SÓ no caminho
-// de janela fechada (template). Como o template achata listas numa zona, aqui a
-// gente pede pro agente reescrever o conteúdo em TEXTO CORRIDO (sem lista/bullet/
-// quebra) antes de mandar o template. Se não vier callback, ou ele falhar, cai
-// no texto original (o normTemplateParam ainda achata como rede de segurança).
-// `templateText`: prosa pronta e determinística para {{1}}; tem prioridade sobre
-// proseFallback e é preservada também no retry assíncrono. Chamador garante limite.
+// `proseFallback(text) => string`: async callback called ONLY on the closed-window
+// path (template). Since the template flattens lists into a zone, here we
+// ask the agent to rewrite the content in RUNNING PROSE (no list/bullet/
+// line break) before sending the template. If no callback comes, or it fails, it falls back
+// to the original text (normTemplateParam still flattens it as a safety net).
+// `templateText`: ready-made, deterministic prose for {{1}}; it takes priority over
+// proseFallback and is also preserved in the async retry. The caller guarantees the limit.
 export async function sendWhatsAppProactive(to, text, { templateName = marca().templatesWhatsApp.notificacao, lang = 'pt_BR', params = null, proseFallback = null, templateText = null, retryUnknown = true, tracking } = {}) {
   const viaTemplate = async (reason) => {
     let outText = templateText === null ? text : String(templateText);
-    // Só reescreve pra prosa quando é template com 1 variável ({{1}}=conteúdo).
-    // Com `params` (multi-variável) a formatação já é controlada por quem chamou.
+    // Only rewrites to prose when it's a template with 1 variable ({{1}}=content).
+    // With `params` (multi-variable) the formatting is already controlled by the caller.
     if (templateText === null && proseFallback && !params) {
       try {
         const rewritten = await proseFallback(text);
         if (rewritten && String(rewritten).trim()) outText = String(rewritten);
-      } catch { /* mantém o texto original */ }
+      } catch { /* keeps the original text */ }
     }
     await tracking?.start({ total: 1, recipient: to });
     try {
@@ -308,10 +308,10 @@ export async function sendWhatsAppProactive(to, text, { templateName = marca().t
     } catch (error) { await tracking?.failed(0, error); throw error; }
   };
 
-  // ── 1) Janela conhecida por dado NOSSO (o conserto de verdade) ──
-  // `undefined` = não deu pra saber (hook ausente ou erro no banco): aí segue o
-  // fluxo antigo, tentando sessão. Só desviamos pro template quando temos
-  // certeza de que a janela fechou.
+  // ── 1) Window known from OUR OWN data (the real fix) ──
+  // `undefined` = couldn't tell (missing hook or database error): then it follows the
+  // old flow, trying session. We only divert to the template when we're
+  // sure the window has closed.
   let lastIn;
   if (waHooks.lastInboundAt) {
     try { lastIn = (await waHooks.lastInboundAt(to)) || null; } catch { lastIn = undefined; }
@@ -323,8 +323,8 @@ export async function sendWhatsAppProactive(to, text, { templateName = marca().t
 
   try {
     const wamids = await sendText(to, text, { requireReceipt: !retryUnknown || !!tracking, tracking });
-    // Guarda pra rede de segurança: se a Meta reprovar depois (131047), o webhook
-    // de status reenvia isto por template.
+    // Stores it for the safety net: if Meta rejects it later (131047), the status
+    // webhook resends this via template.
     // A failure for one part is not proof that all other parts failed. Only
     // single-part sends may retry the whole body on a 131047 status webhook.
     if (!tracking && wamids.length === 1 && prepararTextoWa(text).length === 1) {
@@ -334,10 +334,10 @@ export async function sendWhatsAppProactive(to, text, { templateName = marca().t
   } catch (e) {
     if (e?.partial) throw e; // Some parts may exist: never resend the full body.
     const msg = String(e?.message || e).toLowerCase();
-    // Janela de 24h fechada (erro 131047 / "re-engagement" / "outside allowed
-    // window" / "24 hours"): só template resolve. Qualquer outro erro também cai
-    // no template como rede de segurança; se o template também falhar, propaga o
-    // erro original (número inválido, canal fora, etc.).
+    // Closed 24h window (error 131047 / "re-engagement" / "outside allowed
+    // window" / "24 hours"): only a template solves it. Any other error also falls
+    // back to the template as a safety net; if the template also fails, it propagates the
+    // original error (invalid number, channel down, etc.).
     const closedWindow = /131047|re-?engag|outside|allowed window|24 ?hour|last replied/.test(msg);
     if(!closedWindow&&!retryUnknown)throw e; // uncertain curation: do not risk a second send
     try {
@@ -351,10 +351,10 @@ export async function sendWhatsAppProactive(to, text, { templateName = marca().t
   }
 }
 
-// Janela de 24h decidida por dado NOSSO (whatsapp_links.last_inbound_at), do
-// mesmo jeito que sendWhatsAppProactive faz internamente. Devolve true/false
-// quando dá pra saber e `null` quando não dá (hook ausente ou erro no banco);
-// quem chama decide o que fazer com a incerteza.
+// 24h window decided from OUR OWN data (whatsapp_links.last_inbound_at), the
+// same way sendWhatsAppProactive does internally. Returns true/false
+// when it's possible to tell and `null` when it isn't (missing hook or database error);
+// the caller decides what to do with the uncertainty.
 export async function whatsappWindowOpen(to) {
   if (!waHooks.lastInboundAt) return null;
   let lastIn;
@@ -363,10 +363,10 @@ export async function whatsappWindowOpen(to) {
   return Date.now() - new Date(lastIn).getTime() < WA_WINDOW_MS;
 }
 
-// Envia um DOCUMENTO de forma proativa (fora de um turno de conversa). Só existe
-// caminho de sessão: template aprovado não carrega arquivo. Por isso a janela é
-// checada ANTES, e a janela fechada vira erro explícito em vez de uma mensagem
-// aceita com HTTP 200 e reprovada depois em silêncio (131047).
+// Sends a DOCUMENT proactively (outside of a conversation turn). Only a session
+// path exists: an approved template can't carry a file. That's why the window is
+// checked BEFORE, and a closed window becomes an explicit error instead of a message
+// accepted with HTTP 200 and silently rejected later (131047).
 export async function sendWhatsAppDocument(to, buffer, filename = 'documento.pdf', mime = 'application/pdf', caption = null) {
   if ((await whatsappWindowOpen(to)) === false) throw Object.assign(new Error('WhatsApp fora da janela de 24h: documento não pode ser enviado'), { definitive: true, closedWindow: true });
   const id = await uploadMedia(buffer, mime, filename);
@@ -375,13 +375,13 @@ export async function sendWhatsAppDocument(to, buffer, filename = 'documento.pdf
   return (r?.messages || []).map((m) => m.id).filter((w) => typeof w === 'string' && w.trim());
 }
 
-// ── Rede de segurança: 131047 assíncrono ──
-// A Meta ACEITA (HTTP 200 + wamid) uma mensagem de sessão enviada fora da janela
-// de 24h e só reprova DEPOIS, pelo webhook de status, com erro 131047. Sem isto o
-// harness dava a mensagem por entregue e ela sumia em silêncio. Guardamos o
-// conteúdo de cada envio proativo de SESSÃO por wamid; quando o status vem
-// `failed/131047`, reenviamos por template. Template NUNCA entra no mapa, então
-// não há laço de reenvio por construção.
+// ── Safety net: async 131047 ──
+// Meta ACCEPTS (HTTP 200 + wamid) a session message sent outside the 24h
+// window and only rejects it LATER, via the status webhook, with error 131047. Without this the
+// harness would consider the message delivered and it would silently disappear. We store the
+// content of each proactive SESSION send by wamid; when the status comes back
+// `failed/131047`, we resend via template. A template NEVER enters the map, so
+// there is no resend loop by construction.
 const pendingProactive = new Map();
 const PENDING_TTL_MS = 30 * 60_000;
 
@@ -389,15 +389,15 @@ function rememberProactive(wamids, rec) {
   if (!Array.isArray(wamids) || !wamids.length) return;
   rec.at = Date.now();
   for (const w of wamids) if (w) pendingProactive.set(w, rec);
-  // Poda por TTL/tamanho: o status chega em segundos, isto é só backstop.
+  // Pruning by TTL/size: the status arrives within seconds, this is just a backstop.
   if (pendingProactive.size > 500) {
     const corte = Date.now() - PENDING_TTL_MS;
     for (const [k, v] of pendingProactive) if (v.at < corte) pendingProactive.delete(k);
   }
 }
 
-// Devolve o envio uma ÚNICA vez (uma mensagem longa vira vários wamids que
-// apontam pro mesmo registro; só o primeiro que falhar dispara o reenvio).
+// Returns the send a SINGLE time (a long message becomes several wamids that
+// point to the same record; only the first one to fail triggers the resend).
 function takeProactive(wamid) {
   const rec = pendingProactive.get(wamid);
   if (!rec) return null;
@@ -417,15 +417,15 @@ export async function retryProactiveAsTemplate(wamid, recipient) {
     try {
       const rewritten = await rec.proseFallback(rec.text);
       if (rewritten && String(rewritten).trim()) outText = String(rewritten);
-    } catch { /* mantém o texto original */ }
+    } catch { /* keeps the original text */ }
   }
   await sendWhatsAppTemplate(to, outText, { name: rec.templateName, lang: rec.lang, params: rec.params });
   console.warn(`[whatsapp] 131047 em ${wamid}: janela fechada, reenviado por template pra ${to}`);
   return true;
 }
 
-// Faz upload de um binário pro WhatsApp (multipart) e devolve o media id, usado
-// pra enviar a mídia SEM expor link público (modo bucket privado).
+// Uploads a binary to WhatsApp (multipart) and returns the media id, used
+// to send media WITHOUT exposing a public link (private bucket mode).
 async function uploadMedia(buffer, mime, filename = 'media') {
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
@@ -441,12 +441,12 @@ async function uploadMedia(buffer, mime, filename = 'media') {
   return j.id;
 }
 
-// Baixa a imagem de um card (URL do NOSSO domínio, ex /api/img?k=…) e sobe pro
-// WhatsApp, devolvendo o media id. Só aceita origem própria: a URL sai do nosso
-// cache de imagem de produto, e buscar host arbitrário aqui abriria SSRF.
-// Mensagem de imagem do WhatsApp aceita só JPEG e PNG; o cache guarda o que a
-// loja serviu (webp é comum em e-commerce), então tipo não suportado devolve erro
-// e o card sai SEM foto, em vez de virar card quebrado.
+// Downloads a card's image (URL on OUR OWN domain, e.g. /api/img?k=…) and uploads it to
+// WhatsApp, returning the media id. Only accepts our own origin: the URL comes from our
+// product image cache, and fetching an arbitrary host here would open up SSRF.
+// A WhatsApp image message only accepts JPEG and PNG; the cache stores whatever the
+// store served (webp is common in e-commerce), so an unsupported type returns an error
+// and the card goes out WITHOUT a photo, instead of becoming a broken card.
 async function uploadCardImage(imageUrl) {
   const url = absUrl(imageUrl);
   if (!url.startsWith(`${PUBLIC_BASE()}/`)) throw new Error('imagem de card fora do domínio próprio');
@@ -458,12 +458,12 @@ async function uploadCardImage(imageUrl) {
   return uploadMedia(buf, ct, ct === 'image/png' ? 'card.png' : 'card.jpg');
 }
 
-// Entrega anexos de mídia (imagem / áudio). Se getMedia devolver os bytes
-// (modo bucket privado, sem link público), faz upload e envia por media id;
-// senão (modo disco) cai no link público estático.
-// Devolve QUANTAS mensagens da Meta saíram de fato (cada anexo é uma mensagem;
-// o fallback de card pode gerar duas; anexo que falhou não conta) — é isso que a
-// cobrança por mensagem usa. Anexo que falha não gera mensagem e não é cobrado.
+// Delivers media attachments (image / audio). If getMedia returns the bytes
+// (private bucket mode, no public link), uploads and sends by media id;
+// otherwise (disk mode) falls back to the static public link.
+// Returns HOW MANY Meta messages actually went out (each attachment is a message;
+// the card fallback can generate two; a failed attachment doesn't count) — this is what
+// per-message billing uses. A failed attachment doesn't generate a message and isn't charged.
 async function sendAttachments(to, attachments, getMedia) {
   let sent = 0;
   for (const a of attachments || []) {
@@ -479,35 +479,35 @@ async function sendAttachments(to, attachments, getMedia) {
           await graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, type: 'audio', audio });
           sent++;
         } catch (err) {
-          // A resposta de texto ("mandei em voz") já saiu; sem isto a pessoa não
-          // recebia nada do que a voz dizia. Manda a fala em texto.
+          // The text reply ("sent as voice") already went out; without this the person wouldn't
+          // receive anything the voice said. Sends the speech as text.
           if (!a.fala) throw err;
           console.error('[whatsapp] áudio não entregue, indo em texto:', err?.message ?? err);
           sent += (await sendText(to, `Não consegui mandar o áudio, vai em texto:\n\n${a.fala}`)).length;
         }
       } else if (a.type === 'document') {
-        // Documento (.docx/.pdf/etc.): a URL do bucket é autenticada (o WhatsApp
-        // não conseguiria baixar por link), então SEMPRE sobe os bytes e envia por
-        // media id, com o nome de arquivo pra aparecer certinho no chat.
+        // Document (.docx/.pdf/etc.): the bucket URL is authenticated (WhatsApp
+        // wouldn't be able to download it by link), so it ALWAYS uploads the bytes and sends by
+        // media id, with the file name so it shows up correctly in the chat.
         const filename = a.filename || a.name || 'documento';
         if (bytes) {
           const id = await uploadMedia(bytes.buffer, bytes.contentType || a.mime, filename);
           await graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, type: 'document', document: { id, filename } });
           sent++;
         } else {
-          // Aviso de falha nossa: entra como mensagem de sistema, NÃO é cobrada.
+          // Notice of our own failure: enters as a system message, is NOT charged.
           await sendText(to, `Gerei o arquivo "${filename}", mas não consegui anexar aqui. Você consegue baixar em ${hostDaMarca()}.`);
         }
       } else if (a.type === 'card') {
-        // Card = mensagem interativa cta_url (foto no header + corpo + botão que
-        // abre o link). Só é possível com URL; se algo falhar, cai no fallback
-        // (foto + texto com o link) pra não perder o produto.
+        // Card = cta_url interactive message (photo in header + body + button that
+        // opens the link). Only possible with a URL; if anything fails, falls back
+        // (photo + text with the link) so the product isn't lost.
         const bodyText = ([a.title, a.body].filter(Boolean).join('\n') || a.title || ' ').slice(0, 1024);
-        // Foto do header vai por MEDIA ID, igual às outras mídias desta função.
-        // Com `link` cru quem baixava a imagem era a Meta, e quando essa busca
-        // falhava a mensagem era reprovada DEPOIS do HTTP 200 (webhook de status,
-        // 131053): o try/catch abaixo nunca disparava e o card sumia calado. Subindo
-        // os bytes, qualquer problema de imagem é síncrono e tratado aqui.
+        // Header photo goes by MEDIA ID, same as the other media in this function.
+        // With a raw `link`, Meta was the one downloading the image, and when that
+        // fetch failed the message was rejected AFTER the HTTP 200 (status webhook,
+        // 131053): the try/catch below never fired and the card silently disappeared.
+        // By uploading the bytes, any image problem is synchronous and handled here.
         let headerId = null;
         if (a.image) {
           headerId = await uploadCardImage(a.image).catch((e) => {
@@ -526,8 +526,8 @@ async function sendAttachments(to, attachments, getMedia) {
           await graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, type: 'interactive', interactive });
           sent++;
         } catch (err) {
-          // O fallback NUNCA reusa uma imagem que já falhou: só manda foto se o
-          // upload tinha dado certo. O que não pode faltar é o produto (texto+link).
+          // The fallback NEVER reuses an image that already failed: it only sends a
+          // photo if the upload had succeeded. What can't be missing is the product (text+link).
           if (headerId) { await graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, type: 'image', image: { id: headerId, caption: bodyText.slice(0, 1024) } }); sent++; }
           sent += (await sendText(to, a.url ? `${a.title ? a.title + '\n' : ''}${a.url}` : bodyText)).length;
         }
@@ -537,7 +537,7 @@ async function sendAttachments(to, attachments, getMedia) {
   return sent;
 }
 
-// Baixa uma mídia recebida (áudio/imagem) pelo id: pega a URL e busca o binário.
+// Downloads a received media (audio/image) by id: gets the URL and fetches the binary.
 async function downloadMedia(mediaId) {
   const meta = await fetch(`${GRAPH}/${mediaId}`, {
     headers: { authorization: `Bearer ${process.env.WA_TOKEN}` },
@@ -548,7 +548,7 @@ async function downloadMedia(mediaId) {
   return { buffer: buf, mime: meta.mime_type || 'application/octet-stream' };
 }
 
-// Lista interativa nativa: o usuário toca no nome pra trocar de assistente.
+// Native interactive list: the user taps the name to switch assistants.
 async function sendAgentList(to, agents, header) {
   const rows = agents.slice(0, 10).map((a) => ({
     id: `agent:${a.id}`,
@@ -565,10 +565,10 @@ async function sendAgentList(to, agents, header) {
   });
 }
 
-// Marca a mensagem como lida (best-effort, só pra UX).
-// Marca a mensagem como lida E liga o indicador "digitando..." na mesma chamada
-// (Cloud API: status:'read' + typing_indicator). O "digitando" some sozinho
-// quando enviamos a resposta, ou após ~25s se o processamento estourar isso.
+// Marks the message as read (best-effort, just for UX).
+// Marks the message as read AND turns on the "typing..." indicator in the same call
+// (Cloud API: status:'read' + typing_indicator). The "typing" goes away on its own
+// when we send the reply, or after ~25s if processing takes longer than that.
 async function markRead(messageId) {
   if (!messageId) return;
   await graph(`${PHONE_ID()}/messages`, {
@@ -577,8 +577,8 @@ async function markRead(messageId) {
   }).catch(() => {});
 }
 
-// ── Verificação do webhook (configuração no painel da Meta) ──
-// GET com hub.mode=subscribe & hub.verify_token=<nosso>; devolvemos hub.challenge.
+// ── Webhook verification (configured in the Meta dashboard) ──
+// GET with hub.mode=subscribe & hub.verify_token=<ours>; we return hub.challenge.
 export function verifyChallenge(params) {
   const mode = params.get('hub.mode');
   const token = params.get('hub.verify_token');
@@ -587,11 +587,11 @@ export function verifyChallenge(params) {
   return null;
 }
 
-// Assinatura do POST: HMAC-SHA256 do corpo CRU com o app secret (header
-// x-hub-signature-256: "sha256=<hex>"). SEM secret configurado, REJEITA: a
-// assinatura é a única autenticação deste endpoint público, e deixar passar por
-// falta de configuração transformava uma variável esquecida em porta aberta pra
-// qualquer um forjar mensagem/status e acionar assistente como se fosse o dono.
+// POST signature: HMAC-SHA256 of the RAW body with the app secret (header
+// x-hub-signature-256: "sha256=<hex>"). WITHOUT a configured secret, REJECT: the
+// signature is the only authentication on this public endpoint, and letting it
+// through for lack of configuration turned a forgotten env var into an open door
+// for anyone to forge a message/status and trigger the assistant as if they were the owner.
 export function verifySignature(rawBody, signature) {
   const secret = process.env.WA_APP_SECRET;
   if (!secret) { console.error("[whatsapp] WA_APP_SECRET ausente: webhook recusado (fail-closed)"); return false; }
@@ -603,14 +603,14 @@ export function verifySignature(rawBody, signature) {
   } catch { return false; }
 }
 
-// Injeta as deps do server (evita import circular):
+// Injects the server's deps (avoids circular import):
 //   runConversation(agent, userId, text) -> reply
-//   loadAgent(agentId, userId) -> agent   (valida ownership)
+//   loadAgent(agentId, userId) -> agent   (validates ownership)
 //   db = { getWhatsAppLink, listAgents, setWhatsAppActiveAgent }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
-// registro dele no histórico da thread WhatsApp.
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// its registration in the WhatsApp thread history.
 export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {}, publico = null }) {
-  const seen = new Set(); // ids já processados (dedup de retries do Meta)
+  const seen = new Set(); // ids already processed (dedup of Meta retries)
   const avisar = criarAvisoCanal({ rotulo: 'whatsapp', ...avisoCanal });
 
   const DEBOUNCE_MS = Number(process.env.WA_DEBOUNCE_MS || 3000);
@@ -754,12 +754,12 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     return pumpPromise;
   }
 
-  // Desconhecido num número com atendimento ao público (publico-canal.mjs): quem
-  // responde é o assistente público, fora do pump (o turno chama o modelo) e sem
-  // nada do fluxo do dono (menu, @nome, reação, confirmação, referência de msg).
-  // Mensagens picadas viram um turno só: espera JUNTAR_MS depois da última (no
-  // máximo JUNTAR_MAX_MS desde a primeira), e o que chega durante um turno espera
-  // ele acabar e vai junto no seguinte. Um turno por telefone. Fase 1: só texto.
+  // Unknown on a number with public support (publico-canal.mjs): the one who
+  // replies is the public assistant, outside the pump (the turn calls the model) and
+  // without any of the owner's flow (menu, @name, reaction, confirmation, msg reference).
+  // Chopped-up messages become a single turn: waits JUNTAR_MS after the last one (at
+  // most JUNTAR_MAX_MS since the first), and whatever arrives during a turn waits for
+  // it to finish and joins the next one. One turn per phone number. Phase 1: text only.
   const JUNTAR_MS=Number(process.env.WA_PUBLICO_JUNTAR_MS??1500),JUNTAR_MAX_MS=Number(process.env.WA_PUBLICO_JUNTAR_MAX_MS??5000);
   const filaPublico=new Map(),esperaPublico=new Map();
   function atenderPublico(msg,from){
@@ -793,7 +793,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     work.finally(()=>{turns.delete(work);filaPublico.delete(from);soltarSeVencido(from);});
     return true;
   }
-  // Ao fim de um turno: o que chegou durante ele sai logo se a espera já venceu.
+  // At the end of a turn: whatever arrived during it goes out right away if the wait has already expired.
   function soltarSeVencido(from){const b=esperaPublico.get(from);if(b&&b.vencido)soltarPublico(from);}
 
   async function handleMessage(msg) {
@@ -802,28 +802,28 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     const sendReply=text=>sendText(from,text,{requireReceipt:!!msg._inboxId}).catch(e=>{if(msg._inboxId)throw e;});
     const sendMenu=(agents,header)=>sendAgentList(from,agents,header).catch(e=>{if(msg._inboxId)throw e;});
     if (msg.id && !msg._inboxId) {
-      // Duas camadas: o Set corta o retry que chega enquanto o processo está de pé
-      // (sem ida ao banco), e o `claimWaMsg` cobre o que o Set não cobre — restart,
-      // deploy e o `clear()` do backstop de memória. Sem a camada durável, o retry
-      // da Meta depois de um deploy fazia a mesma mensagem rodar de novo.
+      // Two layers: the Set cuts off the retry that arrives while the process is up
+      // (without going to the database), and `claimWaMsg` covers what the Set doesn't
+      // cover: restart, deploy and the `clear()` of the in-memory backstop. Without the
+      // durable layer, Meta's retry after a deploy made the same message run again.
       if (seen.has(msg.id)) return;
       seen.add(msg.id);
-      if (seen.size > 5000) seen.clear(); // backstop de memória
+      if (seen.size > 5000) seen.clear(); // in-memory backstop
       if (db?.claimWaMsg && !(await db.claimWaMsg(msg.id))) return;
     }
 
-    // Carimba a janela de 24h ANTES de qualquer roteamento: do ponto de vista da
-    // Meta qualquer inbound reabre a janela, inclusive o que aqui cai no menu, em
-    // mídia não suportada ou em número não vinculado.
+    // Stamps the 24h window BEFORE any routing: from Meta's point of view any
+    // inbound reopens the window, including what here falls into the menu, into
+    // unsupported media or into an unlinked number.
     if (db?.touchWaInbound) db.touchWaInbound(from).catch(() => {});
 
     const link = await db.getWhatsAppLink(from);
     if(msg._inboxId&&(link?.enabled?link.user_id:null)!==msg._receivedUserId){await inbox.ignore([msg._inboxId],'recipient_changed');return true;}
     if (!link || !link.enabled) {
-      // Prova de posse: é AQUI que um número passa a valer pra uma conta. A pessoa
-      // pede a conexão no app, recebe um código e manda ele desta linha. Como a
-      // mensagem chega de fato deste telefone, a posse está provada; digitar o
-      // número no app não prova nada (ver POST /api/connect/whatsapp).
+      // Proof of ownership: it's HERE that a number starts to count for an account. The
+      // person requests the connection in the app, gets a code and sends it from this
+      // line. Since the message actually arrives from this phone, ownership is proven;
+      // typing the number in the app proves nothing (see POST /api/connect/whatsapp).
       const texto = msg.type === 'text' ? (msg.text?.body || '') : '';
       let claim = null;
       if (texto && db?.consumeWaClaim) {
@@ -844,13 +844,13 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       return;
     }
 
-    // Reaction (👍/👎) numa mensagem: confirma/cancela uma ação pendente sem
-    // texto. Joinha confirma ação comum; irreversível o server pede texto.
+    // Reaction (👍/👎) on a message: confirms/cancels a pending action without
+    // text. Thumbs up confirms a regular action; for irreversible ones the server asks for text.
     if (msg.type === 'reaction') {
       const emoji = msg.reaction?.emoji || '';
       const positive = ['👍', '✅', '👌', '💯'].some((e) => emoji.includes(e));
       const negative = ['👎', '❌'].some((e) => emoji.includes(e));
-      if (!positive && !negative) return; // reação removida ou emoji neutro
+      if (!positive && !negative) return; // reaction removed or neutral emoji
       const activeId = link.active_agent_id || agents[0].id;
       const agent = await loadAgent(activeId, link.user_id);
       if (!agent) return;
@@ -874,11 +874,11 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       return;
     }
 
-    // Extrai o texto (ou a interação de toque na lista).
+    // Extracts the text (or the list tap interaction).
     let text = '';
-    let images = null; // imagens anexadas ao turno (visão)
+    let images = null; // images attached to the turn (vision)
     let files = null; // documentos (PDF) anexados ao turno
-    let voz = false; // texto veio de transcrição de áudio
+    let voz = false; // text came from audio transcription
     if (msg.type === 'text') {
       text = (msg.text?.body || '').trim();
     } else if (msg.type === 'interactive') {
@@ -894,7 +894,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       }
       text = (r?.title || '').trim();
     } else if ((msg.type === 'audio' || msg.type === 'voice') && transcribe) {
-      // Áudio/nota de voz: baixa o binário, transcreve (STT) e segue como texto.
+      // Audio/voice note: downloads the binary, transcribes (STT) and proceeds as text.
       await markRead(msg.id);
       const mediaId = msg.audio?.id || msg.voice?.id;
       try {
@@ -913,8 +913,8 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       if (!text) { await sendReply( 'Não consegui entender esse áudio. Pode repetir?'); return; }
       voz = true;
     } else if (msg.type === 'image') {
-      // Imagem recebida: baixa o binário e manda pro modelo entender (visão).
-      // A legenda da imagem (se houver) vira o pedido; senão, um pedido genérico.
+      // Received image: downloads the binary and sends it to the model to understand (vision).
+      // The image caption (if any) becomes the request; otherwise, a generic request.
       await markRead(msg.id);
       try {
         const { buffer, mime } = await downloadMedia(msg.image?.id);
@@ -924,12 +924,12 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
         await sendReply( 'Não consegui baixar essa imagem. Tenta mandar de novo?');
         return;
       }
-      // Sem default forçado aqui: se a rajada tiver várias fotos sem legenda, o
-      // flush injeta um único pedido genérico (em vez de repetir a frase N vezes).
+      // No forced default here: if the burst has several photos without a caption, the
+      // flush injects a single generic request (instead of repeating the phrase N times).
       text = (msg.image?.caption || '').trim();
     } else if (msg.type === 'document') {
-      // Documento recebido: se for PDF, baixa o binário e manda pra extração de
-      // texto (o server extrai e salva no bucket do dono). Outros formatos não.
+      // Received document: if it's a PDF, downloads the binary and sends it for text
+      // extraction (the server extracts and saves it in the owner's bucket). Other formats are not handled.
       await markRead(msg.id);
       const doc = msg.document || {};
       const dmime = doc.mime_type || '';
@@ -963,7 +963,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       return;
     }
 
-    // "@nome ..." no começo: troca o agente ativo e roteia a mensagem restante.
+    // "@name ..." at the start: switches the active agent and routes the remaining message.
     let activeId = link.active_agent_id;
     const m = text.match(/^@(\S+)\s*([\s\S]*)$/);
     if (m) {
@@ -985,10 +985,10 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       }
     }
 
-    // Assistente ativo pra ESTE canal (WhatsApp). Se ninguém escolheu ainda, não
-    // amarra sozinho: com 1 assistente usa ele; com vários, mostra o menu e
-    // espera a escolha (antes colava no "mais novo" sem o usuário pedir, foi o
-    // que fez um usuário cair em outro assistente sem nunca ter ativado).
+    // Active assistant for THIS channel (WhatsApp). If no one has chosen yet, it doesn't
+    // bind on its own: with 1 assistant it uses that one; with several, it shows the menu
+    // and waits for the choice (it used to default to the "newest" without the user
+    // asking, which is what made a user end up on another assistant without ever having activated it).
     if (!activeId) {
       if (agents.length === 1) { activeId = agents[0].id; await db.setWhatsAppActiveAgent(from, activeId); }
       else {
@@ -1002,16 +1002,16 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       await sendMenu( agents);
       return;
     }
-    // Indexa esta mensagem por wamid (pra resolver citações futuras) e, se ela
-    // for uma resposta/citação (recurso "responder" do WhatsApp), resolve o texto
-    // citado e injeta como contexto. O webhook só manda o id da msg citada
-    // (msg.context.id), nunca o texto, então buscamos no índice. Sem isto, a
-    // citação some e o assistente não sabe a que mensagem o usuário se refere.
+    // Indexes this message by wamid (to resolve future citations) and, if it is
+    // a reply/quote (WhatsApp's "reply" feature), resolves the quoted text
+    // and injects it as context. The webhook only sends the id of the quoted msg
+    // (msg.context.id), never the text, so we look it up in the index. Without this, the
+    // quote disappears and the assistant doesn't know which message the user is referring to.
     if (msg.id && text && db?.saveWaMsgRef) {
       db.saveWaMsgRef({ wamid: msg.id, userId: link.user_id, agentId: activeId, direction: 'in', body: text }).catch(() => {});
     }
-    // Marca DEPOIS de menu/@nome (comando falado continua valendo) e do índice
-    // de citações (que guarda só a fala).
+    // Stamps AFTER menu/@name (spoken command still counts) and the citation
+    // index (which stores only the speech).
     if (voz) text = markVoiceInput(text);
     if (msg.context?.id && db?.getWaMsgRef) {
       try {
@@ -1019,17 +1019,17 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
         if (q?.body) {
           const quoted = q.body.length > 1200 ? q.body.slice(0, 1200) + '…' : q.body;
           const quem = q.direction === 'out' ? 'uma mensagem anterior SUA (do assistente)' : 'uma mensagem anterior do próprio usuário';
-          // O CHANNEL_CTX_END (char invisível) marca onde o envelope termina e
-          // começa a fala da pessoa. Sem ele, a trava de confirmação lia o
-          // bloco como se fosse o usuário e cancelava toda confirmação feita
-          // por citação (ver userSaid em confirm.mjs).
+          // CHANNEL_CTX_END (invisible char) marks where the envelope ends and
+          // the person's speech begins. Without it, the confirmation guard read the
+          // block as if it were the user and canceled any confirmation made
+          // by citation (see userSaid in confirm.mjs).
           text = `[O usuário está usando o recurso "responder/citar" do WhatsApp para se referir a ${quem}: "${quoted}"]${CHANNEL_CTX_END}\n\n${text}`;
         }
       } catch (e) { console.error('[whatsapp] resolver citação:', e?.message ?? e); }
     }
 
-    // Não roda na hora: enfileira na janela de agrupamento. Quando a pessoa parar
-    // de mandar (~DEBOUNCE_MS), o flush junta tudo e roda a conversa uma vez só.
+    // Doesn't run right away: queues it in the grouping window. When the person stops
+    // sending (~DEBOUNCE_MS), the flush joins everything and runs the conversation once.
     const prepared={from,inputId:msg.id,userId:link.user_id,agentId:activeId,text,images,
       files:files?.map(f=>({name:f.name,mime:f.mime,data:f.buffer.toString('base64')})),
       confirmationTarget:msg.context?{channel:'whatsapp',messageId:msg.context.id==null?null:String(msg.context.id)}:undefined};
@@ -1038,20 +1038,20 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     return true;
   }
 
-  // Processa o payload do webhook (já validado). NÃO bloqueia a resposta ao Meta:
-  // o server responde 200 na hora e chama isto em background.
-  // NÃO chamar de "process": isso sombreia o global `process` dentro deste escopo
-  // e quebra qualquer `process.env` aqui dentro (foi o que derrubou o boot).
+  // Processes the webhook payload (already validated). Does NOT block the reply to Meta:
+  // the server responds 200 right away and calls this in the background.
+  // Do NOT call it "process": that shadows the global `process` within this scope
+  // and breaks any `process.env` in here (that's what brought down boot).
   async function processPayload(payload) {
     try {
       for (const entry of payload.entry || []) {
         for (const change of entry.changes || []) {
           const value = change.value || {};
-          // Status de ENTREGA (sent/delivered/read/failed): a Meta manda aqui,
-          // separado das mensagens. Antes a gente descartava, então não dava pra
-          // saber se um proativo (template) chegou de fato — a API "aceita" e
-          // dropa em silêncio quando bate teto de marketing (code 131049).
-          // Persistimos pra ter rastreio real de entrega e saber pra quem reenviar.
+          // DELIVERY status (sent/delivered/read/failed): Meta sends it here,
+          // separate from the messages. We used to discard it, so there was no way
+          // to know if a proactive (template) message actually arrived; the API "accepts" and
+          // silently drops it when it hits the marketing cap (code 131049).
+          // We persist it to have real delivery tracking and know who to resend to.
           if (Array.isArray(value.statuses)) {
             for (const st of value.statuses) {
               const err = Array.isArray(st.errors) && st.errors[0] ? st.errors[0] : null;
@@ -1067,18 +1067,18 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
                   raw: st,
                 }).catch((e) => console.error('[whatsapp] status:', e?.message ?? e));
               }
-              // TODA reprovação assíncrona vira log. A Meta aceita a mensagem com
-              // HTTP 200 e reprova depois, aqui no webhook de status; até 05/09 só
-              // o 131047 era olhado, então qualquer outro motivo sumia calado (o
-              // registro ia pra tabela e ninguém lia). Foi assim que 4 cards de
-              // produto (131053) e 2 envios de campanha (131049) se perderam sem
-              // deixar rastro em log entre 03 e 04/09.
+              // EVERY async rejection becomes a log entry. Meta accepts the message with
+              // HTTP 200 and rejects it later, here in the status webhook; until 2026-09-05
+              // only 131047 was being watched, so any other reason disappeared silently (the
+              // record went to the table and no one read it). That's how 4 product
+              // cards (131053) and 2 campaign sends (131049) got lost without
+              // leaving a trace in the log between 2026-09-03 and 2026-09-04.
               avisarEntrega(st.id, st.status);
               if (String(st.status) === 'failed') {
                 console.warn(`[whatsapp] REPROVADA pela Meta: destino=${st.recipient_id || '?'} code=${err?.code ?? '?'} "${err?.title || err?.message || 'sem detalhe'}" wamid=${st.id}`);
-                // Quem registrou o envio como 'sent' (nasceu no 200 da Meta, que é
-                // só "aceitei") corrige agora, no único momento em que a verdade
-                // sobre a entrega existe (evento whatsapp_reprovada, eventos.mjs).
+                // Whoever registered the send as 'sent' (born from Meta's 200, which is
+                // just "accepted") corrects it now, at the only moment the truth
+                // about delivery exists (event whatsapp_reprovada, eventos.mjs).
                 if (aoReprovar) {
                   await Promise.resolve().then(() => aoReprovar({
                     wamid: st.id,
@@ -1088,21 +1088,21 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
                   })).catch((e) => console.error('[whatsapp] aviso de reprovação:', e?.message ?? e));
                 }
               }
-              // Rede de segurança do 131047: a mensagem de sessão foi aceita com
-              // HTTP 200 e reprovada agora, de forma assíncrona, porque a janela
-              // de 24h estava fechada. Reenvia o MESMO conteúdo por template em
-              // vez de deixar sumir. Só vale pra proativo de sessão guardado em
-              // memória; template nunca entra no mapa, então não há laço.
-              // NÃO existe reenvio automático pros outros códigos de propósito:
-              // 131049 é a Meta segurando entrega de marketing, e insistir seria
-              // spam; 131053 é mídia, resolvido na origem (ver sendAttachments).
+              // Safety net for 131047: the session message was accepted with
+              // HTTP 200 and got rejected now, asynchronously, because the 24h
+              // window was closed. Resends the SAME content via template instead
+              // of letting it disappear. Only applies to a proactive session message kept
+              // in memory; a template never enters the map, so there's no loop.
+              // There is NO automatic resend for the other purpose codes:
+              // 131049 is Meta holding back marketing delivery, and insisting would be
+              // spam; 131053 is media, resolved at the source (see sendAttachments).
               if (String(st.status) === 'failed' && Number(err?.code) === 131047) {
                 retryProactiveAsTemplate(st.id, st.recipient_id)
                   .catch((e) => console.error('[whatsapp] retry template:', e?.message ?? e));
               }
             }
           }
-          if (!value.messages) continue; // sem mensagens (era só status update)
+          if (!value.messages) continue; // no messages (it was just a status update)
           // Only handle messages addressed to OUR number. When the app is
           // subscribed to a WABA shared with other numbers, Meta fans out every
           // WABA inbound to this webhook; without this filter the harness would

@@ -1,9 +1,9 @@
-// ── Spaces: assunto vivo compartilhado, sem App/runtime ──
-// O degrau do meio da escada de primitivas (Skill / Space / App). Um Space =
-// definição em linguagem natural (`about`, faz o papel do SKILL.md) + dado vivo
-// compartilhado (`space_entries`) + membros (donos conectados). ZERO container,
-// host, deploy ou quota. Reusa agent_connections (gate de convite), o padrão de
-// roster do app_collab e o inbox/notifyOwner. Ver projetos/espaco-implementacao.md.
+// ── Spaces: shared live subject, no App/runtime ──
+// The middle step of the primitive ladder (Skill / Space / App). A Space =
+// natural-language definition (`about`, plays the role of the SKILL.md) + shared
+// live data (`space_entries`) + members (connected owners). ZERO container,
+// host, deploy or quota. Reuses agent_connections (invite gate), the app_collab's
+// roster pattern and the inbox/notifyOwner. See projetos/espaco-implementacao.md.
 
 import {
   createSpace, listSpacesForUser, resolveSpace, addSpaceEntry, listSpaceEntries,
@@ -12,11 +12,11 @@ import {
 } from './db.mjs';
 import { cartaoEdicaoNota } from './nota-diff.mjs';
 
-// Tools do assistente pra ESTE usuário (entram no registry por requisição).
-// `convidar_para_espaco` sai daqui e é registrada GATED em server.mjs.
+// Assistant tools for THIS user (enter the registry on request).
+// `convidar_para_espaco` comes out of here and is registered GATED in server.mjs.
 export function spacesTools(userId, agentId) {
-  // editar_nota: o mesmo alvo e as mesmas permissões valem pro cartão e pra
-  // gravação, então a checagem fica num lugar só.
+  // editar_nota: the same target and the same permissions apply to the card and to the
+  // write, so the check lives in one place.
   async function notaEditavel({ espaco, nota_id, dono } = {}) {
     const r = await resolveSpace(userId, espaco, dono);
     if (r.error === 'espaco_nao_encontrado') return { erro: `Não achei um Space "${espaco}".` };
@@ -161,14 +161,14 @@ export function spacesTools(userId, agentId) {
         },
         required: ['espaco', 'nota_id'],
       },
-      // Duas propostas pendentes pra MESMA nota não fazem sentido: a nova
-      // substitui a anterior (confirm.mjs). Sem isso cada correção da pessoa
-      // virava mais um cartão empilhado (30/09/2026).
+      // Two pending proposals for the SAME note don't make sense: the new one
+      // replaces the earlier one (confirm.mjs). Without this every correction by the
+      // person became yet another stacked card (2026-09-30).
       supersedeKey: ({ nota_id } = {}) => String(nota_id || '').trim() || null,
-      // O cartão mostra só as linhas que mudam em relação à nota GRAVADA agora.
-      // Como o texto do cartão sai desta leitura, se a nota mudar antes da
-      // aprovação o cartão recalculado não bate e a proposta é invalidada, em
-      // vez de gravar por cima de uma versão que a pessoa não viu.
+      // The card shows only the lines that change relative to the note as STORED now.
+      // Since the card's text comes from this read, if the note changes before
+      // approval the recalculated card doesn't match and the proposal is invalidated, instead
+      // of writing over a version the person never saw.
       async prepareConfirmation(args = {}) {
         const alvo = await notaEditavel(args);
         if (alvo.erro) throw Error(alvo.erro);
@@ -262,8 +262,8 @@ export function spacesTools(userId, agentId) {
   ];
 }
 
-// Tool GATED (alcança outra pessoa) — registrada via addGated em server.mjs.
-// Reversível (dá pra remover/sair) → 👍-confirmável, igual convidar_colaborador.
+// GATED tool (reaches another person) — registered via addGated in server.mjs.
+// Reversible (can remove/leave) → 👍-confirmable, same as convidar_colaborador.
 export function spaceInviteTool(userId, agentId) {
   return {
     name: 'convidar_para_espaco',
@@ -291,14 +291,14 @@ export function spaceInviteTool(userId, agentId) {
       try {
         const { notifyOwner } = await import('./notify.mjs').catch(() => ({}));
         await notifyOwner?.(who.userId, `Você foi adicionado ao Space "${r.space.title}". Seu assistente já pode ver e anotar nele.`);
-      } catch { /* silencioso: o convite vale mesmo sem push */ }
+      } catch { /* silent: the invitation counts even without a push */ }
       return `Pronto, ${who.name} agora participa do Space "${r.space.title}". O assistente dele já enxerga o Space.`;
     },
   };
 }
 
-// Texto pro system prompt: índice compacto dos Spaces do usuário (progressive
-// disclosure). As anotações NÃO entram aqui; carregam sob demanda via ler_espaco.
+// Text for the system prompt: compact index of the user's Spaces (progressive
+// disclosure). The notes do NOT go in here; they load on demand via ler_espaco.
 export async function spacesContext(userId) {
   const spaces = await listSpacesForUser(userId);
   if (!spaces.length) return '';

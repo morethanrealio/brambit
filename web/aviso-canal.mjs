@@ -34,10 +34,11 @@ export function textoAvisoCanal(language, tipo) {
   return (TEXTOS[tagIdioma(language)] || TEXTOS['pt-BR'])[tipo];
 }
 
-// Esperas entre as tentativas de reenvio. Só erro incerto (rede, timeout,
-// 429/5xx) é repetido: recusa determinística (`definitive`, ex.: bot bloqueado)
-// não melhora tentando de novo. Erro incerto pode ter chegado, então o reenvio
-// pode duplicar uma parte; resposta repetida é melhor que resposta sumida.
+// Waits between resend attempts. Only an uncertain error (network, timeout,
+// 429/5xx) gets retried: a deterministic refusal (`definitive`, e.g. bot
+// blocked) does not improve by trying again. An uncertain error may have
+// actually arrived, so the resend can duplicate a part; a repeated answer is
+// better than a missing one.
 export function esperasDeReenvio() {
   const env = process.env.CANAL_REENVIO_MS;
   if (env === undefined) return [2000, 8000];
@@ -54,11 +55,12 @@ export async function comReenvio(enviar, { esperas = esperasDeReenvio(), rotulo 
   }
 }
 
-// Monta o `avisar` de um canal. Do servidor vêm o idioma da pessoa e o registro
-// no histórico da thread do canal; aqui fica só a regra comum.
-// avisar({ agent, userId, tipo, mensagem, enviar }): manda o aviso e, se ele não
-// foi recusado com certeza, grava no histórico (com a pergunta, quando `turno`).
-// Nunca lança: o aviso é o último recurso de um caminho que já falhou.
+// Builds a channel's `avisar`. The person's language and the logging into the
+// channel thread's history come from the server; only the shared rule stays here.
+// avisar({ agent, userId, tipo, mensagem, enviar }): sends the notice and, if
+// it was not definitely refused, logs it to the history (with the question,
+// when `turno`). Never throws: the notice is the last resort of a path that
+// already failed.
 export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
   return async function avisar({ agent, userId, tipo, mensagem, enviar }) {
     let text = textoAvisoCanal(null, tipo);
@@ -75,8 +77,9 @@ export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
   };
 }
 
-// Registro padrão do servidor: o aviso entra na thread fixa do canal (`title`),
-// dentro da trava da thread, pra não cruzar com um turno gravando ao mesmo tempo.
+// Server's default logging: the notice enters the channel's fixed thread
+// (`title`), inside the thread lock, so it doesn't cross with a turn writing
+// at the same time.
 export function avisoNaThread({ idiomaDe, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread }) {
   return (title) => ({
     idiomaDe,
