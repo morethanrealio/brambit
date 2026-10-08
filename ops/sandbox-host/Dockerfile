@@ -1,8 +1,8 @@
-# ── Imagem base do sandbox de usuário ──
-# Uma imagem só, rodada como container por usuário. Tem o que a pessoa precisa
-# pra "desenvolver coisas": python, node, git e ferramentas comuns.
-# Roda como usuário NÃO-root. O isolamento forte (rede, recurso, rootfs) vem nas
-# flags do `docker run` (ver runner.mjs), não aqui.
+# ── User sandbox base image ──
+# A single image, run as one container per user. Has what a person needs
+# to "develop things": python, node, git and common tools.
+# Runs as a NON-root user. The strong isolation (network, resources, rootfs) comes
+# from the `docker run` flags (see runner.mjs), not here.
 
 FROM debian:12-slim
 
@@ -23,15 +23,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Bibliotecas úteis de scraping/dados já prontas (evita pip install a cada vez).
+# Useful scraping/data libraries pre-installed (avoids pip install every time).
 RUN pip3 install --break-system-packages --no-cache-dir \
       requests beautifulsoup4 lxml httpx pandas openpyxl xlrd tabulate
 
-# Usuário não-root. O código do usuário roda como ele, nunca como root.
+# Non-root user. The user's code runs as them, never as root.
 RUN useradd -m -u 10001 -s /bin/bash sandbox
 WORKDIR /workspace
 RUN chown sandbox:sandbox /workspace
 USER sandbox
 
-# Fica vivo esperando comandos (o runner faz `docker exec`); ou roda efêmero.
+# Stays alive waiting for commands (the runner does `docker exec`); or runs ephemerally.
 CMD ["sleep", "infinity"]

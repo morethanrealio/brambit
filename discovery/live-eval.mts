@@ -8,7 +8,7 @@ const repo = process.argv[process.argv.indexOf('--repo') + 1];
 if (!repo || !path.isAbsolute(repo)) throw Error('Pass an absolute --repo path.');
 const { makeTogether, TOGETHER_FLASH_MODEL } = await import(pathToFileURL(path.join(repo, 'core-proto/providers/together.mjs')).href);
 const provider = makeTogether({ model: TOGETHER_FLASH_MODEL, maxTokens: 12000 });
-// Brief da distribuição pela porta briefDaJornada dos plugins do repo; sem plugin, o padrão do núcleo.
+// Journey brief through the briefDaJornada port of the repo's plugins; with no plugin, the core default.
 const { carregarPlugins, juntarPortas } = await import(pathToFileURL(path.join(repo, 'web/plugins.mjs')).href);
 const brief: string | undefined = juntarPortas(await carregarPlugins(), { publicBase: '', notifyOwner: async () => {} }).briefDaJornada?.();
 const { marca } = await import(pathToFileURL(path.join(repo, 'web/marca.mjs')).href);

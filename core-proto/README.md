@@ -1,33 +1,33 @@
-# core-proto — protótipo do core model-agnostic
+# core-proto — prototype of the model-agnostic core
 
-Prova de conceito: **o mesmo loop + as mesmas tools, trocando só o provider (modelo)**.
+Proof of concept: **the same loop + the same tools, swapping only the provider (model)**.
 
-## Rodar
+## Run
 ```
-node run.mjs                          # demo determinística (2 providers, sem credencial)
-GEMINI_API_KEY=... node run-gemini.mjs # demo ao vivo no Gemini real (3.5 Flash + 3.1 Pro)
+node run.mjs                          # deterministic demo (2 providers, no credentials)
+GEMINI_API_KEY=... node run-gemini.mjs # live demo on real Gemini (3.5 Flash + 3.1 Pro)
 ```
-A chave NUNCA fica no repo: o adapter lê de `process.env.GEMINI_API_KEY`.
+The key is NEVER in the repo: the adapter reads it from `process.env.GEMINI_API_KEY`.
 
-## Ideia central (diferença vs NanoClaw)
-No NanoClaw o provider (Claude Code SDK) é dono do tool-loop. Aqui **o core é dono do
-tool-loop** e o provider faz só UM turno de modelo. Resultado: trocar de modelo (inclusive
-um proprietário) = implementar uma função `complete()`. Loop, tools, memória e protocolos
-não mudam.
+## Core idea (vs. NanoClaw)
+In NanoClaw, the provider (Claude Code SDK) owns the tool loop. Here **the core
+owns the tool loop** and the provider does only ONE model turn. Result: switching
+models (even a proprietary one) = implementing one `complete()` function. Loop,
+tools, memory and protocols don't change.
 
-## Arquivos
-- `provider.mjs` — o contrato inteiro (cabe num parágrafo, de propósito).
-- `core.mjs` — o harness: `ToolRegistry` + `runAgent()` (o loop). ~50 linhas de lógica.
-- `tools.mjs` — tools de exemplo (`search_products`), shape = JSON Schema (compatível com MCP).
-- `providers/scripted.mjs` — provider determinístico; 2 instâncias simulam 2 modelos. Usado na demo.
-- `providers/gemini.mjs` — adapter real do Google Gemini (TESTADO ao vivo). Inclui
-  `makeGeminiRouter()`: 3.5 Flash por padrão, escala pro 3.1 Pro em tarefas pesadas.
-- `providers/anthropic.mjs` — adapter real da Anthropic (pronto p/ quando houver credencial).
-- `providers/openai.mjs` — adapter real da OpenAI (idem). Mostra que "outro modelo" = +1 arquivo.
-- `run.mjs` — demo: roda o mesmo loop com 2 providers.
+## Files
+- `provider.mjs` — the entire contract (fits in one paragraph, on purpose).
+- `core.mjs` — the harness: `ToolRegistry` + `runAgent()` (the loop). ~50 lines of logic.
+- `tools.mjs` — example tools (`search_products`), shaped as JSON Schema (MCP-compatible).
+- `providers/scripted.mjs` — deterministic provider; 2 instances simulate 2 models. Used in the demo.
+- `providers/gemini.mjs` — real Google Gemini adapter (TESTED live). Includes
+  `makeGeminiRouter()`: 3.5 Flash by default, escalates to 3.1 Pro for heavy tasks.
+- `providers/anthropic.mjs` — real Anthropic adapter (ready for when credentials exist).
+- `providers/openai.mjs` — real OpenAI adapter (same idea). Shows that "another model" = +1 file.
+- `run.mjs` — demo: runs the same loop with 2 providers.
 
-## Próximos passos
-- Ativar um adapter real (depende de credencial no gateway p/ api.anthropic.com ou api.openai.com).
-- Plugar tools de um MCP server real em vez do catálogo fake.
-- Camada de memória/sessão (continuação) — hoje o loop é stateless por chamada.
-- Subir as camadas de produto B2C (login → provisiona agente, onboarding de conectores).
+## Next steps
+- Turn on a real adapter (depends on gateway credentials for api.anthropic.com or api.openai.com).
+- Plug in tools from a real MCP server instead of the fake catalog.
+- Memory/session layer (continuation) — today the loop is stateless per call.
+- Bring up the B2C product layers (login → provisions agent, connector onboarding).

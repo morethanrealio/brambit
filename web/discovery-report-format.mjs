@@ -107,9 +107,9 @@ export function renderReport(report, context) {
         throw Error('report_too_long');
     return text;
 }
-// Mesma devolutiva em markdown, para virar o PDF anexado na entrega. O texto
-// corrido de renderReport() continua sendo o que é gravado na conversa; aqui a
-// hierarquia vira headings e listas que o gerador de documento entende.
+// Same report in markdown, to become the PDF attached to the delivery. The
+// running text from renderReport() stays what's recorded in the conversation;
+// here the hierarchy becomes headings and lists that the document generator understands.
 export function renderReportMarkdown(report, context) {
     const date = (value) => value.slice(0, 10).split('-').reverse().join('/');
     const parts = ['# Sua jornada de autodescoberta'];

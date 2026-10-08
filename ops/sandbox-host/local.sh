@@ -1,20 +1,21 @@
 #!/bin/bash
-# Sandbox de código na SUA máquina (modo local), pra usar junto com `npm run local`.
+# Code sandbox on YOUR machine (local mode), for use together with `npm run local`.
 #
-# Uso (da raiz do repo):   ops/sandbox-host/local.sh
+# Usage (from the repo root):   ops/sandbox-host/local.sh
 #
-# Faz, nesta ordem, e pode rodar de novo à vontade (idempotente):
-#   1. builda a imagem do sandbox;
-#   2. cria a rede docker só-saída (10.200.0.0/16);
-#   3. no Linux, liga o firewall da rede do sandbox (pede sudo): bloqueia a sua
-#      rede local, o metadata de nuvem e a PRÓPRIA máquina; só sai pra internet;
-#   4. confere se o DNS funciona de dentro do sandbox;
-#   5. gera o token (fica em .local/sandbox.env) e imprime as 2 linhas do .env;
-#   6. sobe o runnerd em 127.0.0.1:9000 neste terminal (Ctrl+C para).
+# Does, in this order, and can be run again at will (idempotent):
+#   1. builds the sandbox image;
+#   2. creates the outbound-only docker network (10.200.0.0/16);
+#   3. on Linux, turns on the sandbox network's firewall (asks for sudo): blocks
+#      your local network, cloud metadata and the machine ITSELF; only internet
+#      is allowed out;
+#   4. checks whether DNS works from inside the sandbox;
+#   5. generates the token (kept in .local/sandbox.env) and prints the 2 .env lines;
+#   6. starts runnerd on 127.0.0.1:9000 in this terminal (Ctrl+C to stop).
 #
-# Diferente do firewall-box.sh (máquina dedicada), este NÃO apaga regras que já
-# existam na sua máquina: usa cadeias próprias (BRAMBS-SBX e BRAMBS-SBX-IN).
-# As regras somem no reboot; é só rodar o script de novo.
+# Unlike firewall-box.sh (dedicated machine), this one does NOT remove rules
+# that already exist on your machine: it uses its own chains (BRAMBS-SBX and
+# BRAMBS-SBX-IN). The rules disappear on reboot; just run the script again.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,11 +33,11 @@ command -v docker >/dev/null || die "Docker não encontrado. Instale o Docker e 
 docker info >/dev/null 2>&1 || die "o Docker não respondeu. Ele está rodando? Seu usuário tem acesso a ele (grupo docker)?"
 command -v node >/dev/null || die "Node.js não encontrado."
 
-# 1. imagem
+# 1. image
 say "buildando a imagem $IMAGE (a primeira vez demora)..."
 docker build -q -t "$IMAGE" "$DIR" >/dev/null
 
-# 2. rede
+# 2. network
 if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
   docker network create --driver bridge --subnet "$SBX" "$NETWORK" >/dev/null
   say "rede $NETWORK criada ($SBX)"
@@ -51,7 +52,7 @@ if [ "$(uname -s)" = "Linux" ]; then
   sudo bash -s "$SBX" <<'FW'
 set -e
 SBX="$1"
-# saída (container -> fora): só internet e DNS público
+# outbound (container -> outside): only internet and public DNS
 iptables -N DOCKER-USER 2>/dev/null || true
 iptables -N BRAMBS-SBX 2>/dev/null || iptables -F BRAMBS-SBX
 iptables -A BRAMBS-SBX -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
@@ -64,8 +65,8 @@ for net in 169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10;
 done
 iptables -A BRAMBS-SBX -j RETURN
 iptables -C DOCKER-USER -s "$SBX" -j BRAMBS-SBX 2>/dev/null || iptables -I DOCKER-USER 1 -s "$SBX" -j BRAMBS-SBX
-# entrada (container -> esta máquina): nada. Sem isso o sandbox alcança o runnerd,
-# o banco do `npm run local` e qualquer serviço escutando aqui.
+# inbound (container -> this machine): nothing. Without this the sandbox would reach runnerd,
+# the `npm run local` database and any service listening here.
 iptables -N BRAMBS-SBX-IN 2>/dev/null || iptables -F BRAMBS-SBX-IN
 iptables -A BRAMBS-SBX-IN -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
 iptables -A BRAMBS-SBX-IN -j DROP
@@ -82,7 +83,7 @@ else
   [ "${SANDBOX_SEM_FIREWALL:-}" = "1" ] || die "pra seguir assim mesmo: SANDBOX_SEM_FIREWALL=1 $0"
 fi
 
-# 4. DNS de dentro do sandbox (o firewall só libera DNS pro 8.8.8.8 e 1.1.1.1)
+# 4. DNS from inside the sandbox (the firewall only allows DNS to 8.8.8.8 and 1.1.1.1)
 if ! docker run --rm --network "$NETWORK" "$IMAGE" getent hosts example.com >/dev/null 2>&1; then
   echo "[sandbox] o sandbox não resolve nomes. Normalmente é o Docker usando o DNS da sua rede,"
   echo "[sandbox] que o firewall bloqueia. Ponha em /etc/docker/daemon.json (o daemon.json desta"
@@ -91,8 +92,8 @@ if ! docker run --rm --network "$NETWORK" "$IMAGE" getent hosts example.com >/de
   exit 1
 fi
 if [ "$NET_OK" = "1" ]; then
-  # prova: abre uma porta de teste nesta máquina, no endereço que o sandbox enxerga,
-  # e confere que o sandbox NÃO chega nela (e que daqui ela responde, senão a prova é vazia)
+  # proof: open a test port on this machine, at the address the sandbox sees,
+  # and check that the sandbox CANNOT reach it (and that it responds from here, or the proof is empty)
   GW="$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' "$NETWORK")"
   PROBE=19099
   node -e "require('net').createServer(s=>s.end('x')).listen($PROBE,'$GW')" & LP=$!
@@ -121,7 +122,7 @@ echo "SANDBOX_URL=http://127.0.0.1:$PORT"
 echo "SANDBOX_TOKEN=$RUNNER_TOKEN"
 echo
 
-# 6. runnerd, só no loopback
+# 6. runnerd, loopback only
 export RUNNER_TOKEN RUNNERD_PORT="$PORT" RUNNERD_HOST=127.0.0.1 SANDBOX_IMAGE="$IMAGE" SANDBOX_NETWORK="$NETWORK"
 cd "$DIR"
 exec node runnerd.mjs

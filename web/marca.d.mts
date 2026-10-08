@@ -1,2 +1,2 @@
-// Tipos de marca.mjs para as fontes TypeScript do núcleo (discovery).
+// Types for marca.mjs for the core's TypeScript sources (discovery).
 export declare const marca: () => { readonly nome: string; readonly site: string };

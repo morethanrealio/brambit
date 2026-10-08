@@ -85,8 +85,8 @@ test('claim dedup, recent conversation suppresses slot, and contatos sem respost
     p = await store.claim(u, date + ':evening', now);
     assert.ok(p);
     await store.finish(p!, 'accepted', 'receipt2');
-    // Dois contatos sem resposta NÃO pausam mais nada: a jornada segue viva e o
-    // dia seguinte continua sendo um check-in normal.
+    // Two unanswered contacts no longer pause anything: the journey stays alive and
+    // the next day goes on being a normal check-in.
     now.setUTCDate(now.getUTCDate() + 1);
     now.setUTCHours(15, 30);
     const next = await store.claim(u, now.toISOString().slice(0, 10) + ':lunch', now);
@@ -106,11 +106,11 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     await reset();
     await accept();
     const base = new Date();
-    base.setUTCHours(15, 30, 0, 0); // 12:30 em São Paulo, dentro da janela do almoço
+    base.setUTCHours(15, 30, 0, 0); // 12:30 in São Paulo, within the lunch window
     const at = (days: number) => new Date(base.getTime() + days * 86400000);
     const day = (d: Date) => d.toISOString().slice(0, 10);
     await sql("UPDATE mtr_harness.discovery_participants SET ends_at=now()+interval '30 days',started_at=$1,last_response_at=$1", [base]);
-    // Antes do terceiro dia é check-in normal, sem aviso e sem pausa.
+    // Before the third day it's a normal check-in, no notice and no pause.
     for (const d of [1, 2]) {
         const t = at(d), state = (await store.get(u))!;
         assert.equal(silenceStep(state, t), 'check');
@@ -120,7 +120,7 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
         await store.finish(c!, 'accepted', 'receipt-check-' + d);
     }
     assert.equal((await store.get(u))!.status, 'active');
-    // Terceiro dia de silêncio: o contato do dia vira o aviso da pausa curta.
+    // Third day of silence: the day's contact becomes the short-pause notice.
     const t3 = at(SILENCE_DAYS);
     assert.equal(dueSlot((await store.get(u))!, t3), `${day(t3)}:notice`);
     assert.equal(await store.claim(u, `${day(t3)}:lunch`, t3), null);
@@ -137,7 +137,7 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     assert.equal(state.pause_reason, null);
     const quiet = new Date(state.quiet_until as string).getTime() - Date.now();
     assert.ok(quiet > (QUIET_DAYS - 0.1) * 86400000 && quiet <= (QUIET_DAYS + 0.01) * 86400000);
-    // Durante a pausa prometida ninguém é incomodado, e a manutenção não pausa nada.
+    // During the promised pause nobody is bothered, and maintenance pauses nothing.
     await sql('UPDATE mtr_harness.discovery_participants SET quiet_until=$1', [at(SILENCE_DAYS + QUIET_DAYS)]);
     for (const d of [SILENCE_DAYS + 1, SILENCE_DAYS + 2]) {
         assert.equal(silenceStep((await store.get(u))!, at(d)), null);
@@ -146,7 +146,7 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     }
     await store.maintenance();
     assert.equal((await store.get(u))!.status, 'active');
-    // Vencida a pausa, o contato é o convite para contar como a vida tem sido.
+    // Once the pause is over, the contact is the invite to share how life has been.
     const t6 = at(SILENCE_DAYS + QUIET_DAYS);
     assert.equal(dueSlot((await store.get(u))!, t6), `${day(t6)}:reengage`);
     const invite = await store.claim(u, `${day(t6)}:reengage`, t6);
@@ -164,14 +164,14 @@ test('escadinha do silêncio: avisa no terceiro dia, cala o combinado, convida d
     assert.equal(dueSlot(state, at(SILENCE_DAYS + QUIET_DAYS + 1)), null);
     await store.maintenance();
     assert.equal((await store.get(u))!.status, 'active');
-    // Só depois dos dois dias finais, e só aí, a jornada pausa, com evento.
+    // Only after the final two days, and only then, does the journey pause, with an event.
     await sql("UPDATE mtr_harness.discovery_participants SET quiet_until=now()-interval '1 minute'");
     await store.maintenance();
     state = (await store.get(u))!;
     assert.equal(state.status, 'paused');
     assert.equal(state.pause_reason, 'no_response');
     assert.ok((await store.overview()).metrics.some(m => m.kind === 'auto_paused' && m.outcome === 'no_response'));
-    // Retomar devolve a escadinha ao início.
+    // Resuming resets the ladder back to the start.
     await control('resume');
     const resumed = (await store.get(u))!;
     assert.equal(resumed.status, 'active');
@@ -201,8 +201,8 @@ test('pause while generating prevents send; unknown result never pauses and defi
     assert.equal(await store.canSend(c), false);
     await store.finish(c, 'skipped');
     assert.equal((await store.get(u))!.status, 'paused');
-    // Resultado desconhecido (timeout, 5xx, rede) NUNCA pausa: a mensagem pode
-    // ter chegado. O slot também nunca é reenviado, para não duplicar.
+    // Unknown result (timeout, 5xx, network) NEVER pauses: the message may
+    // have arrived. The slot is also never resent, to avoid duplicating.
     await reset();
     await accept();
     const c2 = (await store.claim(u, slot, now))!;
@@ -213,11 +213,11 @@ test('pause while generating prevents send; unknown result never pauses and defi
     assert.equal(unknown.failures, 0);
     assert.equal(await store.claim(u, slot, now), null);
     assert.equal((await store.deliveries(u))[0].delivery, 'desconhecida');
-    // Recusa determinística conta, mas uma só não pausa: são precisas três seguidas.
+    // A deterministic refusal counts, but just one doesn't pause: three in a row are needed.
     for (let d = 1; d <= 3; d++) {
         const t = at(d), s = slotOf(t);
-        // Escadinha do silêncio à parte: aqui o que está em teste é a falha de
-        // entrega, então a pessoa consta como tendo respondido há pouco mais de duas horas.
+        // Silence ladder aside: what's under test here is delivery failure,
+        // so the person is recorded as having responded just over two hours ago.
         await sql('UPDATE mtr_harness.discovery_participants SET last_response_at=$1', [new Date(t.getTime() - 3 * 3600000)]);
         const claim = (await store.claim(u, s, t))!;
         assert.ok(claim);
@@ -228,7 +228,7 @@ test('pause while generating prevents send; unknown result never pauses and defi
     }
     assert.equal((await store.get(u))!.pause_reason, 'delivery_failed');
     assert.equal((await store.deliveries(u))[0].delivery, 'falhou');
-    // Retomar limpa o contador: a jornada não volta a um passo de pausar de novo.
+    // Resuming clears the counter: the journey doesn't go back one step from pausing again.
     await control('resume');
     const resumed = (await store.get(u))!;
     assert.equal(resumed.status, 'active');

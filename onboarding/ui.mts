@@ -1,5 +1,5 @@
 import { translateUi } from './ui-texts.mjs';
-// Wizard isolado: estado persistido no servidor; localStorage só ajuda antes de criar o agente.
+// Isolated wizard: state is persisted on the server; localStorage only helps before the agent is created.
 interface Agent {id:string;name:string;goal?:string}
 interface Me {name:string;agents:Agent[];connected?:string[];providers?:string[];microsoftServices?:string[];whatsapp?:{linked?:boolean;number?:string}|null;[key:string]:unknown}
 interface Template {id:string;name:string;goal:string;instructions:string;connect:string[];tasks:string[]}
@@ -61,7 +61,7 @@ export function mountWizard(options:Options) {
  function starter(){void touch('starter_offered');resetWow();show('wowLoading',false);show('wowStarter');show('wowSkip');text('wowTitle','Vamos resolver uma coisa agora');}
  async function present(s:Snapshot){state=s;if(!s.result?.welcome)throw new Error('A análise não retornou um resultado completo. Tente novamente.');resetWow();show('wowLoading',false);text('wowTitle',s.mode==='starter'?'Sua primeira tarefa ficou pronta':'Um primeiro olhar sobre seu contexto');text('wowWelcome',s.result.welcome);show('wowResult');
   const list=el('wowSugs');list.replaceChildren();for(const [index,suggestion] of (s.result.suggestions||[]).entries()){const b=document.createElement('button');b.type='button';b.disabled=true;b.className='ci';b.textContent=suggestion;b.onclick=()=>void guarded(async()=>{await progress('suggestion_selected',index);restoreSelection();afterResult()});list.append(b)}
-  // Só registra exposição depois de inserir o resultado no DOM e com a aba visível.
+  // Only logs the exposure after inserting the result into the DOM and with the tab visible.
   if(document.visibilityState!=='visible'){await new Promise<void>(resolve=>{const on=()=>{if(document.visibilityState==='visible'){document.removeEventListener('visibilitychange',on);resolve()}};document.addEventListener('visibilitychange',on)})}
   await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
   if(document.visibilityState!=='visible'||saved.step!=='wow'||!el('wiz').classList.contains('show'))return;
@@ -99,7 +99,7 @@ export function mountWizard(options:Options) {
    try{const s=await status();if(token!==generation)return;state=s;failures=0;
     if(s.status==='done'){await present(s);return}
     if(s.status==='error'){recovery('Não conseguimos concluir a análise. Você pode tentar novamente; nenhuma conclusão foi marcada.');return}
-    // idle também é transitório; não é sucesso nem autorização para encerrar.
+    // idle is also transient; it's neither success nor authorization to stop.
    }catch{if(++failures>=3){recovery('Não consegui consultar a análise. Sua etapa continua salva. Tente novamente ou continue depois.');return}}
    await new Promise(r=>setTimeout(r,2500));
   }
@@ -115,8 +115,8 @@ export function mountWizard(options:Options) {
   await runWow();
  }
  function setupWhatsapp(){const linked=!!me.whatsapp?.linked||saved.waLinked;saved.waLinked=linked;show('wizWaForm',!linked);show('wizWaSuccess',linked);show('wizWaBtn',!linked);show('wizWaSkip',!linked);show('wizWaContinue',linked);if(linked){text('wizWaLead',saved.waCode?'Falta confirmar que o número é seu: toque abaixo e ENVIE a mensagem com o código. É ela que conecta o WhatsApp.':'✅ Número conectado! Agora toque abaixo e mande a primeira mensagem pro seu assistente. É isso que abre a conversa no WhatsApp.');setWaLink(me.whatsapp?.number)}}
- // Com código pendente a mensagem é o DESAFIO de posse (só ela amarra o número à
- // conta; digitar o telefone no app não amarra nada). Sem código é só o "oi".
+ // With a pending code, the message is the ownership CHALLENGE (only it binds the number
+ // to the account; typing the phone in the app binds nothing). With no code it's just the "hi".
  function setWaLink(number?:string){const a=el<HTMLAnchorElement>('wizWaOpen');if(number){const msg=saved.waCode?'conectar '+saved.waCode:'Oi '+saved.agentName+'!';a.href='https://wa.me/'+number.replace(/\D/g,'')+'?text='+encodeURIComponent(msg);text('wizWaOpen',saved.waCode?'💬 Confirmar meu número':'💬 Mandar a primeira mensagem');show('wizWaOpen')}else{a.removeAttribute('href');show('wizWaOpen',false)}}
  async function exit(complete:boolean){++generation;me=await request<Me>('api/me');if(complete)await progress('completed');el('wiz').classList.remove('show');if(complete)clear();options.enterHome(me,pendingTask)}
  btn('wizTypeNext').onclick=()=>{const name=input('wizAgentName').value.trim();if(!name){error('wizErr1',new Error('Primeiro, dê um nome ao seu assistente.'));input('wizAgentName').focus();return}saved.agentName=name;save();setupConnect();goto('connect')};
@@ -133,7 +133,7 @@ export function mountWizard(options:Options) {
  btn('wowRetry').onclick=()=>void guarded(()=>recoverBoot?recoverBoot():runWow(true));
  btn('wowBtn').onclick=()=>afterResult();
  btn('wowSkip').onclick=()=>{++generation;void progress('wow_skipped').then(()=>goto('done')).catch(e=>error('wowError',e))};
- // Pode interromper a espera mesmo enquanto uma operação está em voo.
+ // Can interrupt the wait even while an operation is in flight.
  btn('wowLater').onclick=()=>{void exit(false).catch(e=>error('wowError',e))};
  btn('wizDoneBtn').onclick=()=>void guarded(()=>exit(true),'wizDoneErr');
  btn('wowStarterBtn').onclick=()=>void guarded(async()=>{const context=el<HTMLTextAreaElement>('wowContext').value.trim();if(context.length<10)throw new Error('Conte um pouco mais para gerar algo útil (pelo menos 10 caracteres).');const task=el<HTMLSelectElement>('wowTask').value;await enqueue(true,{task,context});await poll()});

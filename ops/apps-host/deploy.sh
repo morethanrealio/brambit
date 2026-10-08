@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Deploy do plano de controle dos apps: o que está instalado -> box de apps.
+# Deploy of the apps control plane: what is installed -> apps host.
 #
-# Produção viva (apps de usuário final servindo tráfego). Por padrão só SIMULA;
-# escrever de verdade exige --aplicar.
+# Live production (end-user apps serving traffic). By default it only SIMULATES;
+# writing for real requires --aplicar.
 #
-# Roda numa máquina com a chave do canal de controle (APPS_HOST_SSH/APPS_HOST_KEY
-# no ambiente ou no .env da pasta de onde é chamado):
-#   ops/apps-host/deploy.sh [--aplicar] [--marca <arquivo>] [--carimbo <versão>]
+# Runs on a machine that has the control-channel key (APPS_HOST_SSH/APPS_HOST_KEY
+# in the environment or in the .env of the folder it is called from):
+#   ops/apps-host/deploy.sh [--aplicar] [--marca <file>] [--carimbo <version>]
 #
-# Publica o router.py, ctl.py e test_auth.py que estão AO LADO deste script, ou
-# seja, o que está instalado (neste repositório ou no pacote do núcleo).
-# --marca: marca.json opcional (padrão: o que estiver ao lado deste script).
-# --carimbo: versão gravada na box (padrão: commit da pasta de onde é chamado).
+# Publishes the router.py, ctl.py and test_auth.py sitting NEXT TO this
+# script, i.e. whatever is installed (in this repository or in the core
+# package).
+# --marca: optional marca.json (default: whatever is next to this script).
+# --carimbo: version recorded on the host (default: commit of the folder it is called from).
 #
-# Ordem router -> ctl é de propósito (ver README.md): roteador novo com registry
-# velho é seguro; o inverso deixa app privado sem portão por alguns segundos.
+# Order router -> ctl is on purpose (see README.md): new router with old
+# registry is safe; the reverse leaves a private app without a gate for a few seconds.
 set -uo pipefail
 AQUI=$(cd "$(dirname "$0")" && pwd)
-# Le SO as duas chaves do .env, sem executar o arquivo: tem valor com $ solto la dentro.
+# Reads ONLY the two keys from .env, without executing the file: it has loose $ values in there.
 env_get() { [ -f .env ] || return 0; sed -n "s/^$1=//p" .env | tail -1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//"; }
 APPS_HOST_SSH="${APPS_HOST_SSH:-$(env_get APPS_HOST_SSH)}"
 APPS_HOST_KEY="${APPS_HOST_KEY:-$(env_get APPS_HOST_KEY)}"
@@ -30,7 +31,7 @@ while [ $# -gt 0 ]; do
     --aplicar) APLICAR=1 ;;
     --marca) MARCA="${2:?--marca precisa de um arquivo}"; shift ;;
     --carimbo) SHA="${2:?--carimbo precisa de um valor}"; shift ;;
-    # Só pra quem ainda chama do jeito antigo logo depois do pull, quando o disco já é o HEAD.
+    # Only for whoever still calls it the old way right after the pull, when the disk is already HEAD.
     --ref) [ "${2:-}" = HEAD ] || { echo '--ref saiu: o deploy publica o que está no disco'; exit 2; }; shift ;;
     *) echo "uso: deploy.sh [--aplicar] [--marca <arquivo>] [--carimbo <versão>]"; exit 2 ;;
   esac
@@ -43,10 +44,10 @@ if [ -n "$MARCA" ]; then
 fi
 [ -n "$SHA" ] || SHA=$(git rev-parse --short HEAD 2>/dev/null) || SHA=sem-versao
 
-# -n fecha o stdin: sem isso o ssh engole o herestring do while e o loop para na 1a linha.
+# -n closes stdin: without it ssh swallows the while loop's herestring and the loop stops at the 1st line.
 rssh() { ssh -n -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
                -o ConnectTimeout=15 "$APPS_HOST_SSH" "$@"; }
-# rsend e a versao que MANDA arquivo pelo stdin.
+# rsend is the version that SENDS a file over stdin.
 rsend() { ssh -i "$APPS_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
                -o ConnectTimeout=15 "$APPS_HOST_SSH" "$@"; }
 
@@ -56,14 +57,14 @@ trap 'rm -rf "$SRC"' EXIT
 for f in router.py ctl.py test_auth.py; do
   cp "$AQUI/$f" "$SRC/$f" || { echo "FALHOU: não achei $f em $AQUI"; exit 1; }
 done
-# Opcional: nome, site, logo e selo da marca no roteador (ver router.py). Sem ela,
-# a box fica com o que tem (ou a marca neutra).
+# Optional: brand name, site, logo and badge in the router (see router.py). Without it,
+# the host keeps what it has (or the neutral brand).
 [ -z "$MARCA" ] || cp "$MARCA" "$SRC/marca.json" || exit 1
 
-# 1. Portão: o que vai subir tem que passar nos testes do próprio caminho.
+# 1. Gate: what's about to go up has to pass its own path's tests.
 echo "== testes da versão $SHA"
 ( cd "$SRC" && python3 test_auth.py ) || { echo 'FALHOU: teste. Nada foi enviado.'; exit 1; }
-# 2. O que está diferente entre o git e a box?
+# 2. What's different between git and the host?
 MAP='router.py:/opt/brambs-router/router.py:brambs-router
 ctl.py:/opt/brambs-ctl/ctl.py:
 marca.json:/opt/brambs-router/marca.json:brambs-router'
@@ -79,7 +80,7 @@ done <<< "$MAP"
 [ ${#PENDENTES[@]} -gt 0 ] || { echo 'Box já está igual ao que está instalado aqui. Nada a fazer.'; exit 0; }
 [ "$APLICAR" = 1 ] || { echo; echo 'SIMULAÇÃO. Rode com --aplicar para enviar de verdade.'; exit 0; }
 
-# 3. Envia, confere o md5 do que chegou e só então troca o arquivo em uso.
+# 3. Send, check the md5 of what arrived, and only then swap the file in use.
 RESTART=0
 for item in "${PENDENTES[@]}"; do
   IFS=: read -r f dst svc <<< "$item"
@@ -101,7 +102,7 @@ reverter() {
   [ "$RESTART" = 1 ] && rssh "sudo systemctl restart brambs-router"
 }
 
-# 4. Regressão na box, contra os dois arquivos que agora estão em uso.
+# 4. Regression on the host, against the two files that are now in use.
 echo "== testes na box"
 rssh "mkdir -p /tmp/apt.$STAMP && sudo cp /opt/brambs-router/router.py /opt/brambs-ctl/ctl.py /tmp/apt.$STAMP/ && sudo chmod 644 /tmp/apt.$STAMP/*.py"
 rsend "cat > /tmp/apt.$STAMP/test_auth.py" < "$SRC/test_auth.py"
@@ -109,7 +110,7 @@ if ! rssh "cd /tmp/apt.$STAMP && python3 test_auth.py"; then
   echo 'FALHOU o teste na box.'; reverter; exit 1
 fi
 
-# 5. Restart só se o roteador mudou (ctl.py é one-shot por chamada).
+# 5. Restart only if the router changed (ctl.py is one-shot per call).
 if [ "$RESTART" = 1 ]; then
   echo "== restart brambs-router"
   if ! rssh "sudo systemctl restart brambs-router && sleep 2 && systemctl is-active brambs-router"; then
@@ -117,7 +118,7 @@ if [ "$RESTART" = 1 ]; then
   fi
 fi
 
-# 6. Carimbo: a pergunta "qual versão está no ar?" passa a ter resposta.
+# 6. Stamp: the question "which version is live?" now has an answer.
 rssh "echo '$SHA' | sudo tee /opt/brambs-router/.deployed-sha >/dev/null"
 rssh "rm -rf /tmp/apt.$STAMP /tmp/dep.$STAMP.*"
 

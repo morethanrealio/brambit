@@ -1,5 +1,5 @@
-# Testes que leem o TEXTO do código de produção (recortam e executam, ou procuram frase).
-# Backlog para reescrever importando o módulo. Esta lista só encolhe: ver test-support/fragile-guard.mjs.
+# Tests that read the TEXT of the production code (cut it out and run it, or search for a phrase).
+# Backlog to rewrite by importing the module. This list only shrinks: see test-support/fragile-guard.mjs.
 app-builder-validation.test.mjs
 app-edit-flow.test.mjs
 app-edit-tolerante.test.mjs

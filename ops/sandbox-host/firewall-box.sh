@@ -1,6 +1,6 @@
 #!/bin/bash
-# Isola a rede do sandbox (10.200.0.0/16): libera DNS publico, bloqueia metadata
-# e todas as redes internas (VPC/RFC1918). Idempotente (flush + rebuild).
+# Isolates the sandbox network (10.200.0.0/16): allows public DNS, blocks metadata
+# and all internal networks (VPC/RFC1918). Idempotent (flush + rebuild).
 set -e
 SBX=10.200.0.0/16
 iptables -N DOCKER-USER 2>/dev/null || true

@@ -1,89 +1,95 @@
-# Sandbox de código (runnerd)
+# Code sandbox (runnerd)
 
-Serviço à parte onde o assistente roda código do usuário (python, shell, node,
-scraping, montar arquivos). O harness fala com ele por HTTP quando o `.env` tem
-`SANDBOX_URL` e `SANDBOX_TOKEN` (cliente em `web/sandbox.mjs`); sem as duas, as
-ferramentas de código somem e o resto funciona normal.
+A separate service where the assistant runs user code (python, shell, node,
+scraping, assembling files). The harness talks to it over HTTP when `.env`
+has `SANDBOX_URL` and `SANDBOX_TOKEN` (client in `web/sandbox.mjs`); without
+both, the code tools disappear and the rest works normally.
 
-Código de usuário é código arbitrário. Por isso o sandbox NUNCA roda na máquina
-do harness em produção, e o isolamento não depende só do Docker.
+User code is arbitrary code. That's why the sandbox NEVER runs on the
+harness's production machine, and isolation doesn't depend on Docker alone.
 
-## Peças
+## Pieces
 
-| Arquivo | O que é |
+| File | What it is |
 | --- | --- |
-| `Dockerfile` | imagem `brambs-sandbox` (debian-slim, python, node 20, libs de dados/scraping), usuário não-root |
-| `runner.mjs` | um container por usuário (`sbx_<id>`) com volume próprio (`sbxvol_<id>`); comandos via `docker exec` |
-| `runnerd.mjs` | HTTP fino na frente do runner, Bearer `RUNNER_TOKEN` (sem token, não sobe) |
-| `local.sh` | modo local: tudo de uma vez na sua máquina, pra usar com `npm run local` |
-| `firewall-box.sh` | firewall da máquina dedicada (o que roda em produção) |
-| `systemd/` | serviços da máquina dedicada (firewall e runnerd) |
-| `daemon.json` | DNS do Docker (o firewall só libera DNS pro 8.8.8.8 e 1.1.1.1) |
-| `runnerd.env.example` | variáveis do runnerd |
+| `Dockerfile` | `brambs-sandbox` image (debian-slim, python, node 20, data/scraping libs), non-root user |
+| `runner.mjs` | one container per user (`sbx_<id>`) with its own volume (`sbxvol_<id>`); commands via `docker exec` |
+| `runnerd.mjs` | thin HTTP layer in front of the runner, Bearer `RUNNER_TOKEN` (without a token, it won't start) |
+| `local.sh` | local mode: everything at once on your machine, for use with `npm run local` |
+| `firewall-box.sh` | firewall for the dedicated machine (what runs in production) |
+| `systemd/` | services for the dedicated machine (firewall and runnerd) |
+| `daemon.json` | Docker DNS (the firewall only allows DNS to 8.8.8.8 and 1.1.1.1) |
+| `runnerd.env.example` | runnerd variables |
 
-Endpoints (POST com JSON, exceto `/health`): `/shell`, `/write`, `/read`,
-`/readfile` (bytes crus), `/stop`, `GET /health`. Detalhe no topo do `runnerd.mjs`.
+Endpoints (POST with JSON, except `/health`): `/shell`, `/write`, `/read`,
+`/readfile` (raw bytes), `/stop`, `GET /health`. Details at the top of
+`runnerd.mjs`.
 
-## Isolamento
+## Isolation
 
-No container (flags em `runner.mjs`): usuário não-root, `--cap-drop ALL`,
-`no-new-privileges`, rootfs só leitura (graváveis só `/workspace` e `/tmp`),
-limite de memória, CPU e processos, timeout por comando. O socket do Docker
-nunca é montado no container.
+In the container (flags in `runner.mjs`): non-root user, `--cap-drop ALL`,
+`no-new-privileges`, read-only rootfs (only `/workspace` and `/tmp` are
+writable), memory, CPU and process limits, per-command timeout. The Docker
+socket is never mounted in the container.
 
-Na máquina (firewall, porque o Docker sozinho não basta): a rede do sandbox
-(`brambs-sbx`, 10.200.0.0/16) sai pra internet, mas não alcança metadata de
-nuvem (169.254/16) nem redes privadas (10/8, 172.16/12, 192.168/16). Isso
-impede o código do usuário de tocar banco, outros servidores ou credenciais
-da instância.
+On the machine (firewall, because Docker alone isn't enough): the sandbox
+network (`brambs-sbx`, 10.200.0.0/16) can reach the internet, but not cloud
+metadata (169.254/16) nor private networks (10/8, 172.16/12, 192.168/16).
+This stops the user's code from touching the database, other servers, or the
+instance's credentials.
 
-## Modo local (Linux com Docker)
+## Local mode (Linux with Docker)
 
 ```bash
 ops/sandbox-host/local.sh
 ```
 
-Builda a imagem, cria a rede, liga o firewall (pede `sudo`), confere o DNS e
-prova que o sandbox não alcança a sua máquina, gera um token em
-`.local/sandbox.env` e sobe o runnerd em `127.0.0.1:9000` naquele terminal.
-Ele imprime as duas linhas pra colar no `.env`; depois reinicie o `npm run local`.
+Builds the image, creates the network, turns on the firewall (asks for
+`sudo`), checks DNS and proves the sandbox can't reach your machine, generates
+a token at `.local/sandbox.env` and starts runnerd on `127.0.0.1:9000` in
+that terminal. It prints the two lines to paste into `.env`; then restart
+`npm run local`.
 
-No modo local o firewall usa cadeias próprias (`BRAMBS-SBX` e `BRAMBS-SBX-IN`)
-e não apaga nenhuma regra que já exista na sua máquina. Além das redes privadas,
-bloqueia o acesso do sandbox à própria máquina (senão ele alcançaria o runnerd e
-qualquer serviço escutando aí). As regras somem no reboot: rode o script de novo.
+In local mode the firewall uses its own chains (`BRAMBS-SBX` and
+`BRAMBS-SBX-IN`) and doesn't remove any rule that already exists on your
+machine. Besides the private networks, it also blocks the sandbox from
+reaching your own machine (otherwise it would be able to reach runnerd and
+any service listening there). The rules disappear on reboot: run the script
+again.
 
-Fora do Linux (Docker Desktop no macOS ou Windows) o Docker roda numa VM e o
-script não tem como bloquear a rede: o código do sandbox alcança a sua rede
-local. O script recusa seguir, a menos que você rode com
-`SANDBOX_SEM_FIREWALL=1`; faça isso só com código seu.
+Outside Linux (Docker Desktop on macOS or Windows) Docker runs inside a VM
+and the script has no way to block the network: the sandbox's code can reach
+your local network. The script refuses to proceed unless you run it with
+`SANDBOX_SEM_FIREWALL=1`; only do this with your own code.
 
-## Máquina dedicada (produção)
+## Dedicated machine (production)
 
-Uma máquina Linux só pra isso, na mesma rede privada do harness, com Docker e
-Node 18 ou mais novo (testado em AL2023, t3.small).
+A Linux machine dedicated to this, on the same private network as the
+harness, with Docker and Node 18 or newer (tested on AL2023, t3.small).
 
-1. Copie esta pasta pra `/home/ec2-user/sandbox` e builde:
+1. Copy this folder to `/home/ec2-user/sandbox` and build it:
    `docker build -t brambs-sandbox:latest /home/ec2-user/sandbox`.
-2. Rede: `docker network create --subnet 10.200.0.0/16 brambs-sbx`.
-3. DNS: `daemon.json` em `/etc/docker/daemon.json` e reinicie o Docker.
-4. Firewall: `firewall-box.sh` em `/usr/local/bin/brambs-sbx-setup.sh` e
-   `systemd/brambs-sbx-fw.service` em `/etc/systemd/system/`. Esse script
-   ZERA a cadeia `DOCKER-USER` a cada execução; foi feito pra máquina que só
-   serve o sandbox. Não use numa máquina com outras regras ali.
-5. runnerd: `runnerd.env.example` vira `/etc/brambs-runnerd.env` (`chmod 600`,
-   token novo e longo) e `systemd/brambs-runnerd.service` vai em
-   `/etc/systemd/system/`. Depois `systemctl daemon-reload` e
+2. Network: `docker network create --subnet 10.200.0.0/16 brambs-sbx`.
+3. DNS: put `daemon.json` at `/etc/docker/daemon.json` and restart Docker.
+4. Firewall: put `firewall-box.sh` at `/usr/local/bin/brambs-sbx-setup.sh`
+   and `systemd/brambs-sbx-fw.service` at `/etc/systemd/system/`. This script
+   RESETS the `DOCKER-USER` chain on every run; it's built for a machine that
+   only serves the sandbox. Don't use it on a machine with other rules there.
+5. runnerd: turn `runnerd.env.example` into `/etc/brambs-runnerd.env`
+   (`chmod 600`, new long token) and put
+   `systemd/brambs-runnerd.service` at `/etc/systemd/system/`. Then
+   `systemctl daemon-reload` and
    `systemctl enable --now brambs-sbx-fw brambs-runnerd`.
-6. Firewall da nuvem: porta 9000 aceita só o IP privado do harness; nada público.
-7. No `.env` do harness: `SANDBOX_URL=http://<ip-privado>:9000` e
-   `SANDBOX_TOKEN=<o token>`.
+6. Cloud firewall: port 9000 only accepts the harness's private IP; nothing
+   public.
+7. In the harness's `.env`: `SANDBOX_URL=http://<private-ip>:9000` and
+   `SANDBOX_TOKEN=<the token>`.
 
-Conferência: de dentro de um container na rede `brambs-sbx`, um site público
-responde, e `169.254.169.254` e o IP privado do harness não respondem.
+Check: from inside a container on the `brambs-sbx` network, a public site
+responds, and `169.254.169.254` and the harness's private IP don't respond.
 
-## Pendências conhecidas
+## Known gaps
 
-- Faxina: containers ociosos não param sozinhos ainda (`SANDBOX_IDLE_STOP` está
-  declarado no `runner.mjs`, mas nenhum job usa).
-- Sem cota de disco por volume.
+- Cleanup: idle containers don't stop by themselves yet (`SANDBOX_IDLE_STOP`
+  is declared in `runner.mjs`, but no job uses it).
+- No disk quota per volume.

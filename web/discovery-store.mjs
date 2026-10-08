@@ -8,16 +8,16 @@ export class DiscoveryError extends Error {
     }
 }
 export const CHANNELS = ['telegram', 'whatsapp', 'app'];
-// Falhas determinísticas seguidas antes de pausar (uma falha isolada nunca pausa).
+// Consecutive deterministic failures before pausing (a single isolated failure never pauses).
 export const FAILURE_LIMIT = 3;
 /**
- * Escadinha do silêncio. Silêncio não é recusa: a jornada nunca pausa de
- * repente por falta de resposta, e nunca pausa calada. Depois de
- * SILENCE_DAYS sem nenhuma resposta, o assistente AVISA que vai dar uma
- * pausa curta de QUIET_DAYS e deixa claro que a pessoa pode chamar quando
- * quiser; terminada a pausa, ele CONVIDA a pessoa a contar como tem sido; se
- * ainda assim passarem REENGAGE_DAYS em silêncio, aí sim a jornada pausa.
- * Qualquer resposta em qualquer ponto zera a escadinha.
+ * Silence ladder. Silence is not refusal: the journey never pauses suddenly
+ * for lack of a reply, and never pauses silently. After SILENCE_DAYS with no
+ * reply at all, the assistant NOTIFIES that it will take a short pause of
+ * QUIET_DAYS and makes clear the person can call at any time; once the pause
+ * ends, it INVITES the person to say how things have been; if REENGAGE_DAYS
+ * still pass in silence, only then does the journey pause. Any reply at any
+ * point resets the ladder.
  */
 export const SILENCE_DAYS = 3, QUIET_DAYS = 3, REENGAGE_DAYS = 2;
 export const SILENCE_STAGES = ['none', 'notified', 'reengaged'];
@@ -103,22 +103,22 @@ export function localClock(now, tz) { const f = new Intl.DateTimeFormat('en-CA',
 const DAY = 86400000;
 const stamp = (x) => { if (!x)
     return null; const t = new Date(x).getTime(); return Number.isFinite(t) ? t : null; };
-/** Tipo de contato de um slot: `check` é a pergunta do dia, os outros são degraus da escadinha. */
+/** Contact type of a slot: `check` is the day's question, the others are steps of the ladder. */
 export function slotKind(slot) {
     const kind = String(slot || '').split(':')[1];
     return kind === 'notice' || kind === 'reengage' ? kind : 'check';
 }
 /**
- * Qual contato a escadinha do silêncio permite agora, ou `null` para silêncio
- * combinado (a pausa curta que o próprio assistente anunciou).
+ * Which contact the silence ladder allows now, or `null` for the agreed
+ * silence (the short pause the assistant itself announced).
  *
- * Note que nada aqui pausa a jornada: o único desfecho automático de pausa
- * mora em `maintenance()`, no fim da escadinha.
+ * Note that nothing here pauses the journey: the only automatic pause outcome
+ * lives in `maintenance()`, at the end of the ladder.
  */
 export function silenceStep(p, now) {
     const quiet = stamp(p.quiet_until);
     if (p.silence_stage === 'reengaged')
-        return null; // convite já feito; se o prazo vencer, a manutenção pausa
+        return null; // invitation already sent; if the deadline expires, maintenance pauses it
     if (p.silence_stage === 'notified')
         return quiet !== null && now.getTime() >= quiet ? 'reengage' : null;
     const since = stamp(p.last_response_at) ?? stamp(p.started_at) ?? now.getTime();
@@ -141,12 +141,13 @@ export function dueSlot(p, now) {
     return null;
 }
 /**
- * Os cinco estados de entrega que o dono enxerga.
+ * The five delivery states the owner sees.
  *
- * `aceita` é o teto honesto do Telegram e do app: o provedor aceitou a mensagem
- * e não devolve confirmação de entrega nem de leitura. Só o WhatsApp tem webhook
- * de status, então só nele `entregue` e `lida` são fato, lidos de
- * `wa_message_status` pelo wamid guardado no recibo do evento.
+ * `aceita` (accepted) is the honest ceiling for Telegram and the app: the
+ * provider accepted the message and returns no delivery or read confirmation.
+ * Only WhatsApp has a status webhook, so only there are `entregue` (delivered)
+ * and `lida` (read) fact, read from `wa_message_status` by the wamid stored in
+ * the event's receipt.
  */
 export const DELIVERY_STATES = ['aceita', 'entregue', 'lida', 'falhou', 'desconhecida'];
 export function deliveryState(row) {
@@ -165,10 +166,10 @@ export function deliveryState(row) {
         case 'uncertain':
         case 'interrupted':
         case 'generating': return 'desconhecida';
-        default: return null; // skipped e afins não são tentativa de entrega
+        default: return null; // skipped and similar are not a delivery attempt
     }
 }
-/** Motivo de falha legível, sem token, telefone, e-mail ou payload do provedor. */
+/** Readable failure reason, with no token, phone, email or provider payload. */
 export function sanitizeReason(input) {
     const raw = input instanceof Error ? input.message : typeof input === 'string' ? input : input === null || input === undefined ? '' : String(input?.message ?? input);
     const text = raw
@@ -201,12 +202,12 @@ export function createDiscoveryStore(pool, enabled = () => process.env.DISCOVERY
     const get = async (user, agent) => { const r = await pool.query(`SELECT p.* FROM ${P} p JOIN mtr_harness.agents a ON a.id=p.agent_id AND a.user_id=p.user_id AND a.archived_at IS NULL JOIN mtr_harness.users u ON u.id=p.user_id AND u.deleted_at IS NULL WHERE p.user_id=$1 ${agent ? 'AND p.agent_id=$2' : ''}`, [uuid(user), ...(agent ? [uuid(agent)] : [])]); return r.rows[0] || null; };
     const notes = async (user) => (await pool.query(`SELECT * FROM ${N} WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 40`, [uuid(user)])).rows;
     /**
-     * Histórico de entrega por tentativa, com o estado real quando existe webhook
-     * (WhatsApp) e o teto honesto quando não existe.
+     * Delivery history per attempt, with the real state when a webhook exists
+     * (WhatsApp) and the honest ceiling when it doesn't.
      */
-    // A tabela de status do WhatsApp pertence ao harness, não à jornada. Onde ela
-    // não existe (bancos de teste), o histórico cai para o estado do próprio
-    // evento em vez de quebrar a consulta inteira.
+    // The WhatsApp status table belongs to the harness, not the journey. Where
+    // it doesn't exist (test databases), the history falls back to the event's
+    // own state instead of breaking the whole query.
     let waStatusTable = null;
     const hasWaStatus = async () => {
         if (waStatusTable === null)
@@ -417,18 +418,20 @@ export function createDiscoveryStore(pool, enabled = () => process.env.DISCOVERY
         },
         async canSend(p) { const current = await get(p.user_id, p.agent_id); return await available() && current?.status === 'active' && current.lease_token === p.lease_token && !!current.lease_at && Date.now() - new Date(current.lease_at).getTime() < 10 * 60000 && !!current.ends_at && new Date(current.ends_at) > new Date() && (!current.last_response_at || Date.now() - new Date(current.last_response_at).getTime() >= 2 * 3600000); },
         /**
-         * Fecha a tentativa de contato.
+         * Closes the contact attempt.
          *
-         * Resultado INCERTO (`uncertain`, `interrupted`) nunca pausa a jornada: a
-         * mensagem pode ter chegado, e pausar por isso foi exatamente o que
-         * silenciou uma jornada saudável. Só falha DETERMINÍSTICA conta, e ainda
-         * assim a pausa só entra depois de FAILURE_LIMIT tentativas seguidas,
-         * com o motivo já sanitizado guardado no evento.
+         * An UNCERTAIN outcome (`uncertain`, `interrupted`) never pauses the
+         * journey: the message may have arrived, and pausing for that was
+         * exactly what used to silence a healthy journey. Only a DETERMINISTIC
+         * failure counts, and even then the pause only kicks in after
+         * FAILURE_LIMIT consecutive attempts, with the reason already
+         * sanitized and stored in the event.
          *
-         * É aqui também que a escadinha do silêncio avança, e só quando o
-         * provedor ACEITOU a mensagem: o aviso abre a pausa curta prometida e o
-         * convite abre o último prazo. Entrega falha ou incerta não avança nada,
-         * então a pessoa nunca entra num silêncio que ninguém comunicou a ela.
+         * This is also where the silence ladder advances, and only when the
+         * provider ACCEPTED the message: the notice opens the promised short
+         * pause and the invitation opens the final deadline. A failed or
+         * uncertain delivery advances nothing, so the person never enters a
+         * silence that nobody communicated to them.
          */
         async finish(p, outcome, receipt = null, detail = null) {
             const reason = sanitizeReason(detail);
@@ -440,13 +443,13 @@ export function createDiscoveryStore(pool, enabled = () => process.env.DISCOVERY
                 await c.query(`UPDATE ${P} SET unanswered=unanswered+CASE WHEN $3='accepted' AND (last_response_at IS NULL OR last_response_at<=lease_at) THEN 1 ELSE 0 END,failures=CASE WHEN $3='failed' THEN failures+1 WHEN $3='accepted' THEN 0 ELSE failures END,status=CASE WHEN $3='failed' AND failures+1>=$4 THEN 'paused' ELSE status END,pause_reason=CASE WHEN $3='failed' AND failures+1>=$4 THEN 'delivery_failed' ELSE pause_reason END,lease_token=NULL,lease_at=NULL,version=version+1 WHERE user_id=$1 AND lease_token=$2`, [p.user_id, p.lease_token, outcome, FAILURE_LIMIT]);
             });
         },
-        // Lease vencido devolve a jornada ao ciclo normal: o resultado é DESCONHECIDO,
-        // não uma falha do dono, e por isso não pausa mais nada aqui.
+        // An expired lease returns the journey to the normal cycle: the outcome
+        // is UNKNOWN, not a failure of the owner's, so it pauses nothing else here.
         //
-        // A única pausa automática por silêncio do sistema inteiro é a do último
-        // degrau: a pessoa recebeu o aviso da pausa curta, recebeu o convite para
-        // contar como tem sido, e ainda assim passaram REENGAGE_DAYS sem nenhuma
-        // resposta. Fora daqui, só pausa quem pede para pausar.
+        // The only automatic silence pause in the whole system is the last
+        // step: the person got the short-pause notice, got the invitation to
+        // tell how things have been, and REENGAGE_DAYS still passed with no
+        // reply. Outside of this, only someone who asks to pause gets paused.
         async maintenance() {
             await pool.query(`UPDATE ${E} SET outcome='interrupted' WHERE outcome='generating' AND created_at<now()-interval '10 minutes'`);
             await pool.query(`UPDATE ${P} SET lease_token=NULL,lease_at=NULL,version=version+1 WHERE lease_at<now()-interval '10 minutes'`);

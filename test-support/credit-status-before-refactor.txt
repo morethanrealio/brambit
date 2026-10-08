@@ -33,32 +33,33 @@ async function getCreditStatus(userId) {
   const anchor = u?.cycle_anchor || u?.created_at || null;
   const { start, end } = cycleFor(anchor);
 
-  // Consumo do período em CRÉDITOS COBRADOS (bill_credits, desacoplado do custo;
-  // exclui grants/compras). O cost_usd real segue só pra margem/relatório.
+  // Period consumption in BILLED CREDITS (bill_credits, decoupled from cost;
+  // excludes grants/purchases). The real cost_usd is only tracked for margin/reporting.
   const used = await sumUserBillCredits(userId, start);
 
-  // Reconciliação preguiçosa: debita dos extras o excedente dos períodos FECHADOS.
+  // Lazy reconciliation: debits from the extras the overflow of CLOSED periods.
   let recon = await getCreditRecon(userId);
   let debited = recon?.debited || 0;
-  // Âncora no FUTURO é legítima (ver cycleFor): quer dizer "o ciclo desta pessoa
-  // passa a valer nessa data", e até lá o consumo não é contado. Nesse caso o
-  // ciclo corrente AINDA NÃO COMEÇOU, então NADA pode ser fechado: fechar aqui
-  // trataria o mês em curso como período encerrado e debitaria o excedente dele
-  // dos extras, enquanto o mesmo consumo segue contando como `used`. Foi esse
-  // duplo débito que comeu 319.389 créditos de 10 pessoas em 28/08/2026.
+  // A FUTURE anchor is legitimate (see cycleFor): it means "this person's cycle
+  // takes effect on that date", and until then consumption isn't counted. In that
+  // case the current cycle HASN'T STARTED YET, so NOTHING can be closed: closing
+  // here would treat the month in progress as a finished period and debit its
+  // overflow from the extras, while the same consumption still counts as `used`.
+  // This double debit is what ate 319.389 credits from 10 people on 2026-08-28.
   const cicloComecou = new Date(start).getTime() <= Date.now();
   if (!recon) {
-    // Primeira vez: começa a contar a partir do período atual (não retroage).
+    // First time: starts counting from the current period (not retroactive).
     await setCreditRecon(userId, 0, start, franchise);
     debited = 0;
   } else if (recon.reconciledPeriod && recon.reconciledPeriod < start && cicloComecou) {
-    // Fecha os ciclos entre o último reconciliado e o ciclo atual. Como o ciclo é
-    // por aniversário (não bate com mês-calendário), somamos por DIA e agrupamos
-    // nas fronteiras de ciclo. Dia é exato: toda fronteira cai em 00:00 -03:00.
-    // A franquia usada é a que VALIA no período fechado (gravada no carimbo
-    // anterior), nunca a do plano de hoje: senão a virada de plano faz um mês
-    // antigo ser recalculado contra a franquia nova (ex.: agosto no Super de
-    // 12.000 sendo fechado contra o Básico de 3.000 em setembro).
+    // Closes the cycles between the last reconciled one and the current cycle. Since
+    // the cycle is by anniversary (doesn't line up with the calendar month), we sum by
+    // DAY and group at the cycle boundaries. The day is exact: every boundary falls at
+    // 00:00 -03:00. The franchise used is the one that WAS IN EFFECT in the closed
+    // period (recorded in the previous stamp), never today's plan: otherwise a plan
+    // switch would make an old month get recalculated against the new franchise
+    // (e.g. August on the 12.000-credit Super being closed against the 3.000-credit
+    // Básico in September).
     const frFechado = recon.franchise > 0 ? recon.franchise : franchise;
     const days = await billByDay(userId, recon.reconciledPeriod, start);
     const bounds = cycleBoundsBack(anchor, recon.reconciledPeriod, start);
@@ -72,7 +73,7 @@ async function getCreditStatus(userId) {
     await setCreditRecon(userId, debited, start, franchise);
   }
 
-  // Excedente do período ABERTO (debita extras ao vivo, sem persistir).
+  // Overflow of the OPEN period (debits extras live, without persisting).
   const currentOverflow = Math.max(0, used - franchise);
 
   // ── EXPIRATION-aware extras (decided 19/08) ──
@@ -83,7 +84,7 @@ async function getCreditStatus(userId) {
   // IN THE USER'S FAVOR (spend "consumes" the credit about to expire, instead
   // of making them lose the old one AND spend the new one). The monthly
   // allowance does NOT expire here (it resets every month).
-  const grants = await listUserGrants(userId); // {ts, model, usd}, mais antigo 1º
+  const grants = await listUserGrants(userId); // {ts, model, usd}, oldest 1st
   const ttlMs = (EXTRA_TTL_DAYS > 0 ? EXTRA_TTL_DAYS : 0) * 86400_000;
   const nowMs = Date.now();
   const packs = grants.map((g) => {
@@ -95,19 +96,19 @@ async function getCreditStatus(userId) {
       expired: expMs != null && expMs <= nowMs, allocClosed: 0, allocOpen: 0,
     };
   });
-  // Passo 1: débito dos meses FECHADOS (debited) alocado FIFO em TODOS os grants
-  // (consumo do passado; à época o grant provavelmente ainda valia).
+  // Step 1: debit of CLOSED months (debited) allocated FIFO across ALL grants
+  // (past consumption; at the time the grant was probably still valid).
   let remClosed = debited;
   for (const p of packs) {
     if (remClosed <= 0) break;
     const t = Math.min(p.credits, remClosed);
     p.allocClosed = t; remClosed -= t;
   }
-  // Saldo carregado pro mês corrente = só o dos grants ainda VÁLIDOS (expirado
-  // já foi perdido, não importa o que sobrou nele).
+  // Balance carried into the current month = only from grants still VALID (expired
+  // ones are already lost, no matter what was left in them).
   const extraAvailable = packs.reduce((s, p) => s + (p.expired ? 0 : (p.credits - p.allocClosed)), 0);
-  // Passo 2: overflow do mês ABERTO alocado FIFO só nos VÁLIDOS (consumo de agora
-  // não pode sair de crédito que já expirou).
+  // Step 2: overflow of the OPEN month allocated FIFO only across VALID ones (current
+  // consumption can't come out of credit that already expired).
   let remOpen = currentOverflow;
   for (const p of packs) {
     if (remOpen <= 0) break;
@@ -118,7 +119,7 @@ async function getCreditStatus(userId) {
     p.allocOpen = t; remOpen -= t;
   }
   const extraRemaining = packs.reduce((s, p) => s + (p.expired ? 0 : (p.credits - p.allocClosed - p.allocOpen)), 0);
-  const extraTotal = packs.reduce((s, p) => s + p.credits, 0); // total concedido (histórico)
+  const extraTotal = packs.reduce((s, p) => s + p.credits, 0); // total granted (historical)
   const extraExpired = packs.reduce((s, p) => s + (p.expired ? Math.max(0, p.credits - p.allocClosed) : 0), 0);
   const extraUsed = Math.max(0, extraTotal - extraRemaining - extraExpired);
 
@@ -126,12 +127,12 @@ async function getCreditStatus(userId) {
   const franchiseRemaining = Math.max(0, franchise - used);
   const remaining = franchiseRemaining + extraRemaining;
   const pct = franchise > 0 ? Math.min(100, Math.round((used / franchise) * 100)) : 0;
-  // Bloqueia só quando a franquia E os extras acabaram.
+  // Blocks only when both the franchise AND the extras have run out.
   const over = used >= franchise && extraRemaining <= 0;
 
-  // Visão COMBINADA (franquia do mês + extras que SOBRARAM e ainda valem). A barra
-  // conta SÓ o consumo do mês corrente (`used`). capacity = franquia + extras
-  // carregados válidos; usedTotal = consumo do mês; remaining = capacity - usedTotal.
+  // COMBINED view (month's franchise + extras that are LEFT OVER and still valid). The
+  // bar counts ONLY the current month's consumption (`used`). capacity = franchise +
+  // valid carried-over extras; usedTotal = month's consumption; remaining = capacity - usedTotal.
   const capacity = franchise + extraAvailable;
   const usedTotal = used;
   const pctTotal = capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : 0;
@@ -158,11 +159,11 @@ async function getCreditStatus(userId) {
 
   return {
     plan: plan.id, planName: plan.name, price: plan.price_brl,
-    // limit/used/pct mantidos por compat (barra = franquia do plano).
+    // limit/used/pct kept for compat (bar = plan's franchise).
     limit: franchise, used, remaining, pct, over, periodEnd: end, periodStart: start,
-    // Primeiro mês grátis em curso? Exige estar NO plano do mês grátis: os usuários
-    // atuais já têm trial_ends_at gravado, mas até 31/08 ainda rodam no plano antigo
-    // deles, e aí anunciar "seu primeiro mês é por nossa conta no Super" seria mentira.
+    // Free first month in progress? Requires being ON the free-month plan: current
+    // users already have trial_ends_at recorded, but until 2026-08-31 they still run on
+    // their old plan, so announcing "seu primeiro mês é por nossa conta no Super" would be a lie.
     trialEndsAt: u?.trial_ends_at && u?.plan === 'starter' && !u?.stripe_subscription_id
       && new Date(u.trial_ends_at).getTime() > Date.now()
       ? new Date(u.trial_ends_at).toISOString() : null,
@@ -170,7 +171,7 @@ async function getCreditStatus(userId) {
     extraTotal, extraUsed, extraRemaining, extraExpired, extraAvailable, extrasBreakdown,
     extraTtlDays: EXTRA_TTL_DAYS,
     capacity, usedTotal, pctTotal,
-    // manageable = já tem cliente no Stripe (mostra "Gerenciar assinatura")
+    // manageable = already has a Stripe customer (shows "Gerenciar assinatura")
     manageable: !!u?.stripe_customer_id,
   };
 }

@@ -61,9 +61,9 @@
   <h1>__MARCA__ Runner</h1>
   <p class="lead">Deixe seu assistente rodar comandos na <b>sua máquina</b> (o computador na sua frente), mesmo atrás de rede doméstica. Você instala um programinha que disca pro __MARCA__; nada abre porta no seu computador.</p>
 
-  <!-- Avisado ANTES do download, não depois: o binário ainda não é assinado/
-       notarizado (Fase D do runner-go), então macOS e Windows barram na primeira
-       abertura. Sem este aviso o alerta do sistema parece vírus e a pessoa desiste. -->
+  <!-- Warned BEFORE the download, not after: the binary is not yet signed/
+       notarized (runner-go Phase D), so macOS and Windows block it on first
+       open. Without this warning the system alert looks like a virus and the person gives up. -->
   <div class="warn" style="margin:0 0 18px;">O __MARCA__ Runner ainda não está verificado pela Apple ou Microsoft, por isso o sistema vai dar um alerta de segurança.</div>
 
   <div class="card">
@@ -139,8 +139,8 @@
     if(os === 'windows') return '$env:__RUNNERENV___TOKEN="' + tok + '"; .\\__RUNNER__.exe';
     return '__RUNNERENV___TOKEN=' + tok + ' ./__RUNNER__';
   }
-  // Passos por SO (markup nosso, sem dado do usuário). App = fluxo gráfico, sem
-  // terminal; CLI = terminal (usuário técnico).
+  // Steps per OS (our own markup, no user data). App = graphical flow, no
+  // terminal; CLI = terminal (technical user).
   function instHtml(os){
     var s = '';
     if(os === 'mac-app'){
@@ -189,22 +189,22 @@
       if(!s) return;
       var dot=$('dot'), tx=$('statustxt'), mt=$('statusmeta'), wn=$('statuswarn'), dv=$('dlver');
       // Which version the download delivers TODAY. Without it the owner downloaded
-      // again with no way to know if they got the new one (user report 26/08).
+      // again with no way to know if they got the new one (user report 2026-08-26).
       // Comes from the server so the number isn't hand-written in two places.
       if(dv && s.currentVersion) dv.textContent='Versão '+s.currentVersion;
       if(s.online){
         dot.className='dot on'; tx.textContent='Runner conectado';
         var m=s.meta||{};
         var linha=(m.hostname?('máquina: '+m.hostname):'')+(m.os?('  ·  '+m.os+'/'+(m.arch||'')):'');
-        // Quem opera a máquina. Sem isto a tela ficava verde sem dizer o
-        // assistente amarrado, e quem pedia pro assistente errado não entendia
-        // por que o terminal não aparecia.
+        // Who operates the machine. Without this the screen turned green without saying
+        // which assistant it was bound to, and someone asking the wrong assistant didn't understand
+        // why the terminal didn't show up.
         linha += (linha?'  ·  ':'') + 'assistente: ' + (s.activeAgentName || '(nenhum escolhido)');
         linha += '  ·  versão: ' + (s.version || 'desconhecida');
         mt.textContent=linha;
-        // `outdated` é decidido no servidor (compare numérico por componente).
-        // Runner velho descarta frame desconhecido calado, então o pedido de
-        // arquivo ficaria pendurado até o timeout em vez de dar erro claro.
+        // `outdated` is decided on the server (numeric compare per component).
+        // An old runner silently discards an unknown frame, so a file
+        // request would hang until timeout instead of giving a clear error.
         if(s.outdated){
           wn.textContent='Runner desatualizado. Baixe de novo abaixo (versão '+(s.currentVersion||'')+') pra conseguir transferir arquivo da sua máquina.';
           wn.style.display='';
@@ -259,7 +259,7 @@
 
   $('mgmt').addEventListener('click', function(e){ e.preventDefault(); var d=$('devs'); if(d) d.scrollIntoView({behavior:'smooth'}); });
 
-  // Trocar de SO nos botões (caixa principal + avançado): baixa (href download) e ajusta as instruções.
+  // Switch OS on the buttons (main box + advanced): downloads (href download) and adjusts the instructions.
   var dlbtns = document.querySelectorAll('.dl');
   for(var i=0;i<dlbtns.length;i++){
     dlbtns[i].addEventListener('click', function(){ curOS = this.getAttribute('data-os'); renderInst(); });

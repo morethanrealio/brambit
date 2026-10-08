@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Imprime o perfil seatbelt pra comparar byte-a-byte com o do brambs-runner.mjs.
+// Prints the seatbelt profile to compare byte-for-byte with brambs-runner.mjs's.
 func TestDumpSeatbelt(t *testing.T) {
 	fmt.Println("=== workspace-write ===")
 	fmt.Println(seatbeltProfile("workspace-write", []string{"/Users/x/Documents/Brambs", "/Users/x/proj"}))

@@ -1,9 +1,9 @@
-// Modo painel — a cara do app pra LEIGO. Quando o binário é aberto por
-// duplo-clique (sem <SLUG>_RUNNER_TOKEN no ambiente), em vez de virar um
-// programa de terminal ele sobe um painelzinho local em 127.0.0.1 e abre o
-// navegador nele: a pessoa cola o token, vê o status ao vivo e pronto. Zero
-// terminal, zero comando. (Técnico que setar o token por env cai no modo CLI
-// de sempre — ver runCLI em main.go.)
+// Panel mode — the app's face for a NON-TECHNICAL user. When the binary is opened by
+// double-click (without <SLUG>_RUNNER_TOKEN in the environment), instead of becoming a
+// terminal program it brings up a small local panel on 127.0.0.1 and opens the
+// browser on it: the person pastes the token, sees the live status and that's it. Zero
+// terminal, zero command. (A technical user who sets the token via env falls into the usual
+// CLI mode — see runCLI in main.go.)
 package main
 
 import (
@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-// ── Token: env > config (persistido pelo painel) ──────────────────────────────
+// ── Token: env > config (persisted by the panel) ──────────────────────────────
 
 var (
 	tokMu sync.RWMutex
@@ -39,7 +39,7 @@ func configToken() string {
 	return strings.TrimSpace(cfg.Token)
 }
 
-// persistToken grava o token no ~/.<slug>-runner.json preservando mode/writeDirs.
+// persistToken saves the token in ~/.<slug>-runner.json, preserving mode/writeDirs.
 func persistToken(t string) error {
 	var cfg configFile
 	if b, err := os.ReadFile(configPath()); err == nil {
@@ -53,16 +53,16 @@ func persistToken(t string) error {
 	return os.WriteFile(configPath(), b, 0o600)
 }
 
-// modeLocked = o modo veio do ambiente (<SLUG>_RUNNER_MODE), que vence a config:
-// gravar pelo painel não mudaria nada, então o painel nem oferece.
+// modeLocked = the mode came from the environment (<SLUG>_RUNNER_MODE), which overrides the config:
+// saving via the panel wouldn't change anything, so the panel doesn't even offer it.
 func modeLocked() bool { return os.Getenv(envVar("RUNNER_MODE")) != "" }
 
-// checkModeChange decide se o painel pode trocar o modo. Voltar a restringir
-// (workspace-write) sempre pode. Acesso total pelo painel SÓ onde não há cerca:
-// lá, no modo restrito, nenhum comando roda, então o assistente não alcança o
-// painel; e é o único jeito de usar o runner nessa máquina. Onde há cerca
-// (macOS, Linux com bwrap), um comando cercado poderia achar o endereço do
-// painel e se promover; ali acesso total continua só pela config local.
+// checkModeChange decides whether the panel can switch the mode. Going back to restrict
+// (workspace-write) is always allowed. Full access via the panel ONLY where there is no fence:
+// there, in restricted mode, no command runs, so the assistant can't reach the
+// panel; and it's the only way to use the runner on that machine. Where there is a fence
+// (macOS, Linux with bwrap), a fenced command could find the panel's
+// address and promote itself; there, full access still only comes from the local config.
 func checkModeChange(want string, canConf, locked bool) (int, string) {
 	switch {
 	case locked:
@@ -77,7 +77,7 @@ func checkModeChange(want string, canConf, locked bool) (int, string) {
 	return 400, "modo inválido"
 }
 
-// persistMode grava o modo no ~/.<slug>-runner.json preservando token/writeDirs.
+// persistMode saves the mode in ~/.<slug>-runner.json, preserving token/writeDirs.
 func persistMode(m string) error {
 	var cfg configFile
 	if b, err := os.ReadFile(configPath()); err == nil {
@@ -91,7 +91,7 @@ func persistMode(m string) error {
 	return os.WriteFile(configPath(), b, 0o600)
 }
 
-// ── Status ao vivo (o painel lê via /status) ──────────────────────────────────
+// ── Live status (the panel reads it via /status) ──────────────────────────────────
 
 type liveStatus struct {
 	mu        sync.Mutex
@@ -99,7 +99,7 @@ type liveStatus struct {
 	lastOK    time.Time
 	lastCmd   string
 	lastCmdAt time.Time
-	lines     []string // ring buffer das últimas atividades
+	lines     []string // ring buffer of the latest activities
 }
 
 var status = &liveStatus{}
@@ -161,11 +161,11 @@ func (s *liveStatus) snapshot() map[string]any {
 	return out
 }
 
-// ── Servidor do painel ─────────────────────────────────────────────────────────
+// ── Panel server ─────────────────────────────────────────────────────────
 
 var pollOnce_ sync.Once
 
-// startPolling dispara o loop de long-poll (uma vez só).
+// startPolling fires the long-poll loop (only once).
 func startPolling() {
 	pollOnce_.Do(func() {
 		go func() {
@@ -184,13 +184,13 @@ func randNonce() string {
 	return hex.EncodeToString(b)
 }
 
-// startPanel sobe o painel local, abre o navegador e devolve a URL. Se já houver
-// token, começa a polar na hora. Bloqueia o processo vivo (o app não "termina").
+// startPanel brings up the local panel, opens the browser and returns the URL. If a
+// token already exists, it starts polling right away. Blocks the process alive (the app doesn't "end").
 func startPanel() {
 	nonce := randNonce()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		// Sem painel: cai no modo CLI degradado (sem browser), pelo menos pola.
+		// No panel: falls back to degraded CLI mode (no browser), at least it polls.
 		fmt.Fprintln(os.Stderr, "não consegui abrir o painel local:", err)
 		if getToken() != "" {
 			startPolling()
@@ -296,7 +296,7 @@ func startPanel() {
 	status.push(time.Now().Format("15:04:05") + " painel aberto")
 	openBrowser(panelURL)
 	fmt.Println(nomeRunner()+" — painel em", panelURL)
-	select {} // mantém o app vivo
+	select {} // keeps the app alive
 }
 
 func openBrowser(u string) {

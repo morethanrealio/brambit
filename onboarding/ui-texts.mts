@@ -1,4 +1,4 @@
-// Textos do módulo externo não passam pela tradução SSR do index.html.
+// Text from the external module doesn't go through index.html's SSR translation.
 const copy:Record<string,[string,string]>={
 'Não consegui salvar esta etapa. Tente novamente.':['I could not save this step. Please try again.','No pude guardar este paso. Inténtalo de nuevo.'],
 'A conexão oscilou. Seu cadastro continua salvo; tente novamente.':['The connection dropped. Your progress is saved; please try again.','Se interrumpió la conexión. Tu progreso está guardado; inténtalo de nuevo.'],

@@ -7,13 +7,13 @@ import (
 	"syscall"
 )
 
-// setPgid põe o filho num grupo de processo próprio, pra matar a árvore inteira
-// no timeout (senão só o bash morreria, deixando o comando neto vivo).
+// setPgid puts the child in its own process group, to kill the whole tree
+// on timeout (otherwise only bash would die, leaving the grandchild command alive).
 func setPgid(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// killGroup mata o grupo de processo do filho (pid negativo = grupo).
+// killGroup kills the child's process group (negative pid = group).
 func killGroup(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

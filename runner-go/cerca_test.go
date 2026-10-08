@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Sem cerca no modo restrito o comando é recusado; acesso total é escolha explícita.
+// Without a fence in restricted mode the command is refused; full access is an explicit choice.
 func TestSemCerca(t *testing.T) {
 	casos := []struct {
 		mode     string
@@ -45,7 +45,7 @@ func TestMsgSemCerca(t *testing.T) {
 	}
 }
 
-// O painel só promove pra acesso total onde não há cerca; restringir sempre pode.
+// The panel only promotes to full access where there is no fence; restricting is always allowed.
 func TestCheckModeChange(t *testing.T) {
 	casos := []struct {
 		want    string
@@ -69,7 +69,7 @@ func TestCheckModeChange(t *testing.T) {
 	}
 }
 
-// Trocar o modo pelo painel não pode apagar o token nem as pastas.
+// Switching the mode via the panel must not erase the token or the folders.
 func TestPersistModePreservaConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -99,9 +99,9 @@ func TestPersistModePreservaConfig(t *testing.T) {
 	}
 }
 
-// Ponta a ponta numa máquina sem cerca (Linux sem bwrap, Windows): no modo
-// restrito o comando não roda; em acesso total roda. Em máquina com cerca o
-// teste não se aplica e é pulado.
+// End to end on a machine without a fence (Linux without bwrap, Windows): in
+// restricted mode the command doesn't run; in full access it runs. On a machine
+// with a fence the test doesn't apply and is skipped.
 func TestRunExecSemCerca(t *testing.T) {
 	if canConfine() || runtime.GOOS == "windows" {
 		t.Skip("esta máquina tem cerca (ou é Windows); o caso sem cerca não se aplica aqui")
