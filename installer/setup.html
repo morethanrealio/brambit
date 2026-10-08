@@ -66,6 +66,20 @@
     <datalist id="model-list"></datalist>
     <small id="model-hint"></small>
 
+    <h2 id="audio-title"><label for="audio" data-t="audio"></label></h2>
+    <small data-t="audio_hint"></small>
+    <select id="audio">
+      <option value="gemini">Google Gemini</option>
+      <option value="openai">OpenAI</option>
+      <option value="none" data-t="audio_none"></option>
+    </select>
+    <small id="audio-same" hidden data-t="audio_same"></small>
+    <div id="audio-key-fields" hidden>
+      <label for="audio-key" data-t="audio_key"></label>
+      <input id="audio-key" type="password" autocomplete="off">
+      <small><a id="audio-where-key" target="_blank" rel="noopener noreferrer" data-t="where_key"></a> <span id="audio-key-keep" hidden data-t="key_keep"></span></small>
+    </div>
+
     <button id="submit" type="submit" data-t="submit"></button>
     <button id="cancel" class="secondary" type="button" hidden data-t="cancel"></button>
     <p class="error" id="error" hidden></p>
@@ -84,6 +98,11 @@ const TEXTS = {
     models_help: 'O recomendado já vem marcado. Dá pra trocar depois em Configurações › Este computador.', models_other: 'Escolha da lista ou escreva o nome do modelo.',
     key_keep: 'Deixe vazia pra continuar com a chave salva.', invalid_model: 'Confira o nome do modelo.',
     where_key: 'Onde pegar a chave', key_optional: 'Pode ficar vazia se o serviço não pede chave (ex.: Ollama no seu computador).',
+    audio: '3. Mensagens de voz', audio_change: 'Mensagens de voz', audio_none: 'Agora não',
+    audio_hint: 'Pra você mandar áudio pro assistente e ele responder em voz. Hoje só o Google Gemini e a OpenAI fazem isso.',
+    audio_same: 'Usa a mesma chave de cima.', audio_key: 'Chave da API para o áudio', audio_missing_key: 'Cole a chave da API para o áudio.',
+    audio_key_rejected: 'A IA do áudio recusou essa chave. Confira se copiou inteira.', audio_no_connection: 'Não consegui falar com a IA do áudio. Confira a internet.',
+    audio_provider_error: 'A IA do áudio respondeu com erro. Tente de novo daqui a pouco.',
     submit: 'Concluir', testing: 'Testando a chave...', starting: 'Tudo certo. Ligando o Brambit...', signing_in: 'Criando sua conta...',
     e_name: 'Preencha seu nome.', e_email: 'Confira o e-mail.', e_password: 'A senha precisa de pelo menos 12 caracteres.', e_password2: 'As duas senhas estão diferentes.',
     missing_key: 'Cole a chave da API.', invalid_url: 'Confira o endereço da API (começa com http:// ou https://).', missing_model: 'Escreva o nome do modelo.',
@@ -104,6 +123,11 @@ const TEXTS = {
     models_help: 'The recommended one comes selected. You can change it later in Settings › This computer.', models_other: 'Pick from the list or type the model name.',
     key_keep: 'Leave it empty to keep the saved key.', invalid_model: 'Check the model name.',
     where_key: 'Where to get the key', key_optional: 'Can be empty if the service needs no key (e.g. Ollama on your computer).',
+    audio: '3. Voice messages', audio_change: 'Voice messages', audio_none: 'Not now',
+    audio_hint: 'So you can send the assistant audio and it can reply in voice. Today only Google Gemini and OpenAI do this.',
+    audio_same: 'Uses the same key as above.', audio_key: 'API key for audio', audio_missing_key: 'Paste the API key for audio.',
+    audio_key_rejected: 'The audio AI refused this key. Check you copied all of it.', audio_no_connection: "Couldn't reach the audio AI. Check the internet.",
+    audio_provider_error: 'The audio AI answered with an error. Try again in a moment.',
     submit: 'Finish', testing: 'Testing the key...', starting: 'All set. Starting Brambit...', signing_in: 'Creating your account...',
     e_name: 'Fill in your name.', e_email: 'Check the email.', e_password: 'The password needs at least 12 characters.', e_password2: 'The two passwords differ.',
     missing_key: 'Paste the API key.', invalid_url: 'Check the API address (starts with http:// or https://).', missing_model: 'Type the model name.',
@@ -124,6 +148,11 @@ const TEXTS = {
     models_help: 'El recomendado ya viene marcado. Puedes cambiarlo después en Configuración › Esta computadora.', models_other: 'Elige de la lista o escribe el nombre del modelo.',
     key_keep: 'Déjala vacía para seguir con la clave guardada.', invalid_model: 'Revisa el nombre del modelo.',
     where_key: 'Dónde conseguir la clave', key_optional: 'Puede quedar vacía si el servicio no pide clave (ej.: Ollama en tu computadora).',
+    audio: '3. Mensajes de voz', audio_change: 'Mensajes de voz', audio_none: 'Ahora no',
+    audio_hint: 'Para que le mandes audios al asistente y te responda con voz. Hoy solo Google Gemini y OpenAI lo hacen.',
+    audio_same: 'Usa la misma clave de arriba.', audio_key: 'Clave de la API para el audio', audio_missing_key: 'Pega la clave de la API para el audio.',
+    audio_key_rejected: 'La IA del audio rechazó esta clave. Revisa que la copiaste completa.', audio_no_connection: 'No pude hablar con la IA del audio. Revisa internet.',
+    audio_provider_error: 'La IA del audio respondió con un error. Intenta de nuevo en un rato.',
     submit: 'Terminar', testing: 'Probando la clave...', starting: 'Todo listo. Encendiendo Brambit...', signing_in: 'Creando tu cuenta...',
     e_name: 'Escribe tu nombre.', e_email: 'Revisa el correo.', e_password: 'La contraseña necesita al menos 12 caracteres.', e_password2: 'Las dos contraseñas son distintas.',
     missing_key: 'Pega la clave de la API.', invalid_url: 'Revisa la dirección de la API (empieza con http:// o https://).', missing_model: 'Escribe el nombre del modelo.',
@@ -146,7 +175,7 @@ document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[lang];
 // Changing the AI (button in Settings): the account already exists, only the AI part shows.
 const changing = document.documentElement.dataset.mode === 'change';
 if (changing) {
-  for (const [sel, k] of [['h1', 'title_change'], ['p.sub', 'sub_change'], ['#ai-title', 'ai_change'], ['#submit', 'save']]) document.querySelector(sel).dataset.t = k;
+  for (const [sel, k] of [['h1', 'title_change'], ['p.sub', 'sub_change'], ['#ai-title', 'ai_change'], ['#audio-title label', 'audio_change'], ['#submit', 'save']]) document.querySelector(sel).dataset.t = k;
   document.getElementById('account').hidden = true;
   document.getElementById('cancel').hidden = false;
 }
@@ -171,6 +200,8 @@ const keepsKey = () => Boolean(currentAi?.hasKey && currentAi.provider === provi
   && (provider() !== 'other' || currentAi.url === $('url').value.trim().replace(/\/+$/, '')));
 function switchProvider() {
   const p = provider();
+  if (!audioTouched) $('audio').value = AUDIO.includes(p) ? p : 'none';
+  switchAudio();
   $('other-fields').hidden = p !== 'other';
   $('where-key').hidden = p === 'other';
   $('key-optional').hidden = p !== 'other';
@@ -211,6 +242,18 @@ async function loadModels() {
   }
   hint(other ? 'models_other' : 'models_help');
 }
+// Voice messages: the text provider's key serves when it is the same provider;
+// another one needs its own key. Until the person picks, it follows the text choice.
+const AUDIO = ['gemini', 'openai'];
+let audioTouched = false;
+function switchAudio() {
+  const a = $('audio').value;
+  $('audio-same').hidden = a !== provider();
+  $('audio-key-fields').hidden = a === 'none' || a === provider();
+  if (WHERE_KEY[a]) $('audio-where-key').href = WHERE_KEY[a];
+  $('audio-key-keep').hidden = !(currentAi?.hasAudioKey && currentAi.audio === a);
+}
+$('audio').addEventListener('change', () => { audioTouched = true; switchAudio(); });
 for (const r of document.querySelectorAll('input[name=provider]')) r.addEventListener('change', switchProvider);
 for (const id of ['key', 'url']) $(id).addEventListener('input', () => { clearTimeout(lookupTimer); lookupTimer = setTimeout(switchProvider, 600); });
 switchProvider();
@@ -220,6 +263,7 @@ if (changing) fetch('/current').then((r) => (r.ok ? r.json() : null)).then((a) =
   if (!r) return;
   currentAi = a;
   r.checked = true;
+  if (a.audio) { $('audio').value = a.audio; audioTouched = true; }
   if (a.provider === 'other') { $('url').value = a.url || ''; $('model').value = a.model || ''; }
   switchProvider();
 }).catch(() => {});
@@ -255,7 +299,7 @@ $('form').addEventListener('submit', async (ev) => {
   $('submit').disabled = true;
   status(t('testing'));
   try {
-    const r = await post('/install', { code, name, email, provider: provider(), key: $('key').value, url: $('url').value, model: provider() === 'other' ? $('model').value : $('model-select').value });
+    const r = await post('/install', { code, name, email, provider: provider(), key: $('key').value, url: $('url').value, model: provider() === 'other' ? $('model').value : $('model-select').value, audio: $('audio').value, audioKey: $('audio-key').value });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { status(''); $('submit').disabled = false; return showError(t(j.error) === j.error ? t('generic') : t(j.error)); }
   } catch { status(''); $('submit').disabled = false; return showError(t('generic')); }

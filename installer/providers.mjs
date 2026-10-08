@@ -88,6 +88,26 @@ export async function testKey(c, fetchImpl = fetch) {
   return found ? { ok: true, ...(found.price ? { price: found.price } : {}) } : { ok: false, error: 'model_missing' };
 }
 
+// Voice messages: who transcribes them and speaks the replies. Only these two
+// providers do both today (web/audio-provider.mjs).
+export const AUDIO_PROVIDERS = ['gemini', 'openai'];
+
+// The audio provider of a saved setup. Setups from before the choice existed
+// use the text provider when it does audio, and none otherwise.
+export const audioOf = (cfg) => cfg.audio?.provider || (AUDIO_PROVIDERS.includes(cfg.ai.provider) ? cfg.ai.provider : 'none');
+
+// What the person chose for audio, given the text choice → {provider:'none'},
+// {provider} (the text key serves both), {provider, key} or {error}. Without a
+// choice, the text provider when it does audio.
+export function audioChoice({ audio, audioKey }, text) {
+  const provider = audio || (AUDIO_PROVIDERS.includes(text.provider) ? text.provider : 'none');
+  if (provider === 'none') return { provider };
+  if (!AUDIO_PROVIDERS.includes(provider)) return { error: 'invalid_audio' };
+  if (provider === text.provider) return { provider };
+  const key = String(audioKey || '').trim();
+  return key ? { provider, key } : { error: 'audio_missing_key' };
+}
+
 // modelos.yaml with a single provider doing every function. The key is NOT in
 // it: only the name of the environment variable the launcher fills in. The keys
 // of the file itself (provedores, funcoes, padrao...) are the core's format.
