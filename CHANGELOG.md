@@ -10,6 +10,11 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Changed
+- Tests moved from the repository root to `tests/`, and the ones with
+  Portuguese file names got English names (run them with
+  `node --test tests/<file>.test.mjs`).
+
 ## [0.2.8] - 2026-10-08
 
 ### Added

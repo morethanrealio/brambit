@@ -29,7 +29,7 @@
 //   SID_A=… SID_B=… node ops/tenancy-runner-test.mjs (part 1 + part 2, on the local server)
 //   BASE=https://your-domain ALLOW_REMOTE=1 SID_A=… SID_B=… …  (part 2 in production;
 //     without ALLOW_REMOTE=1 the probe refuses a target outside this machine)
-//   JSON=1  prints the report in JSON at the end (tenancy-contract.test.mjs reads it)
+//   JSON=1  prints the report in JSON at the end (tests/tenancy-contract.test.mjs reads it)
 
 import { runnerPoll, runnerExec, runnerResult, runnerReadFile, runnerStatus } from '../web/runner.mjs';
 import { baseOrExit } from './tenancy-base.mjs';

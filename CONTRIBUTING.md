@@ -32,7 +32,7 @@ items that make a good first contribution marked.
    the issue. Once it expires with no news, a bot removes the assignment and the
    issue is free for someone else.
 3. Create a branch from `main` and open the PR against it.
-4. Run the tests for the area you changed (`node --test file.test.mjs` or the matching
+4. Run the tests for the area you changed (`node --test tests/<file>.test.mjs` or the matching
    `npm run <area>:test` in `package.json`). CI runs the quick checks on every PR.
 5. A maintainer of the area reviews it (see [MAINTAINERS.md](MAINTAINERS.md) and
    `.github/CODEOWNERS`).

@@ -220,14 +220,14 @@ To run it on your machine, use the [Quick start](#quick-start). Never reuse the
 configured integrations. `.env` is not versioned. Outside `npm run local`, the entry
 point is `node web/server.mjs`, on `127.0.0.1:8090` by default.
 
-Day to day, run only the tests for the area you changed (`node --test file.test.mjs`
+Day to day, run only the tests for the area you changed (`node --test tests/<file>.test.mjs`
 or the area's script); `npm test` runs the whole suite. Browser tests need
 Chromium/Chrome via `CHROMIUM_PATH` when required; coding storage tests need `flock`.
 Database tests use the same embedded Postgres 14:
 
 ```bash
 export TEST_POSTGRES_BIN="$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")"
-node --test server-boot.test.mjs
+node --test tests/server-boot.test.mjs
 ```
 
 That test creates its own database, isolates credentials and blocks outside access.

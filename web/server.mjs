@@ -8323,7 +8323,7 @@ function clientIp(req) {
 }
 
 // LANGUAGE guess from this request's Accept-Language, and ONLY language.
-// The parsing rule lives in locale.mjs (pure, tested in locale.test.mjs).
+// The parsing rule lives in locale.mjs (pure, tested in tests/locale.test.mjs).
 //
 // `localeDoAcceptLanguage` also returns the tag's region ('es-AR' -> 'AR'),
 // because that's what the tag literally says. But a language tag's region is
