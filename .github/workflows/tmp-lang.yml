@@ -1,0 +1,25 @@
+# Temporary: checks the setup and first-run language on Windows browsers. Not to merge.
+name: Windows language check
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lang:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ['C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', 'C:\Program Files\Google\Chrome\Application\chrome.exe']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: node tmpcheck/lang-repro.mjs
+        env:
+          BROWSER_PATH: ${{ matrix.browser }}
