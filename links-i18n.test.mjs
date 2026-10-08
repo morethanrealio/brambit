@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // i18n tests for the sources block and the broken-link notice (web/links.mjs).
 //
 // What this file proves, in order of importance:

@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Real server boundary and real routine SQL in an isolated local DB.
 // A model turn simulates the lock via reservation; controls don't reach it.
 import test from 'node:test';

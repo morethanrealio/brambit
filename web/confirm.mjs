@@ -31,7 +31,7 @@ import { routineArgsTimeLabel } from './routine-time.mjs';
 // en/es tables are consulted first and, when they don't have the sentence, the path
 // falls back to the usual Portuguese. See the header of confirm-textos.mjs.
 import { pedidoEm, feitoEm, molduraEm, copiaLabel, camposInfinity } from './confirm-textos.mjs';
-import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
+import { tagIdioma, defaultLanguage, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
 import { PORTAO_TEXTOS, PORTAO_IRREVERSIVEIS, portaoTexto } from './confirm-textos-portao.mjs';
 import { marca } from './marca.mjs';
 
@@ -57,7 +57,7 @@ export function setThreadLanguage(threadId, language) {
 // today's pt-BR: a thread whose language wasn't recorded behaves exactly as
 // it did before this change.
 function idiomaDoCartao(threadId) {
-  return idiomaDaThread.get(String(threadId)) || IDIOMA_PADRAO;
+  return idiomaDaThread.get(String(threadId)) || defaultLanguage();
 }
 
 // How the confirmation card describes the requested channel. "app" (= not pushed on any
@@ -234,7 +234,7 @@ function confirmationCard(name, label, language, numbered = false) {
   if (numbered) return label;
   if (name === 'jornada_configurar') return label;
   const reaction = isReactionConfirmable(name);
-  const lang = tagIdioma(language || IDIOMA_PADRAO);
+  const lang = tagIdioma(language || defaultLanguage());
   if (lang === 'en') return `${label}\n\nTo confirm, reply “go ahead”${reaction ? ' or react with 👍' : ' in text'}.`;
   if (lang === 'es') return `${label}\n\nPara confirmar, responde “adelante”${reaction ? ' o reacciona con 👍' : ' por texto'}.`;
   return `${label}\n\nPara confirmar, responda “pode”${reaction ? ' ou reaja com 👍' : ' por texto'}.`;
@@ -299,7 +299,7 @@ function distancia(a, b) {
 export function avisoEnderecoTrocado(destinos, texto, language = null) {
   const escritos = enderecos(texto);
   if (!escritos.length) return '';
-  const lang = language ? tagIdioma(language) : IDIOMA_PADRAO;
+  const lang = language ? tagIdioma(language) : defaultLanguage();
   const avisos = [];
   for (const alvo of enderecos(destinos)) {
     if (escritos.includes(alvo)) continue;
@@ -338,12 +338,12 @@ export function describe(name, args = {}, language = null) {
     const label=/^en/.test(language || '')?'Next occurrences':/^es/.test(language || '')?'Próximas ocurrencias':'Próximas ocorrências';
     return `${describe(name, once, language)} ${recurrenceLabel(recorrencia,start,tz,language)} ${label}: ${recurrenceOccurrences(recorrencia,start,tz).map(o=>o.local.replace('T',' ')).join('; ')}.`;
   }
-  const lang = language ? tagIdioma(language) : IDIOMA_PADRAO;
-  if (lang !== IDIOMA_PADRAO) {
+  const lang = language ? tagIdioma(language) : defaultLanguage();
+  if (lang !== LEGACY_TEXT_LANGUAGE) {
     const t = pedidoEm(lang, name, args);
     if (t) return t;
   }
-  { const t = portaoTexto(IDIOMA_PADRAO, name, args, 0); if (t) return t; }
+  { const t = portaoTexto(LEGACY_TEXT_LANGUAGE, name, args, 0); if (t) return t; }
   switch (name) {
     case 'jornada_configurar': return configurationLabel(args);
     case 'jornada_concluir': return completionLabel();
@@ -545,7 +545,7 @@ export function describe(name, args = {}, language = null) {
       // A tool in the gate with no sentence of its own in any language: here the
       // pt-BR is also generic, so translating the generic one doesn't hide any
       // information.
-      return lang === IDIOMA_PADRAO ? `executar a ação "${name}"` : molduraEm(lang).acaoPedido(name);
+      return lang === LEGACY_TEXT_LANGUAGE ? `executar a ação "${name}"` : molduraEm(lang).acaoPedido(name);
   }
 }
 
@@ -579,18 +579,18 @@ function formatWhen(s) {
 // whoever asked in English confirms in English and gets "E-mail enviado para ..."
 // in Portuguese back.
 export function describeDone(name, args = {}, language = null) {
-  if (name === 'jornada_concluir' && (!language || tagIdioma(language) === IDIOMA_PADRAO)) return `Jornada concluída. Estou preparando suas sugestões de uso do ${marca().nome} e aviso aqui quando estiverem prontas.`;
-  if (name === 'jornada_refazer_devolutiva' && (!language || tagIdioma(language) === IDIOMA_PADRAO)) return 'Estou preparando sua devolutiva novamente. Aviso aqui quando estiver pronta.';
+  if (name === 'jornada_concluir' && tagIdioma(language) === LEGACY_TEXT_LANGUAGE) return `Jornada concluída. Estou preparando suas sugestões de uso do ${marca().nome} e aviso aqui quando estiverem prontas.`;
+  if (name === 'jornada_refazer_devolutiva' && tagIdioma(language) === LEGACY_TEXT_LANGUAGE) return 'Estou preparando sua devolutiva novamente. Aviso aqui quando estiver pronta.';
   if (['calendar_create', 'outlook_calendar_create'].includes(name) && args.recorrencia !== undefined) {
     const { recorrencia, ...once } = args;
     return `${describeDone(name, once, language)} ${recurrenceLabel(recorrencia, args.start || args.inicio, args.timezone || args.fuso, language)}`;
   }
-  const lang = language ? tagIdioma(language) : IDIOMA_PADRAO;
-  if (lang !== IDIOMA_PADRAO) {
+  const lang = language ? tagIdioma(language) : defaultLanguage();
+  if (lang !== LEGACY_TEXT_LANGUAGE) {
     const t = feitoEm(lang, name, args);
     if (t) return t;
   }
-  { const t = portaoTexto(IDIOMA_PADRAO, name, args, 1); if (t) return t; }
+  { const t = portaoTexto(LEGACY_TEXT_LANGUAGE, name, args, 1); if (t) return t; }
   switch (name) {
     case 'gmail_send':
       return `E-mail enviado para ${args.to || 'o destinatário'}${args.subject ? ` com o assunto "${args.subject}"` : ''}${copiaLabel(args.cc)}.`;
@@ -736,7 +736,7 @@ export function describeDone(name, args = {}, language = null) {
     case 'criar_conta_brambs':
       return `Conta ${marca().nome} aberta no seu nome.`;
     default:
-      return lang === IDIOMA_PADRAO ? `Ação "${name}" concluída.` : molduraEm(lang).acaoFeita(name);
+      return lang === LEGACY_TEXT_LANGUAGE ? `Ação "${name}" concluída.` : molduraEm(lang).acaoFeita(name);
   }
 }
 
@@ -753,8 +753,8 @@ export function describeDone(name, args = {}, language = null) {
 // Tools with confirmation whose output is a fixed pt-BR success sentence.
 const FRASE_PRONTA_PT = new Set(['criar_rotina']);
 export function renderConfirmed(pend, r) {
-  const lang = pend?.language ? tagIdioma(pend.language) : IDIOMA_PADRAO;
-  const m18n = lang === IDIOMA_PADRAO ? null : molduraEm(lang);
+  const lang = pend?.language ? tagIdioma(pend.language) : defaultLanguage();
+  const m18n = lang === LEGACY_TEXT_LANGUAGE ? null : molduraEm(lang);
   const feito = () => describeDone(pend.name, pend.args, pend.language);
   let data = null;
   if (r && typeof r === 'object') data = r;
@@ -1253,7 +1253,7 @@ export function confirmationTargetMatches(pend, target) {
 // the person to reply to it. It does not claim that the previously cited action
 // was cancelled.
 export function confirmationTargetNotice(pend) {
-  const lang = tagIdioma(pend?.language || IDIOMA_PADRAO);
+  const lang = tagIdioma(pend?.language || defaultLanguage());
   if (!pend) return lang === 'en'
     ? 'There is no pending confirmation for that message. No action was executed. Please request the action again.'
     : lang === 'es'

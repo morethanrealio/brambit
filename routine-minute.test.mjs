@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Routine with MINUTE (case from 2026-10-01): asked for "todo dia às 22h30" and only
 // whole hours existed. Covers parse/label, firing at the right minute, the card
 // in pt/en/es and the old criar_rotina card being replaced by the new one.

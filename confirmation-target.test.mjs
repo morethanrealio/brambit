@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Offline: only the real gate and synthetic actions. The purchases dependency is
 // isolated before the import so as not to build a database pool or load tokens.
 import test from 'node:test';

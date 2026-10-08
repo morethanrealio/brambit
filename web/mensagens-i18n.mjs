@@ -11,7 +11,7 @@
 // the response comes out byte-for-byte the same as today. A key with no translation stays in
 // Portuguese, on purpose: a missing message is a sentence in the wrong language, and
 // an invented message is a wrong sentence.
-import { IDIOMAS_OK, IDIOMA_PADRAO, tagIdioma } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, LEGACY_TEXT_LANGUAGE, tagIdioma } from './locale.mjs';
 import { fatiaJs } from './site-i18n.mjs';
 import { hostDaMarca, marca } from './marca.mjs';
 
@@ -81,7 +81,7 @@ export function extraiMensagens(js) {
 export function traduzMensagem(texto, language, catalogos) {
   if (typeof texto !== 'string' || !texto) return texto;
   const tag = tagIdioma(language);
-  if (tag === IDIOMA_PADRAO) return texto;
+  if (tag === LEGACY_TEXT_LANGUAGE) return texto;
   const t = catalogos?.[tag]?.[texto];
   return typeof t === 'string' && t ? t : texto;
 }
@@ -105,7 +105,7 @@ const comMarca = (t) => (t.includes('__') ? t.replace(MARCA, daMarca) : t);
 // A copy is only created when some field actually changed.
 export function traduzResposta(obj, language, catalogos) {
   if (!obj || typeof obj !== 'object') return obj;
-  const pt = tagIdioma(language) === IDIOMA_PADRAO;
+  const pt = tagIdioma(language) === LEGACY_TEXT_LANGUAGE;
   let saida = obj;
   for (const campo of ['error', 'message']) {
     const v = obj[campo];
@@ -131,5 +131,5 @@ export function traduzResposta(obj, language, catalogos) {
 export function idiomaDaRequisicao(req, doHeader) {
   const pedido = String(req.headers?.['x-idioma'] || '').trim();
   if (IDIOMAS_OK.includes(pedido)) return pedido;
-  try { return doHeader(req).language || IDIOMA_PADRAO; } catch { return IDIOMA_PADRAO; }
+  try { return doHeader(req).language || defaultLanguage(); } catch { return defaultLanguage(); }
 }

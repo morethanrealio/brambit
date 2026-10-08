@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';

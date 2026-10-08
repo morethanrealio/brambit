@@ -33,6 +33,9 @@ Changes merged since the last tag go under "Unreleased".
   repository, starting with: everything in the repository is in English.
 
 ### Changed
+- The instance default language is now English: it is used when nothing is
+  known about the person (no saved setting, channel or browser language). To
+  keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.
 - Renamed, so the repository stays in English: `BRAMBIT_CADASTRO=fechado` is
   now `BRAMBIT_SIGNUP=closed`, `BRAMBIT_DADOS` is `BRAMBIT_DATA_DIR`, the
   `instalador/` folder is `installer/`, and the installer's data files are

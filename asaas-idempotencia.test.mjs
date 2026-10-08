@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // A retry can't pay twice (finding #10), and the card has to tell the
 // truth about what happened (findings #11, #12 and #13).
 //

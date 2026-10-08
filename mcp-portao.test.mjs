@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Offline: fake in-memory MCP server + the real gate. An MCP connector
 // tool cannot run without the confirmation card: the server belongs to a third party and
 // may write, delete, or send. No tools/call goes out before the owner confirms.
