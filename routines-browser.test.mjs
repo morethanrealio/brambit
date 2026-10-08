@@ -1,5 +1,5 @@
 // Actual SPA in Chromium; every response is fixture/local file, all external requests blocked.
-import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {screenTexts} from './web/screen-texts.mjs';
+import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import {screenTexts} from './web/screen-texts.mjs';import {translatePage,carregaCatalogos} from './web/page-i18n.mjs';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright-core');
 const out=process.env.ROUTINES_TEST_OUTPUT||'/tmp/routines-browser';fs.mkdirSync(out,{recursive:true});
 const root=path.resolve('web/public');const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
@@ -18,7 +18,8 @@ await page.route('**/*',async r=>{const u=new URL(r.request().url());if(u.hostna
  return r.fulfill({json:d});
  }
  let f=path.resolve(root,'.'+u.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)||fs.statSync(f).isDirectory())f=path.join(root,'index.html');
- await r.fulfill({body:fs.readFileSync(f),contentType:({'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'})[path.extname(f)]||'application/octet-stream'});
+ const html=path.extname(f)==='.html';
+ await r.fulfill({body:html?translatePage(fs.readFileSync(f,'utf8'),'pt-BR',carregaCatalogos('web/site-textos'),{vars:{brand:'__MARCA__'}}):fs.readFileSync(f),contentType:({'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'})[path.extname(f)]||'application/octet-stream'});
 });
 const box=page.locator('#routinesBox'),cards=box.locator('article'),rw=()=>writes.filter(w=>w.path.startsWith('/api/routine/'));
 async function load(){await page.goto('http://localhost/habilidades-apps');await box.getByRole('button',{name:'Atualizar',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('#routinesBox').getAttribute('aria-busy')==='false');}

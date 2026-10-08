@@ -37,6 +37,10 @@ Changes merged since the last tag go under "Unreleased".
   (`docs/i18n.md`, "Pages"). The usage, Runner and public service pages use
   it, and are now translated into English and Spanish in full. CI fails on new
   page text outside the catalogs.
+- The main screen's markup (sign-in, first-time setup and the app's sections)
+  takes its text from the catalogs too (`index_page.*`); names that stay the
+  same in every language carry `translate="no"`. Texts built by its script
+  still use the old Portuguese-keyed catalogs for now.
 
 ### Changed
 - Server error and status messages come from the catalogs (`server.*` in
@@ -84,6 +88,10 @@ Changes merged since the last tag go under "Unreleased".
   delivered only in the app now says so instead of "delivered on app".
 - App slot markers accept CRLF line endings: on Windows every plugin with an
   app slot failed at boot.
+- Main screen in English and Spanish: sentences that came out half translated
+  or with a word repeated (sign-up terms, Telegram, App Store Connect) and
+  labels that stayed in Portuguese (public service, WhatsApp confirmation,
+  "View invite", "Company") are now translated.
 
 ## [0.2.7] - 2026-10-07
 
