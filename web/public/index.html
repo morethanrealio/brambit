@@ -3145,7 +3145,7 @@ function initMemoria() {
     var data = null;
     try { data = await r.json(); } catch (e) { /* noop */ }
     if (r.status === 401) { window.location.href = '/login'; throw new Error('unauth'); }
-    if (!r.ok) { throw new Error((data && data.error) || ('Erro ' + r.status)); }
+    if (!r.ok) { throw new Error((data && data.error) || tx('common.error_status', { status: r.status })); }
     return data;
   }
 
@@ -3155,7 +3155,7 @@ function initMemoria() {
     if (!pages.length) {
       var li = document.createElement('li');
       li.className = 'm-muted';
-      li.textContent = 'Nenhuma página ainda.';
+      li.textContent = tx('memory.no_pages');
       ul.appendChild(li);
       return;
     }
@@ -3200,13 +3200,13 @@ function initMemoria() {
   function renderReader() {
     var p = currentPage || {};
     $('rdTitle').textContent = p.title || p.slug || '';
-    $('rdMeta').textContent = p.updated_at ? ('atualizada ' + fmtDate(p.updated_at)) : '';
+    $('rdMeta').textContent = p.updated_at ? tx('memory.updated', { date: fmtDate(p.updated_at) }) : '';
     var body = $('rdBody');
     if (p.body && p.body.trim()) {
       var src = stripLeadingTitle(unwrapMdFence(p.body), p.title || p.slug || '');
       body.innerHTML = mdToHtml(src);
     }
-    else { body.innerHTML = ''; var e = document.createElement('div'); e.className = 'm-md-empty'; e.textContent = 'Página vazia.'; body.appendChild(e); }
+    else { body.innerHTML = ''; var e = document.createElement('div'); e.className = 'm-md-empty'; e.textContent = tx('memory.empty_page'); body.appendChild(e); }
     setRead('');
     showMode('read');
   }
@@ -3226,7 +3226,7 @@ function initMemoria() {
     var p = currentPage || {};
     $('pgTitle').value = p.title || '';
     $('pgBody').value = p.body || '';
-    $('pgMeta').textContent = p.updated_at ? ('atualizada ' + fmtDate(p.updated_at)) : 'nova página';
+    $('pgMeta').textContent = p.updated_at ? tx('memory.updated', { date: fmtDate(p.updated_at) }) : tx('memory.new_page');
     $('delBtn').style.display = current ? '' : 'none';
     setEdit('');
     showMode('edit');
@@ -3247,7 +3247,7 @@ function initMemoria() {
   async function savePage() {
     var title = $('pgTitle').value.trim();
     var body = $('pgBody').value;
-    if (!title) { setEdit('Dê um título à página.', true); return; }
+    if (!title) { setEdit(tx('memory.title_required'), true); return; }
     $('saveBtn').disabled = true;
     try {
       var payload = { title: title, body: body };
@@ -3257,33 +3257,33 @@ function initMemoria() {
       current = d.page.slug;
       await loadOverview(true);
       renderReader();
-      setRead('Salvo.');
+      setRead(tx('memory.saved'));
     } catch (e) { setEdit(e.message, true); }
     $('saveBtn').disabled = false;
   }
 
   async function delCurrent(fromReader) {
     if (!current) { newPage(); return; }
-    if (!window.confirm('Apagar esta página de memória? Isso não pode ser desfeito.')) return;
+    if (!window.confirm(tx('memory.delete_confirm'))) return;
     try {
       await api('/api/memory/page/delete', { method: 'POST', body: JSON.stringify({ slug: current }) });
       current = null; currentPage = null;
       showMode('empty');
       await loadOverview(true);
-      setTop('Página apagada.');
+      setTop(tx('memory.deleted'));
     } catch (e) { (fromReader ? setRead : setEdit)(e.message, true); }
   }
 
   function setPromptMsg(msg, isErr) { var el = $('promptMsg'); el.textContent = msg || ''; el.className = 'm-msg' + (isErr ? ' m-err' : ''); }
 
-  var defaultRoleHint = 'Vazio: usando o papel padrão do __MARCA__. Escreva aqui para personalizar.';
+  var defaultRoleHint = tx('prompt.default_role_hint');
 
   function renderPrompt(agentId) {
     setPromptMsg('');
     $('pName').value = ''; $('pGoal').value = ''; $('pRole').value = ''; $('pStyle').value = '';
     $('pRoleHint').textContent = ''; $('pFormer').textContent = '';
     if (!agentId) return;
-    setPromptMsg('Carregando...');
+    setPromptMsg(tx('prompt.loading'));
     Promise.all([
       api('/api/agent/get?agentId=' + encodeURIComponent(agentId)),
       api('/api/memory/prompt?agentId=' + encodeURIComponent(agentId)).catch(function () { return null; }),
@@ -3300,7 +3300,7 @@ function initMemoria() {
       var prm = res[1];
       if (prm) {
         var fn = (prm.friendly && prm.friendly.formerNames) || [];
-        $('pFormer').textContent = fn.length ? ('Nomes anteriores: ' + fn.join(', ')) : '';
+        $('pFormer').textContent = fn.length ? tx('prompt.former_names', { names: fn.join(', ') }) : '';
       }
       setPromptMsg('');
     }).catch(function (e) { setPromptMsg(e.message, true); });
@@ -3336,25 +3336,25 @@ function initMemoria() {
     if (!Array.isArray(accounts) || accounts.length < 2) { field.style.display = 'none'; return; }
     var main = accounts.filter(function (a) { return a.primary; })[0];
     var o0 = document.createElement('option');
-    o0.value = ''; o0.textContent = 'Conta principal' + (main ? ' (' + main.email + ')' : '');
+    o0.value = ''; o0.textContent = main ? tx('prompt.main_account_email', { email: main.email }) : tx('prompt.main_account');
     sel.appendChild(o0);
     accounts.forEach(function (a) {
       var o = document.createElement('option');
-      o.value = a.email; o.textContent = a.email + (a.primary ? ' (principal)' : '');
+      o.value = a.email; o.textContent = a.primary ? tx('prompt.primary_email', { email: a.email }) : a.email;
       sel.appendChild(o);
     });
     sel.value = current || '';
-    hint.textContent = 'Em qual das suas contas Google este assistente lê e escreve (Gmail, Agenda, Drive, Docs). Você também pode pedir isso pra ele no chat: "usa meu e-mail de trabalho".';
+    hint.textContent = tx('prompt.google_hint');
     field.style.display = '';
   }
 
   // ── Agent security category (personal / group / super) ──
   var TOOL_GROUP_LABELS = {
-    shell: 'Shell e código (ler/editar arquivos, rodar comandos no box dedicado)',
-    produtos: 'Catálogo e produtos (busca no RAG de produto)',
-    projeto: 'Gerir projeto de código (criar/entrar/deploy no workspace de dev)',
-    web: 'Busca na web e leitura de páginas',
-    apps: 'Publicar e gerir sisteminhas (mini-PaaS)',
+    shell: tx('prompt.tools_shell'),
+    produtos: tx('prompt.tools_products'),
+    projeto: tx('prompt.tools_project'),
+    web: tx('prompt.tools_web'),
+    apps: tx('prompt.tools_apps'),
   };
   var _superAvailable = false;
 
@@ -3394,20 +3394,20 @@ function initMemoria() {
     var cat = sel.value;
     $('pToolGroupsField').style.display = (cat === 'grupo') ? '' : 'none';
     var hints = {
-      pessoal: 'Conversa 1:1 com você. Toolset completo, mas escritas e comandos pedem confirmação.',
-      grupo: 'Roda em canais com várias pessoas. Só as ferramentas marcadas abaixo ficam disponíveis; nunca toca sua conta pessoal nem se reconfigura.',
+      pessoal: tx('prompt.category_personal'),
+      grupo: tx('prompt.category_group'),
       super: _superAvailable
-        ? 'Terminal ao vivo na máquina conectada, sem confirmação por comando. O feed ao vivo só aparece na sua conversa 1:1.'
-        : 'Indisponível: conecte um servidor (chave SSH) a este agente para habilitar o super agente.',
+        ? tx('prompt.category_super')
+        : tx('prompt.category_super_unavailable'),
     };
     $('pCategoryHint').textContent = hints[cat] || '';
   }
 
   async function savePrompt() {
     var agentId = selectedAgentId();
-    if (!agentId) { setPromptMsg('Escolha um assistente.', true); return; }
+    if (!agentId) { setPromptMsg(tx('prompt.pick_assistant'), true); return; }
     var name = $('pName').value.trim();
-    if (!name) { setPromptMsg('O nome não pode ficar vazio.', true); return; }
+    if (!name) { setPromptMsg(tx('prompt.name_required'), true); return; }
     $('pSaveBtn').disabled = true;
     try {
       var body = { agentId: agentId, name: name, goal: $('pGoal').value, instructions: $('pRole').value, style: $('pStyle').value };
@@ -3427,7 +3427,7 @@ function initMemoria() {
       var opt = $('agentSel').selectedOptions[0];
       if (opt) opt.textContent = name;
       $('pRoleHint').textContent = $('pRole').value.trim() ? '' : defaultRoleHint;
-      setPromptMsg('Salvo. Vale a partir do próximo turno.');
+      setPromptMsg(tx('prompt.saved'));
     } catch (e) { setPromptMsg(e.message, true); }
     $('pSaveBtn').disabled = false;
   }
@@ -3444,15 +3444,16 @@ function initMemoria() {
     var exists = st && st.exists;
     var enabled = st && st.enabled;
     if (!exists) {
-      $('whStatus').textContent = 'Nenhum token gerado ainda.';
-      $('whGenBtn').textContent = 'Gerar token';
+      $('whStatus').textContent = tx('webhook.no_token');
+      $('whGenBtn').textContent = tx('webhook.generate');
       $('whToggleBtn').style.display = 'none';
     } else {
-      var used = st.callCount ? (', ' + st.callCount + ' chamada(s)') : '';
-      $('whStatus').textContent = (enabled ? 'Ativo' : 'Desativado') + ' (token ...' + (st.hint || '') + ')' + used + '. Envie a skill em "skill" e os dados em "data" no POST, com Authorization: Bearer <token>.';
-      $('whGenBtn').textContent = 'Regerar token';
+      var calls = st.callCount ? tx('webhook.call_count', { count: st.callCount }) : '';
+      $('whStatus').textContent = tx(enabled ? 'webhook.status_active' : 'webhook.status_disabled', { hint: st.hint || '', calls: calls });
+      $('whGenBtn').textContent = tx('webhook.regenerate');
       $('whToggleBtn').style.display = '';
-      $('whToggleBtn').textContent = enabled ? 'Desativar' : 'Reativar';
+      $('whToggleBtn').textContent = enabled ? tx('webhook.disable') : tx('webhook.reactivate');
+      $('whToggleBtn').dataset.reactivate = enabled ? '' : '1';
     }
   }
   function renderWebhook(agentId) {
@@ -3465,14 +3466,14 @@ function initMemoria() {
   }
   async function genWebhookToken() {
     var agentId = selectedAgentId();
-    if (!agentId) { setWhMsg('Escolha um assistente.', true); return; }
+    if (!agentId) { setWhMsg(tx('prompt.pick_assistant'), true); return; }
     $('whGenBtn').disabled = true;
     try {
       var r = await api('/api/agent/webhook/token', { method: 'POST', body: JSON.stringify({ agentId: agentId }) });
       $('whUrl').value = r.url || '';
       $('whToken').value = r.token || '';
       $('whTokenRow').style.display = '';
-      setWhMsg('Token gerado. Copie agora, ele não aparece de novo.');
+      setWhMsg(tx('webhook.generated'));
       renderWebhook(agentId);
       $('whToken').value = r.token || '';
       $('whTokenRow').style.display = '';
@@ -3482,7 +3483,7 @@ function initMemoria() {
   async function toggleWebhook() {
     var agentId = selectedAgentId();
     if (!agentId) return;
-    var reactivate = $('whToggleBtn').textContent.indexOf('Reativar') >= 0;
+    var reactivate = $('whToggleBtn').dataset.reactivate === '1';
     $('whToggleBtn').disabled = true;
     try {
       await api('/api/agent/webhook/enabled', { method: 'POST', body: JSON.stringify({ agentId: agentId, enabled: reactivate }) });
@@ -3564,7 +3565,7 @@ function initMemoria() {
 }
 
 // ── Identity verification (anchor photo for video generation) ──
-const LIKENESS_LABEL = { none: 'Nenhuma foto enviada ainda.', pending: 'Foto enviada. Aguardando análise do time.', verified: 'Identidade verificada. ✓', rejected: 'A foto anterior não foi aprovada.' };
+const LIKENESS_LABEL = { none: tx('likeness.none'), pending: tx('likeness.pending'), verified: tx('likeness.verified'), rejected: tx('likeness.rejected') };
 async function loadLikeness() {
   const st = E('likenessStatus'); if (!st) return;
   const res = await api('api/likeness');
@@ -3575,12 +3576,12 @@ async function loadLikeness() {
   if (res.emRevisao || res.storageEnabled === false) { E('likenessBox').classList.add('hidden'); return; }
   E('likenessBox').classList.remove('hidden');
   let msg = LIKENESS_LABEL[res.status] || LIKENESS_LABEL.none;
-  if (res.status === 'rejected' && res.rejectedReason) msg += ' Motivo: ' + res.rejectedReason;
+  if (res.status === 'rejected' && res.rejectedReason) msg += ' ' + tx('likeness.reason', { reason: res.rejectedReason });
   st.textContent = msg;
   const wrap = E('likenessPreviewWrap');
   if (res.anchorUrl) { E('likenessPreview').src = res.anchorUrl; wrap.classList.remove('hidden'); }
   else wrap.classList.add('hidden');
-  E('likenessPick').textContent = res.hasAnchor ? 'Trocar foto' : 'Enviar foto de frente';
+  E('likenessPick').textContent = res.hasAnchor ? tx('likeness.replace_photo') : tx('likeness.upload_front');
   // Extra face photos: only unlock after the front-facing photo has been sent.
   const extra = E('extraFacesBox');
   if (extra) {
@@ -3608,37 +3609,37 @@ function renderEmpresa(det) {
   const emp = det && det.empresa;
   if (!emp) {
     const conv = (det && det.convites) || [];
-    box.innerHTML = (conv.length ? '<p style="margin:0 0 6px;">Você tem convite para entrar numa empresa:</p>'
+    box.innerHTML = (conv.length ? '<p style="margin:0 0 6px;">' + txHtml('company.you_have_invite') + '</p>'
         + conv.map((c) => empRow('<b>' + esc(c.empresa) + '</b>',
-          '<span style="display:flex;gap:6px;">' + empBtn('class="primary" data-emp-aceitar="' + esc(c.id) + '"', 'Aceitar') + empBtn('data-emp-recusar="' + esc(c.id) + '"', 'Recusar') + '</span>')).join('')
-        + '<p class="sub" style="margin:8px 0 14px;">Ao entrar, esta conta passa a ser da empresa: só dá pra conectar contas Google e Microsoft dos domínios dela. O que sobrou dos pacotes que você pagou com cartão volta pro seu cartão; bônus e créditos que você ganhou vão pra empresa.</p>'
+          '<span style="display:flex;gap:6px;">' + empBtn('class="primary" data-emp-aceitar="' + esc(c.id) + '"', txHtml('company.accept')) + empBtn('data-emp-recusar="' + esc(c.id) + '"', txHtml('company.decline')) + '</span>')).join('')
+        + '<p class="sub" style="margin:8px 0 14px;">' + txHtml('company.join_note') + '</p>'
       : '')
-      + '<p style="margin:0;">Use o __MARCA__ com a sua equipe: transforme esta conta numa conta de empresa. O domínio do seu e-mail de login entra na lista de domínios liberados, e você convida as pessoas pelo e-mail da empresa.</p>'
-      + '<p class="sub" style="margin:8px 0 0;">Sua assinatura pessoal é cancelada agora, sem cobrança nova. O que sobrou do seu plano este mês vira crédito extra da empresa por 30 dias; seus pacotes vão junto com a validade deles. A empresa começa no plano Free (1.500 créditos/mês) até você escolher um plano corporativo.</p>'
-      + empForm('empNome', 'Nome da empresa', 'empCriar', 'Criar empresa');
+      + '<p style="margin:0;">' + txHtml('company.create_intro') + '</p>'
+      + '<p class="sub" style="margin:8px 0 0;">' + txHtml('company.create_note') + '</p>'
+      + empForm('empNome', txHtml('company.name_placeholder'), 'empCriar', txHtml('company.create'));
     return;
   }
   const admin = emp.papel === 'admin';
-  let h = '<p style="margin:0 0 6px;">' + (admin ? 'Você administra a empresa ' : 'Você faz parte da empresa ') + '<b>' + esc(emp.nome) + '</b>.</p>'
-    + '<p style="margin:0 0 10px;">Só dá pra conectar contas Google e Microsoft destes domínios: <b>' + esc((emp.dominios || []).join(', ')) + '</b>.</p>';
+  let h = '<p style="margin:0 0 6px;">' + txHtml(admin ? 'company.you_admin' : 'company.you_member', { company: '<b>' + esc(emp.nome) + '</b>' }) + '</p>'
+    + '<p style="margin:0 0 10px;">' + txHtml('company.domains_only', { domains: '<b>' + esc((emp.dominios || []).join(', ')) + '</b>' }) + '</p>';
   if (admin) {
-    h += '<div class="title" style="margin-top:14px;">Domínios liberados</div>'
-      + (emp.dominios || []).map((d) => empRow(esc(d), empBtn('data-emp-dom-remover="' + esc(d) + '"', 'Remover'))).join('')
-      + empForm('empDominio', 'empresa.com.br', 'empDomAdd', 'Adicionar domínio');
-    h += '<div class="title" style="margin-top:14px;">Membros</div>'
-      + (emp.membros || []).map((m) => empRow('<b>' + esc(m.nome || '') + '</b> <span style="color:var(--mut);">' + esc(m.email) + (m.papel === 'admin' ? ' · administrador' : '') + '</span>',
-        m.papel === 'admin' ? '' : empBtn('data-emp-membro-remover="' + esc(m.id) + '" data-emp-membro-nome="' + esc(m.nome || m.email) + '"', 'Remover'))).join('');
-    h += '<div class="title" style="margin-top:14px;">Convites pendentes</div>'
-      + ((emp.convites || []).length ? emp.convites.map((c) => empRow(esc(c.email), empBtn('data-emp-revogar="' + esc(c.id) + '"', 'Revogar'))).join('') : '<p class="sub" style="margin:0;">Nenhum convite pendente.</p>')
-      + empForm('empConvite', 'pessoa@empresa.com.br', 'empConvidar', 'Convidar')
-      + '<p class="sub" style="margin:6px 0 0;">A pessoa vê o convite quando entrar no __MARCA__ com esse e-mail. Nenhum e-mail é enviado.</p>';
+    h += '<div class="title" style="margin-top:14px;">' + txHtml('company.allowed_domains') + '</div>'
+      + (emp.dominios || []).map((d) => empRow(esc(d), empBtn('data-emp-dom-remover="' + esc(d) + '"', txHtml('common.remove')))).join('')
+      + empForm('empDominio', txHtml('company.domain_placeholder'), 'empDomAdd', txHtml('company.add_domain'));
+    h += '<div class="title" style="margin-top:14px;">' + txHtml('company.members') + '</div>'
+      + (emp.membros || []).map((m) => empRow('<b>' + esc(m.nome || '') + '</b> <span style="color:var(--mut);">' + esc(m.email) + (m.papel === 'admin' ? ' · ' + txHtml('company.admin') : '') + '</span>',
+        m.papel === 'admin' ? '' : empBtn('data-emp-membro-remover="' + esc(m.id) + '" data-emp-membro-nome="' + esc(m.nome || m.email) + '"', txHtml('common.remove')))).join('');
+    h += '<div class="title" style="margin-top:14px;">' + txHtml('company.pending_invites') + '</div>'
+      + ((emp.convites || []).length ? emp.convites.map((c) => empRow(esc(c.email), empBtn('data-emp-revogar="' + esc(c.id) + '"', txHtml('company.revoke')))).join('') : '<p class="sub" style="margin:0;">' + txHtml('company.no_invites') + '</p>')
+      + empForm('empConvite', txHtml('company.invite_placeholder'), 'empConvidar', txHtml('company.invite'))
+      + '<p class="sub" style="margin:6px 0 0;">' + txHtml('company.invite_note') + '</p>';
   }
   box.innerHTML = h;
 }
 async function loadEmpresa() {
   const box = E('empresaBody'); if (!box) return;
   const det = await api('api/empresa');
-  if (!det || det.error) { box.textContent = (det && det.error) || 'Não consegui carregar.'; return; }
+  if (!det || det.error) { box.textContent = (det && det.error) || tx('company.load_failed'); return; }
   renderEmpresa(det);
 }
 function renderEmpresaNotif(me) {
@@ -3646,7 +3647,7 @@ function renderEmpresaNotif(me) {
   const conv = (me && !me.empresa && me.convitesEmpresa) || [];
   let dispensado = false; try { dispensado = sessionStorage.getItem('empresaNotifDismissed') === '1'; } catch {}
   if (!conv.length || dispensado) { banner.classList.add('hidden'); return; }
-  E('empresaNotifTxt').innerHTML = '🏢 ' + (conv.length === 1 ? 'A empresa <b>' + esc(conv[0].empresa) + '</b> convidou você para entrar.' : conv.length + ' empresas convidaram você para entrar.');
+  E('empresaNotifTxt').innerHTML = '🏢 ' + (conv.length === 1 ? txHtml('company.invited_you', { company: '<b>' + esc(conv[0].empresa) + '</b>' }) : txHtml('company.invited_you_many', { count: conv.length }));
   banner.classList.remove('hidden');
 }
 E('empresaNotifOpen').addEventListener('click', () => navigate('/config'));
@@ -3655,7 +3656,7 @@ async function empresaAcao(btn, path, body, okAviso) {
   btn.disabled = true; empresaMsg('', '');
   const res = await api(path, body);
   btn.disabled = false;
-  if (!res || res.error) { empresaMsg((res && res.error) || 'Não consegui concluir. Tente de novo.'); return null; }
+  if (!res || res.error) { empresaMsg((res && res.error) || tx('company.action_failed')); return null; }
   await loadEmpresa();
   empresaMsg('', res.aviso || okAviso || '');
   return res;
@@ -3663,41 +3664,41 @@ async function empresaAcao(btn, path, body, okAviso) {
 E('empresaBox').addEventListener('click', async (e) => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.id === 'empCriar') {
-    const r = await empresaAcao(t, 'api/empresa', { nome: (E('empNome').value || '').trim() }, 'Empresa criada. Agora convide as pessoas pelo e-mail da empresa.');
+    const r = await empresaAcao(t, 'api/empresa', { nome: (E('empNome').value || '').trim() }, tx('company.created'));
     if (r) E('empresaNotif').classList.add('hidden');
   } else if (t.id === 'empDomAdd') {
     await empresaAcao(t, 'api/empresa/dominios', { acao: 'adicionar', dominio: (E('empDominio').value || '').trim() });
   } else if (t.id === 'empConvidar') {
-    const r = await empresaAcao(t, 'api/empresa/convites', { acao: 'convidar', email: (E('empConvite').value || '').trim() }, 'Convite criado. A pessoa vê quando entrar no __MARCA__ com esse e-mail.');
-    if (r && r.email_enviado && !r.aviso) empresaMsg('', 'Convite criado e enviado por e-mail. A pessoa aceita quando entrar no __MARCA__ com esse e-mail.');
+    const r = await empresaAcao(t, 'api/empresa/convites', { acao: 'convidar', email: (E('empConvite').value || '').trim() }, tx('company.invite_created'));
+    if (r && r.email_enviado && !r.aviso) empresaMsg('', tx('company.invite_sent'));
   } else if (t.dataset.empDomRemover) {
     await empresaAcao(t, 'api/empresa/dominios', { acao: 'remover', dominio: t.dataset.empDomRemover });
   } else if (t.dataset.empRevogar) {
-    await empresaAcao(t, 'api/empresa/convites', { acao: 'revogar', id: t.dataset.empRevogar }, 'Convite revogado.');
+    await empresaAcao(t, 'api/empresa/convites', { acao: 'revogar', id: t.dataset.empRevogar }, tx('company.invite_revoked'));
   } else if (t.dataset.empMembroRemover) {
-    if (!confirm('Remover ' + t.dataset.empMembroNome + ' da empresa?')) return;
-    await empresaAcao(t, 'api/empresa/membros/remover', { id: t.dataset.empMembroRemover }, 'Membro removido.');
+    if (!confirm(tx('company.remove_member_confirm', { name: t.dataset.empMembroNome }))) return;
+    await empresaAcao(t, 'api/empresa/membros/remover', { id: t.dataset.empMembroRemover }, tx('company.member_removed'));
   } else if (t.dataset.empAceitar || t.dataset.empRecusar) {
     const aceitar = !!t.dataset.empAceitar;
-    const r = await empresaAcao(t, 'api/empresa/convites/responder', { id: t.dataset.empAceitar || t.dataset.empRecusar, aceitar }, aceitar ? 'Pronto, você entrou na empresa.' : 'Convite recusado.');
+    const r = await empresaAcao(t, 'api/empresa/convites/responder', { id: t.dataset.empAceitar || t.dataset.empRecusar, aceitar }, aceitar ? tx('company.joined') : tx('company.invite_declined'));
     if (r) E('empresaNotif').classList.add('hidden');
   }
 });
 function renderExtraFace(slot, has, urlv) {
   const wrap = E('face' + slot + 'PreviewWrap'), del = E('face' + slot + 'Del'), pick = E('face' + slot + 'Pick');
-  if (has && urlv) { E('face' + slot + 'Preview').src = urlv; wrap.classList.remove('hidden'); del.classList.remove('hidden'); pick.textContent = 'Trocar foto ' + slot; }
-  else { wrap.classList.add('hidden'); del.classList.add('hidden'); pick.textContent = 'Enviar foto ' + slot; }
+  if (has && urlv) { E('face' + slot + 'Preview').src = urlv; wrap.classList.remove('hidden'); del.classList.remove('hidden'); pick.textContent = tx('likeness.replace_photo_n', { n: slot }); }
+  else { wrap.classList.add('hidden'); del.classList.add('hidden'); pick.textContent = tx('likeness.upload_photo_n', { n: slot }); }
 }
 E('likenessPick').onclick = () => E('likenessFile').click();
 E('likenessFile').onchange = async (e) => {
   const f = (e.target.files || [])[0]; e.target.value = '';
   if (!f) return;
-  const hint = E('likenessHint'); hint.textContent = 'Enviando…';
+  const hint = E('likenessHint'); hint.textContent = tx('common.sending');
   let img;
-  try { img = await resizeImage(f); } catch { hint.textContent = 'Não consegui ler essa imagem.'; return; }
+  try { img = await resizeImage(f); } catch { hint.textContent = tx('likeness.read_failed'); return; }
   const res = await api('api/likeness', { images: [{ mimeType: img.mimeType, data: img.data }] });
   if (res.error) { hint.textContent = res.error; return; }
-  hint.textContent = 'Foto salva. ✓';
+  hint.textContent = tx('likeness.saved');
   loadLikeness();
 };
 // Extra face photos (slots 2 and 3): same person, different angles.
@@ -3706,16 +3707,16 @@ function wireExtraFace(slot) {
   E('face' + slot + 'File').onchange = async (e) => {
     const f = (e.target.files || [])[0]; e.target.value = '';
     if (!f) return;
-    const hint = E('face' + slot + 'Hint'); hint.textContent = 'Enviando…';
+    const hint = E('face' + slot + 'Hint'); hint.textContent = tx('common.sending');
     let img;
-    try { img = await resizeImage(f); } catch { hint.textContent = 'Não consegui ler essa imagem.'; return; }
+    try { img = await resizeImage(f); } catch { hint.textContent = tx('likeness.read_failed'); return; }
     const res = await api('api/likeness/face?slot=' + slot, { images: [{ mimeType: img.mimeType, data: img.data }] });
     if (res.error) { hint.textContent = res.error; return; }
-    hint.textContent = 'Foto salva. ✓';
+    hint.textContent = tx('likeness.saved');
     loadLikeness();
   };
   E('face' + slot + 'Del').onclick = async () => {
-    const hint = E('face' + slot + 'Hint'); hint.textContent = 'Removendo…';
+    const hint = E('face' + slot + 'Hint'); hint.textContent = tx('common.removing');
     const res = await api('api/likeness/face?slot=' + slot, null, 'DELETE');
     if (res.error) { hint.textContent = res.error; return; }
     hint.textContent = '';
@@ -3735,51 +3736,51 @@ async function loadVoice() {
   E('voiceBox').classList.remove('hidden');
   const player = E('voicePlayer'), del = E('voiceDel');
   if (res.hasVoice && res.voiceUrl) {
-    st.textContent = 'Voz de referência salva. ✓';
+    st.textContent = tx('voice.saved_status');
     player.src = res.voiceUrl; player.classList.remove('hidden');
     del.classList.remove('hidden');
-    E('voiceRec').textContent = 'Regravar';
+    E('voiceRec').textContent = tx('voice.rerecord');
   } else {
-    st.textContent = 'Nenhuma voz gravada ainda.';
+    st.textContent = tx('voice.none');
     player.classList.add('hidden'); player.removeAttribute('src');
     del.classList.add('hidden');
-    E('voiceRec').textContent = 'Gravar voz';
+    E('voiceRec').textContent = tx('voice.record');
   }
 }
 async function startVoiceRec() {
   const hint = E('voiceHint');
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { hint.textContent = 'Não consegui acessar o microfone. Confere a permissão do navegador.'; return; }
+  catch { hint.textContent = tx('voice.mic_failed'); return; }
   voiceChunks = [];
   try { voiceRecorder = new MediaRecorder(stream); }
-  catch { hint.textContent = 'Seu navegador não suporta gravação de áudio.'; stream.getTracks().forEach(t => t.stop()); return; }
+  catch { hint.textContent = tx('voice.unsupported'); stream.getTracks().forEach(t => t.stop()); return; }
   voiceRecorder.ondataavailable = (e) => { if (e.data && e.data.size) voiceChunks.push(e.data); };
   voiceRecorder.onstop = async () => {
     stream.getTracks().forEach(t => t.stop());
-    voiceRecording = false; E('voiceRec').textContent = 'Gravar voz';
+    voiceRecording = false; E('voiceRec').textContent = tx('voice.record');
     const blob = new Blob(voiceChunks, { type: (voiceRecorder && voiceRecorder.mimeType) || 'audio/webm' });
-    if (!blob.size) { hint.textContent = 'Gravação vazia, tenta de novo.'; return; }
-    if (blob.size > 12 * 1024 * 1024) { hint.textContent = 'Gravação longa demais. Grave um trecho menor.'; return; }
-    hint.textContent = 'Enviando…';
+    if (!blob.size) { hint.textContent = tx('voice.empty'); return; }
+    if (blob.size > 12 * 1024 * 1024) { hint.textContent = tx('voice.too_long'); return; }
+    hint.textContent = tx('common.sending');
     let data;
-    try { data = await readFileB64(blob); } catch { hint.textContent = 'Não consegui ler a gravação.'; return; }
+    try { data = await readFileB64(blob); } catch { hint.textContent = tx('voice.read_failed'); return; }
     const res = await api('api/likeness/voice', { audio: { mimeType: blob.type, data } });
     if (res.error) { hint.textContent = res.error; return; }
-    hint.textContent = 'Voz salva. ✓';
+    hint.textContent = tx('voice.saved');
     loadVoice();
   };
   voiceRecorder.start();
   voiceRecording = true;
-  E('voiceRec').textContent = 'Parar';
-  hint.textContent = 'Gravando… fale naturalmente. Toque em Parar quando terminar.';
+  E('voiceRec').textContent = tx('voice.stop');
+  hint.textContent = tx('voice.recording');
 }
 E('voiceRec').onclick = () => {
   if (voiceRecording) { try { voiceRecorder.stop(); } catch {} }
   else startVoiceRec();
 };
 E('voiceDel').onclick = async () => {
-  const hint = E('voiceHint'); hint.textContent = 'Removendo…';
+  const hint = E('voiceHint'); hint.textContent = tx('common.removing');
   const res = await api('api/likeness/voice', null, 'DELETE');
   if (res.error) { hint.textContent = res.error; return; }
   hint.textContent = ''; loadVoice();
@@ -3814,12 +3815,12 @@ let currentUname = '';
 let unameTimer = null;
 function unameReason(reason) {
   return ({
-    length: 'Use de 3 a 30 caracteres.',
-    invalid: 'Só minúsculas, números e hífen (sem hífen no começo/fim).',
-    reserved: 'Esse nome é reservado, escolha outro.',
-    taken: 'Esse nome já está em uso.',
-    empty: 'Digite um nome.',
-  })[reason] || 'Nome inválido.';
+    length: tx('username.length'),
+    invalid: tx('username.invalid'),
+    reserved: tx('username.reserved'),
+    taken: tx('username.taken'),
+    empty: tx('username.empty'),
+  })[reason] || tx('username.not_valid');
 }
 async function loadUsername() {
   try {
@@ -3828,7 +3829,7 @@ async function loadUsername() {
     if (E('unameInput')) E('unameInput').value = currentUname;
     const cur = E('unameCurrent');
     if (cur) cur.innerHTML = currentUname
-      ? 'Endereço atual: <a href="https://' + esc(currentUname) + '.__APPS__/" target="_blank" rel="noopener">' + esc(currentUname) + '.__APPS__</a>'
+      ? txHtml('username.current', { link: '<a href="https://' + esc(currentUname) + '.__APPS__/" target="_blank" rel="noopener">' + esc(currentUname) + '.__APPS__</a>' })
       : '';
     if (E('unameHint')) E('unameHint').textContent = '';
   } catch {}
@@ -3840,23 +3841,23 @@ if (E('unameInput')) E('unameInput').oninput = () => {
   if (!v || v === currentUname) { hint.textContent = ''; return; }
   unameTimer = setTimeout(async () => {
     const r = await api('api/prefs/username/check?u=' + encodeURIComponent(v));
-    if (r && r.available) { hint.style.color = '#1a8a4a'; hint.textContent = '✓ disponível'; }
+    if (r && r.available) { hint.style.color = '#1a8a4a'; hint.textContent = '✓ ' + tx('username.available'); }
     else { hint.style.color = '#c0392b'; hint.textContent = unameReason(r && r.reason); }
   }, 350);
 };
 if (E('unameSave')) E('unameSave').onclick = async () => {
   const v = E('unameInput').value.trim().toLowerCase();
   const hint = E('unameHint'); const btn = E('unameSave');
-  if (!v || v === currentUname) { hint.style.color = ''; hint.textContent = v ? 'Esse já é o seu endereço.' : 'Digite um nome.'; return; }
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  if (!v || v === currentUname) { hint.style.color = ''; hint.textContent = v ? tx('username.already_yours') : tx('username.empty'); return; }
+  btn.disabled = true; btn.textContent = tx('common.saving');
   const r = await api('api/prefs/username', { username: v });
-  btn.disabled = false; btn.textContent = 'Salvar';
+  btn.disabled = false; btn.textContent = tx('common.save');
   if (r && r.subdomain) {
     currentUname = r.subdomain;
-    hint.style.color = '#1a8a4a'; hint.textContent = '✓ salvo';
+    hint.style.color = '#1a8a4a'; hint.textContent = '✓ ' + tx('username.saved');
     loadUsername();
   } else {
-    hint.style.color = '#c0392b'; hint.textContent = (r && r.error) || 'Não deu pra salvar.';
+    hint.style.color = '#c0392b'; hint.textContent = (r && r.error) || tx('username.save_failed');
   }
 };
 
