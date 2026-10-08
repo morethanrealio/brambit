@@ -44,7 +44,9 @@ Changes merged since the last tag go under "Unreleased".
   sign-in and password reset, connections (Google, apps, credentials, App
   Store Connect, WhatsApp, Telegram, Runner), contacts, Spaces, Skills, the
   skill library, the home greeting and date, the assistant and app lists, the
-  chat list and the Files screen are done; the rest still use the old
+  chat list, the Files screen, the memory and assistant prompt settings, the
+  webhook, identity photo and voice, the business account and the web address
+  are done; the rest still use the old
   Portuguese-keyed catalogs for now.
 
 ### Changed
@@ -92,6 +94,8 @@ Changes merged since the last tag go under "Unreleased".
   you", vote counts, Rename, Style, Favorite, Archive, Images, Documents, the
   home date...) are translated, and a Space owner's name with `&` or
   `<` no longer shows escaped twice.
+- The webhook status and its Reactivate button are translated, and the call
+  count has a proper singular instead of "call(s)".
 - The confirmation card says what was done after removing an app file or
   secret, configuring the discovery journey or editing its note, instead of
   the generic "Action ... completed"; in English and Spanish, a routine
