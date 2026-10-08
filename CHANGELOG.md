@@ -41,6 +41,10 @@ Changes merged since the last tag go under "Unreleased".
   saved, the instance time zone is used: `BRAMBIT_DEFAULT_TIMEZONE`, else the
   machine's, instead of a fixed America/Sao_Paulo. To keep the old behavior on
   a machine in another zone, set `BRAMBIT_DEFAULT_TIMEZONE=America/Sao_Paulo`.
+- Reports, metrics and the monthly allowance window use the instance time zone
+  instead of a fixed America/Sao_Paulo, and the spend tool (`consultar_gasto`)
+  counts days in the person's time zone. `currentPeriodBRT` in
+  `web/periodo.mjs` is now `currentPeriod`; the old name still works.
 - Renamed, so the repository stays in English: `BRAMBIT_CADASTRO=fechado` is
   now `BRAMBIT_SIGNUP=closed`, `BRAMBIT_DADOS` is `BRAMBIT_DATA_DIR`, the
   `instalador/` folder is `installer/`, and the installer's data files are

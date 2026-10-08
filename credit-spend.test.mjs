@@ -24,7 +24,7 @@ test('a multi-day period returns total, categories and days with spend', async (
   const r=await s.porPeriodo({userId:'u',de:'2026-09-26',ate:'2026-09-27'});
   assert.equal(r.total_creditos,55);
   assert.deepEqual(r.por_dia,[{dia:'2026-09-26',creditos:10},{dia:'2026-09-27',creditos:45}]);
-  assert.deepEqual(calls[0].slice(0,3),['u','2026-09-26','2026-09-27']);
+  assert.deepEqual(calls.at(-1).slice(0,3),['u','2026-09-26','2026-09-27']);
 });
 
 test('a single day does not return a daily breakdown', async () => {
@@ -39,12 +39,12 @@ test("the latest answers exclude the current turn, limit N and sum each answer's
     if(sql.includes('task_measurements'))return {rows:[{id:'t2',thread_id:'th',started_at:'2026-09-27T20:06:33Z',finished_at:'2026-09-27T20:13:09Z'}]};
     return {rows:[{kind:'whatsapp',creditos:68},{kind:'search',creditos:240}]};}};
   const r=await createCreditSpend(pool).ultimasRespostas({userId:'u',agentId:'a',n:99,excluirTurnoId:'t-atual'});
-  assert.deepEqual(calls[0].p,['u','a','t-atual',20]);
+  assert.deepEqual(calls[1].p,['u','a','t-atual',20]);
   assert.equal(r.respostas.length,1);
   assert.equal(r.respostas[0].creditos,308);assert.equal(r.respostas[0].canal,'WhatsApp');
   assert.equal(r.respostas[0].onde_foi[0].categoria,'buscas na web');
   assert.equal(r.total_creditos,308);
-  assert.deepEqual(calls[1].p.slice(0,4),['u','th','2026-09-27T20:06:33Z','2026-09-27T20:13:09Z']);
+  assert.deepEqual(calls[2].p.slice(0,4),['u','th','2026-09-27T20:06:33Z','2026-09-27T20:13:09Z']);
 });
 
 test('the result guides answering with just the total by default', async () => {
@@ -62,7 +62,7 @@ test('the usd unit sums the real cost, rounds to 4 decimals and speaks in US$', 
   const s=createCreditSpend({query:async(sql)=>{sqls.push(sql);return {rows:[
     {dia:'2026-09-26',kind:'chat',usd:0.01234},{dia:'2026-09-27',kind:'search',usd:0.1},{dia:'2026-09-27',kind:'chat',usd:0.00001}]};}},{unidade:'usd'});
   const r=await s.porPeriodo({userId:'u',de:'2026-09-26',ate:'2026-09-27'});
-  assert.match(sqls[0],/sum\(cost_usd\)/);assert.doesNotMatch(sqls[0],/bill_credits/);
+  assert.match(sqls.at(-1),/sum\(cost_usd\)/);assert.doesNotMatch(sqls.at(-1),/bill_credits/);
   assert.equal(r.total_usd,0.1124);assert.equal(r.total_creditos,undefined);
   assert.deepEqual(r.por_dia,[{dia:'2026-09-26',usd:0.0123},{dia:'2026-09-27',usd:0.1}]);
   assert.deepEqual(r.onde_foi[0],{categoria:'buscas na web',usd:0.1});

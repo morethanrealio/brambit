@@ -29,6 +29,13 @@ export function defaultTimezone() {
   return 'UTC';
 }
 
+// Instance time zone for SQL text. An IANA name only has letters, digits and _ + - /,
+// so it can go inside quotes; anything else falls back to UTC.
+export function sqlTimezone() {
+  const tz = defaultTimezone();
+  return /^[A-Za-z0-9_+\-/]+$/.test(tz) ? tz : 'UTC';
+}
+
 export function validTimezone(tz) {
   if (typeof tz !== 'string' || !tz.trim()) return false;
   try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch { return false; }

@@ -25,7 +25,7 @@ import { createCurationStore } from './curation-store.mjs';
 import pg from 'pg';
 import { createHash } from 'node:crypto';
 import { encMaybe, decMaybe, encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
-import { IDIOMAS_OK, defaultLanguage, defaultTimezone, normalizaIdioma, normalizaPais } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, defaultTimezone, normalizaIdioma, sqlTimezone, normalizaPais } from './locale.mjs';
 import { matchingWikiLineSnippet, wikiSearchTerms } from './wiki-disclosure.mjs';
 
 export const pgConfig = {
@@ -4526,9 +4526,9 @@ export async function countUsageByModelSince(model, from) {
 // Flexible aggregation for the dashboard. `by` defines the grouping axis;
 // from/to filter the window (ISO). Optional userId restricts to one user.
 const USAGE_GROUPS = {
-  hour:   `to_char(date_trunc('hour',  ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:00')`,
-  day:    `to_char(date_trunc('day',   ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD')`,
-  month:  `to_char(date_trunc('month', ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM')`,
+  get hour() { return `to_char(date_trunc('hour',  ts AT TIME ZONE '${sqlTimezone()}'), 'YYYY-MM-DD HH24:00')`; },
+  get day() { return `to_char(date_trunc('day',   ts AT TIME ZONE '${sqlTimezone()}'), 'YYYY-MM-DD')`; },
+  get month() { return `to_char(date_trunc('month', ts AT TIME ZONE '${sqlTimezone()}'), 'YYYY-MM')`; },
   kind:   `kind`,
   model:  `model`,
   user:   `user_id::text`,
@@ -4667,14 +4667,14 @@ export async function getLastUserMsgMap() {
 }
 
 // Sign-ups per day (the Sign-ups tab of /metrics). Groups users.created_at by
-// day in the São Paulo timezone. Optional from/to filter (dates YYYY-MM-DD, BRT).
+// day in the instance time zone. Optional from/to filter (dates YYYY-MM-DD).
 export async function getSignupsByDay({ from, to } = {}) {
   const where = ['u.created_at IS NOT NULL'], vals = [];
-  if (from) { vals.push(from); where.push(`(u.created_at AT TIME ZONE 'America/Sao_Paulo')::date >= $${vals.length}`); }
-  if (to)   { vals.push(to);   where.push(`(u.created_at AT TIME ZONE 'America/Sao_Paulo')::date <= $${vals.length}`); }
+  if (from) { vals.push(from); where.push(`(u.created_at AT TIME ZONE '${sqlTimezone()}')::date >= $${vals.length}`); }
+  if (to)   { vals.push(to);   where.push(`(u.created_at AT TIME ZONE '${sqlTimezone()}')::date <= $${vals.length}`); }
   const w = `WHERE ${where.join(' AND ')}`;
   const { rows } = await pool.query(
-    `SELECT to_char((u.created_at AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD') AS dia,
+    `SELECT to_char((u.created_at AT TIME ZONE '${sqlTimezone()}')::date, 'YYYY-MM-DD') AS dia,
             count(*) AS cadastros
        FROM ${S}.users u
        ${w}
@@ -4692,14 +4692,14 @@ export async function countRegisteredUsers() {
   return Number(rows[0]?.n) || 0;
 }
 
-// Users registered BEFORE a date (BRT, YYYY-MM-DD) — baseline for the
+// Users registered BEFORE a date (instance time zone, YYYY-MM-DD) — baseline for the
 // cumulative sign-ups chart. Without `before`, returns 0.
 export async function countUsersBefore(before) {
   if (!before) return 0;
   const { rows } = await pool.query(
     `SELECT count(*) AS n FROM ${S}.users u
       WHERE u.created_at IS NOT NULL
-        AND (u.created_at AT TIME ZONE 'America/Sao_Paulo')::date < $1`,
+        AND (u.created_at AT TIME ZONE '${sqlTimezone()}')::date < $1`,
     [before],
   );
   return Number(rows[0]?.n) || 0;
@@ -7206,12 +7206,12 @@ export async function listOrgAdmins(orgId) {
   return rows.map((r) => ({ id: r.id, name: r.name || null }));
 }
 
-// Real model cost grouped by calendar month (BR timezone), in the window
+// Real model cost grouped by calendar month (instance time zone), in the window
 // [fromISO, toISO). Basis for reconciliation: for each closed month, the amount
 // above the allowance debits the extras balance.
 export async function modelCostByMonth(userId, fromISO, toISO) {
   const { rows } = await pool.query(
-    `SELECT to_char(date_trunc('month', ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM') AS mon,
+    `SELECT to_char(date_trunc('month', ts AT TIME ZONE '${sqlTimezone()}'), 'YYYY-MM') AS mon,
             COALESCE(sum(cost_usd), 0) AS cost
        FROM ${S}.usage_events
       WHERE user_id = $1 AND model NOT IN ('admin-grant','purchase','referral')
@@ -7222,12 +7222,12 @@ export async function modelCostByMonth(userId, fromISO, toISO) {
   return rows.map((r) => ({ mon: r.mon, usd: Number(r.cost) || 0 }));
 }
 
-// BILLED CREDITS grouped by calendar month (BR timezone), in the window [from, to).
+// BILLED CREDITS grouped by calendar month (instance time zone), in the window [from, to).
 // Counterpart to modelCostByMonth, but in billing credit (bill_credits). Basis for
 // reconciliation of closed months: the amount above the allowance debits the extras.
 export async function billByMonth(userId, fromISO, toISO) {
   const { rows } = await pool.query(
-    `SELECT to_char(date_trunc('month', ts AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM') AS mon,
+    `SELECT to_char(date_trunc('month', ts AT TIME ZONE '${sqlTimezone()}'), 'YYYY-MM') AS mon,
             COALESCE(sum(bill_credits), 0) AS c
        FROM ${S}.usage_events
       WHERE user_id = $1 AND model NOT IN ('admin-grant','purchase','referral')
