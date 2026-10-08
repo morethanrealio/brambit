@@ -18,8 +18,18 @@ Changes merged since the last tag go under "Unreleased".
 - The assistant knows which model it runs on and that the owner changes it in
   Settings › This computer. Plugins can add a stable note like this to the
   assistant's instructions through the new `systemNote` port.
+- The setup page also chooses who handles voice messages: Google Gemini,
+  OpenAI or nobody. When it is the same provider as the text, the same key
+  serves both; otherwise it asks for a second key. The assistant knows whether
+  it can hear and speak, and Settings › This computer shows it.
+- OpenAI transcription and voice (`gpt-4o-mini-transcribe` and
+  `gpt-4o-mini-tts`), priced like any other model. `BRAMBIT_AUDIO_PROVIDER`
+  (`gemini`, `openai` or `none`) picks the service; unset, it is Gemini when
+  `GEMINI_API_KEY` is there, else OpenAI.
 
 ### Changed
+- With only `OPENAI_API_KEY` set, voice messages now work (before, they
+  needed a Gemini key).
 - "Change the AI" in Settings › This computer is now "Change the AI or the
   model", and the saved key is kept when the provider stays the same.
 - Tests moved from the repository root to `tests/`, and the ones with

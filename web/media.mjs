@@ -1,5 +1,6 @@
 // ── Media: image generation, voice (TTS) and transcription (STT) ──
-// Everything via Gemini (same GEMINI_API_KEY as chat). Each operation returns
+// Images via Gemini (same GEMINI_API_KEY as chat); voice and transcription via
+// the audio provider the installation chose (audio-provider.mjs). Each operation returns
 // `usage` in the SAME shape as the text provider ({ model, in, cached, out,
 // think, total }) so it falls into the same cost/credit pipeline (recordUsages
 // -> costOf -> usage_events). The models have their own line in pricing.mjs.
@@ -23,6 +24,7 @@ export { startAwsCredentialRefresh } from './aws-credentials.mjs';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { costOf } from './pricing.mjs';
+import { audioProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,8 +37,8 @@ const STT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_VOICE = 'Kore';
 
 export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
-export function ttsEnabled() { return !!process.env.GEMINI_API_KEY; }
-export function sttEnabled() { return !!process.env.GEMINI_API_KEY; }
+export function ttsEnabled() { return !!audioProvider(); }
+export function sttEnabled() { return !!audioProvider(); }
 
 // ROUGH estimate of how much credit each media operation uses.
 // Based on typical token counts and the pricing.mjs table; the real value varies
@@ -50,10 +52,12 @@ export function mediaEstimates(toUnits = (usd) => usd) {
   // Read/understand an image: image comes in as input (~1100 tok) + short response
   // (~300 tok) on the chat model. Using 3.5 Flash as the reference (common tier).
   const vision = toUnits(costOf({ model: 'gemini-3.5-flash', in: 1100, out: 300, total: 1400 }));
-  // Transcribe short audio (~30s): audio comes in as input (~350 tok) on Flash.
-  const stt = toUnits(costOf({ model: STT_MODEL, in: 350, out: 40, total: 390 }));
+  // Transcribe short audio (~30s): audio comes in as input (~350 tok on Gemini
+  // Flash, ~270 on OpenAI, which counts ~9 per second).
+  const openai = audioProvider() === 'openai';
+  const stt = toUnits(costOf(openai ? { model: OPENAI_STT_MODEL, in: 270, out: 40, total: 310 } : { model: STT_MODEL, in: 350, out: 40, total: 390 }));
   // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS.
-  const tts = toUnits(costOf({ model: TTS_MODEL, in: 40, out: 600, total: 640 }));
+  const tts = toUnits(costOf({ model: openai ? OPENAI_TTS_MODEL : TTS_MODEL, in: 40, out: 600, total: 640 }));
   return { image, vision, stt, tts };
 }
 
@@ -455,6 +459,11 @@ export function audioToWav(inputBuffer) {
 }
 
 export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
+  if (audioProvider() === 'openai') {
+    const speech = await openaiSpeech(text, voice);
+    console.log(`[media tts] in=${speech.usage.in} out=${speech.usage.out} total=${speech.usage.total}`);
+    return speech;
+  }
   const data = await gen(TTS_MODEL, {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
@@ -480,6 +489,11 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
 
 // ── Transcription (STT) ── audio comes in as multimodal input on Flash.
 export async function transcribeAudio(buffer, mime = 'audio/ogg') {
+  if (audioProvider() === 'openai') {
+    const { text, usage } = await openaiTranscribe(buffer, mime);
+    console.log(`[media stt] in=${usage.in} out=${usage.out} total=${usage.total} -> ${text.length} chars`);
+    return { text, usage };
+  }
   const data = await gen(STT_MODEL, {
     contents: [{ role: 'user', parts: [
       { text: 'Transcreva o áudio a seguir no idioma em que foi falado (normalmente português do Brasil; se a pessoa falar inglês ou outra língua, transcreva nessa língua, sem traduzir). Devolva APENAS o texto falado, sem comentários, sem aspas.' },

@@ -31,7 +31,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dbEnvOf, freePort, postgresBin, prepareDatabase, startPostgres, waitReady } from '../dev/local.mjs';
-import { choice, endpoint, listModels, modelsYaml, PROVIDERS, testKey } from './providers.mjs';
+import { audioChoice, audioOf, choice, endpoint, listModels, modelsYaml, PROVIDERS, testKey } from './providers.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.resolve(process.env.BRAMBIT_DATA_DIR || path.join(os.homedir(), '.brambit'));
@@ -72,7 +72,7 @@ const processAlive = (pid) => { try { process.kill(pid, 0); return true; } catch
 // error page). With `current` it is the AI change (button in Settings): the owner
 // and the port stay, "Cancel" goes back with the previous configuration, and an
 // empty key for the same provider (and address) keeps the saved one, which never
-// goes to the browser.
+// goes to the browser. The same goes for the audio key.
 function serveSetup(port, code, onListen, current = null) {
   const page = readFileSync(path.join(root, 'installer', 'setup.html'), 'utf8').replace('__MODE__', current ? 'change' : 'first');
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
@@ -95,7 +95,7 @@ function serveSetup(port, code, onListen, current = null) {
         return res.end(page.split('__CSP_NONCE__').join(nonce));
       }
       // The current AI, so the page comes with it selected. Nothing secret: the key is not sent.
-      if (req.method === 'GET' && pathname === '/current' && current) return json(200, { ...current.ai, hasKey: Boolean(current.key) });
+      if (req.method === 'GET' && pathname === '/current' && current) return json(200, { ...current.ai, hasKey: Boolean(current.key), audio: audioOf(current), hasAudioKey: Boolean(current.audioKey) });
       if (req.method !== 'POST' || !['/install', '/models', '/cancel'].includes(pathname) || (pathname === '/cancel' && !current)) return json(404, { error: 'not_found' });
       if (req.headers.origin !== `http://${req.headers.host}`) return json(403, { error: 'origin' });
       let raw = '';
@@ -108,6 +108,7 @@ function serveSetup(port, code, onListen, current = null) {
       if (pathname === '/cancel') return finish(current);
       if (!String(p.key || '').trim() && current?.key && p.provider === current.ai.provider
         && (p.provider !== 'other' || endpoint(p).url === current.ai.url)) p.key = vault.decryptSecret(current.key);
+      if (!String(p.audioKey || '').trim() && current?.audioKey && p.audio === audioOf(current)) p.audioKey = vault.decryptSecret(current.audioKey);
       // The models the key can use, for the page to offer (this also tests the key).
       if (pathname === '/models') {
         const e = endpoint(p);
@@ -122,10 +123,18 @@ function serveSetup(port, code, onListen, current = null) {
       if (c.error) return json(400, { error: c.error });
       const test = await testKey(c);
       if (!test.ok) return json(400, { error: test.error, status: test.status });
+      // A separate audio key is tested the same way, by listing what it can use.
+      const audio = audioChoice(p, c);
+      if (audio.error) return json(400, { error: audio.error });
+      if (audio.key) {
+        const t = await listModels({ provider: audio.provider, url: PROVIDERS[audio.provider].url, key: audio.key });
+        if (!t.ok) return json(400, { error: `audio_${t.error}`, status: t.status });
+      }
       const cfg = {
         version: 1, port, owner: { name, email },
         ai: { provider: c.provider, url: c.url, model: c.model, ...(test.price ? { price: test.price } : {}) },
         key: c.key ? vault.encryptSecret(c.key) : null,
+        audio: { provider: audio.provider }, ...(audio.key ? { audioKey: vault.encryptSecret(audio.key) } : {}),
         createdAt: current?.createdAt || new Date().toISOString(),
         ...(current ? { changedAt: new Date().toISOString() } : {}),
       };
@@ -156,7 +165,7 @@ async function status() {
     : live.phase === 'running' ? `running: ${new URL(live.url).origin}`
       : live.phase === 'setup' ? 'running, with the setup page open' : 'starting');
   log(`data: ${dataDir}`);
-  log(cfg ? `AI: ${cfg.ai.provider} · ${cfg.ai.model}` : 'not set up yet: open Brambit to set it up');
+  log(cfg ? `AI: ${cfg.ai.provider} · ${cfg.ai.model} · audio: ${audioOf(cfg)}` : 'not set up yet: open Brambit to set it up');
   process.exitCode = live ? 0 : 3;
 }
 
@@ -264,7 +273,7 @@ async function start(noBrowser) {
   };
 
   function startServer() {
-    const ai = cfg.ai, keyVar = PROVIDERS[ai.provider].keyVar;
+    const ai = cfg.ai, keyVar = PROVIDERS[ai.provider].keyVar, audio = audioOf(cfg);
     writeFileSync(path.join(dataDir, 'modelos.yaml'), modelsYaml({ ...ai, key: Boolean(cfg.key) }));
     const s = spawn(process.execPath, ['server.mjs'], {
       cwd: path.join(root, 'web'), stdio: ['inherit', 'inherit', 'inherit', 'ipc'], windowsHide: true,
@@ -272,7 +281,9 @@ async function start(noBrowser) {
         ...env, ADMIN_EMAIL: cfg.owner.email, BRAMBIT_SIGNUP: 'closed',
         MODELOS_ARQUIVO: path.join(dataDir, 'modelos.yaml'),
         BRAMBIT_PLUGINS: path.join(root, 'installer', 'plugin', 'enabled.mjs'),
-        BRAMBIT_INSTALLATION: JSON.stringify({ version, url: base, dataDir, ai: { provider: ai.provider, model: ai.model }, since }),
+        BRAMBIT_INSTALLATION: JSON.stringify({ version, url: base, dataDir, ai: { provider: ai.provider, model: ai.model }, audio, since }),
+        BRAMBIT_AUDIO_PROVIDER: audio,
+        ...(cfg.audioKey && audio !== 'none' ? { [PROVIDERS[audio].keyVar]: vault.decryptSecret(cfg.audioKey) } : {}),
         ...(cfg.key ? { [keyVar]: vault.decryptSecret(cfg.key) } : {}),
       },
     });

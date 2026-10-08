@@ -95,6 +95,8 @@ try {
   if ((await post('/install', request, 'http://evil.example')).status !== 403) fail('another origin got through');
   const listed = await (await post('/models', { code, provider: 'other', url: aiUrl, key: KEY })).json();
   if (!listed.models?.includes('test-model')) fail(`the model list did not come: ${JSON.stringify(listed)}`);
+  // A provider without audio, and audio left to its default: voice messages off.
+  if ((await (await post('/install', { ...request, audio: 'openai' })).json()).error !== 'audio_missing_key') fail('another audio provider got through without its key');
   const rejected = await post('/install', { ...request, key: 'other' });
   if ((await rejected.json()).error !== 'key_rejected') fail('a wrong key was not rejected');
   const install = await post('/install', request);
@@ -109,7 +111,9 @@ try {
   if (!cookies.length || cookies.some((c) => /;\s*Secure/i.test(c))) fail(`the same-computer cookie should come without Secure: ${cookies}`);
   const other = await post('/api/signup', { name: 'Someone Else', email: 'someone@example.com', password: OWNER.password });
   if (other.status !== 403) fail(`someone else's sign-up should be refused, got ${other.status}`);
-  if (readFileSync(path.join(dataDir, 'installation.json'), 'utf8').includes(KEY)) fail('the AI key is in plain text on disk');
+  const saved = readFileSync(path.join(dataDir, 'installation.json'), 'utf8');
+  if (saved.includes(KEY)) fail('the AI key is in plain text on disk');
+  if (JSON.parse(saved).audio?.provider !== 'none') fail(`audio should default to off: ${saved}`);
   log('owner account created, sign-up closed to others, key encrypted');
 
   // 3) Start again: no setup, straight to the server; the owner signs in.
@@ -133,7 +137,7 @@ try {
   if ((await fetch(`${base}/api/installation`)).status !== 404) fail('/api/installation without a session should be 404');
   const info = await fetch(`${base}/api/installation`, { headers: { cookie: session } });
   const j = await info.json().catch(() => ({}));
-  if (info.status !== 200 || j.ai?.model !== 'test-model' || j.dataDir !== dataDir) fail(`owner's /api/installation: ${info.status} ${JSON.stringify(j)}`);
+  if (info.status !== 200 || j.ai?.model !== 'test-model' || j.audio !== 'none' || j.dataDir !== dataDir) fail(`owner's /api/installation: ${info.status} ${JSON.stringify(j)}`);
   const noSession = await post('/api/installation/change-ai', {}, base);
   if (noSession.ok || 'code' in (await noSession.json().catch(() => ({})))) fail(`changing the AI without a session got through: ${noSession.status}`);
 

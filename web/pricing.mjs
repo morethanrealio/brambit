@@ -36,6 +36,11 @@ const PRICES = {
   // GPT-5.4 mini (newest of the 5.4 family): $0.75 in / $4.50 out / cache ~$0.075 (10% off).
   // This is what the product uses via id 'gpt5mini'. More expensive than the old 5-mini, gain = quality.
   'gpt-5.4-mini': { in: 0.75, cachedIn: 0.075, out: 4.50 },
+  // Audio, when the installation picks OpenAI for it (developers.openai.com/api/docs/pricing,
+  // 2026-10-08). Transcription: audio in $1.25/M (~9 tok/s), text out $5/M.
+  'gpt-4o-mini-transcribe': { in: 1.25, cachedIn: 1.25, out: 5.00 },
+  // Voice: text in $0.60/M, audio out $12/M.
+  'gpt-4o-mini-tts': { in: 0.60, cachedIn: 0.60, out: 12.00 },
   // GPT-4.1 mini: $0,40 in / $1,60 out / cache ~$0,10 (25% off).
   'gpt-4.1-mini': { in: 0.40, cachedIn: 0.10,  out: 1.60 },
   // GPT-4.1 nano: $0.10 in / $0.40 out / cache ~$0.025. The cheapest (Lite tier).

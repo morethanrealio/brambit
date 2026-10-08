@@ -1,7 +1,7 @@
 // Plugin "installation": the part of Brambit on your own computer that only
 // makes sense when it was started by installer/brambit.mjs (the launcher). It
 // adds to the app's Settings, for the owner only, the "This computer" section:
-// what is running (version, address, data folder, AI) and the "Change the AI or
+// what is running (version, address, data folder, AI, audio) and the "Change the AI or
 // the model" and "Turn Brambit off" buttons. It also tells the assistant which
 // model it runs on and where the owner changes it (systemNote port). The launcher, which holds the database and
 // the server, does both: the server only asks, over the message channel (IPC)
@@ -36,6 +36,9 @@ export function systemNoteOf(info, language) {
     `THIS INSTALLATION'S AI: you run on the model ${info.ai.model}, from ${brand}, chosen by the owner of this computer.`,
     'When asked which AI or model you are, answer exactly that; do not guess from your training.',
     `You cannot change it yourself: the owner changes the AI or the model in ${where}.`,
+    info.audio && info.audio !== 'none'
+      ? `Voice messages: ${BRANDS[info.audio]} transcribes the ones people send and speaks your replies when asked.`
+      : `Voice messages are off: you cannot understand audio people send nor reply in voice; the owner turns them on in ${where}.`,
   ].join(' ');
 }
 

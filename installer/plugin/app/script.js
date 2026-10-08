@@ -12,6 +12,7 @@ async function installationLoad() {
   const ai = info.ai || {};
   const brand = { together: 'Together', openai: 'OpenAI', gemini: 'Google Gemini' }[ai.provider];
   E('instAi').textContent = [brand, ai.model].filter(Boolean).join(' · ');
+  E('instAudio').textContent = { openai: 'OpenAI', gemini: 'Google Gemini' }[info.audio] || 'Desligadas';
   E('instDataDir').textContent = info.dataDir || '';
   E('instVersion').textContent = info.version || '';
   box.classList.remove('hidden');
@@ -34,7 +35,7 @@ async function installationWaitForSetup() {
   return false;
 }
 E('instChangeAi').onclick = async () => {
-  const ok = await confirmModal({ title: 'Trocar a IA ou o modelo', body: 'O Brambit vai parar um instante pra você escolher a IA e o modelo. A chave salva pode continuar a mesma. As conversas e os dados continuam aqui.', okLabel: 'Continuar' });
+  const ok = await confirmModal({ title: 'Trocar a IA ou o modelo', body: 'O Brambit vai parar um instante pra você escolher a IA, o modelo e o áudio. As chaves salvas podem continuar as mesmas. As conversas e os dados continuam aqui.', okLabel: 'Continuar' });
   if (!ok) return;
   installationStatus('Abrindo a configuração da IA...');
   const j = await api('/api/installation/change-ai', {});
