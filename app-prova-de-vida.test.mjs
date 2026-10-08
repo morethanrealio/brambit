@@ -1,7 +1,7 @@
-// ── Prova de vida no fim da tarefa de app (Fase 2 do item 3, frustrações 16/09) ──
-// O que está sob teste é o GANCHO, não o container: o host roda a prova sozinho
-// quando a edição fecha validada, anexa o veredito ao recibo e NUNCA deixa a prova
-// mudar o desfecho da tarefa. O container de verdade vive no `probe` do ctl.py.
+// ── Proof of life at the end of the app task (Phase 2 of item 3, 2026-09-16 frustrations) ──
+// What's under test is the HOOK, not the container: the host runs the proof on its own
+// when the edit closes validated, attaches the verdict to the receipt and NEVER lets the proof
+// change the outcome of the task. The real container lives in ctl.py's `probe`.
 import test from 'node:test';import assert from 'node:assert/strict';
 import crypto from 'node:crypto';import fs from 'node:fs';import net from 'node:net';import tls from 'node:tls';
 import {runAppTask} from './web/app-task-runner.mjs';
@@ -15,8 +15,8 @@ const HTML='<html>\n<script>\nasync function ping(){ const r = await fetch("/api
 const call=(name,args,id)=>({id,name,args});const batch=(...toolCalls)=>({stop:'tool',toolCalls,usage:{in:3,out:2}});
 const end={stop:'end',text:'Pronto, testei tudo e está funcionando!',usage:{in:3,out:2}};
 
-// Fixture mínima: um app de um arquivo, edição que grava e valida, e um `provar_app`
-// de mentira cujo retorno cada teste escolhe. Nada aqui fala com host nem com rede.
+// Minimal fixture: a one-file app, an edit that saves and validates, and a fake
+// `provar_app` whose return value each test chooses. Nothing here talks to a host or the network.
 function fixture({prova,semProva=false}={}) {
  let record={id:crypto.randomUUID(),targetIdentity:'owner:demo',mode:'edicao',objective:'Corrigir e validar, sem publicar.',
   status:'paused',history:[],calls:0,tokens:0,elapsed:0,journal:[],evidence:[],report:[],signatures:[],progress:[],pending:null,reviewFiles:null,
@@ -63,7 +63,7 @@ test('app que sobe quebrado INFORMA, não bloqueia: tarefa segue concluída e va
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'quebrado',rotas_quebradas:'/api/pong (404)',
   agente:'Status 404 numa rota de API costuma ser erro de DIGITAÇÃO no caminho.'}});
  const out=await f.run(edicaoBoa(f));
- assert.equal(out.ok,true);                                   // o gate estático continua sendo o gate
+ assert.equal(out.ok,true);                                   // the static gate remains the gate
  assert.equal(out.app_build.estado,'consistencia_validada');
  assert.equal(out.app_build.motivo,'completed');
  assert.equal((await f.leitura()).status,'completed');
@@ -123,22 +123,22 @@ test('o recibo determinístico segue sem prometer o que o modelo disse',async()=
  }
 });
 
-// Roteamento no servidor real: a tool tem que SAIR do assistente principal e ENTRAR
-// no sub-agente de app, senão ela vira 1 schema a mais no piso de todo turno.
+// Routing in the real server: the tool has to LEAVE the main assistant and ENTER
+// the app sub-agent, otherwise it becomes one more schema in the floor cost of every turn.
 test('roteamento: provar_app está em APP_BUILD_TOOLS e fora do inline do principal',()=>{
  const server=fs.readFileSync('web/server.mjs','utf8');
  const build=server.match(/const APP_BUILD_TOOLS = new Set\(\[([\s\S]*?)\]\)/)[1];
  const inline=server.match(/const APPS_INLINE = new Set\(\[([\s\S]*?)\]\)/)[1];
  assert.ok(build.includes("'provar_app'"));
  assert.ok(!inline.includes("'provar_app'"));
- // O filtro do registry principal é NEGATIVO: quem não está num dos dois conjuntos cai lá.
+ // The main registry's filter is NEGATIVE: whoever isn't in one of the two sets falls into it.
  assert.ok(server.includes('!APPS_INLINE.has(t.name) && !APP_BUILD_TOOLS.has(t.name)'));
- // E o sub-agente de app é APP_BUILD_TOOLS + as inline, então a tool chega lá.
+ // And the app sub-agent is APP_BUILD_TOOLS + the inline ones, so the tool gets there.
  assert.ok(server.includes('const APP_SUB_TOOLS = new Set([...APP_BUILD_TOOLS'));
 });
 
-// O runner só enxerga READS ∪ EDITS pra montar o registry do modelo; provar_app fica
-// de fora dos dois de propósito, e é isso que a torna inchamável em loop.
+// The runner only sees READS ∪ EDITS to build the model's registry; provar_app is
+// deliberately left out of both, and that's exactly what keeps it un-callable in a loop.
 test('runner: provar_app não está nem em READS nem em EDITS',()=>{
  const src=fs.readFileSync('web/app-task-runner.mjs','utf8');
  const reads=src.match(/const READS=new Set\(\[([\s\S]*?)\]\)/)[1];

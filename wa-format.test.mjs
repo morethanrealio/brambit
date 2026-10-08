@@ -1,4 +1,4 @@
-// Markdown do modelo vira formatação do WhatsApp antes do envio. Offline.
+// Markdown from the model becomes WhatsApp formatting before sending. Offline.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { markdownParaWa } from './web/wa-format.mjs';
@@ -18,7 +18,7 @@ test('link vira texto + url, e url crua não é mexida', () => {
   assert.equal(markdownParaWa('Leia [o artigo](https://ex.com/a_b)'), 'Leia o artigo (https://ex.com/a_b)');
   assert.equal(markdownParaWa('[https://ex.com](https://ex.com/)'), 'https://ex.com/');
   assert.equal(markdownParaWa('veja https://ex.com/__init__**x**'), 'veja https://ex.com/__init__**x**');
-  // asterisco colado no fim é negrito, não link; link em negrito vai sem a marca
+  // asterisk stuck at the end is bold, not a link; a link in bold goes out without the marker
   assert.equal(markdownParaWa('Acesse **https://brambs.com.br** e faça **login**'), 'Acesse https://brambs.com.br e faça *login*');
   assert.equal(markdownParaWa('**[brambs.com.br](https://brambs.com.br)** › **Conexões**'), 'https://brambs.com.br › *Conexões*');
 });

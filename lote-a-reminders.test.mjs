@@ -53,7 +53,7 @@ test('recorrência e remarcação duráveis: dedup, rollback, fence do worker e 
   assert.equal((await f.store.reschedule(r.id,f.userId,{expectedRunAt:r.run_at,runAt:'2027-09-14T09:00:00Z'})).code,'REMINDER_CHANGED');
   const old=(await f.store.listOccurrences(f.userId,r.id)).find(o=>new Date(o.scheduled_at).toISOString()===a.runAt);
   assert.equal(old.status,'canceled');
-  // Intervalo legado também retoma a âncora, sem disparar de novo no mesmo dia.
+  // Legacy interval also resumes the anchor, without firing again on the same day.
   const daily=await f.create({runAt:'2027-09-14T13:00:00Z',repeatEveryMin:1440});
   const dayMoved=await f.store.reschedule(daily.id,f.userId,{expectedRunAt:daily.run_at,runAt:'2027-09-14T10:00:00Z'});
   assert.equal(nextReminderRun(dayMoved.reminder,dayMoved.reminder.run_at),'2027-09-15T13:00:00.000Z');

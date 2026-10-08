@@ -1,5 +1,5 @@
-// A Cloud API recusa WebP (131053, depois do HTTP 200): o que não é JPEG/PNG
-// vira JPEG antes de subir pra Meta.
+// The Cloud API refuses WebP (131053, after HTTP 200): whatever is not JPEG/PNG
+// becomes JPEG before uploading to Meta.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas } from '@napi-rs/canvas';

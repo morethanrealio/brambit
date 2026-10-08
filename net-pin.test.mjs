@@ -1,5 +1,5 @@
-// Anti DNS rebinding: a conexão tem que ir para o IP validado, não para o que o
-// DNS devolver na hora de conectar.
+// Anti DNS rebinding: the connection has to go to the validated IP, not to whatever the
+// DNS returns at connection time.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -26,7 +26,7 @@ test('a conexão vai para o IP fixado, com o Host original preservado', async ()
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const porta = srv.address().port;
   try {
-    // O resolver devolve um endereço já validado; o hostname nem existe no DNS.
+    // The resolver returns an already-validated address; the hostname doesn't even exist in DNS.
     const r = await fetchFixado(`http://rebind.invalido.example:${porta}/x`, {
       resolver: async () => [{ address: '127.0.0.1', family: 4 }],
     });
@@ -51,7 +51,7 @@ test('protocolo fora de http/https é recusado', async () => {
 });
 
 test('status fora de 200..599 vira erro da chamada, sem derrubar o processo', async () => {
-  // O LinkedIn responde 999 pra robô; o Response do Node não aceita esse status.
+  // LinkedIn responds 999 to bots; Node's Response does not accept that status.
   const srv = http.createServer((req, res) => { res.writeHead(999, 'Request denied'); res.end('x'); });
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const porta = srv.address().port;

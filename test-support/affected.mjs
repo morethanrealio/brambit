@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-// Quais testes uma mudança afeta (o "teste da área" do PR).
+// Which tests a change affects (the PR's "area test").
 //
-// Ninguém mantém lista de áreas à mão: a área de um teste é tudo o que ele
-// alcança. Montamos um grafo de dependências do repositório lendo, em cada
-// arquivo versionado de código, (a) os imports relativos e (b) qualquer string
-// literal que aponte para um arquivo/pasta do repo (é assim que os testes que
-// leem o texto do web/server.mjs aparecem no grafo). Um teste é afetado se algum
-// arquivo mudado está no fecho dele. Mudou o próprio teste, ele roda.
+// Nobody maintains a list of areas by hand: a test's area is everything it
+// reaches. We build a dependency graph of the repository by reading, in each
+// versioned code file, (a) the relative imports and (b) any string
+// literal that points to a file/folder in the repo (that's how tests that
+// read web/server.mjs's text as text show up in the graph). A test is affected if some
+// changed file is within its closure. If the test itself changed, it runs.
 //
-// Import é transitivo (o teste executa o que o módulo importa). Referência por
-// string é terminal: quem só LÊ o texto do server.mjs não depende do que o
-// server.mjs importa. Exceção: arquivo que sobe processo (spawn/execFile/fork)
-// executa o que referencia, então ali a string conta como import.
+// Import is transitive (the test runs whatever the module imports). Reference by
+// string is terminal: whoever only READS server.mjs's text doesn't depend on what
+// server.mjs imports. Exception: a file that spawns a process (spawn/execFile/fork)
+// runs whatever it references, so there the string counts as an import.
 //
-// Conforme o server.mjs for dividido em módulos, os testes passam a importar só
-// o módulo da área e a seleção fica mais estreita sozinha.
+// As server.mjs gets split into modules, tests start importing only
+// the area's module and the selection narrows on its own.
 //
-// Uso: npm test -- --changed-since <sha-base>   (roda só os testes afetados)
+// Usage: npm test -- --changed-since <sha-base>   (runs only the affected tests)
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-// Mudança nestes arquivos muda como TODO teste roda: roda a suíte inteira.
+// A change in these files changes how EVERY test runs: run the whole suite.
 export const RUN_ALL = ['package.json', 'package-lock.json', 'test-support/run-suite.mjs', 'test-support/affected.mjs'];
 
 const CODE = /\.(?:c|m)?(?:j|t)s$|\.html$/;
@@ -29,21 +29,21 @@ const LITERAL = /(['"`])((?:\.{1,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\/?)\1/g;
 const SPAWNS = /\b(?:spawn|fork|execFile)\w*\s*\(/;
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g;
 
-// Apelido do "imports" do package.json (#nucleo/web/x.mjs, #regras-provedor) vira o
-// caminho na raiz; sem apelido que case, null.
+// The package.json "imports" alias (#nucleo/web/x.mjs, #regras-provedor) becomes the
+// path at the root; with no matching alias, null.
 function apelido(ref, imports) {
   for (const [k, v] of Object.entries(imports)) {
     const alvo = k.endsWith('*') ? (ref.startsWith(k.slice(0, -1)) ? v.replace('*', ref.slice(k.length - 1)) : null) : (ref === k ? v : null);
-    // Apelido pro pacote brambit (#nucleo/* na nuvem): os arquivos do pacote entram
-    // no mapa com o caminho de dentro dele (fragile-guard.mjs).
+    // Alias for the brambit package (#nucleo/* in the cloud): the package's files go
+    // into the map with the path inside it (fragile-guard.mjs).
     const local = typeof alvo === 'string' ? alvo.replace(/^brambit\//, './') : null;
     if (local?.startsWith('./')) return local;
   }
   return null;
 }
 
-// Alvos possíveis de uma referência: relativo ao arquivo e relativo à raiz
-// (os testes rodam com cwd na raiz, então readFileSync('web/x.mjs') é da raiz).
+// Possible targets of a reference: relative to the file and relative to the root
+// (tests run with cwd at the root, so readFileSync('web/x.mjs') is from the root).
 function targets(from, ref, tracked, dirs, apelidos = {}) {
   if (ref.startsWith('#')) { const a = apelido(ref, apelidos); if (!a) return []; from = 'x'; ref = a; }
   const clean = ref.replace(/[?#].*$/, '');

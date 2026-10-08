@@ -1,5 +1,5 @@
-// modelos.yaml: o que protege a produção (sem arquivo = roteamento de sempre),
-// a herança entre funções e a trava contra chave colada no arquivo.
+// modelos.yaml: what protects production (no file = the usual routing),
+// inheritance between functions, and the guard against a key pasted into the file.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

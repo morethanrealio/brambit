@@ -128,7 +128,7 @@ test('the owner approves the card in his own words: verb of the card, "as duas",
     const s=selectConfirmation(rows,text,undefined,false,null,null,ids);
     assert.equal(s.kind,'confirm',text);assert.equal(s.row.id,id,text);assert.equal(s.rows,undefined,text);
   }
-  // Fora da lista visível, só com palavra de sim; e nada que acrescente condição.
+  // Outside the visible list, only with a word of yes; and nothing that adds a condition.
   assert.equal(selectConfirmation(rows,'agora pode criar a rotina',undefined,false,null,null,[]).row?.id,'r1');
   assert.notEqual(selectConfirmation(rows,'salvar o arquivo',undefined,false,null,null,[]).kind,'confirm');
   for(const text of ['pode criar a rotina às 8h','pode criar a rotina?','se der, cria a rotina','pode ser as duas menos a rotina','as duas sem o drive','não precisa criar a rotina','criar a rotina outra vez'])

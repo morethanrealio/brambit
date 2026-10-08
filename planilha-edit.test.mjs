@@ -1,12 +1,12 @@
-// Teste offline da EDIÇÃO de planilha por código (web/planilha-edit.mjs).
-// Sem banco, sem S3, sem sandbox: todas as dependências entram por `deps`, e a
-// planilha é um buffer fake. Roda com: node planilha-edit.test.mjs
+// Offline test of spreadsheet EDITING by code (web/planilha-edit.mjs).
+// No DB, no S3, no sandbox: all dependencies come in via `deps`, and the
+// spreadsheet is a fake buffer. Run with: node planilha-edit.test.mjs
 //
-// O que este teste protege (o incidente de 09/09/2026): planilha grande sendo
-// reescrita a partir de uma chamada truncada perdia linhas e gravava o marcador
-// de corte como dado. Os casos abaixo cobrem os mecanismos que impedem isso —
-// guarda do marcador, atomicidade (falha não gera asset), versão anterior
-// preservada com nome de histórico, e serialização de edições encavaladas.
+// What this test protects (the 2026-09-09 incident): a large spreadsheet being
+// rewritten from a truncated call lost rows and wrote the cut marker
+// as data. The cases below cover the mechanisms that prevent this —
+// marker guard, atomicity (failure generates no asset), previous version
+// preserved under a history name, and serialization of overlapping edits.
 
 const {
   editSpreadsheet, pickSheetAsset, versionedCaption, hasCutMarker,
@@ -25,7 +25,7 @@ t('marcador com espaco tambem', hasCutMarker('x …[cortado:74123 chars]… y'))
 t('texto normal nao acusa', !hasCutMarker('| Autor | Ano |\n| Bae | 2019 |'));
 t('nao-string nao quebra', !hasCutMarker(null) && !hasCutMarker(12));
 
-// ── 2) Escolha do asset: o mais RECENTE é a versão válida ──
+// ── 2) Asset selection: the most RECENT one is the valid version ──
 const assets = [
   { id: 9, caption: 'Matriz de artigos.xlsx', mime: XLSX_MIME, s3_key: 'u/9', created_at: '2026-09-09T18:30:00Z' },
   { id: 8, caption: 'foto.jpg', mime: 'image/jpeg', s3_key: 'u/8', created_at: '2026-09-09T18:00:00Z' },
@@ -41,7 +41,7 @@ t('lista vazia da erro', !!pickSheetAsset([]).error && !!pickSheetAsset(null).er
 t('detecta planilha por extensao sem mime', isSheetAsset({ caption: 'x.xlsx' }));
 t('nao confunde docx com planilha', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
 
-// ── 3) Nome da versão arquivada ──
+// ── 3) Archived version name ──
 t('versao arquivada usa aaaammddhhmmss',
   versionedCaption('Matriz de artigos.xlsx', '2026-09-09T17:04:05Z') === 'Matriz de artigos_20260909170405.xlsx');
 t('preserva extensao xlsm',
@@ -53,7 +53,7 @@ t('data invalida cai pro id',
 t('nome canonico nunca vira o arquivado',
   versionedCaption('a.xlsx', '2026-01-02T03:04:05Z') !== 'a.xlsx');
 
-// ── 4) Delta e detecção de falha SILENCIOSA (xlsx válido, conteúdo perdido) ──
+// ── 4) Delta and SILENT failure detection (valid xlsx, lost content) ──
 t('delta descreve crescimento', describeDelta({ rows: 62, sheets: 2 }, { rows: 66, sheets: 2 }).includes('62 → 66 (+4)'));
 t('delta sem mudanca de contagem', describeDelta({ rows: 62, sheets: 1 }, { rows: 62, sheets: 1 }).includes('sem mudança'));
 const prob = (b, a, resumo = '', identical = false) =>
@@ -72,7 +72,7 @@ t('declaracao nao aceita marcador de corte',
   !!detectarProblema({ before: { rows: 62 }, after: { rows: 12, text: '…[cortado: 9 chars]…' }, resumo: 'REMOCAO_INTENCIONAL' }));
 t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'string' && prob(62, 21).instrucao.length > 20);
 
-// ── 5) Fila por chave (edições encavaladas não se sobrepõem) ──
+// ── 5) Queue per key (overlapping edits do not overlap) ──
 {
   const ordem = [];
   const dorme = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -82,12 +82,12 @@ t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'stri
   t('segunda edicao espera a primeira TERMINAR',
     ordem.join(',') === 'a-in,a-out,b-in,b-out');
 
-  // Falha na primeira não pode travar a fila pra sempre.
+  // Failure in the first one must not lock the queue forever.
   const p1 = withKeyLock('k2', async () => { throw new Error('boom'); }).catch(() => 'erro');
   const p2 = withKeyLock('k2', async () => 'segunda rodou');
   t('falha na fila nao trava a proxima', (await p1) === 'erro' && (await p2) === 'segunda rodou');
 
-  // Chaves diferentes (usuários diferentes) rodam em paralelo.
+  // Different keys (different users) run in parallel.
   const marcas = [];
   await Promise.all([
     withKeyLock('u1', async () => { marcas.push('u1-in'); await dorme(20); marcas.push('u1-out'); }),
@@ -96,10 +96,10 @@ t('problema traz instrucao de correcao', typeof prob(62, 21).instrucao === 'stri
   t('usuarios diferentes nao se bloqueiam', marcas.indexOf('u2-out') < marcas.indexOf('u1-out'));
 }
 
-// ── Harness de fakes pro orquestrador ──
-// A "planilha" é só um buffer com um JSON dentro: { rows, sheets, cells }. O
-// "sub-agente" muta esse JSON. Isso testa a orquestração (seleção, atomicidade,
-// versionamento, encadeamento) sem xlsx nem sandbox de verdade.
+// ── Fakes harness for the orchestrator ──
+// The "spreadsheet" is just a buffer with a JSON inside: { rows, sheets, cells }. The
+// "sub-agent" mutates this JSON. This tests the orchestration (selection, atomicity,
+// versioning, chaining) without real xlsx or sandbox.
 function mkFake(over = {}) {
   const state = {
     lib: [{ id: 1, caption: 'Matriz.xlsx', mime: XLSX_MIME, s3_key: 'u/1', created_at: '2026-09-09T17:00:00Z' }],
@@ -174,7 +174,7 @@ function mkFake(over = {}) {
   t('resumo do sub-agente volta', r.resumo.includes('4 linhas'));
 }
 
-// ── 7) Atomicidade: falha em qualquer etapa NÃO gera asset e NÃO renomeia ──
+// ── 7) Atomicity: failure at any step does NOT generate an asset and does NOT rename ──
 for (const [nome, over] of [
   ['sub-agente estourou', { runEditor: async () => { throw new Error('openpyxl faltando'); } }],
   ['nao releu do sandbox', { readBytes: async () => ({ ok: false, error: 'arquivo não encontrado' }) }],
@@ -188,7 +188,7 @@ for (const [nome, over] of [
   t(`atomico: ${nome}`, r.ok === false && !!r.error && state.saved.length === 0 && state.renamed.length === 0);
 }
 
-// Arquivo idêntico byte a byte = ninguém mexeu: não cria versão nova.
+// Byte-for-byte identical file = nobody touched it: no new version is created.
 {
   let chamadas = 0;
   const { state, deps } = mkFake({ runEditor: async () => { chamadas++; return 'não achei o que mudar'; } });
@@ -197,9 +197,9 @@ for (const [nome, over] of [
   t('no-op foi tentado de novo antes de desistir', chamadas === 2);
 }
 
-// ── 7b) Falha SILENCIOSA (xlsx válido, conteúdo perdido) é REFEITA a partir dos
-// bytes originais. Não se entrega arquivo ruim nem se manda o usuário caçar
-// "versão anterior": ou a mudança sai certa, ou nada muda.
+// ── 7b) SILENT failure (valid xlsx, lost content) is REDONE from the
+// original bytes. No bad file is delivered, and the user is not sent hunting for a
+// "previous version": either the change comes out right, or nothing changes.
 {
   const { state, deps } = mkFake();
   const base = deps.runEditor;
@@ -225,7 +225,7 @@ for (const [nome, over] of [
   t('aviso conta que precisou refazer', r.avisos.some((a) => a.includes('2 tentativas')));
 }
 
-// Esgotou as tentativas: nada gravado, arquivo do usuário intacto e com o mesmo nome.
+// Ran out of attempts: nothing saved, user's file intact and with the same name.
 {
   const { state, deps } = mkFake();
   let chamadas = 0; const vistos = [];
@@ -248,7 +248,7 @@ for (const [nome, over] of [
     && JSON.parse(state.files['u/1'].toString()).rows === 62);
 }
 
-// Remoção que a instrução PEDIA: o sub-agente declara e passa de primeira.
+// Removal that the instruction ASKED for: the sub-agent declares it and passes on the first try.
 {
   const { state, deps } = mkFake();
   const rem = {
@@ -264,7 +264,7 @@ for (const [nome, over] of [
   t('aviso pede confirmacao ao usuario', r.avisos.some((a) => a.includes('de propósito')));
 }
 
-// Falha ao renomear a versão antiga não invalida a edição (o asset novo já existe).
+// Failure to rename the old version does not invalidate the edit (the new asset already exists).
 {
   const { state, deps } = mkFake({ renameAsset: async () => { throw new Error('db off'); } });
   const r = await editSpreadsheet({ userId: 'user-ren', objetivo: 'muda', deps });
@@ -278,8 +278,8 @@ for (const [nome, over] of [
   t('objetivo vazio rejeitado', r.ok === false);
 }
 
-// ── 9) Edições ENCAVALADAS do mesmo usuário: a segunda parte do resultado da
-// primeira (nada de lost update). É o caso do turno que chega no meio do turno.
+// ── 9) OVERLAPPING edits from the same user: the second one starts from the result of
+// the first (no lost update). This is the case of a turn arriving mid-turn.
 {
   const { state, deps } = mkFake();
   const lento = {
@@ -301,12 +301,12 @@ for (const [nome, over] of [
   t('so UMA linha fica com o nome canonico', canonicos.length === 1 && canonicos[0].id === 3);
 }
 
-// ── 10) Peças internas do arquivo: conteúdo perdido é ERRO, metadado é aviso ──
-// A classificação foi MEDIDA (round-trip do openpyxl em planilha real): salvar
-// pelo openpyxl descarta customXml/, docMetadata/ e sharedStrings.xml sempre —
-// se isso fosse erro, planilha vinda do Excel seria ineditável. Já perder
-// xl/drawings/ ou xl/media/ é gráfico/imagem que desapareceu (acontece de
-// verdade quando falta Pillow) e tem que reprovar.
+// ── 10) Internal file parts: lost content is an ERROR, metadata is a notice ──
+// The classification was MEASURED (openpyxl round-trip on a real spreadsheet): saving
+// via openpyxl always discards customXml/, docMetadata/ and sharedStrings.xml —
+// if that were an error, a spreadsheet coming from Excel would be uneditable. But losing
+// xl/drawings/ or xl/media/ is a chart/image that disappeared (this really
+// happens when Pillow is missing) and must fail the check.
 {
   const before = {
     parts: ['xl/workbook.xml', 'xl/charts/chart1.xml', 'xl/media/image1.png',
@@ -337,7 +337,7 @@ for (const [nome, over] of [
     }) === null);
 }
 
-// ── 10b) data_only=True achatando fórmula em valor ──
+// ── 10b) data_only=True flattening formula into value ──
 {
   const base = { rows: 40, sheets: 2, parts: ['xl/workbook.xml'] };
   const prob = detectarProblema({
@@ -355,7 +355,7 @@ for (const [nome, over] of [
     detectarProblema({ before: { ...base, formulas: 30 }, after: { ...base, formulas: 1 }, resumo: 'apaguei a aba de cálculo. REMOCAO_INTENCIONAL' }) === null);
 }
 
-// ── 11) Canal de clarificação ──
+// ── 11) Clarification channel ──
 {
   t('sentinela detectada', pedeClarificacao('PRECISO_DE_CLARIFICACAO: qual das duas abas de 2026?') === 'qual das duas abas de 2026?');
   t('sentinela sem acento/underscore tambem', !!pedeClarificacao('preciso de clarificação: qual coluna?'));
@@ -363,7 +363,7 @@ for (const [nome, over] of [
   t('pergunta vazia ainda avisa', !!pedeClarificacao('PRECISO_DE_CLARIFICACAO:'));
 }
 
-// ── 12) Evidência de célula: parse e conferência ──
+// ── 12) Cell evidence: parsing and verification ──
 {
   const ev = parseEvidencia([
     'acrescentei 2 linhas na aba Fontes.',
@@ -404,10 +404,10 @@ for (const [nome, over] of [
   t('data vs serial do Excel nao eh erro', data.erros.length === 0 && data.naoVerificaveis.length === 1);
 }
 
-// ── 13) Evidência ponta a ponta: erro de célula refaz; falta de evidência
-// entrega com ressalva (não queimar token do usuário e não entregar nada).
+// ── 13) End-to-end evidence: cell error redoes; lack of evidence
+// delivers with a caveat (not burning the user's tokens and not delivering nothing).
 {
-  // Harness com peças/fórmulas/células: a "planilha" é JSON { rows, sheets, cells }.
+  // Harness with parts/formulas/cells: the "spreadsheet" is JSON { rows, sheets, cells }.
   const mkRico = (over = {}) => {
     const state = {
       lib: [{ id: 1, caption: 'Real.xlsx', mime: XLSX_MIME, s3_key: 'u/1', created_at: '2026-09-09T17:00:00Z' }],
@@ -447,7 +447,7 @@ for (const [nome, over] of [
     return { state, deps };
   };
 
-  // (a) evidência bate: passa numa tentativa e o aviso diz que conferiu.
+  // (a) evidence matches: passes on one attempt and the notice says it verified.
   {
     const { state, deps } = mkRico({
       runEditor: async ({ path }) => {
@@ -463,7 +463,7 @@ for (const [nome, over] of [
     t('gravou um asset', state.saved.length === 1);
   }
 
-  // (b) evidência mentirosa: refaz do original e desiste sem gravar.
+  // (b) lying evidence: redoes from the original and gives up without saving.
   {
     const { state, deps } = mkRico({
       runEditor: async ({ path }) => {
@@ -480,7 +480,7 @@ for (const [nome, over] of [
     t('erro segue proibindo oferecer versao anterior', /não ofereça "versão anterior"/.test(r.error));
   }
 
-  // (c) sem evidência: pede na 2ª tentativa e, se não vier, grava com ressalva.
+  // (c) no evidence: asks on the 2nd attempt and, if it doesn't come, saves with a caveat.
   {
     let vistas = 0;
     const { state, deps } = mkRico({
@@ -499,7 +499,7 @@ for (const [nome, over] of [
     t('gravou mesmo sem prova', state.saved.length === 1 && state.saved[0].caption === 'Real.xlsx');
   }
 
-  // (d) clarificação: não grava, não repete tentativa, devolve a pergunta.
+  // (d) clarification: does not save, does not retry, returns the question.
   {
     let chamadas = 0;
     const { state, deps } = mkRico({

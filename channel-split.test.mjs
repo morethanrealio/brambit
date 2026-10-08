@@ -1,4 +1,4 @@
-// splitMessage: resposta longa vira várias mensagens na ordem, sem perder texto.
+// splitMessage: a long response becomes several messages in order, without losing text.
 // Offline.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +20,7 @@ test('prefere parágrafo, depois linha, depois espaço', () => {
   const linha = 'a'.repeat(60) + '\n' + 'b'.repeat(60);
   assert.deepEqual(splitMessage(linha, 100), ['a'.repeat(60), 'b'.repeat(60)]);
 
-  // parágrafo cedo demais (primeira metade) perde pra linha na segunda metade
+  // paragraph too early (first half) loses to a line in the second half
   const misto = 'a'.repeat(10) + '\n\n' + 'b'.repeat(60) + '\n' + 'c'.repeat(60);
   assert.deepEqual(splitMessage(misto, 100), ['a'.repeat(10) + '\n\n' + 'b'.repeat(60), 'c'.repeat(60)]);
 

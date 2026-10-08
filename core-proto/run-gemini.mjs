@@ -1,7 +1,7 @@
-// ── Demo ao vivo com Gemini real ──
-// Requer: export GEMINI_API_KEY=...   Rode: node run-gemini.mjs
-// Mostra o MESMO loop + as MESMAS tools rodando no Gemini de verdade, com
-// 3.5 Flash como orquestrador e 3.1 Pro como fallback de raciocínio pesado.
+// ── Live demo with real Gemini ──
+// Requires: export GEMINI_API_KEY=...   Run: node run-gemini.mjs
+// Shows the SAME loop + the SAME tools running on real Gemini, with
+// 3.5 Flash as orchestrator and 3.1 Pro as heavy-reasoning fallback.
 
 import { runAgent } from './core.mjs';
 import { buildTools } from './tools.mjs';

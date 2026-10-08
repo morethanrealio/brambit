@@ -1,6 +1,6 @@
-// Rotina com MINUTO (caso de 01/10): pediu "todo dia às 22h30" e só
-// existia hora cheia. Cobre parse/rótulo, o disparo no minuto certo, o cartão
-// em pt/en/es e o cartão velho de criar_rotina sendo substituído pelo novo.
+// Routine with MINUTE (case from 2026-10-01): asked for "todo dia às 22h30" and only
+// whole hours existed. Covers parse/label, firing at the right minute, the card
+// in pt/en/es and the old criar_rotina card being replaced by the new one.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';

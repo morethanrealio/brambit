@@ -1,7 +1,7 @@
-// Trava das tarefas de programação pelo Postgres (o servidor usa esta, não o flock,
-// que só existe no Linux). Garantias: duas execuções da mesma tarefa nunca entram
-// juntas, e a trava se solta sozinha quando a conexão de quem a tinha morre.
-// PostgreSQL local descartável; nenhuma rede.
+// Postgres-based lock for coding tasks (the server uses this one, not flock,
+// which only exists on Linux). Guarantees: two runs of the same task never enter
+// together, and the lock releases on its own when the connection holding it dies.
+// Disposable local PostgreSQL; no network.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
@@ -18,7 +18,7 @@ test('trava pelo Postgres: exclusiva por tarefa e solta quando a conexão morre'
  const first=store.withTask('u:a:t:x',async()=>{entered();await hold;});await inside;
  await assert.rejects(store.withTask('u:a:t:x',async()=>{throw Error('não podia entrar');}),{code:'TASK_LOCK_BUSY'});
  await store.withTask('u:a:t:outra',async()=>{});
- // Servidor que morre com a trava: o Postgres derruba a sessão e a trava some.
+ // Server that dies while holding the lock: Postgres drops the session and the lock goes away.
  const sessions=async()=>(await f.pool.query("SELECT pid FROM pg_locks WHERE locktype='advisory'")).rows.map(r=>r.pid);
  for(const pid of await sessions())await f.pool.query('SELECT pg_terminate_backend($1)',[pid]);
  for(let i=0;i<100&&(await sessions()).length;i++)await new Promise(r=>setTimeout(r,20));

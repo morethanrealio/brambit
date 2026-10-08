@@ -1,5 +1,5 @@
-// Offline: só o gate real e ações sintéticas. A dependência de compras é
-// isolada antes do import para não construir pool de banco nem carregar tokens.
+// Offline: only the real gate and synthetic actions. The purchases dependency is
+// isolated before the import so as not to build a database pool or load tokens.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';

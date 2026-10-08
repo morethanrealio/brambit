@@ -1,6 +1,6 @@
-// Testes do freio de buscas por turno e do push repetido de parada por crédito
-// (caso de 28/09/2026). Puro: sem rede, sem banco.
-// Rodar: node busca-turno.test.mjs
+// Tests for the per-turn search guard and the repeated push about stopping due to credit
+// (2026-09-28 case). Pure: no network, no database.
+// Run: node busca-turno.test.mjs
 import { readFileSync } from 'fs';
 import { searchKey, createSearchBudget, webSearchTool, SEARCH_LIMIT_MSG, MAX_SEARCHES_PER_TURN } from './web/websearch.mjs';
 import { createRepeatPushGuard } from './web/push-repeat-guard.mjs';
@@ -18,7 +18,7 @@ t('filmes diferentes, chaves diferentes', searchKey('Bacurau streaming') !== sea
 t('janela de data entra na chave', searchKey('noticias', '2026-09-01') !== searchKey('noticias'));
 t('teto padrão 50', MAX_SEARCHES_PER_TURN === 50);
 
-// Orçamento: cache + teto
+// Budget: cache + cap
 const b = createSearchBudget({ max: 3 });
 let reais = 0;
 const buscar = (x) => async () => { reais++; return `resultado ${x}`; };
@@ -32,25 +32,25 @@ const r5 = await b.run('k4', buscar('e'));
 t('acima do teto não busca', r5.limited && reais === 3 && r5.text === SEARCH_LIMIT_MSG(3));
 t('repetida ainda funciona depois do teto', (await b.run(searchKey('Bacurau streaming'), buscar('f'))).cached && reais === 3);
 
-// Erro não fica no cache nem trava a próxima tentativa
+// Error doesn't get cached and doesn't block the next attempt
 const b2 = createSearchBudget({ max: 5 });
 await b2.run('x', async () => 'ERRO ao buscar na web: timeout');
 const again = await b2.run('x', async () => 'ok agora');
 t('erro não é cacheado', !again.cached && again.text === 'ok agora');
 
-// Concorrência: mesma chave em paralelo = uma busca só
+// Concurrency: same key in parallel = a single search
 const b3 = createSearchBudget({ max: 5 });
 let n3 = 0;
 const lenta = async () => { n3++; await new Promise((r) => setTimeout(r, 20)); return 'lento'; };
 const [p1, p2] = await Promise.all([b3.run('y', lenta), b3.run('y', lenta)]);
 t('paralelo deduplica', n3 === 1 && p1.text === 'lento' && p2.text === 'lento' && p2.cached);
 
-// Tool com orçamento esgotado não chega na rede
+// A tool with exhausted budget never reaches the network
 const tool = webSearchTool({ budget: createSearchBudget({ max: 0 }) });
 t('tool bloqueada devolve aviso de teto', (await tool.run({ consulta: 'qualquer coisa' })) === SEARCH_LIMIT_MSG(0));
 t('consulta vazia continua erro', (await tool.run({ consulta: ' ' })).startsWith('ERRO'));
 
-// Fiação no servidor: orçamento compartilhado com o sub-agente de pesquisa
+// Server wiring: budget shared with the research sub-agent
 const src = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 t('principal usa o orçamento do turno', src.includes('webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget })'));
 t('sub-agente usa o mesmo orçamento', src.includes('webSearchTool({ onUsage, budget: searchBudget })') && src.includes('language: userLang, searchBudget })'));
@@ -64,12 +64,12 @@ const slsrc = readFileSync(new URL('./web/slack.mjs', import.meta.url), 'utf8');
 t('slack não manda (sem resposta) no suprimido', (slsrc.match(/if \(res\?\.suppressed\) return;/g) || []).length === 2);
 t('push de chat passa pelo freio de crédito', src.includes('creditPushGuard.allow(userId, termination, text)'));
 
-// Canais: resposta suprimida não vira mensagem nem "(sem resposta)"
+// Channels: a suppressed response doesn't become a message nor "(no response)"
 t('suprimido não gera parte', channelReplyParts({ text: '', suppressed: true }, '(sem resposta)').length === 0);
 t('normal continua', channelReplyParts({ text: 'oi' })[0].text === 'oi');
 t('janela da resposta repetida 2 min', CREDIT_REPLY_WINDOW_MS === 120000);
 
-// Push repetido de parada por crédito
+// Repeated push about stopping due to credit
 let agora = 0;
 const g = createRepeatPushGuard({ windowMs: 1000, now: () => agora });
 const saldo = 'A reserva estimada para esta chamada ultrapassa o saldo livre.';

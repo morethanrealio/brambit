@@ -1,4 +1,4 @@
-// Executor real, persistência simulada: nenhum banco, canal ou inicializador.
+// Real executor, simulated persistence: no DB, channel or initializer.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRoutineExecutor, routineExecutionInfo } from './web/routine-execution.mjs';

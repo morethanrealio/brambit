@@ -31,7 +31,7 @@ try {
   eq((await msgs(mode)).map(x=>x.content),mode==='simple'?['request','reply']:['request','extra','reply']);eq(await hist(mode),completion);
  }
  const opening=fn('persistAgentOpening',{getOrCreateThreadByTitle:async()=>({id:'a'}),appendAssistantToThread:append});eq(await opening({agentId:'agent',userId:'owner',title:'fixture',text:'opening'}),'a');eq((await hist('a')).at(-1).content,'opening');eq((await msgs('a')).at(-1).content,'opening');
- // Todo ponto de gravação do turno passa o baseHistory (sem ele o merge não detecta conflito). Não é mais contagem fixa: surgem chamadas novas.
+ // Every turn-saving point passes baseHistory (without it, the merge can't detect conflict). It's no longer a fixed count: new calls show up.
  const saveCalls=[...server.matchAll(/saveThreadTurn\(thread\.id,\s*agent\.id,\s*\{\s*([A-Za-z]+)/g)];ok(saveCalls.length>=8);ok(saveCalls.every(m=>m[1]==='baseHistory'),'toda chamada de saveThreadTurn passa baseHistory');eq((server.match(/saveThreadTurn\(/g)||[]).length,saveCalls.length);ok(server.includes('const baseHistory = structuredClone(thread.history || []);'));
  eq(mergeThreadHistory([{a:1,b:2}],[{b:2,a:1},{role:'assistant',content:'append'}],[{role:'assistant',content:'compact'}]),[{role:'assistant',content:'compact'},{role:'assistant',content:'append'}]);
  assert.throws(()=>mergeThreadHistory([], [{role:'user',content:'other turn'}], []),/CONFLICT/);checks++;

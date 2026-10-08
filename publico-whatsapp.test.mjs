@@ -1,8 +1,8 @@
-// Atendimento ao público no WhatsApp: quem escreve pro número sem conta vai pro
-// assistente público só quando a instalação ligou; o código de conexão do número
-// continua valendo antes disso; o dono vinculado nunca cai no público. Inbox real
-// (PostgreSQL local) e o handler real; o turno público é falso. Mensagens picadas
-// viram um turno só, e saídas ricas do plugin saem como mensagens próprias.
+// Public support on WhatsApp: whoever writes to the number without an account goes to the
+// public assistant only when the installation turned it on; the number's connection code
+// still works before that; the linked owner never falls into public. Real inbox
+// (local PostgreSQL) and the real handler; the public turn is fake. Chopped-up messages
+// become a single turn, and rich plugin outputs go out as their own messages.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {inboxFixture,uuid} from './test-support/wa-inbox-fixture.mjs';

@@ -1,10 +1,10 @@
-// editar_arquivo tem que gravar a troca LITERAL (achado #20).
+// editar_arquivo has to write the LITERAL replacement (finding #20).
 //
-// O bug: `content.replace(busca, troca)` com troca STRING faz o motor de regex
-// interpretar os padrões de substituição ($$, $&, $`, $'), então um trecho de
-// Makefile/shell/PHP com "$$" era gravado como "$" e a tool ainda respondia
-// "Editado". Aqui o transporte é fingido (nenhum SSH/HTTP real): um mini
-// sistema de arquivos em memória devolve o `cat` e captura o que foi gravado.
+// The bug: `content.replace(busca, troca)` with a STRING replacement makes the regex engine
+// interpret the substitution patterns ($$, $&, $`, $'), so a snippet of
+// Makefile/shell/PHP with "$$" was written as "$" and the tool still replied
+// "Editado". Here the transport is faked (no real SSH/HTTP): a mini
+// in-memory file system returns the `cat` and captures what was written.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,10 +16,10 @@ const { codingTools } = await import('./web/coding.mjs');
 
 const fonte = fs.readFileSync(new URL('./web/coding.mjs', import.meta.url), 'utf8');
 
-// ── transporte fingido ──────────────────────────────────────────────────────
-// Entende só os dois comandos que editar_arquivo emite: o `cat` e a gravação
-// por base64. Qualquer outro comando é erro explícito (o teste não pode passar
-// por acidente).
+// ── fake transport ──────────────────────────────────────────────────────
+// Understands only the two commands that editar_arquivo emits: the `cat` and the
+// base64 write. Any other command is an explicit error (the test cannot pass
+// by accident).
 function montarRunner(arquivos) {
   const gravados = {};
   globalThis.fetch = async (_url, opts) => {

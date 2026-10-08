@@ -1,15 +1,15 @@
-// O chat do bot de Telegram só pode ser amarrado por quem tem o código de
-// pareamento (que só aparece na tela de Conexões do dono, em sessão autenticada).
-// Antes, a PRIMEIRA mensagem que chegasse amarrava o bot: quem descobrisse o
-// @username antes do dono virava o dono do chat. Estes testes travam isso.
+// The Telegram bot chat can only be bound by whoever has the pairing
+// code (which only appears on the owner's Connections screen, in an authenticated session).
+// Before, the FIRST message that arrived would bind the bot: whoever discovered the
+// @username before the owner became the owner of the chat. These tests guard against this.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTelegramManager, codeEq } from './web/telegram.mjs';
 
 const CODIGO = 'a1b2c3d4e5f6';
 
-// Ambiente mínimo: um db falso com um bot cadastrado e ainda sem chat amarrado,
-// e um fetch falso no lugar da API do Telegram (nenhuma rede sai daqui).
+// Minimal environment: a fake db with a registered bot and no chat bound yet,
+// and a fake fetch in place of the Telegram API (no network leaves from here).
 function cenario({ chatId = null, pairCode = CODIGO } = {}) {
   const enviadas = [];
   const amarrados = [];

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Trava de crescimento dos dois arquivos gigantes (fase A do plano open source,
-// projetos/arquitetura-open-source-plano.md seção 5 regra 6).
+// Growth guard for the two giant files (phase A of the open source plan,
+// projetos/arquitetura-open-source-plano.md section 5 rule 6).
 //
-// web/server.mjs e web/db.mjs só podem encolher: código novo vai para um módulo
-// próprio e entra nesses dois arquivos no máximo como import/registro, que
-// precisa ser compensado removendo linhas em outro ponto deles.
+// web/server.mjs and web/db.mjs can only shrink: new code goes into its own
+// module and enters these two files at most as an import/registration, which
+// has to be offset by removing lines somewhere else in them.
 //
-// Uso: node test-support/growth-guard.mjs <sha-base>
-// Compara o número de linhas na base com o da árvore de trabalho. Sai 1 se algum
-// dos arquivos cresceu, a menos que GROWTH_GUARD_ALLOW=1 (o CI liga isso quando o
-// PR tem o rótulo `crescimento-autorizado`).
+// Usage: node test-support/growth-guard.mjs <sha-base>
+// Compares the line count at the base against the working tree's. Exits 1 if either
+// of the files grew, unless GROWTH_GUARD_ALLOW=1 (CI turns this on when the
+// PR has the `crescimento-autorizado` label).
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,7 @@ export const GUARDED = ['web/server.mjs', 'web/db.mjs'];
 
 export const countLines = (text) => (text.match(/\n/g) || []).length + (text && !text.endsWith('\n') ? 1 : 0);
 
-// base/head: { [arquivo]: linhas | null } (null = arquivo não existe naquele lado).
+// base/head: { [file]: lines | null } (null = file doesn't exist on that side).
 export function compareGrowth(base, head, files = GUARDED) {
   return files.map((file) => {
     const before = base[file] ?? null, after = head[file] ?? null;

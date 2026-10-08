@@ -1,4 +1,4 @@
-// Persistência/idempotência da fila de execução extra. PostgreSQL local em memória.
+// Persistence/idempotency of the extra execution queue. Local in-memory PostgreSQL.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';

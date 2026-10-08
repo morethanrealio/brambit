@@ -1,4 +1,4 @@
-// Apenas dados sintéticos e núcleo puro; nenhuma rotina/conta/entrega real.
+// Only synthetic data and pure core; no real routine/account/delivery.
 import assert from 'node:assert/strict';
 import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 const denied=()=>{throw Error('REAL I/O FORBIDDEN');};net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;

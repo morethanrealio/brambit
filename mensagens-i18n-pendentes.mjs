@@ -1,16 +1,16 @@
-// Lista o que o servidor responde e o catálogo ainda não traduz.
+// Lists what the server responds and the catalog still doesn't translate.
 //
-// Existe pelo mesmo motivo do site-i18n-pendentes: o mecanismo é silencioso de
-// propósito. Mensagem sem tradução continua em português e nada reclama, que é
-// o certo pra quem está usando e péssimo pra quem mantém, porque escrever um
-// `fail()` novo acrescenta texto sem aviso nenhum. Este script é o aviso.
+// It exists for the same reason as site-i18n-pendentes: the mechanism is deliberately
+// silent. A message without translation stays in Portuguese and nothing complains, which is
+// right for whoever is using it and terrible for whoever maintains it, because writing a
+// new `fail()` adds text with no warning at all. This script is the warning.
 //
-// A segunda lista é a que não tem conserto pelo catálogo: mensagem montada com
-// template (`${}`) só existe em tempo de execução, então não há chave estável
-// pra guardar. Elas ficam em português mesmo, e estão aqui pra ninguém procurar
-// no catálogo uma entrada que não pode existir.
+// The second list is the one that has no fix via the catalog: a message assembled with a
+// template (`${}`) only exists at runtime, so there's no stable key
+// to store. They stay in Portuguese, and they're here so no one looks
+// in the catalog for an entry that cannot exist.
 //
-// rodar: node mensagens-i18n-pendentes.mjs [en|es]
+// run: node mensagens-i18n-pendentes.mjs [en|es]
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,7 +21,7 @@ import { carregarPlugins, textosDoServidor } from './web/plugins.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(__dirname, 'web');
-// Núcleo e plugins desta instalação: cada plugin traz os módulos e o catálogo dele.
+// Core and plugins of this installation: each plugin brings its own modules and catalog.
 const plugins = await carregarPlugins();
 const arquivos = [...FONTES_MENSAGENS.map((f) => path.join(WEB, f)), ...plugins.flatMap((p) => p.fontesMensagens || [])];
 const fontes = arquivos.map((a) => ({ nome: path.relative(WEB, a), js: fs.readFileSync(a, 'utf8') }));
@@ -37,7 +37,7 @@ for (const idioma of idiomas) {
   for (const m of faltam) console.log(`  ${JSON.stringify(m.slice(0, 110))}`);
 }
 
-// Mesmos pontos de emissão da extração, só que caçando crase em vez de aspa.
+// Same emission points as the extraction, just hunting for a backtick instead of a quote.
 const EMISSORES = [
   /\bfail\s*\(\s*res\s*,\s*\d+\s*,\s*$/,
   /\bsend\s*\(\s*res\s*,\s*\d+\s*,\s*\{\s*error\s*:\s*$/,

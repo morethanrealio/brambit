@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateDocument } from './web/docgen.mjs';
 
-// O gerador de xlsx tem três tetos (abas, linhas por aba, colunas). Até
-// 18/09/2026 os três cortavam em SILÊNCIO: o arquivo chegava ao usuário
-// parecendo completo e o assistente anunciava "planilha pronta". Estes testes
-// travam a regra "quem corta, avisa" na única saída que o modelo enxerga.
+// The xlsx generator has three caps (sheets, rows per sheet, columns). Until
+// 2026-09-18 all three cut SILENTLY: the file arrived to the user
+// looking complete and the assistant announced "planilha pronta". These tests
+// lock down the "whoever cuts, warns" rule in the one output the model sees.
 
 const planilha = (conteudo) => generateDocument({ format: 'xlsx', content: conteudo, title: 'Teste' });
 
@@ -33,7 +33,7 @@ test('colunas acima do teto são contadas no aviso', async () => {
 test('linhas acima do teto são contadas no aviso', async () => {
   const linhas = Array.from({ length: 20003 }, (_, i) => `| ${i} |`).join('\n');
   const { aviso } = await planilha(`| n |\n|---|\n${linhas}`);
-  // 20003 linhas de corpo + 1 de cabeçalho = 20004 contra o teto de 20000
+  // 20003 body rows + 1 header row = 20004 against the cap of 20000
   assert.match(aviso, /4 linha\(s\)/);
 });
 

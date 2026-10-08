@@ -1,10 +1,10 @@
-// ── Tools de exemplo (use case: personal shopper) ──
-// Shape das defs = JSON Schema, igual ao que MCP espera. Trocar por tools de
-// um MCP server real depois é só mapear.
+// ── Example tools (use case: personal shopper) ──
+// Shape of the defs = JSON Schema, same as what MCP expects. Swapping in tools from
+// a real MCP server later is just a matter of mapping.
 
 import { ToolRegistry } from './core.mjs';
 
-// Catálogo fake só pra demo (no produto seria busca real na web / parceiros).
+// Fake catalog just for the demo (in the product it would be a real search on the web / partners).
 const CATALOGO = [
   { nome: 'Tênis de corrida AeroRun', categoria: 'corrida', preco: 459, nota: 4.6 },
   { nome: 'Tênis de corrida SpeedX Pro', categoria: 'corrida', preco: 899, nota: 4.8 },

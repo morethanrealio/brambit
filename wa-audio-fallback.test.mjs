@@ -1,8 +1,8 @@
-// Áudio que o WhatsApp recusa não pode sumir: a resposta de texto ("mandei em
-// voz") sai antes do anexo, então se o upload falhar a pessoa precisa receber a
-// fala em texto. Caso real 02/10/2026: prod sem ffmpeg gerava WAV, a Meta
-// recusava e só chegava a confirmação.
-// Stub do fetch: nada sai pra rede, nada toca o banco. Roda com: node wa-audio-fallback.test.mjs
+// Audio that WhatsApp refuses must not disappear: the text reply ("mandei em
+// voz") goes out before the attachment, so if the upload fails the person needs to receive the
+// speech as text. Real case 2026-10-02: prod without ffmpeg generated WAV, Meta
+// refused it and only the confirmation arrived.
+// Fetch stub: nothing goes out to the network, nothing touches the DB. Run with: node wa-audio-fallback.test.mjs
 process.env.WA_TOKEN = 'x';
 process.env.WA_PHONE_NUMBER_ID = '1';
 process.env.WA_VERIFY_TOKEN = 'v';
@@ -13,7 +13,7 @@ const enviadas = [];
 let seq = 0;
 globalThis.fetch = async (_url, opts) => {
   if (opts?.body instanceof FormData) {
-    // Igual à Meta: WAV não é tipo de áudio aceito.
+    // Same as Meta: WAV is not an accepted audio type.
     if (opts.body.get('type') === 'audio/wav') return { ok: false, status: 400, json: async () => ({ error: { message: 'Param file must be a file with one of the following types: audio/ogg' } }) };
     return { ok: true, json: async () => ({ id: 'media1' }) };
   }
@@ -50,7 +50,7 @@ const fala = 'Hi João, today we practice the past tense.';
 const textos = () => enviadas.filter((b) => b.type === 'text').map((b) => b.text.body);
 const cobrado = () => cobrancas.reduce((s, c) => s + (c.messages || 0), 0);
 
-// 1) Áudio recusado (WAV): a fala chega em texto e a mensagem extra é cobrada.
+// 1) Refused audio (WAV): the speech arrives as text and the extra message is billed.
 resposta = { text: 'Mandado em voz ✅', attachments: [{ type: 'audio', url: '/api/img?k=a', mime: 'audio/wav', key: 'a', fala }] };
 midia = { buffer: Buffer.from('RIFF'), contentType: 'audio/wav' };
 await turno();
@@ -59,7 +59,7 @@ t('fala chega em texto quando o audio e recusado', textos().some((s) => s.includ
 t('nenhum audio enviado', !enviadas.some((b) => b.type === 'audio'));
 t('cobra confirmacao + texto da fala', cobrado() === 2);
 
-// 2) Áudio aceito (OGG): vai como áudio, sem texto duplicado.
+// 2) Accepted audio (OGG): goes as audio, no duplicated text.
 midia = { buffer: Buffer.from('OggS'), contentType: 'audio/ogg' };
 resposta = { ...resposta, attachments: [{ ...resposta.attachments[0], mime: 'audio/ogg' }] };
 await turno();

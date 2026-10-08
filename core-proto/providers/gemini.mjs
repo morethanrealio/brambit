@@ -1,9 +1,9 @@
 import {wrapProvider} from '../provider-attempt.mjs';
 import {providerAttempt,hasProviderAttempts,throwIfAttemptControl} from '../provider-attempt.mjs';
-// ── Adapter real: Google Gemini (generateContent) ──
-// Mesmo contrato dos outros providers. A chave vem de process.env.GEMINI_API_KEY
-// (NUNCA hardcode no repo). Recomendado: 3.5 Flash como orquestrador padrão e
-// 3.1 Pro Preview como fallback de raciocínio pesado.
+// ── Real adapter: Google Gemini (generateContent) ──
+// Same contract as the other providers. The key comes from process.env.GEMINI_API_KEY
+// (NEVER hardcode in the repo). Recommended: 3.5 Flash as the default orchestrator and
+// 3.1 Pro Preview as the heavy-reasoning fallback.
 
 import { selectedDeepSeek, isDeepSeekTurn } from '../deepseek/scope.mjs';
 import { STOP } from '../provider.mjs';
@@ -24,8 +24,8 @@ const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const RETRY_DELAYS = [600, 1800]; // ms; jitter somado na hora
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// fetch + retry. Devolve a resposta final (ok ou não); quem chama segue tratando
-// !res.ok como antes, então a falha persistente continua escalando pro fallback.
+// fetch + retry. Returns the final response (ok or not); the caller keeps treating
+// !res.ok as before, so a persistent failure keeps escalating to the fallback.
 async function fetchRetry(url, init, tag = 'gemini', spec = null) {
   for (let i = 0; ; i++) {
     let res;
@@ -43,7 +43,7 @@ async function fetchRetry(url, init, tag = 'gemini', spec = null) {
     } catch (e) {
       throwIfAttemptControl(e);
       if(e.httpStatus&&!RETRY_STATUS.has(e.httpStatus))throw e;
-      // Falha de rede (socket/DNS/timeout): mesma política de retry.
+      // Network failure (socket/DNS/timeout): same retry policy.
       if (i >= RETRY_DELAYS.length) throw e;
       console.warn(`[${tag}] falha de rede (${e?.message ?? e}), tentativa ${i + 1}/${RETRY_DELAYS.length}`);
     }
@@ -51,15 +51,15 @@ async function fetchRetry(url, init, tag = 'gemini', spec = null) {
   }
 }
 
-// ── Saneamento de schema de tool p/ o subset OpenAPI do Gemini ──
-// Os schemas das nossas tools são JSON Schema padrão (aceitos por GLM/OpenAI), mas
-// o Gemini só aceita um SUBSET do OpenAPI: campos como `additionalProperties`,
-// `$schema`, `$defs`, `patternProperties` etc. derrubam a chamada com 400
-// ("Unknown name ... Cannot find field"). Isso só aparecia agora porque o Gemini
-// era chamado só em caminhos que passavam poucas/nenhuma tool (visão/busca);
-// roteando TEXTO por ele, a suíte inteira de tools vai junto e uma delas tem
-// additionalProperties. Removemos recursivamente as chaves incompatíveis, sem
-// mexer no conteúdo válido (type/description/properties/items/required/enum...).
+// ── Tool schema sanitization for Gemini's OpenAPI subset ──
+// Our tools' schemas are standard JSON Schema (accepted by GLM/OpenAI), but
+// Gemini only accepts a SUBSET of OpenAPI: fields like `additionalProperties`,
+// `$schema`, `$defs`, `patternProperties` etc. break the call with a 400
+// ("Unknown name ... Cannot find field"). This only showed up now because Gemini
+// was only called on paths that passed few/no tools (vision/search);
+// routing TEXT through it brings the whole tool suite along, and one of them has
+// additionalProperties. We recursively remove the incompatible keys, without
+// touching the valid content (type/description/properties/items/required/enum...).
 const GEMINI_SCHEMA_DROP = new Set([
   'additionalProperties', '$schema', '$id', '$ref', '$defs', 'definitions',
   'patternProperties', 'propertyNames', 'unevaluatedProperties', 'dependencies',
@@ -76,51 +76,51 @@ function sanitizeGeminiSchema(node) {
   return out;
 }
 
-// ── Cache explícito (CachedContent) ──
-// O tool-loop chama complete() N vezes no MESMO turno com o MESMO system + tools
-// (só `contents` cresce a cada passo). Esse prefixo estável é grande (prompt do
-// agente + memória + dezenas de tools) e era reenviado inteiro a cada passo — o
-// que fazia um turno de 13 passos custar ~230 créditos. Aqui guardamos esse
-// prefixo num CachedContent e referenciamos por `cachedContent`: o input repetido
-// cai ~90% (cachedContentTokenCount). Desde o Fix#3 o datetime e os blocos voláteis
-// saíram do system (vão no fim da mensagem do usuário), então o prefixo é
-// byte-idêntico TAMBÉM entre turnos — o cache serve o turno inteiro E os turnos
-// seguintes de uma conversa ativa, enquanto for renovado (ver TTL deslizante).
+// ── Explicit cache (CachedContent) ──
+// The tool-loop calls complete() N times in the SAME turn with the SAME system + tools
+// (only `contents` grows at each step). This stable prefix is large (agent prompt
+// + memory + dozens of tools) and was resent in full at every step — which
+// made a 13-step turn cost ~230 credits. Here we store this
+// prefix in a CachedContent and reference it via `cachedContent`: the repeated input
+// drops ~90% (cachedContentTokenCount). Since Fix#3 the datetime and the volatile blocks
+// moved out of the system (they go at the end of the user message), so the prefix is
+// ALSO byte-identical between turns — the cache serves the whole turn AND the
+// following turns of an active conversation, as long as it keeps getting renewed (see sliding TTL).
 //
-// HISTÓRICO NO CACHE: além de system+tools, cacheamos um PREFIXO do histórico
-// da conversa (`contents`), que numa sessão longa de código passa de 100k tokens
-// e era reenviado a preço cheio a cada passo (por isso a fatia cacheada travava
-// em ~44% enquanto o gpt-5.4-mini fazia 73% com cache implícito). Regras:
-// - Só cacheia até `len - HIST_TAIL_KEEP`: as últimas mensagens ainda podem ser
-//   mutadas pelo core (pruneTurnBlobs recolhe blobs quando saem da janela
-//   recente de TURN_KEEP_RECENT=4); fora dessa cauda o histórico é imutável
-//   DENTRO do processo. Entre turnos há duas exceções (compactação de histórico
-//   e remoção de imagens no persist) — por isso o prefixo cacheado é validado
-//   por HASH a cada uso e recriado quando diverge.
-// - O sufixo enviado no request começa sempre numa mensagem de role 'user'
-//   (exigência de ordenação da API; preserva pareamento functionCall/Response).
-// - Recriar cobra o prefixo UMA vez a preço de input normal; depois cada passo
-//   paga 10% sobre ele. Compensa a partir de ~1,1 usos — recriamos quando o
-//   sufixo não-cacheado acumula HIST_REFRESH_TOKENS estimados.
-const TTL_SEC = 300; // TTL curto evita pagar storage à toa em conversa que acabou
-// TTL DESLIZANTE: quando um hit encontra o cache com menos da metade da vida,
-// renovamos o TTL via PATCH (barato) — conversa ativa nunca deixa o cache morrer;
-// conversa parada expira em ≤5 min e para de pagar storage.
+// HISTORY IN THE CACHE: besides system+tools, we cache a PREFIX of the
+// conversation history (`contents`), which in a long coding session goes past 100k tokens
+// and was resent at full price at every step (which is why the cached slice got stuck
+// at ~44% while gpt-5.4-mini got 73% with implicit cache). Rules:
+// - Only caches up to `len - HIST_TAIL_KEEP`: the last messages can still be
+//   mutated by the core (pruneTurnBlobs collects blobs when they leave the
+//   recent window of TURN_KEEP_RECENT=4); outside that tail the history is immutable
+//   WITHIN the process. Between turns there are two exceptions (history compaction
+//   and image removal on persist) — that's why the cached prefix is validated
+//   by HASH on every use and recreated when it diverges.
+// - The suffix sent in the request always starts on a message with role 'user'
+//   (API ordering requirement; preserves functionCall/Response pairing).
+// - Recreating charges the prefix ONCE at normal input price; after that each step
+//   pays 10% of it. It pays off from ~1.1 uses onward — we recreate when the
+//   non-cached suffix accumulates estimated HIST_REFRESH_TOKENS.
+const TTL_SEC = 300; // Short TTL avoids paying for storage needlessly in a conversation that's over
+// SLIDING TTL: when a hit finds the cache with less than half its lifetime left,
+// we renew the TTL via PATCH (cheap) — an active conversation never lets the cache die;
+// a stalled conversation expires in ≤5 min and stops paying for storage.
 const REFRESH_BELOW_MS = (TTL_SEC * 1000) / 2;
-// Mínimo de tokens p/ criar cache no 3.5 Flash = 4096. Estimamos por chars/4
-// (que superestima ~15%), então só tentamos acima de 5000 est. p/ não bater
-// abaixo do mínimo real e levar 400. Blocos menores não compensam mesmo.
+// Minimum tokens to create a cache on 3.5 Flash = 4096. We estimate via chars/4
+// (which overestimates ~15%), so we only try above 5000 est. to avoid landing
+// below the real minimum and getting a 400. Smaller blocks don't pay off anyway.
 const MIN_EST_TOKENS = 5000;
-// Histórico no cache: nunca cacheia as últimas N mensagens (o core ainda pode
-// mutá-las — TURN_KEEP_RECENT=4 + margem de segurança).
+// History in the cache: never caches the last N messages (the core can still
+// mutate them — TURN_KEEP_RECENT=4 + safety margin).
 const HIST_TAIL_KEEP = 6;
-// Recria o cache (empurrando o corte pra frente) quando o sufixo não-cacheado
-// acumula isso de tokens estimados (chars/4). Abaixo disso, reusar o cache
-// existente e pagar o sufixo inteiro sai mais barato que recriar.
+// Recreates the cache (pushing the cutoff forward) when the non-cached suffix
+// accumulates this many estimated tokens (chars/4). Below that, reusing the existing
+// cache and paying for the whole suffix is cheaper than recreating.
 const HIST_REFRESH_TOKENS = 5000;
-// Hash-miss consecutivos no prefixo (ex.: duas conversas intercalando com o
-// MESMO system) -> desiste do histórico por um tempo e cacheia só system+tools,
-// senão cada passo recriaria o cache pagando o prefixo a preço cheio.
+// Consecutive hash-misses on the prefix (e.g.: two conversations interleaving with the
+// SAME system) -> gives up on the history for a while and caches only system+tools,
+// otherwise every step would recreate the cache paying the prefix at full price.
 const HIST_MISS_LIMIT = 3;
 const HIST_SKIP_MS = 10 * 60 * 1000;
 const caches = new Map(); // hash(model+system+tools) -> {name,expireAt,prefixLen,prefixHash,...} | {skipUntil}
@@ -131,40 +131,40 @@ function cacheKey(model, system, toolBlocks) {
     .update(JSON.stringify(toolBlocks)).digest('hex');
 }
 
-// Hash do prefixo do histórico que foi pro cache: valida a cada uso que os
-// `contents` do request ainda COMEÇAM byte-idêntico ao que está cacheado
-// (senão o Gemini responderia com contexto duplicado/errado).
+// Hash of the history prefix that went into the cache: validates on every use that the
+// request's `contents` still START byte-identical to what is cached
+// (otherwise Gemini would respond with duplicated/wrong context).
 function hashPrefix(contents, len) {
   return createHash('sha256').update(JSON.stringify(contents.slice(0, len))).digest('hex');
 }
 
-// Garante um CachedContent vivo p/ o prefixo (model+system+tools+prefixo do
-// histórico). Devolve { name, prefixLen } — prefixLen é quantas mensagens do
-// início de `contents` estão DENTRO do cache (o caller envia só o sufixo) —
-// ou undefined se não deu (cai p/ envio inline).
-// As chamadas do tool-loop são sequenciais (await), então não há corrida dentro
-// de um turno; entre turnos/usuários a chave difere (system carrega memória/dono).
+// Ensures a live CachedContent for the prefix (model+system+tools+history
+// prefix). Returns { name, prefixLen } — prefixLen is how many messages from the
+// start of `contents` are INSIDE the cache (the caller sends only the suffix) —
+// or undefined if it didn't work out (falls back to inline sending).
+// The tool-loop calls are sequential (await), so there's no race within
+// a turn; between turns/users the key differs (system carries memory/owner).
 async function ensureCache({ key, model, system, toolBlocks, search, hasTools, contents }) {
   const ck = cacheKey(model, system, toolBlocks);
   const now = Date.now();
   if (caches.size > 200) for (const [k, v] of caches) if ((v.expireAt || v.skipUntil || 0) < now) caches.delete(k);
   const hit = caches.get(ck);
 
-  // Quanto do histórico dá pra cachear agora: tudo menos a cauda recente, e o
-  // sufixo que sobra pro request tem que começar em role 'user'.
+  // How much of the history can be cached now: everything except the recent tail, and the
+  // suffix left for the request has to start at role 'user'.
   let cutoff = (hit?.histSkipUntil && hit.histSkipUntil > now)
     ? 0
     : Math.max(0, contents.length - HIST_TAIL_KEEP);
   while (cutoff > 0 && contents[cutoff].role !== 'user') cutoff--;
 
-  let validOld; // cache vivo e íntegro; fallback se a recriação (crescimento) falhar
+  let validOld; // cache alive and intact; fallback if recreation (growth) fails
   if (hit?.name && hit.expireAt > now + 5000) {
     const pl = hit.prefixLen || 0;
     const valid = pl === 0 || (pl < contents.length && hit.prefixHash === hashPrefix(contents, pl));
     if (valid) {
       hit.missCount = 0;
-      // TTL deslizante: renova quando passou da metade da vida. Falha de PATCH não
-      // derruba nada — o cache segue válido até o expireAt que já tínhamos.
+      // Sliding TTL: renews when past half its lifetime. A PATCH failure doesn't
+      // bring anything down — the cache stays valid until the expireAt we already had.
       if (hit.expireAt - now < REFRESH_BELOW_MS && !hit.refreshing) {
         hit.refreshing = true;
         try {
@@ -179,18 +179,18 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
         }
         hit.refreshing = false;
       }
-      // O sufixo não-cacheado engordou? Recria o cache com o corte mais pra
-      // frente (paga o prefixo 1x, economiza 90% dele nos passos seguintes).
+      // Did the non-cached suffix grow? Recreate the cache with the cutoff moved
+      // further forward (pays the prefix once, saves 90% of it on the following steps).
       const sufEst = Math.ceil(JSON.stringify(contents.slice(pl)).length / 4);
       const grow = cutoff >= pl + 2 && sufEst >= HIST_REFRESH_TOKENS
         && !(hit.growSkipUntil && hit.growSkipUntil > now);
       if (!grow) return { name: hit.name, prefixLen: pl };
       validOld = { name: hit.name, prefixLen: pl };
     } else {
-      // O início dos contents divergiu do prefixo cacheado (compactação de
-      // histórico, imagens removidas no persist, ou outra conversa com o MESMO
-      // system intercalando). Recria; com misses demais, desiste do histórico
-      // por um tempo (senão viraria recriação a cada passo, preço cheio).
+      // The start of contents diverged from the cached prefix (history
+      // compaction, images removed on persist, or another conversation with the SAME
+      // system interleaving). Recreates; with too many misses, gives up on the history
+      // for a while (otherwise it would become a recreation on every step, at full price).
       hit.missCount = (hit.missCount || 0) + 1;
       console.log(`[gemini cache] prefixo divergiu (len=${pl}, misses=${hit.missCount}) — recriando`);
       if (hit.missCount >= HIST_MISS_LIMIT) {
@@ -199,7 +199,7 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
       }
     }
   } else if (hit?.skipUntil && hit.skipUntil > now) {
-    return undefined; // cooldown após falha
+    return undefined; // cooldown after failure
   }
 
   const create = async (cut) => {
@@ -222,9 +222,9 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
     let cut = cutoff;
     let data = await create(cut);
     if (!data && cut > 0) {
-      // Falhou COM histórico (ex.: conteúdo que o cache não aceita): tenta o
-      // piso (só system+tools, comportamento antigo) e desiste do histórico
-      // por um tempo pra não repetir a falha a cada passo.
+      // Failed WITH history (e.g.: content the cache doesn't accept): tries the
+      // floor (only system+tools, old behavior) and gives up on the history
+      // for a while so as not to repeat the failure on every step.
       if (hit) hit.histSkipUntil = now + HIST_SKIP_MS;
       cut = 0;
       data = await create(0);
@@ -234,16 +234,16 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
       caches.set(ck, { skipUntil: now + 60000, histSkipUntil: hit?.histSkipUntil });
       return undefined;
     }
-    // Apaga o cache substituído (melhor esforço; expiraria sozinho em ≤5 min).
+    // Deletes the replaced cache (best effort; it would expire on its own in ≤5 min).
     if (hit?.name && hit.name !== data.name) {
       fetch(`${BASE}/${hit.name}?key=${key}`, { method: 'DELETE' }).catch(() => {});
     }
     caches.set(ck, {
       name: data.name, expireAt: now + TTL_SEC * 1000,
       prefixLen: cut, prefixHash: cut > 0 ? hashPrefix(contents, cut) : undefined,
-      // missCount NÃO zera aqui: só um hit VÁLIDO zera (lá em cima). Senão o
-      // ciclo miss->recria->miss (duas conversas intercalando) nunca acumularia
-      // até o limite e recriaria o cache a preço cheio pra sempre.
+      // missCount does NOT reset here: only a VALID hit resets it (up above). Otherwise the
+      // miss->recreate->miss cycle (two conversations interleaving) would never accumulate
+      // up to the limit and would recreate the cache at full price forever.
       histSkipUntil: hit?.histSkipUntil, missCount: hit?.missCount || 0,
     });
     console.log(`[gemini cache] criado ${data.name} (~${data.usageMetadata?.totalTokenCount ?? '?'} tok, hist=${cut} msgs)`);
@@ -256,18 +256,18 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
   }
 }
 
-// `search: true` liga o Google Search grounding nativo do Gemini — o modelo
-// busca na web de verdade e responde com citações/links das fontes.
-// `thinkingBudget`: limita (ou zera, com 0) os tokens de "pensamento" do modelo.
-// Pensamento é cobrado como saída e domina o custo de turnos simples. Deixe
-// undefined pra manter o padrão dinâmico do modelo (recomendado pro raciocínio
-// pesado no Pro); use 0 em tarefas de housekeeping e um teto baixo no chat.
-// `maxOutputTokens`: TETO RÍGIDO de saída por chamada. Sem isso, um loop de
-// repetição do modelo corre até o máximo físico (64k tokens) e custa ~200
-// créditos numa única resposta — foi o que torrou o crédito de um usuário em
-// 30/06. 8192 (~6 mil palavras) é folgado pra qualquer resposta legítima e
-// limita o estrago de uma geração degenerada a ~25 créditos.
-// `apiKey`: chave vinda do modelos.yaml; sem ela, GEMINI_API_KEY de sempre.
+// `search: true` turns on Gemini's native Google Search grounding — the model
+// actually searches the web and responds with citations/links to the sources.
+// `thinkingBudget`: limits (or zeroes, with 0) the model's "thinking" tokens.
+// Thinking is charged as output and dominates the cost of simple turns. Leave it
+// undefined to keep the model's dynamic default (recommended for heavy
+// reasoning on Pro); use 0 for housekeeping tasks and a low ceiling in chat.
+// `maxOutputTokens`: HARD output ceiling per call. Without this, a model
+// repetition loop runs up to the physical max (64k tokens) and costs ~200
+// credits in a single response — that's what burned through a user's credit on
+// 2026-06-30. 8192 (~6 thousand words) is generous for any legitimate response and
+// limits the damage of a degenerate generation to ~25 credits.
+// `apiKey`: key coming from modelos.yaml; without it, the usual GEMINI_API_KEY.
 export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkingBudget, maxOutputTokens = 8192, apiKey } = {}) {
   const key = apiKey ?? process.env.GEMINI_API_KEY;
   return wrapProvider({
@@ -282,10 +282,10 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
         if (m.role === 'tool') {
           contents.push({ role: 'user', parts: [{ functionResponse: { name: m.name, response: { result: m.content } } }] });
         } else if (m.role === 'assistant' && m.toolCalls?.length) {
-          // Gemini 3 exige devolver o thoughtSignature que veio junto da turn.
-          // Vem em UMA parte só (texto-pensamento ou a 1ª functionCall); as
-          // demais não têm. Reemitimos exatamente como veio, na MESMA ordem e
-          // no MESMO bloco de content (por isso o core agrupa a turn inteira).
+          // Gemini 3 requires returning the thoughtSignature that came along with the turn.
+          // It comes in only ONE part (thinking-text or the 1st functionCall); the
+          // rest don't have it. We re-emit it exactly as it came, in the SAME order and
+          // in the SAME content block (that's why the core groups the whole turn).
           const parts = [];
           if (m.content) parts.push({ text: m.content });
           for (const c of m.toolCalls) {
@@ -295,8 +295,8 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
           }
           contents.push({ role: 'model', parts });
         } else {
-          // Mensagem normal de texto. Se a mensagem do usuário trouxer imagens
-          // (visão), anexa cada uma como inlineData no MESMO content, depois do texto.
+          // Normal text message. If the user's message brings images
+          // (vision), attach each one as inlineData in the SAME content, after the text.
           const role = m.role === 'assistant' ? 'model' : 'user';
           const parts = [];
           if (m.content) parts.push({ text: m.content });
@@ -312,19 +312,19 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
       if (tools.length) toolBlocks.push({ functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: sanitizeGeminiSchema(t.parameters) })) });
       if (search) toolBlocks.push({ google_search: {} });
 
-      // Cache explícito: se o bloco estável (system+tools) é grande o bastante,
-      // garantimos um CachedContent (que pode incluir um prefixo do histórico)
-      // e referenciamos por `cachedContent` — aí o body NÃO repete system/tools/
-      // toolConfig (vêm do cache) e envia só o SUFIXO dos `contents` que ficou
-      // fora do prefixo cacheado (a API concatena cache + request).
+      // Explicit cache: if the stable block (system+tools) is large enough,
+      // we ensure a CachedContent (which may include a history prefix)
+      // and reference it via `cachedContent` — then the body does NOT repeat system/tools/
+      // toolConfig (they come from the cache) and sends only the SUFFIX of `contents` that was
+      // left out of the cached prefix (the API concatenates cache + request).
       const estTokens = Math.ceil(((system?.length || 0) + JSON.stringify(toolBlocks).length) / 4);
       let cache;
       if (key && estTokens >= MIN_EST_TOKENS) {
         cache = await ensureCache({ key, model, system, toolBlocks, search, hasTools: tools.length > 0, contents });
       }
 
-      // Teto de saída SEMPRE presente (trava anti-loop). thinkingConfig entra
-      // só quando há budget definido.
+      // Output ceiling ALWAYS present (anti-loop guard). thinkingConfig only comes
+      // in when a budget is defined.
       const generationConfig = { maxOutputTokens };
       if (thinkingBudget !== undefined) generationConfig.thinkingConfig = { thinkingBudget };
       const body = cache
@@ -333,8 +333,8 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
             systemInstruction: system ? { parts: [{ text: system }] } : undefined,
             contents,
             tools: toolBlocks.length ? toolBlocks : undefined,
-            // Quando misturamos built-in (google_search) com functionDeclarations,
-            // o Gemini exige essa flag pra permitir invocar a tool server-side.
+            // When we mix a built-in (google_search) with functionDeclarations,
+            // Gemini requires this flag to allow invoking the tool server-side.
             toolConfig: (search && tools.length)
               ? { includeServerSideToolInvocations: true }
               : undefined,
@@ -362,9 +362,9 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
       if (!res.ok) throw new Error(`gemini ${res.status}: ${await res.text()}`);
       const data = await res.json();
 
-      // ── Instrumentação de custo/cache ──
-      // O Gemini devolve usageMetadata em toda resposta. Logamos pra enxergar
-      // quanto cada turno gasta e quanto veio do cache implícito (90% off).
+      // ── Cost/cache instrumentation ──
+      // Gemini returns usageMetadata on every response. We log it to see
+      // how much each turn spends and how much came from the implicit cache (90% off).
       const u = data.usageMetadata ?? {};
       const inTok = u.promptTokenCount ?? 0;
       const cached = u.cachedContentTokenCount ?? 0;
@@ -372,18 +372,18 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
       const think = u.thoughtsTokenCount ?? 0;
       const hit = inTok ? Math.round((cached / inTok) * 100) : 0;
       console.log(`[gemini cost] model=${model} in=${inTok} cache=${cached}(${hit}%) out=${outTok} think=${think} total=${u.totalTokenCount ?? 0}`);
-      // usage: o caller persiste com as dimensões (usuário/conversa/tipo).
+      // usage: the caller persists it with the dimensions (user/conversation/type).
       const usage = { model, in: inTok, cached, out: outTok, think, total: u.totalTokenCount ?? 0 };
 
       const parts = data.candidates?.[0]?.content?.parts ?? [];
-      // finishReason=MAX_TOKENS: a geração bateu no teto de saída e foi CORTADA.
-      // Se o corte pegou o modelo no meio do "pensamento" (antes de emitir a
-      // functionCall/texto), sobra parts só de thought -> text vazio. Sinalizamos
-      // truncated pro core NÃO tratar isso como fim seco (e nunca devolver branco).
+      // finishReason=MAX_TOKENS: the generation hit the output ceiling and was CUT OFF.
+      // If the cut caught the model in the middle of "thinking" (before emitting the
+      // functionCall/text), only thought parts are left -> empty text. We flag it as
+      // truncated so the core does NOT treat this as a clean end (and never returns blank).
       const truncated = data.candidates?.[0]?.finishReason === 'MAX_TOKENS';
-      // O thoughtSignature da turn pode vir numa parte de pensamento OU na 1ª
-      // functionCall. Capturamos o da turn e usamos de fallback na 1ª call, pra
-      // garantir que a turn sempre carregue a assinatura ao voltar pro Gemini.
+      // The turn's thoughtSignature can come in a thinking part OR in the 1st
+      // functionCall. We capture the turn's and use it as a fallback on the 1st call, to
+      // guarantee that the turn always carries the signature when it goes back to Gemini.
       const turnSig = parts.find((p) => p.thoughtSignature)?.thoughtSignature;
       const toolCalls = parts.filter((p) => p.functionCall)
         .map((p, i) => ({
@@ -393,11 +393,11 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
           meta: { thoughtSignature: p.thoughtSignature || (i === 0 ? turnSig : undefined) },
         }));
       const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('');
-      // Fontes da busca NATIVA (google_search). Ela roda no servidor do Google e
-      // NÃO aparece como tool call, então até 08/09 as URLs reais que embasaram a
-      // resposta eram jogadas fora aqui e sobrava o modelo escrevendo endereço de
-      // memória (receita de link 404: caso LinkedIn, 2 dos 9 links quebrados).
-      // Devolvemos junto com o resultado; quem monta a resposta decide se mostra.
+      // Sources from the NATIVE search (google_search). It runs on Google's server and
+      // does NOT appear as a tool call, so until 2026-09-08 the real URLs that grounded the
+      // response were being thrown away here, leaving the model to write an address
+      // from memory (recipe for a 404 link: LinkedIn case, 2 of 9 broken links).
+      // We return it together with the result; whoever assembles the response decides whether to show it.
       const sources = extractSources(data.candidates?.[0]);
       return toolCalls.length
         ? { stop: STOP.TOOL, toolCalls, text: text || undefined, usage, truncated, sources }
@@ -406,8 +406,8 @@ export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkin
   });
 }
 
-// groundingChunks -> [{title, uri}] sem repetir URL. As URIs vêm como redirect
-// opaco do vertexaisearch; quem exibe resolve pro destino real antes de mostrar.
+// groundingChunks -> [{title, uri}] without repeating URL. The URIs come as an opaque
+// redirect from vertexaisearch; whoever displays it resolves to the real destination before showing it.
 function extractSources(cand) {
   const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
   const sources = [];
@@ -419,25 +419,25 @@ function extractSources(cand) {
   return sources;
 }
 
-// ── Busca na web "avulsa" (Gemini como buscador) ──
-// Faz UMA chamada grounded (google_search ligado, sem tools de função) e devolve
-// o texto-resposta + as fontes (groundingChunks). Serve pra dar grounding a
-// modelos que NÃO têm busca embutida (ex.: OpenAI): expomos uma tool `buscar_web`
-// no tool-loop cujo backend é esta função, reaproveitando a cota grátis do Gemini
-// (5k buscas/mês). thinkingBudget 0: a "cabeça" é do modelo principal, aqui só
-// queremos recuperar fatos+links. Devolve usage no shape padrão pra entrar no
-// pipeline de custo (kind='search').
+// ── Standalone web search (Gemini as a search engine) ──
+// Makes ONE grounded call (google_search on, no function tools) and returns
+// the response text + the sources (groundingChunks). Used to give grounding to
+// models that do NOT have built-in search (e.g.: OpenAI): we expose a `buscar_web` tool
+// in the tool-loop whose backend is this function, reusing Gemini's free quota
+// (5k searches/month). thinkingBudget 0: the "thinking" is the main model's job, here we
+// just want to retrieve facts+links. Returns usage in the standard shape so it enters the
+// cost pipeline (kind='search').
 export async function groundedSearch(query, { model = 'gemini-3.5-flash' } = {}) {
   if (isDeepSeekTurn()) throw new Error('Grounding Gemini desabilitado: este assistente usa DeepSeek com Tavily.');
   const key = process.env.GEMINI_API_KEY;
   const body = {
     contents: [{ role: 'user', parts: [{ text: String(query || '').slice(0, 2000) }] }],
     tools: [{ google_search: {} }],
-    // systemInstruction genérica: o retriever deve devolver DADOS CONCRETOS extraídos
-    // das fontes (nomes próprios, números, endereços), várias opções quando fizer
-    // sentido, e nada inventado. Serve pra qualquer tipo de busca (preço, lugar,
-    // produto, notícia). O modelo principal é quem "monta" a resposta; aqui a meta é
-    // maximizar densidade de fato útil por busca.
+    // Generic systemInstruction: the retriever must return CONCRETE DATA extracted
+    // from the sources (proper names, numbers, addresses), multiple options when it makes
+    // sense, and nothing made up. Used for any kind of search (price, place,
+    // product, news). The main model is the one that "assembles" the response; here the goal is
+    // to maximize useful-fact density per search.
     systemInstruction: {
       parts: [{
         text: 'Você é um motor de busca. Responda em pt-BR, denso e objetivo, SÓ com o que as fontes trazem (não invente nada). Extraia dados CONCRETOS: nomes próprios (lugares, produtos, marcas, empresas), números (preços, horários, datas), endereços/bairros. Quando a consulta pedir opções (lugares, restaurantes, produtos), liste VÁRIAS opções nomeadas com um dado distintivo de cada uma. Se algo não estiver nas fontes, não preencha; deixe de fora.',
@@ -465,15 +465,15 @@ export async function groundedSearch(query, { model = 'gemini-3.5-flash' } = {})
   return { text, sources, usage };
 }
 
-// Roteador simples: 3.5 Flash por padrão, escala pro 3.1 Pro quando a tarefa
-// parece exigir raciocínio mais pesado. Heurística trocável; a ideia é mostrar
-// que dá pra misturar modelos no MESMO loop.
+// Simple router: 3.5 Flash by default, scales up to 3.1 Pro when the task
+// seems to require heavier reasoning. Swappable heuristic; the idea is to show
+// that it's possible to mix models in the SAME loop.
 export function makeGeminiRouter({
   fast = 'gemini-3.5-flash',
   heavy = 'gemini-3.1-pro-preview',
   search = false,
-  // Teto de pensamento: baixo no Flash (chat simples não precisa raciocinar
-  // muito), dinâmico no Pro (undefined) pra preservar o raciocínio pesado.
+  // Thinking ceiling: low on Flash (simple chat doesn't need to reason
+  // much), dynamic on Pro (undefined) to preserve heavy reasoning.
   fastThinking = 512,
   heavyThinking = undefined,
   isHeavy = (text) => /(compare|analise|por que|explique|estratégia|trade-?off|melhor opção entre)/i.test(text),

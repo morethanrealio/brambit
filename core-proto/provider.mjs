@@ -1,16 +1,16 @@
-// ── Contrato mínimo do core (model-agnostic) ──
+// ── Minimal core contract (model-agnostic) ──
 //
-// A ideia central que diferencia do NanoClaw: AQUI o CORE é dono do tool-loop.
-// O provider faz apenas UM turno de modelo: recebe (system, messages, tools) e
-// devolve um Step (ou um texto final, ou uma lista de tool calls). Trocar de
-// modelo = implementar `complete()`. Nada do loop, tools, memória ou protocolos
-// muda. Um modelo proprietário entra como só mais um provider.
+// The core idea that differs from NanoClaw: HERE the CORE owns the tool-loop.
+// The provider does only ONE model turn: receives (system, messages, tools) and
+// returns a Step (either final text, or a list of tool calls). Swapping
+// models = implementing `complete()`. Nothing about the loop, tools, memory or protocols
+// changes. A proprietary model comes in as just another provider.
 //
-// Tipos (JSDoc, sem dependências):
+// Types (JSDoc, no dependencies):
 //
 // @typedef {{ role:'system'|'user'|'assistant'|'tool', content:string,
 //             toolCallId?:string, name?:string, toolCalls?:ToolCall[] }} Msg
-// @typedef {{ name:string, description:string, parameters:object }} ToolDef   // parameters = JSON Schema (compatível com MCP)
+// @typedef {{ name:string, description:string, parameters:object }} ToolDef   // parameters = JSON Schema (compatible with MCP)
 // @typedef {{ id:string, name:string, args:object }} ToolCall
 // @typedef {{ text?:string, toolCalls?:ToolCall[], stop:'end'|'tool' }} Step
 // Optional protocolError:{code,retryable:true}: whole tool batch was rejected
@@ -18,10 +18,10 @@
 //
 // interface Provider {
 //   name: string
-//   // Um único turno do modelo. Sem efeitos colaterais, sem executar tools.
+//   // A single model turn. No side effects, no executing tools.
 //   complete(input: { system:string, messages:Msg[], tools:ToolDef[] }): Promise<Step>
 // }
 //
-// É só isso. O contrato inteiro cabe num parágrafo, de propósito.
+// That's all there is. The whole contract fits in one paragraph, on purpose.
 
 export const STOP = { END: 'end', TOOL: 'tool' };

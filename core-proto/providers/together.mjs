@@ -40,25 +40,25 @@ export function togetherReasoning(model,effort,direct=false){
 
 export function makeTogether({
   model = 'zai-org/GLM-5.2',
-  maxTokens = 16384,          // teto TOTAL de saída (raciocínio + texto). Generoso pra o
-                              // raciocínio terminar e SEMPRE sobrar espaço pro texto visível.
+  maxTokens = 16384,          // TOTAL output ceiling (reasoning + text). Generous so the
+                              // reasoning finishes and ALWAYS leaves room for the visible text.
   temperature = model === TOGETHER_FLASH_MODEL ? 1.0 : 0.7,
   reasoningEffort,   // GLM-5.2: 'high' | 'max' (default do modelo = 'max'). Usamos
-                              // 'high' pra o raciocínio não monopolizar o teto de saída.
+                              // 'high' so reasoning doesn't monopolize the output ceiling.
 } = {}) {
   const reasoning = togetherReasoning(model, reasoningEffort);
   return makeCompativel({
     provedor: 'together', model, url: BASE, chave: process.env.TOGETHER_API_KEY,
     campos: () => ({ max_tokens: maxTokens, temperature, ...reasoning }),
     camposDiretos: () => ({ max_tokens: maxTokens, temperature, ...togetherReasoning(model, reasoningEffort, true) }),
-    // Streaming pra medir INATIVIDADE: um GLM travado ficava no timeout default do
-    // undici (~minutos) antes de "fetch failed". A Together (serverless) devolve
-    // 503/429 esporádico por capacidade (a re-tentativa é regra comum, regras.mjs).
+    // Streaming to measure INACTIVITY: a stuck GLM would sit at undici's default
+    // timeout (~minutes) before "fetch failed". Together (serverless) occasionally
+    // returns 503/429 due to capacity (the retry is a common rule, regras.mjs).
     stream: { inatividadeMs: 25_000, diagnosticoRecusa: togetherRejectionDiagnostic },
     ...(model === TOGETHER_FLASH_MODEL ? { contarEntrada: estimateTogetherFlashInput } : {}),
-    // GLM e DeepSeek às vezes escrevem a chamada como TEXTO quando o parser da
-    // Together falha em geração longa (bug de 01/07; DSML de dois casos
-    // de 01/09). Recupera; se não der, re-amostra; resíduo nunca vaza.
+    // GLM and DeepSeek sometimes write the call as TEXT when the Together
+    // parser fails on a long generation (bug from 2026-07-01; DSML from two cases
+    // on 2026-09-01). Recovers; if that doesn't work, re-samples; residue never leaks.
     ferramentaEmTexto: 'sempre', reamostrarResiduo: 2, vazioSemUsoLanca: true, retryVazio: 'completo',
   });
 }

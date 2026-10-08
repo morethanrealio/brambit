@@ -1,8 +1,8 @@
-// Teste offline dos consertos de contexto do turno (nada sai pra rede):
-//  A) poda de blob só colapsa o que o modelo JÁ LEU (consumedUpTo)
-//  B) o freio anti-loop diz QUAL chamada disparou o corte
-//  C) o corte por nº de mensagens do sub-agente de coding preserva o objetivo
-// Roda com: node contexto-turno.test.mjs
+// Offline test of the turn-context fixes (nothing goes out to the network):
+//  A) blob pruning only collapses what the model has ALREADY READ (consumedUpTo)
+//  B) the anti-loop guard says WHICH call triggered the cut
+//  C) the cut by message count of the coding sub-agent preserves the goal
+// Run with: node contexto-turno.test.mjs
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
 
@@ -11,11 +11,11 @@ const { runAgent } = await import('./core-proto/core.mjs');
 const BLOB = 'x'.repeat(5000); // > TURN_BLOB_MAX (2000)
 const STUB = 'Você já viu esse conteúdo antes neste turno';
 
-// ── A) uma rodada com mais resultados grandes que a janela recente (4) ──
-// Os 6 resultados nascem no FIM do passo 0; a poda roda no TOPO do passo 1,
-// ANTES do complete(). Antes do conserto, os 2 mais antigos viravam stub sem
-// nunca terem sido lidos — o modelo recebia "você já viu isso" sobre conteúdo
-// que ele nunca tinha visto.
+// ── A) a round with more large results than the recent window (4) ──
+// The 6 results are born at the END of step 0; pruning runs at the TOP of step 1,
+// BEFORE complete(). Before the fix, the 2 oldest ones turned into a stub without
+// ever having been read — the model received "you've already seen this" about content
+// it had never seen.
 {
   const registry = { defs: [], run: async () => BLOB };
   const vistos = [];
@@ -37,8 +37,8 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
   t('passo 1: modelo vê os 6 resultados da rodada, nenhum stub', noPasso2.length === 6 && !noPasso2.some((c) => c.includes(STUB)));
   const noPasso3 = vistos[2] || [];
   const stubs = noPasso3.filter((c) => c.includes(STUB)).length;
-  // Janela recente = as 4 últimas MENSAGENS (aqui 2 resultados antigos + o
-  // assistant da 2ª rodada + o resultado novo), logo 3 resultados inteiros.
+  // Recent window = the last 4 MESSAGES (here 2 old results + the
+  // assistant message from the 2nd round + the new result), so 3 whole results.
   t('passo 2: o que já foi lido vira stub (poda continua funcionando)', stubs === 4);
   t('passo 2: a janela recente segue inteira', noPasso3.length - stubs === 3);
   t('passo 2: o resultado ainda não lido está inteiro', noPasso3.at(-1) === BLOB);
@@ -62,9 +62,9 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
   t('loop_break carrega os args pra diagnóstico', String(lb?.args || '').includes('sempre igual') && lb?.argsLen > 0);
 }
 
-// ── C) sub-agente de coding: o corte por nº de mensagens não perde o objetivo ──
+// ── C) coding sub-agent: the cut by message count does not lose the goal ──
 {
-  process.env.CODING_COMPACT = '0'; // força o caminho do corte, não o do resumo
+  process.env.CODING_COMPACT = '0'; // forces the cut path, not the summary path
   const { runCodingSubagent, resetCodingSession } = await import('./web/coding-subagent.mjs');
   const registry = { defs: [], run: async () => 'feito' };
   const provider = {
@@ -82,7 +82,7 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
     objetivo: 'MIGRAR O ENDPOINT DE PAGAMENTO PRO NOVO SDK', tools: registry, provider,
     sessionKey: key, maxSteps: 45,
   });
-  // 2ª rodada: o history já passou de HISTORY_MAX (60) e é cortado pela cauda.
+  // 2nd round: the history has already gone past HISTORY_MAX (60) and is cut from the tail.
   let sessionVista = null;
   await runCodingSubagent({
     objetivo: 'continua', tools: registry, sessionKey: key, maxSteps: 2,

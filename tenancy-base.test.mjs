@@ -30,9 +30,9 @@ test('BASE que não é http(s) é recusada', () => {
   assert.throws(() => resolveBase({ BASE: 'file:///etc/passwd' }), /http/);
 });
 
-// Ponta a ponta: cada sonda, com sessão e BASE de produção mas sem ALLOW_REMOTE,
-// sai com 2 antes de qualquer requisição. A guarda de rede garante que nenhuma
-// chamada sairia: se o script tentasse, o fetch quebraria com outra mensagem.
+// End-to-end: each probe, with a session and production BASE but without ALLOW_REMOTE,
+// exits with 2 before any request. The network guard guarantees that no
+// call would go out: if the script tried, fetch would break with a different message.
 const SONDAS = ['ops/tenancy-test.mjs', 'ops/tenancy-write-test.mjs', 'ops/tenancy-runner-test.mjs'];
 for (const f of SONDAS) {
   test(`${f} recusa produção sem ALLOW_REMOTE=1`, () => {

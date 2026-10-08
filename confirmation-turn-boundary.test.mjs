@@ -67,7 +67,7 @@ test('recusa também permanece para o próximo turno sem executar a ação', asy
   assert.equal(polls, 0);
   const nextTurn = await destructivePoll();
   assert.equal(isConfirmation(nextTurn.text), false);
-  takePending(threadId); // o gate do início do turno cancela a pendência
+  takePending(threadId); // the start-of-turn gate cancels the pending request
   assert.equal(executions, 0);
 });
 

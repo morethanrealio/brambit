@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega, LIMITE_ENTREGA_MS } from './web/video-poll-decisao.mjs';
 
-// Achado #25: job de vídeo que falha na entrega ficava 'queued' pra sempre, o
-// poller rebaixava/resubia o mp4 a cada minuto e o dono nunca mais conseguia
-// pedir outro vídeo (limite de 1 em andamento por pessoa).
+// Finding #25: a video job that failed on delivery stayed 'queued' forever, the
+// poller would downgrade/re-upload the mp4 every minute, and the owner could never
+// request another video again (limit of 1 in progress per person).
 
 test('cobranca ja finalizada nao precisa de acao (nao repete sozinha)', () => {
   assert.equal(decidirCobrancaNaoConcluida('already_final').acao, 'seguir');
@@ -56,6 +56,6 @@ test('o poller usa as duas decisoes e marca status nos dois caminhos', () => {
   assert.match(trecho, /status: 'needs_review'/);
   assert.match(trecho, /decidirFalhaNaEntrega\(\{ idadeMs: Date\.now\(\) - new Date\(job\.created_at\)/);
   assert.match(trecho, /decisao\.acao === 'desistir'/);
-  // O ramo de settled:false NÃO pode mais sair calado deixando o job ativo.
+  // The settled:false branch must NOT silently leave the job active anymore.
   assert.ok(!/needs_review'\)\) console\.error/.test(trecho), 'ramo antigo ainda presente');
 });

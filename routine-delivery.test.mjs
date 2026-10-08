@@ -1,7 +1,7 @@
 import { actionResult } from './web/action-evidence.mjs';
 import { reminderChannelSelection } from './web/reminder-channel.mjs';
 import { recurrenceSchema, recurrenceOccurrences, recurrenceLabel } from './web/calendar-recurrence.mjs';
-// Dry-run local: relógio, registros e entregas simulados. Zero canais/BD reais.
+// Local dry-run: clock, records and deliveries simulated. Zero real channels/DB.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import net from 'node:net';
@@ -20,7 +20,7 @@ globalThis.Date=class extends RealDate {constructor(...args){super(...(args.leng
 const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
 function extract(name){const a=source.indexOf('function '+name+'('),b=source.indexOf('\n}\n',a)+2;assert.ok(a>=0&&b>a);return source.slice(a,b);}
 const resolveReminderWhen=new Function(extract('resolveReminderWhen')+'; return resolveReminderWhen;')();
-// Extrai a implementação REAL de criar_lembrete, sem importar servidor.
+// Extracts the REAL implementation of criar_lembrete, without importing the server.
 const a=source.indexOf("    name: 'criar_lembrete'"),b=source.indexOf('\n  });',a);
 const literal='{'+source.slice(a,b)+'\n}';
 let writes=[],registryReads=0;
@@ -46,13 +46,13 @@ eq(routineReminderDeliveryConflict({kind:'chat',channel:'whatsapp',reminderChann
 eq(routineReminderDeliveryConflict({kind:'routine',channel:'none',reminderChannel:'whatsapp',whenMs:clock}),false);
 eq(routineReminderDeliveryConflict({kind:'routine',channel:'whatsapp',reminderChannel:'email',whenMs:clock}),false);
 const tool=reminder();
-// Caso observado: execução 08:09:15 cria outro lembrete para 08:10. Nem timezone
-// nem banco/conector devem ser tocados ao recusar essa duplicação imediata.
+// Observed case: execution at 08:09:15 creates another reminder for 08:10. Neither timezone
+// nor DB/connector should be touched when refusing this immediate duplication.
 for(const extra of [{},{canal:'whatsapp'},{canal:'WHATSAPP'}, {fuso:'America/Sao_Paulo'}, {repetir_cada_min:1440}]){
  writes=[];registryReads=0;
  eq(await tool.run({quando:'2026-09-10T08:10:00',mensagem:'Lembrete sintético',...extra}),ROUTINE_REMINDER_CONFLICT);eq(writes,[]);eq(registryReads,0);
 }
-// Futuro legítimo, rotina sem canal, outro canal e conversa comum conservam criação.
+// Legitimate future, routine without channel, different channel and plain conversation all keep creation.
 for(const test of [
  {opts:{},args:{quando:'2026-09-11T08:00:00',repetir_cada_min:1440}},
  {opts:{channel:'none'},args:{quando:'2026-09-10T08:10:00',canal:'whatsapp'}},
@@ -63,19 +63,19 @@ for(const test of [
  const recorded=writes.find(x=>x[0]==='reminder')[1];eq(recorded.actionId,'mock-action');eq(recorded.originThreadId,'mock-thread');
  if(test.args.repetir_cada_min)eq(writes[0][1].repeatEveryMin,1440);
 }
-// Duplicata: a prova usa canal/recorrência já gravados, não o pedido divergente.
+// Duplicate: the proof uses the already-saved channel/recurrence, not the diverging request.
 {writes=[];const actual=JSON.parse(await reminder({stored:{duplicate:true,channel:'email',repeat_every_min:30,repeat_until:'2026-09-12T12:00:00Z'}}).run({mensagem:'Futuro sintético',quando:'2026-09-11T08:00:00',canal:'whatsapp'}));eq(actual.action_evidence.target,'e-mail');ok(actual.action_evidence.at.includes('30'));ok(actual.text.includes('não criei outro'));eq(writes.filter(x=>x[0]==='reminder').length,1);}
 // A processed/canceled row must never be presented as a newly scheduled action.
 for(const status of ['sent','failed','uncertain','canceled']){
  const out=await reminder({stored:{duplicate:true,status}}).run({mensagem:'Futuro sintético',quando:'2026-09-11T08:00:00',canal:'whatsapp'});
  ok(out.includes('processado ou cancelado'));ok(!out.includes('action_evidence'));
 }
-// Recusa antes de gravar = { ok:false, error } (recibo 'failed'); o texto lido pelo modelo é o mesmo.
+// Refusal before saving = { ok:false, error } (receipt 'failed'); the text read by the model is the same.
 writes=[];eq(JSON.parse(await tool.run({quando:'2026-09-10T08:10:00',mensagem:'Teste',fuso:'Invalid/Zone'})),{ok:false,error:'Fuso inválido para o lembrete. Use um fuso IANA válido.'});eq(writes,[]);
-// Frame realmente usado em produção; a proteção de envio direto segue intacta.
+// Frame actually used in production; the direct-send protection remains intact.
 ok(source.includes('const routineFrame = routineExecutionFrame({ kind, title: routineTitle, channel: routineChannel })'));
 ok(source.includes("registry.map.delete('enviar_mensagem')"));
-// Scheduler REAL com batidas e relógio simulados. Nenhum timer de background.
+// REAL scheduler with simulated ticks and clock. No background timer.
 const realSetInterval=globalThis.setInterval,realClearInterval=globalThis.clearInterval;
 globalThis.setInterval=()=>({unref(){}});globalThis.clearInterval=()=>{};
 const {startScheduler}=await import('./web/scheduler.mjs');

@@ -1,16 +1,16 @@
 import {makeCompativel} from './compativel.mjs';
-// ── Adapter real: OpenAI (Chat Completions, OpenAI-compatible) ──
-// Predefinição do motor compatível (compativel.mjs). A chave vem de
-// process.env.OPENAI_API_KEY (NUNCA hardcode no repo). Serve pra TESTAR modelos
-// da OpenAI (GPT-5 mini, GPT-4.1 mini/nano) lado a lado com o Gemini.
+// ── Real adapter: OpenAI (Chat Completions, OpenAI-compatible) ──
+// Default of the compatible engine (compativel.mjs). The key comes from
+// process.env.OPENAI_API_KEY (NEVER hardcode in the repo). Used to TEST OpenAI
+// models (GPT-5 mini, GPT-4.1 mini/nano) side by side with Gemini.
 //
-// IMPORTANTE: a OpenAI NÃO tem busca embutida como o Gemini (google_search). Aqui
-// o parâmetro `search` é ignorado — sem grounding, respostas factuais/tempo-real
-// podem alucinar. Pra produção precisaria ligar a tool web_search (cobrada à
-// parte) no tool-loop. Pra um teste de CAPACIDADE crua, rodar sem busca serve.
+// IMPORTANT: OpenAI does NOT have built-in search like Gemini (google_search). Here
+// the `search` parameter is ignored — without grounding, factual/real-time responses
+// can hallucinate. For production it would need the web_search tool turned on (billed
+// separately) in the tool-loop. For a raw CAPABILITY test, running without search is fine.
 //
-// Modelos de raciocínio (gpt-5*, o*) não aceitam `temperature` != 1 e usam
-// `max_completion_tokens` no lugar de `max_tokens`; tratamos os dois casos.
+// Reasoning models (gpt-5*, o*) don't accept `temperature` != 1 and use
+// `max_completion_tokens` instead of `max_tokens`; we handle both cases.
 
 const BASE = process.env.OPENAI_URL || 'https://api.openai.com/v1/chat/completions';
 
@@ -18,9 +18,9 @@ export function openaiEnabled() {
   return !!process.env.OPENAI_API_KEY;
 }
 
-// Reserva de crédito pra imagem em modelo configurado: não sabemos quantos tokens
-// cada provedor cobra por imagem, então seguramos uma margem alta (o maior caso da
-// tabela da OpenAI acima de ~10k). É só a reserva; a cobrança final é o uso real.
+// Credit reservation for image in a configured model: we don't know how many tokens
+// each provider charges per image, so we hold a high margin (the largest case in
+// OpenAI's table, above ~10k). It's only the reservation; the final charge is the real usage.
 const GENERIC_IMAGE_RESERVE = 12000;
 function estimateGenericInput(spec){
  const body=JSON.parse(JSON.stringify(spec.body));let images=0;
@@ -33,37 +33,37 @@ function estimateGenericInput(spec){
 
 export function makeOpenAI({
   model = 'gpt-5-mini',
-  maxTokens = 8192,          // teto rígido de saída (anti-loop, igual ao Gemini)
-  temperature = 0.7,         // ignorado em modelos de raciocínio
-  reasoningEffort = 'low',   // só vale pros modelos de raciocínio (gpt-5*/o*)
-  // Qualquer provedor compatível com OpenAI (modelos.yaml): endereço, chave e nome
-  // vêm da configuração. Sem eles, é a OpenAI de sempre. apiKey null = provedor
-  // sem chave (ex.: Ollama na própria máquina).
+  maxTokens = 8192,          // hard output ceiling (anti-loop, same as Gemini)
+  temperature = 0.7,         // ignored on reasoning models
+  reasoningEffort = 'low',   // only applies to reasoning models (gpt-5*/o*)
+  // Any OpenAI-compatible provider (modelos.yaml): address, key and name
+  // come from the configuration. Without them, it's the usual OpenAI. apiKey null = provider
+  // without a key (e.g.: Ollama on the local machine).
   url = BASE,
   apiKey,
   provider = 'openai',
-  extras,                    // parâmetros extras do modelo, mesclados no corpo por último
+  extras,                    // extra model parameters, merged into the body last
 } = {}) {
   const generic = provider !== 'openai';
   const reasoning = /^(o\d|gpt-5)/.test(model);
   return makeCompativel({
     provedor: provider, model, url, chave: apiKey === undefined ? process.env.OPENAI_API_KEY : apiKey,
-    // ATENÇÃO: alguns modelos novos (ex: gpt-5.4-mini) NÃO aceitam
-    // `reasoning_effort` junto com function tools no /v1/chat/completions
-    // (erro 400 "use /v1/responses instead"). Como nosso tool-loop quase
-    // sempre manda tools, só enviamos reasoning_effort quando NÃO há tools.
+    // WARNING: some new models (e.g.: gpt-5.4-mini) do NOT accept
+    // `reasoning_effort` together with function tools on /v1/chat/completions
+    // (400 error "use /v1/responses instead"). Since our tool-loop almost
+    // always sends tools, we only send reasoning_effort when there are NO tools.
     campos: (comTools) => reasoning
       ? { max_completion_tokens: maxTokens, ...(reasoningEffort && !comTools ? { reasoning_effort: reasoningEffort } : {}) }
       : { max_tokens: maxTokens, temperature },
-    // A OpenAI rejeita (400 array_above_max_length) quando passam de 128
-    // ferramentas. O GLM/Together aguenta mais, então agentes tool-heavy só
-    // estouram AQUI, no fallback; as excedentes ficam de fora só nesta chamada.
+    // OpenAI rejects (400 array_above_max_length) when there are more than 128
+    // tools. GLM/Together can handle more, so tool-heavy agents only
+    // blow up HERE, in the fallback; the excess ones are left out just for this call.
     limiteTools: { max: 128, aviso: (n) => `[openai] ${n} tools > teto 128 da OpenAI; cortando pras 128 primeiras neste turno.` },
     extras,
     ...(generic ? { contarEntrada: estimateGenericInput } : {}),
-    // Modelos abertos (GLM, DeepSeek) às vezes escrevem a chamada de ferramenta
-    // como texto; isso é do modelo, não do provedor, então vale pra qualquer
-    // endereço configurado. A OpenAI de verdade não faz isso.
+    // Open models (GLM, DeepSeek) sometimes write the tool call
+    // as text; that's a model thing, not a provider thing, so it applies to any
+    // configured endpoint. The real OpenAI doesn't do this.
     ferramentaEmTexto: generic ? 'comTools' : false,
   });
 }

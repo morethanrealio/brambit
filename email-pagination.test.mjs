@@ -1,5 +1,5 @@
-// DRY-RUN estritamente offline: nenhuma credencial, servidor, DB ou canal real.
-// Sockets e processos filhos bloqueados ANTES de importar os módulos do produto.
+// Strictly offline DRY-RUN: no real credential, server, DB, or channel.
+// Sockets and child processes blocked BEFORE importing the product modules.
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import tls from 'node:tls';
@@ -39,7 +39,7 @@ globalThis.fetch = async (url, opts = {}) => {
  if (entry.error) return { ok: false, status: entry.error, text: async () => 'MOCK ERROR' };
  return { ok: true, status: 200, json: async () => entry };
 };
-// Primeira página -> e-mail procurado só na SEGUNDA página.
+// First page -> the sought email is only on the SECOND page.
 const g = gmail();
 mock(gmPage(['primeiro'], 'native+/token=', 42), data('primeiro'));
 const first = JSON.parse(await g.run({ query: 'from:mock@example.invalid', max: 50 }));
@@ -51,11 +51,11 @@ const second = JSON.parse(await g.run({ query: first.query, cursor: first.next_c
 equal(second.messages[0].id, 'procurado'); equal(second.page, 2); equal(second.has_more, false); equal(second.next_cursor, null);
 equal(new URL(requests[0]).searchParams.get('pageToken'), 'native+/token=', 'token codificado sem corromper');
 equal(new URL(requests[0]).searchParams.get('q'), first.query); equal(new URL(requests[0]).searchParams.get('maxResults'), '10');
-// Vazio final vs vazio COM continuação.
+// Final empty vs. empty WITH continuation.
 mock({ resultSizeEstimate: 0 }); const empty = JSON.parse(await g.run({ query: 'nenhum' })); equal(empty.messages, []); equal(empty.has_more, false); equal(empty.estimated_total, 0);
 mock(gmPage([], 'skip-empty')); const emptyMore = JSON.parse(await g.run({ query: 'vazio-parcial' })); check(emptyMore.has_more); check(emptyMore.next_cursor); check(emptyMore.note.includes('PARCIAL'));
 mock(gmPage([], 'skip-empty')); const repeated = JSON.parse(await g.run({ query: 'vazio-parcial', cursor: emptyMore.next_cursor })); check(repeated.has_more); equal(repeated.next_cursor, null); check(repeated.note.includes('repetiu'));
-// Valores inválidos são rejeitados antes de qualquer chamada.
+// Invalid values are rejected before any call.
 for (const max of [0, -1, 1.5, null, '10', Infinity, NaN, {}, Number.MAX_SAFE_INTEGER + 1]) await reject(() => g.run({ query: 'x', max }), 'max inválido');
 for (const query of [null, 3, [], 'x'.repeat(2049)]) await reject(() => g.run({ query }), 'consulta inválida');
 for (const cursor of [null, '', 'inventado', 'https://evil.invalid', {}, 3]) await reject(() => g.run({ query: first.query, cursor }), 'cursor inválido');
@@ -68,7 +68,7 @@ for (const bad of [{ messages: {} }, { messages: [null] }, { messages: [{ id: nu
 mock(gmPage(Array.from({ length: 6 }, (_, i) => String(i)))); await reject(() => g.run({ query: 'big' }), 'limite de metadata'); equal(requests.length, 1);
 mock({ error: 401 }); await reject(() => g.run({ query: 'erro' }));
 mock(gmPage(['x']), { error: 404 }); await reject(() => g.run({ query: 'erro-metadata' }), 'erro não vira nenhum e-mail');
-// Outlook segue nextLink INTEIRO, exatamente como recebido, só na lista segura.
+// Outlook follows the WHOLE nextLink, exactly as received, only on the safe list.
 const m = outlook();
 const link = 'https://graph.microsoft.com/v1.0/me/messages?$search=%22mock%22&$top=30&$skiptoken=a%2Bb%3D&$select=id,subject';
 mock({ value: [{ id: 'ms1', subject: 'um' }], '@odata.nextLink': link });
@@ -85,21 +85,21 @@ for (const bad of ['https://evil.invalid/v1.0/me/messages', 'http://graph.micros
 }
 for (const bad of [{}, { value: null }, { value: {} }, { value: Array(16).fill({ id: 'x' }) }]) { mock(bad); await reject(() => m.run(), 'Graph inválido/limite'); }
 mock({ error: 429 }); await reject(() => m.run(), 'sem retry automático'); equal(requests.length, 1);
-// TTL e limite de memória, sem timer nem armazenamento persistente.
+// TTL and memory limit, without timer or persistent storage.
 let time = 0; const pages = emailPagination({ defaultMax: 5, cap: 10, now: () => time });
 const req = pages.request('x'); const cursor = JSON.parse(pages.result(req, [], 'p')).next_cursor;
 equal(pages.request('x', undefined, cursor).position, 'p'); time = 900000; throws(() => pages.request('x', undefined, cursor), 'TTL expirado');
 const old = JSON.parse(pages.result(req, [], 'old')).next_cursor;
 for (let i = 0; i < 100; i++) pages.result(req, [], 'p' + i);
 throws(() => pages.request('x', undefined, old), 'cache limitado');
-// Proteção da síntese: não some no caminho worker -> principal.
+// Synthesis protection: it doesn't disappear on the worker -> main path.
 let response = { query: 'x', has_more: true }; const fake = { name: 'gmail_search', run: async () => JSON.stringify(response) };
 const tracker = trackEmailPagination([fake, { name: 'unrelated', run: async () => 'raw' }]);
 await tracker.tools[0].run({}); check(tracker.finish('Não encontrei.').includes('AVISO DE BUSCA PARCIAL'));
 response = { query: 'y', has_more: false }; await tracker.tools[0].run({}); check(tracker.finish('Resultado y').includes('AVISO'), 'outra consulta não limpa a anterior');
 response = { query: 'x', has_more: false }; await tracker.tools[0].run({}); check(tracker.finish('Tudo').startsWith('Tudo')); check(!tracker.finish('Tudo').includes('AVISO DE BUSCA PARCIAL')); equal(tracker.coverage().map(r=>r.status), ['complete','complete']); equal(await tracker.tools[1].run({}), 'raw');
-// Dry-run do tool-loop REAL e das funções reais de orquestração extraídas do
-// arquivo, sem importar server.mjs (que inicializaria banco e canais).
+// Dry-run of the REAL tool-loop and the real orchestration functions extracted from the
+// file, without importing server.mjs (which would initialize database and channels).
 const source = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 function orchestration(name, provider) {
  const start = source.indexOf('async function ' + name + '('), end = source.indexOf('\n}\n', start) + 2;

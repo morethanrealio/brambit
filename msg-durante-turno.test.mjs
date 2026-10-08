@@ -1,11 +1,11 @@
-// Teste offline da mensagem que chega COM O TURNO EM ANDAMENTO.
-// Nada sai pra rede (fetch e banco stubados) e nenhum modelo é chamado: o
-// provider é falso e o teste controla passo a passo o que ele devolve.
-// Roda com: node msg-durante-turno.test.mjs
+// Offline test of the message that arrives WHILE THE TURN IS IN PROGRESS.
+// Nothing goes out to the network (fetch and database stubbed) and no model is called: the
+// provider is fake and the test controls step by step what it returns.
+// Run with: node msg-durante-turno.test.mjs
 process.env.WA_TOKEN = 'x';
 process.env.WA_PHONE_NUMBER_ID = '1';
 process.env.WA_VERIFY_TOKEN = 'v';
-process.env.WA_DEBOUNCE_MS = '10'; // debounce curto pro teste não esperar 3s
+process.env.WA_DEBOUNCE_MS = '10'; // short debounce so the test doesn't wait 3s
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -34,12 +34,12 @@ const semTools = { system: 's', tools: registry };
   const injetada = r.messages.find((m) => m.meta === 'interject');
   t('injeta no passo 0 e o modelo vê', vistos[0] === 'user|user:interject');
   t('texto do usuário chega inteiro', injetada?.content.includes('na verdade faz B'));
-  // raw = o que o server grava no history (sem o invólucro de instrução).
+  // raw = what the server writes to the history (without the instruction wrapper).
   t('raw guarda só a fala do usuário', injetada?.raw === 'na verdade faz B');
   t('turno entrega a resposta nova', r.text === 'ok, fiz B');
 }
 
-// ── B) chegou na hora de entregar: o rascunho NÃO é enviado ──
+// ── B) delivery time arrived: the draft is NOT sent ──
 {
   let poll = 0;
   const eventos = [];
@@ -49,21 +49,21 @@ const semTools = { system: 's', tools: registry };
       name: 'fake',
       complete: async () => ({ stop: 'end', text: ++poll === 1 ? 'RASCUNHO obsoleto' : 'resposta contemplando tudo' }),
     },
-    // null na 1ª consulta (fronteira do passo 0) e texto na 2ª (pré-entrega).
+    // null on the 1st query (step 0 boundary) and text on the 2nd (pre-delivery).
     pollNewUserMsg: () => (poll === 1 ? { text: 'esquece, quero outra coisa' } : null),
     onEvent: (e) => eventos.push(e.type),
   });
   t('não entrega a resposta obsoleta', r.text === 'resposta contemplando tudo');
   t('rascunho não vai pro history como assistant', !r.messages.some((m) => m.role === 'assistant' && m.content.includes('RASCUNHO')));
   t('rascunho vai pro contexto do modelo', r.messages.some((m) => m.meta === 'interject' && m.content.includes('RASCUNHO')));
-  // O rascunho descartado NÃO entra no raw -> não persiste no history nem é
-  // reenviado nos turnos seguintes (custo de input token).
+  // The discarded draft does NOT enter the raw -> it doesn't persist in the history nor is it
+  // resent in subsequent turns (input-token cost).
   const inj = r.messages.find((m) => m.meta === 'interject');
   t('raw da pré-entrega não carrega o rascunho', inj?.raw === 'esquece, quero outra coisa');
   t('evento interject_predraft emitido', eventos.includes('interject_predraft'));
 }
 
-// ── C) teto de interjeições: usuário metralhando não prende o turno ──
+// ── C) interjection cap: a user firing off messages doesn't lock up the turn ──
 {
   let chamadas = 0, injetadas = 0;
   const r = await runAgent({
@@ -76,7 +76,7 @@ const semTools = { system: 's', tools: registry };
   t('turno termina mesmo com fila infinita', !!r.text);
 }
 
-// ── D) canal quebrado não derruba o turno ──
+// ── D) a broken channel does not bring down the turn ──
 {
   const eventos = [];
   const r = await runAgent({
@@ -89,7 +89,7 @@ const semTools = { system: 's', tools: registry };
   t('erro do canal fica visível em onEvent', eventos.includes('interject_error'));
 }
 
-// ── E) sem o canal, comportamento idêntico ao antigo ──
+// ── E) without the channel, behavior identical to before ──
 {
   const r = await runAgent({
     ...semTools, userInput: 'vai',
@@ -98,7 +98,7 @@ const semTools = { system: 's', tools: registry };
   t('sem pollNewUserMsg nada é injetado', !r.messages.some((m) => m.meta));
 }
 
-// ── F) WhatsApp: 2ª mensagem durante o turno vira UMA resposta só ──
+// ── F) WhatsApp: 2nd message during the turn becomes ONE single response ──
 const enviados = [];
 globalThis.fetch = async (_url, opts) => {
   const body = JSON.parse(opts.body);
@@ -125,15 +125,15 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
     db: dbStub,
     loadAgent: async () => ({ id: 'a1', name: 'Bot' }),
     runConversation: async (_agent, _uid, message, _img, _files, extra) => {
-      // Turno em voo: o teste manda a 2ª mensagem e só então consulta o canal.
+      // Turn in flight: the test sends the 2nd message and only then queries the channel.
       await new Promise((r) => { solta = r; });
-      // O poll é assíncrono (contrato do core: ()=>Promise<{text}|null>).
+      // The poll is asynchronous (core contract: ()=>Promise<{text}|null>).
       vistoNoMeio = await extra.pollNewUserMsg();
       return { text: `respondi: ${message} + ${vistoNoMeio?.text || 'nada'}` };
     },
   });
   await h.process(payload('wamid.1', 'primeira'));
-  await espera(40); // debounce -> turno começa e para no await acima
+  await espera(40); // debounce -> turn starts and stops at the await above
   await h.process(payload('wamid.2', 'segunda'));
   solta();
   await espera(40);
@@ -142,7 +142,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   t('a resposta contempla as duas mensagens', enviados[0] === 'respondi: primeira + segunda');
 }
 
-// ── G) o que o turno não consome não é perdido: vira o turno seguinte ──
+// ── G) what the turn doesn't consume is not lost: it becomes the next turn ──
 {
   enviados.length = 0;
   const rodadas = [];
@@ -166,12 +166,12 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   t('duas respostas nesse caso (nada sumiu)', enviados.length === 2);
 }
 
-// ── H) dedup: retry da Meta com o mesmo wamid não roda duas vezes ──
+// ── H) dedup: a Meta retry with the same wamid does not run twice ──
 {
   let rodou = 0;
   const usados = new Set();
   const h = wa.createWhatsAppHandler({
-    // claimWaMsg durável: o 2º claim do mesmo id falha (é o que o Postgres faz).
+    // Durable claimWaMsg: the 2nd claim of the same id fails (that's what Postgres does).
     db: { ...dbStub, claimWaMsg: async (id) => (usados.has(id) ? false : (usados.add(id), true)) },
     loadAgent: async () => ({ id: 'a1', name: 'Bot' }),
     runConversation: async () => { rodou++; return { text: 'ok' }; },
@@ -212,10 +212,10 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   process.env.WA_INTERJECT = '1';
 }
 
-// ── J) confirmação gated no meio do turno não vira interjeição ──
-// Reproduz a corrida real: o assistente registra a publicação, a pessoa manda
-// "Pode" antes de o turno terminar, e o WhatsApp precisa devolver essa mensagem
-// como um NOVO turno para o gate determinístico executar uma única vez.
+// ── J) a gated confirmation in the middle of the turn does not become an interjection ──
+// Reproduces the real race: the assistant records the publication, the person sends
+// "Pode" before the turn ends, and WhatsApp needs to return that message
+// as a NEW turn for the deterministic gate to execute exactly once.
 {
   enviados.length = 0;
   const {
@@ -262,7 +262,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   takePending(threadId);
 }
 
-// ── K) turno longo dá UM sinal de vida e preserva a ordem da resposta ──
+// ── K) a long turn gives ONE sign of life and preserves the order of the response ──
 {
   enviados.length = 0;
   process.env.WA_TURN_HEARTBEAT_MS = '15';
@@ -284,7 +284,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await espera(30);
   t('resposta final chega depois do recibo', enviados.length === 2 && enviados[1] === 'resposta final');
 
-  // Turno rápido não deve ganhar mensagem operacional extra.
+  // A quick turn should not gain an extra operational message.
   enviados.length = 0;
   const quick = wa.createWhatsAppHandler({
     db: dbStub,

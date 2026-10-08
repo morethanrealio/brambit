@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { withEmailSearchCompletion } from './web/email-search-completion.mjs';
 import { emailPagination, trackEmailPagination } from './web/email-pagination.mjs';
 
-// Somente funções em memória; sem providers, credenciais, banco ou rede.
+// Only in-memory functions; no providers, credentials, database, or network.
 const page = (ids, number = 1, next = null, extra = {}) => JSON.stringify({
   search_id: 'search-1', query: 'fatura setembro', page: number, page_size: 2,
   messages: ids.map(id => ({ id, account: 'work@example.invalid', subject: `Fatura ${id}` })),

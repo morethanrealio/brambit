@@ -1,19 +1,19 @@
-// Testes do i18n do bloco de fontes e do aviso de link quebrado (web/links.mjs).
+// i18n tests for the sources block and the broken-link notice (web/links.mjs).
 //
-// O que este arquivo prova, na ordem de importância:
-//  1. o bloco de fontes preserva a tradução e os títulos (é o único idioma que existe na
-//     base, então qualquer diferença aqui seria regressão pra todo mundo);
-//  2. em en/es o rótulo e o aviso saem traduzidos; links quebrados são retirados;
-//  3. o bloco não é anexado quando o texto já traz a lista, nos três idiomas
-//     (o modelo escreve "Sources:"/"Fuentes:" quando responde em outra língua).
+// What this file proves, in order of importance:
+//  1. the sources block preserves the translation and the titles (it's the only language that exists in the
+//     base, so any difference here would be a regression for everyone);
+//  2. in en/es the label and the notice come out translated; broken links are removed;
+//  3. the block is not appended when the text already carries the list, in all three languages
+//     (the model writes "Sources:"/"Fuentes:" when it replies in another language).
 //
-// A conferência de link é isolada: `FONTES_LINKS` não entra aqui e nenhum teste
-// depende de rede. Os que exercitam o aviso de 404 simulam respostas HTTP.
+// Link verification is isolated: `FONTES_LINKS` is not part of this and no test
+// depends on the network. The ones that exercise the 404 notice simulate HTTP responses.
 //
-// rodar: node links-i18n.test.mjs
+// run: node links-i18n.test.mjs
 
 import { blocoDeFontes, fontesEConferencia } from './web/links.mjs';
-// Somente fixtures; nenhuma chamada sai desta função.
+// Fixtures only; no call leaves this function.
 globalThis.fetch = async (url, opts) => {
   const host = new URL(url).hostname;
   if (!['broken.example.invalid', 'www.bcb.gov.br', 'www.ibge.gov.br'].includes(host)) throw Error('Unexpected URL');
@@ -30,14 +30,14 @@ const eq = (a, b, msg) => {
   if (a !== b) throw new Error(`${msg || 'diferente'}\n  esperado: ${JSON.stringify(b)}\n  obtido:   ${JSON.stringify(a)}`);
 };
 
-// Fontes já com URL direta: `resolveGroundingUri` devolve a própria URL quando
-// ela não é redirect do vertexaisearch, então nada aqui toca a rede.
+// Sources already with a direct URL: `resolveGroundingUri` returns the URL itself when
+// it's not a vertexaisearch redirect, so nothing here touches the network.
 const FONTES = [
   { title: 'Banco Central', uri: 'https://www.bcb.gov.br/' },
   { title: 'IBGE', uri: 'https://www.ibge.gov.br/' },
 ];
 
-// ── 1. pt-BR não muda um byte ───────────────────────────────────────────────
+// ── 1. pt-BR doesn't change a byte ───────────────────────────────────────────────
 await t('bloco de fontes em pt-BR é o texto de sempre', async () => {
   const esperado = 'Fontes:\n[1] Banco Central — https://www.bcb.gov.br/\n[2] IBGE — https://www.ibge.gov.br/';
   eq(await blocoDeFontes(FONTES, 'pt-BR'), esperado, 'pt-BR explícito');
@@ -51,7 +51,7 @@ await t('texto sem fonte e sem link sai intocado em pt-BR', async () => {
   eq(r.fontes, 0);
 });
 
-// ── 2. en/es traduzem rótulo e aviso, e não encostam na URL ─────────────────
+// ── 2. en/es translate label and notice, and don't touch the URL ─────────────────
 await t('rótulo do bloco traduz em en e es', async () => {
   eq((await blocoDeFontes(FONTES, 'en')).split('\n')[0], 'Sources:');
   eq((await blocoDeFontes(FONTES, 'es')).split('\n')[0], 'Fuentes:');
@@ -65,7 +65,7 @@ await t('URL e título sobrevivem à tradução', async () => {
   }
 });
 
-// Exercita o verificador real com HTTP simulado (inclui confirmação GET).
+// Exercises the real checker with simulated HTTP (includes GET confirmation).
 await t('link removido e aviso traduzido nos três idiomas', async () => {
   for (const [language, fragment] of [['pt-BR', 'Removi 2 links'], ['en', 'I removed 2 links'], ['es', 'Quité 2 enlaces']]) {
     const text = '• https://broken.example.invalid/' + language + '/a\n• https://broken.example.invalid/' + language + '/b';
@@ -76,7 +76,7 @@ await t('link removido e aviso traduzido nos três idiomas', async () => {
   }
 });
 
-// ── 3. lista que o modelo já escreveu não vira lista dobrada ────────────────
+// ── 3. a list the model already wrote doesn't turn into a doubled list ────────────────
 await t('não anexa fontes quando o texto já traz a lista, nos três idiomas', async () => {
   const casos = [
     ['pt-BR', 'Resposta.\n\nFontes:\n[1] x — https://www.bcb.gov.br/'],

@@ -1,5 +1,5 @@
-// Adaptadores reais; API de transporte, banco e execução externa são falsos.
-// A fronteira do servidor abaixo usa o gate real, sem importar o entrypoint.
+// Real adapters; transport API, database and external execution are fake.
+// The server boundary below uses the real gate, without importing the entrypoint.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -488,8 +488,8 @@ test('reação negativa em alvo durável errado não cancela nenhuma das duas re
   assert.equal((await c.approvals.peek()).state, 'pending');
 });
 
-// Executa blocos reais da fronteira HTTP sem importar o entrypoint, abrir pools,
-// iniciar workers ou reproduzir a implementação do servidor no teste.
+// Runs real blocks of the HTTP boundary without importing the entrypoint, opening pools,
+// starting workers, or reproducing the server implementation in the test.
 const serverSource = await readFile(new URL('./web/server.mjs', import.meta.url), 'utf8');
 test('pipeline real do servidor mantém cartão de app após journals e vincula seu recibo', async (t) => {
   const thread = `app-card-pipeline-${++caseId}`;

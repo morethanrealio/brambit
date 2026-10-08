@@ -82,14 +82,14 @@ const server = http.createServer(async (req, res) => {
       const child = spawnCat(st.name, st.norm);
       res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': String(st.size) });
       let sent = 0, aborted = false;
-      const abort = () => { if (aborted) return; aborted = true; try { child.kill('SIGKILL'); } catch { /* já morto */ } try { res.destroy(); } catch { /* já fechado */ } };
+      const abort = () => { if (aborted) return; aborted = true; try { child.kill('SIGKILL'); } catch { /* already dead */ } try { res.destroy(); } catch { /* already closed */ } };
       child.stdout.on('data', (d) => {
         sent += d.length;
         if (sent > MAX_FILE) return abort(); // guarda extra: arquivo cresceu entre stat e cat
         res.write(d);
       });
-      child.stderr.on('data', () => { /* descarta ruído do docker exec */ });
-      child.on('close', () => { if (!aborted) { try { res.end(); } catch { /* já fechado */ } } });
+      child.stderr.on('data', () => { /* discards noise from docker exec */ });
+      child.on('close', () => { if (!aborted) { try { res.end(); } catch { /* already closed */ } } });
       child.on('error', abort);
       req.on('close', () => { if (!res.writableEnded) abort(); }); // cliente desistiu: mata o cat
       return;

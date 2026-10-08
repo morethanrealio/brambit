@@ -1,15 +1,15 @@
 import {makeCompativel} from './compativel.mjs';
-// ── Adapter real: DeepInfra (OpenAI-compatible Chat Completions) ──
-// Predefinição do motor compatível (compativel.mjs). A chave vem de
-// process.env.DEEPINFRA_API_KEY (NUNCA hardcode no repo). Serve pra TESTAR o
-// GLM-5.2 (zai-org/GLM-5.2) lado a lado com o Gemini e a OpenAI.
+// ── Real adapter: DeepInfra (OpenAI-compatible Chat Completions) ──
+// Default of the compatible engine (compativel.mjs). The key comes from
+// process.env.DEEPINFRA_API_KEY (NEVER hardcode in the repo). Used to TEST
+// GLM-5.2 (zai-org/GLM-5.2) side by side with Gemini and OpenAI.
 //
-// IMPORTANTE: o GLM na DeepInfra NÃO tem busca embutida como o Gemini. Aqui o
-// parâmetro `search` é ignorado; o grounding vem da tool `buscar_web` (backend =
-// busca no Gemini), injetada no tool-loop pra qualquer provider não-Gemini.
+// IMPORTANT: GLM on DeepInfra does NOT have built-in search like Gemini. Here the
+// `search` parameter is ignored; grounding comes from the `buscar_web` tool (backend =
+// Gemini search), injected into the tool-loop for any non-Gemini provider.
 //
-// GLM-5.2 é OpenAI-compatible padrão: usa max_tokens + temperature (não é da
-// família gpt-5/o*, então não mexe com max_completion_tokens/reasoning_effort).
+// GLM-5.2 is standard OpenAI-compatible: uses max_tokens + temperature (it's not from
+// the gpt-5/o* family, so it doesn't touch max_completion_tokens/reasoning_effort).
 
 const BASE = process.env.DEEPINFRA_URL || 'https://api.deepinfra.com/v1/openai/chat/completions';
 
@@ -19,21 +19,21 @@ export function deepinfraEnabled() {
 
 export function makeDeepInfra({
   model = 'zai-org/GLM-5.2',
-  maxTokens = 8192,     // teto rígido de saída (anti-loop, igual ao Gemini)
+  maxTokens = 8192,     // hard output ceiling (anti-loop, same as Gemini)
   temperature = 0.7,
   reasoning,            // ex: { enabled: false } desliga o "pensamento" do GLM.
-                        // GLM-4.7 é um modelo que raciocina antes de responder e
-                        // isso custa 5-10s + tokens escondidos até num "bom dia";
-                        // com o raciocínio off ele responde em ~1-2s, sem perder
-                        // qualidade em chat/tool-calling (ver evals/eval-texto-glm47).
+                        // GLM-4.7 is a model that reasons before responding and
+                        // that costs 5-10s + hidden tokens even for a "good morning";
+                        // with reasoning off it responds in ~1-2s, without losing
+                        // quality in chat/tool-calling (see evals/eval-texto-glm47).
 } = {}) {
   return makeCompativel({
     provedor: 'deepinfra', model, url: BASE, chave: process.env.DEEPINFRA_API_KEY,
     campos: () => ({ max_tokens: maxTokens, temperature, ...(reasoning !== undefined ? { reasoning } : {}) }),
     camposDiretos: () => ({ max_tokens: maxTokens, temperature, reasoning: { enabled: false } }),
-    // Resposta vazia: refaz sem raciocínio (mesma proteção da Together, bug do
-    // caso de 02/07). Resíduo de tool-call do GLM: aqui NÃO re-amostra (o GLM da
-    // DeepInfra é lento); lança direto pra cadeia de fallback assumir.
+    // Empty response: retries without reasoning (same protection as Together, bug from
+    // the 2026-07-02 case). GLM tool-call residue: here it does NOT re-sample (DeepInfra's
+    // GLM is slow); throws straight to the fallback chain to take over.
     retryVazio: 'simples', residuoGlmLanca: true,
   });
 }

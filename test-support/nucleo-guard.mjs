@@ -28,7 +28,7 @@ import { buildGraph } from './affected.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFESTO = 'nuvem.txt';
 
-// Linhas do nuvem.txt viram um teste por arquivo: pasta (termina em /), padrão com * ou caminho exato.
+// Lines from nuvem.txt become one test per file: folder (ends in /), pattern with * or exact path.
 export function lerNuvem(texto) {
   const entradas = texto.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   const teste = (e) => {
@@ -43,7 +43,7 @@ export function lerNuvem(texto) {
   return { entradas: testes, ehNuvem: (f) => testes.some(([, t]) => t(f)) };
 }
 
-// Única citação de arquivo da nuvem permitida no núcleo: onde ele procura os plugins.
+// Only cloud file reference allowed in the core: where it looks for the plugins.
 const PONTES = new Set(['web/plugins.mjs>web/plugins/ativos.mjs']);
 
 // Prova 1. Devolve os problemas em texto (vazio = ok).
@@ -120,7 +120,7 @@ export async function bootSemNuvem(files, nuvem) {
     };
     const conferir = (cond, msg) => { if (!cond) throw Error(msg); };
 
-    // 1º boot: o servidor cria as tabelas do núcleo; depois entram as migrações, como no npm run local.
+    // 1st boot: the server creates the core's tables; then the migrations run, like in npm run local.
     await subir();
     conferir(await parar() === 0, 'o servidor não saiu limpo no SIGTERM');
     for (const n of migrationOrder(readdirSync(path.join(copia, 'migrations')).filter((n) => n.endsWith('.sql')))) {
@@ -129,7 +129,7 @@ export async function bootSemNuvem(files, nuvem) {
     }
     await db.end();
 
-    // 2º boot, já migrado: páginas, cadastro e login.
+    // 2nd boot, already migrated: pages, signup and login.
     const porta = await subir();
     for (const [rota, st] of [['/', 200], ['/login', 200], ['/api/config', 200], ['/api/me', 401]]) {
       const r = await pedir(porta, rota);

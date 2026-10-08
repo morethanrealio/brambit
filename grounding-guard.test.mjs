@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { checkGrounding, groundingRetryPrompt, applyGroundingFallback } from './web/grounding-guard.mjs';
 import { definirMarca } from './web/marca.mjs';
 
-// Os casos POSITIVOS abaixo são transcrições reduzidas de conversas reais de
-// usuários (achados de frustração do grupo 1, 18/09/2026). Cada um é uma
-// resposta que foi entregue afirmando um fato que nenhuma ferramenta tinha
-// consultado. Os casos NEGATIVOS existem pra provar que o freio não morde
-// resposta legítima: falso positivo aqui vira repasse à toa e trecho removido
-// de conversa boa, que é pior do que o bug que ele conserta.
+// The POSITIVE cases below are reduced transcripts of real user
+// conversations (frustration findings from group 1, 2026-09-18). Each one is a
+// response that was delivered asserting a fact that no tool had
+// consulted. The NEGATIVE cases exist to prove that the guard doesn't bite a
+// legitimate response: a false positive here turns into a pointless rewrite and a removed
+// snippet from a good conversation, which is worse than the bug it fixes.
 
 const kinds = r => r.findings.map(f => f.kind).sort();
 
@@ -28,14 +28,14 @@ test('cupom que veio da busca passa', () => {
 test('fonte assinada sem leitura da fonte', () => {
   const texto = 'Reflexão do dia: a fé move.\n\nFonte: Canção Nova';
   assert.deepEqual(kinds(checkGrounding(texto, { toolOutputs: [] })), ['fonte_nao_lida']);
-  // mesma assinatura, agora com a página realmente lida no turno
+  // same signature, now with the page actually read in the turn
   const lido = checkGrounding(texto, { toolOutputs: ['Canção Nova — reflexão diária ...'] });
   assert.deepEqual(kinds(lido), []);
 });
 
 test('assinatura de fonte decorada com markdown', () => {
-  // Como uma rotina real entregava de verdade: em itálico. A âncora
-  // antiga só pegava a linha crua, então a fonte inventada passava batido.
+  // How a real routine actually delivered it: in italics. The old
+  // anchor only caught the raw line, so a made-up source slipped through.
   for (const linha of ['*Fonte: Canção Nova*', '**Fonte:** Canção Nova', '- Fonte: Canção Nova', '> Fonte: Canção Nova']) {
     const texto = `Oração do dia.\n\n${linha}`;
     assert.deepEqual(kinds(checkGrounding(texto, { toolOutputs: [] })), ['fonte_nao_lida'], linha);
@@ -63,19 +63,19 @@ test('saldo e plano do dono afirmados sem consultar crédito', () => {
   const texto = 'Seu plano é o Pro, com 8.000 de franquia e 4.941 créditos disponíveis.';
   assert.deepEqual(kinds(checkGrounding(texto, { toolCounts: {} })), ['saldo_sem_consulta']);
   assert.deepEqual(kinds(checkGrounding(texto, { toolCounts: { consultar_creditos: 1 }, toolOutputs: ['plano pro 8000 4941'] })), []);
-  // Nível 1: a plataforma entregou o saldo real no contexto do turno, então
-  // responder com ele é o certo, não invenção.
+  // Level 1: the platform delivered the real balance in the turn's context, so
+  // answering with it is correct, not invention.
   assert.deepEqual(kinds(checkGrounding(texto, { toolCounts: {}, creditDelivered: true })), []);
 });
 
 test('link cujo domínio nunca apareceu numa consulta', () => {
   const texto = 'Vale ler: https://www.bessemer.com/atlas/estado-do-cloud-2026';
   assert.deepEqual(kinds(checkGrounding(texto, { toolOutputs: [] })), ['link_nao_consultado']);
-  // domínio devolvido pela busca
+  // domain returned by the search
   assert.deepEqual(kinds(checkGrounding(texto, { toolOutputs: ['... bessemer.com/atlas ...'] })), []);
-  // link que o PRÓPRIO dono mandou não é invenção nossa
+  // a link the owner THEMSELVES sent is not our invention
   assert.deepEqual(kinds(checkGrounding(texto, { ownerText: 'olha esse https://www.bessemer.com/atlas/x' })), []);
-  // domínio da própria plataforma (config da marca) vem do system prompt
+  // the platform's own domain (brand config) comes from the system prompt
   const link = 'Entra em https://minhamarca.example/habilidades';
   assert.deepEqual(kinds(checkGrounding(link, { toolOutputs: [] })), ['link_nao_consultado']);
   definirMarca({ hostsCitaveis: ['minhamarca.example'] });
@@ -86,11 +86,11 @@ test('fichamento de anexo sem nenhuma leitura do arquivo', () => {
   const texto = 'Segue o fichamento do documento que você mandou, com os pontos principais.';
   assert.deepEqual(kinds(checkGrounding(texto, { hadAttachment: true, toolCounts: {} })), ['arquivo_nao_lido']);
   assert.deepEqual(kinds(checkGrounding(texto, { hadAttachment: true, toolCounts: { ler_arquivo: 1 } })), []);
-  // sem anexo no turno, a frase é sobre outra coisa
+  // without an attachment in the turn, the sentence is about something else
   assert.deepEqual(kinds(checkGrounding(texto, { hadAttachment: false })), []);
-  // PDF sem camada de texto (logo, arte, escaneado) vira página-imagem na
-  // biblioteca e é lido por ver_midia. Se ver_midia não contasse como leitura,
-  // o freio morderia uma resposta que consultou o anexo de verdade.
+  // A PDF without a text layer (logo, artwork, scanned) becomes an image-page in the
+  // library and is read by ver_midia. If ver_midia didn't count as a read,
+  // the guard would bite a response that genuinely consulted the attachment.
   assert.deepEqual(kinds(checkGrounding(texto, { hadAttachment: true, toolCounts: { ver_midia: 1 } })), []);
 });
 
@@ -119,25 +119,25 @@ test('rede de baixo remove a linha sem base e nunca devolve silêncio', () => {
   assert.ok(!out.includes('Canção Nova'));
   assert.ok(out.includes('Aqui vai o resumo.'));
   assert.ok(out.trim().length > 0);
-  // texto que ERA só a afirmação não some por inteiro
+  // text that WAS only the claim doesn't disappear entirely
   const so = applyGroundingFallback('Fonte: Canção Nova', findings);
   assert.ok(so.trim().length > 0);
 });
 
-// Calibração 06/10/2026: 186 disparos reais em prod, nenhuma invenção
-// confirmada. Um representante de cada causa de falso positivo; cada um tem
-// que passar, e o caso inventado ao lado continua sendo pego.
+// Calibration 2026-10-06: 186 real triggers in prod, no invention
+// confirmed. One representative of each cause of false positive; each one has
+// to pass, and the made-up case next to it keeps getting caught.
 test('calibração: o que tem origem não é acusado', () => {
   const sem = (texto, ctx) => assert.deepEqual(kinds(checkGrounding(texto, ctx)), [], texto);
-  // palavra acentuada não vira código ("DESCART"), "promoções" não abre janela de cupom
+  // an accented word doesn't turn into a code ("DESCART"), "promoções" doesn't open a coupon window
   sem('*2) DESCARTÁVEIS* — propaganda, promoções, newsletter', { toolOutputs: [] });
   // linha que nega cupom
   sem('Não achei nenhum cupom ativo pra TESTANI hoje.', { toolOutputs: [] });
-  // pedaço de endereço e e-mail na linha de cupom
+  // piece of address and email in the coupon line
   sem('Cupom: veja em https://loja.example/promo?utm=VERAO2026 ou fale com VENDAS@loja.example', { toolOutputs: ['loja.example'] });
-  // material da rotina entregue pela plataforma ao modelo conta como origem
+  // routine material delivered by the platform to the model counts as a source
   sem('Promo do remetente MAPFRE no cupom da semana', { toolOutputs: ['De: MAPFRE comunicação'] });
-  // subdomínio de host da marca e endereço local
+  // brand-host subdomain and local address
   definirMarca({ hostsCitaveis: ['minhamarca.example'] });
   try { sem('Seu app: https://joana.minhamarca.example/planner/', { toolOutputs: [] }); } finally { definirMarca(); }
   sem('Use http://localhost:3000/callback no cadastro.', { toolOutputs: [] });
@@ -145,9 +145,9 @@ test('calibração: o que tem origem não é acusado', () => {
   sem('Abrir: https://mail.google.com/mail/#all/1a0b54264c258800', { toolOutputs: ['{"id":"1a0b54264c258800"}'] });
   // conta feita em cima de valor consultado (2 passagens; ida + volta)
   sem('Cotei agora: R$ 4.240 para duas pessoas, R$ 4.760 ida e volta.', { toolOutputs: ['{"preco":"R$ 2.120"} volta R$ 2.640'] });
-  // prosa ao redor da lista de fontes quando houve consulta
+  // prose around the source list when there was a consultation
   sem('Fontes: INSS (gov.br), G1, consultados agora.', { toolOutputs: ['inss gov br'], toolCounts: { buscar_web: 1 } });
-  // ainda pega: preço sem relação com o consultado, cupom e link inventados
+  // still catches: price unrelated to what was consulted, made-up coupon and link
   assert.deepEqual(kinds(checkGrounding('Cotei agora: R$ 9.999.', { toolOutputs: ['{"preco":"R$ 2.120"}'] })), ['preco_sem_consulta']);
   assert.deepEqual(kinds(checkGrounding('Cupom: VERAO2026', { toolOutputs: [] })), ['cupom_nao_consultado']);
   assert.deepEqual(kinds(checkGrounding('Veja https://inventado.example/abc', { toolOutputs: [] })), ['link_nao_consultado']);

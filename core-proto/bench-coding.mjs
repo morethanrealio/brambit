@@ -1,19 +1,19 @@
-// ── Bench off-prod: coding INLINE (A, como hoje) vs SUB-AGENTE (B, novo) ──
+// ── Off-prod bench: INLINE coding (A, like today) vs SUB-AGENT (B, new) ──
 //
-// Reproduz as CONDIÇÕES do caso de 08/2026 (sessão de código multi-turno, suíte
-// grande de tools no principal, contexto que cresce turno a turno) com o número
-// de turnos e passos LIMITADO, pra medir a diferença de tokens SEM chegar perto
-// dos 5M. Não toca produção: roda como script isolado, com a chave do produto
-// (GEMINI_API_KEY) e tools MOCK do tamanho da suíte real (schemas realistas +
-// saídas canned realistas). O modelo é o real; ele decide os próprios passos.
+// Reproduces the CONDITIONS of the 2026-08 case (multi-turn coding session, large
+// tool suite on the main agent, context that grows turn by turn) with the number
+// of turns and steps LIMITED, to measure the token difference WITHOUT getting close
+// to 5M. Doesn't touch production: runs as an isolated script, with the product's
+// key (GEMINI_API_KEY) and MOCK tools the size of the real suite (realistic schemas +
+// realistic canned outputs). The model is the real one; it decides its own steps.
 //
-// Uso:
-//   node core-proto/bench-coding.mjs --selftest        # valida o módulo, sem gastar chamada
+// Usage:
+//   node core-proto/bench-coding.mjs --selftest        # validates the module, without spending a call
 //   GEMINI_API_KEY=... PRIMARY_TEXT_MODEL=gemini-3.7-flash \
 //     node core-proto/bench-coding.mjs --real --turns 6 --steps 8
 //
-// Métrica: soma de tokens de INPUT (in), CACHED e OUTPUT reportados pelo Gemini,
-// em TODAS as chamadas ao modelo (principal + sub-agente), por caminho.
+// Metric: sum of INPUT (in), CACHED and OUTPUT tokens reported by Gemini,
+// across ALL calls to the model (main + sub-agent), per path.
 
 import { runAgent, ToolRegistry } from './core.mjs';
 import { makeGemini } from './providers/gemini.mjs';
@@ -26,7 +26,7 @@ const TURNS = Number(val('--turns', 6));
 const STEPS = Number(val('--steps', 8));
 const est = (s) => Math.ceil((s || '').length / 4);
 
-// ── Sistema realista de código (tamanho parecido com o do principal) ──
+// ── Realistic coding system (size similar to the main agent's) ──
 const CODING_SYSTEM = [
   'Você é um assistente que ajuda o usuário a construir e manter um app web',
   'publicado. Você tem ferramentas de código: ler/listar/buscar arquivos, editar e',
@@ -35,8 +35,8 @@ const CODING_SYSTEM = [
   'e publique quando fizer sentido. Seja direto. Ao concluir cada pedido,',
   'responda em uma frase curta o que você fez.',
   '',
-  // padding realista pra aproximar o system real (~7-11k tok). Repetição de
-  // diretrizes de estilo/segurança que o prompt de produção carrega.
+  // realistic padding to approximate the real system prompt (~7-11k tok). Repetition of
+  // style/security guidelines that the production prompt carries.
   ...Array.from({ length: 40 }, (_, i) =>
     `Diretriz ${i + 1}: ao mexer no app, preserve o comportamento existente, ` +
     'não quebre rotas nem HTML já publicados, mantenha o estilo do código ao ' +
@@ -56,7 +56,7 @@ const PRINCIPAL_SYSTEM = [
     'usuário tenha pedido; confirme antes de qualquer ação irreversível.'),
 ].join('\n');
 
-// ── Estado de arquivos mock (o "app" que está sendo construído) ──
+// ── Mock file state (the "app" being built) ──
 function seedFile() {
   return [
     '<!doctype html>', '<html lang="pt-br">', '<head>',
@@ -69,14 +69,14 @@ function seedFile() {
     'function render(){ul.innerHTML=itens.map(i=>`<li>${i}</li>`).join("")}',
     'document.getElementById("add").onclick=()=>{const v=document.getElementById("novo").value;if(v){itens.push(v);render()}};',
     '</script>', '</body>', '</html>',
-    // padding pra o arquivo ter tamanho de arquivo real (~2-4k chars).
+    // padding so the file has the size of a real file (~2-4k chars).
     ...Array.from({ length: 30 }, (_, i) => `<!-- linha de contexto ${i + 1}: comentário do app, historico de mudanca, nota de layout e acessibilidade -->`),
   ].join('\n');
 }
 
-// Fábrica das tools MOCK de código. Recebe um "estado" compartilhado (arquivos).
-// As funcionais fazem algo plausível; as de padding só existem pra o schema da
-// suíte ter o tamanho da suíte real (o que infla o prefixo reenviado por passo).
+// Factory for the MOCK coding tools. Receives a shared "state" (files).
+// The functional ones do something plausible; the padding ones only exist so the
+// suite's schema has the size of the real suite (which inflates the prefix resent per step).
 function makeCodingTools(state) {
   const tools = [];
   const P = (extra = {}) => ({ type: 'object', properties: { caminho: { type: 'string', description: 'caminho do arquivo' }, ...extra }, required: ['caminho'] });
@@ -111,8 +111,8 @@ function makeCodingTools(state) {
     name: 'publicar_sistema', description: 'Publica a versão atual do app (fica no ar pro usuário).', parameters: { type: 'object', properties: {}, required: [] },
     async run() { state.publishes++; return `app publicado (publicação #${state.publishes}). URL: https://app.example.com/lista`; },
   });
-  // Padding: dummies com descrição realista pra igualar o tamanho da suíte real
-  // (hosting/coding/sandbox/project/permission ~ dezenas de defs). Nunca chamadas.
+  // Padding: dummies with realistic descriptions to match the size of the real suite
+  // (hosting/coding/sandbox/project/permission ~ dozens of defs). Never called.
   const dummyNames = [
     'criar_projeto', 'entrar_projeto', 'sair_projeto', 'listar_projetos', 'deploy_projeto',
     'git_status', 'git_diff', 'git_commit', 'git_push', 'git_log',
@@ -136,8 +136,8 @@ function makeCodingTools(state) {
   return tools;
 }
 
-// Tools base do principal (não-coding), com descrição realista, pra o principal
-// ter uma suíte de tamanho realista mesmo no caminho B (sub-agente).
+// Base tools of the main agent (non-coding), with realistic description, so the main agent
+// has a realistically sized suite even on path B (sub-agent).
 function makeBaseTools() {
   const names = ['enviar_mensagem', 'criar_lembrete', 'criar_rotina', 'google', 'pesquisar', 'buscar_conversas', 'ler_conversa', 'registrar_evento', 'consultar_evento', 'listar_trackers', 'anotar_memoria', 'definir_meu_fuso'];
   return names.map((n) => ({
@@ -149,7 +149,7 @@ function makeBaseTools() {
   }));
 }
 
-// Cenário daquele caso: pedidos incrementais de mudança no app, um por turno.
+// Scenario of that case: incremental change requests to the app, one per turn.
 const TASKS = [
   'no meu app da lista de compras, adiciona um botão de "limpar tudo" que esvazia a lista. Publica quando terminar.',
   'agora faz os itens da lista poderem ser removidos individualmente, com um X do lado de cada um. Publica.',
@@ -186,16 +186,16 @@ async function runInline(provider) {
   return { total: sumUsages(all), state };
 }
 
-// ── Caminho B/C: coding ISOLADO num sub-agente ──
-// compact=false  → B: sub-agente com colapso de blob + cap (sem resumo)
-// compact=true   → C: sub-agente + COMPACTAÇÃO POR RESUMO (disciplina Claude Code)
+// ── Path B/C: ISOLATED coding in a sub-agent ──
+// compact=false  → B: sub-agent with blob collapse + cap (no summary)
+// compact=true   → C: sub-agent + SUMMARY COMPACTION (Claude Code discipline)
 async function runSubagent(provider, { compact = false, tag = 'B' } = {}) {
   const state = { files: { 'index.html': seedFile() }, edits: 0, publishes: 0 };
   const all = [];
   const codingReg = new ToolRegistry();
   for (const t of makeCodingTools(state)) codingReg.add(t);
-  // sessionKey único por caminho: senão B e C compartilham a MESMA sessão
-  // persistente (Map em módulo) e um contamina o history do outro.
+  // unique sessionKey per path: otherwise B and C share the SAME
+  // persistent session (module-level Map) and one contaminates the other's history.
   const sessionKey = `bench:thread1:${tag}`;
   resetCodingSession(sessionKey);
   const principalReg = new ToolRegistry();
@@ -218,15 +218,15 @@ async function runSubagent(provider, { compact = false, tag = 'B' } = {}) {
   return { total: sumUsages(all), state };
 }
 
-// ── Self-check do módulo (sem gastar chamada): provider fake ──
+// ── Module self-check (without spending a call): fake provider ──
 async function selftest() {
   let completes = 0;
-  const bigOut = 'X'.repeat(8000); // saída grande pra testar o colapso de blob
+  const bigOut = 'X'.repeat(8000); // large output to test blob collapse
   const fake = {
     name: 'fake',
     async complete({ messages }) {
       completes++;
-      // 1ª chamada de cada rodada: pede uma leitura; 2ª: encerra.
+      // 1st call of each round: requests a read; 2nd: finishes.
       const lastTool = [...messages].reverse().find((m) => m.role === 'tool');
       if (!lastTool || messages.filter((m) => m.role === 'tool').length < 1 || messages[messages.length - 1].role !== 'tool') {
         return { stop: 'tool', toolCalls: [{ id: 'c1', name: 'ler_arquivo', args: { caminho: 'index.html' } }], usage: { in: 100, cached: 0, out: 10, total: 110 } };
@@ -238,9 +238,9 @@ async function selftest() {
   reg.add({ name: 'ler_arquivo', description: 'lê', parameters: { type: 'object', properties: {}, required: [] }, async run() { return bigOut; } });
   const key = 'st:1';
   await runCodingSubagent({ objetivo: 'leia o index', tools: reg, provider: fake, sessionKey: key, maxSteps: 4 });
-  const { sessions } = await import('../web/coding-subagent.mjs').then((m) => ({ sessions: null })); // (Map é privado; validamos por comportamento)
-  // 2ª rodada na MESMA sessão: history deve ser reusado (persistência) e o blob
-  // grande da 1ª rodada deve ter sido colapsado ao persistir.
+  const { sessions } = await import('../web/coding-subagent.mjs').then((m) => ({ sessions: null })); // (Map is private; we validate by behavior)
+  // 2nd round in the SAME session: history should be reused (persistence) and the
+  // large blob from the 1st round should have been collapsed when persisting.
   await runCodingSubagent({ objetivo: 'continua', tools: reg, provider: fake, sessionKey: key, maxSteps: 4 });
   console.log(`[selftest] completes=${completes} (esperado >0). Módulo roda o loop, persiste sessão e colapsa blobs sem erro.`);
   console.log('[selftest] OK');
@@ -253,7 +253,7 @@ async function main() {
   const model = process.env.PRIMARY_TEXT_MODEL || 'gemini-3.7-flash';
   console.log(`\n== BENCH coding inline vs sub-agente ==\nmodelo=${model} turnos=${TURNS} passos/turno=${STEPS}`);
   console.log(`prefixo est: system_A≈${est(PRINCIPAL_SYSTEM + CODING_SYSTEM)}tok | system_principal_B≈${est(PRINCIPAL_SYSTEM)}tok | system_coding_B≈${est(CODING_SYSTEM)}tok\n`);
-  // search=false pra medir só a dinâmica de coding (cache/tokens), sem grounding.
+  // search=false to measure only coding dynamics (cache/tokens), without grounding.
   const provider = makeGemini({ model, search: false, maxOutputTokens: 32768 });
 
   console.log('— Caminho A: coding INLINE no principal (como hoje) —');

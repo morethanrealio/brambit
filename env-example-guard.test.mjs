@@ -1,4 +1,4 @@
-// Trava do .env.example: cada regra pega o defeito que deveria pegar, com entrada sintética.
+// .env.example guard: each rule catches the defect it should catch, with synthetic input.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { check, envReads, isProductionSource, parseExample } from './test-support/env-example-guard.mjs';

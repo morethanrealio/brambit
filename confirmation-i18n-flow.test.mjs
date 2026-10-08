@@ -15,9 +15,9 @@ const {gateTool,setOwnerText}=await import('./web/confirm.mjs');
 const {handleConfirmation,proposalPresentation,confirmationTargetsInMessage}=await import('./web/confirmation-flow.mjs');
 const {setThreadLanguage}=await import('./web/confirm.mjs');
 
-// Usuários em inglês e espanhol respondem ao cartão com as formas naturais do
-// idioma. Um "sim" precisa executar; um "deixa pra lá" precisa encerrar a
-// proposta (antes ela ficava pendente) e a resposta tem que vir no idioma dela.
+// English and Spanish users reply to the card with the natural forms of their
+// language. A "yes" needs to execute; a "never mind" needs to close the
+// proposal (before, it stayed pending) and the reply has to come in her language.
 async function fixture(t,language){
   const f=await confirmationFixture();t.after(()=>f.db.close());const effects=[];let last='';
   if(language) setThreadLanguage(f.scope.threadId,language);
@@ -51,8 +51,8 @@ for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancela e resp
   assert.notEqual((await f.store.list(f.scope))[0].state,'pending',text);
 });
 
-// Colisões com português: sem acento, "mandalo/envialo" não é o imperativo
-// espanhol, e uma frase que só começa parecida não é consentimento.
+// Collisions with Portuguese: without an accent, "mandalo/envialo" is not the Spanish
+// imperative, and a sentence that only starts out looking similar is not consent.
 for(const text of ['envialo','mandalo','o mandaloriano é bom','do it later?','hazlo mañana y después vemos'])
   test(`"${text}" não executa`,async t=>{
     const f=await fixture(t,'es');await f.decide(text);assert.equal(f.effects.length,0,text);

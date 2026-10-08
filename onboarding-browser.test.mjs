@@ -1,9 +1,9 @@
-// Browser com HTML/módulo reais e API simulada: nenhum servidor Harness, conta ou LLM real.
+// Browser with real HTML/module and simulated API: no real Harness server, account, or LLM.
 import {traduzPagina,carregaCatalogos} from './web/site-i18n.mjs';
 import {marcaNaPagina} from './web/marca.mjs';import {leitorDoApp} from './web/plugins.mjs';
 import {chromium} from 'playwright-core';import {readFileSync,existsSync,mkdirSync,writeFileSync} from 'node:fs';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';
 const root=resolve('web/public'),source=leitorDoApp([],root+'/index.html')(root+'/index.html'),html=source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
-// Núcleo sem plugin nem marca: os encaixes somem e o nome é o padrão.
+// Core without plugin or brand: the slots disappear and the name is the default.
 const catalogos=carregaCatalogos(resolve('web/site-textos'));
 const out=process.env.ONBOARDING_SCREENSHOTS||'/tmp/brambs-onboarding-browser';mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});let checks=0;

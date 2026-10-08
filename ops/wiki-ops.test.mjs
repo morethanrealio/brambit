@@ -1,12 +1,12 @@
-// Testes das operações de memória (Fase 1/1-B/2). Puro: não toca banco.
-// Rodar: node ops/wiki-ops.test.mjs   (precisa de node_modules por causa do db.mjs)
+// Tests for the memory operations (Phase 1/1-B/2). Pure: doesn't touch the database.
+// Run: node ops/wiki-ops.test.mjs   (needs node_modules because of db.mjs)
 import { aplicarOps, diffPerfil, tituloDe, filtrarEscritoNoTurno } from '../web/wiki.mjs';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; } else { fail++; console.log(`FALHOU: ${nome}`); } };
 
 const P = (body) => ({ perfil: body });
-// Conta os fatos do perfil ignorando a seção de links (que é gerada).
+// Counts the profile facts ignoring the links section (which is generated).
 const fatosSemLinks = (body) => {
   const L = String(body).split('\n').map((l) => l.trim()).filter(Boolean);
   const i = L.findIndex((l) => l.startsWith('## Mais detalhe'));
@@ -22,7 +22,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('add normaliza bullet', r.paginas.perfil.endsWith('- gosta de café coado'));
 }
 {
-  // Dedup é por caixa e bullet (o `norm` NÃO tira acento, então "Sao" != "São").
+  // Dedup is by case and bullet (`norm` does NOT strip accents, so "Sao" != "São").
   const r = aplicarOps([{ op: 'add', pagina: 'perfil', texto: 'MORA EM SÃO PAULO' }], P(base));
   t('add duplicado (caixa/bullet) é pulado', !Object.keys(r.paginas).length && r.puladas[0] === 'add:duplicado');
 }
@@ -41,8 +41,8 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('fix sem âncora = no-op', !Object.keys(r.paginas).length && r.puladas[0] === 'fix:ancora_nao_encontrada');
 }
 {
-  // Casamento EXATO tem prioridade; ambíguo é quando a âncora só casa por trecho
-  // e casa em mais de uma linha.
+  // EXACT match has priority; ambiguous is when the anchor only matches by substring
+  // and matches more than one line.
   const dup = '- reunião com o time toda segunda\n- reunião com o time de vendas';
   const r = aplicarOps([{ op: 'fix', pagina: 'perfil', ancora: 'reunião com o time', texto: 'reunião só quinzenal' }], P(dup));
   t('fix ambíguo = no-op', !Object.keys(r.paginas).length && r.puladas[0] === 'fix:ancora_ambigua');
@@ -71,7 +71,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('move põe no destino com texto literal', r.paginas.trabalho === '- trabalha com produto');
 }
 
-// ── página nova (o caminho que a tool memoria_anotar usa) ──
+// ── new page (the path the memoria_anotar tool uses) ──
 {
   const r = aplicarOps([{ op: 'add', pagina: 'marcas', texto: 'usa tênis Nike 42' }], { marcas: '' });
   t('add cria página vazia informada pelo chamador', r.paginas.marcas === '- usa tênis Nike 42');
@@ -81,7 +81,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('destino desconhecido é pulado', r.puladas[0]?.startsWith('add:pagina_desconhecida'));
 }
 
-// ── teto de operações ──
+// ── operation ceiling ──
 {
   const seis = Array.from({ length: 6 }, (_, i) => ({ op: 'add', pagina: 'perfil', texto: `fato numero ${i} aqui` }));
   const r = aplicarOps(seis, P(base));
@@ -105,10 +105,10 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('editar linha conta como mudança, não perda', d.del === 0 && d.chg === 1);
 }
 
-// ── FASE 2: teto do perfil, páginas de área/pessoa, seção de links ──
+// ── PHASE 2: profile ceiling, area/person pages, links section ──
 {
-  // Teto = 15 fatos (PERFIL_MAX_LINHAS). Cheio: o fato novo NÃO é cortado nem
-  // descartado, é roteado pra página de overflow.
+  // Ceiling = 15 facts (PERFIL_MAX_LINHAS). When full: the new fact is NOT cut nor
+  // discarded, it's routed to the overflow page.
   const cheio = Array.from({ length: 15 }, (_, i) => `- fato numero ${i} do perfil`).join('\n');
   const r = aplicarOps([{ op: 'add', pagina: 'perfil', texto: 'gosta de café coado' }], { perfil: cheio, notas: '' });
   t('perfil no teto roteia pra notas', r.paginas.notas === '- gosta de café coado');
@@ -116,8 +116,8 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('roteamento aparece no log', r.feitas[0] === 'add(notas) [perfil-cheio]');
 }
 {
-  // Sem a página de overflow carregada, gravar sobrescreveria conteúdo não lido:
-  // então pula com motivo, em vez de arriscar perda.
+  // Without the overflow page loaded, writing would overwrite unread content:
+  // so it skips with a reason, instead of risking loss.
   const cheio = Array.from({ length: 20 }, (_, i) => `- fato numero ${i} do perfil`).join('\n');
   const r = aplicarOps([{ op: 'add', pagina: 'perfil', texto: 'gosta de café coado' }], { perfil: cheio });
   t('sem overflow carregado o add é pulado', !Object.keys(r.paginas).length && r.puladas[0] === 'add:perfil_cheio');
@@ -127,7 +127,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('perfil abaixo do teto segue aceitando', r.paginas.perfil.endsWith('- gosta de café coado'));
 }
 {
-  // Fato novo entra ANTES da seção de links (que é gerada, fica sempre no fim).
+  // New fact goes in BEFORE the links section (which is generated, always stays at the end).
   const comLinks = `${base}\n\n## Mais detalhe (leia com memoria_ler quando a tarefa pedir)\n- trabalho — Trabalho`;
   const r = aplicarOps([{ op: 'add', pagina: 'perfil', texto: 'gosta de café coado' }], P(comLinks));
   const L = r.paginas.perfil.split('\n');
@@ -135,8 +135,8 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('seção de links não conta pro teto', fatosSemLinks(r.paginas.perfil) === 4);
 }
 {
-  // Escrita por patch não achata a página: recuo e linhas em branco ficam
-  // (prod 25/09: página editada à mão perdeu os 23 subitens num add).
+  // Patch write doesn't flatten the page: indentation and blank lines stay
+  // (prod 2026-09-25: a hand-edited page lost its 23 sub-items on one add).
   const pag = '- Filhos\n  - Ana, 8 anos\n  - Bia, 5 anos\n\n- Escola\n  - Colégio X';
   const r = aplicarOps([{ op: 'add', pagina: 'pessoa-cadu', texto: 'Escola nova: Sarapiquá' }], { 'pessoa-cadu': pag });
   t('add preserva recuo e linha em branco', r.paginas['pessoa-cadu'] === pag + '\n- Escola nova: Sarapiquá');
@@ -164,7 +164,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('página de atualizações é reservada', !Object.keys(r.paginas).length && r.puladas[0] === 'add:pagina_reservada');
 }
 {
-  // `mudancas` é o que alimenta o box de atualizações (sem custo de modelo).
+  // `mudancas` is what feeds the updates box (no model cost).
   const r = aplicarOps([
     { op: 'add', pagina: 'perfil', texto: 'gosta de café coado' },
     { op: 'fix', pagina: 'perfil', ancora: 'treina de manhã', texto: 'treina à noite' },
@@ -179,7 +179,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('nada não registra mudança', !r.mudancas.length && !Object.keys(r.paginas).length);
 }
 
-// ── housekeeping não sobrescreve o que a tool gravou no mesmo turno ──
+// ── housekeeping doesn't overwrite what the tool wrote in the same turn ──
 {
   // Prod 25/09: tool gravou R$619, housekeeping trocou por R$522 3s depois.
   const fatos = [

@@ -1,5 +1,5 @@
-// Teste offline do conserto da janela de 24h do WhatsApp. Stub do fetch: nada sai
-// pra rede. Roda com: node wa-window.test.mjs
+// Offline test of the WhatsApp 24h window fix. Fetch stub: nothing goes out
+// to the network. Run with: node wa-window.test.mjs
 process.env.WA_TOKEN = 'x';
 process.env.WA_PHONE_NUMBER_ID = '1';
 process.env.WA_VERIFY_TOKEN = 'v';
@@ -20,7 +20,7 @@ const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } els
 const ultimo = () => chamadas[chamadas.length - 1];
 const reset = () => { chamadas.length = 0; };
 
-// 1) Janela ABERTA (inbound há 1h) -> mensagem de sessão, formatação preservada.
+// 1) OPEN window (inbound 1h ago) -> session message, formatting preserved.
 reset();
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - 3600_000) });
 let r = await sendWhatsAppProactive('5511999999999', 'linha1\nlinha2');
@@ -28,7 +28,7 @@ t('janela aberta usa sessao', r.via === 'session' && ultimo().type === 'text');
 t('sessao preserva quebra de linha', ultimo().text.body.includes('\n'));
 t('sessao retorna ID e partes', r.wamid === 'wamid.'+seq && r.wamids.length === 1);
 
-// 2) Janela FECHADA (inbound há 30h) -> template, SEM tentar sessão antes.
+// 2) CLOSED window (inbound 30h ago) -> template, WITHOUT trying session first.
 reset();
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - 30 * 3600_000) });
 r = await sendWhatsAppProactive('5511999999999', 'linha1\nlinha2');
@@ -42,20 +42,20 @@ setWaHooks({ lastInboundAt: async () => null });
 r = await sendWhatsAppProactive('5511999999999', 'oi');
 t('sem inbound conhecido vai de template', r.via === 'template');
 
-// 4) Borda: 23h55 ainda é sessão; 23h56 já não é (margem de 5 min).
+// 4) Edge: 23h55 is still session; 23h56 no longer is (5 min margin).
 reset();
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - (24 * 3600_000 - 6 * 60_000)) });
 t('23h54 ainda e sessao', (await sendWhatsAppProactive('5511999999999', 'oi')).via === 'session');
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - (24 * 3600_000 - 4 * 60_000)) });
 t('23h56 ja e template', (await sendWhatsAppProactive('5511999999999', 'oi')).via === 'template');
 
-// 5) Hook indisponível (erro de banco) -> degrada pro comportamento antigo (sessão).
+// 5) Hook unavailable (DB error) -> degrades to the old behavior (session).
 reset();
 setWaHooks({ lastInboundAt: async () => { throw new Error('db fora'); } });
 r = await sendWhatsAppProactive('5511999999999', 'oi');
 t('erro no hook degrada pra sessao', r.via === 'session' && ultimo().type === 'text');
 
-// 6) Rede de segurança do 131047: sessão aceita (200) e reprovada depois.
+// 6) Safety net for 131047: session accepted (200) and rejected afterward.
 reset();
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - 3600_000) });
 r = await sendWhatsAppProactive('5511988888888', 'conteudo perdido');
@@ -66,7 +66,7 @@ t('retry reenvia por template', (await retryProactiveAsTemplate(wamid, '55119888
 t('template leva o mesmo conteudo', ultimo().type === 'template'
   && JSON.stringify(ultimo()).includes('conteudo perdido'));
 
-// 7) Sem laço: o mesmo wamid não reenvia duas vezes, e template nunca é guardado.
+// 7) No loop: the same wamid doesn't resend twice, and template is never stored.
 reset();
 t('retry e idempotente', (await retryProactiveAsTemplate(wamid, '5511988888888')) === false);
 t('retry de wamid desconhecido nao faz nada', (await retryProactiveAsTemplate('wamid.zzz', '55119')) === false);
@@ -75,14 +75,14 @@ await sendWhatsAppProactive('5511977777777', 'via template');
 const wamidTpl = `wamid.${seq}`;
 t('template nao entra na fila de retry', (await retryProactiveAsTemplate(wamidTpl, '5511977777777')) === false);
 
-// 8) Falha de uma parte não prova que as outras falharam. Mensagem longa
-// não pode reenviar o corpo inteiro pelo fallback assíncrono.
+// 8) Failure of one part doesn't prove the others failed. A long message
+// must not resend the entire body via the async fallback.
 reset();
 setWaHooks({ lastInboundAt: async () => new Date(Date.now() - 3600_000) });
 r = await sendWhatsAppProactive('5511966666666', 'a'.repeat(9000));
 const parte2 = `wamid.${seq}`, parte1 = `wamid.${seq - 1}`;
-// Quantas partes dá depende do teto de balão da Meta (já mudou de 4096 pra
-// 1024), então o que se trava aqui é a regra: toda parte enviada volta com id.
+// How many parts it splits into depends on Meta's bubble cap (which already changed from 4096 to
+// 1024), so what's locked down here is the rule: every sent part comes back with an id.
 t('mensagem longa virou varias partes', chamadas.length > 1);
 t('retorna TODOS os IDs da mensagem longa', r.wamids.length === chamadas.length && r.wamids[r.wamids.length - 1] === 'wamid.'+seq);
 reset();

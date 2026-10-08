@@ -1,8 +1,8 @@
-// Guarda-corpo offline para ações financeiras Asaas.
-// Prova três contratos:
-// 1. nenhuma mutação financeira roda antes de confirmação textual;
-// 2. a confirmação de chave Pix informa o efeito e a exposição de dados;
-// 3. saldo isolado nunca é aceito como prova de um depósito.
+// Offline guardrail for Asaas financial actions.
+// Proves three contracts:
+// 1. no financial mutation runs before textual confirmation;
+// 2. the Pix key confirmation states the effect and the data exposure;
+// 3. an isolated balance is never accepted as proof of a deposit.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { asaasTools } from './web/connectors-vault.mjs';
@@ -10,9 +10,9 @@ import {
   gateTool, takePending, renderConfirmed, setOwnerText, GATED_TOOLS, IRREVERSIBLE_TOOLS,
 } from './web/confirm.mjs';
 
-// Relógio fixo em 18/09/2026 (data em que os fixtures foram escritos): os
-// boletos sintéticos vencem em 20/09/2026, um domingo, e a regra "data já
-// passou" do produto é real. Sem congelar o dia, o teste vira bomba-relógio.
+// Clock fixed at 2026-09-18 (date the fixtures were written): the
+// synthetic invoices are due 2026-09-20, a Sunday, and the product's "date already
+// passed" rule is real. Without freezing the day, the test turns into a time bomb.
 const RealDate = Date;
 const FIXED_NOW = RealDate.parse('2026-09-18T15:00:00Z');
 const realStart = RealDate.now();
@@ -49,8 +49,8 @@ const named = (list, name) => {
   return tool;
 };
 
-// O wiring e o gate precisam concordar. Se alguém adicionar uma ação Asaas e
-// esquecer um dos dois lugares, este incidente volta.
+// The wiring and the gate need to agree. If someone adds an Asaas action and
+// forgets one of the two places, this incident comes back.
 for (const name of ['asaas_receber_pix', 'asaas_pagar_conta', 'asaas_cancelar_pagamento_conta', 'asaas_transferir_pix', 'asaas_enviar_comprovante_email']) {
   ok(GATED_TOOLS.has(name), `${name} precisa estar no gate`);
   ok(IRREVERSIBLE_TOOLS.has(name), `${name} exige texto, reação não basta`);
@@ -58,14 +58,14 @@ for (const name of ['asaas_receber_pix', 'asaas_pagar_conta', 'asaas_cancelar_pa
 const server = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_receber_pix/.test(server), 'receber Pix precisa ser registrado pelo caminho gated');
 ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_cancelar_pagamento_conta/.test(server), 'cancelamento precisa ser registrado pelo caminho gated');
-// O cartão determinístico vai sempre inteiro no fim da resposta; o texto do modelo
-// fica acima dele, mas é o cartão que amarra a aprovação (29/09/2026).
+// The deterministic card always goes in full at the end of the response; the model's text
+// stays above it, but it's the card that ties down the approval (2026-09-29).
 ok(/peekPending\(thread\.id\)\?\.confirmationText[\s\S]*if \(deterministicConfirmation\) text = \[[^\n]*, deterministicConfirmation\]/.test(server), 'confirmação financeira determinística fecha a resposta');
 ok(/EVERY financial action[\s\S]*asaas_receber_pix[\s\S]*confirmation in TEXT/.test(server), 'prompt exige confirmação de toda ação financeira');
 ok(!/asaas_receber_pix:[^\n]*não precisa de confirmação/.test(server), 'prompt não contém exceção antiga para receber Pix');
 
-// Defesa em profundidade: mesmo que alguém registre a tool crua por engano,
-// run() não pode fazer POST. Só o closure preparado e confirmado pode mutar.
+// Defense in depth: even if someone registers the raw tool by mistake,
+// run() cannot do a POST. Only the prepared and confirmed closure can mutate.
 await withFetch([], async (calls) => {
   for (const name of ['asaas_receber_pix', 'asaas_pagar_conta', 'asaas_cancelar_pagamento_conta', 'asaas_transferir_pix', 'asaas_enviar_comprovante_email']) {
     const out = JSON.parse(await named(tools(), name).run({
@@ -77,8 +77,8 @@ await withFetch([], async (calls) => {
   eq(calls.length, 0, 'nenhuma rede na chamada direta');
 });
 
-// O comprovante enviado por e-mail é montado com dados relidos da Asaas e só
-// sai depois de confirmação textual. O modelo não escolhe link, valor nem corpo.
+// The receipt sent by email is assembled with data re-read from Asaas and only
+// goes out after textual confirmation. The model does not choose the link, amount, or body.
 await withFetch([
   { id: 'pix-receipt-1', status: 'DONE', value: 73.4, effectiveDate: '2026-09-16', transactionReceiptUrl: 'https://www.asaas.com/comprovantes/fixture-1' },
   { id: 'pix-receipt-1', status: 'DONE', value: 73.4, effectiveDate: '2026-09-16', transactionReceiptUrl: 'https://www.asaas.com/comprovantes/fixture-1' },
@@ -104,7 +104,7 @@ await withFetch([
   eq(calls.map((x) => x.method), ['GET', 'GET'], 'proposta e execução só fazem consultas');
 });
 
-// Se o modelo trocar uma letra do endereço, o cartão denuncia a divergência.
+// If the model swaps a letter in the address, the card flags the divergence.
 await withFetch([
   { id: 'pix-receipt-typo', status: 'DONE', value: 10, transactionReceiptUrl: 'https://www.asaas.com/comprovantes/fixture-typo' },
 ], async () => {
@@ -120,7 +120,7 @@ await withFetch([
   ok(/CONFIRA O ENDEREÇO|CHECK THE ADDRESS|REVISA LA DIRECCIÓN/i.test(pending.label), 'cartão avisa endereço divergente');
 });
 
-// Status pendente não pode produzir nem proposta de e-mail, muito menos envio.
+// Pending status cannot produce an email proposal, let alone a send.
 await withFetch([
   { id: 'pix-pending-1', status: 'PENDING', value: 30, transactionReceiptUrl: null },
 ], async () => {
@@ -137,12 +137,12 @@ await withFetch([
   eq(sent, 0, 'não envia e-mail de operação pendente');
 });
 
-// Pergunta interpretada indevidamente como ação: o modelo pode chamar a tool,
-// mas o código só consulta o estado e cria uma pendência. O POST ocorre apenas
-// depois do turno seguinte, quando a confirmação humana é consumida.
+// A question wrongly interpreted as an action: the model may call the tool,
+// but the code only queries the state and creates a pending request. The POST occurs only
+// after the next turn, when the human confirmation is consumed.
 await withFetch([
   { data: [] },                              // preparo read-only
-  { data: [] },                              // revalidação depois do "sim"
+  { data: [] },                              // revalidation after the "yes"
   { id: 'key-1', key: 'evp-fixture', status: 'ACTIVE', qrCode: { payload: 'pix-payload' } },
 ], async (calls) => {
   const gated = gateTool(named(tools(), 'asaas_receber_pix'), 'financial-key-fixture', { mode: 'livre' });
@@ -159,8 +159,8 @@ await withFetch([
   ok(rendered.includes('pix-payload'), 'resultado entrega o copia-e-cola');
 });
 
-// Se o estado mudar entre proposta e confirmação, nada é executado com base
-// num cartão velho. A pessoa precisa ver e confirmar uma nova proposta.
+// If the state changes between proposal and confirmation, nothing is executed based on
+// an old card. The person needs to see and confirm a new proposal.
 await withFetch([
   { data: [] },
   { data: [{ id: 'key-new', key: 'evp-new', status: 'ACTIVE', qrCode: { payload: 'new' } }] },
@@ -174,8 +174,8 @@ await withFetch([
   eq(calls.map((x) => x.method), ['GET', 'GET'], 'não cria chave depois da mudança');
 });
 
-// Se há duas contas, a credencial e o nome da conta escolhida ficam presos à
-// proposta. A confirmação não resolve de novo e não pode migrar para outra.
+// If there are two accounts, the credential and the name of the chosen account stay pinned to the
+// proposal. The confirmation does not resolve again and cannot migrate to another one.
 await withFetch([
   { data: [{ id: 'key-bound', key: 'evp-bound', status: 'ACTIVE', qrCode: { payload: 'pix-bound' } }] },
   { data: [{ id: 'key-bound', key: 'evp-bound', status: 'ACTIVE', qrCode: { payload: 'pix-bound' } }] },
@@ -198,8 +198,8 @@ await withFetch([
   ok(calls.every((x) => x.headers?.access_token === '$aact_hmlg_bound'), 'todas as chamadas usam a credencial vinculada');
 });
 
-// O pagamento fica vinculado a valor, beneficiário e vencimento lidos na
-// Asaas. Se qualquer um mudar, a confirmação antiga não autoriza outro boleto.
+// The payment stays bound to the amount, payee, and due date read from
+// Asaas. If any of them changes, the old confirmation does not authorize another invoice.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 89.9, dueDate: '2026-09-20', beneficiaryName: 'Empresa A', beneficiaryCpfCnpj: '***1234', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 99.9, dueDate: '2026-09-20', beneficiaryName: 'Empresa A', beneficiaryCpfCnpj: '***1234', allowChangeValue: false } },
@@ -215,9 +215,9 @@ await withFetch([
   ok(calls.every((x) => x.url.includes('/v3/bill/simulate')), 'só a simulação read-only foi chamada');
 });
 
-// Pedido simples de pagamento é imediato. Mesmo que o modelo copie a data de
-// vencimento para `agendar_para`, o gate remove o agendamento antes de mostrar
-// a confirmação e antes de montar o POST.
+// A simple payment request is immediate. Even if the model copies the due date
+// into `agendar_para`, the gate removes the scheduling before showing
+// the confirmation and before assembling the POST.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 108.45, dueDate: '2026-09-20', beneficiaryName: 'BHub', beneficiaryCpfCnpj: '***1111', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 108.45, dueDate: '2026-09-20', beneficiaryName: 'BHub', beneficiaryCpfCnpj: '***1111', allowChangeValue: false } },
@@ -253,8 +253,8 @@ await withFetch([
   eq(calls.filter((x) => x.url.endsWith('/v3/bill') && x.method === 'POST').length, 0, 'não envia o pagamento sem a data oficial');
 });
 
-// Agendamento só sobrevive quando o pedido atual o diz literalmente. Se cair
-// num fim de semana, o próprio código mostra a regra do próximo dia útil.
+// Scheduling only survives when the current request states it literally. If it falls
+// on a weekend, the code itself shows the next-business-day rule.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 108.45, dueDate: '2026-09-20', beneficiaryName: 'BHub', beneficiaryCpfCnpj: '***1111', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 108.45, dueDate: '2026-09-20', beneficiaryName: 'BHub', beneficiaryCpfCnpj: '***1111', allowChangeValue: false } },
@@ -282,8 +282,8 @@ await withFetch([
   eq(calls.filter((x) => x.url.includes('/v3/bill/simulate')).length, 2, 'boleto é conferido na proposta e na confirmação');
 });
 
-// "No vencimento" usa a data verificada na simulação, sem pedir ao usuário que
-// redigite o que já está no boleto e sem deixar o modelo inventá-la.
+// "On the due date" uses the date verified in the simulation, without asking the user to
+// retype what's already on the invoice and without letting the model invent it.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 35, dueDate: '2026-09-20', beneficiaryName: 'Empresa Vencimento', beneficiaryCpfCnpj: '***5555', allowChangeValue: false } },
 ], async (calls) => {
@@ -299,8 +299,8 @@ await withFetch([
   eq(calls.length, 1, 'uma única simulação oficial resolve o vencimento');
 });
 
-// Pedido genérico de agendamento sem data nem referência ao vencimento exige
-// esclarecimento antes de consultar ou propor qualquer coisa.
+// A generic scheduling request without a date or reference to the due date requires
+// clarification before querying or proposing anything.
 await withFetch([], async (calls) => {
   const thread = 'financial-bill-schedule-no-date';
   setOwnerText(thread, 'Agende esse pagamento.', 'Agende esse pagamento.');
@@ -335,8 +335,8 @@ await withFetch([], async (calls) => {
   eq(calls.length, 0, 'cancelamento local não chama a Asaas');
 });
 
-// Cancelamento é outra ação confirmada: duas leituras vinculam o estado, e o
-// endpoint mutável é chamado uma única vez depois do aceite textual.
+// Cancellation is another confirmed action: two reads bind the state, and the
+// mutable endpoint is called exactly once after textual acceptance.
 await withFetch([
   { id: 'bill-cancel-1', status: 'PENDING', value: 108.45, scheduleDate: '2026-09-21', dueDate: '2026-09-20', description: 'BHub', canBeCancelled: true },
   { id: 'bill-cancel-1', status: 'PENDING', value: 108.45, scheduleDate: '2026-09-21', dueDate: '2026-09-20', description: 'BHub', canBeCancelled: true },
@@ -360,7 +360,7 @@ await withFetch([
   eq(calls.length, 3, 'reuso não chama a Asaas novamente');
 });
 
-// Mudança de estado/canBeCancelled entre proposta e confirmação falha fechado.
+// A state/canBeCancelled change between proposal and confirmation fails closed.
 await withFetch([
   { id: 'bill-cancel-stale', status: 'PENDING', value: 20, scheduleDate: '2026-09-21', canBeCancelled: true },
   { id: 'bill-cancel-stale', status: 'BANK_PROCESSING', value: 20, scheduleDate: '2026-09-21', canBeCancelled: false },
@@ -372,8 +372,8 @@ await withFetch([
   eq(calls.filter((x) => x.method === 'POST').length, 0, 'estado alterado não envia cancelamento');
 });
 
-// Se a API aceitar o cancelamento mas ainda devolver PENDING, a resposta é
-// honesta e há uma única reconciliação GET; o POST nunca é repetido.
+// If the API accepts the cancellation but still returns PENDING, the response is
+// honest and there is a single GET reconciliation; the POST is never repeated.
 await withFetch([
   { id: 'bill-cancel-pending', status: 'PENDING', value: 44, scheduleDate: '2026-09-21', canBeCancelled: true },
   { id: 'bill-cancel-pending', status: 'PENDING', value: 44, scheduleDate: '2026-09-21', canBeCancelled: true },
@@ -411,9 +411,9 @@ await withFetch([
   eq(saved.at(-1).comprovanteEntregue, false, 'confirmação tardia fica para a outbox avisar');
 });
 
-// Pagamento aceito como PENDING segue o mesmo contrato assíncrono do Pix. Se
-// BILL_PAID chegar na espera curta, o turno entrega o comprovante sem repetir o
-// POST; o registro final deduplica a notificação posterior.
+// A payment accepted as PENDING follows the same asynchronous contract as Pix. If
+// BILL_PAID arrives within the short wait, the turn delivers the receipt without repeating the
+// POST; the final record deduplicates the later notification.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 120, dueDate: '2026-09-20', beneficiaryName: 'Empresa Assíncrona', beneficiaryCpfCnpj: '***8888', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 120, dueDate: '2026-09-20', beneficiaryName: 'Empresa Assíncrona', beneficiaryCpfCnpj: '***8888', allowChangeValue: false } },
@@ -451,8 +451,8 @@ await withFetch([
   ok(rendered.includes('Pagamento') && rendered.includes('/bill-async-paid'), 'turno entrega conclusão e comprovante do pagamento');
 });
 
-// Se a janela terminar ainda em PENDING, a conversa informa processamento em
-// vez de falha e o webhook poderá fechá-la depois.
+// If the window ends still in PENDING, the conversation reports processing instead
+// of failure, and the webhook can close it later.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 55, dueDate: '2026-09-20', beneficiaryName: 'Empresa Pendente', beneficiaryCpfCnpj: '***9999', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 55, dueDate: '2026-09-20', beneficiaryName: 'Empresa Pendente', beneficiaryCpfCnpj: '***9999', allowChangeValue: false } },
@@ -472,8 +472,8 @@ await withFetch([
   eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento, mas informou processamento em 21/09/2026, diferente de 18/09/2026 que você confirmou. Ele ainda não foi pago. Não repita o pedido; avisarei aqui quando o status mudar.', 'PENDING explica a data real sem afirmar pagamento');
 });
 
-// Sem webhook dentro da janela, há exatamente uma reconciliação GET aos 60s.
-// Ela atualiza o estado para a outbox entregar; jamais repete o POST financeiro.
+// Without a webhook inside the window, there is exactly one GET reconciliation at 60s.
+// It updates the state for the outbox to deliver; it never repeats the financial POST.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 70, dueDate: '2026-09-20', beneficiaryName: 'Empresa Reconciliação', beneficiaryCpfCnpj: '***0000', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 70, dueDate: '2026-09-20', beneficiaryName: 'Empresa Reconciliação', beneficiaryCpfCnpj: '***0000', allowChangeValue: false } },
@@ -510,8 +510,8 @@ await withFetch([
   eq(saved.at(-1).comprovanteEntregue, false, 'estado reconciliado fica para a outbox avisar na conversa');
 });
 
-// A transferência fica vinculada ao titular real consultado, não só à chave
-// digitada pelo modelo. Titularidade diferente invalida a autorização.
+// The transfer stays bound to the actual account holder queried, not just to the key
+// typed by the model. A different holder invalidates the authorization.
 await withFetch([
   {
     key: 'fixture-current-shape', type: 'EVP', ispb: '12345678', ispbName: 'Banco Atual',
@@ -540,9 +540,9 @@ await withFetch([
   eq(rendered, 'O Pix está em processamento. Avisarei aqui quando concluir.', 'PENDING conhecido não vira falha incerta');
 });
 
-// Se o webhook fechar a operação dentro da espera curta, o próprio turno
-// entrega DONE e comprovante sem repetir o POST. O registro final marcado como
-// entregue impede a notificação assíncrona de duplicar a mensagem.
+// If the webhook closes the operation within the short wait, the turn itself
+// delivers DONE and the receipt without repeating the POST. The final record marked as
+// delivered prevents the asynchronous notification from duplicating the message.
 await withFetch([
   { name: 'Pessoa Assíncrona', cpfCnpj: '***7777', institutionName: 'Banco E' },
   { name: 'Pessoa Assíncrona', cpfCnpj: '***7777', institutionName: 'Banco E' },
@@ -580,8 +580,8 @@ await withFetch([
   ok(rendered.includes('PIX de R$ 20 enviado') && rendered.includes('/pix-async-done'), 'turno entrega sucesso e comprovante');
 });
 
-// Incerteza de transporte continua diferente de PENDING aceito: o renderer
-// mantém o aviso de não repetição nesse caso.
+// Transport uncertainty remains different from an accepted PENDING: the renderer
+// keeps the no-repeat notice in that case.
 {
   const p = { name: 'asaas_transferir_pix', args: { valor: 20, chave_pix: 'fixture' } };
   const out = renderConfirmed(p, JSON.stringify({
@@ -616,8 +616,8 @@ await withFetch([
   ok(calls.every((x) => x.url.includes('/v3/pix/addressKeys/external')), 'só a consulta de titularidade foi chamada');
 });
 
-// Com os mesmos dados reais na revalidação, o POST ocorre uma única vez e o
-// estado retornado pelo provedor é preservado sem transformar pendência em êxito.
+// With the same real data on revalidation, the POST occurs exactly once and the
+// state returned by the provider is preserved without turning a pending into a success.
 await withFetch([
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 42, dueDate: '2026-09-22', beneficiaryName: 'Empresa Estável', allowChangeValue: false } },
   { minimumScheduleDate: '2026-09-18', bankSlipInfo: { value: 42, dueDate: '2026-09-22', beneficiaryName: 'Empresa Estável', allowChangeValue: false } },
@@ -683,7 +683,7 @@ await withFetch([
   eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'nenhuma mutação extra antes do POST financeiro');
 });
 
-// Saldo atual é só uma fotografia, nunca prova de depósito.
+// Current balance is only a snapshot, never proof of a deposit.
 await withFetch([{ balance: 365 }], async () => {
   const data = JSON.parse(await named(tools(), 'asaas_saldo').run());
   eq(data.saldo, 365);
@@ -692,8 +692,8 @@ await withFetch([{ balance: 365 }], async () => {
 });
 
 const extrato = (rows) => ({ data: rows });
-// Sem o valor informado, até um único crédito recente continua candidato, não
-// confirmação. É exatamente o caso em que antes o agente afirmou "deu certo".
+// Without the amount informed, even a single recent credit remains a candidate, not
+// confirmation. This is exactly the case where the agent previously claimed "it worked".
 await withFetch([extrato([{ id: 'ft-1', type: 'PIX_TRANSACTION_CREDIT', value: 365, date: '2026-09-16' }])], async () => {
   const data = JSON.parse(await named(tools(), 'asaas_verificar_recebimento_pix').run({ desde: '2026-09-16' }));
   eq(data.confirmado, false);
@@ -701,7 +701,7 @@ await withFetch([extrato([{ id: 'ft-1', type: 'PIX_TRANSACTION_CREDIT', value: 3
   eq(data.creditos_pix_recentes.length, 1);
 });
 
-// Com valor e um único lançamento Pix no extrato, há evidência determinística.
+// With the amount and a single Pix entry in the statement, there is deterministic evidence.
 await withFetch([extrato([
   { id: 'ft-1', type: 'PIX_TRANSACTION_CREDIT', value: 365, date: '2026-09-16' },
   { id: 'fee-1', type: 'PIX_TRANSACTION_CREDIT_FEE', value: -1, date: '2026-09-16' },
@@ -711,7 +711,7 @@ await withFetch([extrato([
   eq(data.evidencia.id, 'ft-1');
 });
 
-// Dois créditos iguais são ambíguos, portanto não confirmam qual foi o teste.
+// Two equal credits are ambiguous, so they do not confirm which one was the test.
 await withFetch([extrato([
   { id: 'ft-1', type: 'PIX_TRANSACTION_CREDIT', value: 20, date: '2026-09-16' },
   { id: 'ft-2', type: 'PIX_TRANSACTION_CREDIT', value: 20, date: '2026-09-16' },

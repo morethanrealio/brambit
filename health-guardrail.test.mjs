@@ -1,5 +1,5 @@
-// Regra de saúde física/mental presente em todo prompt que fala com o usuário.
-// Rodar: node health-guardrail.test.mjs
+// Physical/mental health rule present in every prompt that talks to the user.
+// Run: node health-guardrail.test.mjs
 import { readFileSync } from 'node:fs';
 import { HEALTH_GUARDRAIL } from './web/health-guardrail.mjs';
 import { systemA, systemB } from './web/agent2agent.mjs';
@@ -17,7 +17,7 @@ const agent = { name: 'Bia' };
 t('systemA inclui', systemA({ ownerAName: 'A', agentA: agent, ownerBName: 'B', objetivo: 'x', language: 'pt-BR' }).includes(HEALTH_GUARDRAIL));
 t('systemB inclui', systemB({ ownerBName: 'B', agentB: agent, ownerAName: 'A', language: 'pt-BR' }).includes(HEALTH_GUARDRAIL));
 
-// server.mjs inicializa banco e serviços ao importar: confere pelo fonte.
+// server.mjs initializes database and services on import: check against the source.
 const src = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 t('server importa', /import \{ HEALTH_GUARDRAIL \} from '\.\/health-guardrail\.mjs';/.test(src));
 t('systemFor, emergência e rascunho usam', (src.match(/HEALTH_GUARDRAIL/g) || []).length === 4);

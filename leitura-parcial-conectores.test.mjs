@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { notionTools } from './web/connectors-vault.mjs';
 import { githubTools } from './web/connectors-ext.mjs';
 
-// Leitura parcial que não se declara é o pior tipo de bug de leitura: o modelo
-// resume "a página" ou "a issue" tendo visto só o começo, e ninguém percebe.
-// Aqui a rede é falsa (fetch trocado), então nada sai do processo.
+// A partial read that doesn't declare itself is the worst kind of reading bug: the model
+// summarizes "the page" or "the issue" having seen only the beginning, and no one notices.
+// Here the network is fake (fetch swapped out), so nothing leaves the process.
 
 const comFetch = async (handler, fn) => {
   const orig = globalThis.fetch;

@@ -46,8 +46,8 @@ test('globais de Node não viram aviso no arquivo de servidor',()=>{
 });
 
 test('viés para o silêncio: se o nome aparece fora de posição de chamada, cala',()=>{
- // `calcularTotal` também é passado como referência, logo faz parte do
- // vocabulário do app e a chance de ser erro de digitação despenca.
+ // `calcularTotal` is also passed as a reference, so it's part of the
+ // app's vocabulary and the chance of it being a typo plummets.
  const files={'public/app.js':`
    function calcularTotais(){ }
    const handlers={ total: calcularTotal };
@@ -123,8 +123,8 @@ test('função de topo exportada em objeto: chamada com ponto também é compara
  assert.deepEqual(huntTypos(files),[{tipo:'nome_parecido',funcao:'criaaChat',sugestao:'criarChat',arquivo:'public/app.js'}]);
 });
 
-// Trava de calibração: 0,85 é o piso da faixa aprovada no desenho e o que foi
-// medido em 20/09 (24 apps publicados + 18 rascunhos, 1 aviso, e era typo real).
+// Calibration guard: 0.85 is the floor of the range approved in the design and what was
+// measured on 2026-09-20 (24 published apps + 18 drafts, 1 warning, and it was a real typo).
 test('limiar travado em 0,85, o valor calibrado contra a produção',()=>{
  assert.equal(LIMIAR_TYPO,0.85);
 });

@@ -1,6 +1,6 @@
-// Frustração 25/09: app inteiro construído no Básico (teto 0) e o
-// limite só apareceu ao publicar. O teto agora vale já no primeiro arquivo de
-// rascunho de app NOVO. Fonte recortada, dependências dubladas, sem banco.
+// 2026-09-25 frustration: a whole app built on the Básico plan (cap 0) and the
+// limit only showed up when publishing. The cap now applies starting with the first
+// draft file of a NEW app. Source trimmed, dependencies stubbed, no database.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';

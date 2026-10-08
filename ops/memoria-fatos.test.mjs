@@ -1,5 +1,5 @@
-// Testes da camada de fatos com chave (memória v2, Fase 1). Puro: não toca banco.
-// Rodar: node ops/memoria-fatos.test.mjs   (precisa de node_modules por causa do db.mjs)
+// Tests for the keyed facts layer (memory v2, Phase 1). Pure: doesn't touch the database.
+// Run: node ops/memoria-fatos.test.mjs   (needs node_modules because of db.mjs)
 import { aplicarOps, expandirDefinir, normAssunto, parseDesde, linhaDoFato, valorDaLinha, trocarNaLinha } from '../web/wiki.mjs';
 
 let ok = 0, fail = 0;
@@ -23,7 +23,7 @@ t('valorDaLinha tira sufixo', valorDaLinha('- Mora em Curitiba (desde 09/2026; a
   t('novo vira add', r.paginas.perfil === '- trabalha com produto\n- Mora em São Paulo');
   t('novo marca a mudança com o índice', r.mudancas[0].fato === 0 && e.definicoes[0].assunto === 'cidade');
 }
-// mesmo assunto, valor novo = troca a linha (não acumula)
+// same subject, new value = replaces the line (doesn't accumulate)
 {
   const fatos = [{ id: 1, assunto: 'cidade', valor: 'Mora em São Paulo', pagina: 'perfil', linha_pagina: '- Mora em São Paulo' }];
   const { r } = rodar([{ op: 'definir', assunto: 'cidade', valor: 'Mora em Curitiba', desde: '2026-09' }], fatos,
@@ -37,13 +37,13 @@ t('valorDaLinha tira sufixo', valorDaLinha('- Mora em Curitiba (desde 09/2026; a
   const { e, r } = rodar([{ op: 'definir', assunto: 'Cidade', valor: 'mora em são paulo' }], fatos, { perfil: '- Mora em São Paulo' });
   t('igual é pulado', e.puladas[0] === 'definir:igual' && !Object.keys(r.paginas).length);
 }
-// linha do fato foi editada pelo dono = add em vez de fix quebrado
+// fact line was edited by the owner = add instead of broken fix
 {
   const fatos = [{ id: 1, assunto: 'cidade', valor: 'Mora em São Paulo', pagina: 'perfil', linha_pagina: '- Mora em São Paulo' }];
   const { r } = rodar([{ op: 'definir', assunto: 'cidade', valor: 'Mora em Curitiba' }], fatos, { perfil: '- mora na capital paulista' });
   t('linha sumida vira add', r.paginas.perfil === '- mora na capital paulista\n- Mora em Curitiba (antes: Mora em São Paulo)');
 }
-// mudou de página = remove da velha + add na nova
+// changed page = remove from the old one + add to the new one
 {
   const fatos = [{ id: 1, assunto: 'empresa', valor: 'Trabalha na Acme', pagina: 'perfil', linha_pagina: '- Trabalha na Acme' }];
   const { r } = rodar([{ op: 'definir', assunto: 'empresa', valor: 'Trabalha na Beta', pagina: 'trabalho' }], fatos,
@@ -52,7 +52,7 @@ t('valorDaLinha tira sufixo', valorDaLinha('- Mora em Curitiba (desde 09/2026; a
   t('entra na nova', r.paginas.trabalho === '- Trabalha na Beta (antes: Trabalha na Acme)');
   t('remove interno carrega o índice', r.mudancas.every((m) => m.fato === 0));
 }
-// sem página explícita = fica onde já estava
+// no explicit page = stays where it already was
 {
   const fatos = [{ id: 1, assunto: 'camisa', valor: 'Veste camisa M', pagina: 'compras', linha_pagina: '- Veste camisa M' }];
   const { r } = rodar([{ op: 'definir', assunto: 'camisa', valor: 'Veste camisa G' }], fatos, { compras: '- Veste camisa M' });
@@ -63,13 +63,13 @@ t('valorDaLinha tira sufixo', valorDaLinha('- Mora em Curitiba (desde 09/2026; a
   const { r } = rodar([{ op: 'fix', pagina: 'perfil', ancora: 'treina de manhã', texto: 'treina à noite' }], [], { perfil: '- treina de manhã' });
   t('fix legado guarda antes', r.mudancas[0].antes === '- treina de manhã' && r.mudancas[0].fato === undefined);
 }
-// validação
+// validation
 {
   const { e } = rodar([{ op: 'definir', assunto: '', valor: 'x y z w' }, { op: 'definir', assunto: 'a', valor: 'x' }], [], { perfil: '' });
   t('sem assunto / valor curto', e.puladas.join(',') === 'definir:sem_assunto,definir:valor_curto');
 }
 
-// linha composta (vinda da migração): troca só o pedaço, preserva o resto
+// composite line (coming from the migration): swaps only the piece, preserves the rest
 {
   const L = '- Nome: Ana Souza, e-mail ana@x.com, mora em Recife';
   const fatos = [{ id: 1, assunto: 'cidade', valor: 'Recife', pagina: 'perfil', linha_pagina: L }];

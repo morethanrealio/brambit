@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderConfirmed } from './web/confirm.mjs';
 
-// Frustração 25/09 (dois casos): o recibo de publicar app
-// privado só trazia "publicado" + link; usuário e senha ficavam no retorno da
-// tool e o modelo, que só repete a referência do recibo, nunca os entregava.
+// 2026-09-25 frustration (two cases): the receipt for publishing a private
+// app only showed "published" + link; the username and password stayed in the
+// tool's return value and the model, which only repeats the receipt reference, never delivered them.
 const pub = { name: 'publicar_sistema', args: { nome_do_sistema: 'whoop' } };
 
 test('publicar privado: recibo traz usuário e senha', () => {

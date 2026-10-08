@@ -1,11 +1,11 @@
-// Lista o que as páginas públicas mostram e o catálogo ainda não traduz.
+// Lists what the public pages show and the catalog doesn't translate yet.
 //
-// Existe porque o resto do mecanismo é silencioso de propósito: chave sem
-// tradução continua em português e nada reclama. Isso é o fallback certo pra
-// quem está navegando, e é péssimo pra quem mantém, porque mexer no HTML
-// acrescenta texto novo sem aviso nenhum. Este script é o aviso.
+// Exists because the rest of the mechanism is silent on purpose: a key without
+// translation stays in Portuguese and nothing complains. That's the right fallback for
+// whoever is browsing, and it's terrible for whoever maintains it, because touching the HTML
+// adds new text with no notice at all. This script is the notice.
 //
-// rodar: node site-i18n-pendentes.mjs [en|es]
+// run: node site-i18n-pendentes.mjs [en|es]
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,8 +14,8 @@ import { extraiTextos, carregaCatalogos } from './web/site-i18n.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'web', 'public');
-// Mesma lista que o server traduz. cockpit/metrics/broadcast ficam fora: são
-// páginas internas, não de usuário final.
+// Same list that the server translates. cockpit/metrics/broadcast are left out: they are
+// internal pages, not end-user ones.
 const PAGINAS = ['home', 'precos', 'apps', 'habilidades', 'feed', 'runner', 'suporte', 'usage', 'index', 'termos', 'privacidade'];
 
 const catalogos = carregaCatalogos(path.join(__dirname, 'web', 'site-textos'));

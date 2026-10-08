@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { markVoiceInput, VOICE_INPUT_NOTE, voiceReplyDelivered } from './web/voice-input.mjs';
 import { userSaid, isConfirmation, CHANNEL_CTX_END } from './web/confirm.mjs';
 
-// Caso de 01/10: o áudio chegava como texto puro e o modelo não sabia que era fala.
+// Case from 2026-10-01: the audio arrived as plain text and the model didn't know it was speech.
 test('a transcrição de áudio chega marcada como mensagem de voz', () => {
   const t = markVoiceInput('  I work as an SRE  ');
   assert.equal(t, `${VOICE_INPUT_NOTE}\n\nI work as an SRE`);
@@ -28,7 +28,7 @@ test('lote do canal: "não" digitado antes de um áudio "sim" continua canceland
   assert.match(userSaid(batch), /não/);
 });
 
-// runRoutine → deliverRoutine só entrega texto: áudio gerado ali se perdia (cobrado).
+// runRoutine → deliverRoutine only delivers text: audio generated there was lost (and still billed).
 test('gerar_audio só é oferecido onde o áudio chega na pessoa', () => {
   for (const routineChannel of ['whatsapp', 'telegram', 'email']) {
     assert.equal(voiceReplyDelivered({ kind: 'routine', routineChannel }), false, routineChannel);

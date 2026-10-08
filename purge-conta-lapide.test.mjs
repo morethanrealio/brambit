@@ -1,7 +1,7 @@
-// Regressão: destruir uma conta excluída tem que tirar a mídia do BUCKET de verdade.
-// Antes, purgeUser tentava o delete e, se o S3 falhasse, seguia em frente e apagava
-// a conta: a key sumia junto com as linhas do banco e o arquivo (foto, voz, rosto
-// biométrico) de alguém que pediu pra sair ficava no bucket pra sempre, sem registro.
+// Regression: destroying a deleted account has to actually remove the media from the BUCKET.
+// Before, purgeUser tried the delete and, if S3 failed, went ahead and erased
+// the account: the key disappeared along with the DB rows and the file (photo, voice, biometric
+// face) of someone who asked to leave stayed in the bucket forever, with no record.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarMidiaDaConta, varrerLapides } from './web/media-gc.mjs';

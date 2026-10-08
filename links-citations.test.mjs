@@ -6,8 +6,8 @@ for(const n of ['spawn','spawnSync','exec','execSync','execFile','execFileSync',
 const {conferirLinks,fontesEConferencia,omitBrokenLinks}=await import('./web/links.mjs');
 let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;},ok=a=>{assert.ok(a);checks++;};
 let requests=[],serial=0;const plans=new Map();
-// Plano por URL: número = status; 'throw' = timeout; 'dns'/'refused' = erro de rede
-// que prova falha; 'mixed' = um endereço recusou e outro deu timeout;
+// Plan per URL: number = status; 'throw' = timeout; 'dns'/'refused' = network error
+// that proves failure; 'mixed' = one address refused and another timed out;
 // {to:url,status} = redirect.
 function url(status=200,getStatus=status){const u=`https://links.example.invalid/${++serial}`;plans.set(u,{HEAD:status,GET:getStatus});return u;}
 const netErr=(...codes)=>Object.assign(new TypeError('fetch failed'),{cause:codes.length>1
@@ -23,29 +23,29 @@ globalThis.fetch=async(u,opts={})=>{
  return {ok:code>=200&&code<300,status:code,headers:{get:k=>k.toLowerCase()==='location'?loc:null},body:{cancel:async()=>{}}};
 };
 const redirectTo=(target,status=301)=>({to:target,status});
-// Falha real repetida no GET: 404/410, 5xx, DNS inexistente, conexão recusada.
+// Real repeated failure on GET: 404/410, 5xx, nonexistent DNS, connection refused.
 for(const status of [404,410,500,503,'dns','refused'])for(const language of ['pt-BR','en','es']){
  const bad=url(status),good=url(),result=await fontesEConferencia(`Seleção:\n• Falhou ${bad}\n  Resumo que não deve ser recomendado.\n• Bom ${good}`,[],{language});
  eq(result.quebrados,[bad]);ok(!result.texto.includes(bad));ok(!result.texto.includes('Resumo que não deve'));ok(result.texto.includes(good));ok(result.texto.includes({'pt-BR':'Removi 1 link',en:'I removed 1 link',es:'Quité 1 enlace'}[language]));
  eq(requests.filter(x=>x[0]===bad),[[bad,'HEAD'],[bad,'GET']]);
  const repeat=await conferirLinks(bad);eq(repeat.quebrados,[bad]);eq(requests.filter(x=>x[0]===bad).length,2);
 }
-// Falha no HEAD e no GET, mesmo de tipos diferentes, também é falha repetida.
+// Failure on HEAD and GET, even of different types, is also a repeated failure.
 for(const [head,get] of [[404,500],[500,404],['dns',503],[405,405]]){
  const link=url(head,get),r=await fontesEConferencia(`Link ${link}`,[],{});
  if(head===405){eq(r.quebrados,[]);eq(r.indefinidos,[link]);ok(r.texto.includes(link));continue;}
  eq(r.quebrados,[link]);ok(!r.texto.includes(link));
 }
-// A segunda tentativa desmente ou não confirma: o link fica.
+// The second attempt disproves or doesn't confirm: the link stays.
 for(const head of [404,410,500,'dns','refused'])for(const get of [200,401,403,429,'throw','mixed']){
  const link=url(head,get),result=await fontesEConferencia(`Link ${link}`,[],{});eq(result.quebrados,[]);ok(result.texto.includes(link));eq(result.indefinidos.length,get===200?0:1);
 }
-// Sem prova no HEAD: fica no texto com aviso, sem GET.
+// No proof on HEAD: stays in the text with a notice, without GET.
 for(const status of [401,403,429,405,302,'throw','mixed']){
  const link=url(status),result=await fontesEConferencia(`Link ${link}`);eq(result.indefinidos,[link]);eq(result.quebrados,[]);ok(!result.texto.includes('⚠️'));ok(result.texto.includes(link));eq(requests.filter(x=>x[0]===link).length,1);
 }
-// Redirect é seguido: 200 no fim é link bom; qualquer outra coisa depois de um
-// redirect fica sem veredito (não prova página morta).
+// Redirect is followed: 200 at the end is a good link; anything else after a
+// redirect stays without a verdict (doesn't prove a dead page).
 {
  const final=url(200),link=url(redirectTo(final)),r=await fontesEConferencia(`Link ${link}`);
  eq(r.quebrados,[]);eq(r.indefinidos,[]);ok(r.texto.includes(link));ok(!r.texto.includes('⚠️'));
@@ -59,7 +59,7 @@ for(const status of [404,410,500,403]){
  eq(r.quebrados,[]);eq(r.indefinidos,[link]);ok(r.texto.includes(link));eq(requests.filter(x=>x[0]===link),[[link,'HEAD']]);
 }
 {
- // Redirect pra rede interna não é seguido; laço de redirect para no teto.
+ // Redirect to the internal network is not followed; a redirect loop stops at the cap.
  const before=requests.length;
  const internal=url(redirectTo('http://169.254.169.254/latest/meta-data/')),r=await conferirLinks(internal);
  eq(r.indefinidos,[internal]);eq(requests.slice(before),[[internal,'HEAD']]);
@@ -90,7 +90,7 @@ for(const input of ['`https://code.example.invalid/x`','```\nhttps://code.exampl
  const code='```\n'+bad+'\n```';eq(omitBrokenLinks(code,[bad]),code);eq(omitBrokenLinks('`'+bad+'`',[bad]),'`'+bad+'`');
  const intact=`Texto [fonte](${good}).`;eq(omitBrokenLinks(intact,[bad]),intact);
 }
-// Rotina (strictLinks) não tira mais link sem prova de falha: fica com o aviso.
+// Routine (strictLinks) no longer removes a link without proof of failure: it stays with the notice.
 for (const status of [403,429,302,'throw']) {
  const link=url(status),good=url();
  const r=await fontesEConferencia(`• Item ${link}\n• Bom ${good}`,[],{strictLinks:true});
@@ -114,30 +114,30 @@ eq(strip('Texto [1].'),'Texto.');eq(strip('Texto [1, 7].'),'Texto.');ok(!strip('
 // Gate: ordinary non-search conversation keeps explicit literals untouched.
 const sanitize=(t,o)=>limparTextoFinal(t,o).trim();
 eq(sanitize('Texto [cite: 1].',{comFontes:false}),'Texto [cite: 1].');eq(sanitize('Texto [cite: 1].',{comFontes:true}),'Texto.');
-// Tool-call vazado: sai só o pedaço técnico, o texto depois dele fica (29/09/2026).
+// Leaked tool-call: only the technical chunk is removed, the text after it stays (2026-09-29).
 eq(sanitize('Vou conferir.\n<tool_call>buscar_web\n<arg_key>q</arg_key>\n<arg_value>voo GRU</arg_value>\n</tool_call>\nO voo sai às 10h.'),'Vou conferir.\n\nO voo sai às 10h.');
 eq(sanitize('Vou conferir. <tool_call>buscar_web <arg_key>q</arg_key><arg_value>voo</arg_value> O voo sai às 10h.'),'Vou conferir. O voo sai às 10h.');
 eq(sanitize('Pronto.\n<tool_call>status_conta\nSeu saldo é 300 créditos.'),'Pronto.\n\nSeu saldo é 300 créditos.');
 eq(sanitize('<tool_call>a</tool_call>Texto <tool_call>b<arg_key>k</arg_key><arg_value>v</arg_value></tool_call> final.'),'Texto final.');
 eq(sanitize('Sem vazamento aqui.'),'Sem vazamento aqui.');
-// Fontes por referência: a lista sai do registro do turno, não do texto do modelo.
+// Sources by reference: the list comes from the turn's record, not from the model's text.
 {
  const reg=registroDeFontes();const u1='https://a.example.invalid/x',u2='https://b.example.invalid/y';
  eq(reg.add({title:'A',uri:u1}),1);eq(reg.add({title:'B',uri:u2}),2);eq(reg.add({title:'A de novo',uri:u1}),1);eq(reg.add({title:'x',uri:'ftp://z'}),0);
- // [7] não existe no registro: some; a lista traz só o que foi citado, numerada de 1
+ // [7] doesn't exist in the record: it disappears; the list carries only what was cited, numbered from 1
  eq(citarFontes('Chove [2] e venta [7].',reg),'Chove [1] e venta.\n\nFontes:\n[1] B — '+u2);
  // registro grande (pesquisa a fundo): numera na ordem do texto e lista TODAS as citadas
  const grande=registroDeFontes();for(let i=1;i<=120;i++)grande.add({title:'F'+i,uri:'https://f'+i+'.example.invalid/'});
  const muitas=citarFontes([85,3,114,2,110,7,9,11,13,15,17,19].map(n=>'Fato ['+n+'].').join(' ')+' De novo [85][3].',grande);
  eq(muitas.split('Fontes:')[0].trim(),[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>'Fato ['+n+'].').join(' ')+' De novo [1, 2].');
  eq(muitas.split('\n').filter(l=>/^\[\d+\] F\d+ — /.test(l)).length,12);
- // [n] que os portões não trocam e que existe no registro: numeração do registro fica
+ // [n] that the gates don't swap and that exists in the record: the record's numbering stays
  eq(citarFontes('Item [5].\n[3] Sim',grande),'Item [5].\n[3] Sim\n\nFontes:\n[5] F5 — https://f5.example.invalid/');
- // lista do modelo com as mesmas fontes é trocada pela nossa
+ // the model's list with the same sources is swapped for ours
  eq(citarFontes('Chove [1].\n\nFontes:\n[1] A — '+u1+'\n[2] B — '+u2,reg),'Chove [1].\n\nFontes:\n[1] A — '+u1);
- // lista do modelo com endereço que nenhuma ferramenta mostrou fica como está
+ // the model's list with an address no tool showed stays as is
  const propria='Chove [1].\n\nFontes:\n[1] Outra — https://c.example.invalid/';eq(citarFontes(propria,reg),propria);
- // menu numerado, DDD e código não são citação
+ // numbered menu, area code, and code are not a citation
  for(const t of ['[1] Sim\n[2] Não','DDD [11] 98888-7777','Código `a[1]`'])eq(citarFontes(t,reg),t);
  // sem registro, volta ao comportamento antigo
  eq(citarFontes('Texto [1].',registroDeFontes()),'Texto.');

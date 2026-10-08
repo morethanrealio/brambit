@@ -1,6 +1,6 @@
-// Célula/linha vazia no .xlsx não pode engolir a seguinte (achado #19).
-// Um .xlsx é um ZIP de XMLs; aqui montamos o ZIP na mão (entradas "stored",
-// sem compressão) pra testar o leitor offline, sem arquivo binário no repo.
+// An empty cell/row in the .xlsx must not swallow the next one (finding #19).
+// An .xlsx is a ZIP of XMLs; here we build the ZIP by hand (entries "stored",
+// without compression) to test the reader offline, without a binary file in the repo.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import zlib from 'node:zlib';
 
 const { xlsxToText, xlsxCells } = await import('./web/xlsxread.mjs');
 
-// ---- ZIP mínimo (só o que readZipEntries/readEntry precisam) ----
+// ---- minimal ZIP (only what readZipEntries/readEntry need) ----
 function zip(arquivos) {
   const locais = [];
   const central = [];
@@ -19,7 +19,7 @@ function zip(arquivos) {
     const crc = zlib.crc32 ? zlib.crc32(dados) : 0;
     const lh = Buffer.alloc(30);
     lh.writeUInt32LE(0x04034b50, 0);
-    lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8); // método 0 = stored
+    lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8); // method 0 = stored
     lh.writeUInt32LE(crc, 14);
     lh.writeUInt32LE(dados.length, 18); lh.writeUInt32LE(dados.length, 22);
     lh.writeUInt16LE(nomeBuf.length, 26); lh.writeUInt16LE(0, 28);
@@ -88,7 +88,7 @@ test('conferidor de células: fórmula da célula seguinte não é atribuída à
 });
 
 test('texto compartilhado vazio não desalinha a tabela de textos', () => {
-  // <si/> vazio na posição 0: se ele engolisse o próximo, o índice 1 viria errado.
+  // empty <si/> at position 0: if it swallowed the next one, index 1 would come out wrong.
   const buf = planilha('<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>',
     '<si/><si><t>beta</t></si>');
   assert.equal(xlsxToText(buf).text, '# Dados\n,beta');
@@ -107,11 +107,11 @@ test('planilha normal (sem célula vazia) segue lendo igual', () => {
 });
 
 test('fonte: toda busca de corpo tem a forma autofechada como primeira alternativa', () => {
-  // Guarda contra regressão: se alguém reescrever uma dessas regex sem a
-  // alternativa '/>' na frente, o defeito volta em silêncio.
+  // Guards against regression: if someone rewrites one of these regexes without the
+  // '/>' alternative in front, the defect comes back silently.
   const src = fs.readFileSync(new URL('./web/xlsxread.mjs', import.meta.url), 'utf8');
   for (const linha of src.split('\n')) {
-    if (/^\s*\/\//.test(linha)) continue; // comentário não é código
+    if (/^\s*\/\//.test(linha)) continue; // comment is not code
     if (!/= \/</.test(linha) && !/new RegExp\(/.test(linha)) continue;
     for (const tag of ['row', 'c', 'si', 't']) {
       const corpo = linha.indexOf('</' + tag + '>');

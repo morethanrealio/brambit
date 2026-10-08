@@ -46,8 +46,8 @@ test('several proposals survive a fresh session, remain scoped, and are encrypte
   await assert.rejects(f.store.list({...f.scope,userId:randomUUID()}),/unavailable/);
   assert.equal(f.effects.length,0);
 });
-// Frustração 25/09: o sim simples vai para o único cartão recém-mostrado;
-// o pedido antigo não é aprovado nem apagado. Sem cartão visível, segue ambíguo.
+// Frustration 2026-09-25: a simple yes goes to the one card just shown;
+// the old request is neither approved nor deleted. Without a visible card, it stays ambiguous.
 test('a bare yes confirms only the sole card just shown and leaves the older request pending',async t=>{
   const f=await fixture(t);await f.propose(args(1));await f.propose(args(2));
   await f.decide('sim');assert.deepEqual(f.effects,[args(2)]);

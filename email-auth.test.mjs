@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {emailAuth, passesEmailAuth} from './web/email.mjs';
 
-// Monta o parsed mínimo que emailAuth() consome: só as linhas de cabeçalho.
+// Builds the minimal parsed object that emailAuth() consumes: only the header lines.
 const parsedCom = (...ars) => ({headerLines: ars.map((line) => ({key: 'authentication-results', line: 'Authentication-Results: ' + line}))});
 const AR_GOOGLE = 'mx.google.com; dkim=pass header.i=@gmail.com header.s=20230601; spf=pass smtp.mailfrom=alice@gmail.com; dmarc=pass header.from=gmail.com';
 
 test('authserv-id forjado não é aceito como carimbo do nosso MX', () => {
-  // O atacante escreve o A-R dele no próprio e-mail e cita mx.google.com numa
-  // PROPRIEDADE. Antes, o filtro por ocorrência textual engolia isso como forte.
+  // The attacker writes their own A-R into the email itself and cites mx.google.com in a
+  // PROPERTY. Before, the filter by textual occurrence swallowed this as strong.
   const p = parsedCom('evil.example; dkim=pass header.d=mx.google.com; dmarc=pass header.from=vitima.example');
   assert.equal(emailAuth(p).trusted, false);
   assert.equal(passesEmailAuth(p, 'vitima@vitima.example').strong, false);

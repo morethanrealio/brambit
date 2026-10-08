@@ -1,13 +1,13 @@
-// Testes do i18n das MENSAGENS do servidor. Como no site, o que se prova aqui
-// não é qualidade de tradução: é que a resposta em português sai exatamente
-// igual à de hoje, e que nada além de `error` e `message` é tocado.
+// i18n tests for the server's MESSAGES. As with the site, what is proven here
+// is not translation quality: it's that the Portuguese response comes out exactly
+// the same as today's, and that nothing besides `error` and `message` is touched.
 //
-// A diferença de mecanismo em relação ao site importa e está testada: lá o
-// catálogo é SUBSTITUÍDO dentro do fonte da página; aqui é uma BUSCA no mapa
-// com a string já pronta na mão. Por isso nenhum teste aqui se preocupa com
-// aspa ou crase na tradução, e sim com chave que não existe mais no código.
+// The difference in mechanism relative to the site matters and is tested: there the
+// catalog is REPLACED inside the page's source; here it's a LOOKUP in the map
+// with the string already in hand. That's why no test here worries about
+// quotes or backticks in the translation, but rather about a key that no longer exists in the code.
 //
-// rodar: node mensagens-i18n.test.mjs
+// run: node mensagens-i18n.test.mjs
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,10 +33,10 @@ for (const idioma of ['en', 'es']) {
   catalogos[idioma] = JSON.parse(fs.readFileSync(path.join(WEB, 'textos-servidor', `${idioma}.json`), 'utf8'));
 }
 
-// ── 1. pt-BR não muda um byte ───────────────────────────────────────────────
-// Este é O teste. Vale sobre as 362 mensagens reais, não sobre exemplo
-// inventado: se uma delas passasse a sair diferente, os 99 usuários de hoje
-// veriam a mudança.
+// ── 1. pt-BR doesn't change a byte ───────────────────────────────────────────────
+// This is THE test. It runs over the 362 real messages, not over a made-up
+// example: if one of them started coming out different, today's 99 users
+// would see the change.
 t('pt-BR devolve a MESMA string em toda mensagem real', () => {
   for (const m of mensagens) {
     for (const idioma of ['pt-BR', 'pt', 'pt-PT', undefined, null, '']) {
@@ -59,7 +59,7 @@ t('idioma desconhecido não traduz e não copia', () => {
   eq(traduzMensagem('Faça login.', 'de', catalogos), 'Faça login.', 'alemão não tem catálogo');
 });
 
-// ── 2. só `error` e `message`, nada além ────────────────────────────────────
+// ── 2. only `error` and `message`, nothing else ────────────────────────────────────
 t('traduz error e message e não encosta no resto', () => {
   const pt = mensagens.find((m) => catalogos.en[m]);
   if (!pt) throw new Error('catálogo en vazio: o resto do teste não valeria nada');
@@ -80,9 +80,9 @@ t('não é objeto: devolve como veio', () => {
   for (const v of [null, undefined, 'texto', 42, true]) eq(traduzResposta(v, 'en', catalogos), v, `mexeu em ${JSON.stringify(v)}`);
 });
 
-// ── 3. código de máquina nunca vira frase traduzida ─────────────────────────
-// Traduzir `locked` ou `bad_request` não deixaria a tela feia: deixaria o
-// cliente comparando contra um valor que mudou de idioma.
+// ── 3. machine code never turns into a translated sentence ─────────────────────────
+// Translating `locked` or `bad_request` wouldn't make the screen ugly: it would leave the
+// client comparing against a value that changed language.
 t('código de máquina fica fora da extração', () => {
   const CODIGO = /^[a-z][a-z0-9_]*$/;
   const vazados = mensagens.filter((m) => CODIGO.test(m));
@@ -98,9 +98,9 @@ t('código de máquina não está no catálogo, nem por engano', () => {
   }
 });
 
-// ── 4. o catálogo bate com o código de hoje ─────────────────────────────────
-// Chave que não existe mais no server.mjs é peso morto e esconde erro de
-// digitação; este teste é o que avisa quando alguém reescreve uma mensagem.
+// ── 4. the catalog matches today's code ─────────────────────────────────────
+// A key that no longer exists in server.mjs is dead weight and hides a typo;
+// this test is what warns when someone rewrites a message.
 t('toda chave do catálogo existe na extração do server.mjs', () => {
   const validas = new Set(mensagens);
   for (const idioma of ['en', 'es']) {
@@ -126,10 +126,10 @@ t('extração não pega template nem literal com escape', () => {
   }
 });
 
-// ── 5. ponto de emissão, não conteúdo ───────────────────────────────────────
-// O que decide se um literal vai pra tela é por onde ele sai. `return { error }`
-// é resultado de tool, vai pro modelo, e traduzir ali mexeria no texto que guia
-// a decisão dele.
+// ── 5. emission point, not content ───────────────────────────────────────
+// What decides whether a literal goes to the screen is where it exits through. `return { error }`
+// is a tool result, it goes to the model, and translating it there would mess with the text that guides
+// its decision.
 t('só literal emitido por fail()/send() entra', () => {
   const amostra = `
     fail(res, 401, 'Entra na conta primeiro.');
@@ -143,10 +143,10 @@ t('só literal emitido por fail()/send() entra', () => {
   eq(achados.join(' | '), 'Entra na conta primeiro. | Escolhe um arquivo. | Tudo certo por aqui.', 'conjunto errado');
 });
 
-// ── 6. idioma da requisição ─────────────────────────────────────────────────
-// A ordem existe por um motivo: o `X-Idioma` da SPA não é palpite do navegador,
-// é o eco da preferência SALVA com que o servidor montou aquela página. Então
-// o erro chega no mesmo idioma da tela que o provocou.
+// ── 6. request language ─────────────────────────────────────────────────
+// The order exists for a reason: the SPA's `X-Idioma` is not a browser guess,
+// it's the echo of the SAVED preference with which the server assembled that page. So
+// the error arrives in the same language as the screen that triggered it.
 const doHeader = (req) => ({ language: req.headers['accept-language'] === 'es-AR' ? 'es' : 'pt-BR' });
 
 t('X-Idioma válido ganha do Accept-Language', () => {
@@ -167,16 +167,16 @@ t('doHeader que explode não derruba a requisição', () => {
   eq(idiomaDaRequisicao({ headers: {} }, () => { throw new Error('boom'); }), 'pt-BR');
 });
 
-// ── 7. a SPA de fato devolve o idioma da página ─────────────────────────────
-// Sem isto o resto vira teoria: se o `api()` parar de mandar o header, todo
-// erro do app volta pro português e nenhum outro teste reclama.
+// ── 7. the SPA actually returns the page's language ─────────────────────────
+// Without this the rest turns into theory: if `api()` stops sending the header, every
+// app error falls back to Portuguese and no other test complains.
 t('index.html manda X-Idioma com o lang do <html>', () => {
   const spa = fs.readFileSync(path.join(WEB, 'public', 'index.html'), 'utf8');
   if (!/X-Idioma/.test(spa)) throw new Error('o api() da SPA não manda mais X-Idioma');
   if (!/document\.documentElement\.lang/.test(spa)) throw new Error('X-Idioma não vem mais do lang do <html>');
 });
 
-// ── 8. cobertura, como aviso e não como falha ───────────────────────────────
+// ── 8. coverage, as a warning and not as a failure ───────────────────────────────
 for (const idioma of ['en', 'es']) {
   const n = mensagens.filter((m) => catalogos[idioma][m]).length;
   console.log(`${idioma}: ${n}/${mensagens.length} mensagens traduzidas`);

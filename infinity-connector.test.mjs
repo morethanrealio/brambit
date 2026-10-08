@@ -1,5 +1,5 @@
-// Testes do conector Infinity (StartInfinity) do Cofre. Puro: fetch simulado,
-// sem rede e sem banco. Rodar: node infinity-connector.test.mjs
+// Tests of the Vault's Infinity connector (StartInfinity). Pure: simulated fetch,
+// no network and no database. Run: node infinity-connector.test.mjs
 import { readFileSync } from 'fs';
 import { infinityTools, infinityValues, infinityWriteValue, infinityReadValue } from './web/connectors-vault.mjs';
 import { GATED_TOOLS, IRREVERSIBLE_TOOLS } from './web/confirm.mjs';
@@ -20,7 +20,7 @@ const ATTRS = [
 const MEMBERS = [{ id: 7, name: 'Ana Souza', email: 'ana@x.com' }, { id: 9, name: 'Beto', email: 'beto@x.com' }];
 const FOLDERS = [{ id: 'f1', name: 'Backlog' }];
 
-// Conversão de valores
+// Value conversion
 const v = infinityValues(ATTRS, { nome: 'Ligar', status: 'concluido', 'Responsável': 'ana@x.com', Feito: 'sim', Valor: '12,5', Notas: 'a < b\nlinha 2' }, MEMBERS);
 const por = Object.fromEntries(v.map((x) => [x.attribute_id, x.data]));
 t('nome do campo sem caixa/acento acha o atributo', por['a-nome'] === 'Ligar');
@@ -103,19 +103,19 @@ t('403 não vira "troque a chave"', /403: o token não tem acesso/.test(await to
 mockFetch({ 'GET /workspaces': [429, {}] });
 t('429 explica o limite', /180 por minuto/.test(await tools.infinity_boards.run({}).catch((e) => e.message)));
 
-// Paginação por cursor
+// Cursor-based pagination
 let n = 0;
 mockFetch({ 'GET /workspaces': (u) => { n++; return u.searchParams.get('after') ? [200, { has_more: false, data: [{ id: 2, name: 'B' }] }] : [200, { has_more: true, after: 'cur', data: [{ id: 1, name: 'A' }] }]; },
   'GET /workspaces/1/boards': page([]), 'GET /workspaces/2/boards': page([]) });
 t('segue o cursor after', JSON.parse(await tools.infinity_boards.run({})).length === 2 && n === 2);
 
-// Portão de confirmação e evidência
+// Confirmation gate and evidence
 t('escritas passam pelo cartão', ['infinity_criar_item', 'infinity_editar_item', 'infinity_comentar'].every((x) => GATED_TOOLS.has(x)));
 t('comentário exige confirmação por texto', IRREVERSIBLE_TOOLS.has('infinity_comentar') && !IRREVERSIBLE_TOOLS.has('infinity_itens'));
 t('leituras não passam pelo cartão', !GATED_TOOLS.has('infinity_itens') && !GATED_TOOLS.has('infinity_boards'));
 t('evidência com id do item', actionEvidenceFor('infinity_criar_item', { board_id: 'b1' }, { ok: true, id: 'novo' }).state !== 'unknown');
 
-// Fiação no servidor
+// Server wiring
 const src = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
 t('conector registrado no cofre', src.includes("{ provider: 'infinity', build: (secret) => infinityTools({ secret }) }"));
 t('escritas na lista de escrita do cofre', src.includes("'infinity_criar_item', 'infinity_editar_item', 'infinity_comentar',"));
