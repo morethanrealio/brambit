@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Uso & Custo · __MARCA__</title>
+<title data-i18n="usage_page.page_title">Usage &amp; cost · __MARCA__</title>
 <style nonce="__CSP_NONCE__">
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -35,39 +35,44 @@
 </head>
 <body>
 <header>
-  <h1>Uso & Custo</h1>
-  <div class="sub" id="scope">Carregando…</div>
+  <h1 data-i18n="usage_page.title">Usage &amp; cost</h1>
+  <div class="sub" id="scope" data-i18n="usage_page.loading">Loading…</div>
 </header>
 <main>
   <div class="controls">
     <div>
-      <label>Agrupar por</label>
+      <label data-i18n="usage_page.group_by">Group by</label>
       <select id="by">
-        <option value="hour">Hora</option>
-        <option value="day" selected>Dia</option>
-        <option value="month">Mês</option>
-        <option value="kind">Tipo (chat/onboard/rotina…)</option>
-        <option value="model">Modelo</option>
-        <option value="agent">Assistente</option>
-        <option value="thread">Conversa</option>
-        <option value="turn">Turno</option>
-        <option value="user">Usuário</option>
+        <option value="hour" data-i18n="usage_page.by_hour">Hour</option>
+        <option value="day" selected data-i18n="usage_page.by_day">Day</option>
+        <option value="month" data-i18n="usage_page.by_month">Month</option>
+        <option value="kind" data-i18n="usage_page.by_kind_long">Type (chat/onboard/routine…)</option>
+        <option value="model" data-i18n="usage_page.by_model">Model</option>
+        <option value="agent" data-i18n="usage_page.by_agent">Assistant</option>
+        <option value="thread" data-i18n="usage_page.by_thread">Conversation</option>
+        <option value="turn" data-i18n="usage_page.by_turn">Turn</option>
+        <option value="user" data-i18n="usage_page.by_user">User</option>
       </select>
     </div>
-    <div><label>De</label><input type="date" id="from" /></div>
-    <div><label>Até</label><input type="date" id="to" /></div>
-    <div id="userBox" style="display:none"><label>Usuário (id, admin)</label><input type="text" id="user" placeholder="todos" size="14" /></div>
-    <button id="go">Atualizar</button>
+    <div><label data-i18n="usage_page.from">From</label><input type="date" id="from" /></div>
+    <div><label data-i18n="usage_page.to">To</label><input type="date" id="to" /></div>
+    <div id="userBox" style="display:none"><label data-i18n="usage_page.user_filter">User (id, admin)</label><input type="text" id="user" placeholder="all" data-i18n-placeholder="usage_page.user_all" size="14" /></div>
+    <button id="go" data-i18n="usage_page.refresh">Refresh</button>
   </div>
 
   <div class="cards" id="cards"></div>
   <div id="out"></div>
 </main>
 
+<script type="application/json" data-i18n-texts="usage_page"></script>
+<script src="/page-texts.js"></script>
 <script nonce="__CSP_NONCE__">
-const fmt = (n) => Number(n || 0).toLocaleString('pt-BR');
-const usd = (n) => '$' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const t = window.pageText;
+const locale = document.documentElement.lang;
+const fmt = (n) => Number(n || 0).toLocaleString(locale);
+const usd = (n) => '$' + Number(n || 0).toLocaleString(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 async function load() {
   const by = $('by').value;
@@ -76,39 +81,38 @@ async function load() {
   if ($('to').value)   qs.set('to', $('to').value + 'T23:59:59');
   if ($('user').value) qs.set('user', $('user').value.trim());
   const out = $('out');
-  out.innerHTML = '<p class="muted">Carregando…</p>';
+  out.innerHTML = '<p class="muted">' + esc(t('loading')) + '</p>';
   let data;
   try {
     const r = await fetch('api/usage?' + qs.toString());
     data = await r.json();
     if (!r.ok) throw new Error(data.error || r.status);
   } catch (e) {
-    out.innerHTML = '<p class="err">Erro: ' + e.message + '</p>';
+    out.innerHTML = '<p class="err">' + esc(t('error', { message: e.message })) + '</p>';
     return;
   }
   $('scope').innerHTML = data.admin
-    ? 'Visão <span class="pill">admin</span> · todos os usuários (ou filtre por id)'
-    : 'Seus dados de uso';
+    ? esc(t('scope_admin')).replace('{admin}', '<span class="pill">admin</span>')
+    : esc(t('scope_own'));
   $('userBox').style.display = data.admin ? '' : 'none';
 
-  const t = data.totals || {};
+  const tot = data.totals || {};
   $('cards').innerHTML = [
-    ['Custo total', '<span class="cost">' + usd(t.cost_usd) + '</span>'],
-    ['Tokens totais', fmt(t.tok_total)],
-    ['Entrada <small>(cache ' + (t.tok_in > 0 ? Math.round((t.tok_cached / t.tok_in) * 100) : 0) + '%)</small>', fmt(t.tok_in)],
-    ['Saída', fmt(t.tok_out)],
-    ['Pensamento', fmt(t.tok_think)],
-    ['Turnos', fmt(t.turns)],
-    ['Chamadas', fmt(t.calls)],
-    data.admin ? ['Usuários', fmt(t.users)] : null,
+    [esc(t('total_cost')), '<span class="cost">' + usd(tot.cost_usd) + '</span>'],
+    [esc(t('total_tokens')), fmt(tot.tok_total)],
+    [esc(t('input')) + ' <small>' + esc(t('cache_share', { percent: tot.tok_in > 0 ? Math.round((tot.tok_cached / tot.tok_in) * 100) : 0 })) + '</small>', fmt(tot.tok_in)],
+    [esc(t('output')), fmt(tot.tok_out)],
+    [esc(t('thinking')), fmt(tot.tok_think)],
+    [esc(t('turns')), fmt(tot.turns)],
+    [esc(t('calls')), fmt(tot.calls)],
+    data.admin ? [esc(t('users')), fmt(tot.users)] : null,
   ].filter(Boolean).map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
 
   const rows = data.rows || [];
-  if (!rows.length) { out.innerHTML = '<p class="muted">Sem dados na janela.</p>'; return; }
-  const label = { hour: 'Hora', day: 'Dia', month: 'Mês', kind: 'Tipo', model: 'Modelo', agent: 'Assistente', thread: 'Conversa', turn: 'Turno', user: 'Usuário' }[by] || by;
+  if (!rows.length) { out.innerHTML = '<p class="muted">' + esc(t('no_data')) + '</p>'; return; }
+  const label = esc(t('by_' + by));
   out.innerHTML = `<table><thead><tr>
-    <th>${label}</th><th>Custo</th><th>Tokens</th><th>Entrada</th><th>Cache</th>
-    <th>Saída</th><th>Pensamento</th><th>Turnos</th><th>Chamadas</th>
+    <th>${label}</th>${['cost', 'tokens', 'input', 'cache', 'output', 'thinking', 'turns', 'calls'].map((k) => '<th>' + esc(t(k)) + '</th>').join('')}
   </tr></thead><tbody>` + rows.map((r) => `<tr>
     <td>${r.bucket ?? '—'}</td>
     <td class="cost">${usd(r.cost_usd)}</td>

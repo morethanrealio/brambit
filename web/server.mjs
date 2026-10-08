@@ -1046,7 +1046,7 @@ import {
 } from './db.mjs';
 import { IDIOMAS_OK, defaultLanguage, defaultTimezone, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
 import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
-import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
+import { translatePage, carregaCatalogos } from './page-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao, serverMessages } from './mensagens-i18n.mjs';
 import { costOf, registerPrices } from './pricing.mjs';
 import { MODELS, DEFAULT_MODEL, isValidModel, modelById, modelCatalog, pickAutoModel, isTestProvider } from './models.mjs';
@@ -8594,10 +8594,10 @@ function sendHtml(res, full, status = 200, language = defaultLanguage()) {
   // is active). Goes as an ATTRIBUTE, resolved here on the server, so there's
   // no need for JS reading a cookie: the cookie is HttpOnly and stays that way.
   const cru = lerPagina(full).split('__CSP_NONCE__').join(nonce).split('__IDIOMA__').join(language);
-  // In pt-BR this returns the SAME string, without going through any parser, so the
-  // page stays byte-for-byte the same as always. The parameter's default is pt-BR,
-  // which makes "don't translate" the behavior for whoever didn't ask for anything.
-  const html = marcaNaPagina(traduzPagina(cru, language, CATALOGOS_SITE), { __APPS__: dominioDosApps() });
+  // Marked text (data-i18n) comes from the catalogs in `language`; pages not
+  // migrated yet go through the Portuguese-keyed catalogs after that
+  // (web/page-i18n.mjs, docs/i18n.md "Pages").
+  const html = marcaNaPagina(translatePage(cru, language, CATALOGOS_SITE, { vars: { brand: marca().nome }, file: path.basename(full) }), { __APPS__: dominioDosApps() });
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'Content-Security-Policy': buildCsp(nonce),

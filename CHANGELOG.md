@@ -31,6 +31,12 @@ Changes merged since the last tag go under "Unreleased".
 - `README.pt-BR.md`; the README is now in English.
 - `AGENTS.md`: instructions for coding agents (and people) working in this
   repository, starting with: everything in the repository is in English.
+- Pages take their text from the catalogs: an element marked
+  `data-i18n="key"` (or `data-i18n-<attribute>`) is filled in the person's
+  language, with bold, links and commands kept in place
+  (`docs/i18n.md`, "Pages"). The usage, Runner and public service pages use
+  it, and are now translated into English and Spanish in full. CI fails on new
+  page text outside the catalogs.
 
 ### Changed
 - Server error and status messages come from the catalogs (`server.*` in
