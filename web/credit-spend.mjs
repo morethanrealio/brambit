@@ -6,15 +6,17 @@
 // billed credit, same as the balance; 'usd' (core, no credits) sums cost_usd,
 // the real cost. The spend port, which hands the tool to the turn, picks it.
 //
-// By period: summed in the São Paulo time zone. Covers the whole history.
+// By period: summed in the person's time zone (else the instance one). Covers
+// the whole history.
 //
 // By reply: usage_events.turn_id does NOT group a reply (each model call and
 // each search writes its own id). What delimits a reply is the turn
 // measurement (task_measurements, source='conversation'): same person, same
 // thread, between started_at and finished_at. Search, sub-agent and image of
 // the reply fall in that window with its thread_id. Measured since 2026-09-21.
+import { defaultTimezone, validTimezone } from './locale.mjs';
+
 const S = 'mtr_harness';
-const TZ = 'America/Sao_Paulo';
 const NAO_CONSUMO = ['admin-grant', 'purchase', 'referral'];
 const MAX_DIAS = 366;
 const MAX_RESPOSTAS = 20;
@@ -84,17 +86,28 @@ export function createCreditSpend(pool, { unidade = 'creditos' } = {}) {
   if (!U) throw Error('unidade de gasto desconhecida: ' + unidade);
   const { campo, valor } = U;
   const total = (linhas) => valor(linhas.reduce((s, r) => s + (Number(r[campo]) || 0), 0));
+  // Person's saved time zone, else the instance one.
+  async function timezoneOf(userId) {
+    try {
+      const { rows } = await pool.query(`SELECT timezone FROM ${S}.users WHERE id = $1`, [userId]);
+      if (validTimezone(rows[0]?.timezone)) return rows[0].timezone;
+    } catch { /* falls back to the instance time zone */ }
+    return defaultTimezone();
+  }
+  // Without dates: today, in the person's time zone.
   async function porPeriodo({ userId, de, ate }) {
-    const erro = validarPeriodo(de, ate);
-    if (erro) return { erro };
+    de ||= ate; ate ||= de;
+    if (de) { const erro = validarPeriodo(de, ate); if (erro) return { erro }; }
+    const tz = await timezoneOf(userId);
+    if (!de) de = ate = new Date().toLocaleDateString('en-CA', { timeZone: tz });
     const { rows } = await pool.query(
-      `SELECT to_char(ts AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS dia, kind, ${U.soma} AS ${campo}
+      `SELECT to_char(ts AT TIME ZONE $5, 'YYYY-MM-DD') AS dia, kind, ${U.soma} AS ${campo}
          FROM ${S}.usage_events
         WHERE user_id = $1 AND model <> ALL($4::text[])
-          AND ts >= ($2::date::timestamp AT TIME ZONE '${TZ}')
-          AND ts <  (($3::date + 1)::timestamp AT TIME ZONE '${TZ}')
+          AND ts >= ($2::date::timestamp AT TIME ZONE $5)
+          AND ts <  (($3::date + 1)::timestamp AT TIME ZONE $5)
         GROUP BY 1, 2`,
-      [userId, de, ate, NAO_CONSUMO],
+      [userId, de, ate, NAO_CONSUMO, tz],
     );
     const out = { periodo: { de, ate }, ['total_' + campo]: total(rows), onde_foi: porCategoria(rows, campo, valor), orientacao: U.orientacao };
     if (de !== ate) {
@@ -106,6 +119,7 @@ export function createCreditSpend(pool, { unidade = 'creditos' } = {}) {
   }
 
   async function ultimasRespostas({ userId, agentId, n, excluirTurnoId = null }) {
+    const tz = await timezoneOf(userId);
     const lim = Math.min(MAX_RESPOSTAS, Math.max(1, Math.floor(Number(n) || 1)));
     const { rows: turnos } = await pool.query(
       `SELECT id, thread_id, started_at, finished_at
@@ -127,7 +141,7 @@ export function createCreditSpend(pool, { unidade = 'creditos' } = {}) {
       );
       const canal = rows.map((r) => CANAIS[r.kind]).find(Boolean) || null;
       respostas.push({
-        quando: new Date(t.started_at).toLocaleString('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        quando: new Date(t.started_at).toLocaleString('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
         canal,
         duracao_segundos: Math.round((new Date(t.finished_at) - new Date(t.started_at)) / 1000),
         [campo]: total(rows),
@@ -160,7 +174,7 @@ const NUMEROS = {
 export function ferramentaConsultarGasto({ spend, unidade = 'creditos', userId, agentId, turnId }) {
   return {
     name: 'consultar_gasto',
-    description: `${O_QUE_MOSTRA[unidade]}, with the total and the breakdown by category (conversation, web searches, research, images, routines...). Use when the person asks how much they spent or how much something cost. By default answer ONLY the total; the breakdown by category is detail and only comes in if the person asks what it was spent on or asks for the breakdown. Two modes: (1) by period, passing de/ate as YYYY-MM-DD in the Brasília time zone (today = de and ate both equal to today's date; "ontem", "dia 15", "semana passada" you convert into dates); the total is for the whole account, adding up all assistants; (2) by response, passing ultimas_respostas = N to see the cost of YOUR last N responses (1 = the response before this one, which is the case of "quanto custou essa busca que você fez"). ${NUMEROS[unidade]}`,
+    description: `${O_QUE_MOSTRA[unidade]}, with the total and the breakdown by category (conversation, web searches, research, images, routines...). Use when the person asks how much they spent or how much something cost. By default answer ONLY the total; the breakdown by category is detail and only comes in if the person asks what it was spent on or asks for the breakdown. Two modes: (1) by period, passing de/ate as YYYY-MM-DD in the person's time zone (today = de and ate both equal to today's date; "ontem", "dia 15", "semana passada" you convert into dates); the total is for the whole account, adding up all assistants; (2) by response, passing ultimas_respostas = N to see the cost of YOUR last N responses (1 = the response before this one, which is the case of "quanto custou essa busca que você fez"). ${NUMEROS[unidade]}`,
     parameters: {
       type: 'object',
       properties: {
@@ -172,8 +186,7 @@ export function ferramentaConsultarGasto({ spend, unidade = 'creditos', userId, 
     },
     run: async ({ de, ate, ultimas_respostas } = {}) => {
       if (ultimas_respostas) return spend.ultimasRespostas({ userId, agentId, n: ultimas_respostas, excluirTurnoId: turnId });
-      const hoje = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
-      return spend.porPeriodo({ userId, de: de || ate || hoje, ate: ate || de || hoje });
+      return spend.porPeriodo({ userId, de, ate });
     },
   };
 }

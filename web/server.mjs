@@ -1050,7 +1050,7 @@ import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
 import { costOf, registerPrices } from './pricing.mjs';
 import { MODELS, DEFAULT_MODEL, isValidModel, modelById, modelCatalog, pickAutoModel, isTestProvider } from './models.mjs';
-import { currentPeriodBRT } from './periodo.mjs';
+import { currentPeriod } from './periodo.mjs';
 import { deveAvisarRotinaSemCredito } from './rotina-aviso-credito.mjs';
 import { startScheduler, normalizeRoutineDays, routineDaysLabel, intervalLabel, localParts, isPauseOnlyRoutineChange } from './scheduler.mjs';
 import { parseRoutineTime, routineTimeLabel, routineSupersedeKey } from './routine-time.mjs';
@@ -1084,7 +1084,7 @@ async function billWaMessages({ userId, messages, agentId = null, threadId = nul
   // uniform, otherwise their statement would change in value mid-month.
   let jaNoMes = null;
   try {
-    const { start } = currentPeriodBRT();
+    const { start } = currentPeriod();
     jaNoMes = await countUsageByModelSince(WA_MSG_MODEL, start);
   } catch { jaNoMes = null; } // when in doubt, charge the full cost
   const cotacao = Number(gasto.dolarEmReais()) || 5.40;
@@ -1835,7 +1835,7 @@ async function recordUsages(usages, dims, { noBill = false, eventId = null, stri
   for (const m of Object.keys(SEARCH_FREE_MONTHLY)) {
     if (!usages.some((u) => u?.model === m)) continue;
     try {
-      const { start } = currentPeriodBRT();
+      const { start } = currentPeriod();
       usadasNoMes[m] = await countUsageByModelSince(m, start);
     } catch { usadasNoMes[m] = SEARCH_FREE_MONTHLY[m]; } // when in doubt, charge normally
   }
