@@ -43,7 +43,7 @@ export function makeTogether({
   maxTokens = 16384,          // TOTAL output ceiling (reasoning + text). Generous so the
                               // reasoning finishes and ALWAYS leaves room for the visible text.
   temperature = model === TOGETHER_FLASH_MODEL ? 1.0 : 0.7,
-  reasoningEffort,   // GLM-5.2: 'high' | 'max' (default do modelo = 'max'). Usamos
+  reasoningEffort,   // GLM-5.2: 'high' | 'max' (model default = 'max'). We use
                               // 'high' so reasoning doesn't monopolize the output ceiling.
 } = {}) {
   const reasoning = togetherReasoning(model, reasoningEffort);

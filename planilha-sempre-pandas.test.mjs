@@ -22,12 +22,12 @@ net.Socket.prototype.connect = denied; tls.connect = denied; globalThis.fetch = 
 // assertPublicUrl of abrir_link resolves the host: every host becomes a fixed public IP.
 dns.promises.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
 
-// Sandbox falso: o teste decide o que gravar/rodar devolve (globalThis.__sb).
+// Fake sandbox: the test decides what gravar/rodar returns (globalThis.__sb).
 const fakeSandbox = `const S=()=>globalThis.__sb;
 export const sandboxEnabled=()=>S().enabled;
 export const sandboxWriteBytes=(...a)=>S().write(...a);
 export const sandboxShell=(...a)=>S().shell(...a);`;
-// Rede do abrir_link: cada fetchFixado cai em globalThis.__net(url, opts).
+// Network for abrir_link: each fetchFixado falls into globalThis.__net(url, opts).
 const fakeNetPin = 'export const fetchFixado=(...a)=>globalThis.__net(...a);';
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === './sandbox.mjs' && context.parentURL?.endsWith('/web/planilha.mjs')) return { url: 'data:text/javascript,' + encodeURIComponent(fakeSandbox), shortCircuit: true };
@@ -123,7 +123,7 @@ test('conector sem ambiente de análise, ou com ele quebrando, devolve a nota de
   assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /não pôde ser aberta no ambiente de análise \(x\)/);
 });
 
-// ── A sonda de verdade, com pandas local ──
+// ── The real probe, with local pandas ──
 const PY = process.env.PLANILHA_PY || '/tmp/pdvenv/bin/python';
 const temPandas = fs.existsSync(PY) && spawnSync(PY, ['-c', 'import pandas, openpyxl'], { stdio: 'ignore' }).status === 0;
 function sandboxLocal() {
@@ -305,7 +305,7 @@ test('anexo do chat: docKind manda xlsx, xls, csv e tsv pro caminho da planilha'
   for (const [n, m] of [['a.xlsx', ''], ['a.xls', 'application/vnd.ms-excel'], ['contas.csv', 'application/vnd.ms-excel'], ['contas.csv', 'text/csv'], ['b.tsv', ''], ['sem-nome', 'text/csv']]) assert.equal(docKind(n, m), 'planilha', `${n} ${m}`);
   assert.equal(docKind('a.pdf', 'application/pdf'), 'pdf');
   assert.equal(docKind('a.txt', 'text/plain'), 'text');
-  // O bloco do anexo usa a nota do carregamento, nunca um texto da planilha.
+  // The attachment block uses the loading note, never spreadsheet text.
   const bloco = pega("if (kind === 'planilha')", 'continue;');
   assert.match(bloco, /loadSpreadsheetIntoSandbox\(userId, f\.buffer, name, \{ tipo \}\)/);
   assert.match(bloco, /\$\{lr\.note\}/);

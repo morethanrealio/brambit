@@ -64,7 +64,7 @@ export async function comReenvio(enviar, { esperas = esperasDeReenvio(), rotulo 
 export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
   return async function avisar({ agent, userId, tipo, mensagem, enviar }) {
     let text = textoAvisoCanal(null, tipo);
-    try { text = textoAvisoCanal((await idiomaDe?.(userId))?.language, tipo); } catch { /* fica pt-BR */ }
+    try { text = textoAvisoCanal((await idiomaDe?.(userId))?.language, tipo); } catch { /* stays pt-BR */ }
     let recusado = false;
     try { await enviar(text); } catch (e) {
       recusado = e?.definitive === true;

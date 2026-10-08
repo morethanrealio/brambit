@@ -60,7 +60,7 @@ export function fotoGoogle(e) {
   };
 }
 
-// Graph devolve dateTime sem offset no fuso pedido (Prefer: UTC).
+// Graph returns dateTime without an offset in the requested timezone (Prefer: UTC).
 const utc = (d) => (d?.dateTime ? `${String(d.dateTime).replace(/\.\d+$/, '').replace(/Z$/, '')}Z` : null);
 export function fotoOutlook(e) {
   return {
@@ -121,7 +121,7 @@ export function textoAviso(itens, tz) {
   return `Mudanças na sua agenda:\n\n${itens.map((i) => `• ${linhaAviso(i, tz)}`).join('\n')}`;
 }
 
-// ── Leitura das agendas ─────────────────────────────────────────────────────
+// ── Reading calendars ─────────────────────────────────────────────────────
 class HttpErro extends Error { constructor(status, msg) { super(`${status}: ${msg}`); this.status = status; } }
 
 async function getJson(fetchImpl, url, bearer, headers = {}) {

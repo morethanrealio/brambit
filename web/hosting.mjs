@@ -910,7 +910,7 @@ export function hostingTools(userId, agentId, opts = {}) {
   // card IS the result.
   const emitAppCardRaw = typeof opts.onAppLink === 'function' ? opts.onAppLink : null;
   const emitAppCard = emitAppCardRaw;
-  // Conversa vinda do app iOS: ver appQuotaBlock.
+  // Conversation coming from the iOS app: see appQuotaBlock.
   const appClient = !!opts.appClient;
   // ── Guardrail: each app is looked after by ONE of the owner's assistants (apps.agent_id) ──
   // If the ACTIVE assistant doesn't own the app (and it's the user's own app,
@@ -2134,7 +2134,7 @@ export function hostingTools(userId, agentId, opts = {}) {
               headers.Authorization = 'Basic ' + Buffer.from(`${gate.user}:${gate.pass}`, 'utf8').toString('base64');
             }
           }
-        } catch { /* sem registro de acesso: segue; se for privado volta 401 */ }
+        } catch { /* no access record: proceeds; if private returns 401 */ }
         let body;
         if (corpo != null && method !== 'GET' && method !== 'DELETE') {
           if (typeof corpo === 'string') { body = corpo; if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json'; }

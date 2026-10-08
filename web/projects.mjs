@@ -25,8 +25,8 @@ function normalizeRepo(repo) {
   return r;
 }
 
-// Identidade do workspace no host: (user = id do dono, proj = nome do projeto).
-// O devctl.sh sanitiza os dois; container = brambs-dev-<san(user)>-<san(proj)>.
+// Workspace identity on the host: (user = owner id, proj = project name).
+// devctl.sh sanitizes both; container = brambs-dev-<san(user)>-<san(proj)>.
 function wsRef(ownerUserId, nome) { return { user: ownerUserId, proj: nome }; }
 
 async function githubTokenSafe(getGithubToken) {

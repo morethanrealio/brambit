@@ -160,7 +160,7 @@ function caminha(html, troca) {
   return out;
 }
 
-// Atributos de texto dentro de uma tag de abertura.
+// Text attributes inside an opening tag.
 function traduzTag(tag, troca) {
   const ehMeta = /^<\s*meta\b/i.test(tag);
   let metaNome = null;
@@ -351,7 +351,7 @@ function irmaosDeLista(js, pedacos) {
   return ok;
 }
 
-// Literais de string dentro de <script>.
+// String literals inside <script>.
 function traduzScript(js, troca) {
   const pedacos = fatiaJs(js);
   const daLista = irmaosDeLista(js, pedacos);

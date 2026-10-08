@@ -19,8 +19,8 @@ const NUL = String.fromCharCode(0);
 function sanitizeText(s) {
   if (typeof s !== 'string') return s;
   return s
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, REPLACEMENT) // high surrogate sem par
-    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, REPLACEMENT) // low surrogate sem par
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, REPLACEMENT) // unpaired high surrogate
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, REPLACEMENT) // unpaired low surrogate
     .split(NUL).join('');
 }
 
@@ -68,9 +68,9 @@ const TURN_KEEP_RECENT = 4;   // last N messages of the turn are never collapsed
 // structure; the end has the error/result) with an explicit marker in the middle. 24k
 // chars ≈ 6k tokens per recent blob — big enough for any reasonable
 // app file to go through in full, small enough to not dominate the input.
-const TURN_RECENT_MAX = 24000;  // chars; teto de blob na janela recente
+const TURN_RECENT_MAX = 24000;  // chars; blob cap in the recent window
 const TURN_RECENT_HEAD = 15800; // chars kept from the start
-const TURN_RECENT_TAIL = 8000;  // chars mantidos do fim
+const TURN_RECENT_TAIL = 8000;  // chars kept from the end
 // HEAD+TAIL+marker < TURN_RECENT_MAX on purpose: the result of the cut stays
 // below the cap, so the second pass doesn't touch it again (idempotent).
 function capRecentBlob(s) {
@@ -111,7 +111,7 @@ const INTERJECT_SUFFIX = 'Decida antes de continuar: se isso muda o que você es
 // DETERMINISTIC message (built in code, without a model call) listing the tools
 // already executed this turn with their key args. It persists in history, so
 // the continuation knows exactly where the previous turn stopped.
-const STATE_NOTE_MAX_CALLS = 30; // teto de linhas na nota (turnos de 40 passos)
+const STATE_NOTE_MAX_CALLS = 30; // line cap in the note (40-step turns)
 const STATE_NOTE_KEYS = ['nome_do_sistema', 'caminho', 'arquivo', 'comando', 'rotulo', 'host', 'versao', 'dono'];
 function callHint(c) {
   const a = c?.args;

@@ -101,8 +101,8 @@ async function sendMessage(token, chatId, text, { requireReceipt = false, reenvi
   return {message_id:receipts[0]?.message_id,message_ids:receipts.map(r=>r?.message_id)};
 }
 
-// Envio avulso (usado pelo despachante de lembretes proativos). Reusa a quebra
-// em mensagens do sendMessage interno.
+// One-off send (used by the proactive reminders dispatcher). Reuses the line
+// wrapping from the internal sendMessage.
 export async function sendTelegramMessage(token, chatId, text) {
   return sendMessage(token, chatId, text, { requireReceipt: true });
 }
@@ -421,7 +421,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
         }
       } catch (e) {
         const m = String(e?.message ?? e);
-        // 401 = token revogado/errado: para o poller desse bot.
+        // 401 = revoked/wrong token: stops the poller for this bot.
         if (m.includes('401') || m.toLowerCase().includes('unauthorized')) {
           console.error('[telegram] token inválido, parando poller:', bot.token.slice(0, 8));
           running.delete(bot.token);

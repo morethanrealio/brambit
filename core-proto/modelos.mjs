@@ -102,7 +102,7 @@ export function construirModelo(alvo, { maxTokens = 8192, cfg = carregarModelos(
   const p = cfg.provedores[alvo.provedor];
   const apiKey = p.chave ? (env[p.chave] || '') : null;
   if (p.tipo === 'gemini') {
-    // search:false: a busca entra pela ferramenta buscar_web, igual aos outros.
+    // search:false: search comes in through the buscar_web tool, same as the others.
     return makeGemini({ model: alvo.modelo, search: false, maxOutputTokens: maxTokens, apiKey, ...(alvo.opcoes?.thinkingBudget != null ? { thinkingBudget: alvo.opcoes.thinkingBudget } : {}) });
   }
   return makeOpenAI({

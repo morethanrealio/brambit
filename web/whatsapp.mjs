@@ -199,7 +199,7 @@ function normTemplateParam(v) {
     .replace(/[ \t]*\n[ \t]*/g, ' · ')
     .replace(/\t+/g, ' ')
     .replace(/ {2,}/g, ' ')
-    .replace(/(?: ?· ?){2,}/g, ' · ') // linhas em branco viravam " · · "; colapsa
+    .replace(/(?: ?· ?){2,}/g, ' · ') // blank lines used to turn into " · · "; collapses them
     .replace(/^ ?· ?| ?· ?$/g, '')    // leftover separator at the start/end
     .trim();
   if (text.length > WA_TEMPLATE_MAX) text = text.slice(0, WA_TEMPLATE_MAX).trimEnd() + '…'; // template body is short
@@ -797,7 +797,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   function soltarSeVencido(from){const b=esperaPublico.get(from);if(b&&b.vencido)soltarPublico(from);}
 
   async function handleMessage(msg) {
-    const from = msg.from; // telefone do remetente em E.164 sem '+', ex: "5511999998888"
+    const from = msg.from; // sender phone number in E.164 without '+', e.g. "5511999998888"
     if (!from) return;
     const sendReply=text=>sendText(from,text,{requireReceipt:!!msg._inboxId}).catch(e=>{if(msg._inboxId)throw e;});
     const sendMenu=(agents,header)=>sendAgentList(from,agents,header).catch(e=>{if(msg._inboxId)throw e;});
@@ -877,7 +877,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     // Extracts the text (or the list tap interaction).
     let text = '';
     let images = null; // images attached to the turn (vision)
-    let files = null; // documentos (PDF) anexados ao turno
+    let files = null; // documents (PDF) attached to the turn
     let voz = false; // text came from audio transcription
     if (msg.type === 'text') {
       text = (msg.text?.body || '').trim();
@@ -956,7 +956,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     if (!text && !images && !files) return;
     await markRead(msg.id);
 
-    // Comandos de menu.
+    // Menu commands.
     const low = text.toLowerCase();
     if (low === '/agentes' || low === 'agentes' || low === 'menu' || low === '/menu') {
       await sendMenu( agents);

@@ -170,7 +170,7 @@ test('actual internal repair wiring measures usage without billing or demanding 
   assert.deepEqual(observed.map(x => x.repairDraft), [false, true, true]);
 });
 
-// ── Entrega com PDF (texto curto + arquivo em qualquer canal) ────────────────
+// ── Delivery with PDF (short text + file on any channel) ────────────────
 function pdfFixture(overrides = {}) {
   const published = [], docs = [], mails = [];
   const doc = { buffer: Buffer.from('%PDF-synthetic'), mime: 'application/pdf', filename: 'Jornada de descoberta.pdf',

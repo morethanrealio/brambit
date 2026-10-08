@@ -30,7 +30,7 @@ const PROVIDERS = {
     authUrl: 'https://slack.com/oauth/v2/authorize',
     tokenUrl: 'https://slack.com/api/oauth.v2.access',
     // USER token (the assistant acts as the person): goes in user_scope.
-    scope: '', // sem escopos de bot
+    scope: '', // no bot scopes
     userScope: 'search:read channels:history channels:read groups:history groups:read im:history im:read im:write mpim:history mpim:read mpim:write chat:write users:read',
     clientId: () => process.env.SLACK_CLIENT_ID,
     clientSecret: () => process.env.SLACK_CLIENT_SECRET,
@@ -413,7 +413,7 @@ export function providerAuthUrl(name, state, opts = {}) {
   return `${p.authUrl}?${params.toString()}`;
 }
 
-// Troca o authorization code pelo token. Devolve { access_token, refresh_token, scope, expiry }.
+// Exchanges the authorization code for the token. Returns { access_token, refresh_token, scope, expiry }.
 export async function providerExchange(name, code, opts = {}) {
   const p = PROVIDERS[name];
   if (p.exchange) return p.exchange(p, code, opts);

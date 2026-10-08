@@ -129,7 +129,7 @@ export function createScheduledDelivery({
       try {
         const tema = temaAvisoValido(await runAgentMessageDraft({ agent_id: r.agent_id, user_id: r.user_id }, pedidoTemaAviso(r.title, body, r.user_language)));
         if (tema) frase = tx.sobreHoje(tema);
-      } catch { /* cai na frase fixa */ }
+      } catch { /* falls back to the fixed phrase */ }
     }
     return `${frase || tx.prontoHoje(r.title)} ${janelaFechada ? tx.emailJanela : tx.emailTamanho}`;
   }
@@ -151,7 +151,7 @@ export function createScheduledDelivery({
       try {
         const t = adaptacaoEmailValida(body, await runAgentMessageDraft({ agent_id: r.agent_id, user_id: r.user_id }, pedidoAdaptarEmail(canal, body)));
         if (t) return t;
-      } catch { /* cai na nota fixa */ }
+      } catch { /* falls back to the fixed note */ }
     }
     return `${textosEntrega(r.user_language).notaEmail(canal)}\n\n${body}`;
   }

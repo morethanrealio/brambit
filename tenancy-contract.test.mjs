@@ -53,7 +53,7 @@ test('sondas de isolamento entre contas passam no servidor real com duas contas 
   child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
   let port;for(let i=0;i<150;i++){await delay(100);port=output.match(/BOOT_TEST_PORT=(\d+)/)?.[1];if(port||child.exitCode!==null)break;}
   assert.ok(port,'servidor não subiu:\n'+output);
-  // espera o initDb terminar antes de gravar as contas
+  // waits for initDb to finish before writing the accounts
   for(let i=0;i<100;i++){if((await db.query("SELECT to_regclass('mtr_harness.sessions') t")).rows[0].t)break;await delay(100);}
   await db.query(`INSERT INTO mtr_harness.users(id,name,email,password_hash) VALUES($1,'Conta A','a@example.invalid','x'),($2,'Conta B','b@example.invalid','x')`,[A,B]);
   await db.query(`INSERT INTO mtr_harness.sessions(token,user_id,expires_at,last_seen_at) VALUES($1,$2,now()+interval '1 day',now()),($3,$4,now()+interval '1 day',now())`,[SID_A,A,SID_B,B]);

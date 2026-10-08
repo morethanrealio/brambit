@@ -22,7 +22,7 @@ export function avisarEntrega(wamid, status) {
   recentes.set(wamid, { status: s === 'failed' ? 'failed' : 'delivered', em: agora });
 }
 
-// Resolve 'delivered', 'failed' ou 'timeout'.
+// Resolves 'delivered', 'failed' or 'timeout'.
 export function esperarEntrega(wamid, ms) {
   const r = recentes.get(wamid);
   if (r) { recentes.delete(wamid); return Promise.resolve(r.status); }

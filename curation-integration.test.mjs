@@ -116,7 +116,7 @@ ok(!readFileSync('web/db.mjs','utf8').includes('CREATE TABLE mtr_harness.curatio
 ok(readFileSync('web/scheduler.mjs','utf8').includes("text?.type === 'curation-v1'"));
 // Future/old dates are filtered out before counting; without inventing substitutes.
 for(const date of ['2026-09-12','2025-09-10']){const r=await finalize(JSON.stringify({items:[{...items[0],date},...items.slice(1)],checks}));eq(r.coverageSatisfied,false);eq(r.urls.includes(url(1)),false);eq(r.audit.discarded.windowSectionOrExclusion,1);ok(!r.text.includes('janela de publicação'));}
-// Scheduler real preserva envelope, sem chamar canal real.
+// Real scheduler preserves the envelope, without calling a real channel.
 const savedInterval=globalThis.setInterval,savedClear=globalThis.clearInterval,NativeDate=Date;
 class FixedDate extends NativeDate {constructor(...a){super(...(a.length?a:['2026-09-11T08:00:00Z']));}static now(){return NativeDate.parse('2026-09-11T08:00:00Z');}}
 globalThis.Date=FixedDate;

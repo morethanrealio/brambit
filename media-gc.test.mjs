@@ -56,7 +56,7 @@ test('o varredor apaga de verdade quando o S3 volta', async () => {
   const id = lap.enfileira('u1/rosto.jpg');
   let noAr = false;
   const deleteMedia = async () => { if (!noAr) throw new Error('s3 indisponível'); };
-  // 1ª tentativa (na hora do pedido) falha
+  // 1st attempt (at request time) fails
   await apagarObjetoComLapide({ key: 'u1/rosto.jpg', tombstoneId: id, deleteMedia, settle: lap.settle });
   // sweep with S3 still down: stays pending
   let r = await varrerLapides({ claim: lap.claim, deleteMedia, settle: lap.settle });

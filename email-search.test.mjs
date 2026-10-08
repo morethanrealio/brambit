@@ -138,13 +138,13 @@ await test('executeEmailSearch Gmail: pagina até o fim, corpo só nos primeiros
   const r = await executeEmailSearch(c, { fetchImpl, token: async () => 'TOK', page: 3, bodyLimit: 2 });
   assert.equal(r.provider, 'gmail'); assert.equal(r.query, 'quintoandar newer_than:2d -from:me');
   assert.equal(r.total, 7); assert.equal(r.pages, 3); assert.equal(r.truncated, false); assert.equal(r.partial, false); assert.deepEqual(r.errors, []);
-  assert.equal(r.items[0].id, 'm7'); assert.equal(r.items[6].id, 'm1'); // mais recente primeiro
+  assert.equal(r.items[0].id, 'm7'); assert.equal(r.items[6].id, 'm1'); // most recent first
   const lists = calls.filter((x) => x.url.includes('/messages?q='));
   assert.equal(lists.length, 3); assert.ok(lists[0].url.includes('q=quintoandar%20newer_than%3A2d')); assert.ok(lists[1].url.includes('pageToken=1'));
   assert.ok(calls.every((x) => x.auth === 'Bearer TOK'));
   assert.equal(calls.filter((x) => x.url.includes('format=full')).length, 2);
   assert.equal(calls.filter((x) => x.url.includes('format=metadata')).length, 5);
-  const full = r.items.find((m) => m.id === 'm1'); // idx 0 na ordem de listagem → corpo
+  const full = r.items.find((m) => m.id === 'm1'); // idx 0 in listing order → body
   assert.equal(full.body, 'Corpo do e-mail 1'); assert.equal(full.link, 'https://mail.google.com/mail/#all/m1'); assert.deepEqual(full.attachments, ['contrato1.pdf']); assert.equal(full.unread, true); assert.equal(full.subject, 'Assunto 1');
   const meta = r.items.find((m) => m.id === 'm7'); assert.equal(meta.body, ''); assert.equal(meta.snippet, 'trecho 7');
 });
@@ -197,7 +197,7 @@ await test('executeEmailSearch Outlook: sem termos usa $filter + $orderby', asyn
   assert.match(r.query, /^\$filter=receivedDateTime ge .* and isRead eq false$/);
 });
 
-// ---- blocos de prompt ----
+// ---- prompt blocks ----
 await test('emailSearchPromptBlock: lista completa vs cortada, vazio manda avisar em uma frase (nunca silêncio)', async () => {
   const { fetchImpl } = gmailFake({ total: 2 });
   const c = normalizeEmailSearchConfig({ terms: ['quintoandar'], days: 2, account: 'me@g.com' });

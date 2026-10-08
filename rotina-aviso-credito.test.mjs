@@ -13,7 +13,7 @@ const atras = (ms) => new Date(AGORA - ms).toISOString();
 const DIA = 86400_000;
 const CICLO = '2026-09-01';
 
-// 1) Primeira vez: nunca avisou essa pessoa -> avisa.
+// 1) First time: never notified this person -> notifies.
 t('sem marca nenhuma, avisa',
   deveAvisarRotinaSemCredito({ marca: null, periodStart: CICLO, agora: AGORA }) === true);
 t('marca vazia, avisa',

@@ -216,7 +216,7 @@ function allow(userId) {
   return true;
 }
 
-// Texto simples -> HTML leve (mesma pegada do mailer).
+// Plain text -> lightweight HTML (same approach as the mailer).
 function textToHtml(text) {
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const body = esc(text || '')

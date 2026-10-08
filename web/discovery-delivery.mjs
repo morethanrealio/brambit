@@ -1,22 +1,23 @@
 import { createHash } from 'node:crypto';
 
-// Entrega da devolutiva da jornada de descoberta.
+// Delivery of the discovery journey feedback.
 //
-// O relatório inteiro nunca vai cru pro canal. Quando dá pra gerar o PDF, a
-// entrega é SEMPRE texto curto + o PDF anexado, em qualquer canal; o PDF também
-// fica anexado à mensagem gravada na conversa, e o texto integral continua
-// guardado no banco (consultável pelo assistente). Se o PDF falhar em qualquer
-// etapa, o fluxo cai exatamente no comportamento anterior (aviso com link).
+// The full report never goes raw to the channel. When the PDF can be generated,
+// delivery is ALWAYS short text + the attached PDF, on any channel; the PDF also
+// stays attached to the message recorded in the conversation, and the full text
+// keeps being stored in the database (queryable by the assistant). If the PDF
+// fails at any step, the flow falls back exactly to the previous behavior
+// (notice with a link).
 //
-// Dependências opcionais (`buildDocument`, `sendDocument`, `whatsappWindowOpen`,
-// `emailDocument`): sem elas o módulo se comporta como antes do PDF.
+// Optional dependencies (`buildDocument`, `sendDocument`, `whatsappWindowOpen`,
+// `emailDocument`): without them the module behaves as before the PDF.
 export function createDiscoveryReportDelivery({ publish, deliverToChannel, push, baseUrl, buildDocument, sendDocument, whatsappWindowOpen, emailDocument }) {
   return async (p, body) => {
     const requested = !!p.delivery_thread_id;
     if (requested) p = { ...p, channel: p.delivery_channel };
     const failed = p.report_state === 'failed';
 
-    // O aviso de falha de preparo não tem relatório, logo não tem PDF.
+    // The preparation-failure notice has no report, so it has no PDF.
     let doc = null;
     if (!failed && buildDocument && p.body_markdown) {
       try { doc = (await buildDocument(p)) || null; } catch (error) { console.warn('[discovery] pdf da devolutiva:', error?.message ?? error); }
@@ -44,10 +45,10 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
       }
 
       if (doc && sendDocument) {
-        // WhatsApp fora da janela de 24h não aceita arquivo: nenhum template
-        // aprovado carrega documento. Nesse caso o PDF vai por e-mail e o canal
-        // recebe só o aviso, que o próprio deliverToChannel manda por template
-        // de utilidade.
+        // WhatsApp outside the 24h window does not accept files: no approved
+        // template carries a document. In that case the PDF goes by email and the
+        // channel receives only the notice, which deliverToChannel itself sends via
+        // a utility template.
         const closed = p.channel === 'whatsapp' && whatsappWindowOpen ? (await whatsappWindowOpen(p)) === false : false;
         if (closed) {
           const mailed = emailDocument ? await emailDocument(p, doc).catch((error) => { console.warn('[discovery] pdf por e-mail:', error?.message ?? error); return false; }) : false;
@@ -62,8 +63,8 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
             if (receipt?.ok === true && typeof receipt?.id === 'string' && receipt.id.trim()) return { ok: true, id: receipt.id, threadId };
           } catch (error) { console.warn('[discovery] envio do pdf:', error?.message ?? error); }
         }
-        // Qualquer falha do PDF no canal cai no aviso com link, e o anexo segue
-        // disponível na conversa.
+        // Any PDF failure on the channel falls back to the notice with a link, and
+        // the attachment remains available in the conversation.
         const receipt = await deliverToChannel({ ...p, title: 'Sua jornada de descoberta' }, notice, notice);
         return { ok: receipt?.ok === true && typeof receipt?.id === 'string' && !!receipt.id.trim(), id: receipt?.id || null, threadId };
       }

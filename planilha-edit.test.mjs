@@ -19,7 +19,7 @@ const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } els
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-// ── 1) Marcador de corte ──
+// ── 1) Cut marker ──
 t('marcador de corte detectado', hasCutMarker('linha a\n…[cortado: 74123 chars]…\nlinha b'));
 t('marcador com espaco tambem', hasCutMarker('x …[cortado:74123 chars]… y'));
 t('texto normal nao acusa', !hasCutMarker('| Autor | Ano |\n| Bae | 2019 |'));

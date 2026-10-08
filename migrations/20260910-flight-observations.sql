@@ -1,5 +1,5 @@
--- NÃO é chamada pelo initDb. Executar somente após autorização específica.
--- Sem backfill: dados legados não têm identidade completa da consulta.
+-- NOT called by initDb. Run only after specific authorization.
+-- No backfill: legacy data doesn't have the query's full identity.
 BEGIN;
 CREATE TABLE mtr_harness.flight_monitor_observations (
   id bigserial PRIMARY KEY,

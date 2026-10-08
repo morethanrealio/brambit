@@ -91,7 +91,7 @@ chamadas.length = 0;
 const com = JSON.parse(await tools.infinity_comentar.run({ workspace_id: 1, board_id: 'b1', item_id: 'i1', texto: 'Feito <ok>' }));
 t('comentário em html escapado', chamadas[0].body.text === '<p>Feito &lt;ok&gt;</p>' && com.id === 'c1');
 
-// Sem token, token ruim, 403 e 429
+// No token, bad token, 403 and 429
 const semToken = Object.fromEntries(infinityTools({ secret: async () => null }).map((x) => [x.name, x]));
 chamadas.length = 0;
 t('sem token devolve passo a passo sem chamar a API', (await semToken.infinity_boards.run({})).includes('profile/developer/tokens') && chamadas.length === 0);

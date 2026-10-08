@@ -38,7 +38,7 @@ const PRICES = {
   'gpt-5.4-mini': { in: 0.75, cachedIn: 0.075, out: 4.50 },
   // GPT-4.1 mini: $0,40 in / $1,60 out / cache ~$0,10 (25% off).
   'gpt-4.1-mini': { in: 0.40, cachedIn: 0.10,  out: 1.60 },
-  // GPT-4.1 nano: $0,10 in / $0,40 out / cache ~$0,025. O mais barato (tier do Lite).
+  // GPT-4.1 nano: $0.10 in / $0.40 out / cache ~$0.025. The cheapest (Lite tier).
   'gpt-4.1-nano': { in: 0.10, cachedIn: 0.025, out: 0.40 },
   // ── Together AI (alternative test; GLM-5.2 much faster than on DeepInfra) ──
   // GLM-5.2 (zai-org/GLM-5.2) on Together: $1.40 in / $4.40 out / cache $0.26 (together.ai/pricing).
@@ -94,7 +94,7 @@ const PRICES = {
   'websearch-bug': { in: 0.0, cachedIn: 0.0, out: 0.0 },
 };
 
-// Fallback conservador pra modelo desconhecido (usa o tier Flash).
+// Conservative fallback for unknown model (uses the Flash tier).
 const DEFAULT_PRICE = { in: 1.50, cachedIn: 0.15, out: 9.00 };
 const missingPriceByModel = new Map();
 

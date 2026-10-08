@@ -28,7 +28,7 @@ export async function extractPdfText(buffer, { maxChars = 20000 } = {}) {
     if (truncated) text = text.slice(0, maxChars);
     return { text, pages, truncated };
   } finally {
-    // libera recursos do worker do pdfjs
+    // releases pdfjs worker resources
     try { await parser.destroy?.(); } catch { /* noop */ }
   }
 }

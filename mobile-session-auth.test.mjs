@@ -5,7 +5,7 @@ const stale = 'a'.repeat(64);
 const fresh = 'b'.repeat(64);
 const req = (headers = {}) => ({ headers });
 
-// Web continua dependendo exclusivamente do cookie HttpOnly.
+// Web still depends exclusively on the HttpOnly cookie.
 assert.equal(readSid(req({ cookie: `sid=${stale}` })), stale);
 assert.equal(readSid(req({ authorization: `Bearer ${fresh}` })), null);
 

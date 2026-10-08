@@ -38,7 +38,7 @@ const check = (c, label) => { assert.ok(c, label); checks++; };
 const usos = [];
 const tool = webSearchTool({ onUsage: (u) => usos.push(u) });
 
-// 1) caminho feliz: Tavily responde → texto + Fontes numeradas, sem erro de binding.
+// 1) happy path: Tavily responds → text + numbered Sources, no binding error.
 const out = await tool.run({ consulta: 'frequência de chuva com vento oeste em Florianópolis' });
 check(typeof out === 'string' && !/renderFontes|not defined|ERRO/.test(out), `saída sem ReferenceError: ${out.slice(0, 120)}`);
 check(out.includes('Fontes:'), 'tem bloco Fontes:');

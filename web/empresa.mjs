@@ -352,7 +352,7 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
       });
     },
 
-    // Convite pendente pro e-mail: passa pela fila de espera do beta no cadastro.
+    // Pending invite for the email: goes through the beta waitlist at signup.
     async temConvitePendente(email) {
       const em = String(email || '').trim().toLowerCase();
       if (!em) return false;

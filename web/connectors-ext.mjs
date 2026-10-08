@@ -370,7 +370,7 @@ export async function uploadToOneDrive({ token, name, buffer, mimeType = 'applic
   return { id: f.id, name: f.name, link: f.webUrl, size: f.size, updated: existed };
 }
 
-// ── Agenda do Outlook (Microsoft Graph /me/events) ──
+// ── Outlook Calendar (Microsoft Graph /me/events) ──
 const DEFAULT_TZ = 'America/Sao_Paulo';
 // Builds Graph's start/end object. Accepts ISO ("2026-08-12T15:00") and sends the
 // timezone along; Graph interprets the time in that timezone (avoids the bug of

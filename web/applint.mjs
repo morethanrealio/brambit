@@ -155,7 +155,7 @@ function collectApiCallIssues(files, htmlSrcSet, serverBlob) {
 // Rule 3: same function DECLARED in two client files (shared global scope →
 // the last one loaded silently wins).
 function collectDuplicateFunctions(files, htmlSrcSet) {
-  const decl = new Map(); // nome -> Set de arquivos
+  const decl = new Map(); // name -> Set of files
   const fnRe = /\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
   for (const [rel, txt] of Object.entries(files)) {
     if (!JS_EXTS.test(rel) || !isClientPath(rel, htmlSrcSet)) continue;
@@ -178,7 +178,7 @@ function collectDuplicateFunctions(files, htmlSrcSet) {
 export function lintApp(files) {
   const erros = [];
   const avisos = [];
-  // Arquivos .js citados em <script src> de algum HTML contam como cliente.
+  // .js files referenced in a <script src> of some HTML count as client.
   const htmlSrcSet = new Set();
   const srcRe = /<script[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
   for (const [rel, txt] of Object.entries(files)) {

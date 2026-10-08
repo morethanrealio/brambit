@@ -230,7 +230,7 @@ export function voosTools(userId, agentId, { onUsage = () => {}, onObservation =
           } catch (e) { erro = e?.message || String(e); await sleep(1200); }
         }
         if (!data) {
-          // Fonte fora do ar: serve o cache velho DIZENDO a idade, ou admite.
+          // Source down: serves the old cache STATING its age, or admits it.
           if (hit?.payload) { data = hit.payload; idadeCache = hit.ageMin; }
           else return `Não consegui consultar os voos agora (${erro || 'falha na fonte'}). Tento de novo se você quiser.`;
         }

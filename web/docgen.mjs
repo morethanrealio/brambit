@@ -56,7 +56,7 @@ function htmlToMd(html) {
     return /^https?:\/\//i.test(src) ? `\n![${alt}](${src})\n` : '';
   });
   s = s.replace(/<\s*\/\s*(p|div|ul|ol|tr|table|section|article|header|footer)\s*>/gi, '\n');
-  s = s.replace(/<[^>]+>/g, ''); // tira o resto das tags
+  s = s.replace(/<[^>]+>/g, ''); // strips the rest of the tags
   s = decodeEntities(s);
   s = s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
   return s.trim();
@@ -73,7 +73,7 @@ function toMarkdown(content) {
   return looksLikeHtml(s) ? htmlToMd(s) : s;
 }
 
-// Divide uma linha em "runs" alternando normal/negrito a partir de **...**.
+// Splits a line into "runs" alternating normal/bold based on **...**.
 function splitBold(line) {
   const parts = [];
   const re = /\*\*([^*]+)\*\*/g;
@@ -87,7 +87,7 @@ function splitBold(line) {
   return parts.length ? parts : [{ text: line, bold: false }];
 }
 
-// Modelo de bloco comum ao docx e ao pdf: cada linha de markdown vira um bloco
+// Block model shared by docx and pdf: each markdown line becomes a block
 // { type: 'h1'|'h2'|'h3'|'li'|'p'|'blank', runs: [{text,bold}] }.
 function parseBlocks(md) {
   const out = [];
@@ -736,7 +736,7 @@ function buildPdf(md, title, images) {
     for (const l of wrap(flat, 95)) items.push({ type: 'text', text: l, size: 11, bold: false });
   }
 
-  // Pagina posicionando y do topo pra baixo.
+  // Paginates by positioning y from top to bottom.
   const pages = [];
   let cur = [];
   let y = TOP;
@@ -775,7 +775,7 @@ function buildPdf(md, title, images) {
     return { s, used: [...used] };
   });
 
-  // Monta os objetos PDF.
+  // Builds the PDF objects.
   const objs = [];
   const nPages = pages.length;
   const pageObjStart = 3;
@@ -807,7 +807,7 @@ function buildPdf(md, title, images) {
     objs[imageObjStart + i] = { stream: xobjs[i].stream, dict: xobjs[i].dict };
   }
 
-  // Serializa com xref.
+  // Serializes with xref.
   let pdf = Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n', 'latin1');
   const offsets = [];
   const total = imageObjStart + xobjs.length;
@@ -960,7 +960,7 @@ function imageInfo(buf) {
       if (buf[p] !== 0xff) { p++; continue; }
       let marker = buf[p + 1];
       while (marker === 0xff && p + 1 < buf.length) { p++; marker = buf[p + 1]; }
-      // markers sem payload
+      // markers without payload
       if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) { p += 2; continue; }
       if (p + 4 > buf.length) break;
       const len = buf.readUInt16BE(p + 2);
@@ -1224,7 +1224,7 @@ export async function generateDocument({ format, content, title = '' } = {}) {
     try { html = await inlineRemoteImages(html); } catch {}
     return { buffer: Buffer.from(html, 'utf8'), mime: MIME.html, ext: 'html' };
   }
-  // txt e qualquer outro caem em texto puro.
+  // txt and anything else fall back to plain text.
   return { buffer: Buffer.from(md, 'utf8'), mime: MIME.txt, ext: 'txt' };
 }
 

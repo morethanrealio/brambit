@@ -21,7 +21,7 @@ import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 
 const SLACK_API = 'https://slack.com/api';
 
-// Canal pronto (precisa de bot token + signing secret).
+// Channel ready (needs bot token + signing secret).
 export function slackEnabled() {
   return !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_SIGNING_SECRET);
 }
@@ -57,7 +57,7 @@ async function slackApi(method, body) {
 let cachedBotUserId = null;
 async function getBotUserId() {
   if (cachedBotUserId) return cachedBotUserId;
-  try { const j = await slackApi('auth.test', {}); cachedBotUserId = j.user_id || null; } catch { /* fica null */ }
+  try { const j = await slackApi('auth.test', {}); cachedBotUserId = j.user_id || null; } catch { /* stays null */ }
   return cachedBotUserId;
 }
 
@@ -263,7 +263,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       return;
     }
 
-    // Comando de menu.
+    // Menu command.
     const low = text.toLowerCase();
     if (low === 'menu' || low === 'agentes' || low === '/agentes' || low === '/menu') {
       await reply(agentListText(agents));

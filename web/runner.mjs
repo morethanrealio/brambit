@@ -18,7 +18,7 @@
 
 import { marca } from './marca.mjs';
 
-const HOLD_MS = 25_000;        // quanto o long-poll segura a resposta antes de mandar idle
+const HOLD_MS = 25_000;        // how long the long-poll holds the response before sending idle
 const ONLINE_TTL_MS = 45_000;  // device is "online" if it polled/responded within this
 const MAX_OUT = 200_000;       // accumulated output ceiling per command (memory)
 const REQ_GRACE_MS = 15_000;   // slack over the command's timeout before giving up
@@ -28,8 +28,8 @@ const REQ_GRACE_MS = 15_000;   // slack over the command's timeout before giving
 // text in the prompt), and in this path the bytes never get close to the model — they go
 // straight to OUR S3. Here the limit is only the process's memory.
 const MAX_FILE = 25 * 1024 * 1024;   // byte ceiling per file brought from the machine
-const FILE_GRACE_MS = 20_000;        // folga sobre o timeout do pedido de arquivo
-const MIN_FILE_VERSION = '2.1.0';    // runner mais velho descarta o frame calado
+const FILE_GRACE_MS = 20_000;        // slack over the file request timeout
+const MIN_FILE_VERSION = '2.1.0';    // older runner silently discards the frame
 
 // Version /runner SERVES today (= runner-go/main.go `version`). Exported
 // because the page must say which version the download delivers and compare it
@@ -100,7 +100,7 @@ export function runnerSetBoundAgent(userId, agentId) {
   return d.deviceId;
 }
 
-// ── Lado do canal (chamado pelas rotas /api/runner/*) ──────────────────────
+// ── Channel side (called by the /api/runner/* routes) ──────────────────────
 
 // Long-poll: the runner calls this and receives the next command (or {type:'idle'}
 // after HOLD_MS, when it should re-poll right away). deviceId = device token id.

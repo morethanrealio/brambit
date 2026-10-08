@@ -69,7 +69,7 @@ const semTools = { system: 's', tools: registry };
   const r = await runAgent({
     ...semTools, userInput: 'vai',
     provider: { name: 'fake', complete: async () => { chamadas++; return { stop: 'end', text: `t${chamadas}` }; } },
-    pollNewUserMsg: () => ({ text: 'mais uma' }), // nunca para
+    pollNewUserMsg: () => ({ text: 'mais uma' }), // never stops
     onEvent: (e) => { if (e.type === 'interject' || e.type === 'interject_predraft') injetadas++; },
   });
   t('teto de 3 interjeições respeitado', injetadas === 3);
@@ -161,7 +161,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await espera(40);
   await h.process(payload('wamid.4', 'segunda'));
   solta();
-  await espera(120); // fim do 1º turno + debounce do rebote
+  await espera(120); // end of the 1st turn + rebound debounce
   t('mensagem não consumida vira o turno seguinte', rodadas.length === 2 && rodadas[1] === 'segunda');
   t('duas respostas nesse caso (nada sumiu)', enviados.length === 2);
 }
@@ -177,12 +177,12 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
     runConversation: async () => { rodou++; return { text: 'ok' }; },
   });
   await h.process(payload('wamid.9', 'oi'));
-  await h.process(payload('wamid.9', 'oi')); // retry da Meta
+  await h.process(payload('wamid.9', 'oi')); // Meta retry
   await espera(60);
   t('retry do mesmo wamid roda 1x', rodou === 1);
 }
 
-// ── I) WA_INTERJECT=0 volta ao caminho antigo (chave de desligamento) ──
+// ── I) WA_INTERJECT=0 falls back to the old path (kill switch) ──
 {
   enviados.length = 0;
   process.env.WA_INTERJECT = '0';
@@ -276,7 +276,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
     },
   });
   await h.process(payload('wamid.14', 'trabalho demorado'));
-  await espera(40); // debounce de 10ms + heartbeat de 15ms
+  await espera(40); // 10ms debounce + 15ms heartbeat
   t('turno longo envia recibo de andamento', enviados[0]?.includes('Ainda estou trabalhando nisso'));
   await espera(35);
   t('recibo de andamento é enviado uma única vez', enviados.length === 1);

@@ -37,7 +37,7 @@ test('fontes de Gmail sobrevivem à síntese, à segunda página e à troca de c
   assert.equal(tracked.hasPartial(),false);
   account='trabalho@example.invalid'; const count=calls.length;
   await assert.rejects(search.run({query:'subject:contrato',cursor:first.next_cursor}),/Cursor/);
-  assert.equal(calls.length,count); // recusa ANTES de consultar a outra conta
+  assert.equal(calls.length,count); // refuses BEFORE querying the other account
   const second=JSON.parse(await search.run({query:'subject:contrato'}));
   assert.equal(second.messages[0].account,account);
   assert.equal(tracked.evidence().filter(r=>r.id==='one').length,2);

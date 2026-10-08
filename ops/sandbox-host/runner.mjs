@@ -24,7 +24,7 @@ const MEM = process.env.SANDBOX_MEM || '512m';
 const CPUS = process.env.SANDBOX_CPUS || '1';
 const PIDS = process.env.SANDBOX_PIDS || '256';
 const EXEC_TIMEOUT_MS = Number(process.env.SANDBOX_EXEC_TIMEOUT_MS || 60_000);
-const IDLE_STOP = process.env.SANDBOX_IDLE_STOP || '30m';         // (faxina externa usa isso)
+const IDLE_STOP = process.env.SANDBOX_IDLE_STOP || '30m';         // (external cleanup uses this)
 
 const cname = (userId) => `sbx_${userId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)}`;
 const vname = (userId) => `sbxvol_${userId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)}`;

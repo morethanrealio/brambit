@@ -218,7 +218,7 @@ export function citarFontes(texto, registro, { language, comLista = true } = {})
   return [corpo, `${rotuloDe(language)}\n${linhas.join('\n')}`, resto].filter(Boolean).join('\n\n');
 }
 
-// ——— outros consertos do texto final ———————————————————————————
+// ——— other fixes to the final text ———————————————————————————
 
 // The <tool_call>…</tool_call> block (GLM format: name + <arg_key>/<arg_value> pairs)
 // comes out whole. Without a closing tag, it comes out up to the block's last </arg_value> or, with no
@@ -268,7 +268,7 @@ export function limparTextoFinal(t, { comFontes = false, fontes = null, language
   // stays. Before, it used to cut everything from the first <tool_call> onward and lost the
   // response that came after it (2026-09-29).
   let s = removerToolCallVazado(String(t ?? ''));
-  // Limpa fragmentos soltos de arg (caso o modelo emita sem o <tool_call> de abertura).
+  // Cleans up loose arg fragments (in case the model emits without the opening <tool_call>).
   s = s.replace(/<\/?(?:tool_call|arg_key|arg_value)>/g, '');
   if (fontes?.size) return citarFontes(s, fontes, { language });
   if (comFontes) return stripCitationMarkers(s);

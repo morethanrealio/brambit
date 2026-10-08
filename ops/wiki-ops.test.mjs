@@ -50,7 +50,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('fix casa exato mesmo com linha parecida ao lado', exato.paginas.perfil === '- reunião com o time toda segunda\n- reunião com vendas quinzenal');
 }
 
-// ── remove (novo na Fase 1-B) ──
+// ── remove (new in Phase 1-B) ──
 {
   const r = aplicarOps([{ op: 'remove', pagina: 'perfil', ancora: 'trabalha com produto' }], P(base));
   t('remove apaga só a linha da âncora', r.paginas.perfil === '- mora em São Paulo\n- treina de manhã');
@@ -88,7 +88,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
   t('teto de 5 ops por chamada', r.feitas.length === 5);
 }
 
-// ── detector de perda (guarda-corpo do memoria_escrever) ──
+// ── loss detector (guardrail for memoria_escrever) ──
 {
   const condensado = '- mora em SP e trabalha com produto';
   const d = diffPerfil(base, condensado);
@@ -181,7 +181,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
 
 // ── housekeeping doesn't overwrite what the tool wrote in the same turn ──
 {
-  // Prod 25/09: tool gravou R$619, housekeeping trocou por R$522 3s depois.
+  // Prod 25/09: tool recorded R$619, housekeeping swapped it for R$522 3s later.
   const fatos = [
     { assunto: 'preco_do_voo', linha_pagina: '- Preço do voo: R$619', fonte: { origem: 'memoria_anotar', turn_id: 'T1' } },
     { assunto: 'cidade', linha_pagina: '- Mora em Curitiba', fonte: { origem: 'housekeeping', turn_id: 'T0' } },

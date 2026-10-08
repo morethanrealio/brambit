@@ -53,7 +53,7 @@ function imds(method, path, headers = {}) {
 
 let _creds = null; // { accessKeyId, secretAccessKey, token, expiration }
 async function getCreds() {
-  // reusa enquanto faltar > 5 min pra expirar
+  // reuse while more than 5 min remain before expiring
   if (_creds && new Date(_creds.expiration).getTime() - Date.now() > 300000) return _creds;
   const token = await imds('PUT', '/latest/api/token', { 'X-aws-ec2-metadata-token-ttl-seconds': '21600' });
   const h = { 'X-aws-ec2-metadata-token': token };
@@ -106,14 +106,14 @@ async function kmsCall(target, payloadObj) {
   });
 }
 
-// Cifra um Buffer com a CMK. Retorna o CiphertextBlob em base64.
+// Encrypts a Buffer with the CMK. Returns the CiphertextBlob in base64.
 export async function kmsEncrypt(plaintextBuf, keyId = process.env.KMS_KEY_ID) {
   if (!keyId) throw new Error('KMS_KEY_ID não configurada');
   const r = await kmsCall('TrentService.Encrypt', { KeyId: keyId, Plaintext: Buffer.from(plaintextBuf).toString('base64') });
   return r.CiphertextBlob;
 }
 
-// Decifra um CiphertextBlob (base64) produzido pela CMK. Retorna Buffer.
+// Decrypts a CiphertextBlob (base64) produced by the CMK. Returns Buffer.
 export async function kmsDecrypt(ciphertextB64) {
   const r = await kmsCall('TrentService.Decrypt', { CiphertextBlob: String(ciphertextB64) });
   return Buffer.from(r.Plaintext, 'base64');

@@ -35,7 +35,7 @@ function resolveEventDate(data, tz) {
   if (s === 'hoje') return hoje;
   if (s === 'ontem') return shiftISO(hoje, -1);
   if (s === 'anteontem') return shiftISO(hoje, -2);
-  // dd/mm ou dd/mm/aaaa
+  // dd/mm or dd/mm/yyyy
   const m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (m) {
     const [, dd, mm, yy] = m;

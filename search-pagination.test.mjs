@@ -88,7 +88,7 @@ mock({files:[],nextPageToken:'A'});const da=JSON.parse(await d.run({query:'ciclo
 mock({files:[],nextPageToken:'B'});const db=JSON.parse(await d.run({query:'ciclo',cursor:da.next_cursor}));
 mock({files:[],nextPageToken:'A'});r=JSON.parse(await d.run({query:'ciclo',cursor:db.next_cursor}));eq(r.partial,true);eq(r.next_cursor,null);ok(r.note.includes('repetiu'));
 for(const bad of [null,[],{files:null},{files:{}},{files:[null]},{files:[{}]},{files:Array(9).fill({id:'x'})},{files:[],incompleteSearch:'false'},{files:[],nextPageToken:''}]){mock(bad);await reject(()=>d.run({query:'bad'}));}
-// OneDrive: raiz e pesquisa, nextLink integral, sem cruzar conta/caminho/origem.
+// OneDrive: root and search, full nextLink, without crossing account/path/origin.
 const od=tool('onedrive_search'),rootLink='https://graph.microsoft.com/v1.0/me/drive/root/children?$skiptoken=root';
 mock({value:[],'@odata.nextLink':rootLink});const root=JSON.parse(await od.run());eq(root.partial,true);
 mock({value:[]});r=JSON.parse(await od.run({cursor:root.next_cursor}));eq(requests[0].href,rootLink);eq(r.partial,false);
@@ -122,7 +122,7 @@ r=JSON.parse(await sl.run({query:'texto'}));eq(r.items[0].text.length,800);eq(r.
 mock({ok:true,messages:{matches:[],paging:{page:1,pages:0,total:0}}});r=JSON.parse(await sl.run({query:'vazio'}));eq(r.partial,false);
 for(const bad of [{ok:true},{ok:true,messages:{matches:[],paging:{page:2,pages:2,total:20}}},{ok:true,messages:{matches:[],paging:{page:1,pages:'1',total:0}}}]){mock(bad);await reject(()=>sl.run({query:'bad'}));}
 meta=slackSearchMeta({messages:{paging:{page:100,pages:101,total:2020}}},{page:100,pageSize:20});eq(meta.next,null);eq(meta.limitReached,true);
-// TTL, cache, limite de cadeia e erros antes de qualquer API.
+// TTL, cache, chain limit and errors before any API.
 let time=0;const pg=searchPagination({defaultMax:1,cap:2,now:()=>time});const req=pg.request('x');
 const old=JSON.parse(pg.result(req,[] ,{next:'A'}));time=900000;throws(()=>pg.request('x',undefined,old.next_cursor));
 const first=JSON.parse(pg.result(req,[],{next:'A'}));for(let i=0;i<100;i++)pg.result(req,[],{next:String(i)});

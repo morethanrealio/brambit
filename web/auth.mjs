@@ -72,7 +72,7 @@ export function clearCookie() {
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export const validEmail = (e) => typeof e === 'string' && EMAIL_RE.test(e);
 
-// ── Login com Google (OAuth 2.0, fluxo authorization code) ──
+// ── Google Login (OAuth 2.0, authorization code flow) ──
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo';
@@ -181,7 +181,7 @@ export async function googleRefresh(refreshToken) {
     if (/invalid_grant/i.test(raw)) err.code = 'invalid_grant';
     throw err;
   }
-  return r.json(); // { access_token, expires_in, scope, ... } (sem refresh_token novo)
+  return r.json(); // { access_token, expires_in, scope, ... } (no new refresh_token)
 }
 
 // Troca o code por tokens.

@@ -111,7 +111,7 @@ async function parte1() {
     saida.saida === 'saida-legitima' && !JSON.stringify(saida).includes(INVASOR),
     `saida=${JSON.stringify(saida.saida)}`);
 
-  // Comando de B vai pro device de B, nunca pro de A.
+  // B's command goes to B's device, never A's.
   const pollB2 = runnerPoll(UB, 'devB', meta);
   const pollA3 = runnerPoll(UA, 'devA', meta);
   const execB = runnerExec(UB, 'echo comando-de-B', { threadId: 'thread-de-B', timeout: 8000 });

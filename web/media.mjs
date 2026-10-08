@@ -240,7 +240,7 @@ export function campaignS3Enabled() {
   return !!(process.env.CAMPAIGN_S3_BUCKET && awsCredentialsConfigured());
 }
 
-// Grava um asset de campanha na key informada (ex.: campanhas/<slug>/<tipo>/<uuid>.<ext>).
+// Writes a campaign asset at the given key (e.g.: campanhas/<slug>/<tipo>/<uuid>.<ext>).
 export async function putCampaignObject(key, body, contentType) {
   const res = await s3Request('PUT', key, {
     body, contentType, payloadHash: sha256hex(body),

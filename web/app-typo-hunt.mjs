@@ -132,8 +132,8 @@ export function huntTypos(files, opcoes = {}) {
   const minimo = opcoes.tamanhoMinimo ?? TAMANHO_MINIMO;
   const maxAvisos = opcoes.maxAvisos ?? MAX_AVISOS;
 
-  const funcoes = new Set();   // declaradas, alvo de chamada global
-  const metodos = new Set();   // declaradas, alvo de chamada com ponto
+  const funcoes = new Set();   // declared, global call target
+  const metodos = new Set();   // declared, dotted call target
   const vocabulario = new Set(); // ANY occurrence outside call position
   const usos = new Map();      // nome -> { arquivo, ponto }
 
@@ -153,7 +153,7 @@ export function huntTypos(files, opcoes = {}) {
     let m;
     while ((m = RE_OCORRENCIA.exec(txt)) !== null) {
       const antes = m[1], nome = m[2], chamada = m[3] === '(';
-      // O regex consome o caractere anterior; recuar deixa `a.b(` ser visto.
+      // The regex consumes the previous character; stepping back lets `a.b(` be seen.
       RE_OCORRENCIA.lastIndex = m.index + (antes ? 1 : 0) + nome.length;
       if (!chamada) { vocabulario.add(nome); continue; }
       if (usos.has(nome)) continue;
