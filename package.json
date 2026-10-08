@@ -7,7 +7,7 @@
   },
   "scripts": {
     "local": "node dev/local.mjs",
-    "brambit": "node instalador/brambit.mjs",
+    "brambit": "node installer/brambit.mjs",
     "modelos": "node dev/modelos.mjs",
     "test": "node test-support/run-suite.mjs",
     "routines:build": "node --experimental-strip-types routines/build.mts",

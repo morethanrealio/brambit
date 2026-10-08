@@ -19,8 +19,12 @@ npm run brambit
 Na primeira vez abre no navegador uma página de configuração: sua conta (você vira
 a dona ou o dono da instalação), qual IA usar e a chave dela, testada antes de
 salvar. Depois disso o cadastro fica fechado: os outros entram com o seu convite.
-Os dados ficam em `~/.brambit` (ou em `BRAMBIT_DADOS`), fora da pasta do
+Os dados ficam em `~/.brambit` (ou em `BRAMBIT_DATA_DIR`), fora da pasta do
 programa, e tudo escuta só em `127.0.0.1`.
+
+Rodar `npm run brambit` de novo com ele ligado só abre o navegador. Pra desligar:
+`npm run brambit -- stop` (ou o botão em Configurações > Este computador, onde
+também dá pra trocar a IA); `npm run brambit -- status` diz se está ligado.
 
 ## Quick start
 
@@ -38,8 +42,8 @@ npm run local
 
 O `npm run local` sobe um banco descartável em `.local/` (só num socket local),
 aplica schema e migrações, cria uma conta de teste e abre o servidor. Quando
-aparecer `[local] pronto: http://127.0.0.1:8080`, entre com `teste@example.com` /
-`brambs-local-teste`. Pra recomeçar do zero, pare (Ctrl+C) e apague `.local/`.
+aparecer `[local] ready: http://127.0.0.1:8080`, entre com `test@example.com` /
+`brambit-local-test`. Pra recomeçar do zero, pare (Ctrl+C) e apague `.local/`.
 
 Pra o assistente rodar código (python, shell), suba o sandbox num outro
 terminal: `ops/sandbox-host/local.sh` (Linux com Docker; pede `sudo` pro
@@ -138,7 +142,7 @@ cada porta tem um padrão que deixa a instância inteira funcionando.
 - `ops/apps-host/` — plano de controle dos apps hospedados (`ctl.py`, `router.py`).
 - `ops/tenancy-*.mjs` — provas de isolamento entre contas, rodadas pela suíte.
 - `dev/` — `npm run local` e `npm run modelos`.
-- `instalador/` — `npm run brambit` (uso no próprio computador) e a prova de ponta a ponta dele.
+- `installer/` — `npm run brambit` (uso no próprio computador) e a prova de ponta a ponta dele.
 - `test-support/` — apoio da suíte de testes.
 
 ## Desenvolvimento e validação

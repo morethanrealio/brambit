@@ -1,0 +1,19 @@
+{
+ "Este computador": "Esta computadora",
+ "O Brambit está ligado neste computador. Só você, que é dono dele, vê esta parte.": "Brambit está encendido en esta computadora. Solo tú, que eres el dueño, ves esta parte.",
+ "Endereço": "Dirección",
+ "Inteligência artificial": "Inteligencia artificial",
+ "Pasta dos dados": "Carpeta de datos",
+ "Versão": "Versión",
+ "Trocar a IA": "Cambiar la IA",
+ "Desligar o Brambit": "Apagar Brambit",
+ "O Brambit vai parar um instante pra você escolher a IA e colar a chave nova. As conversas e os dados continuam aqui.": "Brambit se detendrá un momento para que elijas la IA y pegues la clave nueva. Las conversaciones y los datos siguen aquí.",
+ "Continuar": "Continuar",
+ "Abrindo a configuração da IA...": "Abriendo la configuración de la IA...",
+ "Não deu certo. Tente de novo.": "No funcionó. Intenta de nuevo.",
+ "A configuração não abriu. Veja a mensagem na janela do Brambit.": "La configuración no se abrió. Mira el mensaje en la ventana de Brambit.",
+ "O assistente para de responder, inclusive no Telegram e no WhatsApp, até você ligar de novo.": "El asistente deja de responder, también en Telegram y WhatsApp, hasta que lo enciendas de nuevo.",
+ "Desligar": "Apagar",
+ "O Brambit foi desligado": "Brambit está apagado",
+ "Pra ligar de novo, abra o Brambit pelo atalho ou rode o comando brambit.": "Para encenderlo de nuevo, abre Brambit desde su acceso directo o ejecuta el comando brambit."
+}

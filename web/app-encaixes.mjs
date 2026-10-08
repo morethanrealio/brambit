@@ -12,7 +12,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const MARCADOR = /^[ \t]*(?:<!--encaixe:([a-z0-9-]+)-->|\/\*encaixe:([a-z0-9-]+)\*\/)[ \t]*\n/gm;
+// \r?: on Windows git checks out index.html with CRLF.
+const MARCADOR = /^[ \t]*(?:<!--encaixe:([a-z0-9-]+)-->|\/\*encaixe:([a-z0-9-]+)\*\/)[ \t]*\r?\n/gm;
 
 function pedacos(pastas) {
   const porNome = {};
