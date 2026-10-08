@@ -44,8 +44,8 @@ items that make a good first contribution marked.
   restates the code doesn't help.
 - No secrets, keys, real user data, IPs or internal hosts, in code or in tests. CI
   blocks secrets (gitleaks) and unsafe workflows (zizmor).
-- User-facing text in Portuguese, English and Spanish, when the area already has
-  all three languages.
+- User-facing text in Portuguese, English and Spanish, following
+  [`docs/i18n.md`](docs/i18n.md).
 
 ## Sensitive areas
 
