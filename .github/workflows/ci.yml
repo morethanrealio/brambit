@@ -53,7 +53,7 @@ jobs:
         run: |
           for b in */build.mts; do node "$b"; done
           git diff --exit-code || { echo "::error::Run the build.mts files and commit the generated files."; exit 1; }
-      - name: Growth guard (web/server.mjs, web/db.mjs)
+      - name: Growth guards (web/server.mjs, web/db.mjs, page texts)
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
@@ -73,6 +73,9 @@ jobs:
             base=$(git merge-base origin/main HEAD)
           fi
           node test-support/growth-guard.mjs "$base"
+          # Page text outside the catalogs (docs/i18n.md, "Pages"); the list of
+          # texts still on the old catalogs may only shrink against the same base.
+          node test-support/page-i18n-guard.mjs "$base"
       - name: Guard against tests that read the source as text
         run: node test-support/fragile-guard.mjs
       - name: .env.example complete and with nothing of ours

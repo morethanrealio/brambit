@@ -14,9 +14,9 @@ import { extraiTextos, carregaCatalogos } from './web/site-i18n.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'web', 'public');
-// Same list that the server translates. cockpit/metrics/broadcast are left out: they are
-// internal pages, not end-user ones.
-const PAGINAS = ['home', 'precos', 'apps', 'habilidades', 'feed', 'runner', 'suporte', 'usage', 'index', 'termos', 'privacidade'];
+// Core pages still on the Portuguese-keyed catalogs; the others mark their text
+// with data-i18n (docs/i18n.md, "Pages").
+const PAGINAS = ['index'];
 
 const catalogos = carregaCatalogos(path.join(__dirname, 'web', 'site-textos'));
 const idiomas = process.argv[2] ? [process.argv[2]] : Object.keys(catalogos);

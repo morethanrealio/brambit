@@ -54,76 +54,110 @@
 <body>
 <div class="top"><div class="in">
   <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
-  <a class="back" href="/">voltar ao início</a>
+  <a class="back" href="/" data-i18n="runner_page.back">back to home</a>
 </div></div>
 
 <div class="wrap">
   <h1>__MARCA__ Runner</h1>
-  <p class="lead">Deixe seu assistente rodar comandos na <b>sua máquina</b> (o computador na sua frente), mesmo atrás de rede doméstica. Você instala um programinha que disca pro __MARCA__; nada abre porta no seu computador.</p>
+  <p class="lead" data-i18n="runner_page.lead">Let your assistant run commands on <b>your machine</b> (the computer in front of you), even behind a home network. You install a small program that dials into __MARCA__; nothing opens a port on your computer.</p>
 
   <!-- Warned BEFORE the download, not after: the binary is not yet signed/
        notarized (runner-go Phase D), so macOS and Windows block it on first
        open. Without this warning the system alert looks like a virus and the person gives up. -->
-  <div class="warn" style="margin:0 0 18px;">O __MARCA__ Runner ainda não está verificado pela Apple ou Microsoft, por isso o sistema vai dar um alerta de segurança.</div>
+  <div class="warn" style="margin:0 0 18px;" data-i18n="runner_page.unverified">__MARCA__ Runner is not verified by Apple or Microsoft yet, so your system will show a security warning.</div>
 
   <div class="card">
-    <h2>Estado</h2>
-    <div class="status"><span id="dot" class="dot off"></span><span id="statustxt">verificando…</span></div>
+    <h2 data-i18n="runner_page.status_title">Status</h2>
+    <div class="status"><span id="dot" class="dot off"></span><span id="statustxt" data-i18n="runner_page.status_checking">checking…</span></div>
     <div id="statusmeta" class="meta"></div>
     <div id="statuswarn" class="warn" style="display:none;"></div>
   </div>
 
   <div class="card">
-    <h2>1. Pegue seu código de conexão</h2>
-    <p class="lead" style="margin:0 0 12px;">Esse código liga o app à sua conta. Ele aparece uma única vez; deixe esta aba aberta, você vai colá-lo no app daqui a pouco.</p>
-    <button id="genbtn" class="btn primary">Gerar código de conexão</button>
+    <h2 data-i18n="runner_page.step1_title">1. Get your connection code</h2>
+    <p class="lead" style="margin:0 0 12px;" data-i18n="runner_page.step1_lead">This code links the app to your account. It appears only once; keep this tab open, you will paste it into the app in a moment.</p>
+    <button id="genbtn" class="btn primary" data-i18n="runner_page.generate">Generate connection code</button>
     <div id="tokwrap" style="display:none;margin-top:12px;">
-      <div class="tokbox"><code id="tokval"></code><button id="copybtn" class="btn ghost">copiar</button></div>
-      <div class="warn">Guarde este código só pra você. Ele dá acesso de execução à sua máquina enquanto o app estiver aberto. Se vazar, revogue em <a class="inl" href="#" id="mgmt">seus códigos</a> abaixo.</div>
+      <div class="tokbox"><code id="tokval"></code><button id="copybtn" class="btn ghost" data-i18n="runner_page.copy">copy</button></div>
+      <div class="warn" data-i18n="runner_page.code_warning">Keep this code to yourself. It grants execution access to your machine while the app is open. If it leaks, revoke it in <a class="inl" href="#" id="mgmt">your codes</a> below.</div>
     </div>
     <div id="genmsg" class="msg"></div>
   </div>
 
   <div class="card">
-    <h2>2. Baixe e abra o app</h2>
+    <h2 data-i18n="runner_page.step2_title">2. Download and open the app</h2>
     <div style="display:flex;align-items:center;gap:14px;margin:0 0 14px;">
       <img src="/__ICONE__" alt="__MARCA__ Runner" style="width:44px;height:44px;flex:none;"/>
-      <p class="lead" style="margin:0;">Baixe o app do __MARCA__ Runner e abra. Ele abre uma janela no seu navegador pra você colar o código; não precisa de terminal nem comando. Depois é só deixar rodando.</p>
+      <p class="lead" style="margin:0;" data-i18n="runner_page.step2_lead">Download the __MARCA__ Runner app and open it. It opens a window in your browser for you to paste the code; no terminal or commands needed. After that, just leave it running.</p>
     </div>
     <div class="dlrow" id="dlmainrow">
-      <a class="btn dl" data-os="mac-app" href="/runner/download/mac-app" download>Baixar para Mac</a>
-      <a class="btn dl" data-os="windows" href="/runner/download/windows" download>Baixar para Windows</a>
+      <a class="btn dl" data-os="mac-app" href="/runner/download/mac-app" download data-i18n="runner_page.download_mac">Download for Mac</a>
+      <a class="btn dl" data-os="windows" href="/runner/download/windows" download data-i18n="runner_page.download_windows">Download for Windows</a>
     </div>
     <div id="dlver" class="meta" style="margin-top:8px;color:var(--mut);font-size:13px;"></div>
     <div id="inst" style="margin-top:6px;"></div>
     <details class="adv">
-      <summary>Outro sistema ou modo avançado (linha de comando)</summary>
+      <summary data-i18n="runner_page.advanced">Other system or advanced mode (command line)</summary>
       <div class="dlrow" id="dlrow" style="margin-top:10px;">
         <a class="btn ghost dl" data-os="macos-arm64" href="/runner/download/macos-arm64" download>Mac CLI (Apple Silicon)</a>
         <a class="btn ghost dl" data-os="macos-intel" href="/runner/download/macos-intel" download>Mac CLI (Intel)</a>
         <a class="btn ghost dl" data-os="linux" href="/runner/download/linux" download>Linux CLI</a>
       </div>
-      <p class="lead" style="margin:10px 0 0;font-size:13.5px;">O modo CLI espera o código em <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">__RUNNERENV___TOKEN</code> e roda no terminal (sem abrir o painel). Fixe a pasta inicial com <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">__RUNNERENV___DIR=~/pasta</code>.</p>
+      <p class="lead" style="margin:10px 0 0;font-size:13.5px;" data-i18n="runner_page.cli_mode">CLI mode expects the code in <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">__RUNNERENV___TOKEN</code> and runs in the terminal (without opening the panel). Set the starting folder with <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">__RUNNERENV___DIR=~/<span data-i18n="runner_page.folder_example">folder</span></code>.</p>
     </details>
   </div>
 
   <div class="card">
-    <h2>3. Cole o código no painel</h2>
-    <p class="lead" style="margin:0 0 4px;">Ao abrir o app, uma aba do navegador mostra o painel do __MARCA__ Runner. Cole ali o código do passo 1 e clique <b>Conectar</b>. O indicador acima fica verde quando conectar. Pronto: pode fechar a aba, ele continua rodando (pra parar, use <b>Encerrar</b> no painel).</p>
+    <h2 data-i18n="runner_page.step3_title">3. Paste the code into the panel</h2>
+    <p class="lead" style="margin:0 0 4px;" data-i18n="runner_page.step3_lead">When you open the app, a browser tab shows the __MARCA__ Runner panel. Paste the code from step 1 there and click <b>Connect</b>. The indicator above turns green once it connects. Done: you can close the tab, it keeps running (to stop it, use <b>Quit</b> in the panel).</p>
   </div>
 
   <div class="card">
-    <h2>4. Peça pro seu assistente</h2>
-    <p class="lead" style="margin:0;">Com o app verde acima, é só pedir no chat, por exemplo: <i>"roda <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">hostname; whoami; pwd</code> na minha máquina"</i>. Quem opera a máquina é o assistente que aparece no status acima; pra trocar, vá em <b>Conexões → __MARCA__ Runner</b>. Assistente de <b>grupo</b> não pode operar o Runner (grupo é canal com várias pessoas, o Runner é a sua máquina).</p>
+    <h2 data-i18n="runner_page.step4_title">4. Ask your assistant</h2>
+    <p class="lead" style="margin:0;" data-i18n="runner_page.step4_lead">With the app green above, just ask in the chat, for example: <i>“run <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">hostname; whoami; pwd</code> on my machine”</i>. The one operating the machine is the assistant shown in the status above; to switch, go to <b>Connections → __MARCA__ Runner</b>. A <b>group</b> assistant cannot operate the Runner (a group is a channel with several people, the Runner is your machine).</p>
     <div id="devs" class="devs"></div>
   </div>
 </div>
 
-<div class="sitefoot"><div class="footinner">__MARCA__ · o runner roda comandos só enquanto você o mantém aberto.</div></div>
+<div class="sitefoot"><div class="footinner" data-i18n="runner_page.footer">__MARCA__ · the runner runs commands only while you keep it open.</div></div>
 
+<!-- Install steps per system; the script shows the one for the chosen download. -->
+<template id="inst-mac-app">
+  <div class="step"><span class="n">a</span><span data-i18n="runner_page.mac_app_unzip">The file downloads and the Mac unzips it automatically: you get the <b>__MARCA__ Runner</b> app in your Downloads folder.</span></div>
+  <div class="step"><span class="n">b</span><span data-i18n="runner_page.mac_app_open"><b>Double-click</b> the app. macOS will warn that it could not open it (the app does not have a digital signature yet). Click <b>OK</b> on that warning.</span></div>
+  <div class="step"><span class="n">c</span><span data-i18n="runner_page.mac_app_allow">Open <b>System Settings › Privacy &amp; Security</b>. Scroll to the <b>Security</b> section: you will see the message saying that <b>__MARCA__ Runner</b> was blocked, with the <b>Open Anyway</b> button. Click it.</span></div>
+  <div class="step"><span class="n">d</span><span data-i18n="runner_page.mac_app_confirm">Confirm with <b>Open</b> and unlock with your password or Touch ID. (Only the first time.)</span></div>
+  <div class="step"><span class="n">e</span><span data-i18n="runner_page.panel_opens">A browser tab opens with the __MARCA__ Runner panel. Follow step 3.</span></div>
+</template>
+<template id="inst-windows">
+  <div class="step"><span class="n">a</span><span data-i18n="runner_page.windows_open">Download <b>__MARCA__ Runner.exe</b> (button above) and <b>double-click</b> it.</span></div>
+  <div class="step"><span class="n">b</span><span data-i18n="runner_page.windows_allow">If you see <b>“Windows protected your PC”</b>, click <b>More info</b> › <b>Run anyway</b>. (Only the first time.)</span></div>
+  <div class="step"><span class="n">c</span><span data-i18n="runner_page.panel_opens">A browser tab opens with the __MARCA__ Runner panel. Follow step 3.</span></div>
+</template>
+<template id="inst-linux">
+  <div class="step"><span class="n">a</span><span data-i18n="runner_page.linux_download">Download __MARCA__ Runner (button above).</span></div>
+  <div class="step"><span class="n">b</span><span data-i18n="runner_page.linux_executable">In the terminal, inside the folder with the file, make it executable:</span></div>
+  <pre class="code">chmod +x __RUNNER__</pre>
+  <div class="step"><span class="n">c</span><span data-i18n="runner_page.run_with_code">Run it with your code:</span></div>
+  <pre class="code" id="runcmd"></pre>
+  <div class="step"><span class="n">d</span><span data-i18n="runner_page.keep_running">Leave it running. Ctrl-C to stop.</span></div>
+</template>
+<template id="inst-macos-cli">
+  <div class="step"><span class="n">a</span><span data-i18n="runner_page.cli_download">Download the __MARCA__ Runner CLI (button above).</span></div>
+  <div class="step"><span class="n">b</span><span data-i18n="runner_page.cli_folder">Open <b>Terminal</b> and go to the folder with the file (e.g.: <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">cd ~/Downloads</code>).</span></div>
+  <div class="step"><span class="n">c</span><span data-i18n="runner_page.cli_allow">Allow it to run (just once):</span></div>
+  <pre class="code">chmod +x __RUNNER__ && xattr -dr com.apple.quarantine __RUNNER__</pre>
+  <div class="step"><span class="n">d</span><span data-i18n="runner_page.run_with_code">Run it with your code:</span></div>
+  <pre class="code" id="runcmd"></pre>
+  <div class="step"><span class="n">e</span><span data-i18n="runner_page.keep_running">Leave it running. Ctrl-C to stop.</span></div>
+</template>
+
+<script type="application/json" data-i18n-texts="runner_page"></script>
+<script src="/page-texts.js"></script>
 <script nonce="__CSP_NONCE__">
 (function(){
   var $ = function(id){ return document.getElementById(id); };
+  var t = window.pageText;
   function setMsg(el, t, cls){ el.textContent = t || ''; el.className = 'msg' + (cls ? ' ' + cls : ''); }
 
   var curOS = 'mac-app', curToken = '';
@@ -135,41 +169,15 @@
     return 'mac-app';
   }
   function runCmd(os, tok){
-    tok = tok || 'SEU_CODIGO';
+    tok = tok || t('your_code');
     if(os === 'windows') return '$env:__RUNNERENV___TOKEN="' + tok + '"; .\\__RUNNER__.exe';
     return '__RUNNERENV___TOKEN=' + tok + ' ./__RUNNER__';
   }
-  // Steps per OS (our own markup, no user data). App = graphical flow, no
+  // Steps per OS, from the <template>s above. App = graphical flow, no
   // terminal; CLI = terminal (technical user).
   function instHtml(os){
-    var s = '';
-    if(os === 'mac-app'){
-      s += '<div class="step"><span class="n">a</span>O arquivo baixa e o Mac descompacta sozinho: aparece o app <b>__MARCA__ Runner</b> na pasta Downloads.</div>';
-      s += '<div class="step"><span class="n">b</span>Dê <b>dois cliques</b> no app. O macOS vai avisar que não conseguiu abrir (o app ainda não tem assinatura digital). Clique <b>OK</b> nesse aviso.</div>';
-      s += '<div class="step"><span class="n">c</span>Abra <b>Ajustes do Sistema &rsaquo; Privacidade e Segurança</b>. Role até a seção <b>Segurança</b>: vai aparecer a mensagem de que o <b>__MARCA__ Runner</b> foi bloqueado, com o botão <b>Abrir Assim Mesmo</b>. Clique nele.</div>';
-      s += '<div class="step"><span class="n">d</span>Confirme com <b>Abrir</b> e desbloqueie com sua senha ou Touch ID. (Só na primeira vez.)</div>';
-      s += '<div class="step"><span class="n">e</span>Uma aba do navegador abre com o painel do __MARCA__ Runner. Siga o passo 3.</div>';
-    } else if(os === 'windows'){
-      s += '<div class="step"><span class="n">a</span>Baixe o <b>__MARCA__ Runner.exe</b> (botão acima) e dê <b>dois cliques</b> nele.</div>';
-      s += '<div class="step"><span class="n">b</span>Se aparecer <b>"O Windows protegeu o computador"</b>, clique em <b>Mais informações</b> &rsaquo; <b>Executar assim mesmo</b>. (Só na primeira vez.)</div>';
-      s += '<div class="step"><span class="n">c</span>Uma aba do navegador abre com o painel do __MARCA__ Runner. Siga o passo 3.</div>';
-    } else if(os === 'linux'){
-      s += '<div class="step"><span class="n">a</span>Baixe o __MARCA__ Runner (botão acima).</div>';
-      s += '<div class="step"><span class="n">b</span>No terminal, na pasta do arquivo, torne-o executável:</div>';
-      s += '<pre class="code">chmod +x __RUNNER__</pre>';
-      s += '<div class="step"><span class="n">c</span>Rode com o seu código:</div>';
-      s += '<pre class="code" id="runcmd"></pre>';
-      s += '<div class="step"><span class="n">d</span>Deixe rodando. Ctrl-C pra parar.</div>';
-    } else {
-      s += '<div class="step"><span class="n">a</span>Baixe o __MARCA__ Runner CLI (botão acima).</div>';
-      s += '<div class="step"><span class="n">b</span>Abra o <b>Terminal</b> e vá até a pasta do arquivo (ex.: <code style="background:var(--line2);padding:2px 6px;border-radius:6px;">cd ~/Downloads</code>).</div>';
-      s += '<div class="step"><span class="n">c</span>Autorize a execução (uma vez só):</div>';
-      s += '<pre class="code">chmod +x __RUNNER__ && xattr -dr com.apple.quarantine __RUNNER__</pre>';
-      s += '<div class="step"><span class="n">d</span>Rode com o seu código:</div>';
-      s += '<pre class="code" id="runcmd"></pre>';
-      s += '<div class="step"><span class="n">e</span>Deixe rodando. Ctrl-C pra parar.</div>';
-    }
-    return s;
+    var id = (os === 'mac-app' || os === 'windows' || os === 'linux') ? os : 'macos-cli';
+    return $('inst-' + id).innerHTML;
   }
   function renderInst(){
     $('inst').innerHTML = instHtml(curOS);
@@ -191,27 +199,27 @@
       // Which version the download delivers TODAY. Without it the owner downloaded
       // again with no way to know if they got the new one (user report 2026-08-26).
       // Comes from the server so the number isn't hand-written in two places.
-      if(dv && s.currentVersion) dv.textContent='Versão '+s.currentVersion;
+      if(dv && s.currentVersion) dv.textContent=t('download_version',{version:s.currentVersion});
       if(s.online){
-        dot.className='dot on'; tx.textContent='Runner conectado';
+        dot.className='dot on'; tx.textContent=t('connected');
         var m=s.meta||{};
-        var linha=(m.hostname?('máquina: '+m.hostname):'')+(m.os?('  ·  '+m.os+'/'+(m.arch||'')):'');
+        var linha=(m.hostname?t('status_machine',{host:m.hostname}):'')+(m.os?('  ·  '+m.os+'/'+(m.arch||'')):'');
         // Who operates the machine. Without this the screen turned green without saying
         // which assistant it was bound to, and someone asking the wrong assistant didn't understand
         // why the terminal didn't show up.
-        linha += (linha?'  ·  ':'') + 'assistente: ' + (s.activeAgentName || '(nenhum escolhido)');
-        linha += '  ·  versão: ' + (s.version || 'desconhecida');
+        linha += (linha?'  ·  ':'') + t('status_assistant',{name:s.activeAgentName || t('status_no_assistant')});
+        linha += '  ·  ' + t('status_version',{version:s.version || t('status_version_unknown')});
         mt.textContent=linha;
         // `outdated` is decided on the server (numeric compare per component).
         // An old runner silently discards an unknown frame, so a file
         // request would hang until timeout instead of giving a clear error.
         if(s.outdated){
-          wn.textContent='Runner desatualizado. Baixe de novo abaixo (versão '+(s.currentVersion||'')+') pra conseguir transferir arquivo da sua máquina.';
+          wn.textContent=t('outdated',{version:s.currentVersion||''});
           wn.style.display='';
         } else { wn.style.display='none'; wn.textContent=''; }
       } else {
-        dot.className='dot off'; tx.textContent='Nenhum runner conectado';
-        mt.textContent='Abra o __MARCA__ Runner na sua máquina (passo 2).';
+        dot.className='dot off'; tx.textContent=t('offline');
+        mt.textContent=t('offline_hint');
         wn.style.display='none'; wn.textContent='';
       }
     }).catch(function(){});
@@ -223,13 +231,14 @@
       var runners = j.devices.filter(function(d){ return (d.label||'').indexOf('__MARCA__ Runner')===0; });
       var box=$('devs');
       if(!runners.length){ box.textContent=''; return; }
-      box.innerHTML='<div style="font-weight:600;color:var(--txt);margin-bottom:2px;">Seus códigos de conexão</div>';
+      box.innerHTML='<div style="font-weight:600;color:var(--txt);margin-bottom:2px;"></div>';
+      box.firstChild.textContent=t('codes_title');
       runners.forEach(function(d){
         var row=document.createElement('div'); row.className='d';
-        var left=document.createElement('span'); left.textContent=(d.label||'runner')+(d.enabled?'':' (desativado)');
-        var rev=document.createElement('a'); rev.className='inl'; rev.href='#'; rev.textContent='revogar';
+        var left=document.createElement('span'); left.textContent=d.enabled?(d.label||'runner'):t('code_disabled',{label:d.label||'runner'});
+        var rev=document.createElement('a'); rev.className='inl'; rev.href='#'; rev.textContent=t('revoke');
         rev.addEventListener('click', function(e){ e.preventDefault();
-          if(!confirm('Revogar este código? O app que o usa vai parar de conectar.')) return;
+          if(!confirm(t('revoke_confirm'))) return;
           fetch('/api/device/tokens/revoke',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({id:d.id})})
             .then(function(){ refreshDevs(); });
         });
@@ -239,22 +248,22 @@
   }
 
   $('genbtn').addEventListener('click', function(){
-    setMsg($('genmsg'),'gerando…');
+    setMsg($('genmsg'),t('generating'));
     fetch('/api/device/tokens',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({label:'__MARCA__ Runner'})})
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(j&&j.token){
           $('tokval').textContent=j.token; $('tokwrap').style.display='';
           curToken=j.token; renderInst();
-          setMsg($('genmsg'),'Código gerado. Copie agora, ele não é mostrado de novo.','ok');
+          setMsg($('genmsg'),t('generated'),'ok');
           refreshDevs();
-        } else setMsg($('genmsg'),(j&&j.error)||'Falha ao gerar o código.','err');
-      }).catch(function(){ setMsg($('genmsg'),'Falha de rede.','err'); });
+        } else setMsg($('genmsg'),(j&&j.error)||t('generate_failed'),'err');
+      }).catch(function(){ setMsg($('genmsg'),t('network_error'),'err'); });
   });
 
   $('copybtn').addEventListener('click', function(){
-    var t=$('tokval').textContent||'';
-    if(navigator.clipboard){ navigator.clipboard.writeText(t).then(function(){ setMsg($('genmsg'),'Copiado.','ok'); }); }
+    var code=$('tokval').textContent||'';
+    if(navigator.clipboard){ navigator.clipboard.writeText(code).then(function(){ setMsg($('genmsg'),t('copied'),'ok'); }); }
   });
 
   $('mgmt').addEventListener('click', function(e){ e.preventDefault(); var d=$('devs'); if(d) d.scrollIntoView({behavior:'smooth'}); });

@@ -1,5 +1,9 @@
 // i18n of the public pages: translation at RESPONSE time, without touching the HTML.
 //
+// BEING REPLACED: pages now mark their text with data-i18n and take it from
+// web/locales (web/page-i18n.mjs, docs/i18n.md "Pages"). This stays only for the
+// pages not migrated yet and goes away after them; add no new text here.
+//
 // Why not `data-i18n` on every element (the original plan): marking ~740
 // strings by hand means editing every page that is currently correct and live,
 // and every forgotten mark becomes a chunk in Portuguese in the middle of the
