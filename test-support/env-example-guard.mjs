@@ -17,12 +17,12 @@ export const EXAMPLE = '.env.example';
 
 // Read in the code but that are NOT server configuration.
 export const IGNORE = new Map([
-  ['TSC_PATH', 'build dos .mts (*/build.mts)'],
-  ['PGLITE_MODULE', 'prévia local do painel com banco em memória (engagement/preview.mts)'],
-  ['DATA_DIR', 'modelo de código gerado pros apps dos usuários (web/hosting.mjs)'],
-  ['NOME', 'texto de instrução pro modelo ("use process.env.NOME")'],
-  ['NAME', 'texto de instrução pro modelo ("use process.env.NAME")'],
-  ['X', 'texto de comentário ("process.env.X")'],
+  ['TSC_PATH', 'build of the .mts files (*/build.mts)'],
+  ['PGLITE_MODULE', 'local panel preview with an in-memory database (engagement/preview.mts)'],
+  ['DATA_DIR', 'generated code template for users\' apps (web/hosting.mjs)'],
+  ['NOME', 'instruction text for the model ("use process.env.NOME")'],
+  ['NAME', 'instruction text for the model ("use process.env.NAME")'],
+  ['X', 'comment text ("process.env.X")'],
   ['BRAMBIT_HOME', 'program folder of an installed copy, read by the installer check (installer/install-check.mjs)'],
   ['PATH', 'the system PATH the installer edits (installer/desktop.mjs)'],
   ['XDG_CONFIG_HOME', 'where Linux keeps autostart entries (installer/desktop.mjs)'],

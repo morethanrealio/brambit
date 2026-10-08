@@ -65,21 +65,21 @@ async function parte1() {
   // A's command: goes to A's device and creates the pending reqId.
   const execA = runnerExec(UA, 'echo saida-legitima', { threadId: 'thread-de-A', timeout: 20_000 });
   const frameA = await pollA;
-  check('comando de A chega no device de A', frameA?.type === 'exec' && !!frameA.reqId, `frame=${frameA?.type}`);
+  check('A\'s command reaches A\'s device', frameA?.type === 'exec' && !!frameA.reqId, `frame=${frameA?.type}`);
 
   // B's device cannot receive A's command.
   const oQueBRecebeu = await Promise.race([pollB, sentinela(2000)]);
-  check('device de B não recebe o comando de A', oQueBRecebeu?.type === '__nada__',
-    `B recebeu: ${JSON.stringify(oQueBRecebeu)}`);
+  check('B\'s device does not receive A\'s command', oQueBRecebeu?.type === '__nada__',
+    `B received: ${JSON.stringify(oQueBRecebeu)}`);
 
   // B tries to poison the output of A's command.
   const r1 = runnerResult(UB, 'devB', { reqId: frameA.reqId, type: 'stdout', chunk: INVASOR });
-  check('B não consegue escrever na saída do comando de A',
+  check('B cannot write to the output of A\'s command',
     r1?.ok === false && /outro usuário/.test(r1.error || ''), JSON.stringify(r1));
 
   // B tries to close A's command (would deny service even without reading anything).
   const r2 = runnerResult(UB, 'devB', { reqId: frameA.reqId, type: 'exit', exitCode: 0 });
-  check('B não consegue encerrar o comando de A',
+  check('B cannot close A\'s command',
     r2?.ok === false && /outro usuário/.test(r2.error || ''), JSON.stringify(r2));
 
   // File channel: same reqId correlation, its own check.
@@ -88,36 +88,36 @@ async function parte1() {
   const frameF = await Promise.race([pollA2, sentinela(2000)]);
   if (frameF?.type === 'readfile') {
     const r3 = runnerResult(UB, 'devB', { reqId: frameF.reqId, type: 'filechunk', seq: 0, chunk: Buffer.from(INVASOR).toString('base64') });
-    check('B não consegue injetar bytes no arquivo pedido por A',
+    check('B cannot inject bytes into the file A requested',
       r3?.ok === false && /outro usuário/.test(r3.error || ''), JSON.stringify(r3));
     const r4 = runnerResult(UB, 'devB', { reqId: frameF.reqId, type: 'filedone', size: 0 });
-    check('B não consegue encerrar a transferência de A',
+    check('B cannot close A\'s transfer',
       r4?.ok === false && /outro usuário/.test(r4.error || ''), JSON.stringify(r4));
     // Ends the transfer via the owner, otherwise the test waits for the timeout.
-    runnerResult(UA, 'devA', { reqId: frameF.reqId, type: 'filedone', error: 'fim do teste' });
+    runnerResult(UA, 'devA', { reqId: frameF.reqId, type: 'filedone', error: 'end of test' });
   } else {
-    check('B não consegue injetar bytes no arquivo pedido por A', null, 'frame readfile não chegou');
-    check('B não consegue encerrar a transferência de A', null, 'frame readfile não chegou');
+    check('B cannot inject bytes into the file A requested', null, 'readfile frame did not arrive');
+    check('B cannot close A\'s transfer', null, 'readfile frame did not arrive');
   }
   const arq = await lerA;
-  check('pedido de arquivo de A não trouxe bytes do invasor',
-    !JSON.stringify(arq).includes(INVASOR), `resultado=${(arq.error || 'ok').slice(0, 60)}`);
+  check('A\'s file request did not return any bytes from the intruder',
+    !JSON.stringify(arq).includes(INVASOR), `result=${(arq.error || 'ok').slice(0, 60)}`);
 
   // Closes A's command via the right device and checks that nothing from the intruder got in.
   runnerResult(UA, 'devA', { reqId: frameA.reqId, type: 'stdout', chunk: 'saida-legitima' });
   runnerResult(UA, 'devA', { reqId: frameA.reqId, type: 'exit', exitCode: 0 });
   const saida = await execA;
-  check('saída entregue a A é só a legítima',
+  check('output delivered to A is only the legitimate one',
     saida.saida === 'saida-legitima' && !JSON.stringify(saida).includes(INVASOR),
-    `saida=${JSON.stringify(saida.saida)}`);
+    `output=${JSON.stringify(saida.saida)}`);
 
   // B's command goes to B's device, never A's.
   const pollB2 = runnerPoll(UB, 'devB', meta);
   const pollA3 = runnerPoll(UA, 'devA', meta);
   const execB = runnerExec(UB, 'echo comando-de-B', { threadId: 'thread-de-B', timeout: 8000 });
   const [fb, fa] = [await Promise.race([pollB2, sentinela(2000)]), await Promise.race([pollA3, sentinela(1)])];
-  check('comando de B não cai no device de A', fb?.type === 'exec' && fa?.type === '__nada__',
-    `B recebeu ${fb?.type}, A recebeu ${fa?.type}`);
+  check('B\'s command does not land on A\'s device', fb?.type === 'exec' && fa?.type === '__nada__',
+    `B received ${fb?.type}, A received ${fa?.type}`);
   if (fb?.reqId) runnerResult(UB, 'devB', { reqId: fb.reqId, type: 'exit', exitCode: 0 });
   await execB;
 }
@@ -141,22 +141,22 @@ async function parte2() {
   try {
     const st0 = await call('A', 'GET', '/api/runner/status');
     if (st0.data?.online) {
-      check('device falso na conta A', null, 'o Runner de verdade do dono está online; não registro device falso pra não sequestrar comando real');
-      check('sessão de B não enxerga o device de A', st0.data.online === true && (await call('B', 'GET', '/api/runner/status')).data?.online !== true,
-        'runner real de A online e B continua offline');
+      check('fake device on account A', null, 'the owner\'s real Runner is online; not registering a fake device to avoid hijacking a real command');
+      check('B\'s session cannot see A\'s device', st0.data.online === true && (await call('B', 'GET', '/api/runner/status')).data?.online !== true,
+        'A\'s real runner is online and B remains offline');
       return criados;
     }
 
     const tk = {};
     for (const who of ['A', 'B']) {
       const d = await call(who, 'POST', '/api/device/tokens', { body: { label: 'zz-tenancy-runner' } });
-      if (d.status !== 200 || !d.data?.token) { check(`token de device da conta ${who}`, false, `HTTP ${d.status}`); return criados; }
+      if (d.status !== 200 || !d.data?.token) { check(`device token for account ${who}`, false, `HTTP ${d.status}`); return criados; }
       tk[who] = d.data.token; criados.push([who, d.data.device.id]);
     }
 
     // Invalid token doesn't get in.
     const ruim = await call(null, 'GET', '/api/runner/poll', { bearer: 'token-invalido-de-teste' });
-    check('poll com token inválido é recusado', ruim.status === 401, `HTTP ${ruim.status}`);
+    check('poll with invalid token is rejected', ruim.status === 401, `HTTP ${ruim.status}`);
 
     // Registers A's fake device (the owner is offline, verified above) and
     // checks that only account A can see it.
@@ -164,17 +164,17 @@ async function parte2() {
     await sentinela(1500);
     const stA = await call('A', 'GET', '/api/runner/status');
     const stB = await call('B', 'GET', '/api/runner/status');
-    check('device de A aparece pra A', stA.data?.online === true, `deviceId=${String(stA.data?.deviceId).slice(0, 8)}`);
-    check('device de A NÃO aparece pra B', stB.data?.online !== true, `status de B: online=${stB.data?.online}`);
+    check('A\'s device appears for A', stA.data?.online === true, `deviceId=${String(stA.data?.deviceId).slice(0, 8)}`);
+    check('A\'s device does NOT appear for B', stB.data?.online !== true, `B's status: online=${stB.data?.online}`);
 
     // With B's token, try to answer a reqId that isn't theirs.
     const forjado = await call(null, 'POST', '/api/runner/result', { bearer: tk.B, body: { reqId: 'reqid-forjado-de-teste', type: 'stdout', chunk: INVASOR } });
-    check('result com reqId forjado não é aceito como saída válida',
+    check('result with a forged reqId is not accepted as valid output',
       forjado.status === 200 && forjado.data?.ignored === true, JSON.stringify(forjado.data));
 
     // A's poll cannot be served by B's token: B gets idle.
     const pollB = await call(null, 'GET', '/api/runner/poll?hostname=zz-tenancy-b&v=2.1.1', { bearer: tk.B });
-    check('poll de B só recebe idle (nunca frame de A)', pollB.data?.type === 'idle', JSON.stringify(pollB.data).slice(0, 80));
+    check('B\'s poll only receives idle (never A\'s frame)', pollB.data?.type === 'idle', JSON.stringify(pollB.data).slice(0, 80));
     await pollA;
   } finally {
     for (const [who, id] of criados) await call(who, 'POST', '/api/device/tokens/revoke', { body: { id } });

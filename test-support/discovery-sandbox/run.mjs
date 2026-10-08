@@ -83,13 +83,13 @@ try{
    if(req.method==='GET'&&url.pathname==='/state')return send(200,await state());
    if(req.method!=='POST'||req.headers.origin!==`http://127.0.0.1:${port}`||!String(req.headers['content-type']).startsWith('application/json'))return send(403,{error:'Local JSON request required'});
    if(!['/message','/reset'].includes(url.pathname))return send(404,{error:'Unknown route'});
-   if(busy)return send(409,{error:'Aguarde a resposta atual.'});
-   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)return send(413,{error:'Mensagem muito longa.'});}const body=JSON.parse(raw||'{}');
+   if(busy)return send(409,{error:'Wait for the current response.'});
+   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)return send(413,{error:'Message too long.'});}const body=JSON.parse(raw||'{}');
    busy=true;try{
-    if(url.pathname==='/message'){if(typeof body.message!=='string'||!body.message.trim())return send(400,{error:'Escreva uma mensagem.'});await api('/api/chat',{threadId:thread,message:body.message});}
+    if(url.pathname==='/message'){if(typeof body.message!=='string'||!body.message.trim())return send(400,{error:'Write a message.'});await api('/api/chat',{threadId:thread,message:body.message});}
     else{
      const r=(await db.query('SELECT state FROM mtr_harness.discovery_reports WHERE user_id=$1',[owner])).rows[0];
-     if(['pending','generating','ready','sending'].includes(r?.state))return send(409,{error:'Aguarde o preparo da devolutiva antes de recomeçar.'});
+     if(['pending','generating','ready','sending'].includes(r?.state))return send(409,{error:'Wait for the report to finish preparing before restarting.'});
      await stopApp();await seed();await startApp();
     }
     send(200,{ok:true});

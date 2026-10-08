@@ -34,12 +34,12 @@ import { baseOrExit } from './tenancy-base.mjs';
 const SID = { A: process.env.SID_A || '', B: process.env.SID_B || '' };
 
 if (!SID.A || !SID.B) {
-  console.error('Faltou SID_A e/ou SID_B (cookie de sessão de cada conta).');
+  console.error('Missing SID_A and/or SID_B (session cookie for each account).');
   process.exit(2);
 }
 const BASE = baseOrExit();
 
-const short = (s) => (s ? String(s).slice(0, 6) + '…' : '(sem sessão)');
+const short = (s) => (s ? String(s).slice(0, 6) + '…' : '(no session)');
 const other = (who) => (who === 'A' ? 'B' : 'A');
 
 // ── HTTP client ──
@@ -88,7 +88,7 @@ async function discover(who) {
 
   const me = await call(who, 'GET', '/api/me');
   if (me.status !== 200) {
-    inv.error = `/api/me devolveu ${me.status} — sessão inválida ou expirada`;
+    inv.error = `/api/me returned ${me.status} — invalid or expired session`;
     return inv;
   }
   // /api/me doesn't return id or e-mail. The id comes out of the media key's prefix
@@ -151,7 +151,7 @@ const results = [];
 function record(nome, alvo, intruso, r, ok, obs) {
   results.push({ nome, alvo, intruso, status: r.status, bytes: r.bytes, ok, obs: obs || null });
   const tag = ok === null ? 'SKIP' : ok ? 'PASSOU' : 'FALHOU';
-  const linha = `[${tag}] ${nome} — id de ${alvo}, sessão de ${intruso} → HTTP ${r.status}${r.bytes ? ` (${r.bytes}B)` : ''}`;
+  const linha = `[${tag}] ${nome} — id of ${alvo}, session of ${intruso} → HTTP ${r.status}${r.bytes ? ` (${r.bytes}B)` : ''}`;
   console.log(obs ? `${linha}  · ${obs}` : linha);
 }
 
@@ -195,10 +195,10 @@ async function run() {
   const invB = await discover('B');
   for (const inv of [invA, invB]) {
     if (inv.error) { console.error(`Account ${inv.who}: ${inv.error}`); process.exit(2); }
-    console.log(`Account ${inv.who} = ${inv.nome} / ${inv.subdomain} (userId ${inv.userId || 'não descoberto'})`);
-    console.log(`  threads=${inv.threads.length} mídia=${inv.mediaKeys.length} agentes=${inv.agents.length} ` +
-      `páginas=${inv.pages.length} spaces=${inv.spaces.length} rotinas=${inv.routines.length} ` +
-      `tarefas=${inv.tasks.length} devices=${inv.devices.length} conexões=${inv.connections.length} ` +
+    console.log(`Account ${inv.who} = ${inv.nome} / ${inv.subdomain} (userId ${inv.userId || 'not found'})`);
+    console.log(`  threads=${inv.threads.length} media=${inv.mediaKeys.length} agents=${inv.agents.length} ` +
+      `pages=${inv.pages.length} spaces=${inv.spaces.length} routines=${inv.routines.length} ` +
+      `tasks=${inv.tasks.length} devices=${inv.devices.length} connections=${inv.connections.length} ` +
       `mcp=${inv.mcp.length} home=${inv.homeItems.length} apps=${inv.apps.length}`);
   }
   console.log('');
@@ -214,7 +214,7 @@ async function run() {
   for (const [nome, mk, campo] of READ_PROBES) {
     for (const dono of ['A', 'B']) {
       const ids = inv[dono][campo] || [];
-      if (!ids.length) { record(nome, dono, other(dono), { status: 0, bytes: 0 }, null, 'a conta não tem esse recurso'); continue; }
+      if (!ids.length) { record(nome, dono, other(dono), { status: 0, bytes: 0 }, null, 'the account does not have this resource'); continue; }
       const id = ids[0];
       const path = mk(id);
       const r = await call(other(dono), 'GET', path);
@@ -222,7 +222,7 @@ async function run() {
 
       // Same id, with no session at all.
       const anon = await call('anon', 'GET', path);
-      record(nome + ' (anônimo)', dono, 'anon', anon, recusou(anon));
+      record(nome + ' (anonymous)', dono, 'anon', anon, recusou(anon));
     }
   }
 
@@ -244,8 +244,8 @@ async function run() {
     const b = await call('B', 'GET', `/api/memory/page?slug=${encodeURIComponent(slug)}`);
     const igual = a.status === 200 && b.status === 200 &&
       JSON.stringify(a.data?.page?.content ?? a.data) === JSON.stringify(b.data?.page?.content ?? b.data);
-    record(`GET /api/memory/page?slug=${slug} (conteúdo)`, 'A', 'B', b, !igual,
-      igual ? 'as duas contas recebem a MESMA página' : 'cada conta recebe a sua página');
+    record(`GET /api/memory/page?slug=${slug} (content)`, 'A', 'B', b, !igual,
+      igual ? 'both accounts receive the SAME page' : 'each account receives its own page');
   }
 
   // /api/usage?user= can't be judged by status: for non-admin the server
@@ -255,17 +255,17 @@ async function run() {
   for (const dono of ['A', 'B']) {
     const alvoId = inv[dono].userId;
     const intruso = other(dono);
-    if (!alvoId) { record('GET /api/usage?user', dono, intruso, { status: 0, bytes: 0 }, null, 'não descobri o userId (conta sem mídia)'); continue; }
+    if (!alvoId) { record('GET /api/usage?user', dono, intruso, { status: 0, bytes: 0 }, null, 'could not find the userId (account without media)'); continue; }
     if (inv[intruso].admin) {
       record('GET /api/usage?user', dono, intruso, { status: 0, bytes: 0 }, null,
-        'sessão é a conta de ADMIN_EMAIL — ler consumo agregado de outro usuário é o comportamento desenhado');
+        'session is the ADMIN_EMAIL account — reading another user\'s aggregated usage is the intended behavior');
       continue;
     }
     const proprio = await call(intruso, 'GET', '/api/usage?by=day');
     const cruzado = await call(intruso, 'GET', `/api/usage?by=day&user=${encodeURIComponent(alvoId)}`);
     const igual = JSON.stringify(proprio.data) === JSON.stringify(cruzado.data);
     record('GET /api/usage?user', dono, intruso, cruzado, igual,
-      igual ? 'parâmetro ignorado (resposta idêntica à própria)' : 'RESPOSTA MUDOU ao pedir o id do outro');
+      igual ? 'parameter ignored (response identical to its own)' : 'RESPONSE CHANGED when asking for the other\'s id');
   }
 
   // Privilege escalation: a regular session cannot open the admin route.

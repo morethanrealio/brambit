@@ -15,4 +15,4 @@ export function fixture(){
 }
 export const step=(calls,n)=>({stop:'tool',toolCalls:calls.map((x,i)=>({...x,id:`${n}:${i}`})),usage:{in:10,out:3}});
 export const read=(f,path,start,size=6000)=>({name:'ler_arquivo_do_app',args:{caminho:path,inicio:start,limite:size,hash_esperado:hash(f.files[path])}});
-export const options=(f,store,provider,extra={})=>({store,scope:'fixture',executionId:'job',mode:'edicao',objetivo:'Corrigir integração',userRequest:'Corrija o código sem publicar',tools:f.tools,provider,system:'Synthetic regression, no external systems',...extra});
+export const options=(f,store,provider,extra={})=>({store,scope:'fixture',executionId:'job',mode:'edicao',objetivo:'Fix integration',userRequest:'Fix the code without publishing',tools:f.tools,provider,system:'Synthetic regression, no external systems',...extra});

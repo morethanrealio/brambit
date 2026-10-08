@@ -12,11 +12,11 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-const SYSTEM = 'Você é um personal shopper brasileiro. Use as tools pra achar o produto certo e recomende com preço e nota. Seja direto.';
+const SYSTEM = 'You are a Brazilian personal shopper. Use the tools to find the right product and recommend it with price and rating. Be direct.';
 
 const casos = [
-  { provider: makeGemini({ model: 'gemini-3.5-flash' }), pedido: 'Quero um tênis de corrida até 500 reais.' },
-  { provider: makeGemini({ model: 'gemini-3.1-pro-preview' }), pedido: 'Entre os tênis de corrida até 500, qual a melhor opção e por quê? Compare preço e nota.' },
+  { provider: makeGemini({ model: 'gemini-3.5-flash' }), pedido: 'I want running shoes for up to 500 reais.' },
+  { provider: makeGemini({ model: 'gemini-3.1-pro-preview' }), pedido: 'Among running shoes up to 500, which is the best option and why? Compare price and rating.' },
 ];
 
 const trace = (e) => {

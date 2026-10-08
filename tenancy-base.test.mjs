@@ -26,7 +26,7 @@ test('production and any remote target require ALLOW_REMOTE=1', () => {
 });
 
 test('a BASE that isn\'t http(s) is rejected', () => {
-  assert.throws(() => resolveBase({ BASE: 'brambs.com.br' }), /inválida|http/);
+  assert.throws(() => resolveBase({ BASE: 'brambs.com.br' }), /Invalid|http/);
   assert.throws(() => resolveBase({ BASE: 'file:///etc/passwd' }), /http/);
 });
 
