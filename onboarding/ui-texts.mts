@@ -1,52 +1,9 @@
-// Text from the external module doesn't go through index.html's SSR translation.
-const copy:Record<string,[string,string]>={
-'Não consegui salvar esta etapa. Tente novamente.':['I could not save this step. Please try again.','No pude guardar este paso. Inténtalo de nuevo.'],
-'A conexão oscilou. Seu cadastro continua salvo; tente novamente.':['The connection dropped. Your progress is saved; please try again.','Se interrumpió la conexión. Tu progreso está guardado; inténtalo de nuevo.'],
-'Crie seu assistente primeiro.':['Create your assistant first.','Primero crea tu asistente.'],
-'Não consegui concluir. Tente novamente.':['I could not finish. Please try again.','No pude terminar. Inténtalo de nuevo.'],
-'Conectado; você pode continuar':['Connected; you can continue','Conectado; puedes continuar'],
-'Conectar →':['Connect →','Conectar →'],
-'Seu primeiro resultado está pronto':['Your first result is ready','Tu primer resultado está listo'],
-'Seu assistente foi criado':['Your assistant has been created','Tu asistente ha sido creado'],
-'Você já tem um primeiro resultado. Agora pode pedir a próxima tarefa na conversa.':['You have your first result. You can now ask for your next task in the conversation.','Ya tienes tu primer resultado. Ahora puedes pedir la siguiente tarea en la conversación.'],
-'Você escolheu continuar sem a análise. Peça uma tarefa quando quiser; conectar e-mail é opcional.':['You chose to continue without the analysis. Ask for a task whenever you like; connecting email is optional.','Elegiste continuar sin el análisis. Pide una tarea cuando quieras; conectar el correo es opcional.'],
-'Não consegui recuperar sua etapa. Seu cadastro não foi encerrado. Tente novamente.':['I could not recover your step. Your setup has not been marked complete. Please try again.','No pude recuperar tu paso. Tu configuración no se ha marcado como completa. Inténtalo de nuevo.'],
-'Vamos criar seu assistente':['Let’s create your assistant','Vamos a crear tu asistente'],
-'Vamos resolver uma coisa agora':['Let’s get something done now','Vamos a resolver algo ahora'],
-'A análise não retornou um resultado completo. Tente novamente.':['The analysis did not return a complete result. Please try again.','El análisis no devolvió un resultado completo. Inténtalo de nuevo.'],
-'Sua primeira tarefa ficou pronta':['Your first task is ready','Tu primera tarea está lista'],
-'Um primeiro olhar sobre seu contexto':['A first look at your context','Un primer vistazo a tu contexto'],
-'A análise pode levar até alguns minutos. Você pode continuar depois sem perder esta etapa.':['The analysis may take a few minutes. You can continue later without losing this step.','El análisis puede tardar unos minutos. Puedes continuar más tarde sin perder este paso.'],
-'Não conseguimos concluir a análise. Você pode tentar novamente; nenhuma conclusão foi marcada.':['We could not finish the analysis. You can retry; it has not been marked complete.','No pudimos terminar el análisis. Puedes reintentarlo; no se ha marcado como completo.'],
-'Não consegui consultar a análise. Sua etapa continua salva. Tente novamente ou continue depois.':['I could not check the analysis. Your progress is saved. Retry or continue later.','No pude consultar el análisis. Tu progreso está guardado. Reintenta o continúa más tarde.'],
-'A análise ainda não retornou. Consultar novamente não dispara outra cobrança enquanto ela estiver em andamento.':['The analysis has not returned yet. Checking again does not start another charge while it is running.','El análisis aún no ha terminado. Volver a consultar no inicia otro cobro mientras esté en curso.'],
-'A análise foi interrompida. Tente novamente para retomar.':['The analysis was interrupted. Please retry to resume.','El análisis se interrumpió. Inténtalo de nuevo para retomarlo.'],
-'Não consegui iniciar a análise. Tente novamente.':['I could not start the analysis. Please try again.','No pude iniciar el análisis. Inténtalo de nuevo.'],
-'Primeiro, dê um nome ao seu assistente.':['First, give your assistant a name.','Primero, ponle un nombre a tu asistente.'],
-'Marque o aceite para ativar o WhatsApp.':['Check the consent box to activate WhatsApp.','Marca la casilla de consentimiento para activar WhatsApp.'],
-'Informe o número com país e DDD.':['Enter the number with country and area code.','Introduce el número con código de país y de área.'],
-'Conte um pouco mais para gerar algo útil (pelo menos 10 caracteres).':['Share a little more context to get a useful result (at least 10 characters).','Comparte un poco más de contexto para obtener un resultado útil (al menos 10 caracteres).'],
-'Não consegui retomar. Tente novamente.':['I could not resume. Please try again.','No pude retomar el proceso. Inténtalo de nuevo.'],
-'A tarefa escolhida será colocada na caixa de mensagem para você revisar e enviar.':['The selected task will be placed in the message box for you to review and send.','La tarea elegida se colocará en el cuadro de mensaje para que la revises y envíes.'],
-"Você cancelou a autorização. Pode tentar novamente ou experimentar sem conectar.":["You cancelled authorization. You can retry or try without connecting.", "Cancelaste la autorización. Puedes reintentarlo o probar sin conectar."],
-"A conexão não foi concluída. Tente novamente ou experimente sem conectar.":["The connection was not completed. Retry or try without connecting.", "La conexión no se completó. Reinténtalo o prueba sin conectar."],
-"Não encontramos uma fonte autorizada para a análise. Revise as permissões ou experimente sem conectar.":["We could not find an authorized source for the analysis. Review permissions or try without connecting.", "No encontramos una fuente autorizada para el análisis. Revisa los permisos o prueba sin conectar."],
-'Falta confirmar que o número é seu: toque abaixo e ENVIE a mensagem com o código. É ela que conecta o WhatsApp.':['One step left: tap below and SEND the message with the code. That message is what connects your WhatsApp.','Falta un paso: toca abajo y ENVÍA el mensaje con el código. Ese mensaje es lo que conecta tu WhatsApp.'],
-'✅ Número conectado! Agora toque abaixo e mande a primeira mensagem pro seu assistente. É isso que abre a conversa no WhatsApp.':['✅ Number connected! Now tap below and send the first message to your assistant. That is what opens the conversation on WhatsApp.','✅ ¡Número conectado! Ahora toca abajo y envía el primer mensaje a tu asistente. Eso es lo que abre la conversación en WhatsApp.'],
-'💬 Confirmar meu número':['💬 Confirm my number','💬 Confirmar mi número'],
-'💬 Mandar a primeira mensagem':['💬 Send the first message','💬 Enviar el primer mensaje'],
-"Este resultado ajudou você?":["Did this result help you?", "¿Te ayudó este resultado?"],
-"Foi útil":["It was useful", "Fue útil"],
-"Precisa melhorar":["Needs improvement", "Necesita mejorar"],
-"Ajustar na conversa":["Refine in chat", "Ajustar en la conversación"],
-"Avaliação salva.":["Feedback saved.", "Evaluación guardada."],
-"Avaliação salva. Você pode pedir um ajuste na conversa.":["Feedback saved. You can request a refinement in chat.", "Evaluación guardada. Puedes pedir un ajuste en la conversación."],
-"Avaliação opcional.":["Optional feedback.", "Evaluación opcional."],
-"Não consegui salvar sua avaliação. Você pode continuar e tentar novamente depois.":["I could not save your feedback. You can continue and try again later.", "No pude guardar tu evaluación. Puedes continuar e intentarlo de nuevo más tarde."],
-"Quero ajustar este resultado. Vou explicar o que precisa mudar:":["I want to refine this result. I will explain what needs to change:", "Quiero ajustar este resultado. Voy a explicar qué debe cambiar:"],
-"Liste o que precisa fazer, os prazos e o tempo disponível.":["List what you need to do, your deadlines and the time available.", "Enumera lo que necesitas hacer, los plazos y el tiempo disponible."],
-"Conte quais são as opções e o que mais importa na escolha.":["Describe the options and what matters most in your choice.", "Describe las opciones y lo que más importa al elegir."],
-"Diga para quem é a mensagem, o objetivo e o tom que você quer.":["Say who the message is for, its purpose and the tone you want.", "Indica para quién es el mensaje, el objetivo y el tono que quieres."],
-"Seu resultado já está salvo. Se quiser, conecte o WhatsApp para continuar por lá; você também pode seguir no app.":["Your result is saved. You can connect WhatsApp to continue there, or keep using the app.", "Tu resultado está guardado. Puedes conectar WhatsApp para seguir allí o continuar en la aplicación."],
-};
-export function translateUi(text:string,language:string):string {const i=language.startsWith('en')?0:language.startsWith('es')?1:-1;if(i===-1)return text;if(copy[text])return copy[text][i];if(text.startsWith('Bem-vindo, '))return (i===0?'Welcome, ':'Te damos la bienvenida, ')+text.slice(11);return text;}
+// Texts of the onboarding screens: the onboarding.* keys of the catalogs
+// (web/locales), fetched once in the page's language (web/screen-texts.mjs).
+// A failed fetch fails this module's import, so the page shows its load error
+// and tries again later instead of showing keys.
+const language=document.documentElement.lang||'en';
+const response=await fetch('/api/texts/onboarding?lang='+encodeURIComponent(language),{credentials:'same-origin'});
+if(!response.ok)throw new Error('Onboarding texts unavailable: '+response.status);
+const texts:Record<string,string>=await response.json();
+export function t(key:string,vars:Record<string,string>={}):string{return (texts[key]??key).replace(/\{(\w+)\}/g,(m,name)=>name in vars?vars[name]:m)}

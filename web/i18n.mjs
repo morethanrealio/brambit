@@ -97,6 +97,8 @@ export function createI18n({layers = localeLayers()} = {}) {
   return {
     t: (key, language, vars = {}) => inst.t(key, {...vars, lng: lng(language)}),
     has: (key, language) => inst.exists(key, {lng: lng(language)}),
+    // Keys under a prefix (`onboarding`), from the source language, which has them all.
+    keys: (prefix) => Object.keys(flattenCatalog(inst.getResourceBundle(SOURCE_LANGUAGE, 'translation') || {})).filter((k) => k.startsWith(prefix + '.')),
     languages: [...languages].sort(),
   };
 }
