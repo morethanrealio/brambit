@@ -10,11 +10,13 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-10-08
+
 ### Added
 - Translation catalogs (`web/locales/<tag>.json`, contract in `docs/i18n.md`):
   plugins bring their own in a `locales` field, and an instance can adjust
   wording in `BRAMBIT_LOCALES_DIR` (`<data folder>/locales` with
-  `npm run brambit`). Nothing uses them yet; areas move over one at a time.
+  `npm run brambit`).
 - `npm run brambit -- start | stop | status`: one copy per data folder;
   running it again while it runs only opens the browser. The owner gets a
   "This computer" section in Settings (address, data folder, AI, version)
@@ -260,7 +262,8 @@ service built on it.
 - Guards and the test suite run from the directory they are called from, so
   an app that installs Brambit can run them on its own repo.
 
-[Unreleased]: https://github.com/morethanrealio/Brambit/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/morethanrealio/Brambit/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/morethanrealio/Brambit/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/morethanrealio/Brambit/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/morethanrealio/Brambit/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/morethanrealio/Brambit/compare/v0.2.4...v0.2.5
