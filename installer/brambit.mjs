@@ -31,7 +31,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dbEnvOf, freePort, postgresBin, prepareDatabase, startPostgres, waitReady } from '../dev/local.mjs';
-import { choice, modelsYaml, PROVIDERS, testKey } from './providers.mjs';
+import { choice, endpoint, listModels, modelsYaml, PROVIDERS, testKey } from './providers.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.resolve(process.env.BRAMBIT_DATA_DIR || path.join(os.homedir(), '.brambit'));
@@ -70,7 +70,9 @@ const processAlive = (pid) => { try { process.kill(pid, 0); return true; } catch
 // Resolves with the configuration once the AI key was tested and saved; onListen
 // runs when the port already answers (before that the browser would land on an
 // error page). With `current` it is the AI change (button in Settings): the owner
-// and the port stay, and "Cancel" goes back with the previous configuration.
+// and the port stay, "Cancel" goes back with the previous configuration, and an
+// empty key for the same provider (and address) keeps the saved one, which never
+// goes to the browser.
 function serveSetup(port, code, onListen, current = null) {
   const page = readFileSync(path.join(root, 'installer', 'setup.html'), 'utf8').replace('__MODE__', current ? 'change' : 'first');
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
@@ -93,8 +95,8 @@ function serveSetup(port, code, onListen, current = null) {
         return res.end(page.split('__CSP_NONCE__').join(nonce));
       }
       // The current AI, so the page comes with it selected. Nothing secret: the key is not sent.
-      if (req.method === 'GET' && pathname === '/current' && current) return json(200, current.ai);
-      if (req.method !== 'POST' || !['/install', '/cancel'].includes(pathname) || (pathname === '/cancel' && !current)) return json(404, { error: 'not_found' });
+      if (req.method === 'GET' && pathname === '/current' && current) return json(200, { ...current.ai, hasKey: Boolean(current.key) });
+      if (req.method !== 'POST' || !['/install', '/models', '/cancel'].includes(pathname) || (pathname === '/cancel' && !current)) return json(404, { error: 'not_found' });
       if (req.headers.origin !== `http://${req.headers.host}`) return json(403, { error: 'origin' });
       let raw = '';
       for await (const chunk of req) { raw += chunk; if (raw.length > 16384) return json(413, { error: 'too_large' }); }
@@ -104,6 +106,15 @@ function serveSetup(port, code, onListen, current = null) {
       if (!sameText(p.code, code)) { attempts++; return json(403, { error: 'code' }); }
       const finish = (cfg) => { res.on('finish', () => { server.close(() => resolve(cfg)); server.closeIdleConnections(); }); json(200, { ok: true }); };
       if (pathname === '/cancel') return finish(current);
+      if (!String(p.key || '').trim() && current?.key && p.provider === current.ai.provider
+        && (p.provider !== 'other' || endpoint(p).url === current.ai.url)) p.key = vault.decryptSecret(current.key);
+      // The models the key can use, for the page to offer (this also tests the key).
+      if (pathname === '/models') {
+        const e = endpoint(p);
+        if (e.error) return json(400, { error: e.error });
+        const r = await listModels(e);
+        return r.ok ? json(200, { models: r.models.map((m) => m.id), recommended: r.recommended }) : json(400, { error: r.error, status: r.status });
+      }
       const name = current ? current.owner.name : String(p.name || '').trim().slice(0, 120);
       const email = current ? current.owner.email : String(p.email || '').trim().toLowerCase();
       if (!name || !validEmail(email)) return json(400, { error: 'owner' });
@@ -113,7 +124,7 @@ function serveSetup(port, code, onListen, current = null) {
       if (!test.ok) return json(400, { error: test.error, status: test.status });
       const cfg = {
         version: 1, port, owner: { name, email },
-        ai: { provider: c.provider, url: c.url, model: c.model },
+        ai: { provider: c.provider, url: c.url, model: c.model, ...(test.price ? { price: test.price } : {}) },
         key: c.key ? vault.encryptSecret(c.key) : null,
         createdAt: current?.createdAt || new Date().toISOString(),
         ...(current ? { changedAt: new Date().toISOString() } : {}),

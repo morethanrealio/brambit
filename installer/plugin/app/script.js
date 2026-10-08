@@ -34,7 +34,7 @@ async function installationWaitForSetup() {
   return false;
 }
 E('instChangeAi').onclick = async () => {
-  const ok = await confirmModal({ title: 'Trocar a IA', body: 'O Brambit vai parar um instante pra você escolher a IA e colar a chave nova. As conversas e os dados continuam aqui.', okLabel: 'Continuar' });
+  const ok = await confirmModal({ title: 'Trocar a IA ou o modelo', body: 'O Brambit vai parar um instante pra você escolher a IA e o modelo. A chave salva pode continuar a mesma. As conversas e os dados continuam aqui.', okLabel: 'Continuar' });
   if (!ok) return;
   installationStatus('Abrindo a configuração da IA...');
   const j = await api('/api/installation/change-ai', {});

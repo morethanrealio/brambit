@@ -3,7 +3,8 @@
 // Windows, macOS and Linux): first run with the setup page, the owner's account,
 // sign-up closed to everyone else, the key never in plain text on disk; starting
 // again, the owner signs in; a second copy only points at the one already
-// running; the owner sees "This computer" in Settings and changes the AI there;
+// running; the owner sees "This computer" in Settings and changes the AI there
+// (keeping the saved key);
 // `brambit stop` turns it off. The "AI" is a fake server on 127.0.0.1: nothing
 // leaves the machine.
 //
@@ -92,6 +93,8 @@ try {
   const request = { code, name: OWNER.name, email: OWNER.email, provider: 'other', url: aiUrl, model: 'test-model', key: KEY };
   if ((await post('/install', { ...request, code: 'wrong' })).status !== 403) fail('a wrong code got through');
   if ((await post('/install', request, 'http://evil.example')).status !== 403) fail('another origin got through');
+  const listed = await (await post('/models', { code, provider: 'other', url: aiUrl, key: KEY })).json();
+  if (!listed.models?.includes('test-model')) fail(`the model list did not come: ${JSON.stringify(listed)}`);
   const rejected = await post('/install', { ...request, key: 'other' });
   if ((await rejected.json()).error !== 'key_rejected') fail('a wrong key was not rejected');
   const install = await post('/install', request);
@@ -145,8 +148,9 @@ try {
   }
   if (!onSetup) fail('the change-the-AI page did not open');
   const currentAi = await (await fetch(`${base}/current`)).json();
-  if (currentAi.model !== 'test-model' || 'key' in currentAi) fail(`/current: ${JSON.stringify(currentAi)}`);
-  const changed = await post('/install', { code: changeCode, provider: 'other', url: aiUrl, model: 'test-model', key: KEY });
+  if (currentAi.model !== 'test-model' || 'key' in currentAi || !currentAi.hasKey) fail(`/current: ${JSON.stringify(currentAi)}`);
+  // An empty key for the same provider and address keeps the saved one.
+  const changed = await post('/install', { code: changeCode, provider: 'other', url: aiUrl, model: 'test-model', key: '' });
   if (changed.status !== 200) fail(`change the AI: ${changed.status} ${await changed.text()}`);
   await waitForServer();
   const cfg = JSON.parse(readFileSync(path.join(dataDir, 'installation.json'), 'utf8'));

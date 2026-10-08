@@ -7820,8 +7820,8 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
   // descriptions are written in English, so the directive (web/locale.mjs) has
   // to come AFTER everything to set the reply language for every user language,
   // pt-BR included, and override whatever language the text above is in.
-  const diretrizIdioma = instrucaoDeIdioma(language);
-  if (diretrizIdioma) lines.push('', diretrizIdioma);
+  const diretrizIdioma = instrucaoDeIdioma(language), systemNote = pecas.systemNote?.({ language });
+  for (const extra of [systemNote, diretrizIdioma]) if (extra) lines.push('', extra);
   return lines.join('\n');
 }
 
