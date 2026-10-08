@@ -6,7 +6,7 @@ interface Template {id:string;name:string;goal:string;instructions:string;connec
 interface Saved {type:string;agentId:string|null;agentName:string;step:string;waLinked:boolean;connected:boolean;waCode?:string}
 interface Result {welcome:string;suggestions:string[];notes:string[]}
 interface Snapshot {registered:boolean;agentId?:string;step?:string;status:string;mode?:'connected'|'starter';attemptId?:string;result?:Result;errorCode?:string;viewed?:boolean;skipped?:boolean;completed?:boolean;selectedSuggestion?:number|null;refinementSelected?:boolean;feedback?:'useful'|'needs_work'|null}
-interface Options {generic:Template;config:()=>{microsoft?:boolean};showApp:(on:boolean)=>void;enterHome:(me:Me,pendingTask:string|null)=>void}
+interface Options {generic:Template;config:()=>{google?:boolean;microsoft?:boolean};showApp:(on:boolean)=>void;enterHome:(me:Me,pendingTask:string|null,threadId?:string)=>void}
 export function hasContext(me:Me):boolean{return !!me.connected?.length||!!(me.providers?.includes('microsoft')&&(me.microsoftServices===undefined||me.microsoftServices.length))}
 export function mountWizard(options:Options) {
  const el=<T extends HTMLElement=HTMLElement,>(id:string)=>{const e=document.getElementById(id);if(!e)throw new Error(`Elemento ausente: ${id}`);return e as T};
@@ -51,6 +51,9 @@ export function mountWizard(options:Options) {
  function renderDone(){text('wizDoneTitle',state?.viewed?t('done_title_result'):t('done_title_created'));text('wizDoneLead',state?.viewed?t('done_lead_result'):t('done_lead_skipped'));
   el('wizDoneList').replaceChildren();if(pendingTask){const li=document.createElement('li');li.textContent=t('task_in_draft');el('wizDoneList').append(li)}
  }
+ // No Google or Microsoft sign-in to connect: naming the assistant leads straight to a chat it opens itself.
+ const signIn=()=>{const c=options.config();return !!(c.google||c.microsoft)};
+ async function toChat(){await ensureAgent();await progress('connections_skipped');await touch('connection_skipped');const r=await request<{threadId:string}>('api/onboard/intro',{agentId:saved.agentId});await progress('wow_skipped');await exit(true,r.threadId)}
  async function ensureAgent(){if(!saved.agentId){const r=await request<Agent>('api/agent',{name:saved.agentName,instructions:options.generic.instructions,goal:options.generic.goal});saved.agentId=r.id;save()}await progress('started')}
  async function enqueue(retry=false,starter?:{task:string;context:string}){if(startPromise)return startPromise;
   startPromise=request<Snapshot>('api/onboard',{agentId:saved.agentId,retry,mode:starter?'starter':'connected',...starter});
@@ -118,8 +121,8 @@ export function mountWizard(options:Options) {
  // With a pending code, the message is the ownership CHALLENGE (only it binds the number
  // to the account; typing the phone in the app binds nothing). With no code it's just the "hi".
  function setWaLink(number?:string){const a=el<HTMLAnchorElement>('wizWaOpen');if(number){const msg=saved.waCode?'conectar '+saved.waCode:'Oi '+saved.agentName+'!';a.href='https://wa.me/'+number.replace(/\D/g,'')+'?text='+encodeURIComponent(msg);text('wizWaOpen',saved.waCode?t('whatsapp_confirm_button'):t('whatsapp_first_message_button'));show('wizWaOpen')}else{a.removeAttribute('href');show('wizWaOpen',false)}}
- async function exit(complete:boolean){++generation;me=await request<Me>('api/me');if(complete)await progress('completed');el('wiz').classList.remove('show');if(complete)clear();options.enterHome(me,pendingTask)}
- btn('wizTypeNext').onclick=()=>{const name=input('wizAgentName').value.trim();if(!name){error('wizErr1',new Error(t('name_required')));input('wizAgentName').focus();return}saved.agentName=name;save();setupConnect();goto('connect')};
+ async function exit(complete:boolean,threadId?:string){++generation;me=await request<Me>('api/me');if(complete)await progress('completed');el('wiz').classList.remove('show');if(complete)clear();options.enterHome(me,pendingTask,threadId)}
+ btn('wizTypeNext').onclick=()=>{const name=input('wizAgentName').value.trim();if(!name){error('wizErr1',new Error(t('name_required')));input('wizAgentName').focus();return}saved.agentName=name;save();if(!signIn()){void guarded(toChat,'wizErr1');return}setupConnect();goto('connect')};
  input('wizAgentName').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();btn('wizTypeNext').click()}};
  btn('wizConnBack').onclick=()=>goto('type');
  btn('wizConnBtn').onclick=()=>{const expanded=btn('wizConnBtn').getAttribute('aria-expanded')!=='true';show('wizConnProviders',expanded);btn('wizConnBtn').setAttribute('aria-expanded',String(expanded));if(expanded)btn('wizConnGoogle').focus()};
@@ -151,6 +154,7 @@ export function mountWizard(options:Options) {
    saved={type:options.generic.id,agentId:agent.id,agentName:agent.name,step:remote.step||local?.step||'connect',connected:hasContext(current),waLinked:!!current.whatsapp?.linked};state=remote;restoreSelection();save();display();
    try{
     if(!remote.registered)await progress('started');
+    if(!signIn()){recoverBoot=toChat;await toChat();return true}
     if(remote.skipped||remote.step==='done'&&remote.viewed){goto('done');return true}
     if(oauth?.provider&&['google','microsoft'].includes(oauth.provider)){
      const cancelled=oauth.outcome==='cancelled';await touch(cancelled?'connection_cancelled':'connection_failed',oauth.provider);

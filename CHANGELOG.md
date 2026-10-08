@@ -39,6 +39,11 @@ Changes merged since the last tag go under "Unreleased".
 - Tests moved from the repository root to `tests/`, and the ones with
   Portuguese file names got English names (run them with
   `node --test tests/<file>.test.mjs`).
+- On an instance without Google or Microsoft sign-in, the first access no
+  longer offers to connect accounts or suggests tasks: after the person names
+  the assistant, a chat opens where the assistant introduces itself, says what
+  it helps with and asks three questions to get to know them, with the
+  microphone pointed out when voice is set up.
 
 ## [0.2.8] - 2026-10-08
 

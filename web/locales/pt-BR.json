@@ -802,7 +802,12 @@
     "hint_plan": "Liste o que precisa fazer, os prazos e o tempo disponível.",
     "hint_decision": "Conte quais são as opções e o que mais importa na escolha.",
     "hint_draft": "Diga para quem é a mensagem, o objetivo e o tom que você quer.",
-    "welcome_name": "Bem-vindo, {name} 👋"
+    "welcome_name": "Bem-vindo, {name} 👋",
+    "intro": {
+      "title": "Conhecendo você",
+      "message": "Oi! Eu sou {name}, seu assistente. Posso responder perguntas, escrever e revisar textos, lembrar você das coisas e montar rotinas que rodam sozinhas.\n\nPara ajudar bem, queria conhecer você um pouco:\n\n1. O que você faz, e como é uma semana normal sua?\n2. O que toma mais do seu tempo do que você gostaria?\n3. Tem alguma coisa em que eu posso ajudar agora?{voice_hint}",
+      "voice_hint": "\n\nVocê pode escrever ou tocar no 🎤 e só falar."
+    }
   },
   "routines": {
     "title": "Suas rotinas",

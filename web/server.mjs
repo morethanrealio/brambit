@@ -37,7 +37,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './eventos.mjs';
-import {createRotas} from './rotas.mjs';import {registerScreenTexts} from './screen-texts.mjs';
+import {createRotas} from './rotas.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';
 import {createMidiaPublica} from './midia-publica.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -60,7 +60,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (conta-pagamento.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (eventos.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas); // Routes port (rotas.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas); // Routes port (rotas.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs) and the first chat (onboarding-intro.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (midia-publica.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (gasto.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (gasto-simples.mjs).

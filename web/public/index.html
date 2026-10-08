@@ -354,6 +354,10 @@
   .composer .mini { white-space:nowrap; }
   .composer .attach { background:transparent; color:var(--mut); border:1px solid var(--line); }
   .composer .mic.rec { background:#d33; border-color:#d33; color:#fff; }
+  /* First chat: points at the microphone until it is used or a message is sent. */
+  .composer .mic.hint { animation:micHint 1.6s ease-in-out infinite; }
+  @keyframes micHint { 50% { box-shadow:0 0 0 6px rgba(211,51,51,.3); } }
+  @media (prefers-reduced-motion: reduce) { .composer .mic.hint { animation:none; outline:2px solid #d33; } }
   .attach-preview { display:flex; gap:8px; flex-wrap:wrap; padding:10px 2px 0; }
   .attach-preview .thumb { position:relative; }
   .attach-preview .thumb img { height:58px; width:58px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
@@ -4621,11 +4625,12 @@ function wizClear() { try { localStorage.removeItem('mtr_wiz'); } catch {} }
 async function getWizard() {
   if (!wizardModule) wizardModule = import('./onboarding.mjs').then(({ mountWizard }) => mountWizard({
     generic: GENERIC, config: () => APP_CFG || {}, showApp,
-    enterHome: (me, task) => {
+    enterHome: (me, task, threadId) => {
       enterHome(me.name, me.agents || [], me.connected, me.telegramBots || [], me.whatsapp, me.emailSend, me.providers, me.apps, me.ext, me.runner);
       renderTrainingOptOut(me.paying, me.trainingOptOut);
       renderEmpresaNotif(me);
       if (task) { const box = E('taskInput'); if (box) { box.value = task; box.focus(); } }
+      if (threadId) openIntroChat(threadId);
     }
   })).catch(e => { wizardModule = null; throw e; });
   return wizardModule;
@@ -4654,6 +4659,7 @@ const chatPending = new Map();
 const showingChat = (id, epoch) => currentThreadId === id && chatViewEpoch === epoch && E('panel-chat').classList.contains('active');
 function openChatThread(threadId, title, agentName, msgs) {
   currentThreadId = threadId; chatViewEpoch++; chatGen++;
+  E('micBtn').classList.remove('hint');
   chatSending = !!chatPending.get(threadId)?.size;
   E('typing').classList.toggle('hidden', !chatSending);
   E('typing').textContent = tx('chat.typing');
@@ -4732,6 +4738,11 @@ async function pollThreadList() {
   try { await loadThreads(); } catch {}
 }
 setInterval(pollThreadList, 5000);
+// First chat (web/onboarding-intro.mjs): the assistant's opening, with the microphone pointed out.
+async function openIntroChat(id) {
+  await openThreadById(id);
+  if (currentThreadId === id) E('micBtn').classList.add('hint');
+}
 async function openThreadById(id) {
   const request = ++chatOpenRequest;
   const res = await api('api/thread?id=' + encodeURIComponent(id));
@@ -4966,6 +4977,7 @@ E('imgFile').onchange = async (e) => {
 // voice = the text is the transcript of what the person said; the server tells
 // the model so (markVoiceInput), as it does for channel audio.
 async function sendThread(text, images, files, threadId = currentThreadId, { voice = false } = {}) {
+  E('micBtn').classList.remove('hint');
   if (!threadId) return;
   const epoch = chatViewEpoch;
   const visible = () => showingChat(threadId, epoch);
@@ -5119,7 +5131,7 @@ async function micSend(blob, threadId) {
   if (text) return sendThread(text, [], [], threadId, { voice: true });
   if (currentThreadId === threadId) addLocalNote(error || tx('chat.mic_not_heard'));
 }
-E('micBtn').onclick = () => (micRec ? micStop() : micStart());
+E('micBtn').onclick = () => { E('micBtn').classList.remove('hint'); return micRec ? micStop() : micStart(); };
 ['auEmail','auPass','auName'].forEach(id => E(id).addEventListener('keydown', e => { if (e.key==='Enter') E('authBtn').click(); }));
 E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').click(); });
 
