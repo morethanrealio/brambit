@@ -33,6 +33,9 @@ Changes merged since the last tag go under "Unreleased".
   repository, starting with: everything in the repository is in English.
 
 ### Changed
+- Server error and status messages come from the catalogs (`server.*` in
+  `web/locales`), so an instance or plugin can reword or translate them there;
+  `web/textos-servidor` is gone. A plugin's `textosServidor` still works.
 - The instance default language is now English: it is used when nothing is
   known about the person (no saved setting, channel or browser language). To
   keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.

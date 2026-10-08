@@ -1047,7 +1047,7 @@ import {
 import { IDIOMAS_OK, defaultLanguage, defaultTimezone, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
 import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
 import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
-import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
+import { traduzResposta, idiomaDaRequisicao, serverMessages } from './mensagens-i18n.mjs';
 import { costOf, registerPrices } from './pricing.mjs';
 import { MODELS, DEFAULT_MODEL, isValidModel, modelById, modelCatalog, pickAutoModel, isTestProvider } from './models.mjs';
 import { currentPeriod } from './periodo.mjs';
@@ -7897,8 +7897,7 @@ async function updateProfile(agent, userMsg, assistantMsg) {
 }
 
 // The language hangs off `res` because this function only sees `res`; when there
-// isn't one (call outside the HTTP handler), `traduzResposta` falls back to pt-BR and
-// returns the SAME object, so the response stays byte-for-byte the same as today.
+// isn't one (call outside the HTTP handler), `traduzResposta` uses the instance default.
 function send(res, code, obj, headers = {}) {
   res.writeHead(code, { 'content-type': 'application/json', ...headers });
   res.end(JSON.stringify(traduzResposta(obj, res.idiomaResposta, CATALOGOS_MSGS)));
@@ -8364,7 +8363,7 @@ const cookieIdioma = (lang) => `${COOKIE_IDIOMA}=${lang}; HttpOnly; Secure; Same
 // Applies the limit; if it's exceeded, replies 429 and returns true (caller should return).
 function tooManyRequests(req, res, bucket, max, windowMs) {
   if (rateLimit(`${bucket}:${clientIp(req)}`, max, windowMs)) return false;
-  send(res, 429, { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' });
+  send(res, 429, { error: 'server.too_many_attempts' });
   return true;
 }
 
@@ -8588,7 +8587,7 @@ const CATALOGOS_SITE = carregaCatalogos([path.join(__dirname, 'site-textos'), ..
 // Catalog of response MESSAGES (the JSON's `error`/`message`). Separate from the
 // site's because the source is different: that one comes from HTML, this one from
 // code literals. Same reading, core + plugins, and same fallback in Portuguese.
-const CATALOGOS_MSGS = carregaCatalogos([path.join(__dirname, 'textos-servidor'), ...textosDoServidor(plugins)]);
+const CATALOGOS_MSGS = serverMessages({ plugins, legacy: carregaCatalogos(textosDoServidor(plugins)) });
 
 function sendHtml(res, full, status = 200, language = defaultLanguage()) {
   const nonce = randomBytes(16).toString('base64');
@@ -8655,7 +8654,7 @@ async function atenderRequest(req, res) {
   // error arrives in the language of the screen that caused it.
   res.idiomaResposta = idiomaDaRequisicao(req, (r) => ({ language: idiomaDoCookie(r) || idiomaDoHeader(r).language }));
 
-  if (!csrfOk(req, url.pathname)) return send(res, 403, { error: 'Origem não autorizada.' });
+  if (!csrfOk(req, url.pathname)) return send(res, 403, { error: 'server.unauthorized_origin' });
 
   // Resolves the logged-in user from the session (cookie). null if not logged in.
   async function currentUser() {
@@ -8720,11 +8719,11 @@ async function atenderRequest(req, res) {
     if (tooManyRequests(req, res, 'signup', 5, 60 * 60_000)) return;
     const { name, email, password, referralCode } = await readBody(req);
     if (!name || !validEmail(email) || !password || password.length < 12)
-      return send(res, 400, { error: 'Informe nome, e-mail válido e senha (mín. 12 caracteres).' });
+      return send(res, 400, { error: 'server.signup_fields_invalid' });
     const em = email.toLowerCase();
     try {
       const existente = await getUserByEmail(em);
-      if (existente && !existente.deleted_at) return send(res, 409, { error: 'Esse e-mail já tem conta. Faça login.' });
+      if (existente && !existente.deleted_at) return send(res, 409, { error: 'server.email_already_has_account' });
       // Sign-up with the SAME e-mail as an account that requested deletion and is
       // still within the 30-day window: `users.email` is UNIQUE, so either we
       // destroy the old one now or the person is stuck 30 days unable to come back.
@@ -8754,7 +8753,7 @@ async function atenderRequest(req, res) {
         const codeExists = code ? await referralCodeExists(code) : false;
         const reason = !code ? 'sem_codigo' : (codeExists ? 'sem_convite' : 'codigo_invalido');
         const naFila = await permissoes.entrarNaFila({ email: em, name, referrerCode: code, reason });
-        if (!naFila) return send(res, 403, { error: 'O cadastro de contas novas está fechado.' });
+        if (!naFila) return send(res, 403, { error: 'server.signups_closed' });
         return send(res, 200, { queued: true, message: naFila.mensagem });
       }
       // New account language: first what the person CHOSE in the site
@@ -8771,24 +8770,24 @@ async function atenderRequest(req, res) {
       await createSession(token, user.id);
       return send(res, 200, { name: user.name, agents: [], ...(mobileClient ? { token } : {}) }, { 'set-cookie': sessionCookie(token) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao criar conta.', e);
+      return fail(res, 500, 'server.failed_create_account', e);
     }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/login') {
     if (tooManyRequests(req, res, 'login', 10, 15 * 60_000)) return;
     const { email, password } = await readBody(req);
-    if (!validEmail(email) || !password) return send(res, 400, { error: 'Informe e-mail e senha.' });
+    if (!validEmail(email) || !password) return send(res, 400, { error: 'server.enter_email_and_password' });
     try {
       const user = await getUserByEmail(email.toLowerCase());
       if (!user || !verifyPassword(password, user.password_hash))
-        return send(res, 401, { error: 'E-mail ou senha incorretos.' });
+        return send(res, 401, { error: 'server.incorrect_email_or_password' });
       // Account closed at the owner's request: right password doesn't get in. We only
       // answer this AFTER checking the password, otherwise login would become a way to find
       // out which e-mails have an account. Anyone who wants to come back redoes the sign-up
       // (/api/signup handles the repeated e-mail) or talks to support within the 30 days.
       if (user.deleted_at)
-        return send(res, 401, { error: 'Essa conta foi excluída. Se foi engano, escreva pra __SUPORTE__.' });
+        return send(res, 401, { error: 'server.account_deleted' });
       const token = newToken();
       await createSession(token, user.id);
       const agents = await listAgents(user.id);
@@ -8813,7 +8812,7 @@ async function atenderRequest(req, res) {
         whatsapp: waEnabled() ? (wa ? { phone: wa.wa_phone, activeAgentId: wa.active_agent_id, linked: true, number: process.env.WA_BUSINESS_NUMBER || null } : { linked: false, number: process.env.WA_BUSINESS_NUMBER || null }) : null,
       }, { 'set-cookie': sessionCookie(token) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao entrar.', e);
+      return fail(res, 500, 'server.failed_log_in', e);
     }
   }
 
@@ -8837,15 +8836,15 @@ async function atenderRequest(req, res) {
   // same job without turning the right to erasure into a typing test.
   if (req.method === 'POST' && url.pathname === '/api/account/delete') {
     const sess = await currentUser();
-    if (!sess) return send(res, 401, { error: 'Faça login.' });
+    if (!sess) return send(res, 401, { error: 'server.log_in' });
     const body = await readBody(req);
     const digitado = String(body?.email || '').trim().toLowerCase();
     const confere = digitado === String(sess.email || '').toLowerCase() || digitado === 'excluir';
     if (!confere)
-      return send(res, 400, { error: 'Digite o e-mail da sua conta (ou a palavra EXCLUIR) para confirmar.' });
+      return send(res, 400, { error: 'server.confirm_delete_type_email' });
     try {
       const user = await getUserById(sess.id);
-      if (!user) return send(res, 401, { error: 'Faça login.' });
+      if (!user) return send(res, 401, { error: 'server.log_in' });
       // The installer closes what's theirs FIRST, outside the transaction (e.g.
       // a plugin's Stripe subscription: someone who asked to leave can't keep
       // paying for 30 days). A failure there doesn't block deletion, which is what
@@ -8880,7 +8879,7 @@ async function atenderRequest(req, res) {
         message: [base, ...extras.map((x) => x.aviso).filter(Boolean)].join(' '),
       }, { 'set-cookie': clearCookie() });
     } catch (e) {
-      return fail(res, 500, 'Falha ao excluir a conta.', e);
+      return fail(res, 500, 'server.failed_delete_account', e);
     }
   }
 
@@ -8931,21 +8930,21 @@ async function atenderRequest(req, res) {
     if (tooManyRequests(req, res, 'reset', 10, 15 * 60_000)) return;
     const { token, password } = await readBody(req);
     if (!token || !password || password.length < 12)
-      return send(res, 400, { error: 'Informe o link completo e uma senha de no mínimo 12 caracteres.' });
+      return send(res, 400, { error: 'server.reset_fields_invalid' });
     try {
       const pr = await getValidPasswordReset(String(token));
-      if (!pr) return send(res, 400, { error: 'Esse link de redefinição é inválido ou expirou. Peça um novo.' });
+      if (!pr) return send(res, 400, { error: 'server.reset_link_invalid_or_expired' });
       await updateUserPassword(pr.user_id, hashPassword(password));
       await markPasswordResetUsed(pr.token);
-      return send(res, 200, { ok: true, message: 'Senha redefinida. Já pode entrar com a nova senha.' });
+      return send(res, 200, { ok: true, message: 'server.password_reset_done' });
     } catch (e) {
-      return fail(res, 500, 'Falha ao redefinir a senha.', e);
+      return fail(res, 500, 'server.failed_reset_password', e);
     }
   }
 
   // ── Login with Google ──
   if (req.method === 'GET' && url.pathname === '/api/auth/google/start') {
-    if (!googleEnabled()) return send(res, 503, { error: 'Login com Google não configurado.' });
+    if (!googleEnabled()) return send(res, 503, { error: 'server.google_login_not_configured' });
     // mobile=1: same base login scope (ZERO impact on OAuth verification);
     // it only changes the flow, which makes the callback deliver the session via deep link.
     const flow = url.searchParams.get('mobile') === '1' ? 'login_mobile' : 'login';
@@ -8957,12 +8956,12 @@ async function atenderRequest(req, res) {
   // ── Connect Google services (INCREMENTAL authorization, requires login) ──
   // ?services=gmail,drive,docs (default: all). Requests offline+consent for the refresh_token.
   if (req.method === 'GET' && url.pathname === '/api/connect/google/start') {
-    if (!googleEnabled()) return send(res, 503, { error: 'Google não configurado.' });
+    if (!googleEnabled()) return send(res, 503, { error: 'server.google_not_set_up' });
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const req2 = (url.searchParams.get('services') || 'gmail,drive,docs,calendar').split(',').map((s) => s.trim());
     const scopes = scopesFor(req2);
-    if (!scopes.length) return send(res, 400, { error: 'Nenhum serviço válido.' });
+    if (!scopes.length) return send(res, 400, { error: 'server.no_valid_service' });
     // hint = e-mail of an account already connected (reconnect/review access).
     const loginHint = (url.searchParams.get('hint') || '').toLowerCase().trim();
     const state = newToken();
@@ -9067,14 +9066,14 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/auth/mobile/exchange') {
     const body = await readBody(req);
     const token = takeMobileAuthCode(body?.code);
-    if (!token) return send(res, 400, { error: 'Código inválido ou expirado.' });
+    if (!token) return send(res, 400, { error: 'server.invalid_or_expired_code' });
     return send(res, 200, { token });
   }
 
   // Nonce for Sign in with Apple. The app requests one before opening the iOS
   // sheet and sends Apple its SHA-256; on the way back we check the pair. No session.
   if (req.method === 'GET' && url.pathname === '/api/auth/apple/nonce') {
-    if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
+    if (!appleEnabled()) return send(res, 503, { error: 'server.apple_signin_not_configured' });
     return send(res, 200, { nonce: putAppleNonce() });
   }
 
@@ -9083,7 +9082,7 @@ async function atenderRequest(req, res) {
   // authorization — name and authorization code. Returns the session directly
   // in the body, like /exchange: there's no browser or deep link in this flow.
   if (req.method === 'POST' && url.pathname === '/api/auth/apple') {
-    if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
+    if (!appleEnabled()) return send(res, 503, { error: 'server.apple_signin_not_configured' });
     const body = await readBody(req);
     try {
       // Two possible inputs: a new Apple authorization, or the resumption of
@@ -9091,13 +9090,13 @@ async function atenderRequest(req, res) {
       let id, refreshToken = null, nomeApple = String(body?.fullName || '').trim();
       const retomada = body?.pending ? takeApplePending(String(body.pending)) : null;
       if (body?.pending) {
-        if (!retomada) return send(res, 400, { error: 'Sessão de login expirada. Tente de novo.' });
+        if (!retomada) return send(res, 400, { error: 'server.login_session_expired_try_again' });
         id = { sub: retomada.sub, email: retomada.email, isPrivateEmail: retomada.isPrivateEmail };
         refreshToken = retomada.refreshToken;
         nomeApple = retomada.fullName || nomeApple;
       } else {
         const nonce = String(body?.nonce || '');
-        if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'Sessão de login expirada. Tente de novo.' });
+        if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'server.login_session_expired_try_again' });
         id = await verifyAppleIdentityToken(body?.identityToken, { expectedNonce: nonce });
 
         // The refresh token only exists now, on the first authorization, and is what
@@ -9136,7 +9135,7 @@ async function atenderRequest(req, res) {
       // `pending` + `create`; whoever answers "I have an account" logs in as
       // usual and the app uses the same `pending` to link, with no new Face ID.
       if (!user && !body?.create) {
-        if (!id.email) return send(res, 400, { error: 'Não recebemos seu e-mail da Apple. Tente novamente.' });
+        if (!id.email) return send(res, 400, { error: 'server.apple_email_not_received' });
         const pending = putApplePending({
           sub: id.sub, email: id.email, isPrivateEmail: id.isPrivateEmail,
           refreshToken, fullName: nomeApple,
@@ -9153,10 +9152,10 @@ async function atenderRequest(req, res) {
         // Apple doesn't guarantee an e-mail on later logins, but at account creation
         // it always comes (relay or real). With no e-mail there's nothing to store:
         // the column is UNIQUE NOT NULL and support is left with no channel.
-        if (!id.email) return send(res, 400, { error: 'Não recebemos seu e-mail da Apple. Tente novamente.' });
+        if (!id.email) return send(res, 400, { error: 'server.apple_email_not_received' });
         const fila = await permissoes.filaDeEspera();
         if (fila && !await permissoes.liberadoNoCadastro(id.email) && !await empresaStore.temConvitePendente(id.email)) {
-          return send(res, 403, { error: 'beta', message: 'Seu e-mail ainda não está liberado no beta.' });
+          return send(res, 403, { error: 'beta', message: 'server.email_not_enabled_for_beta' });
         }
         // The name only arrives on the FIRST authorization and never again. Anyone who already
         // authorized before and deleted the account comes back without a name, hence the fallback.
@@ -9173,7 +9172,7 @@ async function atenderRequest(req, res) {
       return send(res, 200, { token });
     } catch (e) {
       console.error('apple login:', e?.message ?? e);
-      return send(res, 401, { error: 'Não foi possível entrar com a Apple.' });
+      return send(res, 401, { error: 'server.apple_signin_failed' });
     }
   }
 
@@ -9196,20 +9195,20 @@ async function atenderRequest(req, res) {
   // nobody can undo, and isn't what the person asks. When the Apple ID is
   // already linked to another account, we answer 409 explaining.
   if (req.method === 'POST' && url.pathname === '/api/account/apple/link') {
-    if (!appleEnabled()) return send(res, 503, { error: 'Login com Apple não configurado.' });
+    if (!appleEnabled()) return send(res, 503, { error: 'server.apple_signin_not_configured' });
     const sess = await currentUser();
-    if (!sess) return send(res, 401, { error: 'Faça login.' });
+    if (!sess) return send(res, 401, { error: 'server.log_in' });
     const body = await readBody(req);
     try {
       let id, refreshToken = null;
       if (body?.pending) {
         const retomada = takeApplePending(String(body.pending));
-        if (!retomada) return send(res, 400, { error: 'Autorização expirada. Tente de novo.' });
+        if (!retomada) return send(res, 400, { error: 'server.authorization_expired_try_again' });
         id = { sub: retomada.sub, email: retomada.email, isPrivateEmail: retomada.isPrivateEmail };
         refreshToken = retomada.refreshToken;
       } else {
         const nonce = String(body?.nonce || '');
-        if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'Autorização expirada. Tente de novo.' });
+        if (!takeAppleNonce(nonce)) return send(res, 400, { error: 'server.authorization_expired_try_again' });
         id = await verifyAppleIdentityToken(body?.identityToken, { expectedNonce: nonce });
         // Refresh token: same logic as login. It only comes on the FIRST
         // authorization, and is what allows revoking on account deletion. If the
@@ -9232,7 +9231,7 @@ async function atenderRequest(req, res) {
         } else {
           return send(res, 409, {
             error: 'apple-em-uso',
-            message: 'Este ID Apple já está ligado a outra conta do __MARCA__. Entre naquela conta para continuar usando, ou exclua uma das duas antes de vincular.',
+            message: 'server.apple_id_linked_elsewhere',
           });
         }
       }
@@ -9242,7 +9241,7 @@ async function atenderRequest(req, res) {
       return send(res, 200, { ok: true, privateEmail: id.isPrivateEmail });
     } catch (e) {
       console.error('apple link:', e?.message ?? e);
-      return send(res, 400, { error: 'Não foi possível vincular seu ID Apple.' });
+      return send(res, 400, { error: 'server.could_not_link_apple_id' });
     }
   }
 
@@ -9256,15 +9255,15 @@ async function atenderRequest(req, res) {
   // that case deletes the account (the right to erasure stays whole).
   if (req.method === 'POST' && url.pathname === '/api/account/apple/unlink') {
     const sess = await currentUser();
-    if (!sess) return send(res, 401, { error: 'Faça login.' });
+    if (!sess) return send(res, 401, { error: 'server.log_in' });
     try {
       const user = await getUserById(sess.id);
-      if (!user) return send(res, 401, { error: 'Faça login.' });
+      if (!user) return send(res, 401, { error: 'server.log_in' });
       if (!user.apple_sub) return send(res, 200, { ok: true, already: true });
       if (/@privaterelay\.appleid\.com$/i.test(String(user.email || ''))) {
         return send(res, 400, {
           error: 'apple-unica-entrada',
-          message: 'Sua conta foi criada com o ID Apple e o e-mail dela é o endereço privado da Apple, então o login com Apple é a única forma de entrar. Desvincular deixaria você de fora.',
+          message: 'server.apple_private_relay_account',
         });
       }
       const token = await getAppleRefreshToken(user.id).catch(() => null);
@@ -9279,7 +9278,7 @@ async function atenderRequest(req, res) {
       console.log(`[apple-unlink] Apple ID unlinked from account ${user.id}`);
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Não foi possível desvincular seu ID Apple.', e);
+      return fail(res, 500, 'server.could_not_unlink_apple_id', e);
     }
   }
 
@@ -9297,7 +9296,7 @@ async function atenderRequest(req, res) {
   // are in setUserAttribution's SQL.
   if (req.method === 'POST' && url.pathname === '/api/atribuicao') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const body = (await readBody(req)) || {};
     const CAMPOS = ['gclid', 'gbraid', 'wbraid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'referrer', 'landing'];
     const attr = {};
@@ -9317,7 +9316,7 @@ async function atenderRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/me') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const agents = await listAgents(user.id);
     const tgList = await listTelegramBotsForUser(user.id);
     const wa = await getWhatsAppLinkForUser(user.id);
@@ -9374,7 +9373,7 @@ async function atenderRequest(req, res) {
   // No billing here (F1). Invites are app-internal only: no e-mail goes out.
   if (url.pathname === '/api/empresa' || url.pathname.startsWith('/api/empresa/')) {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login.' });
+    if (!user) return send(res, 401, { error: 'server.log_in' });
     const responde = (r) => r.ok ? send(res, 200, r) : send(res, r.status || 400, r);
     // Microsoft connected before we stored the e-mail: tries to find it out
     // now (Graph /me), otherwise the domain guard has no way to let the entry through.
@@ -9387,7 +9386,7 @@ async function atenderRequest(req, res) {
     };
     try {
       if (req.method === 'GET' && url.pathname === '/api/empresa') return send(res, 200, await empresaStore.detalhe(user));
-      if (req.method !== 'POST') return send(res, 405, { error: 'Método não permitido.' });
+      if (req.method !== 'POST') return send(res, 405, { error: 'server.method_not_allowed' });
       const body = await readBody(req);
       if (url.pathname === '/api/empresa') {
         if (tooManyRequests(req, res, 'empresa-criar', 10, 60 * 60_000)) return;
@@ -9399,7 +9398,7 @@ async function atenderRequest(req, res) {
       if (url.pathname === '/api/empresa/dominios') {
         if (body?.acao === 'adicionar') return responde(await empresaStore.adicionarDominio(user.id, body?.dominio));
         if (body?.acao === 'remover') return responde(await empresaStore.removerDominio(user.id, body?.dominio));
-        return send(res, 400, { error: 'Ação inválida.' });
+        return send(res, 400, { error: 'server.invalid_action' });
       }
       if (url.pathname === '/api/empresa/convites') {
         if (body?.acao === 'convidar') {
@@ -9414,30 +9413,30 @@ async function atenderRequest(req, res) {
           return responde(r);
         }
         if (body?.acao === 'revogar') return responde(await empresaStore.revogarConvite(user.id, body?.id));
-        return send(res, 400, { error: 'Ação inválida.' });
+        return send(res, 400, { error: 'server.invalid_action' });
       }
       if (url.pathname === '/api/empresa/convites/responder') {
         if (body?.aceitar === true) await backfillMicrosoft();
         return responde(await empresaStore.responder(user, body?.id, body?.aceitar === true));
       }
       if (url.pathname === '/api/empresa/membros/remover') return responde(await empresaStore.removerMembro(user.id, body?.id));
-      return send(res, 404, { error: 'Rota não encontrada.' });
+      return send(res, 404, { error: 'server.route_not_found' });
     } catch (e) {
-      return fail(res, 500, 'Não consegui concluir. Tente de novo.', e);
+      return fail(res, 500, 'server.could_not_finish_try_again', e);
     }
   }
 
   // User's model choice (quality x credit consumption).
   if (req.method === 'POST' && url.pathname === '/api/prefs/model') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const choice = body?.model;
-    if (!isValidModel(choice)) return send(res, 400, { error: 'Modelo inválido.' });
+    if (!isValidModel(choice)) return send(res, 400, { error: 'server.invalid_model' });
     // Test models (OpenAI/DeepInfra) can only be selected by the admin.
     const isAdmin = (user.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase();
     if (isTestProvider(modelById(choice).provider) && !isAdmin) {
-      return send(res, 403, { error: 'Modelo indisponível.' });
+      return send(res, 403, { error: 'server.model_unavailable' });
     }
     const model = await setUserModelPref(user.id, choice);
     return send(res, 200, { model });
@@ -9448,10 +9447,10 @@ async function atenderRequest(req, res) {
   // agent can also set it via the definir_meu_fuso tool.
   if (req.method === 'POST' && url.pathname === '/api/prefs/timezone') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const timezone = await setUserTimezone(user.id, body?.timezone);
-    if (!timezone) return send(res, 400, { error: 'Fuso inválido.' });
+    if (!timezone) return send(res, 400, { error: 'server.invalid_time_zone' });
     return send(res, 200, { timezone });
   }
 
@@ -9459,10 +9458,10 @@ async function atenderRequest(req, res) {
   // telling us, not the machine guessing.
   if (req.method === 'POST' && url.pathname === '/api/prefs/idioma') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const language = await setUserLanguage(user.id, body?.language);
-    if (!language) return send(res, 400, { error: 'Idioma não suportado.' });
+    if (!language) return send(res, 400, { error: 'server.language_not_supported' });
     // Syncs the site cookie with the settings choice. The two are separate by
     // design (screen vs. system), but someone who just said "my language is
     // X" on the settings screen doesn't expect the site to stay in Y because
@@ -9481,7 +9480,7 @@ async function atenderRequest(req, res) {
       req.on('end', () => resolve(b));
     });
     const lang = new URLSearchParams(raw).get('lang') || '';
-    if (!IDIOMAS_OK.includes(lang)) return send(res, 400, { error: 'Idioma não suportado.' });
+    if (!IDIOMAS_OK.includes(lang)) return send(res, 400, { error: 'server.language_not_supported' });
     // Returns to the page it came from. The destination comes from the Referer and is reduced
     // to the PATH of one of our origins: an outside host doesn't become a redirect, and
     // `//other` (which the browser would read as an absolute URL) falls back to the home.
@@ -9505,7 +9504,7 @@ async function atenderRequest(req, res) {
   // the SERVER so it doesn't depend on the front having been updated.
   if (req.method === 'POST' && url.pathname === '/api/prefs/locale-auto') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = (await readBody(req)) || {};
     const locale = await setUserLocaleIfEmpty(user.id, {
       language: body.language || idiomaDoHeader(req).language,
@@ -9517,7 +9516,7 @@ async function atenderRequest(req, res) {
   // to validate while the person types. Returns {available, reason?}.
   if (req.method === 'GET' && url.pathname === '/api/prefs/username/check') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const desired = url.searchParams.get('u') || '';
     const r = await isSubdomainAvailable(desired, user.id);
     return send(res, 200, { available: !!r.available, reason: r.error || null, label: r.label || null });
@@ -9527,7 +9526,7 @@ async function atenderRequest(req, res) {
   // they already have published systems (renaming would orphan the containers).
   if (req.method === 'POST' && url.pathname === '/api/prefs/username') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const r = await setUserSubdomain(user.id, body?.username);
     if (!r.ok) {
@@ -9550,7 +9549,7 @@ async function atenderRequest(req, res) {
   // Turns "Automatic" mode on/off (backend picks the model per question).
   if (req.method === 'POST' && url.pathname === '/api/prefs/model-auto') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const modelAuto = await setUserModelAuto(user.id, !!body?.enabled);
     return send(res, 200, { modelAuto });
@@ -9559,7 +9558,7 @@ async function atenderRequest(req, res) {
   // Permission for the assistant to SEND e-mail (off by default; without it, draft only).
   if (req.method === 'POST' && url.pathname === '/api/prefs/email-send') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const emailSend = await setEmailSendEnabled(user.id, !!body?.enabled);
     return send(res, 200, { emailSend });
@@ -9569,31 +9568,31 @@ async function atenderRequest(req, res) {
   // sends this on login. The token isn't a secret (just a delivery address), regular table.
   if (req.method === 'POST' && url.pathname === '/api/push/register') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const token = String(body?.token || '').trim();
     const platform = String(body?.platform || '').trim();
-    if (!token) return send(res, 400, { error: 'token ausente' });
+    if (!token) return send(res, 400, { error: 'server.token_missing' });
     try {
       await registerPushTokenDb(user.id, token, platform);
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Falha ao registrar push.', e);
+      return fail(res, 500, 'server.failed_register_push', e);
     }
   }
 
   // Removes the device's push token (logout). Idempotent.
   if (req.method === 'POST' && url.pathname === '/api/push/unregister') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const token = String(body?.token || '').trim();
-    if (!token) return send(res, 400, { error: 'token ausente' });
+    if (!token) return send(res, 400, { error: 'server.token_missing' });
     try {
       await unregisterPushTokenDb(token);
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Falha ao remover push.', e);
+      return fail(res, 500, 'server.failed_remove_push', e);
     }
   }
 
@@ -9604,25 +9603,25 @@ async function atenderRequest(req, res) {
   // even if the person turns it off later, and turning it on today doesn't protect the past.
   if (req.method === 'POST' && url.pathname === '/api/prefs/training-optout') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const want = !!body?.enabled;
     try {
       if (want && !(await permissoes.podeRecusarTreino(user.id))) {
-        return send(res, 400, { error: 'Disponível apenas para assinantes de um plano pago.' });
+        return send(res, 400, { error: 'server.paid_plan_only' });
       }
       if (want) await openOptOutPeriod(user.id, 'user');
       else await closeOptOutPeriod(user.id);
       return send(res, 200, { trainingOptOut: await isOptedOutNow(user.id) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao atualizar a preferência de treinamento.', e);
+      return fail(res, 500, 'server.failed_update_training_preference', e);
     }
   }
 
   // Turns media features on/off per user (image / stt / tts).
   if (req.method === 'POST' && url.pathname === '/api/prefs/media') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const media = await setUserMediaPrefs(user.id, body || {});
     return send(res, 200, { media });
@@ -9636,69 +9635,69 @@ async function atenderRequest(req, res) {
   // Overview: list of the user's assistants + memory pages (no body).
   if (req.method === 'GET' && url.pathname === '/api/memory/overview') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try {
       const [agents, pages] = await Promise.all([
         listAgents(user.id),
         listWikiPages(user.id),
       ]);
       return send(res, 200, { agents, pages });
-    } catch (e) { return fail(res, 500, 'Falha ao carregar memória.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_load_memory', e); }
   }
 
   // Reads a memory page (with body).
   if (req.method === 'GET' && url.pathname === '/api/memory/page') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const slug = url.searchParams.get('slug') || '';
-    if (!slug.trim()) return send(res, 400, { error: 'Falta o slug.' });
+    if (!slug.trim()) return send(res, 400, { error: 'server.missing_slug' });
     try {
       const page = await getWikiPage(user.id, slug);
-      if (!page) return send(res, 404, { error: 'Página não encontrada.' });
+      if (!page) return send(res, 404, { error: 'server.page_not_found' });
       return send(res, 200, { page });
-    } catch (e) { return fail(res, 500, 'Falha ao ler a página.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_read_page', e); }
   }
 
   // Creates/edits a memory page. Validates title/slug and limits the body.
   if (req.method === 'POST' && url.pathname === '/api/memory/page') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const title = String(body?.title || '').trim();
     const text = String(body?.body || '');
     const slug = String(body?.slug || '').trim();
-    if (!title && !slug) return send(res, 400, { error: 'Dê um título à página.' });
-    if (text.length > 100_000) return send(res, 400, { error: 'Página grande demais (máx. 100 mil caracteres).' });
+    if (!title && !slug) return send(res, 400, { error: 'server.give_page_title' });
+    if (text.length > 100_000) return send(res, 400, { error: 'server.page_too_large' });
     try {
       const savedSlug = await upsertWikiPage(user.id, { slug, title, body: text });
       const page = await getWikiPage(user.id, savedSlug);
       return send(res, 200, { page });
-    } catch (e) { return fail(res, 500, 'Falha ao salvar a página.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_save_page', e); }
   }
 
   // Deletes a memory page of the user.
   if (req.method === 'POST' && url.pathname === '/api/memory/page/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const body = await readBody(req);
     const slug = String(body?.slug || '').trim();
-    if (!slug) return send(res, 400, { error: 'Falta o slug.' });
+    if (!slug) return send(res, 400, { error: 'server.missing_slug' });
     try {
       const removed = await deleteWikiPage(user.id, slug);
       return send(res, 200, { removed });
-    } catch (e) { return fail(res, 500, 'Falha ao apagar a página.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_delete_page', e); }
   }
 
   // Prompt of a user's assistant: friendly version + raw version (advanced).
   // getAgentOwned already locks by user.id, so only the owner sees their own assistant.
   if (req.method === 'GET' && url.pathname === '/api/memory/prompt') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const agentId = url.searchParams.get('agentId') || '';
-    if (!agentId.trim()) return send(res, 400, { error: 'Falta o agentId.' });
+    if (!agentId.trim()) return send(res, 400, { error: 'server.missing_agentid' });
     try {
       const agent = await getAgentOwned(agentId, user.id);
-      if (!agent) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!agent) return send(res, 404, { error: 'server.assistant_not_found' });
       let raw = '';
       // Debug view of the prompt: shows the version the owner actually receives,
       // language included. If reading the locale fails, falls back to the default.
@@ -9706,7 +9705,7 @@ async function atenderRequest(req, res) {
       try { promptLang = (await getUserLocale(user.id)).language; } catch { /* default */ }
       try { raw = systemFor(agent, { language: promptLang }); } catch { raw = ''; }
       return send(res, 200, { friendly: friendlyPrompt(agent), raw });
-    } catch (e) { return fail(res, 500, 'Falha ao montar o prompt.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_build_prompt', e); }
   }
 
   // ── Usage/cost (dashboard) ──
@@ -9714,7 +9713,7 @@ async function atenderRequest(req, res) {
   // (ADMIN_EMAIL) sees all users; anyone else logged in sees only their own.
   if (req.method === 'GET' && url.pathname === '/api/usage') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
     const isAdmin = adminEmail && user.email?.toLowerCase() === adminEmail;
     const by = url.searchParams.get('by') || 'day';
@@ -9730,14 +9729,14 @@ async function atenderRequest(req, res) {
       ]);
       return send(res, 200, { admin: isAdmin, by, rows, totals });
     } catch (e) {
-      return fail(res, 500, 'Falha na agregação.', e);
+      return fail(res, 500, 'server.aggregation_failed', e);
     }
   }
 
   // ── User credits (Usage bar + plan catalog) ──
   if (req.method === 'GET' && url.pathname === '/api/usage/credits') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try {
       const status = await getCreditStatus(user.id);
       const isAdmin = (user.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase();
@@ -9745,7 +9744,7 @@ async function atenderRequest(req, res) {
       const extras = { models: modelCatalog({ admin: isAdmin, enabled: { openai: openaiEnabled(), deepinfra: deepinfraEnabled(), together: togetherEnabled() } }), model: await getUserModelPref(user.id), modelAuto: await getUserModelAuto(user.id), media: await getUserMediaPrefs(user.id), mediaCosts: mediaEstimates() };
       return send(res, 200, await gasto.telaDeCreditos({ userId: user.id, status, extras }));
     } catch (e) {
-      return fail(res, 500, 'Falha ao calcular créditos.', e);
+      return fail(res, 500, 'server.failed_calculate_credits', e);
     }
   }
 
@@ -9754,7 +9753,7 @@ async function atenderRequest(req, res) {
   if(await discoveryRoutes(url.pathname,req.method,discoveryStore,{
     admin:()=>metricsAuthGuard(req,res),user:currentUser,read:()=>readBody(req),
     limit:bucket=>tooManyRequests(req,res,bucket,40,60_000),send:(code,body)=>send(res,code,body),
-    error:e=>fail(res,500,'Falha na jornada de descoberta.',e),
+    error:e=>fail(res,500,'server.discovery_journey_failed',e),
 
   }))return;
 
@@ -9809,14 +9808,14 @@ async function atenderRequest(req, res) {
   // ── API (requer login) ──
   if (req.method === 'POST' && url.pathname === '/api/agent') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { name, goal, instructions } = await readBody(req);
-    if (!name) return send(res, 400, { error: 'Informe o nome do agente.' });
+    if (!name) return send(res, 400, { error: 'server.enter_agent_name' });
     try {
       const ag = await createAgent({ userId: user.id, owner: user.name, name, goal, instructions });
       return send(res, 200, { id: ag.id, name: ag.name, greeting: `Oi, ${user.name}! Sou o ${name}. Como posso te ajudar?` });
     } catch (e) {
-      return fail(res, 500, 'Falha ao criar o agente.', e);
+      return fail(res, 500, 'server.failed_create_agent', e);
     }
   }
 
@@ -9824,17 +9823,17 @@ async function atenderRequest(req, res) {
   // stays stored on the account; the agent just disappears from lists and can no longer be used.
   if (req.method === 'POST' && url.pathname === '/api/agent/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id, { incluirArquivado: true });
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const { archived, remaining } = await archiveAgent(agentId, user.id);
       if (!archived) return send(res, 200, { deleted: false, name: ag.name });
       return send(res, 200, { deleted: true, name: archived.name, remaining });
     } catch (e) {
-      return fail(res, 500, 'Falha ao excluir o agente.', e);
+      return fail(res, 500, 'server.failed_delete_agent', e);
     }
   }
 
@@ -9842,30 +9841,30 @@ async function atenderRequest(req, res) {
   // system prompt is built from the name in the database); the old one is stored in former_names.
   if (req.method === 'POST' && url.pathname === '/api/agent/rename') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId, name } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
-    if (!name || !String(name).trim()) return send(res, 400, { error: 'Informe o novo nome.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
+    if (!name || !String(name).trim()) return send(res, 400, { error: 'server.enter_new_name' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const r = await renameAgent(agentId, user.id, name);
-      if (!r.ok) return send(res, 400, { error: r.error || 'Falha ao renomear.' });
+      if (!r.ok) return send(res, 400, { error: r.error || 'server.failed_rename' });
       return send(res, 200, { id: agentId, name: r.name, old: r.old || null, unchanged: !!r.unchanged });
     } catch (e) {
-      return fail(res, 500, 'Falha ao renomear o agente.', e);
+      return fail(res, 500, 'server.failed_rename_agent', e);
     }
   }
 
   // Returns an agent's editable fields (to prefill the edit screen).
   if (req.method === 'GET' && url.pathname === '/api/agent/get') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const agentId = url.searchParams.get('agentId');
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const hasServer = await userHasSshKey(user.id).catch(() => false);
       // Multi-account Google: the screen shows which account THIS assistant works on.
       // '' = uses the user's main one (the default for anyone with a single account).
@@ -9882,7 +9881,7 @@ async function atenderRequest(req, res) {
         superAvailable: hasServer,
       });
     } catch (e) {
-      return fail(res, 500, 'Falha ao carregar o agente.', e);
+      return fail(res, 500, 'server.failed_load_agent', e);
     }
   }
 
@@ -9891,14 +9890,14 @@ async function atenderRequest(req, res) {
   // prompt every turn. Changes take effect from the next turn.
   if (req.method === 'POST' && url.pathname === '/api/agent/update') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId, name, goal, instructions, style, model, category, tool_config, google_email } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const fields = {};
-      if (name !== undefined) { if (!String(name).trim()) return send(res, 400, { error: 'O nome não pode ficar vazio.' }); fields.name = name; }
+      if (name !== undefined) { if (!String(name).trim()) return send(res, 400, { error: 'server.name_cannot_be_empty' }); fields.name = name; }
       if (goal !== undefined) fields.goal = goal;
       if (instructions !== undefined) fields.instructions = instructions;
       if (style !== undefined) fields.style = style;
@@ -9911,7 +9910,7 @@ async function atenderRequest(req, res) {
         const tcGroups = Array.isArray(tool_config?.groups) ? tool_config.groups : [];
         const tcHost = typeof tool_config?.host === 'string' ? tool_config.host.trim() : '';
         if (tcGroups.includes('shell') && !tcHost) {
-          return send(res, 400, { error: 'Pra liberar shell num assistente de grupo, informe o servidor (host). É ele que prende o shell a uma máquina só.' });
+          return send(res, 400, { error: 'server.enable_shell_on_group_assistant' });
         }
         fields.tool_config = tool_config;
       }
@@ -9924,10 +9923,10 @@ async function atenderRequest(req, res) {
       // in updateAgentFields).
       if (model !== undefined) fields.model = normalizeAgentModel(model);
       const r = await updateAgentFields(agentId, user.id, fields);
-      if (!r.ok) return send(res, 400, { error: r.error || 'Nada pra atualizar.' });
+      if (!r.ok) return send(res, 400, { error: r.error || 'server.nothing_to_update' });
       return send(res, 200, { ok: true, id: agentId });
     } catch (e) {
-      return fail(res, 500, 'Falha ao atualizar o agente.', e);
+      return fail(res, 500, 'server.failed_update_agent', e);
     }
   }
 
@@ -9935,12 +9934,12 @@ async function atenderRequest(req, res) {
   // Webhook status (without the token, which is only shown once when generated).
   if (req.method === 'GET' && url.pathname === '/api/agent/webhook/get') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const agentId = url.searchParams.get('agentId');
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const hook = await getAgentWebhook(agentId, user.id);
       const base = (process.env.APP_BASE_URL || siteDaMarca() + '/').replace(/\/+$/, '');
       return send(res, 200, {
@@ -9952,7 +9951,7 @@ async function atenderRequest(req, res) {
         url: `${base}/api/webhook/skill`,
       });
     } catch (e) {
-      return fail(res, 500, 'Falha ao carregar o webhook.', e);
+      return fail(res, 500, 'server.failed_load_webhook', e);
     }
   }
 
@@ -9960,36 +9959,36 @@ async function atenderRequest(req, res) {
   // only once (the server only stores the hash). Regenerating invalidates the previous token.
   if (req.method === 'POST' && url.pathname === '/api/agent/webhook/token') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const token = newToken();
       await setAgentWebhookToken(agentId, user.id, token);
       const base = (process.env.APP_BASE_URL || siteDaMarca() + '/').replace(/\/+$/, '');
       return send(res, 200, { ok: true, token, enabled: true, url: `${base}/api/webhook/skill` });
     } catch (e) {
-      return fail(res, 500, 'Falha ao gerar o token do webhook.', e);
+      return fail(res, 500, 'server.failed_generate_webhook_token', e);
     }
   }
 
   // Enables/disables the agent's webhook without deleting the token.
   if (req.method === 'POST' && url.pathname === '/api/agent/webhook/enabled') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId, enabled } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Informe o agente.' });
+    if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrado.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
       const hook = await getAgentWebhook(agentId, user.id);
-      if (!hook) return send(res, 400, { error: 'Gere um token antes de ativar o webhook.' });
+      if (!hook) return send(res, 400, { error: 'server.generate_token_before_webhook' });
       await setAgentWebhookEnabled(agentId, user.id, !!enabled);
       return send(res, 200, { ok: true, enabled: !!enabled });
     } catch (e) {
-      return fail(res, 500, 'Falha ao atualizar o webhook.', e);
+      return fail(res, 500, 'server.failed_update_webhook', e);
     }
   }
 
@@ -9997,11 +9996,11 @@ async function atenderRequest(req, res) {
   // Lists the user's devices (without the token; only the 8-char hint).
   if (req.method === 'GET' && url.pathname === '/api/device/tokens') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       return send(res, 200, { devices: await listDeviceTokens(user.id) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao listar os devices.', e);
+      return fail(res, 500, 'server.failed_list_devices', e);
     }
   }
 
@@ -10009,44 +10008,44 @@ async function atenderRequest(req, res) {
   // only stores the hash). Optional label so the owner recognizes the device.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { label } = await readBody(req);
     try {
       const token = newToken();
       const dev = await createDeviceToken(user.id, label, token);
       return send(res, 200, { ok: true, token, device: dev });
     } catch (e) {
-      return fail(res, 500, 'Falha ao gerar o token do device.', e);
+      return fail(res, 500, 'server.failed_generate_device_token', e);
     }
   }
 
   // Enables/disables a device without deleting the token.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens/enabled') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, enabled } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Informe o device.' });
+    if (!id) return send(res, 400, { error: 'server.enter_device' });
     try {
       const ok = await setDeviceTokenEnabled(id, user.id, !!enabled);
-      if (!ok) return send(res, 404, { error: 'Device não encontrado.' });
+      if (!ok) return send(res, 404, { error: 'server.device_not_found' });
       return send(res, 200, { ok: true, enabled: !!enabled });
     } catch (e) {
-      return fail(res, 500, 'Falha ao atualizar o device.', e);
+      return fail(res, 500, 'server.failed_update_device', e);
     }
   }
 
   // Revokes (deletes) a device. Irreversible.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens/revoke') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Informe o device.' });
+    if (!id) return send(res, 400, { error: 'server.enter_device' });
     try {
       const ok = await deleteDeviceToken(id, user.id);
-      if (!ok) return send(res, 404, { error: 'Device não encontrado.' });
+      if (!ok) return send(res, 404, { error: 'server.device_not_found' });
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Falha ao revogar o device.', e);
+      return fail(res, 500, 'server.failed_revoke_device', e);
     }
   }
 
@@ -10078,7 +10077,7 @@ async function atenderRequest(req, res) {
       if (deviceAction) out.action = deviceAction; // {type, query} — native action for the OS to execute
       return send(res, 200, out);
     } catch (e) {
-      return fail(res, 500, 'Falha ao falar com o modelo.', e);
+      return fail(res, 500, 'server.failed_talk_model', e);
     }
   }
 
@@ -10110,7 +10109,7 @@ async function atenderRequest(req, res) {
       const frame = await runnerPoll(dev.user_id, dev.id, meta, dev.active_agent_id || null);
       return send(res, 200, frame);
     } catch (e) {
-      return fail(res, 500, 'Falha no canal do runner.', e);
+      return fail(res, 500, 'server.runner_channel_failed', e);
     }
   }
 
@@ -10118,7 +10117,7 @@ async function atenderRequest(req, res) {
   // Authenticated by SESSION (cookie), not by device token; it's the owner looking.
   if (req.method === 'GET' && url.pathname === '/api/runner/status') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const st = runnerStatus(user.id);
     // Returns WHICH assistant is bound (name, not just id): the page used to
     // show green without saying who operates the machine, so the owner had no
@@ -10142,18 +10141,18 @@ async function atenderRequest(req, res) {
   // right away and persisted in the database (survives a daemon restart).
   if (req.method === 'POST' && url.pathname === '/api/runner/agent') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const st = runnerStatus(user.id);
-    if (!st.online) return send(res, 400, { error: 'Abra o __MARCA__ Runner na sua máquina pra escolher o assistente.' });
+    if (!st.online) return send(res, 400, { error: 'server.open_brand_runner_on_machine' });
     const { agentId } = await readBody(req);
     if (agentId) {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found_alt' });
       // Hard block: a group assistant runs in a channel with several people
       // and can't gain shell access on the owner's personal machine. Refuses
       // HERE so the screen doesn't confirm a binding that was never going to work.
       if (ag.category === 'grupo') {
-        return send(res, 400, { error: 'Assistente de grupo não pode operar no Runner: grupo é um canal com várias pessoas e o Runner roda na sua máquina. Escolha um assistente pessoal.' });
+        return send(res, 400, { error: 'server.group_assistant_cannot_operate_runner' });
       }
     }
     await setDeviceActiveAgent(st.deviceId, user.id, agentId || null);
@@ -10165,11 +10164,11 @@ async function atenderRequest(req, res) {
   // Session-authed. `@name` in the extension chat still overrides it per message.
   if (req.method === 'POST' && url.pathname === '/api/ext/agent') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId } = await readBody(req);
     if (agentId) {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     }
     await setExtActiveAgent(user.id, agentId || null);
     if (agentId) extActiveAgent.set(user.id, agentId); else extActiveAgent.delete(user.id);
@@ -10189,7 +10188,7 @@ async function atenderRequest(req, res) {
     try {
       return send(res, 200, runnerResult(dev.user_id, dev.id, frame));
     } catch (e) {
-      return fail(res, 500, 'Falha ao processar a saída do runner.', e);
+      return fail(res, 500, 'server.failed_process_runner_output', e);
     }
   }
 
@@ -10201,7 +10200,7 @@ async function atenderRequest(req, res) {
   // exposes nothing to the user. Inert while the token isn't in .env (503).
   if (req.method === 'POST' && url.pathname === '/api/mobile/telemetry') {
     const expected = process.env.MOBILE_TELEMETRY_TOKEN;
-    if (!expected) return send(res, 503, { error: 'telemetria desativada' });
+    if (!expected) return send(res, 503, { error: 'server.telemetry_disabled' });
     if (tooManyRequests(req, res, 'mobile-telemetry', 600, 60_000)) return;
     const token = readBearer(req);
     if (!token || !safeStrEq(token, expected)) return send(res, 401, { error: 'unauthorized' });
@@ -10227,7 +10226,7 @@ async function atenderRequest(req, res) {
     } catch {
       // Nonexistent user_id (FK) or another issue with user_id: stores without the user.
       try { await insertMobileError({ ...rec, userId: null }); }
-      catch (e) { return fail(res, 500, 'Falha ao gravar telemetria.', e); }
+      catch (e) { return fail(res, 500, 'server.failed_record_telemetry', e); }
     }
     return send(res, 202, { ok: true, fingerprint });
   }
@@ -10235,9 +10234,9 @@ async function atenderRequest(req, res) {
   // Lists the user's threads (topics), across all assistants.
   if (req.method === 'GET' && url.pathname === '/api/threads') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try { return send(res, 200, { threads: await listThreads(user.id) }); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // ══ Public app library (e.g. example.com/apps) ══
@@ -10256,14 +10255,14 @@ async function atenderRequest(req, res) {
         origem: `${a.label}/${a.system}`,
       }));
       return send(res, 200, { apps: list });
-    } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    } catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // The user's own apps (the ones they use/have), for selection in the feed
   // composer. Requires login. Returns name/system/url in the same format as /api/apps.
   if (req.method === 'GET' && url.pathname === '/api/apps/mine') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try {
       const apps = await listAppsForUser(user.id);
       const list = (apps || []).map((a) => ({
@@ -10275,21 +10274,21 @@ async function atenderRequest(req, res) {
         origem: `${a.label}/${a.system}`,
       }));
       return send(res, 200, { apps: list });
-    } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    } catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // Copies a public app into the logged-in user's space. Requires an account.
   if (req.method === 'POST' && url.pathname === '/api/apps/copy') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Crie uma conta ou faça login no __MARCA__ pra copiar este app pro seu espaço.', precisa_login: true });
+    if (!user) return send(res, 401, { error: 'server.copy_app_login_required', precisa_login: true });
     const { origem, novo_nome } = await readBody(req);
-    if (!origem) return send(res, 400, { error: 'Informe qual app copiar.' });
+    if (!origem) return send(res, 400, { error: 'server.tell_us_which_app' });
     let agentId = null;
     try { agentId = (await listAgents(user.id))[0]?.id || null; }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     let r;
     try { r = await replicateApp({ userId: user.id, agentId, origem, novo_nome }); }
-    catch (e) { return fail(res, 500, 'Falha ao copiar o app.', e); }
+    catch (e) { return fail(res, 500, 'server.failed_copy_app', e); }
     if (!r?.ok) {
       const status = r?.ja_existe ? 409 : 400;
       return send(res, status, { error: r?.error || 'Não consegui copiar o app.', ja_existe: !!r?.ja_existe });
@@ -10301,23 +10300,23 @@ async function atenderRequest(req, res) {
   // Making it public requires a code snapshot (every publish generates one) + a description.
   if (req.method === 'POST' && url.pathname === '/api/apps/visibility') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { sistema, publico, descricao } = await readBody(req);
-    if (!sistema) return send(res, 400, { error: 'Informe qual sistema.' });
+    if (!sistema) return send(res, 400, { error: 'server.enter_which_system' });
     let app;
     try { app = await getAppRow(user.id, sistema); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!app) return send(res, 404, { error: 'Você não tem um sistema com esse nome.' });
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!app) return send(res, 404, { error: 'server.no_system_with_that_name' });
     const vis = publico ? 'public' : 'private';
     if (publico && !app.source_snapshot) {
-      return send(res, 400, { error: 'Publique (ou republique) o app antes de colocá-lo na biblioteca, pra gerar o código copiável.' });
+      return send(res, 400, { error: 'server.publish_app_before_library' });
     }
     const desc = typeof descricao === 'string' ? descricao.trim().slice(0, 400) : null;
     if (publico && !desc && !app.description) {
-      return send(res, 400, { error: 'Dê uma descrição curta pra biblioteca (o que o app faz).', precisa_descricao: true });
+      return send(res, 400, { error: 'server.give_short_description_for_library', precisa_descricao: true });
     }
     try { await setAppVisibility(user.id, sistema, vis, publico ? desc : null); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     return send(res, 200, { ok: true, visibility: vis });
   }
 
@@ -10325,12 +10324,12 @@ async function atenderRequest(req, res) {
   // the row in the database). The UI asks for confirmation before calling, because it's irreversible.
   if (req.method === 'POST' && url.pathname === '/api/apps/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { sistema } = await readBody(req);
-    if (!sistema) return send(res, 400, { error: 'Informe qual sistema apagar.' });
+    if (!sistema) return send(res, 400, { error: 'server.tell_us_which_system' });
     let r;
     try { r = await deleteAppForUser(user.id, sistema); }
-    catch (e) { return fail(res, 500, 'Falha ao apagar o app.', e); }
+    catch (e) { return fail(res, 500, 'server.failed_delete_app', e); }
     if (!r?.ok) {
       const status = r?.nao_encontrado ? 404 : 400;
       return send(res, status, { error: r?.error || 'Não consegui apagar o app.' });
@@ -10342,7 +10341,7 @@ async function atenderRequest(req, res) {
   // Lists the user's spaces (owner or member), with mode and member count.
   if (req.method === 'GET' && url.pathname === '/api/spaces') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try {
       const spaces = await listSpacesForUser(user.id);
       const list = await Promise.all(spaces.map(async (s) => ({
@@ -10356,21 +10355,21 @@ async function atenderRequest(req, res) {
         membros: (await listSpaceMembers(s.id)).length,
       })));
       return send(res, 200, { spaces: list });
-    } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    } catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // Changes a space's sharing mode (auto/manual). Owner only.
   if (req.method === 'POST' && url.pathname === '/api/spaces/mode') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { spaceId, modo } = await readBody(req);
     if (!spaceId || (modo !== 'auto' && modo !== 'manual')) {
-      return send(res, 400, { error: 'Informe o Space e o modo (auto ou manual).' });
+      return send(res, 400, { error: 'server.enter_space_and_mode' });
     }
     let r;
     try { r = await setSpaceMode(spaceId, user.id, modo); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (r?.error === 'nao_e_dono') return send(res, 403, { error: 'Só o dono do Space pode mudar o modo.' });
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (r?.error === 'nao_e_dono') return send(res, 403, { error: 'server.only_space_owner_can_change_mode' });
     return send(res, 200, { ok: true, modo: r.mode });
   }
 
@@ -10378,7 +10377,7 @@ async function atenderRequest(req, res) {
   // Authored by you + installed on this assistant. Read-only for the UI.
   if (req.method === 'GET' && url.pathname === '/api/skills') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try {
       const authored = (await listSkillsAuthored(user.id)).map((s) => ({
         id: s.id, nome: s.title, gatilho: s.trigger,
@@ -10402,7 +10401,7 @@ async function atenderRequest(req, res) {
       const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase();
       const isAdmin = adminEmail && user.email?.toLowerCase() === adminEmail;
       return send(res, 200, { authored, installed, admin: isAdmin });
-    } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    } catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // ══ Official skills library (e.g. example.com/habilidades) ══
@@ -10430,40 +10429,40 @@ async function atenderRequest(req, res) {
         votos: s.ratingCount, media: s.ratingAvg, minha_nota: s.myRating,
       }));
       return send(res, 200, { skills: list });
-    } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    } catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // Rates a library skill (1-5 score). Requires an account; re-rating overwrites.
   if (req.method === 'POST' && url.pathname === '/api/skills/avaliar') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login no __MARCA__ pra avaliar esta habilidade.', precisa_login: true });
+    if (!user) return send(res, 401, { error: 'server.rate_skill_login_required', precisa_login: true });
     const { skillId, nota } = await readBody(req);
-    if (!skillId) return send(res, 400, { error: 'Informe qual habilidade avaliar.' });
+    if (!skillId) return send(res, 400, { error: 'server.tell_us_which_skill_to_rate' });
     let r;
     try { r = await rateSkill(skillId, user.id, nota); }
-    catch (e) { return fail(res, 500, 'Falha ao registrar a avaliação.', e); }
-    if (r?.error === 'nota_invalida') return send(res, 400, { error: 'A nota tem que ser de 1 a 5.' });
-    if (r?.error === 'nao_publica') return send(res, 404, { error: 'Essa habilidade não está na biblioteca.' });
-    if (r?.error) return send(res, 400, { error: 'Não consegui registrar a avaliação.' });
+    catch (e) { return fail(res, 500, 'server.failed_record_rating', e); }
+    if (r?.error === 'nota_invalida') return send(res, 400, { error: 'server.rating_out_of_range' });
+    if (r?.error === 'nao_publica') return send(res, 404, { error: 'server.skill_not_in_library' });
+    if (r?.error) return send(res, 400, { error: 'server.could_not_record_rating' });
     return send(res, 200, { ok: true, votos: r.ratingCount, media: r.ratingAvg, minha_nota: r.myRating });
   }
 
   // Installs a library skill on the user's 1st assistant. Requires an account.
   if (req.method === 'POST' && url.pathname === '/api/skills/instalar') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Crie uma conta ou faça login no __MARCA__ pra instalar esta habilidade.', precisa_login: true });
+    if (!user) return send(res, 401, { error: 'server.install_skill_login_required', precisa_login: true });
     const { skillId } = await readBody(req);
-    if (!skillId) return send(res, 400, { error: 'Informe qual habilidade instalar.' });
+    if (!skillId) return send(res, 400, { error: 'server.tell_us_which_skill_to_install' });
     let agentId = null;
     try { agentId = (await listAgents(user.id))[0]?.id || null; }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!agentId) return send(res, 400, { error: 'Você ainda não tem um assistente. Crie um antes de instalar habilidades.' });
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!agentId) return send(res, 400, { error: 'server.no_assistant_before_skills' });
     let r;
     try { r = await installPublicSkill(skillId, user.id, agentId); }
-    catch (e) { return fail(res, 500, 'Falha ao instalar a habilidade.', e); }
-    if (r?.error === 'nao_publica') return send(res, 404, { error: 'Essa habilidade não está na biblioteca.' });
+    catch (e) { return fail(res, 500, 'server.failed_install_skill', e); }
+    if (r?.error === 'nao_publica') return send(res, 404, { error: 'server.skill_not_in_library' });
     if (r?.error === 'limite') return send(res, 400, { error: `Seu assistente já está no limite de ${r.max} habilidades.` });
-    if (r?.error) return send(res, 400, { error: 'Não consegui instalar a habilidade.' });
+    if (r?.error) return send(res, 400, { error: 'server.could_not_install_skill' });
     return send(res, 200, { ok: true, ja_instalada: !!r.already });
   }
 
@@ -10471,19 +10470,19 @@ async function atenderRequest(req, res) {
   // Lists my contacts (connections in any state), already resolving the other person.
   if (req.method === 'GET' && url.pathname === '/api/contacts') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try { return send(res, 200, { contacts: await listContacts(user.id) }); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   // Invites someone (by signup email) to become a contact.
   if (req.method === 'POST' && url.pathname === '/api/contacts/invite') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { email } = await readBody(req);
     let r;
     try { r = await inviteContact(user.id, email); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (r?.error) {
       const msg = {
         email_vazio: 'Informe o e-mail da pessoa.',
@@ -10517,17 +10516,17 @@ async function atenderRequest(req, res) {
   // Accepts a received invite and designates which of my assistants receives outside requests.
   if (req.method === 'POST' && url.pathname === '/api/contacts/accept') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { connId, inboundAgentId } = await readBody(req);
-    if (!connId) return send(res, 400, { error: 'Conexão inválida.' });
+    if (!connId) return send(res, 400, { error: 'server.invalid_connection' });
     // validates that the chosen assistant is mine (if provided)
     if (inboundAgentId) {
-      let ag; try { ag = await getAgentOwned(inboundAgentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
+      let ag; try { ag = await getAgentOwned(inboundAgentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     }
     let r;
     try { r = await acceptContact(connId, user.id, inboundAgentId); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (r?.error) {
       const msg = { nao_encontrada: 'Convite não encontrado.', sem_permissao: 'Você não pode aceitar esse convite.', ja_recusada: 'Esse convite já foi recusado.' }[r.error] || 'Não consegui aceitar.';
       return send(res, 400, { error: msg });
@@ -10538,12 +10537,12 @@ async function atenderRequest(req, res) {
   // Declines (or undoes) a connection.
   if (req.method === 'POST' && url.pathname === '/api/contacts/decline') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { connId } = await readBody(req);
-    if (!connId) return send(res, 400, { error: 'Conexão inválida.' });
+    if (!connId) return send(res, 400, { error: 'server.invalid_connection' });
     let r;
     try { r = await declineContact(connId, user.id); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (r?.error) {
       const msg = { nao_encontrada: 'Conexão não encontrada.', sem_permissao: 'Você não pode mexer nessa conexão.' }[r.error] || 'Não consegui recusar.';
       return send(res, 400, { error: msg });
@@ -10554,16 +10553,16 @@ async function atenderRequest(req, res) {
   // (Re)assigns the inbound assistant on MY side of this connection.
   if (req.method === 'POST' && url.pathname === '/api/contacts/inbound') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { connId, agentId } = await readBody(req);
-    if (!connId) return send(res, 400, { error: 'Conexão inválida.' });
+    if (!connId) return send(res, 400, { error: 'server.invalid_connection' });
     if (agentId) {
-      let ag; try { ag = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-      if (!ag) return send(res, 404, { error: 'Assistente não encontrada.' });
+      let ag; try { ag = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+      if (!ag) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     }
     let r;
     try { r = await setInboundAgent(connId, user.id, agentId); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (r?.error) {
       const msg = { nao_encontrada: 'Conexão não encontrada.', sem_permissao: 'Você não faz parte dessa conexão.' }[r.error] || 'Não consegui atualizar.';
       return send(res, 400, { error: msg });
@@ -10574,28 +10573,28 @@ async function atenderRequest(req, res) {
   // Creates a new thread for an assistant.
   if (req.method === 'POST' && url.pathname === '/api/thread') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId, title } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Escolha uma assistente.' });
+    if (!agentId) return send(res, 400, { error: 'server.pick_assistant' });
     let agent;
-    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     try {
       const t = await createThread({ agentId, userId: user.id, title });
       return send(res, 200, { id: t.id, agentId, agentName: agent.name, title: t.title });
     } catch (e) {
-      return fail(res, 500, 'Falha ao criar a conversa.', e);
+      return fail(res, 500, 'server.failed_create_chat', e);
     }
   }
 
   // Messages of a thread (history retrieval).
   if (req.method === 'GET' && url.pathname === '/api/thread') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const id = url.searchParams.get('id');
     let thread;
-    try { thread = await getThreadOwned(id, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!thread) return send(res, 404, { error: 'Conversa não encontrada.' });
+    try { thread = await getThreadOwned(id, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!thread) return send(res, 404, { error: 'server.chat_not_found' });
     const agent = await getAgentOwned(thread.agent_id, user.id, { incluirArquivado: true });
     const messages = await getThreadMessages(id);
     // Opening the conversation (or re-syncing with it on screen) = read. Marks up to the
@@ -10617,10 +10616,10 @@ async function atenderRequest(req, res) {
   // that's exactly when the unread dot in the list is the notice that something is there.
   if (req.method === 'POST' && url.pathname === '/api/thread/read') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     const { id } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Informe a conversa.' });
-    try { await markThreadRead(id, user.id, null); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    if (!id) return send(res, 400, { error: 'server.enter_chat' });
+    try { await markThreadRead(id, user.id, null); } catch (e) { return fail(res, 500, 'server.database_error', e); }
     return send(res, 200, { ok: true });
   }
 
@@ -10654,10 +10653,10 @@ async function atenderRequest(req, res) {
   // that it sends as Bearer in subsequent calls.
   if (req.method === 'GET' && url.pathname === '/api/ext/token') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login no __MARCA__ primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_brand_first' });
     const token = newToken();
     try { await createSession(token, user.id); }
-    catch (e) { return fail(res, 500, 'Falha ao gerar token.', e); }
+    catch (e) { return fail(res, 500, 'server.failed_generate_token', e); }
     return send(res, 200, { token, name: user.name });
   }
 
@@ -10669,14 +10668,14 @@ async function atenderRequest(req, res) {
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
     if (tooManyRequests(req, res, 'ext-chat', 60, 60_000)) return;
     const token = readBearer(req);
-    if (!token) return send(res, 401, { error: 'Conecte a extensão ao __MARCA__.' });
+    if (!token) return send(res, 401, { error: 'server.connect_extension_brand' });
     let user = null;
     try { user = await getUserBySession(token); } catch {}
-    if (!user) return send(res, 401, { error: 'Sessão expirada. Reconecte a extensão.' });
+    if (!user) return send(res, 401, { error: 'server.session_expired_reconnect_extension' });
     const { message, page } = await readBody(req);
-    if (!message || !String(message).trim()) return send(res, 400, { error: 'Mensagem vazia.' });
+    if (!message || !String(message).trim()) return send(res, 400, { error: 'server.empty_message' });
     const agents = await listAgents(user.id);
-    if (!agents.length) return send(res, 400, { error: 'Você ainda não tem um assistente no __MARCA__.' });
+    if (!agents.length) return send(res, 400, { error: 'server.no_assistant_yet' });
 
     // Assistant that serves the extension: the one CONFIGURED in Connections (ext_links,
     // persisted) is the default; unset => first assistant. `@name ...` still
@@ -10709,7 +10708,7 @@ async function atenderRequest(req, res) {
     if (!agents.some((a) => a.id === activeId)) activeId = agents[0].id;
 
     const agent = await getAgentOwned(activeId, user.id);
-    if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     try {
       const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId: user.id, title: '🧩 Extensão Chrome' });
       // The user's question is the NORMAL thread message (persisted, short). The
@@ -10719,7 +10718,7 @@ async function atenderRequest(req, res) {
       const { text: reply } = await runConversationInThread(agent, thread, user.id, text, { kind: 'chat', pageContext });
       return send(res, 200, { reply });
     } catch (e) {
-      return fail(res, 500, 'Falha ao falar com o modelo.', e);
+      return fail(res, 500, 'server.failed_talk_model', e);
     }
   }
 
@@ -10788,17 +10787,17 @@ async function atenderRequest(req, res) {
 
   if (req.method === 'POST' && url.pathname === '/api/chat') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { threadId, message, images, files } = await readBody(req);
     const imgs = normalizeImages(images);
     const docs = normalizeFiles(files);
-    if (!message && !imgs.length && !docs.length) return send(res, 400, { error: 'Mensagem vazia.' });
-    if (!threadId) return send(res, 400, { error: 'Conversa não informada.' });
+    if (!message && !imgs.length && !docs.length) return send(res, 400, { error: 'server.empty_message' });
+    if (!threadId) return send(res, 400, { error: 'server.chat_not_specified' });
     let thread;
-    try { thread = await getThreadOwned(threadId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!thread) return send(res, 404, { error: 'Conversa não encontrada. Recarregue a página.' });
+    try { thread = await getThreadOwned(threadId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!thread) return send(res, 404, { error: 'server.chat_not_found_reload_page' });
     const agent = await getAgentOwned(thread.agent_id, user.id);
-    if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     try {
       const msg = message || notaMidiaSemTexto({ images: imgs.length, files: docs.length });
       // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on
@@ -10807,7 +10806,7 @@ async function atenderRequest(req, res) {
       const { text, attachments } = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient });
       return send(res, 200, { reply: text, attachments });
     } catch (e) {
-      return fail(res, 500, 'Falha ao falar com o modelo.', e);
+      return fail(res, 500, 'server.failed_talk_model', e);
     }
   }
 
@@ -10816,16 +10815,16 @@ async function atenderRequest(req, res) {
   // with the same pipeline as the channels. Respects the user's STT toggle.
   if (req.method === 'POST' && url.pathname === '/api/transcribe') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const prefs = await getUserMediaPrefs(user.id);
-    if (!prefs.stt) return send(res, 400, { error: 'A transcrição de áudio está desligada nas suas configurações (Conexões › Mídia).' });
+    if (!prefs.stt) return send(res, 400, { error: 'server.audio_transcription_off_in_settings' });
     const body = await readBody(req);
     const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'Envie um áudio.' });
+    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
     let buffer;
     try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler o áudio.' });
-    if (buffer.length > 20 * 1024 * 1024) return send(res, 413, { error: 'Áudio grande demais. Grave um trecho mais curto.' });
+    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
+    if (buffer.length > 20 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
     // Normalizes to WAV 16k mono; if ffmpeg fails, sends the original anyway.
     let outBuf = await audioToWav(buffer);
     let mime = 'audio/wav';
@@ -10834,19 +10833,19 @@ async function atenderRequest(req, res) {
       const { text, usage } = await transcribeAudio(outBuf, mime);
       await recordUsages([usage], { userId: user.id, turnId: randomUUID(), kind: 'stt' });
       return send(res, 200, { text: String(text || '') });
-    } catch (e) { return fail(res, 500, 'Falha ao transcrever o áudio.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_transcribe_audio', e); }
   }
 
   // Persistent state, recovery and telemetry without private content in the events.
   if (req.method === 'GET' && url.pathname === '/api/onboard/status') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try { return send(res, 200, publicState(await onboardingStore.get(user.id, url.searchParams.get('agentId') || undefined))); }
     catch (e) { return fail(res, e instanceof OnboardingError ? e.status : 500, e instanceof OnboardingError ? e.message : 'Não consegui recuperar a análise.', e); }
   }
   if (req.method === 'POST' && url.pathname === '/api/onboard/touch') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     if (tooManyRequests(req, res, 'onboard-touch', 120, 60_000)) return;
     try {
       const body = await readBody(req);
@@ -10856,7 +10855,7 @@ async function atenderRequest(req, res) {
     } catch (e) { return fail(res, e instanceof OnboardingError ? e.status : 500, 'Não consegui registrar esta métrica.', e); }
   }
   if(req.method==='POST'&&url.pathname==='/api/onboard/feedback'){
-    const user=await currentUser();if(!user)return send(res,401,{error:'Faça login primeiro.'});
+    const user=await currentUser();if(!user)return send(res,401,{error:'server.log_in_first'});
     try{const body=await readBody(req);
       if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['agentId','attemptId','choice'].includes(k)))throw new OnboardingError(400,'Avaliação inválida.');
       return send(res,200,publicState(await onboardingStore.feedback(user.id,body.agentId,body.attemptId,body.choice)));
@@ -10864,7 +10863,7 @@ async function atenderRequest(req, res) {
   }
   if (req.method === 'POST' && url.pathname === '/api/onboard/progress') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       const body = await readBody(req);
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new OnboardingError(400, 'Pedido inválido.');
@@ -10873,7 +10872,7 @@ async function atenderRequest(req, res) {
   }
   if (req.method === 'POST' && url.pathname === '/api/onboard') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       const body = await readBody(req);
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new OnboardingError(400, 'Pedido inválido.');
@@ -10935,7 +10934,7 @@ async function atenderRequest(req, res) {
   // has arrived since the last time. Only with real news does it trigger the model.
   if (req.method === 'POST' && url.pathname === '/api/home-refresh') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       const agents = await listAgents(user.id);
       if (!agents.length) return send(res, 200, { refreshed: false, reason: 'no-agent' });
@@ -11000,7 +10999,7 @@ async function atenderRequest(req, res) {
   // Home screen items: "Need to know" (note) + personalized suggestions.
   if (req.method === 'GET' && url.pathname === '/api/home-items') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const items = await listHomeItems(user.id);
     return send(res, 200, {
       notes: items.filter((i) => i.kind === 'note'),
@@ -11009,9 +11008,9 @@ async function atenderRequest(req, res) {
   }
   if (req.method === 'POST' && url.pathname === '/api/home-items/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Item não informado.' });
+    if (!id) return send(res, 400, { error: 'server.item_not_provided' });
     const ok = await deleteHomeItem(user.id, id);
     return send(res, 200, { ok });
   }
@@ -11019,15 +11018,15 @@ async function atenderRequest(req, res) {
   // Rename / mark status (open|done) of a thread.
   if (req.method === 'POST' && url.pathname === '/api/thread/update') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, title, status } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Conversa não informada.' });
+    if (!id) return send(res, 400, { error: 'server.chat_not_specified' });
     try {
       if (typeof title === 'string' && title.trim()) await renameThread(id, user.id, title.trim());
       if (status === 'open' || status === 'done') await setThreadStatus(id, user.id, status);
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Falha ao atualizar.', e);
+      return fail(res, 500, 'server.failed_update', e);
     }
   }
 
@@ -11037,66 +11036,66 @@ async function atenderRequest(req, res) {
   if ((req.method === 'POST' && url.pathname === '/api/thread/delete') ||
       (req.method === 'DELETE' && url.pathname === '/api/thread')) {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const id = req.method === 'DELETE'
       ? url.searchParams.get('id')
       : (await readBody(req)).id;
-    if (!id) return send(res, 400, { error: 'Conversa não informada.' });
+    if (!id) return send(res, 400, { error: 'server.chat_not_specified' });
     try {
       const n = await deleteThread(id, user.id);
-      if (!n) return send(res, 404, { error: 'Conversa não encontrada.' });
+      if (!n) return send(res, 404, { error: 'server.chat_not_found' });
       return send(res, 200, { ok: true });
     } catch (e) {
-      return fail(res, 500, 'Falha ao apagar.', e);
+      return fail(res, 500, 'server.failed_delete', e);
     }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/thread/favorite') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, on } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Conversa não informada.' });
+    if (!id) return send(res, 400, { error: 'server.chat_not_specified' });
     try {
       const n = await setThreadFavorite(id, user.id, on);
-      if (!n) return send(res, 404, { error: 'Conversa não encontrada.' });
+      if (!n) return send(res, 404, { error: 'server.chat_not_found' });
       return send(res, 200, { ok: true, favorite: !!on });
     } catch (e) {
-      return fail(res, 500, 'Falha ao favoritar.', e);
+      return fail(res, 500, 'server.failed_favorite', e);
     }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/thread/archive') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, on } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Conversa não informada.' });
+    if (!id) return send(res, 400, { error: 'server.chat_not_specified' });
     try {
       const n = await setThreadArchived(id, user.id, on);
-      if (!n) return send(res, 404, { error: 'Conversa não encontrada.' });
+      if (!n) return send(res, 404, { error: 'server.chat_not_found' });
       return send(res, 200, { ok: true, archived: !!on });
     } catch (e) {
-      return fail(res, 500, 'Falha ao arquivar.', e);
+      return fail(res, 500, 'server.failed_archive', e);
     }
   }
 
   // ── Routines (scheduled recurring tasks, delivered by email) ──
   if (req.method === 'GET' && url.pathname === '/api/routines') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'não logado' });
+    if (!user) return send(res, 401, { error: 'server.not_logged_in' });
     try { return send(res, 200, { routines: await listRoutinesForUser(user.id), mail: mailEnabled() }); }
-    catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    catch (e) { return fail(res, 500, 'server.database_error', e); }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/routine') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId, title, prompt, hour, minute, days, tz, channel, curation, emailSearch } = await readBody(req);
-    if (!agentId || !title || !prompt) return send(res, 400, { error: 'Informe assistente, título e o que fazer.' });
+    if (!agentId || !title || !prompt) return send(res, 400, { error: 'server.routine_fields_missing' });
     const agent = await getAgentOwned(agentId, user.id);
-    if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     const t = parseRoutineTime({ hora: hour, minuto: minute });
-    if (t.error || t.hour === undefined) return send(res, 400, { error: t.error || 'Hora inválida (0–23).' });
-    if(channel&&!['email','telegram','whatsapp','none','app'].includes(channel))return send(res,400,{error:'Canal de entrega inválido.'});
+    if (t.error || t.hour === undefined) return send(res, 400, { error: t.error || 'server.invalid_hour_0_23' });
+    if(channel&&!['email','telegram','whatsapp','none','app'].includes(channel))return send(res,400,{error:'server.invalid_delivery_channel'});
     try {prepareRoutineChange(null,{curadoria:curation,busca_email:emailSearch,prompt,channel:channel||'email'});}
     catch(e){
       if(emailSearch!==undefined)return send(res,400,{code:'EMAIL_SEARCH_INVALID',error:e.message});
@@ -11105,32 +11104,32 @@ async function atenderRequest(req, res) {
     try {
       const r = await createRoutine({ userId: user.id, agentId, title, prompt, hour: t.hour, minute: t.minute, days, tz, channel:channel==='app'?'none':channel, curation, emailSearch });
       return send(res, 200, { id: r.id });
-    } catch (e) { return fail(res, 500, 'Falha ao criar rotina.', e); }
+    } catch (e) { return fail(res, 500, 'server.failed_create_routine', e); }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/routine/update') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, ...fields } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Rotina não informada.' });
+    if (!id) return send(res, 400, { error: 'server.routine_not_provided' });
     const current=await getRoutineOwned(id,user.id);
-    if(!current)return send(res,404,{error:'Rotina não encontrada.'});
+    if(!current)return send(res,404,{error:'server.routine_not_found'});
     try {prepareRoutineChange(current,{curadoria:fields.curation,busca_email:fields.emailSearch,prompt:fields.prompt,channel:fields.channel});}
     catch(e){
       if(fields.emailSearch!==undefined||current.config?.email_search)return send(res,400,{code:'EMAIL_SEARCH_INVALID',error:e.message});
       return send(res,400,{code:'CURATION_CRITERIA_REQUIRED',error:'Peça ao assistente para ajustar o conteúdo e os critérios desta curadoria juntos. Nada foi alterado; a rotina anterior continua valendo.'});
     }
     try { await updateRoutine(id, user.id, fields); return send(res, 200, { ok: true }); }
-    catch (e) { if(e.code==='ROUTINE_CHANGED')return send(res,409,{error:e.message}); return fail(res, 500, 'Falha ao atualizar.', e); }
+    catch (e) { if(e.code==='ROUTINE_CHANGED')return send(res,409,{error:e.message}); return fail(res, 500, 'server.failed_update', e); }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/routine/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id, expected } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Rotina não informada.' });
+    if (!id) return send(res, 400, { error: 'server.routine_not_provided' });
     try { await deleteRoutine(id, user.id, expected); return send(res, 200, { ok: true }); }
-    catch (e) { if(e.code==='ROUTINE_CHANGED')return send(res,409,{error:e.message}); return fail(res, 500, 'Falha ao remover.', e); }
+    catch (e) { if(e.code==='ROUTINE_CHANGED')return send(res,409,{error:e.message}); return fail(res, 500, 'server.failed_remove', e); }
   }
 
   // Fires a routine RIGHT NOW. It's not a preview: the delivery is REAL, through the
@@ -11140,14 +11139,14 @@ async function atenderRequest(req, res) {
   // records failure/interruption without turning the stamp into a delivery receipt.
   if (req.method === 'POST' && url.pathname === '/api/routine/run') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id } = await readBody(req);
     const r = await getRoutineOwned(id, user.id);
-    if (!r) return send(res, 404, { error: 'Rotina não encontrada.' });
+    if (!r) return send(res, 404, { error: 'server.routine_not_found' });
     try {
       const {text,delivery}=await executeRoutineNow(r);
       return send(res, 200, { ok: true, preview: ['flight-monitor-v1','curation-v1'].includes(text?.type) ? text.text : text, delivered: delivery ? delivery.status==='accepted' : mailEnabled(), ...(delivery?{delivery}:{}) });
-    } catch (e) { if(e.code==='ROUTINE_BUSY')return send(res,409,{error:e.message}); return fail(res, 500, 'Não consegui concluir a rotina. Veja o estado antes de tentar novamente; uma ação pode ter ocorrido.', e); }
+    } catch (e) { if(e.code==='ROUTINE_BUSY')return send(res,409,{error:e.message}); return fail(res, 500, 'server.could_not_complete_routine', e); }
   }
 
   // ── WhatsApp channel (shared webhook of the WABA Cloud API) ──
@@ -11211,19 +11210,19 @@ async function atenderRequest(req, res) {
   // this assistant and the link is created PER CHANNEL (assistant A in one group, B in another).
   if (req.method === 'POST' && url.pathname === '/api/slack/pair-code') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { agentId } = await readBody(req);
-    if (!agentId) return send(res, 400, { error: 'Escolha um assistente.' });
+    if (!agentId) return send(res, 400, { error: 'server.pick_assistant_alt' });
     let agent;
-    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
     // Charset with no ambiguous characters (no I, O, 0, 1). 8 chars. Single use, 15 min TTL.
     const alph = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '', saved = null;
     for (let attempt = 0; attempt < 5 && !saved; attempt++) {
       code = Array.from(randomBytes(8)).map((b) => alph[b % alph.length]).join('');
       try { saved = await createSlackPairingCode({ userId: user.id, agentId, code, ttlMin: 15 }); }
-      catch (e) { if (attempt === 4) return fail(res, 500, 'Falha ao gerar o código.', e); }
+      catch (e) { if (attempt === 4) return fail(res, 500, 'server.could_not_generate_code', e); }
     }
     return send(res, 200, { code, agentName: agent.name, expiresInMin: 15 });
   }
@@ -11233,7 +11232,7 @@ async function atenderRequest(req, res) {
   // their WhatsApp to the platform's number, and that inbound proves ownership and binds.
   if (req.method === 'POST' && url.pathname === '/api/connect/whatsapp') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { phone, agentId } = await readBody(req);
     const raw = String(phone || '').trim();
     let digits = raw.replace(/\D/g, '');
@@ -11249,12 +11248,12 @@ async function atenderRequest(req, res) {
       if (digits.length === 10) digits = '55' + digits;
       else if (digits.length === 11 && digits[2] === '9') digits = '55' + digits;
     }
-    if (digits.length < 10) return send(res, 400, { error: 'Informe seu número com país e DDD (ex: 5511999998888).' });
+    if (digits.length < 10) return send(res, 400, { error: 'server.enter_phone_number' });
     let activeAgentId = null;
     if (agentId) {
       let agent;
-      try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-      if (!agent) return send(res, 404, { error: 'Assistente não encontrada.' });
+      try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+      if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
       activeAgentId = agentId;
     }
     // PROOF OF OWNERSHIP. Typing a number is not proof that it's yours: the phone is
@@ -11265,19 +11264,19 @@ async function atenderRequest(req, res) {
     //  • any other case -> returns a CODE, and the binding only happens when
     //    an inbound from that phone arrives with it (consumeWaClaim in the webhook).
     let atual = null;
-    try { atual = await getWhatsAppLink(digits); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
+    try { atual = await getWhatsAppLink(digits); } catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (atual && String(atual.user_id) === String(user.id)) {
       try {
         await upsertWhatsAppLink({ phone: atual.wa_phone, userId: user.id, activeAgentId });
         return send(res, 200, { phone: atual.wa_phone, linked: true, number: process.env.WA_BUSINESS_NUMBER || null });
-      } catch (e) { return fail(res, 500, 'Falha ao conectar.', e); }
+      } catch (e) { return fail(res, 500, 'server.failed_connect', e); }
     }
-    if (atual) return send(res, 409, { error: 'Esse número já está conectado a outra conta do __MARCA__. Desconecte nela antes de conectar aqui.' });
+    if (atual) return send(res, 409, { error: 'server.number_already_connected' });
     // Charset with no ambiguous characters (no I, O, 0, 1). 8 chars, single use, 30 min TTL.
     const waAlph = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const waCode = Array.from(randomBytes(8)).map((b) => waAlph[b % waAlph.length]).join('');
     try { await createWaClaim({ phone: digits, userId: user.id, activeAgentId, code: waCode, ttlMin: 30 }); }
-    catch (e) { return fail(res, 500, 'Falha ao gerar o código.', e); }
+    catch (e) { return fail(res, 500, 'server.could_not_generate_code', e); }
     return send(res, 200, {
       phone: digits, pending: true, code: waCode, expiresInMin: 30,
       number: process.env.WA_BUSINESS_NUMBER || null,
@@ -11286,8 +11285,8 @@ async function atenderRequest(req, res) {
 
   if (req.method === 'POST' && url.pathname === '/api/disconnect/whatsapp') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    try { await deleteWhatsAppLinkForUser(user.id); } catch (e) { return fail(res, 500, 'Falha ao desconectar.', e); }
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    try { await deleteWhatsAppLinkForUser(user.id); } catch (e) { return fail(res, 500, 'server.failed_disconnect', e); }
     return send(res, 200, { ok: true });
   }
 
@@ -11295,35 +11294,35 @@ async function atenderRequest(req, res) {
   // which agent handles it. We validate the token, save it and start the poller.
   if (req.method === 'POST' && url.pathname === '/api/connect/telegram') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { token, agentId } = await readBody(req);
-    if (!token || !agentId) return send(res, 400, { error: 'Informe o token do bot e o agente.' });
+    if (!token || !agentId) return send(res, 400, { error: 'server.enter_bot_token_and_agent' });
     let agent;
-    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'Falha no banco.', e); }
-    if (!agent) return send(res, 404, { error: 'Agente não encontrado.' });
+    try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
+    if (!agent) return send(res, 404, { error: 'server.agent_not_found' });
     let info;
     try { info = await validateBotToken(token.trim()); }
-    catch { return send(res, 400, { error: 'Token inválido. Confira o que o BotFather te deu.' }); }
+    catch { return send(res, 400, { error: 'server.invalid_bot_token' }); }
     try {
       // One bot per AGENT: if this agent already had a bot with ANOTHER token, swap it
       // (drop the old poller). Bots from the user's OTHER agents stay up
       // (that's what allows several agents on Telegram, one per bot).
       const mine = await listTelegramBotsForUser(user.id);
       const dupToken = mine.find((b) => b.token === token.trim() && b.agent_id !== agentId);
-      if (dupToken) return send(res, 409, { error: 'Esse bot já está conectado a outro agente. Crie um bot novo no BotFather pra este agente.' });
+      if (dupToken) return send(res, 409, { error: 'server.bot_already_connected_another_agent' });
       const oldForAgent = mine.find((b) => b.agent_id === agentId && b.token !== token.trim());
       if (oldForAgent) { telegramMgr.removeBot(oldForAgent.token); await deleteTelegramBot(oldForAgent.token); }
       const bot = await saveTelegramBot({ token: token.trim(), userId: user.id, agentId, botUsername: info.username });
       telegramMgr.addBot(bot);
       return send(res, 200, { username: info.username, agentId, linked: !!bot.chat_id, pairCode: bot.chat_id ? null : (bot.pair_code || null) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao conectar.', e);
+      return fail(res, 500, 'server.failed_connect', e);
     }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/disconnect/telegram') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     // Disconnects ONE specific bot by token (ownership checked). With no token in the body,
     // falls back to legacy behavior (disconnects the user's first bot).
     const body = await readBody(req).catch(() => ({}));
@@ -11342,40 +11341,40 @@ async function atenderRequest(req, res) {
   // ── Conectores MCP ──
   if (req.method === 'GET' && url.pathname === '/api/mcp') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const servers = await listMcpServers(user.id);
     return send(res, 200, { servers: servers.map((s) => ({ id: s.id, label: s.label, url: s.url, enabled: s.enabled })) });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/connect/mcp') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { label, url: serverUrl, token, agentId } = await readBody(req);
-    if (!label || !serverUrl) return send(res, 400, { error: 'Informe um nome e a URL do servidor MCP.' });
+    if (!label || !serverUrl) return send(res, 400, { error: 'server.enter_mcp_name_and_url' });
     // The URL belongs to the user and the BACKEND is what fetches it, from inside the VPC.
     // Here the guard runs BEFORE building the Authorization, to return the real reason
     // ('it's an internal network', 'https only') instead of the generic connection failure.
     try { await assertUrlPublica(serverUrl); }
-    catch (e) { return send(res, 400, { error: e?.message || 'URL inválida.' }); }
+    catch (e) { return send(res, 400, { error: e?.message || 'server.invalid_url' }); }
     const headers = token ? { Authorization: `Bearer ${String(token).trim()}` } : {};
     // Validates by connecting and listing the tools before saving.
     let probe;
     try { probe = await mcpListTools({ url: serverUrl, headers, label: label.trim() }); }
-    catch (e) { return fail(res, 400, 'Não consegui conectar nesse servidor MCP.', e); }
-    if (!probe.tools.length) return send(res, 400, { error: 'Conectei, mas o servidor não expôs nenhuma ferramenta.' });
+    catch (e) { return fail(res, 400, 'server.could_not_connect_mcp_server', e); }
+    if (!probe.tools.length) return send(res, 400, { error: 'server.mcp_server_has_no_tools' });
     try {
       const saved = await addMcpServer({ userId: user.id, label: label.trim(), url: serverUrl, headers, agentId: agentId || null });
       return send(res, 200, { id: saved.id, label: saved.label, tools: probe.tools, serverInfo: probe.serverInfo });
     } catch (e) {
-      return fail(res, 500, 'Falha ao salvar.', e);
+      return fail(res, 500, 'server.failed_save', e);
     }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/disconnect/mcp') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'Informe o id do servidor.' });
+    if (!id) return send(res, 400, { error: 'server.enter_server_id' });
     await deleteMcpServer(user.id, id);
     return send(res, 200, { ok: true });
   }
@@ -11394,10 +11393,10 @@ async function atenderRequest(req, res) {
 
     if (step === 'start') {
       const user = await currentUser();
-      if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+      if (!user) return send(res, 401, { error: 'server.log_in_first' });
       const services = prov === 'microsoft' ? url.searchParams.get('services') ?? undefined : undefined;
       if (services !== undefined) {
-        try { microsoftOnboardingScope(services); } catch { return send(res, 400, { error: 'Serviços inválidos para conectar a agenda.' }); }
+        try { microsoftOnboardingScope(services); } catch { return send(res, 400, { error: 'server.invalid_calendar_services' }); }
       }
       const state = newToken();
       // PKCE (OAuth 2.1): the verifier stays in the cookie, only the challenge goes in the URL.
@@ -11464,9 +11463,9 @@ async function atenderRequest(req, res) {
 
   if (req.method === 'POST' && url.pathname === '/api/disconnect/provider') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { provider } = await readBody(req);
-    if (!PROVIDER_NAMES.includes(provider)) return send(res, 400, { error: 'Provider inválido.' });
+    if (!PROVIDER_NAMES.includes(provider)) return send(res, 400, { error: 'server.invalid_provider' });
     await deleteOAuthToken(user.id, provider);
     return send(res, 200, { ok: true });
   }
@@ -11476,27 +11475,27 @@ async function atenderRequest(req, res) {
   const VAULT_KINDS = ['apikey', 'token', 'basic', 'ssh_key'];
   if (req.method === 'GET' && url.pathname === '/api/connections') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     return send(res, 200, { enabled: vaultEnabled(), connections: await listConnections(user.id) });
   }
   if (req.method === 'POST' && url.pathname === '/api/connections') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    if (!vaultEnabled()) return send(res, 503, { error: 'Cofre indisponível.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    if (!vaultEnabled()) return send(res, 503, { error: 'server.vault_unavailable' });
     const { provider, kind = 'apikey', label = '', secret, meta = {} } = await readBody(req);
-    if (!provider || !String(provider).trim()) return send(res, 400, { error: 'Informe o serviço (provider).' });
-    if (!secret || !String(secret).trim()) return send(res, 400, { error: 'Informe a credencial.' });
-    if (!VAULT_KINDS.includes(kind)) return send(res, 400, { error: 'Tipo inválido.' });
+    if (!provider || !String(provider).trim()) return send(res, 400, { error: 'server.enter_service_provider' });
+    if (!secret || !String(secret).trim()) return send(res, 400, { error: 'server.enter_credential' });
+    if (!VAULT_KINDS.includes(kind)) return send(res, 400, { error: 'server.invalid_type' });
     let secretEnc;
-    try { secretEnc = encryptSecret(String(secret)); } catch (e) { return send(res, 500, { error: 'Falha ao cifrar.' }); }
+    try { secretEnc = encryptSecret(String(secret)); } catch (e) { return send(res, 500, { error: 'server.failed_encrypt' }); }
     const row = await addConnection(user.id, { provider: String(provider).trim().slice(0, 60), kind, label: String(label).slice(0, 120), secretEnc, meta: (meta && typeof meta === 'object') ? meta : {} });
     return send(res, 200, { ok: true, connection: row });
   }
   if (req.method === 'POST' && url.pathname === '/api/connections/delete') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { id } = await readBody(req);
-    if (!id) return send(res, 400, { error: 'id ausente.' });
+    if (!id) return send(res, 400, { error: 'server.id_missing' });
     await deleteConnection(user.id, id);
     return send(res, 200, { ok: true });
   }
@@ -11506,7 +11505,7 @@ async function atenderRequest(req, res) {
   // each agent uses lives in the agent editor (agents.google_email).
   if (req.method === 'GET' && url.pathname === '/api/google/accounts') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const accts = await listGoogleAccounts(user.id);
     return send(res, 200, { accounts: accts.map((a) => ({
       email: a.google_email,
@@ -11519,21 +11518,21 @@ async function atenderRequest(req, res) {
   // operate at the user level (not the agent level).
   if (req.method === 'POST' && url.pathname === '/api/google/accounts/primary') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { email } = await readBody(req);
     const em = String(email || '').toLowerCase().trim();
-    if (!em) return send(res, 400, { error: 'email ausente.' });
+    if (!em) return send(res, 400, { error: 'server.email_missing' });
     const acct = await getGoogleAccount(user.id, em);
-    if (!acct) return send(res, 404, { error: 'Essa conta Google não está conectada.' });
+    if (!acct) return send(res, 404, { error: 'server.google_account_not_connected' });
     await setPrimaryGoogleAccount(user.id, em);
     return send(res, 200, { ok: true, primary: em });
   }
   if (req.method === 'POST' && url.pathname === '/api/google/accounts/remove') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { email } = await readBody(req);
     const em = String(email || '').toLowerCase().trim();
-    if (!em) return send(res, 400, { error: 'email ausente.' });
+    if (!em) return send(res, 400, { error: 'server.email_missing' });
     await removeGoogleAccount(user.id, em);
     return send(res, 200, { ok: true });
   }
@@ -11557,12 +11556,12 @@ async function atenderRequest(req, res) {
       catch (e) { console.error('[media] midiaPublica:', e?.message ?? e); }
     }
     if (!mine && !published) {
-      if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-      return send(res, 403, { error: 'Sem acesso a esta mídia.' });
+      if (!user) return send(res, 401, { error: 'server.log_in_first' });
+      return send(res, 403, { error: 'server.no_access_media' });
     }
     try {
       const m = await fetchMedia(key);
-      if (!m) return send(res, 404, { error: 'Mídia não encontrada.' });
+      if (!m) return send(res, 404, { error: 'server.media_not_found' });
       // Defense in depth: the upload's mime comes from the client. When the byte goes
       // out to ANOTHER person (published path), only real media is allowed through
       // (image/audio/video, no SVG); no HTML/SVG/script served from our
@@ -11570,7 +11569,7 @@ async function atenderRequest(req, res) {
       if (!mine) {
         const ct = String(m.contentType || '');
         if (!/^(image|audio|video)\//i.test(ct) || /svg/i.test(ct)) {
-          return send(res, 403, { error: 'Sem acesso a esta mídia.' });
+          return send(res, 403, { error: 'server.no_access_media' });
         }
       }
       const total = m.buffer.length;
@@ -11605,7 +11604,7 @@ async function atenderRequest(req, res) {
       if (req.method === 'HEAD') return res.end();
       return res.end(chunk);
     } catch (e) {
-      return send(res, 404, { error: 'Mídia não encontrada.' });
+      return send(res, 404, { error: 'server.media_not_found' });
     }
   }
 
@@ -11614,7 +11613,7 @@ async function atenderRequest(req, res) {
   // item points to the /api/media proxy (which revalidates the owner at download time).
   if (req.method === 'GET' && url.pathname === '/api/files') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const rows = await listMediaAssets(user.id, { limit: 100 });
     const files = rows.map((r) => ({
       id: r.id,
@@ -11632,13 +11631,13 @@ async function atenderRequest(req, res) {
   // Deletes a file from the library (owner only; removes the row + the object in S3).
   if (req.method === 'DELETE' && url.pathname === '/api/files') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const id = url.searchParams.get('id');
-    if (!id) return send(res, 400, { error: 'Faltou o id do arquivo.' });
+    if (!id) return send(res, 400, { error: 'server.file_id_missing' });
     let removido;
     try { removido = await deleteMediaAsset(user.id, id); }
-    catch (e) { return fail(res, 500, 'Não consegui apagar o arquivo.', e); }
-    if (removido === null) return send(res, 404, { error: 'Arquivo não encontrado.' });
+    catch (e) { return fail(res, 500, 'server.could_not_delete_file', e); }
+    if (removido === null) return send(res, 404, { error: 'server.file_not_found' });
     // The DB row already left TOGETHER with the tombstone (same transaction). Now the
     // object: if S3 fails, the tombstone stays open and the sweeper deletes it later, instead
     // of the file becoming an orphan with no record. The user isn't blocked, and the
@@ -11658,7 +11657,7 @@ async function atenderRequest(req, res) {
   // what locks "only the person themselves" by construction. 1 identity per account.
   if (req.method === 'GET' && url.pathname === '/api/likeness') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const l = await getLikeness(user.id);
     return send(res, 200, {
       storageEnabled: s3Enabled(),
@@ -11679,22 +11678,22 @@ async function atenderRequest(req, res) {
     });
   }
   if (req.method === 'POST' && url.pathname === '/api/likeness') {
-    if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
+    if (videoEmRevisao()) return send(res, 503, { error: 'server.video_generation_under_review' });
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    if (!s3Enabled()) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
     const img = normalizeImages((await readBody(req)).images)[0];
-    if (!img) return send(res, 400, { error: 'Envie uma foto de frente.' });
+    if (!img) return send(res, 400, { error: 'server.upload_front_photo' });
     let buffer;
     try { buffer = Buffer.from(img.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler a imagem.' });
-    if (buffer.length > 8 * 1024 * 1024) return send(res, 413, { error: 'Imagem grande demais. Tente uma menor.' });
+    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_image' });
+    if (buffer.length > 8 * 1024 * 1024) return send(res, 413, { error: 'server.image_too_large' });
     const tipo = sniffImagem(buffer);
-    if (!tipo) return send(res, 400, { error: 'Esse arquivo não é uma foto (aceito JPEG, PNG, WebP ou HEIC).' });
+    if (!tipo) return send(res, 400, { error: 'server.file_not_a_photo' });
     const { mime, ext } = tipo;
     try {
       const { key } = await putMedia(user.id, buffer, ext, mime);
-      if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+      if (!key) return send(res, 503, { error: 'server.storage_not_active' });
       await setLikenessAnchor({ userId: user.id, anchorKey: key, anchorMime: mime });
       // The anchor is what authorizes generating a video WITH THAT FACE, and `gerar_video`
       // promises that the face is the person's own. Whoever uploads the photo can be anyone:
@@ -11709,7 +11708,7 @@ async function atenderRequest(req, res) {
       }
       return send(res, 200, { ok: true, status: 'pending', anchorUrl: '/api/media?key=' + encodeURIComponent(key) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao salvar a foto.', e);
+      return fail(res, 500, 'server.failed_save_photo', e);
     }
   }
   // ── EXTRA face photos (people's video generation feature) ──
@@ -11718,25 +11717,25 @@ async function atenderRequest(req, res) {
   // reconstruction in the render (the H3 worker accepts multiple face references). Slot ∈ 2|3.
   // They don't affect the identity status (verification is only for the anchor).
   if (req.method === 'POST' && url.pathname === '/api/likeness/face') {
-    if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
+    if (videoEmRevisao()) return send(res, 503, { error: 'server.video_generation_under_review' });
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    if (!s3Enabled()) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
     const slot = Number(url.searchParams.get('slot'));
-    if (slot !== 2 && slot !== 3) return send(res, 400, { error: 'Slot de foto inválido.' });
+    if (slot !== 2 && slot !== 3) return send(res, 400, { error: 'server.invalid_photo_slot' });
     const img = normalizeImages((await readBody(req)).images)[0];
-    if (!img) return send(res, 400, { error: 'Envie uma foto.' });
+    if (!img) return send(res, 400, { error: 'server.upload_photo' });
     let buffer;
     try { buffer = Buffer.from(img.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler a imagem.' });
-    if (buffer.length > 8 * 1024 * 1024) return send(res, 413, { error: 'Imagem grande demais. Tente uma menor.' });
+    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_image' });
+    if (buffer.length > 8 * 1024 * 1024) return send(res, 413, { error: 'server.image_too_large' });
     // Same byte check as the anchor: the extra photos also go into the render.
     const tipo = sniffImagem(buffer);
-    if (!tipo) return send(res, 400, { error: 'Esse arquivo não é uma foto (aceito JPEG, PNG, WebP ou HEIC).' });
+    if (!tipo) return send(res, 400, { error: 'server.file_not_a_photo' });
     const { mime, ext } = tipo;
     try {
       const { key } = await putMedia(user.id, buffer, ext, mime);
-      if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+      if (!key) return send(res, 503, { error: 'server.storage_not_active' });
       // Replacing the slot's photo also retires the previous one: same biometric photo,
       // same duty to disappear from the bucket (setLikenessExtraFace returns the old key).
       const r = await setLikenessExtraFace({ userId: user.id, slot, faceKey: key, faceMime: mime });
@@ -11747,14 +11746,14 @@ async function atenderRequest(req, res) {
       });
       return send(res, 200, { ok: true, slot, url: '/api/media?key=' + encodeURIComponent(key) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao salvar a foto.', e);
+      return fail(res, 500, 'server.failed_save_photo', e);
     }
   }
   if (req.method === 'DELETE' && url.pathname === '/api/likeness/face') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const slot = Number(url.searchParams.get('slot'));
-    if (slot !== 2 && slot !== 3) return send(res, 400, { error: 'Slot de foto inválido.' });
+    if (slot !== 2 && slot !== 3) return send(res, 400, { error: 'server.invalid_photo_slot' });
     try {
       // Dropping the reference isn't enough: it's a BIOMETRIC photo, it has to leave the bucket.
       // The tombstone goes out in the same transaction that clears the column, so even if S3
@@ -11767,24 +11766,24 @@ async function atenderRequest(req, res) {
       });
       return send(res, 200, purga.pendente ? { ok: true, slot, purga: 'pendente' } : { ok: true, slot });
     } catch (e) {
-      return fail(res, 500, 'Falha ao remover a foto.', e);
+      return fail(res, 500, 'server.failed_remove_photo', e);
     }
   }
   // ── Reference voice (people's video generation feature) ──
   // The person records a short audio clip in the app; it becomes the voice for generations
   // when the request doesn't bring its own audio. Stored in the private bucket (WAV 16k mono).
   if (req.method === 'POST' && url.pathname === '/api/likeness/voice') {
-    if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
+    if (videoEmRevisao()) return send(res, 503, { error: 'server.video_generation_under_review' });
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    if (!s3Enabled()) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
     const body = await readBody(req);
     const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'Envie um áudio.' });
+    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
     let buffer;
     try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler o áudio.' });
-    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'Áudio grande demais. Grave um trecho mais curto.' });
+    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
+    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
     // Normalizes to WAV 16k mono (universal format for the worker). If ffmpeg
     // fails, stores the original anyway (the worker tries to decode it).
     let outBuf = await audioToWav(buffer);
@@ -11792,21 +11791,21 @@ async function atenderRequest(req, res) {
     if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; ext = (mime.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm'; }
     try {
       const { key } = await putMedia(user.id, outBuf, ext, mime);
-      if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+      if (!key) return send(res, 503, { error: 'server.storage_not_active' });
       await setLikenessVoice({ userId: user.id, voiceKey: key, voiceMime: mime });
       return send(res, 200, { ok: true, hasVoice: true, voiceUrl: '/api/media?key=' + encodeURIComponent(key) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao salvar o áudio.', e);
+      return fail(res, 500, 'server.failed_save_audio', e);
     }
   }
   if (req.method === 'DELETE' && url.pathname === '/api/likeness/voice') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       await setLikenessVoice({ userId: user.id, voiceKey: null, voiceMime: null });
       return send(res, 200, { ok: true, hasVoice: false });
     } catch (e) {
-      return fail(res, 500, 'Falha ao remover o áudio.', e);
+      return fail(res, 500, 'server.failed_remove_audio', e);
     }
   }
   // ── LITERAL audio to speak (people's video generation feature) ──
@@ -11814,37 +11813,37 @@ async function atenderRequest(req, res) {
   // want the video to speak (their own words). When present, the video does
   // lip-sync on that audio (worker's V1 mode). Stored in the private bucket.
   if (req.method === 'POST' && url.pathname === '/api/likeness/speech') {
-    if (videoEmRevisao()) return send(res, 503, { error: 'A geração de vídeo está em revisão; por enquanto não dá pra enviar.' });
+    if (videoEmRevisao()) return send(res, 503, { error: 'server.video_generation_under_review' });
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
-    if (!s3Enabled()) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
+    if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
     const body = await readBody(req);
     const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'Envie um áudio.' });
+    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
     let buffer;
     try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'Não consegui ler o áudio.' });
-    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'Áudio grande demais. Grave um trecho mais curto.' });
+    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
+    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
     let outBuf = await audioToWav(buffer);
     let mime = 'audio/wav', ext = 'wav';
     if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; ext = (mime.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm'; }
     try {
       const { key } = await putMedia(user.id, outBuf, ext, mime);
-      if (!key) return send(res, 503, { error: 'O armazenamento ainda não está ativo por aqui.' });
+      if (!key) return send(res, 503, { error: 'server.storage_not_active' });
       await setLikenessSpeech({ userId: user.id, speechKey: key, speechMime: mime });
       return send(res, 200, { ok: true, hasSpeech: true, speechUrl: '/api/media?key=' + encodeURIComponent(key) });
     } catch (e) {
-      return fail(res, 500, 'Falha ao salvar o áudio.', e);
+      return fail(res, 500, 'server.failed_save_audio', e);
     }
   }
   if (req.method === 'DELETE' && url.pathname === '/api/likeness/speech') {
     const user = await currentUser();
-    if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
+    if (!user) return send(res, 401, { error: 'server.log_in_first' });
     try {
       await setLikenessSpeech({ userId: user.id, speechKey: null, speechMime: null });
       return send(res, 200, { ok: true, hasSpeech: false });
     } catch (e) {
-      return fail(res, 500, 'Falha ao remover o áudio.', e);
+      return fail(res, 500, 'server.failed_remove_audio', e);
     }
   }
 

@@ -1,6 +1,11 @@
 // Translation of SERVER MESSAGES (the `error`/`message` field of JSON
 // responses), sibling of site-i18n.mjs, which handles the HTML.
 //
+// The core sends a catalog key (`server.*` in web/locales, docs/i18n.md) and the
+// reply carries its text in the request's language. What follows below is the
+// older mechanism, still used by plugins (`textosServidor`): the code sends the
+// Portuguese sentence and a catalog keyed by that sentence translates it.
+//
 // Why a module separate from the site: the origin is different. HTML is data, and the
 // walker knows what's text because it knows the tag grammar. Here the origin is
 // CODE, and what decides whether a literal goes to the user's screen isn't its
@@ -14,6 +19,10 @@
 import { IDIOMAS_OK, defaultLanguage, LEGACY_TEXT_LANGUAGE, tagIdioma } from './locale.mjs';
 import { fatiaJs } from './site-i18n.mjs';
 import { hostDaMarca, marca } from './marca.mjs';
+import { CORE_LOCALES_DIR, createI18n, localeLayers, readCatalogDir } from './i18n.mjs';
+
+// A core message key: what the core's fail()/send() emit instead of a sentence.
+export const SERVER_KEY = /^server\.[a-z0-9_]+$/;
 
 // The emission points that reach the CLIENT. `fail()` and `send()` are the server's
 // two JSON exit ports; whatever passes through them the person reads.
@@ -42,10 +51,10 @@ const EMISSORES = [
 // against a value that changed language.
 const CODIGO_DE_MAQUINA = /^[a-z][a-z0-9_-]*$/;
 
-// Core files (inside web/) whose responses pass through the server's send/fail
-// and therefore through the web/textos-servidor catalog. A new core module
-// that answers via this send belongs here; a plugin's goes in its own fontesMensagens,
-// with the catalog in textosServidor (plugins.mjs).
+// Core files (inside web/) whose responses pass through the server's send/fail.
+// They emit keys, never sentences: the extraction below must find nothing in them.
+// A plugin's modules go in its own fontesMensagens, with the catalog in
+// textosServidor (plugins.mjs).
 export const FONTES_MENSAGENS = ['server.mjs'];
 
 // User messages emitted as a literal in the code. Returns the unique
@@ -67,7 +76,7 @@ export function extraiMensagens(js) {
     // would have to re-escape it. Neither side is worth the risk for a handful of
     // sentences; they stay in Portuguese and pendentes shows them.
     if (texto.includes('\\')) continue;
-    if (!texto.trim() || CODIGO_DE_MAQUINA.test(texto)) continue;
+    if (!texto.trim() || CODIGO_DE_MAQUINA.test(texto) || SERVER_KEY.test(texto)) continue;
     if (vistos.has(texto)) continue;
     vistos.add(texto);
     fora.push(texto);
@@ -99,23 +108,42 @@ const comMarca = (t) => (t.includes('__') ? t.replace(MARCA, daMarca) : t);
 // touch the rest of the object: `ok`, `queued`, id, balance and any other data stay
 // as they are.
 //
-// In pt-BR and for any text outside the catalog (and without __MARCA__ or __SUPORTE__)
-// it returns the SAME object, by the same reference, so the response stays byte for
-// byte the same as today.
-// A copy is only created when some field actually changed.
-export function traduzResposta(obj, language, catalogos) {
+// For a sentence outside the catalogs (and without __MARCA__ or __SUPORTE__) it
+// returns the SAME object, by the same reference. A copy is only created when
+// some field actually changed.
+//
+// `messages` comes from serverMessages().
+export function traduzResposta(obj, language, messages = {}) {
   if (!obj || typeof obj !== 'object') return obj;
-  const pt = tagIdioma(language) === LEGACY_TEXT_LANGUAGE;
+  const tag = tagIdioma(language);
   let saida = obj;
   for (const campo of ['error', 'message']) {
     const v = obj[campo];
     if (typeof v !== 'string') continue;
-    const t = comMarca(pt ? v : traduzMensagem(v, language, catalogos));
+    const t = replyText(v, tag, messages);
     if (t === v) continue;
     if (saida === obj) saida = { ...obj };
     saida[campo] = t;
   }
   return saida;
+}
+
+// A core key becomes its text. A Portuguese sentence that is the text of a core
+// key (it reached the reply through an error's message, not as a key) is
+// translated through that key. Anything else goes through the plugins' catalogs.
+function replyText(v, tag, { i18n, keyOfPt, legacy } = {}) {
+  const key = SERVER_KEY.test(v) ? v : tag !== LEGACY_TEXT_LANGUAGE && keyOfPt?.get(v);
+  if (key && i18n?.has(key, tag)) return i18n.t(key, tag, { brand: daMarca('__MARCA__'), support: daMarca('__SUPORTE__') });
+  return comMarca(tag === LEGACY_TEXT_LANGUAGE ? v : traduzMensagem(v, tag, legacy));
+}
+
+// What traduzResposta needs, built once at boot: the catalogs of every layer
+// (core, instance overlay, plugins' `locales`) and the plugins' older catalogs
+// keyed by the Portuguese sentence (`legacy`, {tag: {sentence: translation}}).
+export function serverMessages({ plugins = [], legacy = {}, layers = localeLayers({ plugins }) } = {}) {
+  const pt = readCatalogDir(CORE_LOCALES_DIR)[LEGACY_TEXT_LANGUAGE]?.server || {};
+  const keyOfPt = new Map(Object.entries(pt).map(([k, text]) => [text.replace(/\{brand\}/g, '__MARCA__').replace(/\{support\}/g, '__SUPORTE__'), `server.${k}`]));
+  return { i18n: createI18n({ layers }), keyOfPt, legacy };
 }
 
 // Language of a request, resolved WITHOUT hitting the database.
