@@ -39,7 +39,7 @@ Changes merged since the last tag go under "Unreleased".
 - The sentences of the confirmation card (what the assistant asks to do and
   what it did) come from the catalogs too (`confirm.*`), in every language
   through the same code; `web/confirm-textos.mjs` and
-  `web/confirm-textos-portao.mjs` are gone. So does the rest of the card:
+  `web/confirm-textos-portao.mjs` are gone. The rest of the card moved too:
   how to confirm, the address warning, pending payment and Pix notices,
   calendar and private app lines.
 - The instance default language is now English: it is used when nothing is
