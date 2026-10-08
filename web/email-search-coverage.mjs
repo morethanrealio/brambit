@@ -32,8 +32,8 @@ export function emailQueryCoverage() {
   };
 }
 
-// Backstop estreito para as alegações observadas no incidente. Não tenta
-// verificar semanticamente fatos positivos nem modificar fontes/citações.
+// Narrow backstop for the claims observed in the incident. Doesn't try to
+// semantically verify positive facts nor modify sources/citations.
 export function guardEmailCoverageClaims(text, { partial = false, active = false, language = 'pt-BR' } = {}) {
   if (!active) return String(text ?? '');
   const lang=String(language).slice(0,2);
@@ -44,8 +44,8 @@ export function guardEmailCoverageClaims(text, { partial = false, active = false
   return String(text ?? '').split('\n').map(line => {
     if (/^\s*(?:>|```)/.test(line)) return line;
     return line.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ú])/).map(sentence => {
-      // O assunto/link da fonte pode conter uma negativa legítima; proteja
-      // apenas esse trecho, sem liberar afirmações ao lado de qualquer link.
+      // The source's subject/link may contain a legitimate negative; protect
+      // only that excerpt, without clearing claims next to any link.
       const prose = sentence.replace(/\[[^\]]*\]\(https?:\/\/[^\s)]+\)/g,'FONTE');
       if (exhaustive.test(prose) || (partial && absent.test(prose))) return replacement;
       return sentence;
@@ -103,8 +103,8 @@ const LIMITATIONS = {
 const limitationKeys = ['query_failed','more_pages','search_incomplete','body_truncated','attachment_truncated','attachment_failed','evidence_limited','not_consulted','account_failed','needs_reconnect'];
 const safeAccount = s => String(s || '').replace(/[\r\n`<>*_\[\],;]/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
 
-// Só limitações materiais chegam ao usuário. O relatório com filtros acima
-// continua disponível para diagnóstico; completar consultas não gera rodapé.
+// Only material limitations reach the user. The report with filters above
+// stays available for diagnostics; completing queries doesn't generate a footer.
 export function renderEmailCoverageLimitations(rows = [], accounts = [], language = 'pt-BR') {
   const labels = LIMITATIONS[String(language).slice(0,2)] || LIMITATIONS.pt;
   const grouped = new Map();
@@ -130,8 +130,9 @@ export function renderEmailCoverageLimitations(rows = [], accounts = [], languag
 }
 
 const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-// WhatsApp faz uma segunda síntese sem acesso ao objeto do turno. Reconhece
-// apenas frases exatas do formato emitido acima, nunca ressalvas livres do LLM.
+// WhatsApp does a second synthesis without access to the turn object.
+// Recognizes only exact phrases from the format emitted above, never free-form
+// LLM caveats.
 export function findEmailCoverageWarnings(text) {
   const found = [];
   for (const labels of Object.values(LIMITATIONS)) {

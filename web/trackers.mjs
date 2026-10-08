@@ -1,10 +1,10 @@
-// ── Trackers: registro estruturado de eventos datados/contáveis ──────────────
-// A primitiva que substitui o "sisteminha" que hoje vive numa página de memória
-// em texto livre (dias com açúcar, treinos, peso, gasto). O problema do texto:
-// escrita não-determinística (confirma sem gravar), rewrite dropa linhas, o
-// modelo conta "de cabeça" e erra a data. Aqui: registrar = INSERT de 1 linha
-// (append-only), consultar = agregação em SQL (número pronto, o modelo nunca
-// conta), event_date separado de created_at. Ver projetos/tracker-primitiva.md.
+// ── Trackers: structured record of dated/countable events ──────────────
+// The primitive that replaces the "little system" that today lives on a free-text
+// memory page (sugar-free days, workouts, weight, spending). The problem with text:
+// non-deterministic writing (confirms without saving), rewrite drops lines, the
+// model counts "in its head" and gets the date wrong. Here: registrar = 1-row INSERT
+// (append-only), consultar = SQL aggregation (ready-made number, the model never
+// counts), event_date separate from created_at. See projetos/tracker-primitiva.md.
 
 import {
   resolveOrCreateTracker, resolveTracker, listTrackers, addTrackerEvent,
@@ -12,21 +12,21 @@ import {
   disableTracker, getUserTimezone, listAppsForUser,
 } from './db.mjs';
 
-// "Hoje" na hora local do usuário, como 'YYYY-MM-DD' (locale sv = ISO).
+// "Today" in the user's local time, as 'YYYY-MM-DD' (locale sv = ISO).
 function todayISO(tz) {
   return new Date().toLocaleDateString('sv', { timeZone: tz || 'America/Sao_Paulo' });
 }
 
-// Aritmética de data-só (sem fuso): soma `days` a um 'YYYY-MM-DD'. Usa meio-dia
-// UTC pra não escorregar de dia.
+// Date-only arithmetic (no timezone): adds `days` to a 'YYYY-MM-DD'. Uses UTC
+// noon so it doesn't slip a day.
 function shiftISO(iso, days) {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
-// Resolve a data de um evento a partir do que o usuário disse. Aceita ISO
-// ('YYYY-MM-DD'), vazio (=hoje) e alguns relativos comuns. Devolve ISO | null.
+// Resolves an event's date from what the user said. Accepts ISO
+// ('YYYY-MM-DD'), empty (=today) and some common relative terms. Returns ISO | null.
 function resolveEventDate(data, tz) {
   const hoje = todayISO(tz);
   if (data == null || data === '') return hoje;
@@ -45,8 +45,8 @@ function resolveEventDate(data, tz) {
   return null;
 }
 
-// Converte um `periodo` nomeado em intervalo [de, ate] (ISO). Semana = segunda
-// desta semana até hoje. Devolve {} pra 'tudo'/desconhecido (sem limites).
+// Converts a named `periodo` into a [from, to] range (ISO). Week = Monday
+// of this week through today. Returns {} for 'everything'/unknown (no bounds).
 function periodRange(periodo, tz) {
   const hoje = todayISO(tz);
   switch (String(periodo || '').trim().toLowerCase()) {
@@ -55,7 +55,7 @@ function periodRange(periodo, tz) {
     case '30dias': case '30d': return { de: shiftISO(hoje, -29), ate: hoje };
     case 'semana': {
       const dow = new Date(`${hoje}T12:00:00Z`).getUTCDay(); // 0=dom
-      const back = dow === 0 ? 6 : dow - 1;                  // volta até segunda
+      const back = dow === 0 ? 6 : dow - 1;                  // goes back to Monday
       return { de: shiftISO(hoje, -back), ate: hoje };
     }
     case 'mes': case 'mês': return { de: `${hoje.slice(0, 7)}-01`, ate: hoje };
@@ -63,7 +63,7 @@ function periodRange(periodo, tz) {
   }
 }
 
-// Tokeniza um nome em palavras normalizadas (sem acento, minúsculas).
+// Tokenizes a name into normalized words (no accents, lowercase).
 function slugTokens(s) {
   return String(s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -71,21 +71,21 @@ function slugTokens(s) {
     .split(/\s+/).filter(Boolean);
 }
 
-// Palavras estruturais/genéricas que NÃO contam como sinal de colisão (senão
-// qualquer "Controle de X" bateria com qualquer "Lista de Y"). Sobram os
-// substantivos que de fato nomeiam a coisa (contas, gastos, treino, açúcar…).
+// Structural/generic words that do NOT count as a collision signal (otherwise
+// any "Controle de X" would match any "Lista de Y"). What's left are the
+// nouns that actually name the thing (bills, expenses, workout, sugar…).
 const APP_STOP = new Set([
   'de', 'da', 'do', 'das', 'dos', 'a', 'o', 'e', 'para', 'por', 'no', 'na',
   'os', 'as', 'um', 'uma', 'minha', 'meu', 'minhas', 'meus', 'app', 'sistema',
   'planilha', 'controle', 'lista', 'registro', 'registros', 'dados', 'tabela',
 ]);
 
-// Nível 2 (checagem determinística): antes de CRIAR um tracker novo, vê se o
-// nome bate com um app/planilha que o usuário já tem. Retorna o app colidente
-// ou null. Casa por substring do slug OU por token significativo compartilhado
-// (>=4 letras, fora do APP_STOP). Não pega sinônimo semântico (ex: "custos" vs
-// "contas"); esse caso fica pro Nível 1 (prompt, com a lista de apps no
-// contexto). Best-effort: se listAppsForUser falhar, não bloqueia.
+// Level 2 (deterministic check): before CREATING a new tracker, checks whether the
+// name matches an app/spreadsheet the user already has. Returns the colliding app
+// or null. Matches by slug substring OR by a shared significant token
+// (>=4 letters, outside APP_STOP). Doesn't catch semantic synonyms (e.g. "custos" vs
+// "contas"); that case is left for Level 1 (prompt, with the list of apps in the
+// context). Best-effort: if listAppsForUser fails, it doesn't block.
 async function findAppCollision(userId, trackerName) {
   let apps = [];
   try { apps = await listAppsForUser(userId); } catch { return null; }
@@ -107,9 +107,9 @@ async function findAppCollision(userId, trackerName) {
   return null;
 }
 
-// Tools do assistente pra ESTE usuário (entram no registry por requisição).
-// Todas não-gated: registrar/consultar dado do próprio dono já é autorizado pelo
-// pedido; e a escrita é reversível (remover_evento).
+// Assistant tools for THIS user (enter the registry per request).
+// All non-gated: recording/querying the owner's own data is already authorized by the
+// request; and the write is reversible (remover_evento).
 export function trackersTools(userId, agentId) {
   return [
     {
@@ -130,8 +130,8 @@ export function trackersTools(userId, agentId) {
         const tz = (await getUserTimezone(userId)) || 'America/Sao_Paulo';
         const eventDate = resolveEventDate(data, tz);
         if (!eventDate) return `Não entendi a data "${data}". Me diga como YYYY-MM-DD (ex: ${todayISO(tz)}), ou "hoje"/"ontem".`;
-        // Nível 2: se ia CRIAR um tracker novo e o nome colide com um app do
-        // usuário, não grava; devolve pergunta pro assistente checar com o dono.
+        // Level 2: if it was going to CREATE a new tracker and the name collides with a
+        // user's app, doesn't save; returns a question for the assistant to check with the owner.
         if (!confirmar_novo) {
           const existing = await resolveTracker(userId, tracker);
           if (existing.error === 'nome_vazio') return 'Preciso do nome do registro (ex: "açúcar").';
@@ -238,9 +238,9 @@ export function trackersTools(userId, agentId) {
       async run({ tracker }) {
         const res = await resolveTracker(userId, tracker);
         if (res.error === 'nao_encontrado') {
-          // Roteamento: o modelo às vezes chama remover_tracker querendo apagar um
-          // APP do usuário (as duas são "remover X pelo nome"). Se o nome bate com um
-          // app dele, em vez do beco sem saída aponta pra ferramenta certa.
+          // Routing: the model sometimes calls remover_tracker wanting to delete an
+          // APP of the user's (both are "remove X by name"). If the name matches a
+          // user's app, instead of a dead end it points to the right tool.
           const app = await findAppCollision(userId, tracker);
           if (app) return `"${app.label || app.system}" é um APP/sistema seu, não um registro/tracker. Pra apagar o app use a ferramenta apagar_sistema (não remover_tracker).`;
           return `Não achei um registro "${tracker}".`;
@@ -254,9 +254,9 @@ export function trackersTools(userId, agentId) {
   ];
 }
 
-// Texto pro system prompt: índice compacto dos trackers do usuário (progressive
-// disclosure) + a regra de roteamento (usar tracker, não memória em texto, pra
-// dado contável). Os eventos NÃO entram aqui; carregam via consultar_evento.
+// Text for the system prompt: compact index of the user's trackers (progressive
+// disclosure) + the routing rule (use tracker, not text memory, for
+// countable data). The events do NOT enter here; they load via consultar_evento.
 export async function trackersContext(userId) {
   const list = await listTrackers(userId);
   const lines = [
@@ -270,8 +270,8 @@ export async function trackersContext(userId) {
       lines.push(`• ${t.title} (${t.eventos} ocorrências${u}${last})`);
     }
   }
-  // Nível 1: dá ao modelo a lista de apps/planilhas do próprio usuário, pra ele
-  // NÃO criar um tracker quando o dado é de um app dele, e PERGUNTAR na dúvida.
+  // Level 1: gives the model the list of the user's own apps/spreadsheets, so it
+  // does NOT create a tracker when the data belongs to one of their apps, and ASKS when in doubt.
   let apps = [];
   try { apps = await listAppsForUser(userId); } catch { apps = []; }
   if (apps.length) {

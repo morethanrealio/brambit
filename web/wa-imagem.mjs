@@ -1,11 +1,11 @@
-// Imagem por link de fora (saídas do atendimento público) pronta pro WhatsApp.
-// A Cloud API só aceita JPEG e PNG, e muita loja serve WebP mesmo com URL .jpg
-// (o CDN decide pelo cabeçalho Accept de quem pede). Se a Meta busca o link
-// sozinha, a recusa chega DEPOIS do HTTP 200, no webhook de status (131053), e
-// a mensagem some. Aqui a gente baixa, converte o que não for JPEG/PNG e sobe
-// os bytes pra Meta: o envio passa a usar o media id e qualquer problema de
-// imagem acontece na nossa mão, antes do envio.
-// Falhou o preparo: devolve o link como veio (melhor tentar do que não mandar).
+// Image from an outside link (public-facing support outputs) made ready for WhatsApp.
+// The Cloud API only accepts JPEG and PNG, and many stores serve WebP even with a .jpg URL
+// (the CDN decides based on the requester's Accept header). If Meta fetches the link
+// on its own, the rejection arrives AFTER the HTTP 200, in the status webhook (131053), and
+// the message disappears. Here we download, convert whatever isn't JPEG/PNG, and upload
+// the bytes to Meta: sending then uses the media id and any image
+// problem happens on our side, before sending.
+// Preparation failed: returns the link as it came (better to try than not to send).
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { fetchFixado } from './net-pin.mjs';
 
@@ -21,8 +21,8 @@ export function tipoDaImagem(buf) {
   return null;
 }
 
-// JPEG/PNG até 5 MB passam como estão; o resto (WebP, GIF, AVIF, grande demais)
-// vira JPEG com no máximo 1600 px no lado maior.
+// JPEG/PNG up to 5 MB pass through as is; the rest (WebP, GIF, AVIF, too big)
+// becomes JPEG with at most 1600 px on the longer side.
 export async function paraJpegOuPng(buf) {
   const tipo = tipoDaImagem(buf);
   if (tipo && buf.length <= MAX_WA) return { buffer: buf, mime: tipo };
@@ -31,7 +31,7 @@ export async function paraJpegOuPng(buf) {
   const w = Math.max(1, Math.round(img.width * escala)), h = Math.max(1, Math.round(img.height * escala));
   const canvas = createCanvas(w, h);
   const c = canvas.getContext('2d');
-  c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); // JPEG não tem transparência
+  c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); // JPEG has no transparency
   c.drawImage(img, 0, 0, w, h);
   return { buffer: await canvas.encode('jpeg', 85), mime: 'image/jpeg' };
 }

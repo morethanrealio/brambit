@@ -32,7 +32,7 @@ test('failed fallback preserves useful observed metadata and marks reading parti
 });
 test('actual page tool retries a sparse extract once, accounts only paid extraction, and preserves limitations',async()=>{
  const source=readFileSync(new URL('./web/websearch.mjs',import.meta.url),'utf8');
- const code=source.slice(source.indexOf('export function openLinkTool'),source.indexOf('// ── Busca REVERSA')).replace('export function','function');
+ const code=source.slice(source.indexOf('export function openLinkTool'),source.indexOf('// ── REVERSE image search')).replace('export function','function');
  let directReads=0,extracts=0;const usages=[];
  const paperUrl='https://arxiv.org/abs/2609.99999';
  const useful=`# Example Paper\nAbstract: ${quote} The study reports transparent methodology and important limitations for practical deployments.\nSubjects: Machine Learning`;

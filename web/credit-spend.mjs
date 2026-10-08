@@ -1,6 +1,6 @@
 // Spend by slice, so the assistant can answer questions like
 // "how much did I spend today?", "and on the 15th?", "how much did the last 3
-// replies cost?". Added 27/09/2026.
+// replies cost?". Added 2026-09-27.
 //
 // Unit: 'creditos' (a credit-based plugin) sums usage_events.bill_credits, the
 // billed credit, same as the balance; 'usd' (core, no credits) sums cost_usd,
@@ -12,14 +12,14 @@
 // each search writes its own id). What delimits a reply is the turn
 // measurement (task_measurements, source='conversation'): same person, same
 // thread, between started_at and finished_at. Search, sub-agent and image of
-// the reply fall in that window with its thread_id. Measured since 21/09.
+// the reply fall in that window with its thread_id. Measured since 2026-09-21.
 const S = 'mtr_harness';
 const TZ = 'America/Sao_Paulo';
 const NAO_CONSUMO = ['admin-grant', 'purchase', 'referral'];
 const MAX_DIAS = 366;
 const MAX_RESPOSTAS = 20;
-// Folga depois do fim da resposta: a última linha de uso é gravada logo depois
-// de o turno ser marcado como encerrado.
+// Slack after the response ends: the last usage line is recorded shortly
+// after the turn is marked as finished.
 const FOLGA_FIM = '5 seconds';
 
 const CATEGORIAS = {
@@ -49,7 +49,7 @@ const CATEGORIAS = {
 const ORIENTACAO_TOTAL = 'Responda só com o total de créditos (e o total de cada dia ou de cada resposta, se a pergunta for sobre vários). NÃO mostre a divisão por categoria (onde_foi) a não ser que a pessoa pergunte em que foi gasto ou peça o detalhamento.';
 const UNIDADES = {
   creditos: { campo: 'creditos', soma: 'COALESCE(sum(bill_credits), 0)::int', valor: (v) => Number(v) || 0, orientacao: ORIENTACAO_TOTAL },
-  // Custo em US$ tem frações de centavo; 4 casas bastam pra uma resposta curta.
+  // A US$ cost has fractions of a cent; 4 decimal places are enough for a short reply.
   usd: { campo: 'usd', soma: 'COALESCE(sum(cost_usd), 0)::float8', valor: (v) => Math.round((Number(v) || 0) * 1e4) / 1e4,
     orientacao: 'Responda só com o total em US$ (e o total de cada dia ou de cada resposta, se a pergunta for sobre vários). NÃO mostre a divisão por categoria (onde_foi) a não ser que a pessoa pergunte em que foi gasto ou peça o detalhamento.' },
 };

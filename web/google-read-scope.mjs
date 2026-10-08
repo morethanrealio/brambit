@@ -1,5 +1,6 @@
-// Consultas têm conta própria. Não alteram agents.google_email nem o token das
-// ferramentas de escrita. As contas disponíveis vêm somente do dono autenticado.
+// Queries have their own account. They don't change agents.google_email or
+// the write tools' token. The available accounts come only from the
+// authenticated owner.
 export function selectGoogleReadAccounts({ accounts, currentAccount, requested }) {
   const available = new Set(accounts.map(a => a.google_email));
   const values = requested === undefined ? [currentAccount] : requested;
@@ -11,12 +12,14 @@ export function selectGoogleReadAccounts({ accounts, currentAccount, requested }
   return selected;
 }
 
-// Conexão morta (grant revogado/expirado) não é falha do Google: a pessoa
-// precisa reconectar, e o assistente tem que dizer isso a ela. O erro do token
-// leva este código; a conta sem token nenhum já chega morta.
+// A dead connection (revoked/expired grant) isn't a Google failure: the
+// person needs to reconnect, and the assistant has to tell them so. The
+// token error carries this code; an account with no token at all already
+// arrives dead.
 export const GOOGLE_RECONNECT = 'google_reconnect';
 export const googleReconnectError = message => Object.assign(new Error(message), { code: GOOGLE_RECONNECT });
-// Só conta como morta quando os tokens vieram e estão apagados (clearGoogleAccount).
+// Only counts as dead when the tokens came back and were cleared
+// (clearGoogleAccount).
 const apagado = v => v === null || v === '';
 const grantMorto = row => !!row && apagado(row.access_token) && apagado(row.refresh_token);
 const reconnectPadrao = account => `A conexão com o Google da conta ${account} expirou ou foi revogada e precisa ser refeita em Conexões › Google.`;
@@ -32,8 +35,8 @@ export async function runGoogleReadAccounts({ accounts, currentAccount, requeste
     };
     if (grantMorto(accounts.find(a => a.google_email === account))) { precisaReconectar(); continue; }
     let calls = 0, succeeded = 0, reconnect = false;
-    // Marca a conta quando o token morre no meio da consulta, mesmo que a
-    // ferramenta engula o erro e devolva texto.
+    // Marks the account when the token dies mid-query, even if the tool
+    // swallows the error and returns text.
     const wrapToken = token => async () => {
       try { return await token(); } catch (e) { if (e?.code === GOOGLE_RECONNECT) reconnect = true; throw e; }
     };
@@ -41,7 +44,7 @@ export async function runGoogleReadAccounts({ accounts, currentAccount, requeste
       const readTools = (await createReadTools(account, wrapToken)).map(tool => ({ ...tool, async run(args) {
         calls++;
         const raw = await tool.run(args);
-        // Erros em JSON/texto não contam como leitura bem-sucedida.
+        // Errors in JSON/text don't count as a successful read.
         let parsed; try { parsed = JSON.parse(raw); } catch { /* ferramentas de texto */ }
         if (!parsed?.error && !parsed?.erro && !/^\s*(?:ERRO|ERROR)\b/i.test(String(raw))) succeeded++;
         return raw;
@@ -58,8 +61,8 @@ export async function runGoogleReadAccounts({ accounts, currentAccount, requeste
     } catch (e) {
       if (reconnect || e?.code === GOOGLE_RECONNECT) { precisaReconectar(); continue; }
       onAccountCoverage?.({ account, status:'failed' });
-      // Sem erro cru do provedor (pode conter dados privados). Uma falha não
-      // impede a consulta às outras contas explicitamente solicitadas.
+      // No raw provider error (it may contain private data). One failure
+      // doesn't block the query to the other explicitly requested accounts.
       results.push(`CONTA: ${account}\nESTADO: failed\nNão consegui concluir esta consulta. Não significa ausência de resultados.`);
     }
   }

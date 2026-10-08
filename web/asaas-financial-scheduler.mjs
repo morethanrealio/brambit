@@ -128,8 +128,9 @@ export function createAsaasFinancialScheduler({
       }, result.id);
     } catch (e) {
       log.error?.('[asaas-schedule] execução falhou:', e?.message || e);
-      // Antes do POST, erro é falha conhecida; depois do POST os caminhos acima
-      // já marcam uncertain. Não há retry automático financeiro.
+      // Before the POST, an error is a known failure; after the POST the
+      // paths above already mark it uncertain. There is no automatic
+      // financial retry.
       return finalize(row, providerMayHaveReceived ? 'uncertain' : 'failed', {
         reason: String(e?.message || e).slice(0, 400),
       });

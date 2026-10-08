@@ -1,14 +1,16 @@
-// ── Checagem de sintaxe antes de gravar arquivo de app (parser de verdade) ──
-// Medido na bancada de 19/09/2026: das 12 edições reais recusadas por "trecho
-// não encontrado", resolver a âncora faz 12 casarem, mas só 7 dos textos NOVOS
-// que o modelo mandou geram arquivo que compila. Gravar os outros 5 trocaria uma
-// recusa inútil por um app quebrado. Aqui o host passa o resultado por um parser
-// e devolve o erro do compilador, que é informação acionável.
+// ── Syntax check before writing an app file (a real parser) ──
+// Measured on the bench of 2026-09-19: of the 12 real edits refused for
+// "snippet not found", resolving the anchor makes all 12 match, but only 7 of
+// the NEW texts the model sent generate a file that compiles. Writing the
+// other 5 would trade a useless refusal for a broken app. Here the host runs
+// the result through a parser and returns the compiler's error, which is
+// actionable information.
 //
-// Regra de ouro: NUNCA bloquear uma edição que não piora o arquivo. Se o arquivo
-// JÁ estava quebrado antes (o modelo pode estar justamente consertando), ou se o
-// parser não está disponível, a gravação passa. O parser só parseia: não executa
-// o código, não importa módulo, não resolve dependência.
+// Golden rule: NEVER block an edit that does not make the file worse. If the
+// file was ALREADY broken before (the model might be exactly fixing it), or if
+// the parser is not available, the write goes through. The parser only
+// parses: it does not execute the code, does not import a module, does not
+// resolve a dependency.
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,7 +30,7 @@ function rodar(cmd, args) {
   });
 }
 
-// Primeira linha útil do erro do parser, sem caminho temporário nem stack.
+// First useful line of the parser's error, with no temp path or stack.
 function limparErro(saida, arquivoTmp, rel) {
   const linhas = String(saida || '').split('\n')
     .filter((l) => !/^\s+at\s/.test(l) && !/^Node\.js v/.test(l) && !/ExperimentalWarning|Warning:/.test(l) && l.trim());
@@ -38,8 +40,8 @@ function limparErro(saida, arquivoTmp, rel) {
 }
 
 /**
- * Retorna { estado: 'ok' | 'erro' | 'pulado', erro? }. 'pulado' = não deu pra
- * checar (extensão sem parser, arquivo grande demais, binário ausente, timeout).
+ * Returns { estado: 'ok' | 'erro' | 'pulado', erro? }. 'pulado' = couldn't
+ * check (extension with no parser, file too big, binary missing, timeout).
  */
 export async function checarSintaxe(rel, fonte) {
   if (typeof fonte !== 'string' || !sintaxeChecavel(rel)) return { estado: 'pulado' };
@@ -54,15 +56,15 @@ export async function checarSintaxe(rel, fonte) {
     if (PY.test(rel)) {
       const f = join(dir, 'a.py');
       await writeFile(f, fonte, 'utf8');
-      // compile() só parseia; não importa nem executa o módulo.
+      // compile() only parses; it does not import or execute the module.
       const r = await rodar('python3', ['-c', 'import sys;compile(open(sys.argv[1],encoding="utf-8").read(),"x","exec")', f]);
       if (!r.err) return { estado: 'ok' };
       if (r.err.code === 'ENOENT' || r.err.killed) return { estado: 'pulado' };
       return { estado: 'erro', erro: limparErro(r.saida, f, rel) };
     }
-    // JS: o mesmo .js pode ser CommonJS ou ESM conforme o package.json do app.
-    // Só é erro o que falha nas DUAS leituras; assim nenhum arquivo válido é
-    // barrado por causa do dialeto.
+    // JS: the same .js can be CommonJS or ESM depending on the app's
+    // package.json. Only what fails BOTH reads is an error; this way no
+    // valid file gets blocked because of the dialect.
     const cjs = join(dir, 'a.cjs');
     await writeFile(cjs, fonte, 'utf8');
     const r1 = await rodar(process.execPath, ['--check', cjs]);
@@ -84,8 +86,8 @@ export async function checarSintaxe(rel, fonte) {
 }
 
 /**
- * Portão de gravação: só bloqueia quando a edição QUEBRA um arquivo que estava
- * íntegro. Retorna null pra liberar, ou { erro } pra recusar.
+ * Write gate: only blocks when the edit BREAKS a file that was intact.
+ * Returns null to allow, or { erro } to refuse.
  */
 export async function pioraSintaxe(rel, fonteAntes, fonteDepois) {
   if (!sintaxeChecavel(rel)) return null;

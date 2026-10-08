@@ -1,12 +1,12 @@
-// ── MEMÓRIA v2, R1+R3: conciliador de escrita ──
-// Antes de gravar um fato novo, procura o MESMO assunto em todas as páginas. Se já
-// está dito, não grava de novo (R1: a tool do turno e o housekeeping escreviam os
-// dois a mesma coisa). Se uma linha diz o valor antigo, atualiza ELA em vez de
-// acrescentar outra, e corrige as outras páginas que repetem o valor antigo (R3:
-// cada assunto numa página só). Desligado por padrão: MEMORIA_RECONCILIAR=1.
+// ── MEMORY v2, R1+R3: write reconciler ──
+// Before writing a new fact, looks for the SAME subject across all pages. If it's
+// already stated, doesn't write it again (R1: the turn tool and the housekeeping were both
+// writing the same thing). If a line states the old value, updates IT instead of
+// adding another one, and fixes the other pages that repeat the old value (R3:
+// each subject lives on one page only). Off by default: MEMORIA_RECONCILIAR=1.
 //
-// O modelo só DECIDE e aponta o trecho; a linha nova é montada aqui com replace,
-// então fora do trecho ela é a velha letra por letra (mesma regra de corrigirPerdedora).
+// The model only DECIDES and points at the excerpt; the new line is assembled here via replace,
+// so outside the excerpt it stays letter-for-letter the old one (same rule as corrigirPerdedora).
 import { makeMemoriaModel } from './memoria-modelo.mjs';
 
 export const reconciliarLigado = () => process.env.MEMORIA_RECONCILIAR === '1';
@@ -20,7 +20,7 @@ const STOP = new Set(('que com para por uma uns umas dos das nos nas num numa pe
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 const limpa = (s) => String(s || '').replace(/^\s*[-*•]\s*/, '').replace(/\s+/g, ' ').trim();
 
-// Palavras com peso: número pesa 3 (datas, tamanhos, valores), nome próprio 2, resto 1.
+// Weighted words: number weighs 3 (dates, sizes, values), proper noun 2, rest 1.
 export function termos(texto) {
   const out = new Map();
   for (const bruto of String(texto || '').split(/[^\p{L}\p{N}]+/u)) {
@@ -32,8 +32,8 @@ export function termos(texto) {
   return out;
 }
 
-// Linhas candidatas (puro): as que mais dividem termos com a informação nova.
-// Fica de fora: página reservada, cabeçalho e a seção de links gerada do perfil.
+// Candidate lines (pure): the ones that share the most terms with the new information.
+// Excluded: reserved page, header and the generated links section of the profile.
 export function candidatas(paginas, consulta, { excluir = [] } = {}) {
   const Q = termos(consulta);
   if (!Q.size) return [];
@@ -56,8 +56,8 @@ export function candidatas(paginas, consulta, { excluir = [] } = {}) {
 
 const palavras = (s) => new Set(semAcento(s).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 || /\d/.test(w)));
 
-// Aplica um {de, para} numa linha. Devolve a linha nova ou null se o trecho não
-// está na linha, é quase a linha inteira (numa linha longa) ou não muda nada.
+// Applies a {de, para} to a line. Returns the new line or null if the excerpt isn't
+// in the line, is almost the whole line (in a long line) or doesn't change anything.
 export function trocarTrecho(linha, de, para) {
   const d = String(de || ''), p = String(para || '').trim();
   if (!d.trim() || !p || !linha.includes(d)) return null;
@@ -89,11 +89,11 @@ async function decidir(novaInfo, cands, { soOutras = false } = {}) {
   try { return JSON.parse(String(r.text || '').match(/\{[\s\S]*\}/)?.[0] || 'null'); } catch { return null; }
 }
 
-// Decide o destino de UMA op (add ou definir). Devolve um plano, sem tocar o banco:
-//   { acao:'nada', cand }                         a info já está na linha `cand`
-//   { acao:'atualizar', cand, nova, assunto }     a linha `cand` vira `nova`
-//   { acao:'novo' }                               segue o caminho de sempre
-// e, em todos, `outras`: [{ cand, nova }] com as repetições do valor antigo.
+// Decides the destination of ONE op (add or definir). Returns a plan, without touching the database:
+//   { acao:'nada', cand }                         the info is already on line `cand`
+//   { acao:'atualizar', cand, nova, assunto }     line `cand` becomes `nova`
+//   { acao:'novo' }                               follows the usual path
+// and, in all cases, `outras`: [{ cand, nova }] with the repeats of the old value.
 export async function planejarOp(op, paginas, { linhaPropria = '', valorAntigo = '' } = {}) {
   const tipo = String(op?.op || '').toLowerCase();
   const texto = tipo === 'definir' ? limpa(op.valor) : limpa(op.texto);
@@ -115,8 +115,8 @@ export async function planejarOp(op, paginas, { linhaPropria = '', valorAntigo =
     if (nova) outras.push({ cand: c, nova, de: o.de });
   }
   if (!linhaPropria && j.acao === 'nada' && Number.isInteger(j.na_linha) && cands[j.na_linha]) {
-    // Guarda contra perder fato: "já está" só vale se a linha tem a maior parte
-    // das palavras da informação nova.
+    // Guard against losing a fact: "already stated" only counts if the line has most
+    // of the words from the new information.
     const N = [...palavras(texto)], L = palavras(cands[j.na_linha].linha);
     const tem = N.filter((w) => L.has(w)).length;
     if (N.length && tem / N.length >= 0.5) return { acao: 'nada', cand: cands[j.na_linha], outras };

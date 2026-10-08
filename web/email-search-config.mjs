@@ -1,9 +1,10 @@
-// Rotina tipo "busca_email": a busca estruturada fica gravada em
-// routines.config.email_search e é a PLATAFORMA que executa a consulta exata
-// no Gmail/Outlook (paginando até o fim) antes de chamar o modelo. O modelo
-// recebe a lista pronta e só resume. Espelha o desenho de curadoria
-// (curation-config.mjs): schema pra tool + normalização estrita + prepare que
-// devolve o novo config ou lança Error em pt-BR pro assistente corrigir.
+// "busca_email" type routine: the structured search is recorded in
+// routines.config.email_search and it's the PLATFORM that runs the exact
+// query on Gmail/Outlook (paging to the end) before calling the model. The
+// model receives the ready-made list and only summarizes. Mirrors the
+// curation design (curation-config.mjs): schema for the tool + strict
+// normalization + a prepare that returns the new config or throws an Error in
+// pt-BR for the assistant to fix.
 
 export const EMAIL_SEARCH_VERSION = 1;
 export const EMAIL_SEARCH_MAX_DAYS = 30;
@@ -49,8 +50,8 @@ function normList(raw, field, validate) {
 const SENDER_RE = /^(?:[\w.+'-]+@)?[\w-]+(?:\.[\w-]+)+$/i;
 const EMAIL_RE = /^[\w.+'-]+@[\w-]+(?:\.[\w-]+)+$/i;
 
-// Normalização estrita: chave desconhecida ou valor fora do contrato = Error.
-// Tudo que sai daqui é seguro pra virar consulta (sem aspas/parênteses soltos).
+// Strict normalization: an unknown key or a value outside the contract = Error.
+// Everything that comes out of here is safe to become a query (no loose quotes/parens).
 export function normalizeEmailSearchConfig(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('busca_email deve ser um objeto.');
   const known = new Set(['version', 'provider', 'account', 'terms', 'senders', 'days', 'unreadOnly', 'withAttachment']);
@@ -74,8 +75,9 @@ export function normalizeEmailSearchConfig(raw) {
   };
 }
 
-// Prompt de rotina "geral" que na prática é busca de e-mail. Só heurística pra
-// empurrar o assistente pro tipo certo; monitor misto (agenda + e-mail) passa.
+// Prompt of a "general" routine that in practice is an email search. Just a
+// heuristic to push the assistant toward the right type; a mixed monitor
+// (calendar + email) passes.
 export function looksLikeEmailSearch(prompt) {
   const p = String(prompt || '').toLowerCase();
   if (!p) return false;
@@ -85,8 +87,8 @@ export function looksLikeEmailSearch(prompt) {
   return mail && act && !mixed;
 }
 
-// Igual ao prepareCurationChange: devolve o config novo (config inteiro da
-// rotina, com email_search substituído), undefined se nada muda, ou lança.
+// Same as prepareCurationChange: returns the new config (the routine's entire
+// config, with email_search replaced), undefined if nothing changes, or throws.
 export function prepareEmailSearchChange(current, { tipo, busca_email, prompt, channel } = {}) {
   const old = current?.config || {};
   const typed = Object.hasOwn(old, 'email_search');
@@ -106,7 +108,7 @@ export function prepareEmailSearchChange(current, { tipo, busca_email, prompt, c
   return { ...old, email_search: c };
 }
 
-// Texto pro assistente/usuário confirmar o que ficou gravado.
+// Text for the assistant/user to confirm what was recorded.
 export function describeEmailSearch(c) {
   if (!c) return '';
   const quoted = (xs) => xs.map((x) => `"${x}"`).join(' ou ');
@@ -123,15 +125,15 @@ export function describeEmailSearch(c) {
   return `${parts[0]}: ${crit.join('; ')}. A plataforma roda essa consulta exata e pagina até o fim a cada execução; o assistente só resume o que voltou.`;
 }
 
-// Só o que o assistente pode editar (sem version).
+// Only what the assistant can edit (no version).
 export function editableEmailSearch(c) {
   if (!c) return null;
   const { version, ...rest } = c;
   return rest;
 }
 
-// Na execução da rotina de busca, o modelo só precisa resumir: tira todas as
-// ferramentas de busca/leitura de e-mail e web. Fica memória (contexto do dono).
+// When the search routine runs, the model only needs to summarize: removes
+// every email- and web-search/reading tool. What's left is memory (the owner's context).
 export function pruneEmailSearchTools(registry) {
   const allowed = new Set(['memoria_ler']);
   for (const name of registry.map.keys()) if (!allowed.has(name)) registry.map.delete(name);

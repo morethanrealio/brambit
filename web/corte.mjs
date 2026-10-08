@@ -1,40 +1,43 @@
-// ── Aviso de corte: nenhuma busca trunca em silêncio ──
+// ── Truncation notice: no search truncates silently ──
 //
-// Caso de 07/09/2026: o usuário perguntou por um e-mail que EXISTIA e o
-// assistente respondeu que não existia. Não foi alucinação do modelo: o
-// `gmail_search` pedia no máximo 10 e-mails ao Google, jogava fora o
-// `nextPageToken`/`resultSizeEstimate` da resposta e devolvia a lista curta como
-// se fosse a busca inteira. Do ponto de vista do modelo, a busca tinha terminado.
+// Case from 2026-09-07: the user asked about an email that DID EXIST and the
+// assistant answered that it didn't exist. It wasn't the model hallucinating:
+// `gmail_search` asked Google for at most 10 emails, discarded the response's
+// `nextPageToken`/`resultSizeEstimate`, and returned the short list as if it
+// were the whole search. From the model's point of view, the search had finished.
 //
-// A regra que faltava, e que este módulo padroniza: uma lista truncada tem que
-// vir acompanhada da informação de que é truncada. O molde é o `corte` que o
-// `calendar_list` já usava (connectors.mjs:169) e que nunca foi aplicado ao
-// resto: dizer quantos vieram, quantos ficaram de fora quando dá pra saber, e
-// principalmente dizer que a lista NÃO prova ausência.
+// The missing rule, which this module standardizes: a truncated list has to
+// come along with the information that it's truncated. The template is the
+// `corte` (cutoff) that `calendar_list` already used (connectors.mjs:169) and
+// was never applied to the rest: state how many came back, how many were left
+// out when that's knowable, and above all state that the list does NOT prove
+// absence.
 //
-// Cuidado deliberado com número: `total` de umas APIs é exato (Slack `paging`,
-// GitHub `total_count`) e de outras é estimativa grossa (Gmail
-// `resultSizeEstimate`). Quem chama diz qual é qual em `aprox`, e o texto sai
-// com "~" pra não transformar chute em fato.
+// Deliberate care with the number: `total` from some APIs is exact (Slack
+// `paging`, GitHub `total_count`) and from others it's a rough estimate (Gmail
+// `resultSizeEstimate`). The caller states which is which in `aprox`, and the
+// text comes out with "~" so it doesn't turn a guess into a fact.
 
 /**
- * Monta a frase de corte, ou null quando nada foi cortado.
+ * Builds the truncation sentence, or null when nothing was cut.
  *
  * @param {object} o
- * @param {number} o.mostrados  quantos itens estão indo na resposta
- * @param {number|null} o.total quantos casaram com a busca no total, se a API disser
- * @param {boolean} o.temMais   a API sinalizou que há mais (nextPageToken/@odata.nextLink)
- * @param {boolean} o.talvezMais a lista veio cheia no teto pedido e a API não diz
- *                               se há mais; é suspeita, não certeza, e o texto sai assim
- * @param {boolean} o.aprox     `total` é estimativa, não contagem exata
- * @param {string} o.oQue       "e-mails", "arquivos", "mensagens"...
- * @param {string} o.comoVerMais instrução concreta pra alcançar o resto
+ * @param {number} o.mostrados  how many items are going into the response
+ * @param {number|null} o.total how many matched the search in total, if the API says so
+ * @param {boolean} o.temMais   the API signaled there's more (nextPageToken/@odata.nextLink)
+ * @param {boolean} o.talvezMais the list came back full at the requested ceiling and the API
+ *                               doesn't say whether there's more; it's a suspicion, not a
+ *                               certainty, and the text comes out that way
+ * @param {boolean} o.aprox     `total` is an estimate, not an exact count
+ * @param {string} o.oQue       "emails", "files", "messages"...
+ * @param {string} o.comoVerMais concrete instruction for reaching the rest
  */
 export function avisoDeCorte({ mostrados, total = null, temMais = false, talvezMais = false, aprox = false, oQue = 'resultados', comoVerMais = '' }) {
   const n = Number(mostrados) || 0;
   const t = Number.isFinite(Number(total)) ? Number(total) : null;
-  // Só é corte se sobrou coisa de fora. `total` mentiroso (menor que o que veio)
-  // é ignorado: estimativa do Gmail faz isso quando a caixa é pequena.
+  // It's only a cutoff if something was left out. A misleading `total` (lower
+  // than what came back) is ignored: Gmail's estimate does this when the mailbox
+  // is small.
   const faltam = t !== null && t > n ? t - n : null;
   if (faltam === null && !temMais && !talvezMais) return null;
 
@@ -50,9 +53,10 @@ export function avisoDeCorte({ mostrados, total = null, temMais = false, talvezM
 }
 
 /**
- * Formata a resposta de uma tool de busca de forma uniforme.
- * Sem corte, mantém o formato antigo (array puro) pra não mexer no que já
- * funciona. Com corte, embrulha em objeto pra o aviso viajar junto dos itens.
+ * Formats a search tool's response uniformly.
+ * Without a cutoff, keeps the old format (plain array) so as not to touch what
+ * already works. With a cutoff, wraps it in an object so the notice travels
+ * along with the items.
  */
 export function respostaDeBusca(itens, corte, vazio = 'Nada encontrado.') {
   const lista = Array.isArray(itens) ? itens : [];

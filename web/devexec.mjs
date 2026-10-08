@@ -1,13 +1,14 @@
-// ── Cliente do devexec runner (workspaces de dev no host mini-PaaS) ──
+// ── devexec runner client (dev workspaces on the mini-PaaS host) ──
 //
-// O harness (prod SP) fala com o runner `devexecd.py` que roda no host de
-// workspaces de dev (mesma VPC, IP privado liberado no SG só pro prod). O runner
-// é o canal de CONTROLE: provisiona/clona/executa nos containers de dev de cada
-// usuário via devctl.sh. Config por env: DEVEXEC_URL + DEVEXEC_TOKEN.
+// The harness (prod SP) talks to the `devexecd.py` runner that runs on the dev
+// workspaces host (same VPC, private IP allowed in the SG only for prod). The
+// runner is the CONTROL channel: provisions/clones/executes in each user's dev
+// containers via devctl.sh. Config by env: DEVEXEC_URL + DEVEXEC_TOKEN.
 //
-// Diferença pro ssh.mjs: ssh.mjs conecta na infra DO USUÁRIO com a chave dele
-// (caso own_ssh); isto opera o NOSSO host de workspaces (provisionamento de
-// sistema). Token do GitHub, quando vai, é repassado ao container só em memória.
+// Difference from ssh.mjs: ssh.mjs connects to the USER's own infra with their
+// own key (own_ssh case); this operates OUR workspaces host (system
+// provisioning). GitHub token, when it's sent, is passed to the container only
+// in memory.
 import { maskSecrets } from './ssh.mjs';
 
 const URL_BASE = (process.env.DEVEXEC_URL || '').replace(/\/+$/, '');
@@ -43,7 +44,7 @@ async function call(method, path, body = null, timeoutMs = 130_000) {
   }
 }
 
-// Normaliza a resposta do runner num objeto estável, mascarando segredo na saída.
+// Normalizes the runner's response into a stable object, masking secrets in the output.
 function norm(r) {
   return {
     ok: Boolean(r.ok),
@@ -54,20 +55,21 @@ function norm(r) {
   };
 }
 
-// Provisiona (ou religa) o workspace do usuário/projeto. `repo` opcional faz um
-// clone ANÔNIMO no create (só serve pra repo público); pra privado use devClone.
+// Provisions (or reconnects) the user/project's workspace. Optional `repo` does
+// an ANONYMOUS clone on create (only works for a public repo); for a private
+// one use devClone.
 export async function devCreate({ user, proj, repo } = {}) {
   return norm(await call('POST', '/create', { user, proj, repo: repo || undefined }, 180_000));
 }
 
-// Clone AUTENTICADO: o token do GitHub do usuário vai pro container só em
-// memória (credential helper), a URL do remote fica limpa.
+// AUTHENTICATED clone: the user's GitHub token goes to the container only in
+// memory (credential helper), the remote's URL stays clean.
 export async function devClone({ user, proj, repo, token } = {}) {
   return norm(await call('POST', '/clone', { user, proj, repo, token }, 180_000));
 }
 
-// Roda um comando no workspace. `token` opcional habilita operações git
-// autenticadas (push/pull) via GH_TOKEN no container.
+// Runs a command in the workspace. Optional `token` enables authenticated git
+// operations (push/pull) via GH_TOKEN in the container.
 export async function devExec({ user, proj, cmd, token, timeout } = {}) {
   return norm(await call('POST', '/exec', { user, proj, cmd, token: token || undefined, timeout }, 180_000));
 }

@@ -18,11 +18,11 @@ import { lerCorpo } from './kms.mjs';
 const IMDS = 'http://169.254.169.254';
 const IMDS_TIMEOUT_MS = 2000;
 const REFRESH_EVERY_MS = 5 * 60_000;
-// Abaixo disso a credencial em cache não serve mais pra assinar.
+// Below this, the cached credential is no longer good for signing.
 const MIN_REMAINING_MS = 5 * 60_000;
 
-// Fonte padrão: lida por process.env.X (e não env.X) pra trava do .env.example
-// (test-support/env-example-guard.mjs) enxergar que essas variáveis são usadas.
+// Default source: read via process.env.X (and not env.X) so the .env.example
+// guard (test-support/env-example-guard.mjs) can see these variables are used.
 const processEnv = () => ({
   S3_INSTANCE_ROLE: process.env.S3_INSTANCE_ROLE,
   AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
@@ -37,7 +37,7 @@ export function instanceRoleMode(env = processEnv()) {
   return env.S3_INSTANCE_ROLE === '1';
 }
 
-// Tem de onde tirar credencial? (não garante que a role já respondeu)
+// Is there a source to get credentials from? (doesn't guarantee the role has already responded)
 export function awsCredentialsConfigured(env = processEnv()) {
   return instanceRoleMode(env) || !!(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY);
 }
@@ -47,15 +47,15 @@ function staticCredentials(env) {
   return { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY, sessionToken: null };
 }
 
-// Síncrono: a credencial que dá pra usar AGORA, ou null (role ainda sem cache).
+// Synchronous: the credential that can be used NOW, or null (role still without cache).
 export function currentAwsCredentials(env = processEnv(), now = Date.now()) {
   if (!instanceRoleMode(env)) return staticCredentials(env);
   return cached && cached.expiration - now > MIN_REMAINING_MS ? cached : null;
 }
 
-// Mini-fetch em http puro só pro IMDS: devolve { ok, status, text() }. Agent
-// próprio de propósito: com NODE_USE_ENV_PROXY o agent global do http manda tudo
-// pro HTTP_PROXY, e o IMDS só responde direto da instância.
+// Mini-fetch in plain http just for IMDS: returns { ok, status, text() }. Dedicated
+// agent on purpose: with NODE_USE_ENV_PROXY the global http agent sends everything
+// to HTTP_PROXY, and IMDS only responds directly from the instance.
 const imdsAgent = new http.Agent();
 export function imdsFetch(url, { method = 'GET', headers = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -70,9 +70,9 @@ export function imdsFetch(url, { method = 'GET', headers = {} } = {}) {
   });
 }
 
-// Lê a credencial da role pelo IMDSv2 (token de sessão primeiro, depois o nome
-// da role, depois a credencial).
-// `imds` só muda no teste (servidor local no lugar do 169.254.169.254).
+// Reads the role credential via IMDSv2 (session token first, then the role
+// name, then the credential).
+// `imds` only changes in tests (local server instead of 169.254.169.254).
 export async function fetchInstanceCredentials(fetchImpl = imdsFetch, imds = IMDS) {
   const tokRes = await fetchImpl(`${imds}/latest/api/token`, {
     method: 'PUT', headers: { 'X-aws-ec2-metadata-token-ttl-seconds': '21600' },
@@ -96,7 +96,7 @@ export async function fetchInstanceCredentials(fetchImpl = imdsFetch, imds = IMD
   };
 }
 
-// Relê a credencial da role (uma leitura por vez) e guarda no cache.
+// Re-reads the role credential (one read at a time) and stores it in the cache.
 export async function refreshInstanceCredentials(fetchImpl = imdsFetch) {
   if (!inflight) {
     inflight = fetchInstanceCredentials(fetchImpl)
@@ -106,14 +106,14 @@ export async function refreshInstanceCredentials(fetchImpl = imdsFetch) {
   return inflight;
 }
 
-// Assíncrono: usado por PUT/GET/DELETE. Na role, relê se o cache está vazio ou
-// perto de vencer. Devolve null se não há fonte configurada.
+// Asynchronous: used by PUT/GET/DELETE. On the role, re-reads if the cache is empty or
+// close to expiring. Returns null if there is no configured source.
 export async function getAwsCredentials({ env = processEnv(), now = Date.now(), fetchImpl = imdsFetch } = {}) {
   if (!instanceRoleMode(env)) return staticCredentials(env);
   return currentAwsCredentials(env, now) || refreshInstanceCredentials(fetchImpl);
 }
 
-// Boot: aquece o cache e mantém a credencial da role fresca. Sem a flag, não faz nada.
+// Boot: warms the cache and keeps the role credential fresh. Without the flag, does nothing.
 export function startAwsCredentialRefresh({ env = processEnv(), fetchImpl = imdsFetch, log = console } = {}) {
   if (!instanceRoleMode(env) || timer) return;
   const tick = () => refreshInstanceCredentials(fetchImpl)
@@ -123,7 +123,7 @@ export function startAwsCredentialRefresh({ env = processEnv(), fetchImpl = imds
   timer.unref();
 }
 
-// Só pra teste.
+// Test only.
 export function _resetAwsCredentialsForTest() {
   cached = null; inflight = null;
   if (timer) clearInterval(timer);

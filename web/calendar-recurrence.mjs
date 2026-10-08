@@ -1,5 +1,5 @@
-// Contrato comum e estrito: uma cadência ancorada no PRIMEIRO início local.
-// Não recebe RRULE/Graph cru: campos desconhecidos nunca são descartados.
+// Common, strict contract: a cadence anchored on the FIRST local start.
+// Does not accept raw RRULE/Graph: unknown fields are never discarded.
 export const recurrenceSchema = {
   type: 'object', additionalProperties: false, required: ['frequencia'],
   description: 'REQUIRED for a recurring request. Cadence based on the first start date/time: monthly at 2026-09-14T08:30:00 = every 14th at 08:30. Supports daily, weekly on the same day, monthly (days 1–28) and yearly (except 02/29). For other patterns, do NOT create a single event: explain the limitation. No quantidade/ate = no end, show this when confirming.',
@@ -21,7 +21,7 @@ function validDate(s) {
   return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 export function normalizeRecurrence(value, start, timezone = 'America/Sao_Paulo') {
-  if (value === undefined) return null; // campo ausente: preserva eventos únicos
+  if (value === undefined) return null; // missing field: preserves single events
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('recorrencia deve ser um objeto válido, não criar evento único.');
   if (Object.keys(value).some(k => !Object.hasOwn(recurrenceSchema.properties, k))) throw new Error('Campo/padrão de recorrência não suportado. Não criar evento único.');
   if (!Object.hasOwn(CONFIG, value.frequencia)) throw new Error('Frequência de recorrência inválida.');
@@ -40,8 +40,8 @@ export function normalizeRecurrence(value, start, timezone = 'America/Sao_Paulo'
   return { frequencia: value.frequencia, intervalo, date, day, month, timezone,
     weekday: new Date(date + 'T00:00:00Z').getUTCDay(), quantidade: value.quantidade, ate: value.ate };
 }
-// UNTIL é UTC para série com horário. Converte o fim do dia LOCAL pelo IANA,
-// não por um offset fixo (que seria errado atravessando o horário de verão).
+// UNTIL is UTC for a series with time. Converts the LOCAL end of day via IANA,
+// not a fixed offset (which would be wrong across daylight saving time).
 function untilUtc(date, timezone) {
   const target = Date.parse(date + 'T23:59:59Z');
   const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
@@ -89,13 +89,13 @@ export function recurrenceLabel(value, start, timezone, language = 'pt-BR') {
   return `${prefix}: ${every} ${r.intervalo} ${unit}${onDay}; ${from} ${start} (${r.timezone}); ${end}.`;
 }
 
-// Somar uma hora de parede não pode depender do TZ do processo Node.
+// Adding a wall-clock hour cannot depend on the Node process's TZ.
 export function recurrenceDefaultEnd(localStart) {
   return new Date(new Date(localStart + 'Z').getTime() + 3600000).toISOString().slice(0, 19);
 }
 
-// Hora de parede -> instante, sem depender do TZ do processo. Recusa o horário
-// inexistente da entrada no horário de verão. Na hora repetida, usa a primeira.
+// Wall-clock time -> instant, without depending on the process's TZ. Rejects the
+// nonexistent time of entering daylight saving time. On the repeated hour, uses the first.
 export function localDateTimeInstant(local, timezone = 'America/Sao_Paulo') {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(String(local)) || !validDate(local.slice(0,10))) throw Error('Data/hora local inválida.');
   const wall = local.length === 16 ? local + ':00' : local;
@@ -115,7 +115,7 @@ export function localDateTimeInstant(local, timezone = 'America/Sao_Paulo') {
 
 export function recurrenceOccurrences(value, start, timezone = 'America/Sao_Paulo', {after = null, limit = 3} = {}) {
   const r=normalizeRecurrence(value,start,timezone); if (!r) return [];
-  localDateTimeInstant(start,timezone); // valida também a primeira ocorrência
+  localDateTimeInstant(start,timezone); // also validates the first occurrence
   const first=Date.parse(start+'Z'), out=[];
   if (!Number.isInteger(limit) || limit<1) throw Error('Limite de ocorrências inválido.');
   let begin=0;
@@ -125,7 +125,7 @@ export function recurrenceOccurrences(value, start, timezone = 'America/Sao_Paul
     const distance=r.frequencia==='mensal' ? (date.getUTCFullYear()-startDate.getUTCFullYear())*12+date.getUTCMonth()-startDate.getUTCMonth()
       : r.frequencia==='anual' ? date.getUTCFullYear()-startDate.getUTCFullYear()
       : (date.getTime()-first)/86400000/(r.frequencia==='semanal'?7:1);
-    begin=Math.max(0,Math.floor(distance/r.intervalo)-2); // margem para diferenças de fuso/DST
+    begin=Math.max(0,Math.floor(distance/r.intervalo)-2); // margin for timezone/DST differences
   }
   const max=Math.min(r.quantidade ?? Infinity,begin+Math.min(limit,10)+370);
   for (let i=begin; i<max && out.length<Math.min(limit,10); i++) {
@@ -137,7 +137,7 @@ export function recurrenceOccurrences(value, start, timezone = 'America/Sao_Paul
     const local=d.toISOString().slice(0,19);
     if (r.ate && local.slice(0,10)>r.ate) break;
     let instant;
-    try { instant=localDateTimeInstant(local,timezone); } catch { continue; } // uma parede inexistente não vira outro horário
+    try { instant=localDateTimeInstant(local,timezone); } catch { continue; } // a nonexistent wall-clock time doesn't turn into another time
     if (after && Date.parse(instant)<=Date.parse(after)) continue;
     out.push({local,instant});
   }

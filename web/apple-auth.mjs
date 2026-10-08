@@ -1,14 +1,14 @@
-// Sign in with Apple — verificação do identity token e revogação.
+// Sign in with Apple — identity token verification and revocation.
 //
-// Por que à mão: o repo não tem biblioteca de JWT, e puxar uma dependência nova
-// pra verificar UM tipo de token (RS256 com chave pública publicada) não paga o
-// custo de auditoria. São ~60 linhas de `crypto` nativo.
+// Why by hand: the repo has no JWT library, and pulling in a new dependency to
+// verify ONE kind of token (RS256 with a published public key) doesn't pay
+// for the audit cost. It's ~60 lines of native `crypto`.
 //
-// O identity token é um JWT assinado pela Apple. Verificar significa, nesta
-// ordem: achar a chave pública pelo `kid` do cabeçalho, conferir a assinatura
-// sobre `header.payload`, e SÓ DEPOIS acreditar no conteúdo. Conferir claim de
-// token não verificado é o erro clássico — aqui o parse do payload só acontece
-// depois que a assinatura passou.
+// The identity token is a JWT signed by Apple. Verifying means, in this
+// order: finding the public key by the header's `kid`, checking the signature
+// over `header.payload`, and ONLY THEN trusting the content. Checking a claim
+// of an unverified token is the classic mistake — here the payload parsing
+// only happens after the signature has passed.
 import { createPublicKey, createVerify, createSign, createHash, timingSafeEqual } from 'node:crypto';
 
 const APPLE_ISS = 'https://appleid.apple.com';
@@ -16,10 +16,10 @@ const JWKS_URL = `${APPLE_ISS}/auth/keys`;
 const TOKEN_URL = `${APPLE_ISS}/auth/token`;
 const REVOKE_URL = `${APPLE_ISS}/auth/revoke`;
 
-// Login da Apple é o mínimo pra funcionar: só o client_id (bundle do app).
-// Revogação exige a chave .p8 e é checada em separado (ver appleRevokeReady),
-// porque a ausência dela NÃO pode impedir alguém de entrar — só muda o que
-// conseguimos fazer no momento da exclusão da conta.
+// Apple login is the bare minimum to work: just the client_id (app bundle).
+// Revocation requires the .p8 key and is checked separately (see
+// appleRevokeReady), because its absence must NOT keep someone from logging
+// in — it only changes what we're able to do at the moment of account deletion.
 export function appleEnabled() {
   return !!process.env.APPLE_CLIENT_ID;
 }
@@ -29,8 +29,8 @@ export function appleRevokeReady() {
     && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
 }
 
-// Aceita mais de um audience (bundle do app iOS + Services ID do site, se um dia
-// existir login pela web). Separado por vírgula.
+// Accepts more than one audience (iOS app bundle + the site's Services ID, if
+// web login ever exists). Comma-separated.
 function allowedAudiences() {
   return String(process.env.APPLE_CLIENT_ID || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
@@ -44,9 +44,9 @@ function jsonFromB64url(s) {
   return JSON.parse(b64urlToBuf(s).toString('utf8'));
 }
 
-// Cache das chaves públicas. A Apple roda rotação, então o cache tem prazo e,
-// diante de um `kid` desconhecido, refaz o fetch na hora (uma vez) em vez de
-// recusar o login de quem pegou a chave nova.
+// Public key cache. Apple rotates keys, so the cache has a TTL and, faced
+// with an unknown `kid`, redoes the fetch right away (once) instead of
+// refusing the login of whoever got the new key.
 let jwksCache = { keys: [], at: 0 };
 const JWKS_TTL_MS = 60 * 60 * 1000;
 
@@ -64,7 +64,7 @@ async function appleKeyFor(kid, { refetch = true } = {}) {
   if (!keys.length || Date.now() - jwksCache.at > JWKS_TTL_MS) keys = await fetchJwks();
   let jwk = keys.find((k) => k.kid === kid);
   if (!jwk && refetch) {
-    keys = await fetchJwks(); // rotação de chave: tenta uma vez com a lista fresca
+    keys = await fetchJwks(); // key rotation: tries once with the fresh list
     jwk = keys.find((k) => k.kid === kid);
   }
   if (!jwk) throw new Error('chave da Apple não encontrada para este token');
@@ -80,12 +80,14 @@ export function sha256Hex(s) {
   return createHash('sha256').update(String(s), 'utf8').digest('hex');
 }
 
-// Verifica o identity token e devolve a identidade. Lança em qualquer desvio —
-// quem chama trata como "não entrou". Nunca devolve dado de token inválido.
+// Verifies the identity token and returns the identity. Throws on any
+// deviation — the caller treats it as "did not log in". Never returns data
+// from an invalid token.
 //
-// `expectedNonce` é o nonce CRU que o app recebeu de nós; o token carrega o
-// SHA-256 dele (é o app que hasheia antes de mandar pra Apple). Sem esse
-// amarração, um identity token capturado em outro lugar viraria sessão aqui.
+// `expectedNonce` is the RAW nonce the app received from us; the token
+// carries its SHA-256 (it's the app that hashes it before sending to Apple).
+// Without this binding, an identity token captured elsewhere would turn into
+// a session here.
 export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) {
   const parts = String(idToken || '').split('.');
   if (parts.length !== 3) throw new Error('identity token malformado');
@@ -98,7 +100,7 @@ export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) 
   const ok = createVerify('RSA-SHA256').update(`${h}.${p}`).verify(key, b64urlToBuf(s));
   if (!ok) throw new Error('assinatura do identity token não confere');
 
-  // Daqui pra baixo o conteúdo é confiável.
+  // From here down the content is trusted.
   const claims = jsonFromB64url(p);
   if (claims.iss !== APPLE_ISS) throw new Error('emissor inesperado');
   const auds = allowedAudiences();
@@ -118,18 +120,18 @@ export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) 
   return {
     sub: String(claims.sub),
     email,
-    // `email_verified` e `is_private_email` vêm como boolean OU string ("true").
+    // `email_verified` and `is_private_email` come as boolean OR string ("true").
     emailVerified: claims.email_verified === true || claims.email_verified === 'true',
     isPrivateEmail: claims.is_private_email === true || claims.is_private_email === 'true',
   };
 }
 
-// A .p8 é um PEM de várias linhas e o EnvironmentFile do systemd não é um shell:
-// o tratamento de `\n` dentro de aspas varia com a versão e um erro aqui só
-// aparece na hora de excluir uma conta. Então aceitamos três formas e
-// normalizamos: PEM cru (se o arquivo .env tiver quebras de linha reais), PEM com
-// `\n` literal, ou base64 do PEM inteiro — esta última é a que não tem como sair
-// errado, porque é uma linha só sem aspas nem escape.
+// The .p8 is a multi-line PEM and systemd's EnvironmentFile is not a shell:
+// the handling of `\n` inside quotes varies by version and an error here only
+// shows up at account-deletion time. So we accept three forms and normalize:
+// raw PEM (if the .env file has real line breaks), PEM with literal `\n`, or
+// base64 of the whole PEM — this last one is the one that can't go wrong,
+// because it's a single line with no quotes or escaping.
 function applePrivateKeyPem() {
   const raw = String(process.env.APPLE_PRIVATE_KEY || '').trim();
   if (raw.includes('BEGIN')) return raw.replace(/\\n/g, '\n');
@@ -138,9 +140,9 @@ function applePrivateKeyPem() {
   return pem;
 }
 
-// client_secret da Apple: um JWT ES256 assinado com a chave .p8 do portal,
-// válido por poucos minutos. Gerado a cada chamada porque o custo é desprezível
-// e guardar um secret vivo em memória não compra nada.
+// Apple client_secret: an ES256 JWT signed with the portal's .p8 key, valid
+// for a few minutes. Generated on every call because the cost is negligible
+// and keeping a live secret in memory buys nothing.
 function appleClientSecret() {
   if (!appleRevokeReady()) throw new Error('chave privada da Apple não configurada');
   const teamId = process.env.APPLE_TEAM_ID;
@@ -152,8 +154,8 @@ function appleClientSecret() {
   const b64url = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const head = b64url({ alg: 'ES256', kid: keyId });
   const body = b64url({ iss: teamId, iat, exp: iat + 300, aud: APPLE_ISS, sub: clientId });
-  // ieee-p1363 = r||s cru, que é o formato do JWS. O padrão do Node é DER, e
-  // DER aqui produz um token que a Apple recusa sem explicar por quê.
+  // ieee-p1363 = raw r||s, which is the JWS format. Node's default is DER,
+  // and DER here produces a token Apple refuses without explaining why.
   const sig = createSign('SHA256')
     .update(`${head}.${body}`)
     .sign({ key: pem, dsaEncoding: 'ieee-p1363' })
@@ -169,14 +171,14 @@ async function applePostForm(url, params) {
   });
   const txt = await r.text();
   let json = null;
-  try { json = txt ? JSON.parse(txt) : null; } catch { /* a Apple às vezes devolve vazio */ }
+  try { json = txt ? JSON.parse(txt) : null; } catch { /* Apple sometimes returns empty */ }
   if (!r.ok) throw new Error(`Apple ${url} respondeu ${r.status}: ${txt.slice(0, 200)}`);
   return json;
 }
 
-// Troca o authorization code (do login nativo) pelo refresh_token. É o único
-// momento em que esse token existe: sem guardar agora, não há como revogar
-// depois, e a exclusão de conta deixa de cumprir a 5.1.1(v).
+// Exchanges the authorization code (from native login) for the refresh_token.
+// It's the only moment this token exists: without storing it now, there is no
+// way to revoke it later, and account deletion stops complying with 5.1.1(v).
 export async function appleExchangeCode(code) {
   const out = await applePostForm(TOKEN_URL, {
     client_id: allowedAudiences()[0],
@@ -187,9 +189,9 @@ export async function appleExchangeCode(code) {
   return { refreshToken: out?.refresh_token || null };
 }
 
-// Revoga o acesso na Apple quando a pessoa exclui a conta. Exigência da
-// 5.1.1(v): apagar só do nosso lado não basta — enquanto o token vive, a conta
-// segue listada em Ajustes > ID Apple > Usar ID Apple.
+// Revokes access on Apple when the person deletes their account. Required by
+// 5.1.1(v): deleting only on our side is not enough — while the token lives,
+// the account stays listed under Settings > Apple ID > Sign in with Apple.
 export async function appleRevoke(refreshToken) {
   if (!refreshToken) throw new Error('sem refresh token da Apple');
   await applePostForm(REVOKE_URL, {

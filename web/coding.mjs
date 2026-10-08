@@ -23,20 +23,20 @@ import { devexecEnabled, devExec } from './devexec.mjs';
 
 function shq(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
 
-// Máximo de bytes que aceitamos escrever/editar num arquivo remoto (o conteúdo
-// vai base64 dentro do comando SSH; arquivos de código cabem folgado).
+// Maximum bytes we accept writing/editing in a remote file (the content
+// goes base64 inside the SSH command; code files fit comfortably).
 const MAX_FILE = 512 * 1024;
 const effect=(state,operation)=>({version:1,state,operation});
 const result=(body,state,operation)=>JSON.stringify({...body,effect:effect(state,operation)});
 
-// codingTools opera em dois modos, transparentes pras tools:
-//  • SEM projeto ativo: alvo é o servidor DO USUÁRIO, via sshExec (chave do
-//    cofre, a partir do sandbox SP). Precisa sandbox + cofre.
-//  • COM projeto ativo ({ project }): alvo é o WORKSPACE do projeto no host de
-//    dev, via devExec (runner). cwd = /work (a raiz do repo clonado), então os
-//    caminhos podem ser relativos. host/usuario são ignorados nesse modo.
-// `transport(cmd, {host,usuario,timeout,token})` esconde a diferença: os dois
-// backends devolvem o MESMO formato { ok, exit, saida, stderr, error }.
+// codingTools operates in two modes, transparent to the tools:
+//  • WITHOUT an active project: the target is the USER's server, via sshExec (vault
+//    key, from the SP sandbox). Needs sandbox + vault.
+//  • WITH an active project ({ project }): the target is the project's WORKSPACE on the
+//    dev host, via devExec (runner). cwd = /work (the cloned repo's root), so
+//    paths can be relative. host/usuario are ignored in this mode.
+// `transport(cmd, {host,usuario,timeout,token})` hides the difference: both
+// backends return the SAME format { ok, exit, saida, stderr, error }.
 export function codingTools(userId, { project = null, getGithubToken = null } = {}) {
   if (project) { if (!devexecEnabled()) return []; }
   else if (!sandboxEnabled() || !vaultEnabled()) return [];
@@ -48,10 +48,10 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     return sshExec(userId, cmd, { host, usuario, timeout });
   }
 
-  // Efeito de um comando que muda estado. Se o transporte devolveu código de
-  // saída, o comando RODOU até o fim (mesmo com erro): o resultado é conhecido e a
-  // tarefa segue. "unknown" fica só pra quando não dá pra saber se terminou:
-  // sem código (conexão caiu), 124/137 (timeout/kill) e 255 no SSH (falha do ssh).
+  // Effect of a command that changes state. If the transport returned an exit
+  // code, the command RAN to completion (even with an error): the result is known and the
+  // task continues. "unknown" is only for when there's no way to know if it finished:
+  // no code (connection dropped), 124/137 (timeout/kill) and 255 on SSH (ssh failure).
   function commandEffect(r) {
     if (r?.ok) return 'applied';
     const e = r?.exit;
@@ -59,15 +59,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     return 'applied';
   }
 
-  // Token do GitHub (só no modo projeto, pra push autenticado). Falha silenciosa
-  // vira null: o push então tenta sem credencial (repo público / remote já auth).
+  // GitHub token (only in project mode, for authenticated push). A silent failure
+  // becomes null: the push then tries without a credential (public repo / remote already auth'd).
   async function githubToken() {
     if (!project || !getGithubToken) return null;
     try { return await getGithubToken(); } catch { return null; }
   }
 
   return [
-    // ---------- LEITURA (inline, sem confirmação) ----------
+    // ---------- READ (inline, no confirmation) ----------
     {
       name: 'ler_arquivo',
       description: 'Reads a text file on a user\'s server (via SSH). Returns the content with line numbers. Use it BEFORE editing. Reading is free, no confirmation needed.',
@@ -189,8 +189,8 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
         const occ = content.split(busca).length - 1;
         if (occ === 0) return result({ ok: false, error: 'Não achei o trecho exato ("busca") no arquivo. Confira com ler_arquivo e cole o texto idêntico.' },'not_applied','file_edit');
         if (occ > 1) return result({ ok: false, error: `O trecho aparece ${occ}x no arquivo; deixe-o ÚNICO incluindo mais contexto ao redor.` },'not_applied','file_edit');
-        // Troca LITERAL. Com string de substituicao o replace interpreta $$, $& e afins,
-        // o que gravaria um arquivo diferente do que o usuario pediu (achado #20).
+        // LITERAL replacement. With a replacement string, replace interprets $$, $& and similar,
+        // which would write a file different from what the user asked for (finding #20).
         const novo = content.split(busca).join(troca);
         const b64 = Buffer.from(novo, 'utf8').toString('base64');
         const tmp = `${caminho}.brambs.tmp`;
@@ -216,9 +216,9 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
       async run({ caminho, conteudo, host, usuario }) {
         if (Buffer.byteLength(String(conteudo), 'utf8') > MAX_FILE) return result({ ok: false, error: 'Conteúdo grande demais (>512KB).' },'not_applied','file_write');
         const b64 = Buffer.from(String(conteudo), 'utf8').toString('base64');
-        // Pasta do arquivo: se o caminho tem barra, tudo antes da última barra
-        // (ou '/' pra caminho na raiz); sem barra (caminho relativo simples), é o
-        // diretório atual '.'. Sem isso, um nome solto viraria mkdir do próprio nome.
+        // The file's folder: if the path has a slash, everything before the last slash
+        // (or '/' for a root path); without a slash (simple relative path), it's the
+        // current directory '.'. Without this, a bare name would turn into a mkdir of itself.
         const cp = String(caminho);
         const dir = cp.includes('/') ? (cp.replace(/\/[^/]*$/, '') || '/') : '.';
         const tmp = `${caminho}.brambs.tmp`;
@@ -254,8 +254,8 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
     },
 
     // ---------- GIT (GATED — confirm.mjs) ----------
-    // Operações que mudam o repo. Leitura de git (status/log/diff/branch/show)
-    // continua livre por rodar_leitura. Todas rodam via git -C <diretorio>.
+    // Operations that change the repo. Git reads (status/log/diff/branch/show)
+    // remain free via rodar_leitura. All of them run via git -C <diretorio>.
     {
       name: 'git_commit',
       description: 'Makes a commit in the git repository of a directory (via SSH). By default runs "git add -A" first (adicionar_tudo=false to commit only what is already staged). WRITE ACTION: only runs after the user confirms.',
@@ -274,8 +274,8 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
         if (!String(mensagem || '').trim()) return result({ ok: false, error: 'mensagem do commit vazia.' },'not_applied','git_commit');
         const D = shq(diretorio || '.');
         const add = adicionar_tudo === false ? '' : `git -C ${D} add -A && `;
-        // Identidade só como FALLBACK: -c não sobrescreve config já existente do repo? Na verdade
-        // -c tem prioridade; por isso só usamos quando o repo não tem user.name/email definidos.
+        // Identity only as FALLBACK: doesn't -c override config already set in the repo? Actually
+        // -c takes priority; that's why we only use it when the repo doesn't have user.name/email set.
         const ident = `NAME="$(git -C ${D} config user.name || echo ${shq(marca().nome)})"; EMAIL="$(git -C ${D} config user.email || echo ${shq(`dev@${new URL(siteDaMarca()).hostname}`)})";`;
         const cmd = `${ident} ${add}git -C ${D} -c user.name="$NAME" -c user.email="$EMAIL" commit -m ${shq(mensagem)} && git -C ${D} log -1 --oneline`;
         const r = await transport(cmd, { host, usuario, timeout: 60_000 });
@@ -302,9 +302,9 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
         const rem = shq(remote || 'origin');
         const br = branch ? shq(branch) : `"$(git -C ${D} rev-parse --abbrev-ref HEAD)"`;
         const u = set_upstream ? '-u ' : '';
-        // Modo projeto: push autenticado com o token do GitHub do usuário. O token
-        // vai pro container via GH_TOKEN (env, fora do argv); o credential helper
-        // injeta user/senha só em memória, sem gravar no .git/config.
+        // Project mode: authenticated push with the user's GitHub token. The token
+        // goes to the container via GH_TOKEN (env, outside argv); the credential helper
+        // injects user/password only in memory, without writing to .git/config.
         const token = await githubToken();
         const cred = token ? `-c credential.helper='!f(){ echo username=x-access-token; echo password=${'$'}{GH_TOKEN}; };f' ` : '';
         const cmd = `git -C ${D} ${cred}push ${u}${rem} ${br} 2>&1`;
@@ -358,5 +358,5 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
   ];
 }
 
-// Nomes das tools de ESCRITA deste módulo (para o confirm.mjs marcar como gated).
+// Names of this module's WRITE tools (for confirm.mjs to mark as gated).
 export const CODING_WRITE_TOOLS = ['editar_arquivo', 'escrever_arquivo', 'rodar_comando', 'git_commit', 'git_push', 'git_branch', 'git_checkout'];

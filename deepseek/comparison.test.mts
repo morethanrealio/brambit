@@ -34,7 +34,7 @@ test('actual router prioritizes explicit Gemini for text and raw images, preserv
 });
 
 test('actual image caption helper honors Gemini selection without Together dispatch or fallback',async()=>{
- const media=readFileSync('web/media.mjs','utf8');const code=media.slice(media.indexOf('export async function describeImage('),media.indexOf('// OCR de PDF')).replace('export ','');
+ const media=readFileSync('web/media.mjs','utf8');const code=media.slice(media.indexOf('export async function describeImage('),media.indexOf('// PDF OCR via Gemini')).replace('export ','');
  let calls=0,ready=true,fail=false;const ctx=vm.createContext({GEMINI_COMPARISON_MODEL,requireProviderContent,isGeminiComparison:()=>true,imageEnabled:()=>ready,makeGemini:(opts:{model:string,search:boolean,maxOutputTokens:number})=>{assert.equal(opts.model,GEMINI_COMPARISON_MODEL);assert.equal(opts.search,false);assert.equal(opts.maxOutputTokens,1400);return {complete:async(arg:{messages:{images:{data:string}[]}[]})=>{calls++;assert.equal(arg.messages[0].images[0].data,Buffer.from('synthetic').toString('base64'));if(fail)throw Error('synthetic rejected');return {text:'417',usage:{model:GEMINI_COMPARISON_MODEL},protocolError:{code:'output_truncated'}};}};}});
  vm.runInContext(code,ctx);const run=()=>vm.runInContext("describeImage(buffer,'image/png','describe',{maxOut:1400})",ctx);ctx.buffer=Buffer.from('synthetic');
  const result=await run();assert.equal(result.text,'417');assert.equal(result.truncated,true);assert.equal(calls,1);

@@ -1,25 +1,25 @@
 import {scopeConflict,reviewRequestNeedsClarification,editRequestNeedsClarification} from './app-task-scope.mjs';
 import {runCodingTask} from './coding-task-runner.mjs';
 import { runAppTask } from './app-task-runner.mjs';
-// ── Sub-agente de CODING (isolamento estrutural) ──
-// Molde = runGoogleSubagent (server.mjs), com UMA diferença central: coding
-// NÃO é one-shot. Uma tarefa de código se estende por VÁRIOS turnos do
-// principal (você lê, ele responde, você pede o próximo passo). Por isso este
-// sub-agente tem SESSÃO PERSISTENTE por (agente, thread): o history do loop de
-// código vive aqui e é reusado turno a turno, em vez de ser jogado no history
-// do principal (que é o que inchava o contexto de um caso real: 5M tokens).
+// ── CODING sub-agent (structural isolation) ──
+// Template = runGoogleSubagent (server.mjs), with ONE central difference: coding
+// is NOT one-shot. A coding task spans SEVERAL turns of the
+// main agent (you read, it replies, you ask for the next step). That's why this
+// sub-agent has a PERSISTENT SESSION per (agent, thread): the code loop's history
+// lives here and is reused turn by turn, instead of being dumped into the main
+// agent's history (which is what bloated the context in a real case: 5M tokens).
 //
-// O que sai do principal: a suíte inteira de tools de código (~40-80 defs,
-// ~20k tok de schema reenviados a cada passo) e os resultados crus enormes
-// (dumps de arquivo, saída de comando). O principal fica só com a meta-tool
-// `codar`; a síntese volta como texto. Igual google/pesquisar/conectores.
+// What this takes out of the main agent: the entire suite of code tools (~40-80 defs,
+// ~20k tok of schema resent on every step) and the huge raw results
+// (file dumps, command output). The main agent is left with just the meta-tool
+// `codar`; the synthesis comes back as text. Same as google/pesquisar/conectores.
 //
-// Escrita gated: a trava de confirmação (addGated) é presa ao turno/thread do
-// principal e NÃO funciona dentro de um sub-agente. Então o sub-agente só é
-// dono do loop quando a escrita já roda inline (modo aceitar_edicoes ou super/
-// livre) — que é EXATAMENTE o cenário pesado. Em modo padrao a decisão
-// de rota fica com o server (mantém inline no principal). Este módulo não
-// decide política; só executa o loop com as tools que recebe.
+// Gated writes: the confirmation guard (addGated) is tied to the main agent's
+// turn/thread and does NOT work inside a sub-agent. So the sub-agent only
+// owns the loop when the write already runs inline (aceitar_edicoes mode or super/
+// livre) — which is EXACTLY the heavy scenario. In padrao mode, the routing
+// decision stays with the server (keeps it inline in the main agent). This module doesn't
+// decide policy; it just runs the loop with the tools it receives.
 
 import { retainedFilePage } from '../core-proto/file-page.mjs';
 import { createBuildState } from './app-build-state.mjs';
@@ -27,15 +27,15 @@ import { runAgent } from '../core-proto/core.mjs';
 import { comIdioma } from './locale.mjs';
 import { marca } from './marca.mjs';
 
-// Sessões persistentes de coding, por sessionKey = `${agentId}:${threadId}`.
-// { history: [...], lastUsed: ms }. Idle > SESSION_TTL_MS é coletado (o resumo
-// do trabalho já voltou pro principal como texto a cada turno; retomar do zero
-// custa pouco perto de guardar contexto morto).
+// Persistent coding sessions, keyed by sessionKey = `${agentId}:${threadId}`.
+// { history: [...], lastUsed: ms }. Idle > SESSION_TTL_MS gets collected (the work
+// summary has already gone back to the main agent as text on every turn; starting from
+// scratch again costs little compared to keeping dead context).
 const sessions = new Map();
 const SESSION_TTL_MS = Number(process.env.CODING_SESSION_TTL_MS) || 30 * 60 * 1000; // 30 min
-// Teto de history do sub-agente (mensagens). Coding gera muitos passos; sem
-// teto o history do sub cresce igual o do principal crescia. Mantém as N mais
-// recentes (o par user/assistant + tool msgs). Compactação real fica p/ depois.
+// Cap on the sub-agent's history (messages). Coding generates many steps; without
+// a cap, the sub's history would grow the way the main agent's used to. Keeps the N most
+// recent (the user/assistant pair + tool msgs). Real compaction comes later.
 const HISTORY_MAX = Number(process.env.CODING_HISTORY_MAX) || 60;
 
 function gcSessions(nowMs) {
@@ -44,15 +44,15 @@ function gcSessions(nowMs) {
   }
 }
 
-// Higiene de contexto ENTRE chamadas (item 3). O pruneTurnBlobs do core só
-// colapsa blobs gerados DENTRO da chamada atual (turnStart = messages.length);
-// o history que entra de chamadas anteriores fica full-size. Numa sessão de
-// coding persistente isso reacumula (releitura do mesmo arquivo turno a turno =
-// o inchaço daquele caso). Aqui, ao persistir, colapsamos leituras/saídas
-// antigas e args de escrita grandes, preservando intactas as N mais recentes
-// (o modelo ainda precisa do que acabou de ver).
+// Context hygiene BETWEEN calls (item 3). The core's pruneTurnBlobs only
+// collapses blobs generated WITHIN the current call (turnStart = messages.length);
+// history coming in from previous calls stays full-size. In a persistent
+// coding session this re-accumulates (re-reading the same file turn after turn =
+// the bloat from that case). Here, when persisting, we collapse old reads/outputs
+// and large write args, keeping the N most recent intact
+// (the model still needs what it just saw).
 const BLOB_MAX = Number(process.env.CODING_BLOB_MAX) || 2000;   // chars
-const KEEP_RECENT = Number(process.env.CODING_KEEP_RECENT) || 6; // últimas msgs intactas
+const KEEP_RECENT = Number(process.env.CODING_KEEP_RECENT) || 6; // last msgs intact
 function collapseHistoryBlobs(messages) {
   const lastKeep = messages.length - KEEP_RECENT;
   for (let i = 0; i < lastKeep; i++) {
@@ -73,17 +73,17 @@ function collapseHistoryBlobs(messages) {
   return messages;
 }
 
-// Costura do par chamada/resultado depois de qualquer poda. Cortar o history
-// pelo teto de mensagens é um corte CEGO: ele pode cair entre o `assistant` que
-// pediu a ferramenta e o `tool` que traz o resultado, e o resultado sozinho é
-// inválido pra API. A Together recusa a chamada inteira com 400
+// Stitching the call/result pair back together after any pruning. Cutting the history
+// at the message cap is a BLIND cut: it can land between the `assistant` that
+// requested the tool and the `tool` that carries the result, and the result alone is
+// invalid for the API. Together rejects the entire call with a 400
 // `invalid_tool_messages` ("tool message tool_call_id '...' does not match any
-// tool call in the preceding assistant messages"); o provider cai no fallback e,
-// como o history envenenado FICA guardado na sessão, TODA chamada seguinte da
-// mesma thread repete o mesmo erro até a sessão expirar (30 min). Foi o que
-// derrubou o DeepSeek pro Gemini em 03/09 e 05/09, sempre com o mesmo
-// tool_call_id repetindo. Aqui mantemos só os `tool` cujo id foi de fato pedido
-// por um `assistant` ANTERIOR no que sobrou da poda.
+// tool call in the preceding assistant messages"); the provider falls back and,
+// since the poisoned history STAYS stored in the session, EVERY subsequent call on the
+// same thread repeats the same error until the session expires (30 min). This is what
+// knocked DeepSeek down to Gemini on 2026-09-03 and 2026-09-05, always with the same
+// tool_call_id repeating. Here we keep only the `tool` messages whose id was actually requested
+// by a PREVIOUS `assistant` in what was left after pruning.
 function dropOrphanToolMessages(messages) {
   const called = new Set();
   const out = [];
@@ -97,15 +97,15 @@ function dropOrphanToolMessages(messages) {
   return out;
 }
 
-// Corte por número de mensagens, preservando o OBJETIVO da sessão.
-// O corte antigo era um slice puro da cauda, e a cauda descarta a cabeça — e a
-// cabeça é justamente a primeira mensagem do usuário, a que diz o que a sessão
-// veio fazer. Esse caminho não é raro: o resumo só dispara acima de
-// COMPACT_TRIGGER_TOKENS, então uma sessão com MUITA mensagem curta (o padrão de
-// quem itera em passos pequenos) passa de HISTORY_MAX sem nunca chegar ao
-// gatilho do resumo, e o executor perde o objetivo original enquanto acha que
-// está com o contexto inteiro. Quando a âncora sai no corte, ela volta como
-// bloco de contexto explícito na frente da cauda.
+// Cutting by number of messages, preserving the session's GOAL.
+// The old cut was a plain tail slice, and the tail discards the head — and the
+// head is exactly the user's first message, the one that says what the session
+// came to do. This path isn't rare: the summary only fires above
+// COMPACT_TRIGGER_TOKENS, so a session with MANY short messages (the pattern of
+// someone iterating in small steps) goes past HISTORY_MAX without ever reaching the
+// summary trigger, and the executor loses the original goal while thinking it
+// has the whole context. When the anchor drops out in the cut, it comes back as an
+// explicit context block in front of the tail.
 function capHistory(messages) {
   if (messages.length <= HISTORY_MAX) return messages;
   const tail = messages.slice(messages.length - HISTORY_MAX);
@@ -114,20 +114,20 @@ function capHistory(messages) {
   return [{ role: 'user', content: `[OBJETIVO ORIGINAL DESTA SESSÃO DE CÓDIGO]\n${anchor.content.slice(0, 2000)}` }, ...tail];
 }
 
-// ── Compactação por RESUMO (igual Claude Code) ──
-// Colapsar blob corta o TAMANHO das leituras/escritas antigas, mas o histórico
-// cru continua em `contents` (que o Gemini NÃO cacheia) e cresce turno a turno,
-// derrubando o cache hit. A compactação por resumo troca todo o histórico velho
-// por um único bloco "estado do trabalho até aqui" + a última resposta, encolhendo
-// `contents` de dezenas de milhares de tokens pra alguns milhares. É o passo que
-// recupera o cache e o que fecha a diferença pro Claude Code.
-// Gatilho ALTO de propósito. O colapso de blob (collapseHistoryBlobs) já encolhe
-// o conteúdo pesado sem custo de chamada extra; o resumo só compensa a chamada de
-// resumo quando o histórico é MUITO longo (aquele cenário, centenas de passos),
-// onde mesmo os stubs colapsados + as msgs recentes somam muito. O bench de 6
-// turnos mostrou que disparar cedo (8k) piora vs só-colapso (a chamada de resumo
-// não se paga nessa escala). Acima deste teto (contents já colapsados), o resumo
-// vira o único jeito de estancar. Tunável por env sem redeploy.
+// ── Compaction by SUMMARY (like Claude Code) ──
+// Collapsing blobs cuts the SIZE of old reads/writes, but the raw
+// history stays in `contents` (which Gemini does NOT cache) and grows turn by turn,
+// killing the cache hit. Summary compaction swaps the entire old history
+// for a single "state of the work so far" block + the last response, shrinking
+// `contents` from tens of thousands of tokens down to a few thousand. It's the step that
+// recovers the cache and closes the gap with Claude Code.
+// HIGH trigger on purpose. Blob collapsing (collapseHistoryBlobs) already shrinks
+// heavy content with no extra call cost; the summary only pays for the
+// summary call when the history is VERY long (that scenario, hundreds of steps),
+// where even collapsed stubs + recent msgs add up to a lot. The 6-turn
+// bench showed that firing early (8k) is worse than collapse-only (the summary call
+// doesn't pay for itself at that scale). Above this cap (contents already collapsed), the summary
+// becomes the only way to stop the bleeding. Tunable via env without a redeploy.
 const COMPACT_TRIGGER_TOKENS = Number(process.env.CODING_COMPACT_TRIGGER) || 30000; // aprox tokens
 const estMsgTokens = (m) => {
   if (!m) return 0;
@@ -149,7 +149,7 @@ const COMPACT_SYSTEM = [
   'Do not invent anything that is not in the history. Be economical.',
 ].join('\n');
 
-// Monta um transcript curto do histórico pra alimentar o resumo (trunca blobs).
+// Builds a short transcript of the history to feed the summary (truncates blobs).
 function transcriptOf(messages) {
   const line = (m) => {
     if (!m || !m.role) return '';
@@ -165,10 +165,10 @@ function transcriptOf(messages) {
   return messages.map(line).filter(Boolean).join('\n');
 }
 
-// Resume o histórico num único bloco e devolve a nova sessão compacta:
-// [ {user: resumo}, {assistant: última resposta} ] — sequência válida (o próximo
-// turno acrescenta um user, mantendo a alternância). Em falha, devolve null e o
-// caller mantém o comportamento anterior (cap + colapso).
+// Summarizes the history into a single block and returns the new compact session:
+// [ {user: resumo}, {assistant: última resposta} ] — a valid sequence (the next
+// turn adds a user message, keeping the alternation). On failure, returns null and the
+// caller keeps the previous behavior (cap + collapse).
 async function compactHistory({ messages, provider, onUsage }) {
   try {
     const transcript = transcriptOf(messages);
@@ -181,7 +181,7 @@ async function compactHistory({ messages, provider, onUsage }) {
     if (res?.usage && onUsage) { try { onUsage({ ...res.usage, kind: 'compact', noBill: true }); } catch {} }
     const resumo = (res?.text || '').trim();
     if (!resumo) return null;
-    // preserva a última resposta em texto do assistente (o passo mais fresco)
+    // preserves the assistant's last text response (the freshest step)
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() && !(Array.isArray(m.toolCalls) && m.toolCalls.length));
     const out = [{ role: 'user', content: `[CONTEXT] Summary of the coding job so far:\n${resumo}` }];
     if (lastAssistant) out.push({ role: 'assistant', content: lastAssistant.content });
@@ -189,9 +189,9 @@ async function compactHistory({ messages, provider, onUsage }) {
   } catch { return null; }
 }
 
-// System enxuto do sub-agente de coding. Só o essencial: ele é um executor de
-// tarefa de código com ferramental próprio; o principal já cuidou de persona,
-// canal, memória. Nada disso precisa ser reenviado aqui.
+// Lean system prompt for the coding sub-agent. Only the essentials: it's an executor of
+// a code task with its own tooling; the main agent already handled persona,
+// channel, memory. None of that needs to be resent here.
 export const CODING_SUBAGENT_SYSTEM = [
   "You are an assistant's CODE task executor. You receive a programming",
   'goal (change an app, project, server or sandbox) and accomplish it',
@@ -221,15 +221,15 @@ export const CODING_SUBAGENT_SYSTEM = [
   '  does not see the intermediate steps or the raw tool output.',
 ].join('\n');
 
-// ── System do sub-agente de BUILD DE APP ───────────────────────────────────
-// Segunda instância do MESMO motor (runCodingSubagent), com outro system e
-// outro registry — é o "carrega o plugin duas vezes com toolName diferente" do
-// dsh. O que muda em relação ao `codar`: aqui o alvo é sempre um app do dono no
-// subdomínio dele, e as ações IRREVERSÍVEIS (publicar, apagar, replicar, voltar
-// versão, remover) NÃO existem neste registry — são decisão do dono, e o gate de
-// confirmação vive no turno principal, não num sub-agente. O sub termina o
-// rascunho e RELATA o que falta confirmar (mesma disciplina do dsh: filho
-// reporta a limitação, pai decide perguntar ao humano).
+// ── System prompt for the APP BUILD sub-agent ──────────────────────────────
+// Second instance of the SAME engine (runCodingSubagent), with a different system and
+// a different registry — it's the "load the plugin twice with a different toolName" from
+// dsh. What changes compared to `codar`: here the target is always an owner's app on
+// their subdomain, and IRREVERSIBLE actions (publish, delete, replicate, roll back
+// version, remove) do NOT exist in this registry — they are the owner's decision, and the
+// confirmation gate lives in the main turn, not in a sub-agent. The sub finishes the
+// draft and REPORTS what's left to confirm (same discipline as dsh: the child
+// reports the limitation, the parent decides whether to ask the human).
 export const APP_SUBAGENT_SYSTEM = () => [
   `You are the APP BUILDER of a ${marca().nome} assistant. You receive a goal`,
   '(create or change a web app of the owner, published on their subdomain) and carry it out',
@@ -307,16 +307,16 @@ export const APP_SUBAGENT_SYSTEM = () => [
   'not for the owner.',
 ].join('\n');
 
-// Executa uma rodada do sub-agente de coding sobre uma sessão persistente.
-//   objetivo   — o que fazer (o principal descreve com contexto; o sub não vê a conversa)
-//   tools      — ToolRegistry já montado com o ferramental de código
-//   provider   — provider forte (coding precisa do modelo bom)
-//   sessionKey — `${agentId}:${threadId}` (persiste o history entre turnos)
-//   system     — override do system (default CODING_SUBAGENT_SYSTEM)
-//   maxSteps   — teto de passos do loop
-//   onUsage    — recebe cada usage pra cobrança (kind='subagent')
-//   onEvent    — encaminha eventos (tool_call etc.) pra narração ao vivo
-//   nowMs      — relógio injetável (testes)
+// Runs one round of the coding sub-agent over a persistent session.
+//   objetivo   — what to do (the main agent describes it with context; the sub doesn't see the conversation)
+//   tools      — ToolRegistry already assembled with the code tooling
+//   provider   — strong provider (coding needs the good model)
+//   sessionKey — `${agentId}:${threadId}` (persists the history across turns)
+//   system     — system override (default CODING_SUBAGENT_SYSTEM)
+//   maxSteps   — cap on the loop's steps
+//   onUsage    — receives each usage for billing (kind='subagent')
+//   onEvent    — forwards events (tool_call etc.) for live narration
+//   nowMs      — injectable clock (tests)
 export async function runCodingSubagent({
   objetivo, tools, provider, sessionKey,
   system = CODING_SUBAGENT_SYSTEM, maxSteps = 40,
@@ -343,24 +343,24 @@ export async function runCodingSubagent({
     onEvent: ev => { buildState?.event(ev); onEvent?.(ev); },
   });
 
-  // Persiste o history do sub (sem imagens; coding não usa), colapsa blobs
-  // antigos (higiene entre chamadas) e o poda pelo teto de mensagens.
+  // Persists the sub's history (no images; coding doesn't use them), collapses old
+  // blobs (hygiene between calls) and prunes it by the message cap.
   const hist = messages.filter((m) => m && m.role);
   for (const m of hist) if (m.images) delete m.images;
   collapseHistoryBlobs(hist);
-  // Compactação por resumo: se o history (já colapsado) ainda passa do limiar,
-  // troca-o por um único bloco "estado do trabalho" + a última resposta. Isso
-  // encolhe os `contents` (não cacheáveis) que cresciam turno a turno e derrubavam
-  // o cache hit. Em falha do resumo, cai no cap por nº de mensagens (comportamento
-  // anterior), então nunca fica pior. Rodamos ANTES do cap pra o resumo enxergar
-  // todo o history.
+  // Summary compaction: if the history (already collapsed) still exceeds the threshold,
+  // swap it for a single "state of the work" block + the last response. This
+  // shrinks the (non-cacheable) `contents` that grew turn by turn and was killing
+  // the cache hit. On summary failure, it falls back to the cap by number of messages (previous
+  // behavior), so it's never worse. We run this BEFORE the cap so the summary can see
+  // the whole history.
   let compacted = null;
   if (compact && estHistoryTokens(hist) > COMPACT_TRIGGER_TOKENS) {
     compacted = await compactHistory({ messages: hist, provider, onUsage });
   }
-  // O que for guardado passa pela costura do par chamada/resultado: é o que
-  // sobra da poda que vai virar o `history` da próxima chamada, então é aqui que
-  // um resultado órfão precisa morrer, antes de envenenar a sessão inteira.
+  // Whatever gets stored goes through the call/result pair stitching: it's what's
+  // left after pruning that becomes the `history` for the next call, so this is where
+  // an orphan result needs to die, before it poisons the entire session.
   if (compacted) sess.history = compacted;
   else sess.history = dropOrphanToolMessages(capHistory(hist));
   sess.lastUsed = Date.now();
@@ -371,16 +371,16 @@ export async function runCodingSubagent({
   return buildState ? buildState.finish({ text, termination }) : text || 'A chamada de código terminou sem resumo textual; conclusão não confirmada.';
 }
 
-// Descarta a sessão de coding de uma thread (ex.: sair do projeto/app, reset).
+// Discards a thread's coding session (e.g. leaving the project/app, reset).
 export function resetCodingSession(sessionKey) {
   if (sessionKey) sessions.delete(sessionKey);
 }
 
-// Fábrica da meta-tool `codar` pro registry do PRINCIPAL. Recebe uma closure
-// que monta (lazy) o registry de coding + provider quando a tool é chamada, pra
-// não pagar a montagem em turno que não coda.
-// `language` = idioma do dono. O relatório do sub-agente volta pro principal,
-// mas pedaços dele (resumo, perguntas) chegam à pessoa quase literais.
+// Factory for the `codar` meta-tool for the MAIN agent's registry. Receives a closure
+// that (lazily) builds the coding registry + provider when the tool is called, so
+// it doesn't pay the setup cost on a turn that doesn't code.
+// `language` = owner's language. The sub-agent's report goes back to the main agent,
+// but pieces of it (summary, questions) reach the person almost verbatim.
 export function makeCodarTool({ buildCodingContext, sessionKey, executionId, onUsage, onEvent, compact, extra, taskStore, targetIdentity, authorize, shouldPause, dispatch, language }) {
   return {
     name: 'codar',
@@ -433,11 +433,11 @@ export function makeCodarTool({ buildCodingContext, sessionKey, executionId, onU
   };
 }
 
-// Fábrica da meta-tool `construir_app` pro registry do PRINCIPAL. Mesma forma da
-// makeCodarTool (mesmo motor, outra instância): o que muda é o system, o registry
-// que a closure monta e a sessionKey (`:app`, separada da sessão do `codar`).
-// É por AQUI que o modelo forte entra — num contexto novo e limpo. O turno
-// principal não troca de modelo em momento nenhum.
+// Factory for the `construir_app` meta-tool for the MAIN agent's registry. Same shape as
+// makeCodarTool (same engine, another instance): what changes is the system, the registry
+// the closure builds and the sessionKey (`:app`, separate from the `codar` session).
+// This is where the strong model comes in — in a new, clean context. The main
+// turn never switches models at any point.
 export function makeConstruirAppTool({ buildAppContext, sessionKey, executionId, onUsage, onEvent, compact, onAppTarget, taskStore, shouldPause, userRequest, dispatch, language }) {
   return {
     name: 'construir_app',
@@ -488,9 +488,9 @@ export function makeConstruirAppTool({ buildAppContext, sessionKey, executionId,
         }
         const { tools, provider } = await buildAppContext();
         const nomeAlvo = app && String(app).trim() ? String(app).trim() : '';
-        // Quando o principal JÁ sabe qual app é, avisa o hosting: assim a PRIMEIRA
-        // escrita do sub-agente já sai com o app certo, sem ele ter que repetir o
-        // slug em cada chamada (pedido de um usuário).
+        // When the main agent ALREADY knows which app it is, it notifies the hosting: this way the FIRST
+        // write from the sub-agent already goes out with the right app, without it having to repeat the
+        // slug in every call (a user's request).
         if (nomeAlvo && typeof onAppTarget === 'function') {
           try { onAppTarget(nomeAlvo); } catch {}
         }

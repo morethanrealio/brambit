@@ -1,23 +1,23 @@
-// Saídas ricas do atendimento ao público: o que um plugin (porta
-// atendimentoPublico) pode mandar no lugar do texto do modelo. Cada canal decide
-// como entrega; quem não sabe entregar um tipo usa o texto de textoDasSaidas.
+// Rich outputs for public support: what a plugin (atendimentoPublico
+// port) can send instead of the model's text. Each channel decides
+// how to deliver it; whoever doesn't know how to deliver a type uses textoDasSaidas's text.
 //
-// Tipos:
+// Types:
 //  {tipo:'texto', texto}
-//  {tipo:'imagem', url, legenda?}            url https
-//  {tipo:'botao', texto, rotulo, url, imagem?}  botão que abre um link (url https);
-//                                            imagem (https) vai no topo da mensagem
-//  {tipo:'template', nome, idioma?, componentes?}  template aprovado do canal
+//  {tipo:'imagem', url, legenda?}            https url
+//  {tipo:'botao', texto, rotulo, url, imagem?}  button that opens a link (https url);
+//                                            image (https) goes at the top of the message
+//  {tipo:'template', nome, idioma?, componentes?}  channel's approved template
 //
-// Imagem, botão e template aceitam `reserva`: texto que o canal manda no lugar
-// quando não consegue entregar aquela saída (ex.: a Meta recusa o template).
+// Image, button and template accept `reserva`: text the channel sends instead
+// when it can't deliver that output (e.g. Meta rejects the template).
 //
-// O que vem do plugin passa por aqui antes de sair: tipo desconhecido, url que
-// não é https ou campo vazio derrubam só aquela saída.
+// What comes from the plugin passes through here before going out: an unknown type, a url that
+// isn't https or an empty field drop just that output.
 export const SAIDAS_MAX = 10;
 export const SAIDA_TEXTO_MAX = 4000;
 export const LEGENDA_MAX = 1024;
-export const ROTULO_MAX = 20;       // botão de link no WhatsApp aceita até 20
+export const ROTULO_MAX = 20;       // WhatsApp link button accepts up to 20
 export const COMPONENTES_MAX = 20000; // chars do JSON dos componentes de um template
 
 const corte = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
@@ -62,8 +62,8 @@ export function normalizarSaidas(saidas) {
   return saidas.slice(0, SAIDAS_MAX).map(normalizar).filter(Boolean);
 }
 
-// Versão em texto: vai pro histórico (o modelo vê o que a pessoa recebeu) e pro
-// canal que não entrega o tipo rico.
+// Text version: goes to the history (the model sees what the person received) and to
+// the channel that doesn't deliver the rich type.
 export function textoDasSaidas(saidas) {
   return saidas.map((s) => {
     if (s.tipo === 'texto') return s.texto;

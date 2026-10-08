@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { marca } from './marca.mjs';
 import { connectorActionReceipt } from './connector-action-evidence.mjs';
 import { recurrenceLabel } from './calendar-recurrence.mjs';
-// Recibos de ações são criados pelo código no limite de execução, nunca pelo
-// modelo nem a partir de um simples tool_call. Sem rede, retries ou armazenamento.
+// Action receipts are created by the code at the execution boundary, never by
+// the model nor from a plain tool_call. No network, retries or storage.
 const NATIVE = new Set(['criar_lembrete', 'enviar_mensagem', 'enviar_sugestao_time', 'agendar_execucao_rotina', 'executar_rotina_agora', 'memoria_anotar', 'memoria_atualizar', 'memoria_escrever']);
 const MAIL = new Set(['gmail_send', 'gmail_create_draft']);
 export function actionResult(evidence, text) {
@@ -32,10 +32,10 @@ const words = {
   'en': { unknown:'I could not confirm this now, so I would rather not say it is done. If you still need it, just ask me.', pending:'Action not executed; awaiting your confirmation.', scheduled:'Reminder scheduled, not sent', get registered() { return `Suggestion sent to the ${marca().nome} team`; }, saved:'Information saved to permanent memory', already_saved:'That information was already in permanent memory', draft:'Draft created, not sent', accepted:'Send accepted by the service; delivery and reading not confirmed', failed:'The action was not completed', check:'completion needs confirmation; not verified in this reply', reported:'reported by you; not verified with the service', target:'Destination', at:'Time', ref:'Reference', subject:'Action' },
   'es': { unknown:'No pude confirmar esto ahora, así que prefiero no decir que está hecho. Si aún lo necesitas, pídemelo.', pending:'Acción no ejecutada; espera tu confirmación.', scheduled:'Recordatorio programado, no enviado', get registered() { return `Sugerencia enviada al equipo de ${marca().nome}`; }, saved:'Información guardada en la memoria permanente', already_saved:'Esa información ya estaba guardada en la memoria permanente', draft:'Borrador creado, no enviado', accepted:'Envío aceptado por el servicio; entrega y lectura no confirmadas', failed:'La acción no se completó', check:'finalización por confirmar; no verificada en esta respuesta', reported:'informado por ti; no verificado en el servicio', target:'Destino', at:'Horario', ref:'Referencia', subject:'Acción' },
 };
-// Rótulos impressos pelo próprio recibo. O modelo às vezes ecoa o recibo
-// inteiro no texto dele; quando a afirmação inicial é trocada pelo recibo de
-// verdade (que já traz esses campos), os ecos seguintes ficam órfãos e o
-// destino/horário aparece duplicado (msg 18000, 16/09/2026).
+// Labels printed by the receipt itself. The model sometimes echoes the whole
+// receipt in its own text; when the initial claim is swapped for the real
+// receipt (which already carries these fields), the later echoes become
+// orphaned and the destination/time shows up duplicated (msg 18000, 2026-09-16).
 const RECEIPT_FIELD = /^\s*(?:destino|destination|hor[áa]rios?|times?|refer[êe]ncia|reference|a[çc][ãa]o|acci[óo]n|action)\s*:\s*[^\n]{0,120}$/i;
 const languageKey = language => /^en\b/i.test(language) ? 'en' : /^es\b/i.test(language) ? 'es' : 'pt';
 const routineWords={
@@ -61,9 +61,10 @@ export function renderAction(e, language = 'pt-BR') {
   if (e.family === 'reminder' && e.state === 'updated') return (lang==='en'?'Next reminder rescheduled; the remaining cadence is unchanged.':lang==='es'?'Próximo aviso reprogramado; la cadencia restante no cambia.':'Próximo aviso remarcado; a cadência dos demais foi preservada.') + ` ${w.at}: ${clean(e.at)}. ${w.target}: ${clean(e.target)}.`;
   if (e.family === 'routine_run' && e.detail && ['routine_blocked','unknown'].includes(e.state)) return e.detail;
   let text = connectorWords[lang][e.state] || routineWords[lang][e.state] || w[e.state] || w.unknown;
-  // O texto de um lembrete pode ser a mensagem futura inteira. Ele e o ID de
-  // armazenamento continuam no recibo tipado/log para prova e suporte, mas não
-  // pertencem à conversa. A confirmação visível precisa ser curta e humana.
+  // The text of a reminder can be the entire future message. It and the
+  // storage ID stay in the typed receipt/log for proof and support, but do
+  // not belong in the conversation. The visible confirmation needs to be
+  // short and human.
   if (e.subject && e.family !== 'reminder') text += `. ${w.subject}: ${clean(e.subject)}`;
   if (e.target) text += `. ${w.target}: ${clean(e.target)}`;
   const at = e.recurrence ? recurrenceLabel(e.recurrence.rule,e.recurrence.start,e.recurrence.timezone,language) : e.at;
@@ -99,19 +100,21 @@ export function renderCompletedActions(entries, language = 'pt-BR') {
     return true;
   }), language);
 }
-// Registros contáveis (web/trackers.mjs): só a frase de sucesso da tool prova a
-// gravação. Pergunta, ambiguidade e erro não viram recibo, e o "anotei" do
-// modelo nesses casos continua sem prova. Sem isto, o "anotei" de um
-// registrar_evento que gravou de verdade saía da resposta e, quando era a
-// resposta inteira, virava "Não consegui confirmar isso agora" (caso 05/10/2026).
+// Countable records (web/trackers.mjs): only the tool's success phrase proves
+// the write. A question, ambiguity or error never becomes a receipt, and the
+// model's "anotei" in those cases stays unproven. Without this, the "anotei"
+// of a registrar_evento that actually wrote would drop from the response and,
+// when it was the entire response, it turned into "Não consegui confirmar
+// isso agora" (case 2026-10-05).
 const TRACKER = {
   registrar_evento: [/^Registrado em "(.+)": (\d{4}-\d{2}-\d{2})(?: valor (-?\d+(?:\.\d+)?))?/, m => ({ state:'recorded', subject:m[1], at:m[2], value:m[3] })],
   remover_evento: [/^Removi (\d+) lançamentos? de "(.+)" em (\d{4}-\d{2}-\d{2})\.$/, m => ({ state:'removed', subject:m[2], at:m[3], value:m[1] })],
   remover_tracker: [/^Parei de acompanhar "(.+)" \(/, m => ({ state:'stopped', subject:m[1] })],
 };
-// A consulta também prova, mas só o estado que leu: "já está anotado" depois
-// do consultar_evento era cortado como "fiz sem prova" e o fato lido no banco
-// sumia da resposta (msg 8494, 05/10/2026). Erro e "não achei" seguem sem recibo.
+// The query also proves, but only the state it read: "já está anotado" after
+// consultar_evento was being cut as "done without proof" and the fact read
+// from the database disappeared from the response (msg 8494, 2026-10-05).
+// Error and "não achei" still have no receipt.
 function trackerReadReceipt(out) {
   const d = resultData(out);
   if (typeof d?.registro !== 'string' || !Number.isInteger(d.eventos)) return null;
@@ -172,15 +175,16 @@ function receipt(name, args, out) {
   if (typeof out === 'string' && out.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO')) {
     return { ...base, state:'pending', target: clean(args?.to) };
   }
-  // Lembrete recusado antes de gravar leva o texto como objeto: a regra de
-  // substituição do finish() só esconde esta falha quando o MESMO lembrete deu
-  // certo depois no turno. O texto não aparece na conversa (família reminder).
+  // A reminder refused before being written carries the text as an object:
+  // the finish() substitution rule only hides this failure when the SAME
+  // reminder succeeded later in the turn. The text does not appear in the
+  // conversation (reminder family).
   if (d?.ok === false || d?.skipped === true) return { ...base, state:'failed',
     ...(name === 'criar_lembrete' ? { subject: clean(String(args?.mensagem || '').trim()) } : {}) };
   if (NATIVE.has(name)) {
-    // A memória nativa já persistiu antes de devolver estas respostas. Um
-    // duplicado idempotente é sucesso estável, não motivo para perguntar de
-    // novo. Qualquer outro texto continua sem recibo e não valida "salvei".
+    // Native memory already persisted before returning these responses. An
+    // idempotent duplicate is a stable success, not a reason to ask again.
+    // Any other text still has no receipt and does not validate "salvei".
     if (name === 'memoria_anotar' || name === 'memoria_atualizar' || name === 'memoria_escrever') {
       const raw = typeof out === 'string' ? out : '';
       const page = clean(args?.pagina || args?.slug || 'perfil');
@@ -203,8 +207,8 @@ function receipt(name, args, out) {
         && typeof e.detail === 'string' && e.detail.trim()) {
       return {...base,state:e.state,id:validId(e.id)?clean(e.id):null,detail:clean(e.detail, 1200)};
     }
-    // Só adaptadores nativos conhecidos podem emitir este contrato. Resultado
-    // vindo de leitura, subagente ou conector arbitrário não serve como recibo.
+    // Only known native adapters can emit this contract. A result coming
+    // from a read, sub-agent or arbitrary connector does not count as a receipt.
     const states = name === 'criar_lembrete' ? ['scheduled']
       : name === 'enviar_sugestao_time' ? ['registered']
       : name === 'agendar_execucao_rotina' ? ['routine_scheduled']
@@ -231,23 +235,25 @@ ACTION CONFIRMATIONS: never infer success from the intent, the tool call, a conf
 TIME EVIDENCE: a tool output in the history only proves the state at the turn in which it was obtained. Never say "I just checked", "I checked now" or equivalent (in any language) based on the history. A claim about the current state requires a call to the appropriate tool IN THIS turn. Earlier claims by the assistant itself are not evidence, and a current authoritative system rule prevails over them.
 `;
 
-// O nome da marca como fica no texto já dobrado (minúsculo, sem acento), pronto pra regex.
+// The brand name as it appears in the already-folded text (lowercase, no accents), ready for regex.
 const marcaNoTexto = () => marca().nome.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// Rede de segurança restrita às famílias do incidente, NÃO um classificador
-// semântico universal. A confirmação principal é a referência tipada acima.
+// Safety net restricted to the incident families, NOT a universal semantic
+// classifier. The main confirmation is the typed reference above.
 const ACTION_URL = /https?:\/\/[^\s<>()[\]"'`]+/g;
 function ownActionClaim(t) {
   return new RegExp(String.raw`\b(?:cancelei|remarquei|registrei|registramos|enviei|enviamos|mandei|encaminhei|agendei|criei|anotei|guardei|salvei|memorizei)\b|\bpor\s+(?:mim|nos)\b|\b(?:pelo|pela|por)\s+(?:(?:meu|minha|nosso|nossa)\s+)?(?:assistente|${marcaNoTexto()})\b|\b(?:i|we)\s+(?:(?:have|just|already)\s+)*(?:sent|registered|scheduled|saved|stored|noted)\b`).test(t);
 }
 function reportedDocumentStatus(t) {
-  // Relatar o que um documento diz sobre uma compra não é confirmar uma ação
-  // nossa. Não basta mencionar e-mail/link: precisa haver atribuição explícita
-  // à fonte e um objeto externo. Afirmações em primeira pessoa continuam a
-  // exigir recibo, mesmo dentro de uma frase com essa atribuição.
+  // Reporting what a document says about a purchase is not confirming an
+  // action of ours. Mentioning an email/link is not enough: there needs to
+  // be explicit attribution to the source and an external object.
+  // First-person claims still require a receipt, even inside a sentence with
+  // that attribution.
   const prose = t.replace(/https?:\/\/\S+/g, ' ');
   if (ownActionClaim(prose)) return false;
-  // A conta ou o assunto podem introduzir o relato: "Na conta de trabalho,
-  // as mensagens dizem que...". O prefixo não aceita outra frase/afirmação.
+  // The account or the subject can introduce the report: "Na conta de
+  // trabalho, as mensagens dizem que...". The prefix does not accept another
+  // sentence/claim.
   const report = prose.replace(/^(?:\W)*(?:(?:na|nas|no|nos)\s+(?:contas?|caixas?|consultas?|buscas?|conversas?|historico)\b[^,;.!?]{0,120}|(?:sobre|quanto a|em relacao a)\s+[^,;.!?]{1,120}),\s*/, '');
   const attributed = /^(?:\W)*(?:o|a|os|as)\s+(?:(?:ultim[oa]s?|primeir[oa]s?|nov[oa]s?|recentes?)\s+)?(?:e-?mails?|mensage(?:m|ns)|avisos?|comunicados?)\b[^.!?]*\b(?:diz(?:em)?|informa(?:m)?|registra(?:m)?|indica(?:m)?|mostra(?:m)?|confirma(?:m)?|relata(?:m)?|acrescenta(?:m)?)\s+que\b/.test(report)
     || /^(?:\W)*(?:segundo|conforme|de acordo com)\s+(?:o|a|os|as)\s+(?:e-?mails?|mensage(?:m|ns)|avisos?|comunicados?)\b/.test(report)
@@ -259,14 +265,15 @@ function claimFamily(line, authenticatedEmailSources) {
     .replace(/"[^"\n]*"|“[^”\n]*”|'[^'\n]*'|`[^`\n]*`/g, ' ');
   const visible = fold(line.replace(ACTION_URL, ' '));
   const own = ownActionClaim(visible);
-  // Rótulos de fontes não são parte da ação relatada. Mas "Enviei [o e-mail]"
-  // continua sendo uma afirmação nossa e conserva seu objeto para a checagem.
+  // Source labels are not part of the reported action. But "Enviei [o
+  // e-mail]" is still a claim of ours and keeps its object for the check.
   const t = own ? visible : fold(line.replace(/\[[^\]\n]*\]\(https?:\/\/[^\s)]+\)/g, ' ').replace(ACTION_URL, ' '));
   if (/^(?:\W)*(?:se\b|if\b|si\b|nao\b|not\b|no\b|voce\b|you\b|ela\b|ele\b)/.test(t)) return null;
   const citedObserved = (line.match(ACTION_URL) || []).some(url => authenticatedEmailSources.has(url.replace(/[.,;:!?]+$/, '')));
-  // Uma linha de achados que cita mensagem observada relata estado da fonte,
-  // mesmo em tabela/bullet sem "o e-mail diz". Isso não valida ações próprias,
-  // recibos de memória/lembrete/lista nem encaminhamento ao nosso suporte.
+  // A findings line that cites an observed message reports the source's
+  // state, even in a table/bullet without "o e-mail diz". This does not
+  // validate our own actions, memory/reminder/list receipts, nor forwarding
+  // to our support.
   const receiptContext = /\b(?:lista|list|checklist|memoria|memory|lembretes?|reminders?|recordatorios?|rascunho|draft|borrador)\b/.test(t)
     || new RegExp(String.raw`\b(?:ao|aos|para|pro|pros|to)\s+(?:(?:o|os|a|as|the)\s+)?(?:time|equipe|suporte|desenvolvimento|support|team|${marcaNoTexto()})\b`).test(t)
     || /^(?:\W)*(?:(?:o|a|the)\s+)?(?:e-?mail|mensagem|message|correo)\s+(?:(?:foi|was)\s+)?(?:enviad[oa]|sent)\b/.test(t);
@@ -281,8 +288,8 @@ function claimFamily(line, authenticatedEmailSources) {
   if (/\b(?:mensagem|whatsapp|telegram|email|e-mail|rascunho|message|draft|correo|borrador)\b/.test(t)) return 'message';
   return null;
 }
-// "Anotei" é ação deste turno; "já está anotado" é estado. A leitura do
-// registro só prova o estado: um "anotei" sem registrar_evento continua cortado.
+// "Anotei" is this turn's action; "já está anotado" is state. Reading the
+// record only proves the state: an "anotei" without registrar_evento still gets cut.
 function actionNow(line) {
   const t = line.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   return /\b(?:anotei|registrei|registramos|salvei|guardei|memorizei|criei|anote|guarde|registre)\b/.test(t)
@@ -292,7 +299,7 @@ function reportedByUser(task, ownerText) {
   const norm = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const key = norm(task);
   if (key.length < 8) return false;
-  // Somente relato explícito, nunca interpretar "marque como feito" como fato.
+  // Only explicit reporting, never interpret "marque como feito" as a fact.
   return String(ownerText || '').split(/[\n.!?]/).some(s => /^(?:eu\s+)?(?:ja\s+)?(?:conclui|finalizei|fiz|enviei)\s+/.test(norm(s)) && norm(s).includes(key));
 }
 export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {}) {
@@ -300,10 +307,10 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
   let checkedItems = new Set();
   const itemKey = s => String(s || '').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[*_`]/g,'').replace(/\s+/g,' ').trim();
   const turnKey = randomUUID();
-  let onDroppedClaim = null; // TEMPORÁRIO: porta diagnosticoDosFiltros
+  let onDroppedClaim = null; // TEMPORARY: diagnosticoDosFiltros port
   const w = words[languageKey(language)];
   return {
-    // Core chama APÓS execução, uma vez, também nos caminhos salvage/interjeição.
+    // Core calls AFTER execution, once, also on the salvage/interjection paths.
     toolResult(call, out) {
       if (['consultar_listas','criar_lista','editar_lista'].includes(call.name)) {
         const d=resultData(out);
@@ -316,41 +323,42 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       return JSON.stringify({ result:out, confirmation_ref:`[[acao:${e.ref}]]`, action_evidence:e, confirmation:renderAction(e, language) });
     },
     finish(text, { termination = null, authenticatedEmailSources = [], suppressRoutineMemoryReceipts = false, proposalShown = false } = {}) {
-      // Com o cartão da proposta logo abaixo, a ação pendente já está descrita
-      // nele: o texto do modelo segue (é a resposta ao resto da mensagem) e o
-      // recibo "aguarda confirmação" não se repete. Uma falha que o próprio
-      // turno refez com sucesso (mesma família e objeto) também não aparece
-      // como "não foi concluída" ao lado do sucesso (msg 20508, 28/09/2026).
+      // With the proposal card right below, the pending action is already
+      // described in it: the model's text continues (it's the answer to the
+      // rest of the message) and the "aguarda confirmação" receipt does not
+      // repeat. A failure that the same turn redid successfully (same family
+      // and object) also does not show up as "não foi concluída" next to the
+      // success (msg 20508, 2026-09-28).
       const subjectKey = e => itemKey(e.subject);
       const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
         && !(e.state === 'failed' && subjectKey(e) && entries.slice(i + 1).some(l => l.family === e.family
           && subjectKey(l) === subjectKey(e) && !['unknown','failed','pending'].includes(l.state))));
-      // Só o servidor habilita isto após validar o protocolo exato da rotina.
-      // Um aviso de cobertura/erro anexado depois da validação impede silêncio.
-      // As evidências permanecem em entries para persistência e métricas.
+      // Only the server enables this after validating the routine's exact
+      // protocol. A coverage/error notice appended after validation prevents
+      // silence. The evidence stays in entries for persistence and metrics.
       if (suppressRoutineMemoryReceipts === true && !proposalShown && (!termination || termination === 'completed') && !String(text || '').trim()) {
         const onlySavedMemory = entries.every(e => e.state === 'found' || e.family === 'memory'
           && ['memoria_anotar','memoria_atualizar','memoria_escrever'].includes(e.tool)
           && ['saved','already_saved'].includes(e.state));
-        // Outro recibo, inclusive falha/incerteza, precisa continuar visível.
+        // Another receipt, including failure/uncertainty, needs to stay visible.
         return onlySavedMemory ? '' : renderActions(shown, language);
       }
       const observedEmailSources = new Set(authenticatedEmailSources);
       // If a mutation has a real receipt, that receipt is the useful answer.
       // Do not prepend an internal credit/reconciliation stop after the action
-      // already succeeded (the reminder incident of 14/09/2026).
-      // credit_reservation_unavailable idem (caso de 24/09: "Não iniciei a chamada"
-      // em cima de uma planilha editada e memória salva no mesmo turno).
+      // already succeeded (the reminder incident of 2026-09-14).
+      // credit_reservation_unavailable likewise (case of 2026-09-24: "Não iniciei a chamada"
+      // on top of an edited spreadsheet and memory saved in the same turn).
       const receiptDominates = ['credit_reconciliation_required','provider_failure','account_credit_reserved','credit_reservation_unavailable'].includes(termination)
         && shown.some(e => !['unknown','failed'].includes(e.state));
-      // Para execução/agendamento de rotina, o recibo operacional é a resposta
-      // inteira. Assim o modelo não consegue reinterpretar "conteúdo falhou,
-      // entrega aceita" como "a entrega falhou", nem chamar um lembrete de
-      // execução futura da rotina.
+      // For routine execution/scheduling, the operational receipt is the
+      // entire response. This way the model cannot reinterpret "conteúdo
+      // falhou, entrega aceita" as "a entrega falhou", nor call a routine's
+      // future execution a reminder.
       const routineReceipt = [...shown].reverse().find(e => ['routine_run','routine_schedule'].includes(e.family));
       if (routineReceipt) return renderActions(shown, language);
-      // Conector pendente não conta: o cartão cobre a proposta e o texto do
-      // modelo continua sendo a resposta ao que mais foi pedido.
+      // Pending connector does not count: the card covers the proposal and
+      // the model's text is still the answer to whatever else was asked.
       if (shown.some(e => e.state !== 'pending' && connectorActionReceipt(e.tool, {}, null))) return renderActions(shown, language);
       const used = new Set();
       const shownLists = new Set();
@@ -365,20 +373,22 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
         for(const e of es)used.add(e.ref);
         return renderOnce(es);
       };
-      // Afirmação de "já fiz" pega pela rede de segurança SEM NENHUM recibo da
-      // família: a plataforma REMOVE a afirmação. Trocá-la por uma frase de
-      // sistema solta, sem referente, alarma o dono e vaza encanamento
-      // (msg 18002, 16/09/2026). O invariante é só não confirmar o que não
-      // aconteceu; falar em nome da plataforma no meio da resposta não é parte
-      // disso. Se a resposta INTEIRA era a afirmação, o fallback abaixo garante
-      // que o dono ainda fique sabendo, em vez de receber silêncio.
+      // A "já fiz" claim caught by the safety net WITHOUT ANY receipt from
+      // the family: the platform REMOVES the claim. Swapping it for a loose
+      // system sentence, with no referent, alarms the owner and leaks
+      // plumbing (msg 18002, 2026-09-16). The invariant is just not
+      // confirming what did not happen; speaking on the platform's behalf in
+      // the middle of the response is not part of that. If the ENTIRE
+      // response was the claim, the fallback below ensures the owner still
+      // finds out, instead of getting silence.
       const emitOrDrop = es => {
         if(!es.length){ droppedClaim = true; return ''; }
         for(const e of es)used.add(e.ref);
         return renderOnce(es);
       };
-      // Recibo já entregue nesta resposta não se repete: o modelo costuma
-      // confirmar no começo E no fim, e cada afirmação virava um recibo novo.
+      // A receipt already delivered in this response does not repeat: the
+      // model tends to confirm at the beginning AND the end, and each claim
+      // used to turn into a new receipt.
       const allUsed = es => es.length > 0 && es.every(e => used.has(e.ref));
       let afterReceipt = false;
       let fenced = false, draft = false;
@@ -393,23 +403,24 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
         if (/^\s*(?:#{1,6}\s*)?(?:rascunho|modelo de mensagem|exemplo|draft|example|borrador)\s*:/i.test(line)) draft = true;
         if (draft && !line.trim()) { draft = false; return line; }
         if (draft) return line;
-        // Slots sempre viram texto do recibo; texto adicional na mesma linha não
-        // pode usar um recibo para validar outra ação/destinatário.
+        // Slots always become receipt text; extra text on the same line
+        // cannot use a receipt to validate a different action/recipient.
         const markerRe = /\[\[acao:([^\]\r\n]*)\]\]|\{\{acao:([^}\r\n]*)\}\}/g;
         const markerMatches = [...line.matchAll(markerRe)];
         if (markerMatches.length || /"?(?:confirmation_ref|action_evidence)"?\s*:/.test(line)) {
           const refs = markerMatches.map(m => m[1] || m[2]).filter(Boolean);
           const es = shown.filter(e => refs.includes(e.ref));
           if (allUsed(es) || (!es.length && refs.some(r => entries.some(e => e.ref === r)))) { afterReceipt = true; return ''; }
-          // Slot que não é deste turno (o modelo copia o de um recibo antigo do
-          // histórico) sai como afirmação sem prova: no meio da resposta, a frase
-          // de sistema aparecia em cima do cartão de confirmação (05/10/2026).
+          // A slot that is not from this turn (the model copies it from an
+          // old receipt in the history) comes out as an unproven claim: in
+          // the middle of the response, the system sentence used to appear
+          // on top of the confirmation card (2026-10-05).
           const out = emitOrDrop(es);
           afterReceipt = es.length > 0;
           return out;
         }
-        // Mensagens/markers legados são metadado interno. Fora de citações,
-        // exemplos e blocos de código, nunca chegam ao usuário.
+        // Legacy messages/markers are internal metadata. Outside of quotes,
+        // examples and code blocks, they never reach the user.
         line = line.replace(legacyUnknown, '').trim();
         if (!line) return '';
         const checked = line.match(/^(\s*[-*+]\s*)\[[xX]\]\s*(.+)$/);
@@ -420,37 +431,38 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
           return `${checked[1]}[${reported ? 'x' : ' '}] ${checked[2]} — ${reported ? w.reported : w.check}.`;
         }
         return line.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÀÂÊÔÃÕ])/u).map(part => {
-          // Pedaço do recibo ecoado pelo modelo logo após o recibo real:
-          // é duplicata, não conteúdo. Some.
+          // A piece of the receipt echoed by the model right after the real
+          // receipt: it's a duplicate, not content. Gone.
           if (afterReceipt && RECEIPT_FIELD.test(part)) return '';
           const f = claimFamily(part, observedEmailSources);
           if (!f) { afterReceipt = false; return part; }
-          // Nunca conserva o destino/objeto inventado pelo modelo: substitui a
-          // afirmação INTEIRA pelos recibos desta família, ou a remove.
+          // Never keeps the destination/object invented by the model:
+          // replaces the ENTIRE claim with this family's receipts, or removes it.
           const es = shown.filter(e => (e.state !== 'found' || !actionNow(part))
             && (e.family === f || (f === 'memory' && ['list','tracker'].includes(e.family)) || (f === 'reminder' && e.tool === 'enviar_mensagem')));
           if (allUsed(es)) { afterReceipt = true; return ''; }
-          if (!es.length) onDroppedClaim?.(part, f); // TEMPORÁRIO: porta diagnosticoDosFiltros
+          if (!es.length) onDroppedClaim?.(part, f); // TEMPORARY: diagnosticoDosFiltros port
           const out = emitOrDrop(es);
           afterReceipt = es.length > 0;
           return out;
         }).filter(part => part.trim()).join(' ').trim();
       }).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-      // O modelo pode omitir o slot: a ação real/pedido pendente ainda aparece.
+      // The model may omit the slot: the real action/pending request still shows up.
       // A successful first action must not hide a failed or uncertain later
       // step just because the model omits that receipt from its final answer.
       const hasCompletedStep = shown.some(e => !['unknown','failed','pending'].includes(e.state));
-      // O recibo de registro só confirma o "anotei"; a tool já devolve ao modelo a
-      // frase do que gravou, e anexá-lo depois da resposta repetia a confirmação.
+      // The registration receipt only confirms the "anotei"; the tool
+      // already returns the saved phrase to the model, and appending it
+      // after the response used to repeat the confirmation.
       const missing = shown.filter(e => !used.has(e.ref)
         && (hasCompletedStep || !['unknown','failed'].includes(e.state))
         && (e.family !== 'tracker' || (!result && e.state !== 'found')));
       const final = [result, missing.length ? emit(missing) : ''].filter(Boolean).join('\n\n');
-      // Remover a afirmação nunca pode virar silêncio.
-      // Com cartão abaixo, a resposta já não fica em silêncio.
+      // Removing the claim can never turn into silence.
+      // With a card below, the response is no longer silent.
       return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? w.unknown : '');
     },
     get entries() { return entries.map(e => ({...e})); },
-    observeDroppedClaims(fn) { onDroppedClaim = fn; }, // TEMPORÁRIO: porta diagnosticoDosFiltros
+    observeDroppedClaims(fn) { onDroppedClaim = fn; }, // TEMPORARY: diagnosticoDosFiltros port
   };
 }

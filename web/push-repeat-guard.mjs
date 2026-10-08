@@ -13,8 +13,8 @@ export const CREDIT_REPLY_WINDOW_MS = 2 * 60 * 1000;
 export function createRepeatPushGuard({ windowMs = CREDIT_PUSH_WINDOW_MS, now = () => Date.now() } = {}) {
   const last = new Map();
   return {
-    // true = pode mandar. Mesmo escopo (pessoa ou conversa) + mesmo motivo +
-    // mesmo texto dentro da janela = repetido, não manda.
+    // true = can send. Same scope (person or conversation) + same reason +
+    // same text within the window = repeated, don't send.
     allow(scopeId, reason, text) {
       const key = `${scopeId}|${reason}|${String(text || '').trim()}`;
       const t = now();

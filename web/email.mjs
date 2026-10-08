@@ -1,36 +1,36 @@
-// ── Canal E-mail (ingest por IMAP + resposta por SMTP, como o assistente) ──
-// O usuário manda um e-mail de QUALQUER endereço @exemplo.com. O catch-all do
-// Google Workspace reescreve o envelope pra EMAIL_ADDRESS (assistente@exemplo.com),
-// então tudo cai numa caixa só. A gente lê essa caixa por IMAP, identifica o
-// usuário pelo REMETENTE (= e-mail de cadastro), escolhe o assistente pelo nome
-// escrito no assunto/corpo ("aos cuidados de <nome>") e responde por SMTP como o
-// assistente ("Bento <assistente@exemplo.com>").
+// ── Email channel (IMAP ingest + SMTP reply, as the assistant) ──
+// The user sends an email from ANY @example.com address. Google Workspace's
+// catch-all rewrites the envelope to EMAIL_ADDRESS (assistant@example.com), so
+// everything lands in a single mailbox. We read that mailbox over IMAP,
+// identify the user by the SENDER (= their registered email), pick the
+// assistant by the name written in the subject/body ("attn: <name>") and reply
+// over SMTP as the assistant ("Bento <assistant@example.com>").
 //
-// Segurança / anti-abuso:
-//  • só responde a remetentes REGISTRADOS (From = e-mail de cadastro) — impede
-//    que um estranho acione o assistente de outra pessoa;
-//  • verifica a AUTENTICAÇÃO do remetente (DKIM/DMARC) antes de confiar no From:
-//    o From (RFC5322) é trivialmente forjável no SMTP, então um estranho poderia
-//    escrever "From: fulano-registrado@dominio" e acionar o assistente dele. A
-//    gente lê o Authentication-Results CARIMBADO PELO NOSSO MX (mx.google.com) —
-//    o único que o atacante não consegue forjar, porque o Google remove os A-R
-//    pré-existentes com o próprio authserv-id — e exige DMARC=pass (ou DKIM=pass
-//    quando o domínio não publica DMARC). Ver passesEmailAuth();
-//  • ignora auto-respostas / no-reply / mailer-daemon / listas e o próprio
-//    endereço (anti-loop);
-//  • dedup por Message-ID (tabela email_seen) + fila persistente (email_queue):
-//    o raw baixado vive no Postgres até a resposta SAIR; crash/SMTP-fail não
-//    perde mensagem (retry com teto de tentativas);
-//  • rate-limit por usuário (lição de um flood real);
-//  • o gate de crédito já existe dentro de runConversationInThread.
+// Security / anti-abuse:
+//  • only replies to REGISTERED senders (From = registered email) — prevents a
+//    stranger from triggering someone else's assistant;
+//  • checks the sender's AUTHENTICATION (DKIM/DMARC) before trusting the From:
+//    From (RFC5322) is trivially forgeable over SMTP, so a stranger could write
+//    "From: registered-person@domain" and trigger their assistant. We read the
+//    Authentication-Results STAMPED BY OUR OWN MX (mx.google.com) — the one the
+//    attacker cannot forge, because Google strips pre-existing A-R headers with
+//    its own authserv-id — and require DMARC=pass (or DKIM=pass when the domain
+//    doesn't publish DMARC). See passesEmailAuth();
+//  • ignores auto-replies / no-reply / mailer-daemon / mailing lists and its own
+//    address (anti-loop);
+//  • dedup by Message-ID (email_seen table) + persistent queue (email_queue):
+//    the downloaded raw message lives in Postgres until the reply GOES OUT;
+//    a crash/SMTP failure doesn't lose a message (retry with an attempt ceiling);
+//  • rate-limit per user (a lesson from a real flood);
+//  • the credit gate already exists inside runConversationInThread.
 //
 // Env:
-//   EMAIL_ADDRESS=assistente@exemplo.com
-//   EMAIL_APP_PASSWORD=<senha de app do Google (2FA)>
+//   EMAIL_ADDRESS=assistant@example.com
+//   EMAIL_APP_PASSWORD=<Google app password (2FA)>
 //   EMAIL_IMAP_HOST=imap.gmail.com   EMAIL_IMAP_PORT=993
 //   EMAIL_SMTP_HOST=smtp.gmail.com   EMAIL_SMTP_PORT=465
 //   EMAIL_POLL_MS=30000
-// Sem EMAIL_ADDRESS/EMAIL_APP_PASSWORD o canal fica inerte (não conecta).
+// Without EMAIL_ADDRESS/EMAIL_APP_PASSWORD the channel stays inert (doesn't connect).
 
 export function emailEnabled() {
   return !!(process.env.EMAIL_ADDRESS && process.env.EMAIL_APP_PASSWORD);
@@ -38,8 +38,8 @@ export function emailEnabled() {
 
 const SELF = () => (process.env.EMAIL_ADDRESS || '').toLowerCase().trim();
 
-// Tira "Re:/Fwd:/Enc:/Res:" repetidos do começo do assunto (pra threadear
-// respostas no mesmo tópico).
+// Strips repeated "Re:/Fwd:/Enc:/Res:" from the start of the subject (so
+// replies thread into the same topic).
 export function normalizeSubject(s) {
   let out = (s || '').trim();
   let prev;
@@ -47,17 +47,17 @@ export function normalizeSubject(s) {
   return out.trim();
 }
 
-// Corta o histórico citado (respostas anteriores) pra mandar só o texto novo.
+// Cuts the quoted history (previous replies) to send only the new text.
 export function stripQuoted(text) {
   if (!text) return '';
   const lines = String(text).split(/\r?\n/);
   const out = [];
   for (const line of lines) {
-    if (/^\s*>/.test(line)) break;                                          // citação ">"
+    if (/^\s*>/.test(line)) break;                                          // ">" quote
     if (/^\s*(Em|On)\s+.+\b(escreveu|wrote)\s*:?\s*$/i.test(line)) break;    // "Em <data>, X escreveu:"
     if (/^\s*-{2,}\s*(Mensagem original|Original Message|Forwarded message|Início da mensagem)/i.test(line)) break;
     if (/^_{5,}\s*$/.test(line)) break;
-    if (/^\s*De:\s.+\bPara:/i.test(line)) break;                            // cabeçalho de encaminhamento
+    if (/^\s*De:\s.+\bPara:/i.test(line)) break;                            // forwarding header
     out.push(line);
   }
   return out.join('\n').trim();
@@ -65,8 +65,8 @@ export function stripQuoted(text) {
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Escolhe o assistente pelo nome escrito no e-mail. Procura "aos cuidados de X"
-// / "a/c X" primeiro; senão qualquer nome de assistente citado no texto.
+// Picks the assistant by the name written in the email. Looks for "attn: X" /
+// "a/c X" first; otherwise any assistant name mentioned in the text.
 export function pickAgent(text, agents) {
   const t = (text || '').toLowerCase();
   if (!agents || !agents.length) return null;
@@ -82,11 +82,11 @@ export function pickAgent(text, agents) {
   return cited || null;
 }
 
-// Detecta remetentes que NÃO devem ser respondidos (anti-loop / automáticos).
+// Detects senders that should NOT be replied to (anti-loop / automated).
 export function isAutoOrLoop(parsed, fromAddr) {
   if (!fromAddr || fromAddr === SELF()) return true;
   if (/(^|[.@+_-])(no-?reply|noreply|mailer-daemon|postmaster|daemon|bounce|notifications?)([.@+_-]|$)/i.test(fromAddr)) return true;
-  const h = parsed.headers; // Map (mailparser), chaves minúsculas
+  const h = parsed.headers; // Map (mailparser), lowercase keys
   const get = (k) => {
     const v = h?.get ? h.get(k) : undefined;
     return typeof v === 'string' ? v : (v?.value ?? (Array.isArray(v) ? v.join(' ') : ''));
@@ -101,17 +101,17 @@ export function isAutoOrLoop(parsed, fromAddr) {
   return false;
 }
 
-// Lê os vereditos de autenticação (dkim/spf/dmarc) do Authentication-Results.
-// SÓ confia na linha carimbada pelo NOSSO MX: o authserv-id (o token ANTES do
-// primeiro ';') tem que ser EXATAMENTE mx.google.com. Testar só se a string
-// aparece na linha não serve: o atacante escreve "Authentication-Results:
-// evil.example; dkim=pass header.d=mx.google.com" no próprio e-mail e o Google
-// não descarta esse cabeçalho (ele só remove os que usam o authserv-id dele).
-// Sem nenhuma linha confiável (e-mail não passou pelo MX Google), trusted=false.
+// Reads the authentication verdicts (dkim/spf/dmarc) from Authentication-Results.
+// ONLY trusts the line stamped by OUR MX: the authserv-id (the token BEFORE the
+// first ';') has to be EXACTLY mx.google.com. Just checking whether the string
+// appears in the line isn't enough: the attacker writes "Authentication-Results:
+// evil.example; dkim=pass header.d=mx.google.com" in their own email and Google
+// doesn't discard that header (it only removes ones that use its own authserv-id).
+// With no trustworthy line (the email didn't go through Google's MX), trusted=false.
 const MX_CONFIAVEL = String(process.env.EMAIL_TRUSTED_AUTHSERV || 'mx.google.com').toLowerCase();
 
-// Extrai o domínio de um valor de propriedade do A-R: "@x.com", "u@x.com" e
-// "x.com" viram todos "x.com".
+// Extracts the domain from an A-R property value: "@x.com", "u@x.com" and
+// "x.com" all become "x.com".
 function dominioDe(valor) {
   const v = String(valor || '').toLowerCase().trim().replace(/[.;,]+$/, '');
   if (!v) return null;
@@ -120,18 +120,18 @@ function dominioDe(valor) {
   return d || null;
 }
 
-// Alinhamento de domínio no sentido do DMARC "relaxado", sem lista pública de
-// sufixos: igual, ou um é subdomínio do outro (mail.x.com ~ x.com). Não cobre
-// dois subdomínios irmãos de um mesmo domínio organizacional, o que é raro e
-// cai no caminho inconclusivo, nunca em "forte".
+// Domain alignment in DMARC's "relaxed" sense, with no public suffix list:
+// equal, or one is a subdomain of the other (mail.x.com ~ x.com). Doesn't cover
+// two sibling subdomains of the same organizational domain, which is rare and
+// falls into the inconclusive path, never into "strong".
 function alinhado(dominio, fromDominio) {
   const d = dominioDe(dominio); const f = dominioDe(fromDominio);
   if (!d || !f) return false;
   return d === f || f.endsWith('.' + d) || d.endsWith('.' + f);
 }
 
-// Um Authentication-Results é "authserv-id ; metodo=resultado prop=valor ; ...".
-// Devolve null quando o carimbo não é do nosso MX.
+// An Authentication-Results is "authserv-id ; method=result prop=value ; ...".
+// Returns null when the stamp isn't from our MX.
 function lerAuthResults(linha) {
   const valor = String(linha || '').replace(/\s+/g, ' ').replace(/^[^:]*:/, '').trim();
   const partes = valor.split(';').map((p) => p.trim()).filter(Boolean);
@@ -157,7 +157,7 @@ export function emailAuth(parsed) {
   if (!lidas.length) return { trusted: false, dmarc: null, dkim: null, spf: null, dkimDomains: [], spfDomains: [] };
   const metodos = lidas.flatMap((l) => l.metodos);
   const daqui = (nome) => metodos.filter((m) => m.metodo === nome);
-  // dkim pode aparecer várias vezes (múltiplas assinaturas): pass se QUALQUER uma passa.
+  // dkim can appear several times (multiple signatures): pass if ANY one passes.
   const pick = (arr) => (arr.includes('pass') ? 'pass' : arr.includes('fail') ? 'fail' : arr[0] || null);
   const dkim = daqui('dkim'); const spf = daqui('spf'); const dmarc = daqui('dmarc');
   return {
@@ -165,8 +165,8 @@ export function emailAuth(parsed) {
     dmarc: pick(dmarc.map((m) => m.resultado)),
     dkim: pick(dkim.map((m) => m.resultado)),
     spf: pick(spf.map((m) => m.resultado)),
-    // Quem ASSINOU de fato (header.d, ou o domínio de header.i). DKIM prova a chave
-    // deste domínio, não o From: sem isso não dá pra checar alinhamento.
+    // Who actually SIGNED (header.d, or header.i's domain). DKIM proves this
+    // domain's key, not the From: without this there's no way to check alignment.
     dkimDomains: dkim.filter((m) => m.resultado === 'pass')
       .map((m) => dominioDe(m.props['header.d'] || m.props['header.i'])).filter(Boolean),
     spfDomains: spf.filter((m) => m.resultado === 'pass')
@@ -174,21 +174,22 @@ export function emailAuth(parsed) {
   };
 }
 
-// Decide se o remetente está autenticado o suficiente pra ser tratado como o dono
-// do endereço. Política:
-//  • DMARC=pass  -> OK (o próprio DMARC já exige alinhamento, âncora forte).
-//  • DMARC=fail  -> REJEITA (spoof de domínio que publica política).
-//  • sem DMARC, DKIM=pass ALINHADO com o From -> OK forte.
-//  • sem DMARC, SPF=pass ALINHADO com o From -> OK forte.
-//  • DKIM=pass de domínio NÃO alinhado, e nada alinhado -> REJEITA. Isso não é
-//    ausência de prova, é prova ao contrário: alguém que não é o domínio do From
-//    assinou a mensagem. Era exatamente o furo: "dkim=pass header.i=@atacante;
-//    dmarc=none header.from=vitima" entrava como identidade forte da vítima.
-//  • DKIM=fail E SPF=fail -> REJEITA.
-//  • inconclusivo / sem A-R confiável -> fail-OPEN com log (não derruba e-mail
-//    legítimo de domínio sem política), a menos que EMAIL_STRICT_AUTH=1.
-// fromAddr é o From do RFC5322 (o mesmo que o handler usa pra achar a conta): é
-// contra ELE que o alinhamento tem que ser medido.
+// Decides whether the sender is authenticated enough to be treated as the
+// owner of the address. Policy:
+//  • DMARC=pass  -> OK (DMARC itself already requires alignment, a strong anchor).
+//  • DMARC=fail  -> REJECTS (domain spoof against a domain that publishes a policy).
+//  • no DMARC, DKIM=pass ALIGNED with From -> strong OK.
+//  • no DMARC, SPF=pass ALIGNED with From -> strong OK.
+//  • DKIM=pass from a NON-aligned domain, and nothing aligned -> REJECTS. This
+//    isn't absence of proof, it's proof to the contrary: someone who isn't the
+//    From's domain signed the message. This was exactly the hole: "dkim=pass
+//    header.i=@attacker; dmarc=none header.from=victim" was coming in as the
+//    victim's strong identity.
+//  • DKIM=fail AND SPF=fail -> REJECTS.
+//  • inconclusive / no trustworthy A-R -> fail-OPEN with a log (doesn't drop a
+//    legitimate email from a domain with no policy), unless EMAIL_STRICT_AUTH=1.
+// fromAddr is the RFC5322 From (the same one the handler uses to find the
+// account): alignment has to be measured AGAINST IT.
 export function passesEmailAuth(parsed, fromAddr) {
   const a = emailAuth(parsed);
   const strict = process.env.EMAIL_STRICT_AUTH === '1';
@@ -205,7 +206,7 @@ export function passesEmailAuth(parsed, fromAddr) {
   return { ok: !strict, strong: false, reason: `inconclusivo (dmarc=${a.dmarc} dkim=${a.dkim} spf=${a.spf})`, a };
 }
 
-// Rate-limit em memória: no máx 20 e-mails processados por usuário / hora.
+// In-memory rate-limit: at most 20 emails processed per user / hour.
 const rl = new Map(); // userId -> timestamps[]
 function allow(userId) {
   const now = Date.now();
@@ -227,9 +228,9 @@ function textToHtml(text) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto"><p>${body}</p></div>`;
 }
 
-// Responde por SMTP como o assistente (From = "Nome <assistente@exemplo.com>").
-// Mantém o threading (In-Reply-To / References) pra cair no mesmo assunto no
-// cliente de e-mail do usuário.
+// Replies over SMTP as the assistant (From = "Name <assistant@example.com>").
+// Keeps the threading (In-Reply-To / References) so it lands in the same
+// subject in the user's email client.
 async function sendReply({ to, subject, agentName, text, inReplyTo, references }) {
   const { default: nodemailer } = await import('nodemailer');
   const port = Number(process.env.EMAIL_SMTP_PORT || 465);
@@ -253,14 +254,16 @@ async function sendReply({ to, subject, agentName, text, inReplyTo, references }
   return info.messageId;
 }
 
-// Trata um e-mail já parseado (mailparser). deps = { runConversation, getUserByEmail,
-// listAgents, emailSeen, markEmailSeen }. Devolve o desfecho pra fila:
-//   'skipped' = descartado de propósito (não tentar de novo)
-//   'defer'   = adiar sem gastar tentativa (rate-limit)
-//   'done'    = resposta enviada
-// Erros (conversa/SMTP) SOBEM pro caller, que devolve a linha pra fila (retry).
-// email_seen só é marcado quando o caso está RESOLVIDO (respondido ou descartado):
-// marcar antes era o que perdia mensagem em silêncio quando o envio falhava.
+// Handles an already-parsed email (mailparser). deps = { runConversation,
+// getUserByEmail, listAgents, emailSeen, markEmailSeen }. Returns the outcome
+// for the queue:
+//   'skipped' = discarded on purpose (don't retry)
+//   'defer'   = deferred without spending an attempt (rate-limit)
+//   'done'    = reply sent
+// Errors (conversation/SMTP) BUBBLE UP to the caller, which returns the row to
+// the queue (retry). email_seen is only marked once the case is RESOLVED
+// (replied to or discarded): marking it earlier was what silently lost a
+// message when sending failed.
 async function handleEmail(parsed, deps) {
   const fromAddr = (parsed.from?.value?.[0]?.address || '').toLowerCase().trim();
   const messageId = parsed.messageId || '';
@@ -286,9 +289,9 @@ async function handleEmail(parsed, deps) {
     if (messageId) await deps.markEmailSeen(messageId, user.id);
     return 'skipped';
   }
-  // Anti-spoofing: o From é forjável, então só confia se DKIM/DMARC autenticam o
-  // remetente. Um e-mail que finge ser de um usuário registrado, mas falha na
-  // autenticação, é descartado (não aciona o assistente dele).
+  // Anti-spoofing: the From is forgeable, so only trust it if DKIM/DMARC
+  // authenticate the sender. An email pretending to be from a registered user,
+  // but that fails authentication, is discarded (doesn't trigger their assistant).
   const auth = passesEmailAuth(parsed, fromAddr);
   if (!auth.ok) {
     console.warn('[email] REJEITADO por autenticação (possível spoofing de From):', fromAddr, '—', auth.reason);
@@ -308,9 +311,9 @@ async function handleEmail(parsed, deps) {
   const subject = (parsed.subject || '(sem assunto)').trim();
   const bodyText = (parsed.text || '').trim();
   const agent = pickAgent(subject + '\n' + bodyText, agents) || agents[0]; // fallback = principal
-  // Num ENCAMINHAMENTO o conteúdo útil vai na parte "citada" (o stripQuoted comeria
-  // ela e sobraria só a assinatura). Então: se é forward, ou se depois de tirar a
-  // citação sobrou quase nada, usa o corpo INTEIRO.
+  // In a FORWARD the useful content goes in the "quoted" part (stripQuoted
+  // would eat it and only the signature would be left). So: if it's a forward,
+  // or if after removing the quote almost nothing is left, uses the WHOLE body.
   const stripped = stripQuoted(bodyText);
   const isForward = /^\s*(fwd|fw|enc|encaminh)/i.test(subject)
     || /-{2,}\s*(forwarded message|mensagem encaminhada)/i.test(bodyText)
@@ -324,20 +327,21 @@ async function handleEmail(parsed, deps) {
     if (messageId) await deps.markEmailSeen(messageId, user.id);
     return 'skipped';
   }
-  // Se o SMTP falhar aqui, o retry re-roda a conversa (turno duplicado na
-  // thread). Trade-off aceito: melhor responder com atraso que sumir.
+  // If SMTP fails here, the retry re-runs the conversation (duplicate turn in
+  // the thread). Accepted trade-off: better to reply late than to disappear.
   await sendReply({ to: fromAddr, subject, agentName: agent.name, text: reply, inReplyTo: messageId, references: parsed.references });
   console.log(`[email] respondido ${fromAddr} como "${agent.name}" (assunto: ${subject.slice(0, 50)})`);
   if (messageId) await deps.markEmailSeen(messageId, user.id);
   return 'done';
 }
 
-// Uma passada SÓ de IMAP (rápida): baixa os não-lidos, ENFILEIRA no Postgres,
-// marca \Seen e fecha. O processamento (que pode chamar o modelo e levar
-// minutos) acontece depois, fora do socket IMAP, lendo da fila — ver drainQueue.
-// Ordem por item: enqueue ANTES do \Seen. Se o processo cair entre os dois, o
-// e-mail continua não-lido e re-entra no próximo poll (a linha duplicada na
-// fila é neutralizada pelo dedup de Message-ID na hora de processar).
+// A SINGLE IMAP pass (quick): downloads the unread ones, ENQUEUES them in
+// Postgres, marks \Seen and closes. The processing (which can call the model
+// and take minutes) happens afterward, outside the IMAP socket, reading from
+// the queue — see drainQueue.
+// Order per item: enqueue BEFORE \Seen. If the process crashes between the
+// two, the email stays unread and re-enters on the next poll (the duplicate
+// row in the queue is neutralized by the Message-ID dedup at processing time).
 async function pollOnce(deps) {
   const { ImapFlow } = await import('imapflow');
   const dbg = process.env.EMAIL_DEBUG === '1';
@@ -356,18 +360,20 @@ async function pollOnce(deps) {
     secure: true,
     auth: { user: process.env.EMAIL_ADDRESS, pass: process.env.EMAIL_APP_PASSWORD },
     logger: dbgLogger,
-    // Sem isto o default do ImapFlow é ~5min: um socket/teardown travado deixaria
-    // o poller "busy" preso por 5min (nenhum e-mail lido no meio). Curto = falha
-    // rápido e o próximo tick reabre. disableAutoIdle: a gente faz polling, não IDLE.
+    // Without this, ImapFlow's default is ~5min: a stuck socket/teardown would
+    // leave the poller "busy" stuck for 5min (no email read in the meantime).
+    // Short = fails fast and the next tick reopens. disableAutoIdle: we poll,
+    // we don't IDLE.
     greetingTimeout: 15000,
     socketTimeout: 60000,
     disableAutoIdle: true,
   });
   if (dbg) { dlog('new client'); client.on('close', () => dlog('socket close')); }
-  // ImapFlow é EventEmitter: num timeout de socket ele emite 'error' de forma
-  // ASSÍNCRONA (fora do await do connect/fetch), então o try/catch do tick NÃO
-  // pega. Sem um listener, o Node derruba o PROCESSO INTEIRO (crash do servidor).
-  // Este listener neutraliza isso; só logamos e deixamos o tick seguinte reabrir.
+  // ImapFlow is an EventEmitter: on a socket timeout it emits 'error'
+  // ASYNCHRONOUSLY (outside the connect/fetch await), so the tick's try/catch
+  // does NOT catch it. Without a listener, Node brings down the WHOLE PROCESS
+  // (server crash). This listener neutralizes that; we just log and let the
+  // next tick reopen.
   client.on('error', (e) => { console.error('[email] imap error:', e?.code || e?.message || e); });
 
   dlog('connect start');
@@ -376,10 +382,10 @@ async function pollOnce(deps) {
   const lock = await client.getMailboxLock('INBOX');
   dlog('lock acquired');
   try {
-    // Drena o FETCH INTEIRO primeiro (nada de STORE no meio do streaming: emitir
-    // comando durante um fetch em curso trava a conexão até o socketTimeout —
-    // era o motivo do poller estolar com e-mail acumulado). Teto por tick pra não
-    // puxar centenas de uma vez.
+    // Drains the WHOLE FETCH first (no STORE in the middle of streaming:
+    // issuing a command during an in-progress fetch locks the connection until
+    // socketTimeout — that was why the poller stalled with accumulated email).
+    // Ceiling per tick so it doesn't pull hundreds at once.
     const MAX_PER_TICK = 10;
     const items = [];
     for await (const msg of client.fetch({ seen: false }, { source: true, uid: true })) {
@@ -387,9 +393,9 @@ async function pollOnce(deps) {
       if (items.length >= MAX_PER_TICK) break;
     }
     dlog(`fetch drained: ${items.length}`);
-    // Agora, sem fetch em curso, é seguro enfileirar e marcar \Seen. O \Seen só
-    // depois do INSERT: se o enqueue falhar (DB fora), o e-mail fica não-lido e
-    // volta no próximo poll.
+    // Now, with no fetch in progress, it's safe to enqueue and mark \Seen.
+    // \Seen only after the INSERT: if the enqueue fails (DB down), the email
+    // stays unread and comes back on the next poll.
     for (const it of items) {
       try {
         await deps.enqueueEmail(it.source);
@@ -398,14 +404,14 @@ async function pollOnce(deps) {
     }
   } finally {
     lock.release();
-    // logout()/close() podem TRAVAR; não deixamos o teardown segurar o tick.
+    // logout()/close() can HANG; we don't let the teardown hold up the tick.
     await Promise.race([client.logout().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
     try { client.close(); } catch { /* ok */ }
   }
 }
 
-// Processa a fila (inclusive sobras de crash/restart e retries de envio).
-// Roda FORA da conexão IMAP; um turno de LLM pode levar minutos sem problema.
+// Processes the queue (including leftovers from a crash/restart and send retries).
+// Runs OUTSIDE the IMAP connection; an LLM turn can take minutes without a problem.
 async function drainQueue(deps) {
   const { simpleParser } = await import('mailparser');
   const rows = await deps.claimPendingEmails(10);
@@ -418,15 +424,16 @@ async function drainQueue(deps) {
     } catch (e) {
       const msg = String(e?.message ?? e).slice(0, 500);
       console.error(`[email] fila #${row.id} (tentativa ${row.attempts}):`, msg);
-      // Volta pra 'pending' mantendo o attempts já gasto; o claim seguinte
-      // enterra em 'failed' quando estourar o teto.
+      // Goes back to 'pending' keeping the attempts already spent; the next
+      // claim buries it in 'failed' once the ceiling is hit.
       await deps.settleEmail(row.id, 'pending', msg).catch(() => {});
     }
   }
 }
 
-// Cria o poller. Conecta a cada tick (robusto contra conexão velha); reentrância
-// protegida por `busy`. deps injetadas pelo server (evita import circular).
+// Creates the poller. Connects on every tick (robust against a stale
+// connection); reentrancy protected by `busy`. deps injected by the server
+// (avoids a circular import).
 export function createEmailPoller(deps) {
   let stopped = false, busy = false, timer = null;
   const intervalMs = Number(process.env.EMAIL_POLL_MS || 30000);
@@ -435,18 +442,18 @@ export function createEmailPoller(deps) {
     if (stopped || busy) return schedule();
     busy = true;
     try {
-      // Backstop: se pollOnce travar apesar dos timeouts do IMAP, o guard destrava
-      // o `busy` (senão o poller para de vez até o próximo restart). Agora o
-      // pollOnce é SÓ IMAP (rápido); 120s é folgado.
+      // Backstop: if pollOnce hangs despite IMAP's timeouts, the guard releases
+      // `busy` (otherwise the poller stops for good until the next restart). Now
+      // pollOnce is IMAP-ONLY (fast); 120s is generous.
       await Promise.race([
         pollOnce(deps),
         new Promise((_, rej) => setTimeout(() => rej(new Error('poll timeout (guard)')), 120000)),
       ]);
     } catch (e) { console.error('[email] poll:', e?.message ?? e); }
     try {
-      // Fila roda mesmo com o IMAP fora (retries/sobras). Pode levar minutos
-      // (turnos de LLM); o guard largo só destrava o busy num travamento real —
-      // reprocesso duplicado é bloqueado pelo claim ('working' + attempts).
+      // The queue runs even with IMAP down (retries/leftovers). It can take
+      // minutes (LLM turns); the wide guard only releases busy on a real hang —
+      // duplicate reprocessing is blocked by the claim ('working' + attempts).
       await Promise.race([
         drainQueue(deps),
         new Promise((_, rej) => setTimeout(() => rej(new Error('drain timeout (guard)')), 900000)),

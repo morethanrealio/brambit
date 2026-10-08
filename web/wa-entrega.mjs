@@ -1,11 +1,11 @@
-// Espera a Meta dizer se uma mensagem chegou (webhook de status), pras saídas do
-// atendimento público. Serve pra duas coisas:
-//  - ordem: mensagem com imagem (carrossel, foto) é processada mais devagar pela
-//    Meta, e o texto mandado logo depois chega ANTES dela; a saída seguinte só
-//    sai depois da entrega (ou do tempo-limite, pra não travar a conversa);
-//  - reprovação tardia: a Meta aceita com HTTP 200 e reprova depois; quem
-//    espera fica sabendo e pode mandar o texto de reserva.
-// Status que chega antes de alguém esperar fica guardado um minuto.
+// Waits for Meta to say whether a message arrived (status webhook), for the outputs of
+// public-facing support. Serves two purposes:
+//  - ordering: a message with an image (carousel, photo) is processed more slowly by
+//    Meta, and text sent right after it arrives BEFORE it; the next output only
+//    goes out after delivery (or after the timeout, so as not to stall the conversation);
+//  - late rejection: Meta accepts with HTTP 200 and rejects afterwards; whoever
+//    waits finds out and can send the fallback text.
+// A status that arrives before anyone is waiting is kept for one minute.
 const esperando = new Map(); // wamid -> [resolve]
 const recentes = new Map();  // wamid -> {status, em}
 const RECENTE_MS = 60_000;

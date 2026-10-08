@@ -1,19 +1,19 @@
-// ── Composição determinística de imagem ────────────────────────────────────
-// Por que isto existe: `gerar_imagem` manda uma DESCRIÇÃO pro modelo e recebe
-// um desenho novo. Quando o pedido é "põe o MEU logo no cartão", isso não tem
-// conserto por prompt: o modelo redesenha o emblema (fica parecido, não é o
-// logo) e erra letra dentro da arte ("CONSÓRCCIO", "PARABÊÑS"). O caso do
-// Um caso de set/2026 foi exatamente esse: várias tentativas, nenhuma com
-// o logo dele de verdade.
+// ── Deterministic image composition ────────────────────────────────────────
+// Why this exists: `gerar_imagem` sends a DESCRIPTION to the model and gets back
+// a new drawing. When the request is "põe o MEU logo no cartão", this can't be
+// fixed by prompting: the model redraws the emblem (it looks similar, it's not the
+// logo) and gets letters wrong inside the art ("CONSÓRCCIO", "PARABÊÑS"). The case of the
+// A case from set/2026 was exactly that: several attempts, none with
+// their real logo.
 //
-// A saída é separar as duas coisas. O modelo faz o que ele faz bem (pintar um
-// FUNDO, sem texto e sem marca) e a plataforma faz o que precisa ser exato:
-// cola o arquivo original em pixel e escreve o texto com fonte de verdade.
-// Nada aqui é probabilístico; o assistente só decide POSIÇÃO e TAMANHO.
+// The fix is to separate the two things. The model does what it does well (painting a
+// BACKGROUND, with no text and no brand) and the platform does what needs to be exact:
+// pastes the original file pixel-for-pixel and writes the text with a real font.
+// Nothing here is probabilistic; the assistant only decides POSITION and SIZE.
 //
-// Coordenadas são sempre em PORCENTAGEM da tela (0-100), nunca em pixel: assim
-// o mesmo layout serve pra 1080x1080 do WhatsApp e pra 1080x1920 de story, e o
-// modelo não precisa fazer conta de pixel (onde ele erra).
+// Coordinates are always a PERCENTAGE of the screen (0-100), never in pixels: this way
+// the same layout works for WhatsApp's 1080x1080 and for a 1080x1920 story, and the
+// model doesn't have to do pixel math (where it gets it wrong).
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,11 +27,11 @@ const ARQUIVOS_FONTE = [
   ['PTSerif-Bold.ttf', FAMILIAS.serif],
 ];
 
-// O servidor de produção NÃO tem nenhuma fonte instalada (/usr/share/fonts nem
-// existe lá). Sem registrar uma fonte própria, fillText desenha NADA e a
-// composição sairia muda, sem erro nenhum. Por isso as fontes viajam dentro do
-// repositório e o registro é conferido: se falhar, a composição avisa em vez de
-// entregar um cartão sem texto.
+// The production server has NO font installed at all (/usr/share/fonts doesn't
+// even exist there). Without registering a font of our own, fillText draws NOTHING and the
+// composition would come out mute, with no error at all. That's why the fonts travel inside the
+// repository and the registration is checked: if it fails, the composition warns instead of
+// delivering a card with no text.
 let fontesRegistradas = null;
 export function registrarFontes() {
   if (fontesRegistradas !== null) return fontesRegistradas;
@@ -47,9 +47,9 @@ export function registrarFontes() {
   return fontesRegistradas;
 }
 
-// Nomes de cor em português porque é assim que o modelo escreve. Hex e rgb()
-// continuam passando direto; o que não for reconhecido cai no padrão em vez de
-// virar preto silencioso.
+// Color names in Portuguese because that's how the model writes them. Hex and rgb()
+// still pass straight through; whatever isn't recognized falls back to the default instead of
+// silently turning black.
 const CORES = {
   branco: '#ffffff', preto: '#000000', cinza: '#8a8a8a', 'cinza-claro': '#d9d9d9', 'cinza-escuro': '#3a3a3a',
   vermelho: '#c0392b', vinho: '#7d2230', rosa: '#e0629a', laranja: '#ef7a1a', amarelo: '#f2c200',
@@ -73,9 +73,9 @@ const ANCORAS = {
 };
 const ancora = (v) => ANCORAS[String(v || '').trim().toLowerCase()] || ANCORAS.centro;
 
-// Branco -> transparente. Uma logo que veio de PDF chega desenhada sobre a
-// folha BRANCA da página; sem isto, colar a logo põe um retângulo branco em
-// cima da arte.
+// White -> transparent. A logo that came from a PDF arrives drawn over the
+// WHITE page sheet; without this, pasting the logo puts a white rectangle on
+// top of the art.
 function tirarBranco(ctx, w, h, limiar) {
   const d = ctx.getImageData(0, 0, w, h);
   const p = d.data;
@@ -85,9 +85,9 @@ function tirarBranco(ctx, w, h, limiar) {
   ctx.putImageData(d, 0, 0);
 }
 
-// Corta a margem vazia em volta do desenho. Página de PDF é quase toda folha em
-// branco com a marca pequena no meio: sem aparar, "logo com 60% da largura"
-// entregaria 60% de folha em branco e uma marca minúscula.
+// Trims the empty margin around the drawing. A PDF page is almost all blank
+// sheet with the small mark in the middle: without trimming, "logo com 60% da largura"
+// would deliver 60% blank sheet and a tiny mark.
 function aparar(canvas) {
   const w = canvas.width, h = canvas.height;
   const p = canvas.getContext('2d').getImageData(0, 0, w, h).data;
@@ -102,7 +102,7 @@ function aparar(canvas) {
       }
     }
   }
-  if (x1 < x0 || y1 < y0) return canvas; // tudo transparente: não há o que aparar
+  if (x1 < x0 || y1 < y0) return canvas; // all transparent: there's nothing to trim
   const lw = x1 - x0 + 1, lh = y1 - y0 + 1;
   if (lw === w && lh === h) return canvas;
   const saida = createCanvas(lw, lh);
@@ -110,8 +110,8 @@ function aparar(canvas) {
   return saida;
 }
 
-// Repinta o desenho inteiro numa cor só, preservando o recorte (alpha). É o que
-// deixa uma logo azul-escura utilizável sobre fundo escuro, sem redesenhar.
+// Repaints the entire drawing in a single color, preserving the cutout (alpha). This is what
+// makes a dark-blue logo usable over a dark background, without redrawing it.
 function repintar(canvas, corChapada) {
   const ctx = canvas.getContext('2d');
   ctx.globalCompositeOperation = 'source-in';
@@ -121,10 +121,10 @@ function repintar(canvas, corChapada) {
   return canvas;
 }
 
-// Teto de trabalho por peça. Uma foto de 8000px entraria em memória inteira e
-// ainda seria varrida pixel a pixel por tirarBranco/aparar, e no fim ela é
-// desenhada em no máximo alguns milhares de pixels. Reduzir na entrada é o que
-// mantém o custo previsível sem mudar o resultado visível.
+// Work cap per piece. An 8000px photo would be loaded into memory in full and
+// still be swept pixel by pixel by tirarBranco/aparar, and in the end it's
+// drawn at no more than a few thousand pixels. Downsizing at input is what
+// keeps the cost predictable without changing the visible result.
 const LADO_MAX_PECA = 2400;
 async function prepararImagem(buffer, camada) {
   const img = await loadImage(buffer);
@@ -135,7 +135,7 @@ async function prepararImagem(buffer, camada) {
   c.getContext('2d').drawImage(img, 0, 0, w, h);
   const semBranco = camada.remover_fundo_branco === true;
   if (semBranco) tirarBranco(c.getContext('2d'), c.width, c.height, Math.max(1, Math.min(num(camada.limiar_branco, 235), 254)));
-  // aparar segue o fundo removido por padrão: é o caso do logo vindo de PDF.
+  // trimming follows the removed background by default: this is the case of a logo coming from a PDF.
   if (camada.aparar === true || (camada.aparar !== false && semBranco)) c = aparar(c);
   const chapada = camada.cor ? cor(camada.cor, null) : null;
   if (chapada) repintar(c, chapada);
@@ -167,8 +167,8 @@ function desenharTexto(ctx, camada, W, H) {
   const entrelinha = Math.max(0.9, Math.min(num(camada.entrelinha, 1.2), 3));
   let tamanho = Math.max(8, Math.round(H * Math.max(0.5, Math.min(num(camada.tamanho, 5), 40)) / 100));
   let linhas = [];
-  // Encolhe até caber. Texto que vaza pra fora da arte é o jeito mais fácil de
-  // estragar o cartão, e quem escreve o texto (o modelo) não sabe medir pixel.
+  // Shrinks until it fits. Text that spills outside the art is the easiest way to
+  // ruin the card, and whoever writes the text (the model) doesn't know how to measure pixels.
   for (;;) {
     ctx.font = `${peso} ${tamanho}px "${familia}"`;
     linhas = quebrar(ctx, texto, maxLargura);
@@ -221,8 +221,8 @@ function desenharRetangulo(ctx, camada, W, H) {
   ctx.restore();
 }
 
-// Preenche a tela inteira sem distorcer: escala pelo lado que falta e corta o
-// excesso (o "cover" do CSS). Esticar a arte do fundo é o erro clássico.
+// Fills the entire screen without distorting: scales by whichever side is short and crops the
+// excess (CSS's "cover"). Stretching the background art is the classic mistake.
 function cobrir(ctx, img, W, H) {
   const escala = Math.max(W / img.width, H / img.height);
   const w = img.width * escala, h = img.height * escala;
@@ -247,12 +247,12 @@ function pintarFundo(ctx, fundo, W, H, imagemFundo) {
 }
 
 /**
- * Monta a imagem final. `carregarImagem(ref)` devolve o Buffer da peça (logo,
- * foto, fundo) ou null; quem chama é que sabe resolver a referência (id da
- * biblioteca do dono), então aqui não há I/O de storage nem dependência de
- * banco, e o teste roda com buffers na mão.
- * Devolve { png, width, height, avisos }: `avisos` diz o que NÃO entrou, pra o
- * assistente poder contar a verdade em vez de afirmar que colou o logo.
+ * Builds the final image. `carregarImagem(ref)` returns the piece's Buffer (logo,
+ * photo, background) or null; the caller is the one who knows how to resolve the reference (owner's
+ * library id), so there's no storage I/O or database dependency
+ * here, and the test runs with buffers in hand.
+ * Returns { png, width, height, avisos }: `avisos` says what did NOT make it in, so the
+ * assistant can tell the truth instead of claiming it pasted the logo.
  */
 export async function composeImage(spec = {}, { carregarImagem = async () => null } = {}) {
   const W = Math.max(64, Math.min(Math.round(num(spec.largura, 1080)), 4096));
@@ -274,8 +274,8 @@ export async function composeImage(spec = {}, { carregarImagem = async () => nul
   }
   pintarFundo(ctx, spec.fundo, W, H, imagemFundo);
 
-  // Teto de camadas: um layout de verdade tem punhado delas; uma lista enorme
-  // só queimaria tempo e memória. Corta em silêncio não, avisa.
+  // Layer cap: a real layout has a handful of them; a huge list
+  // would just burn time and memory. It doesn't cut silently, it warns.
   const todas = Array.isArray(spec.camadas) ? spec.camadas : [];
   const camadas = todas.slice(0, 40);
   if (todas.length > camadas.length) avisos.push(`só as 40 primeiras camadas foram desenhadas (vieram ${todas.length})`);
@@ -293,8 +293,8 @@ export async function composeImage(spec = {}, { carregarImagem = async () => nul
         ? W * Math.max(1, Math.min(num(camada.largura, 40), 200)) / 100
         : null;
       const alturaAlvo = camada.altura != null ? H * Math.max(1, Math.min(num(camada.altura, 40), 200)) / 100 : null;
-      // Sem os dois lados, mantém a proporção original da peça (esticar um logo
-      // é tão errado quanto redesenhá-lo).
+      // Without both sides, keeps the piece's original proportion (stretching a logo
+      // is just as wrong as redrawing it).
       const w = larguraAlvo ?? alturaAlvo * (peca.width / peca.height);
       const h = alturaAlvo ?? larguraAlvo * (peca.height / peca.width);
       const [ax, ay] = ancora(camada.ancora);
@@ -344,10 +344,10 @@ const CAMADA_SCHEMA = {
 };
 
 /**
- * Tool do tool-loop. Mantida ao lado das de mídia porque é a outra metade do
- * `gerar_imagem`: uma inventa a arte, esta monta o resultado exato.
- * carregarAsset(id) -> Buffer|null é injetado pelo servidor (resolve o id na
- * biblioteca DO DONO, então uma pessoa não alcança arquivo de outra).
+ * Tool for the tool-loop. Kept alongside the media ones because it's the other half of
+ * `gerar_imagem`: one invents the art, this one builds the exact result.
+ * carregarAsset(id) -> Buffer|null is injected by the server (resolves the id in
+ * the OWNER's library, so one person can't reach another's file).
  */
 export function comporTools(userId, { carregarAsset, saveBlob, onAttachment = () => {} } = {}) {
   if (typeof carregarAsset !== 'function' || typeof saveBlob !== 'function') return [];

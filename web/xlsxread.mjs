@@ -1,23 +1,23 @@
-// Leitor de .xlsx SEM dependência externa (mesma filosofia zero-dep do docgen.mjs).
-// Um .xlsx é um ZIP de XMLs. A gente abre o ZIP na unha (diretório central +
-// inflateRaw nativo do zlib) e lê xl/sharedStrings.xml + xl/worksheets/sheetN.xml,
-// devolvendo o conteúdo como CSV (uma planilha vira texto que o modelo entende).
+// .xlsx reader WITHOUT an external dependency (same zero-dep philosophy as docgen.mjs).
+// A .xlsx is a ZIP of XMLs. We open the ZIP by hand (central directory +
+// zlib's native inflateRaw) and read xl/sharedStrings.xml + xl/worksheets/sheetN.xml,
+// returning the content as CSV (a spreadsheet becomes text the model understands).
 import zlib from 'node:zlib';
 import {posix} from 'node:path';
 
-// ---- ZIP: lê as entradas pelo End Of Central Directory + diretório central ----
+// ---- ZIP: reads entries via the End Of Central Directory + central directory ----
 function readZipEntries(buf) {
-  // EOCD: assinatura 0x06054b50, procurada a partir do fim (comentário pode existir).
+  // EOCD: signature 0x06054b50, searched from the end (a comment may exist).
   let eocd = -1;
   for (let i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65536; i--) {
     if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
   }
   if (eocd < 0) throw new Error('xlsx inválido: não achei o fim do ZIP (EOCD)');
   const count = buf.readUInt16LE(eocd + 10);
-  let off = buf.readUInt32LE(eocd + 16); // início do diretório central
+  let off = buf.readUInt32LE(eocd + 16); // start of the central directory
   const entries = {};
   for (let n = 0; n < count; n++) {
-    if (buf.readUInt32LE(off) !== 0x02014b50) break; // fim/entrada inválida
+    if (buf.readUInt32LE(off) !== 0x02014b50) break; // end/invalid entry
     const method = buf.readUInt16LE(off + 10);
     const compSize = buf.readUInt32LE(off + 20);
     const nameLen = buf.readUInt16LE(off + 28);
@@ -33,7 +33,7 @@ function readZipEntries(buf) {
 
 function readEntry(buf, entry) {
   if (!entry) return null;
-  // Cabeçalho local: recalcula o início dos dados (nome/extra podem diferir do central).
+  // Local header: recalculates the start of the data (name/extra may differ from the central one).
   const lo = entry.localOff;
   if (buf.readUInt32LE(lo) !== 0x04034b50) throw new Error('xlsx inválido: cabeçalho local ausente');
   const nameLen = buf.readUInt16LE(lo + 26);
@@ -45,14 +45,14 @@ function readEntry(buf, entry) {
   throw new Error(`xlsx: método de compressão ${entry.method} não suportado`);
 }
 
-// ---- XML mínimo (formato controlado; regex serve e evita dep de parser) ----
+// ---- Minimal XML (controlled format; regex works and avoids a parser dependency) ----
 function decodeXml(s) {
   return s
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
-    .replace(/&amp;/g, '&'); // por último
+    .replace(/&amp;/g, '&'); // last
 }
 
 // Texto de um bloco <si>/<is>: concatena todos os <t>...</t> (inclui runs <r><t>).
@@ -67,15 +67,15 @@ function textOfNode(xml) {
 function parseSharedStrings(xml) {
   if (!xml) return [];
   const strings = [];
-  // Autofechada primeiro pelo mesmo motivo do <row>/<c>: '<si/>' faria o ramo
-  // com corpo engolir a string seguinte e desalinhar TODA a tabela de textos (achado #19).
+  // Self-closed first, for the same reason as <row>/<c>: '<si/>' would make the
+  // with-body branch swallow the following string and misalign the WHOLE text table (finding #19).
   const re = /<si\b[^>]*?\/>|<si\b[^>]*>([\s\S]*?)<\/si>/g;
   let m;
   while ((m = re.exec(xml))) strings.push(m[1] != null ? textOfNode(m[1]) : '');
   return strings;
 }
 
-// Letra da coluna ("A","AB") -> índice 0-based.
+// Column letter ("A","AB") -> 0-based index.
 function colToIdx(ref) {
   const letters = (ref.match(/^[A-Z]+/) || [''])[0];
   let n = 0;
@@ -204,7 +204,7 @@ function sheetNames(entries) {
 }
 
 /**
- * Lê um Buffer .xlsx e devolve texto (CSV por planilha).
+ * Reads an .xlsx Buffer and returns text (CSV per sheet).
  * @param {Buffer} buf
  * @param {object} [opts] { maxChars=40000, maxRowsPerSheet=2000 }
  * @returns {{ text:string, sheets:number, rows:number, truncated:boolean }}
@@ -236,15 +236,15 @@ export function xlsxToText(buf, opts = {}) {
   return {text,sheets:sheets.size,rows:totalRows,truncated};
 }
 
-// ── Peças internas do arquivo (fidelidade de round-trip) ───────────────────
-// Um .xlsx é um ZIP: gráfico, imagem, tabela dinâmica e macro são PEÇAS
-// separadas (xl/charts/, xl/media/, xl/pivotCache/, xl/vbaProject.bin). Quando
-// um script de edição recria o arquivo (ou a lib não entende uma peça), a peça
-// simplesmente DESAPARECE do zip — sem erro nenhum. Comparar a lista de peças
-// antes/depois pega essa classe inteira de dano, incluindo recursos que a gente
-// nunca testou, sem precisar prever cada um. `formulas` conta os <f> de todas as
-// abas: fórmula achatada em valor estático (o clássico data_only=True) não muda
-// a lista de peças, mas zera essa contagem.
+// ── Internal file parts (round-trip fidelity) ───────────────────
+// An .xlsx is a ZIP: chart, image, pivot table and macro are separate PARTS
+// (xl/charts/, xl/media/, xl/pivotCache/, xl/vbaProject.bin). When
+// an editing script recreates the file (or the lib doesn't understand a part), the part
+// simply DISAPPEARS from the zip, with no error at all. Comparing the list of parts
+// before/after catches this whole class of damage, including features we've
+// never tested, without needing to predict each one. `formulas` counts the <f> tags across all
+// sheets: a formula flattened into a static value (the classic data_only=True) doesn't change
+// the list of parts, but zeroes out this count.
 export function xlsxParts(buf) {
   const entries = readZipEntries(buf);
   const names = Object.keys(entries).sort();
@@ -257,8 +257,8 @@ export function xlsxParts(buf) {
   return { names, formulas };
 }
 
-// Mapa "nome da aba" -> arquivo da aba, resolvido pelos rels (a ordem de
-// sheet1/sheet2 no zip NÃO é garantida igual à ordem das abas no workbook).
+// Map "sheet name" -> sheet file, resolved via the rels (the order of
+// sheet1/sheet2 in the zip is NOT guaranteed to match the order of sheets in the workbook).
 function sheetFileByName(entries, dec) {
   const wb=dec('xl/workbook.xml'),rels=dec('xl/_rels/workbook.xml.rels'),map=new Map(),targets=new Map();
   for(const m of rels.matchAll(/<Relationship\b[^>]*>/g)){
@@ -289,9 +289,9 @@ function sheetFileByName(entries, dec) {
 }
 
 /**
- * Lê células específicas de um .xlsx por referência A1 ("Aba!C8" ou "C8").
- * Serve pra CONFERIR, do lado de fora, que uma edição feita por código caiu
- * onde disse que caiu — sem trazer o conteúdo da planilha pro contexto.
+ * Reads specific cells of an .xlsx by A1 reference ("Sheet!C8" or "C8").
+ * Used to VERIFY, from the outside, that an edit made by code landed
+ * where it said it would, without bringing the spreadsheet's content into context.
  * @param {Buffer} buf
  * @param {string[]} refs
  * @returns {Array<{ref:string, sheet:string, cell:string, exists:boolean, value:string, formula:string}>}

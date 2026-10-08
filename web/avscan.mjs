@@ -1,29 +1,29 @@
-// Antivírus de uploads (ASVS L1). Escaneia o byte de um arquivo enviado pelo
-// usuário contra o ClamAV via protocolo INSTREAM do clamd, sem dependência
-// externa (só node:net). O clamd roda como daemon local no host; a gente fala
-// com ele pelo socket unix (CLAMD_SOCKET) ou por TCP (CLAMD_HOST:CLAMD_PORT).
+// Upload antivirus (ASVS L1). Scans the bytes of a file the user uploaded
+// against ClamAV via clamd's INSTREAM protocol, with no external dependency
+// (just node:net). clamd runs as a local daemon on the host; we talk to it
+// over a unix socket (CLAMD_SOCKET) or over TCP (CLAMD_HOST:CLAMD_PORT).
 //
-// Comportamento:
-//   - Sem CLAMD_SOCKET/CLAMD_HOST setado → no-op (clean, skipped). Dev/local
-//     não quebra e nada é bloqueado por engano.
-//   - Vírus detectado (FOUND) → { clean: false, signature }. O caller REJEITA.
-//   - clamd fora do ar / erro de socket / timeout → fail-open (clean, skipped,
-//     error) pra não derrubar o upload por indisponibilidade do daemon; o motivo
-//     fica logado. Só uma detecção positiva bloqueia.
+// Behavior:
+//   - With no CLAMD_SOCKET/CLAMD_HOST set → no-op (clean, skipped). Dev/local
+//     does not break and nothing is blocked by mistake.
+//   - Virus detected (FOUND) → { clean: false, signature }. The caller REJECTS.
+//   - clamd down / socket error / timeout → fail-open (clean, skipped, error)
+//     so the upload is not brought down by the daemon being unavailable; the
+//     reason stays logged. Only a positive detection blocks.
 import net from 'net';
 
-// StreamMaxLength padrão do clamd é 25MB; acima disso ele corta o stream. A
-// gente pula o scan de arquivos maiores (raro nesse app) e loga.
+// clamd's default StreamMaxLength is 25MB; above that it cuts the stream. We
+// skip scanning larger files (rare in this app) and log it.
 const MAX_SCAN = 25 * 1024 * 1024;
 
 export function avEnabled() {
   return !!(process.env.CLAMD_SOCKET || process.env.CLAMD_HOST);
 }
 
-// Escaneia um Buffer. Resolve sempre (nunca rejeita) com:
-//   { clean: true }                          arquivo limpo
-//   { clean: false, signature }              vírus encontrado
-//   { clean: true, skipped: true, error? }   scan pulado (desligado/grande/erro)
+// Scans a Buffer. Always resolves (never rejects) with:
+//   { clean: true }                          clean file
+//   { clean: false, signature }              virus found
+//   { clean: true, skipped: true, error? }   scan skipped (off/large/error)
 export function scanBuffer(buffer, { timeoutMs = 15000 } = {}) {
   return new Promise((resolve) => {
     if (!avEnabled()) return resolve({ clean: true, skipped: true });
@@ -40,8 +40,9 @@ export function scanBuffer(buffer, { timeoutMs = 15000 } = {}) {
     const finish = (r) => { if (done) return; done = true; clearTimeout(timer); try { sock.destroy(); } catch { } resolve(r); };
     const timer = setTimeout(() => finish({ clean: true, skipped: true, error: 'timeout no clamd' }), timeoutMs);
 
-    // clamd responde uma linha terminada em \0 e fecha. Interpreta assim que a
-    // resposta completa chega (\0) ou no fechamento do socket, o que vier antes.
+    // clamd answers with one line ending in \0 and closes. Parses as soon as
+    // the complete response arrives (\0) or on the socket's close, whichever
+    // comes first.
     const parse = () => {
       const line = resp.replace(/\0/g, '').trim();
       if (!line) return finish({ clean: true, skipped: true, error: 'resposta vazia do clamd' });
@@ -56,7 +57,7 @@ export function scanBuffer(buffer, { timeoutMs = 15000 } = {}) {
     sock.on('data', (d) => { resp += d.toString('utf8'); if (resp.includes('\0')) parse(); });
     sock.on('end', () => parse());
     sock.on('connect', () => {
-      // INSTREAM: comando, depois chunks (len BE de 4 bytes + bytes), depois len 0.
+      // INSTREAM: command, then chunks (4-byte BE len + bytes), then len 0.
       sock.write('zINSTREAM\0');
       const CH = 64 * 1024;
       for (let i = 0; i < buffer.length; i += CH) {

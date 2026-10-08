@@ -80,7 +80,7 @@ test('read-only tool rejects writes and executable input before reaching its tra
 });
 test('PDF extraction records no Tavily usage; real HTML extraction still records provider usage',async()=>{
  const source=readFileSync(new URL('./web/websearch.mjs',import.meta.url),'utf8');
- const functionCode=source.slice(source.indexOf('export function openLinkTool'),source.indexOf('// ── Busca REVERSA')).replace('export function','function');
+ const functionCode=source.slice(source.indexOf('export function openLinkTool'),source.indexOf('// ── REVERSE image search')).replace('export function','function');
  let pdf=true,providerCalls=0,saves=0;const usages=[];
  const quality=await import('./web/page-content-quality.mjs');const {uaBot}=await import('./web/marca.mjs');
  const context={Buffer,console,uaBot,...quality,assertPublicUrl:async()=>{},safeFetch:async()=>({headers:{get:()=>pdf?'application/pdf':'text/html'},arrayBuffer:async()=>new ArrayBuffer(4),body:{cancel:async()=>{}}}),nameFromUrl:()=> 'fixture.pdf',extractPdfText:async()=>({text:'PDF text',pages:1}),tavilyEnabled:()=>true,tavilyExtract:async()=>{providerCalls++;return {text:'HTML text',url:'https://fixture.invalid',usage:{model:'tavily-search',total:1}};},lerPaginaDireto:async()=>({texto:'HTML text',url:'https://fixture.invalid'}),recortarPagina:text=>({corpo:text,corte:''}),exportGoogleSheets:()=>null,nomeDoDownload:(_r,f)=>f,nomeDoPath:()=>'',tipoPlanilha:()=>null};

@@ -1,9 +1,10 @@
-// Execução da rotina "busca_email": monta a consulta exata a partir do config
-// gravado, roda no Gmail (API REST) ou Outlook (Microsoft Graph) paginando até
-// o fim (ou até o teto) e devolve a lista pronta pro modelo resumir. Nada aqui
-// depende do modelo: mesma consulta, mesmo resultado, toda execução.
+// Execution of the "busca_email" routine: builds the exact query from the
+// recorded config, runs it on Gmail (REST API) or Outlook (Microsoft Graph)
+// paging to the end (or to the ceiling) and returns the ready-made list for the
+// model to summarize. Nothing here depends on the model: same query, same
+// result, every run.
 //
-// Só leitura (gmail.readonly / Mail.Read já concedidos). Nenhum escopo novo.
+// Read-only (gmail.readonly / Mail.Read already granted). No new scope.
 
 import { readGmailBody, collectAttachments } from './gmail-payload.mjs';
 
@@ -12,8 +13,8 @@ import { normalizeEmailBody, limitEmailBody } from './email-body.mjs';
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
-export const EMAIL_SEARCH_CAP = 200;        // teto de mensagens por execução
-export const EMAIL_SEARCH_PAGE = 50;        // tamanho da página
+export const EMAIL_SEARCH_CAP = 200;        // ceiling of messages per run
+export const EMAIL_SEARCH_PAGE = 50;        // page size
 export const EMAIL_SEARCH_BODY_LIMIT = 15;  // quantas ganham corpo (as mais recentes)
 export const EMAIL_SEARCH_BODY_CHARS = 1500;
 const CONCURRENCY = 6;
@@ -21,8 +22,9 @@ const CONCURRENCY = 6;
 // ---- consultas ----
 
 // Gmail: ("a" OR "b") (from:x OR from:y) newer_than:Nd [is:unread] [has:attachment] -from:me
-// `-from:me` = só e-mails RECEBIDOS: a rotina é sobre o que chegou, e sem isso as
-// próprias respostas do dono (que citam o termo) voltariam como "novidade".
+// `-from:me` = only RECEIVED emails: the routine is about what came in, and
+// without this the owner's own replies (which quote the term) would come back
+// as "news".
 export function buildGmailQuery(c) {
   const parts = [];
   if (c.terms?.length) parts.push(c.terms.length === 1 ? q(c.terms[0]) : '(' + c.terms.map(q).join(' OR ') + ')');
@@ -35,12 +37,12 @@ export function buildGmailQuery(c) {
 }
 const q = (t) => (/\s/.test(t) ? `"${t}"` : t);
 
-// Outlook (Graph $search, sintaxe KQL). Sem termo/remetente usa $filter por
-// data (mais preciso). Data também é filtrada do lado do cliente.
+// Outlook (Graph $search, KQL syntax). Without a term/sender uses $filter by
+// date (more precise). Date is also filtered client-side.
 export function buildGraphQuery(c, since) {
   const day = since.toISOString().slice(0, 10);
-  // $search (KQL) só quando há termo/remetente; só flags/data vai de $filter,
-  // que é exato e aceita $orderby.
+  // $search (KQL) only when there's a term/sender; flags/date-only goes through
+  // $filter, which is exact and accepts $orderby.
   if (c.terms?.length || c.senders?.length) {
     const kql = [];
     if (c.terms?.length) kql.push(c.terms.length === 1 ? q(c.terms[0]) : '(' + c.terms.map(q).join(' OR ') + ')');
@@ -146,7 +148,7 @@ async function runGraph(c, deps) {
     const j = await getJson(fetchImpl, token, url);
     pages++;
     for (const m of j.value || []) {
-      if (m.receivedDateTime && new Date(m.receivedDateTime) < since) continue; // $search não garante a data
+      if (m.receivedDateTime && new Date(m.receivedDateTime) < since) continue; // $search doesn't guarantee the date
       raw.push(m);
     }
     url = j['@odata.nextLink'] || '';
@@ -178,8 +180,8 @@ async function runGraph(c, deps) {
 
 // ---- entrada ----
 
-// deps.token: async () => access token (Gmail ou Graph conforme c.provider).
-// Lança se a busca em si falhar (token, rede, 4xx/5xx na listagem).
+// deps.token: async () => access token (Gmail or Graph depending on c.provider).
+// Throws if the search itself fails (token, network, 4xx/5xx on the listing).
 export async function executeEmailSearch(c, deps = {}) {
   const d = {
     fetchImpl: deps.fetchImpl || globalThis.fetch,
@@ -196,12 +198,12 @@ export async function executeEmailSearch(c, deps = {}) {
   r.ms = Date.now() - t0;
   r.days = c.days;
   r.account = c.account || null;
-  // partial = algo ficou de fora (teto ou mensagem que não abriu): dispara o rodapé.
+  // partial = something was left out (ceiling or a message that didn't open): triggers the footer.
   r.partial = r.truncated || r.errors.length > 0 || r.items.some(m=>m.truncated || m.links_truncated);
   return r;
 }
 
-// Bloco que entra no frame da rotina. O modelo só trabalha com isto.
+// Block that goes into the routine's frame. The model only works with this.
 export function emailSearchPromptBlock(c, r, { language = 'pt-BR' } = {}) {
   const conta = r.account ? ` (account ${r.account})` : '';
   const prov = r.provider === 'outlook' ? 'Outlook' : 'Gmail';
@@ -230,7 +232,7 @@ export function emailSearchPromptBlock(c, r, { language = 'pt-BR' } = {}) {
   return lines.join('\n');
 }
 
-// Quando a busca em si falhou (token, rede, API): o modelo avisa, não finge.
+// When the search itself failed (token, network, API): the model warns, doesn't fake it.
 export function emailSearchFailureBlock(c, err) {
   const prov = c.provider === 'outlook' ? 'Outlook' : 'Gmail';
   return [
@@ -240,7 +242,7 @@ export function emailSearchFailureBlock(c, err) {
   ].join('\n');
 }
 
-// Resumo curto pro teste feito na criação da rotina.
+// Short summary for the test done when the routine is created.
 export function describeEmailSearchTest(r) {
   const n = r.total;
   const base = `Testei agora: ${n === 0 ? 'nenhum e-mail' : n === 1 ? '1 e-mail' : `${n} e-mails`} nos últimos ${r.days} dia${r.days === 1 ? '' : 's'}${r.truncated ? ' (teto atingido)' : ''}.`;

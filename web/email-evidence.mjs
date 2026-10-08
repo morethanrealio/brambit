@@ -1,5 +1,5 @@
 import { emailBodyUrl } from './email-body.mjs';
-// Proveniência coletada diretamente das tools, nunca da síntese do modelo.
+// Provenance collected directly from the tools, never from the model's synthesis.
 const clip = (s,n) => String(s || '').replace(/\s+/g,' ').trim().slice(0,n);
 export function emailSource(provider, m, { read = false, account = '' } = {}) {
   if (!m || typeof m.id !== 'string' || !m.id) return null;
@@ -33,7 +33,7 @@ export function createEmailEvidence() {
     },
     finish(value, language = 'pt-BR') {
       const s=String(value || ''), rows=this.rows().filter(r=>r.link);
-      // Se o modelo já citou fonte consultada, preservar seu formato proporcional.
+      // If the model has already cited a consulted source, preserve its proportional format.
       if (!rows.length || rows.some(r=>s.includes(r.link))) return s;
       const lang=String(language).slice(0,2);
       const title={pt:'E-mails consultados',en:'Emails consulted',es:'Correos consultados'}[lang] || 'E-mails consultados';

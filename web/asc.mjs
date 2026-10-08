@@ -1,17 +1,17 @@
-// ── App Store Connect (crashes do TestFlight) como tools do cofre ──
+// ── App Store Connect (TestFlight crashes) as vault tools ──
 //
-// Conector por chave de API da Apple (issuer id + key id + chave privada .p8),
-// guardado no Cofre de credenciais (provider 'appstoreconnect'): a .p8 fica
-// CIFRADA em secret_enc; issuer id + key id ficam no `meta` (são
-// identificadores, não segredo). Cada função recebe um `cred()` async que
-// devolve { issuerId, keyId, p8, appId? } ou null se o usuário ainda não
-// conectou. Escopado por usuário: cada assistente só enxerga os crashes do app
-// da conta que O DONO conectou.
+// Connector via Apple API key (issuer id + key id + .p8 private key), kept in
+// the credentials Vault (provider 'appstoreconnect'): the .p8 stays ENCRYPTED
+// in secret_enc; issuer id + key id live in `meta` (they're identifiers, not
+// a secret). Each function receives an async `cred()` that returns {
+// issuerId, keyId, p8, appId? } or null if the user hasn't connected yet.
+// Scoped per user: each assistant only sees the crashes of the app from the
+// account THE OWNER connected.
 //
-// Só LEITURA. Fluxo SOB DEMANDA (nada de push/automático): o dono pede a lista,
-// escolhe o(s) crash(es), e só então o assistente baixa o log completo daquele.
-// Mesmo shape das outras tools de conector: { name, description, parameters,
-// async run(args) } -> string.
+// READ-ONLY. ON-DEMAND flow (no push/automatic): the owner asks for the list,
+// picks the crash(es), and only then does the assistant download that one's
+// full log. Same shape as the other connector tools: { name, description,
+// parameters, async run(args) } -> string.
 import crypto from 'crypto';
 import { marca } from './marca.mjs';
 
@@ -36,9 +36,9 @@ const ASC_BAD = [
 const b64url = (b) =>
   Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-// Monta um JWT ES256 curto (10min) pra autenticar na App Store Connect API.
-// A .p8 é uma chave EC P-256 (PKCS#8). dsaEncoding ieee-p1363 = assinatura
-// JOSE (r||s), que é o formato que a Apple espera (não o DER).
+// Builds a short-lived (10min) ES256 JWT to authenticate to the App Store
+// Connect API. The .p8 is an EC P-256 (PKCS#8) key. dsaEncoding ieee-p1363 =
+// JOSE signature (r||s), which is the format Apple expects (not DER).
 function ascJwt({ issuerId, keyId, p8 }) {
   const header = { alg: 'ES256', kid: keyId, typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
@@ -73,7 +73,7 @@ async function aReq(cred, path) {
   return json;
 }
 
-// Traduz os marcadores de erro num texto de orientação (ou null se ok).
+// Translates the error markers into a guidance text (or null if ok).
 function errText(j) {
   if (!j) return null;
   if (j.__notConnected) return ASC_SETUP();
@@ -83,9 +83,10 @@ function errText(j) {
   return null;
 }
 
-// Resolve o app a operar. Se o usuário fixou um appId no conector, usa ele.
-// Senão lista os apps da conta: 1 app -> usa; vários -> devolve a lista pro
-// dono escolher (sem chutar). Devolve { app } | { pick: [...] } | { err }.
+// Resolves which app to operate on. If the user pinned an appId in the
+// connector, uses it. Otherwise lists the account's apps: 1 app -> uses it;
+// several -> returns the list for the owner to choose (no guessing). Returns
+// { app } | { pick: [...] } | { err }.
 async function resolveApp(cred, hint) {
   const c = await cred();
   if (c?.appId && !hint) return { app: { id: c.appId } };
@@ -105,7 +106,7 @@ async function resolveApp(cred, hint) {
   return { pick: apps };
 }
 
-// Normaliza um crash submission (metadados legíveis).
+// Normalizes a crash submission (readable metadata).
 function crashSummary(item) {
   const a = item?.attributes || {};
   return {
@@ -133,7 +134,7 @@ export function ascTools({ cred }) {
         if (r.err) return r.err;
         if (r.pick) return JSON.stringify({ escolha_o_app: r.pick.map((a) => ({ nome: a.name, bundle: a.bundleId })) });
         const n = Math.min(Math.max(1, Number(limite) || 20), 100);
-        // Puxa um lote e ordena no cliente por data desc (a API não garante ordem).
+        // Pulls a batch and sorts client-side by date desc (the API does not guarantee order).
         const j = await aReq(cred, `/v1/apps/${r.app.id}/betaFeedbackCrashSubmissions?limit=200`);
         const e = errText(j);
         if (e) return e;
@@ -157,7 +158,7 @@ export function ascTools({ cred }) {
         for (const id of list) {
           const meta = await aReq(cred, `/v1/betaFeedbackCrashSubmissions/${encodeURIComponent(id)}`);
           const em = errText(meta);
-          if (em) return em; // credencial/conexão: falha geral, para tudo
+          if (em) return em; // credential/connection: general failure, stops everything
           const logJ = await aReq(cred, `/v1/betaFeedbackCrashSubmissions/${encodeURIComponent(id)}/crashLog`);
           const el = errText(logJ);
           const summary = crashSummary(meta.data || {});

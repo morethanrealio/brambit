@@ -43,8 +43,8 @@ export function remetenteConvite(env = process.env) {
   };
 }
 
-// Manda o e-mail de um convite. Devolve true se saiu, false se não (sem
-// credencial de e-mail, erro do SMTP). Nunca lança.
+// Sends an invite email. Returns true if it went out, false if not (no email
+// credential, SMTP error). Never throws.
 export async function enviarConviteEmpresa({ sendEmail, email, quem, quemEmail, empresa, base, regra, env = process.env, log = console }) {
   try {
     const { subject, text } = textoConviteEmpresa({ quem, empresa, email, base, regra });

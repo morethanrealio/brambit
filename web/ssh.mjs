@@ -1,16 +1,16 @@
-// ── SSH via cofre de credenciais (opção B: chave por usuário) ──
+// ── SSH via credential vault (option B: key per user) ──
 //
-// Fluxo:
-//  1) `gerar_chave_ssh(host, usuario)` gera um par ed25519 DENTRO do sandbox do
-//     usuário, guarda a chave PRIVADA cifrada no cofre (kind 'ssh_key') e devolve
-//     a chave PÚBLICA pro usuário colar no ~/.ssh/authorized_keys do servidor.
-//  2) `rodar_no_servidor(comando)` (GATED) busca a chave no cofre, decifra em
-//     memória, conecta a partir do sandbox SP (egress BR, rede interna bloqueada
-//     pelo firewall do host) e roda o comando. Exige confirmação explícita.
+// Flow:
+//  1) `gerar_chave_ssh(host, usuario)` generates an ed25519 pair INSIDE the
+//     user's sandbox, stores the PRIVATE key encrypted in the vault (kind 'ssh_key') and returns
+//     the PUBLIC key for the user to paste into the server's ~/.ssh/authorized_keys.
+//  2) `rodar_no_servidor(comando)` (GATED) fetches the key from the vault, decrypts it in
+//     memory, connects from the SP sandbox (BR egress, internal network blocked
+//     by the host's firewall) and runs the command. Requires explicit confirmation.
 //
-// Por que roda do SANDBOX e não do backend: o sandbox tem firewall que dropa a
-// rede interna da VPC (metadata, Postgres, 10/172.16/192.168), então um usuário
-// não consegue mirar a infra por dentro. O backend está na VPC, seria perigoso.
+// Why it runs from the SANDBOX and not the backend: the sandbox has a firewall that drops
+// the VPC's internal network (metadata, Postgres, 10/172.16/192.168), so a user
+// can't aim at the infra from inside. The backend is on the VPC, it would be dangerous.
 import { comAviso } from './recorte.mjs';
 import { sandboxEnabled, sandboxShell, sandboxWrite, sandboxRead } from './sandbox.mjs';
 import { encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
@@ -37,8 +37,8 @@ export function maskSecrets(s, { prose = false } = {}) {
   t = t.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)([^@\s/]+)(@)/gi, '$1***$3');
   // AWS Access Key ID (AKIA/ASIA + 16 alfanum).
   t = t.replace(/\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/g, '***AWS_KEY***');
-  // Tokens por FORMATO (não dependem de aparecer num `NOME=`). Cobre os que o
-  // regex por-nome deixava passar no live-feed/saída: Authorization Bearer/Basic,
+  // Tokens by FORMAT (don't depend on appearing in a `NOME=`). Covers the ones the
+  // by-name regex let through in the live-feed/output: Authorization Bearer/Basic,
   // JWT, GitHub, Slack, OpenAI/Anthropic, Google (ya29/AIza), Stripe.
   t = t.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***');
   t = t.replace(/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, '***JWT***');
@@ -49,14 +49,14 @@ export function maskSecrets(s, { prose = false } = {}) {
   t = t.replace(/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, '***STRIPE_KEY***');
   t = t.replace(/\bya29\.[A-Za-z0-9._-]{10,}/g, '***GOOGLE_TOKEN***');
   t = t.replace(/\bAIza[0-9A-Za-z_-]{30,}/g, '***GOOGLE_KEY***');
-  // Atribuição de env/config cujo NOME parece segredo: X=valor  ->  X=***
+  // env/config assignment whose NAME looks like a secret: X=value  ->  X=***
   // (SECRET, PASSWORD/PASS, TOKEN, APIKEY/API_KEY, ACCESS_KEY, PRIVATE_KEY, etc.)
-  // Em PROSA do assistente (prose:true) só dispara quando o NOME parece um
-  // identificador de env/config de verdade (TUDO_MAIUSCULO ou snake_case com _);
-  // assim palavra comum de texto pt-BR ("passo:", "Passagens:", "tokens:") não é
-  // mais comida, mas segredo real (DB_PASS=, CLIENT_SECRET:, PASSWORD=) segue
-  // mascarado. Na saída de terminal (prose:false) mantém o comportamento
-  // agressivo de sempre.
+  // In the assistant's PROSE (prose:true) it only triggers when the NAME looks like a real
+  // env/config identifier (ALL_CAPS or snake_case with _);
+  // that way a common pt-BR text word ("passo:", "Passagens:", "tokens:") is no longer
+  // caught, but a real secret (DB_PASS=, CLIENT_SECRET:, PASSWORD=) stays
+  // masked. In terminal output (prose:false) keeps the always-aggressive
+  // behavior.
   t = t.replace(
     /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|PASS|TOKEN|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CLIENT_SECRET)[A-Za-z0-9_]*)(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
     (m, name, sep) => (prose && !(name.includes('_') || /^[A-Z0-9]+$/.test(name)) ? m : `${name}${sep}***`),
@@ -66,13 +66,13 @@ export function maskSecrets(s, { prose = false } = {}) {
   return maskPasswordLabels(t);
 }
 
-// Senha escrita em texto comum (pt/es/en), que o regex por NOME acima não pega
-// em prosa: "senha: casa2026", "a senha do wifi é casa2026", "contraseña: x",
-// "password is x". Só o valor vira ***. "chave"/"clave" ficam de fora de
-// propósito: chave Pix é dado que o dono pede.
-// Com ":"/"=" qualquer valor é mascarado. Com verbo ("é", "is", "es") só quando o
-// valor tem dígito/símbolo ou vem entre aspas/crases/negrito, senão "a senha é
-// obrigatória" perderia a palavra.
+// Password written in plain text (pt/es/en), which the by-NAME regex above doesn't catch
+// in prose: "senha: casa2026", "a senha do wifi é casa2026", "contraseña: x",
+// "password is x". Only the value becomes ***. "chave"/"clave" are left out on
+// purpose: a Pix key is data the owner asks for.
+// With ":"/"=" any value is masked. With a verb ("é", "is", "es") only when the
+// value has a digit/symbol or comes between quotes/backticks/bold, otherwise "a senha é
+// obrigatória" would lose the word.
 const PW_LABEL = String.raw`(?<![\p{L}\p{N}_])(?:senha|contraseña|contrasena|password|passwd|pwd)`;
 const PW_QUAL = String.raw`(?:[ \t]+(?:nova|atual|antiga|provis[oó]ria|tempor[aá]ria|nueva|actual|new|current|temporary))?(?:[ \t]+(?:d[oa]s?|de|del|de la|of|for|to)[ \t]+[\p{L}\p{N}._@/-]{1,40}(?:[ \t]+(?:d[oa]s?|de|del|ao|à|no|na|en|of|for|to|on)[ \t]+[\p{L}\p{N}._@/-]{1,40})?)?`;
 const PW_VALUE = String.raw`("[^"\n]+"|'[^'\n]+'|\x60[^\x60\n]+\x60|\*\*[^*\n]+\*\*|[^\s"'\x60*]+?)(?=[.,;!?)]*(?:\s|$))`;
@@ -81,7 +81,7 @@ const RE_PW_VERB = new RegExp(String.raw`(${PW_LABEL}${PW_QUAL}[ \t]+(?:é|eh|er
 const PW_EMPTY = /^(?:\*+|-+|n\/a|não|nao|nenhuma|none|ninguna|no)$/i;
 
 function maskPasswordValue(value) {
-  // Aspas e crase ficam; negrito vira só *** (senão sobra "*******").
+  // Quotes and backtick stay; bold becomes just *** (otherwise "*******" would remain).
   const q = /^["'`]/.exec(value)?.[0] || '';
   return q ? `${q}***${q}` : '***';
 }
@@ -97,8 +97,8 @@ function maskPasswordLabels(t) {
 
 function shq(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
 
-// Verifica se o cliente SSH está instalado no sandbox. Sem openssh-client (ver
-// Dockerfile), ssh/ssh-keygen não existem: degradamos com mensagem útil.
+// Checks whether the SSH client is installed in the sandbox. Without openssh-client (see
+// Dockerfile), ssh/ssh-keygen don't exist: degrades with a useful message.
 async function sshAvailable(userId) {
   try {
     const r = await sandboxShell(userId, 'command -v ssh-keygen && command -v ssh', 15_000);
@@ -108,14 +108,14 @@ async function sshAvailable(userId) {
 
 const NO_SSH = 'O ambiente ainda não tem o cliente SSH instalado (openssh-client). Avise o suporte pra habilitar; assim que o ambiente for atualizado, isso funciona.';
 
-// Acha a conexão de chave SSH do usuário. Se `host` vier, casa por host; senão,
-// usa a única existente (ou pede pra especificar quando houver várias).
+// Finds the user's SSH key connection. If `host` comes in, matches by host; otherwise,
+// uses the only one that exists (or asks to specify when there are several).
 function pickKeyConn(conns, host, rotulo) {
   const keys = conns.filter((c) => c.kind === 'ssh_key');
   if (!keys.length) return { error: 'Você ainda não tem uma chave SSH criada. Use "gerar chave ssh" primeiro, cole a chave pública no servidor e depois rode o comando.' };
   const labels = () => keys.map((k) => k.label || k.meta?.host || '(sem rótulo)').join(', ');
-  // Rótulo explícito resolve QUALQUER ambiguidade: casa pelo label (ou pelo host
-  // fixo da chave). É o parâmetro que o modelo passa quando há mais de uma chave.
+  // An explicit label resolves ANY ambiguity: matches by label (or by the key's
+  // fixed host). It's the parameter the model passes when there's more than one key.
   if (rotulo) {
     const r = String(rotulo).toLowerCase().trim();
     const m = keys.filter((c) => String(c.label || '').toLowerCase() === r || String(c.meta?.host || '').toLowerCase() === r);
@@ -128,9 +128,9 @@ function pickKeyConn(conns, host, rotulo) {
     const m = keys.filter((c) => (c.meta?.host || '').toLowerCase() === h);
     if (m.length === 1) return { conn: m[0] };
     if (m.length > 1) return { error: `Há mais de uma chave pro host ${host}. Passe o parâmetro "rotulo" pra escolher. Rótulos: ${labels()}.` };
-    // Sem chave amarrada a esse host: se só existir uma no total, usa ela.
+    // No key bound to that host: if only one exists in total, uses it.
     if (keys.length === 1) return { conn: keys[0] };
-    // Senão, tenta uma chave "solta" (gerada sem host fixo).
+    // Otherwise, tries a "loose" key (generated without a fixed host).
     const unbound = keys.filter((c) => !c.meta?.host);
     if (unbound.length === 1) return { conn: unbound[0] };
     if (unbound.length > 1) return { error: `Você tem mais de uma chave sem host fixo. Passe o parâmetro "rotulo" pra escolher qual usar com ${host}. Rótulos: ${labels()}.` };
@@ -140,10 +140,10 @@ function pickKeyConn(conns, host, rotulo) {
   return { error: `Você tem várias chaves SSH (${labels()}). Passe o parâmetro "rotulo" pra escolher, ou diga o host.` };
 }
 
-// Transporte reusável: roda um comando no servidor do usuário via SSH a partir
-// do sandbox, usando a chave do cofre. Usado por rodar_no_servidor e pelas tools
-// de coding (coding.mjs). Devolve um OBJETO (não string): { ok, host, exit,
-// saida, stderr, error }. Não trunca saida/stderr — quem chama corta como quiser.
+// Reusable transport: runs a command on the user's server via SSH from the
+// sandbox, using the vault's key. Used by rodar_no_servidor and by the
+// coding tools (coding.mjs). Returns an OBJECT (not a string): { ok, host, exit,
+// saida, stderr, error }. Doesn't truncate saida/stderr — whoever calls it cuts as they like.
 export async function sshExec(userId, comando, { host, usuario, rotulo, timeout = 90_000 } = {}) {
   if (!(await sshAvailable(userId))) return { ok: false, error: NO_SSH };
   if (!comando) return { ok: false, error: 'Sem comando pra rodar.' };
@@ -177,8 +177,8 @@ export async function sshExec(userId, comando, { host, usuario, rotulo, timeout 
   };
 }
 
-// Existe alguma máquina conectada (chave SSH no cofre)? Usado pra decidir se o
-// modo LIVRE se aplica (terminal ao vivo em vez do toolset básico).
+// Is there any connected machine (SSH key in the vault)? Used to decide whether
+// FREE mode applies (live terminal instead of the basic toolset).
 export async function userHasSshKey(userId) {
   try {
     const conns = await listConnections(userId);
@@ -186,21 +186,21 @@ export async function userHasSshKey(userId) {
   } catch { return false; }
 }
 
-// ── Modo LIVRE: sessão persistente NA máquina conectada do usuário ──
+// ── FREE mode: persistent session ON the user's connected machine ──
 //
-// No tier avançado (perm_mode 'livre') o assistente NÃO fica retransmitindo
-// comando por comando de um sandbox pelado: ele opera COMO SE estivesse logado
-// na máquina que o usuário conectou. Tecnicamente ainda saímos do sandbox SP
-// (o sandbox é só o CLIENTE SSH: custódia da chave cifrada + egress BR), mas a
-// sessão é PERSISTENTE, diferente do sshExec stateless:
-//  • ControlMaster/ControlPersist: uma conexão só, multiplexada e reusada a cada
-//    comando (sem re-handshake), então parece um shell vivo.
-//  • cwd PERSISTENTE por thread: um `cd` num comando vale pro próximo, porque a
-//    gente rastreia o diretório atual e prefixa `cd <cwd>` no comando seguinte.
-// O terminal é NÃO-gated: o dono já assumiu o risco ao ligar o modo livre e
-// conectar o PRÓPRIO host (o risco é da máquina dele). Segredos ainda são
-// mascarados na SAÍDA (rede de segurança do histórico), como no sshExec.
-const CWD = new Map(); // `${userId}:${threadId}:${connId}` -> diretório atual remoto
+// In the advanced tier (perm_mode 'livre') the assistant does NOT keep relaying
+// command by command from a bare sandbox: it operates AS IF it were logged
+// into the machine the user connected. Technically we still go out of the SP sandbox
+// (the sandbox is just the SSH CLIENT: custody of the encrypted key + BR egress), but the
+// session is PERSISTENT, unlike the stateless sshExec:
+//  • ControlMaster/ControlPersist: a single connection, multiplexed and reused on every
+//    command (no re-handshake), so it feels like a live shell.
+//  • PERSISTENT cwd per thread: a `cd` in one command carries over to the next, because
+//    we track the current directory and prefix `cd <cwd>` to the next command.
+// The terminal is NOT gated: the owner already took on the risk by turning on free mode and
+// connecting their OWN host (the risk is theirs). Secrets are still
+// masked in the OUTPUT (history safety net), same as sshExec.
+const CWD = new Map(); // `${userId}:${threadId}:${connId}` -> current remote directory
 const CWD_MARK = '__BRAMBS_CWD__';
 
 export async function livreExec(userId, comando, { threadId, host, usuario, rotulo, timeout = 180_000 } = {}) {
@@ -220,22 +220,22 @@ export async function livreExec(userId, comando, { threadId, host, usuario, rotu
   const keyPath = `${SSH_DIR}/livre_${pick.conn.id}`;
   const w = await sandboxWrite(userId, keyPath, priv.endsWith('\n') ? priv : priv + '\n');
   if (!w.ok) return { ok: false, error: 'Não consegui preparar a chave no ambiente.' };
-  // cwd persistente por (usuário, thread, conexão): um `cd` vale pro próximo comando.
-  // Chave do ALVO (usuário+host). Entra no socket do ControlMaster e no cwd:
-  // os dois são estado de UMA sessão, e sessão é por máquina, não por credencial.
+  // persistent cwd per (user, thread, connection): a `cd` carries over to the next command.
+  // TARGET key (user+host). Goes into the ControlMaster socket and the cwd:
+  // both are state of ONE session, and a session is per machine, not per credential.
   const alvoKey = createHash('sha256').update(`${usuarioFinal}@${alvo}`).digest('hex').slice(0, 12);
   const cwdKey = `${userId}:${threadId || 'no-thread'}:${pick.conn.id}:${alvoKey}`;
   const cwd = CWD.get(cwdKey) || '';
-  // Envolve o comando: entra no cwd rastreado (ou ~), roda, e emite o pwd final
-  // num marcador pra gente atualizar o cwd. Assim um `cd` persiste sem shell vivo.
+  // Wraps the command: enters the tracked cwd (or ~), runs, and emits the final pwd
+  // in a marker so we can update the cwd. This way a `cd` persists without a live shell.
   const inner = cwd ? `cd ${shq(cwd)} 2>/dev/null || cd ~\n${comando}` : `cd ~\n${comando}`;
   const wrapped = `${inner}\n__brc=$?\nprintf '\\n${CWD_MARK}%s\\n' "$(pwd)"\nexit $__brc`;
   const b64 = Buffer.from(wrapped, 'utf8').toString('base64');
   const remote = `echo ${b64} | base64 -d | bash`;
-  // O socket PRECISA do alvo no nome. Com ControlPersist=300 o master fica vivo
-  // 5 min; se o nome dependesse só da conexão do cofre (uma chave costuma abrir
-  // VÁRIAS máquinas), o comando pro host B era multiplexado no master do host A
-  // e rodava na máquina errada, em silêncio.
+  // The socket NEEDS the target in the name. With ControlPersist=300 the master stays alive
+  // 5 min; if the name depended only on the vault connection (a single key often opens
+  // SEVERAL machines), the command for host B would be multiplexed in host A's master
+  // and run on the wrong machine, silently.
   const sock = `${SSH_DIR}/cm_${pick.conn.id}_${alvoKey}.sock`;
   const sshOpts = [
     `-i ${shq(keyPath)}`,
@@ -250,8 +250,8 @@ export async function livreExec(userId, comando, { threadId, host, usuario, rotu
   ].join(' ');
   const cmd = `chmod 600 ${shq(keyPath)} && mkdir -p ${SSH_DIR} && touch ${shq(KNOWN_HOSTS)} && ssh ${sshOpts} ${shq(usuarioFinal + '@' + alvo)} ${shq(remote)}`;
   let res;
-  // Apaga a chave do disco depois; a conexão persiste pelo socket do ControlMaster,
-  // então os próximos comandos reusam a sessão sem a chave estar em disco.
+  // Deletes the key from disk afterward; the connection persists via the ControlMaster's socket,
+  // so the following commands reuse the session without the key being on disk.
   try { res = await sandboxShell(userId, cmd, timeout); }
   finally { await sandboxShell(userId, `rm -f ${shq(keyPath)}`, 10_000); }
   let out = res.stdout || '';
@@ -272,12 +272,12 @@ export async function livreExec(userId, comando, { threadId, host, usuario, rotu
   };
 }
 
-// Toolset do modo LIVRE: um único terminal ao vivo, persistente e não-gated.
-// `sshLivre` diz se ESTE agente tem direito ao SSH-in (categoria super + chave no
-// cofre). Quando o livre veio SÓ do Runner (assistente comum amarrado à máquina
-// local do dono), o único alvo legítimo é essa máquina: host/rotulo — que
-// endereçam um servidor por SSH — somem do schema e o fallback pra livreExec é
-// bloqueado no run. Sem isso, relaxar o gate do Runner daria SSH de brinde.
+// FREE mode's toolset: a single live, persistent and non-gated terminal.
+// `sshLivre` says whether THIS agent has the right to SSH-in (super category + a key in the
+// vault). When free mode came ONLY from the Runner (regular assistant bound to the
+// owner's local machine), the only legitimate target is that machine: host/rotulo — which
+// address a server via SSH — disappear from the schema and the fallback to
+// livreExec is blocked at run time. Without this, relaxing the Runner's gate would give out free SSH.
 export function livreTools(userId, threadId, runnerBound = false, sshLivre = true) {
   if (!sandboxEnabled() || !vaultEnabled()) return [];
   const soRunner = runnerBound && !sshLivre;
@@ -305,11 +305,11 @@ export function livreTools(userId, threadId, runnerBound = false, sshLivre = tru
         required: [],
       },
       async run({ comando, comandos, host, rotulo }) {
-        // Trava dura: agente que só tem o Runner não endereça servidor por SSH,
-        // nem se o modelo inventar host/rotulo (não estão no schema).
+        // Hard guard: an agent that only has the Runner doesn't address a server via SSH,
+        // even if the model makes up a host/rotulo (they aren't in the schema).
         if (soRunner) { host = undefined; rotulo = undefined; }
-        // Batching: `comandos` (lista) vira um script rodado numa chamada só —
-        // mesma sessão, mesmo cwd, uma ida-e-volta de rede e UM passo do turno.
+        // Batching: `comandos` (list) becomes a script run in a single call —
+        // same session, same cwd, one network round trip and ONE step of the turn.
         if (!comando && Array.isArray(comandos) && comandos.length) {
           comando = comandos.filter((c) => typeof c === 'string' && c.trim()).join('\n');
         }
@@ -333,9 +333,9 @@ export function livreTools(userId, threadId, runnerBound = false, sshLivre = tru
           host: r.host,
           cwd: r.cwd,
           exit: r.exit,
-          // Mascara primeiro, corta depois, e diz que cortou: saída longa de
-          // comando saía truncada sem marcador nenhum, então o modelo concluía
-          // sobre um log que tinha visto pela metade.
+          // Masks first, cuts afterward, and says it cut: a long command output used to
+          // come out truncated with no marker at all, so the model would conclude
+          // from a log it had seen only half of.
           saida: comAviso(maskSecrets(r.saida || ''), 12000, 'saída'),
           stderr: comAviso(maskSecrets(r.stderr || ''), 4000, 'saída de erro'),
           error: r.error,

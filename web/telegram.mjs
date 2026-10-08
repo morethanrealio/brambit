@@ -1,11 +1,11 @@
 import { hostDaMarca, siteDaMarca } from './marca.mjs';
 import { channelReplyParts } from './confirmation-target.mjs';
-// ── Canal Telegram (bot por usuário, token do BotFather dele) ──
-// Cada usuário traz o próprio token; a gente roda o bot dele com long-polling
-// (getUpdates), sem precisar de webhook público. Roteia a mensagem pro agente
-// ligado ao bot e responde. O chat_id é amarrado no "/start <código de
-// pareamento>" (o código só aparece na tela de Conexões do dono); só esse chat é
-// atendido (o bot é privado do dono).
+// ── Telegram channel (bot per user, their own BotFather token) ──
+// Each user brings their own token; we run their bot with long-polling
+// (getUpdates), no need for a public webhook. Routes the message to the agent
+// linked to the bot and replies. The chat_id is bound on "/start <pairing
+// code>" (the code only appears on the owner's Connections screen); only that
+// chat is served (the bot is private to the owner).
 
 import { timingSafeEqual } from 'node:crypto';
 import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
@@ -14,7 +14,7 @@ import { splitMessage } from './channel-split.mjs';
 import { markVoiceInput } from './voice-input.mjs';
 import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 
-// Compara o código de pareamento sem vazar acerto parcial pelo tempo de resposta.
+// Compares the pairing code without leaking partial matches through response time.
 export function codeEq(a, b) {
   const x = Buffer.from(String(a ?? ''), 'utf8');
   const y = Buffer.from(String(b ?? ''), 'utf8');
@@ -23,19 +23,19 @@ export function codeEq(a, b) {
 }
 
 const API = (token) => `https://api.telegram.org/bot${token}`;
-// Base pública pra montar a URL absoluta dos anexos (o Telegram busca a URL).
+// Public base to build the absolute URL of attachments (Telegram fetches the URL).
 const PUBLIC_BASE = () => (process.env.PUBLIC_BASE_URL || siteDaMarca()).replace(/\/$/, '');
 const absUrl = (u) => (/^https?:\/\//.test(u) ? u : `${PUBLIC_BASE()}${u}`);
 
-// Teto de espera de uma chamada à Bot API. Sem isso o fetch podia ficar pendurado
-// indefinidamente e o chamador (ex.: jornada de descoberta) não sabia se a
-// mensagem saiu ou não.
+// Wait ceiling for a Bot API call. Without this the fetch could hang
+// indefinitely and the caller (e.g. discovery journey) wouldn't know whether the
+// message went out or not.
 const TG_TIMEOUT_MS = Number(process.env.TELEGRAM_TIMEOUT_MS || 20000);
 
-// Separa recusa DETERMINÍSTICA de incerteza. 4xx (menos 429) é o Telegram
-// dizendo "não vou entregar isso": bot bloqueado, chat inexistente, token
-// inválido. 429/5xx, timeout e erro de rede são INCERTOS: a mensagem pode ter
-// saído. Quem chama decide o que fazer com cada caso (`e.definitive`).
+// Separates DETERMINISTIC refusal from uncertainty. 4xx (except 429) is Telegram
+// saying "I won't deliver this": bot blocked, chat doesn't exist, invalid
+// token. 429/5xx, timeout and network errors are UNCERTAIN: the message may have
+// gone out. The caller decides what to do with each case (`e.definitive`).
 function tgError(method, description, status) {
   const e = new Error(`telegram ${method}: ${description || status}`);
   e.definitive = Number(status) >= 400 && Number(status) < 500 && Number(status) !== 429;
@@ -44,8 +44,8 @@ function tgError(method, description, status) {
 }
 
 async function tg(token, method, params) {
-  // Long-polling (`getUpdates` com `timeout`) tem prazo próprio: o teto padrão
-  // abortaria a espera legítima do Telegram a cada ciclo.
+  // Long-polling (`getUpdates` with `timeout`) has its own deadline: the default
+  // ceiling would abort Telegram's legitimate wait on every cycle.
   const poll = Number(params?.timeout);
   const deadline = Number.isFinite(poll) && poll > 0 ? poll * 1000 + 10000 : TG_TIMEOUT_MS;
   let r;
@@ -57,7 +57,7 @@ async function tg(token, method, params) {
       signal: AbortSignal.timeout(deadline),
     });
   } catch (e) {
-    // Rede/timeout: NUNCA é recusa determinística, pode ter chegado no servidor.
+    // Network/timeout: NEVER a deterministic refusal, it may have reached the server.
     throw Object.assign(new Error(`telegram ${method}: ${e?.name === 'TimeoutError' ? 'timeout' : 'falha de rede'}`), { definitive: false, status: null });
   }
   const j = await r.json().catch(() => null);
@@ -65,22 +65,22 @@ async function tg(token, method, params) {
   return j.result;
 }
 
-// Valida um token e devolve o @username do bot (ou lança).
+// Validates a token and returns the bot's @username (or throws).
 export async function validateBotToken(token) {
   const me = await tg(token, 'getMe', {});
   return { username: me.username, name: me.first_name };
 }
 
-// Telegram aceita até 4096 chars por mensagem; resposta longa vai em várias,
-// na ordem, sem corte. Até 29/09/2026 havia teto de 12k chars com o aviso
-// "[…resposta muito longa, cortei o resto]" e a quebra era seca a cada 4000
-// (partia palavra e URL); agora usa channel-split.mjs.
+// Telegram accepts up to 4096 chars per message; a long reply goes out in several,
+// in order, with no truncation. Until 2026-09-29 there was a 12k char ceiling with
+// the notice "[…resposta muito longa, cortei o resto]" and the split was blunt every 4000
+// chars (it would cut words and URLs mid-way); now it uses channel-split.mjs.
 const TG_CHUNK = 4000;
 
-// `reenvio`: repete cada parte que falhou com erro incerto (aviso-canal.mjs). É
-// por parte, pra não mandar de novo as que o Telegram já aceitou.
+// `reenvio`: retries each part that failed with an uncertain error (aviso-canal.mjs). It's
+// per part, so as not to resend the ones Telegram already accepted.
 async function sendMessage(token, chatId, text, { requireReceipt = false, reenvio = false } = {}) {
-  // Texto puro (sem parse_mode) pra não quebrar com markdown malformado do modelo.
+  // Plain text (no parse_mode) so malformed markdown from the model doesn't break it.
   const chunks = splitMessage(text || '', TG_CHUNK);
   if (!chunks.length) chunks.push('');
   const receipts=[];
@@ -107,9 +107,9 @@ export async function sendTelegramMessage(token, chatId, text) {
   return sendMessage(token, chatId, text, { requireReceipt: true });
 }
 
-// Envia um arquivo por multipart (upload direto, sem link público). `extra`
-// carrega campos adicionais do método (caption, reply_markup): string vai
-// direto, objeto é serializado em JSON (formato que a Bot API espera no form).
+// Sends a file via multipart (direct upload, no public link). `extra`
+// carries additional method fields (caption, reply_markup): a string goes
+// straight through, an object is serialized to JSON (the format the Bot API expects in the form).
 async function tgUpload(token, method, chatId, field, buffer, filename, contentType, extra) {
   const form = new FormData();
   form.append('chat_id', chatId);
@@ -124,7 +124,7 @@ async function tgUpload(token, method, chatId, field, buffer, filename, contentT
   return j.result;
 }
 
-// Baixa os bytes de uma URL do nosso domínio (ex.: /api/img?k=...). Nunca lança.
+// Downloads the bytes of a URL on our domain (e.g. /api/img?k=...). Never throws.
 async function fetchBytes(u) {
   try {
     const r = await fetch(absUrl(u), { signal: AbortSignal.timeout(9000) });
@@ -136,9 +136,9 @@ async function fetchBytes(u) {
   } catch { return null; }
 }
 
-// Entrega anexos de mídia (imagem como foto, áudio como voz). Se getMedia
-// devolver os bytes (modo bucket privado, sem link público), faz upload direto;
-// senão (modo disco) usa o link público estático.
+// Delivers media attachments (image as photo, audio as voice). If getMedia
+// returns the bytes (private bucket mode, no public link), uploads directly;
+// otherwise (disk mode) uses the static public link.
 async function sendAttachments(token, chatId, attachments, getMedia) {
   for (const a of attachments || []) {
     try {
@@ -151,30 +151,30 @@ async function sendAttachments(token, chatId, attachments, getMedia) {
           if (bytes) await tgUpload(token, 'sendVoice', chatId, 'voice', bytes.buffer, 'voice.ogg', bytes.contentType || a.mime);
           else await tg(token, 'sendVoice', { chat_id: chatId, voice: absUrl(a.url) });
         } catch (err) {
-          // Mesmo caso do WhatsApp: a confirmação já saiu, então a fala vai em texto.
+          // Same case as WhatsApp: the confirmation already went out, so the speech goes as text.
           if (!a.fala) throw err;
           console.error('[telegram] áudio não entregue, indo em texto:', err?.message ?? err);
           await tg(token, 'sendMessage', { chat_id: chatId, text: `Não consegui mandar o áudio, vai em texto:\n\n${a.fala}` });
         }
       } else if (a.type === 'document') {
-        // Documento gerado (.docx/.pdf/etc.): a URL do bucket é autenticada, então
-        // sobe os bytes direto via sendDocument, com o nome de arquivo certo.
+        // Generated document (.docx/.pdf/etc.): the bucket URL is authenticated, so
+        // it uploads the bytes directly via sendDocument, with the correct file name.
         const filename = a.filename || a.name || 'documento';
         if (bytes) await tgUpload(token, 'sendDocument', chatId, 'document', bytes.buffer, filename, bytes.contentType || a.mime);
         else await tg(token, 'sendMessage', { chat_id: chatId, text: `Gerei o arquivo "${filename}", mas não consegui anexar aqui. Dá pra baixar em ${hostDaMarca()}.` });
       } else if (a.type === 'video') {
-        // Vídeo gerado (mp4): sobe os bytes direto via sendVideo (player inline).
+        // Generated video (mp4): uploads the bytes directly via sendVideo (inline player).
         const filename = a.filename || a.name || 'video.mp4';
         if (bytes) await tgUpload(token, 'sendVideo', chatId, 'video', bytes.buffer, filename, bytes.contentType || a.mime || 'video/mp4');
         else await tg(token, 'sendMessage', { chat_id: chatId, text: `Gerei um vídeo, mas não consegui anexar aqui. Dá pra ver em ${hostDaMarca()}.` });
       } else if (a.type === 'card') {
-        // Card de produto. O Telegram NÃO renderiza a imagem por URL quando ela é
-        // webp/avif (formatos comuns de foto de e-commerce) — sendPhoto por link
-        // devolve "failed to get HTTP URL content" e o card sumia, sobrando só o
-        // texto. Fix: baixa os bytes no NOSSO servidor e sobe direto (multipart).
-        // jpeg/png/gif vira foto; webp/avif/outros vão como documento (ainda abre
-        // a imagem) — sempre com legenda + botão do link. Qualquer falha cai pra
-        // mensagem de texto com o botão, então título/preço/link nunca somem.
+        // Product card. Telegram does NOT render the image by URL when it is
+        // webp/avif (common e-commerce photo formats) — sendPhoto by link
+        // returns "failed to get HTTP URL content" and the card disappeared, leaving only the
+        // text. Fix: downloads the bytes on OUR server and uploads directly (multipart).
+        // jpeg/png/gif becomes a photo; webp/avif/others go as a document (still opens
+        // the image) — always with caption + link button. Any failure falls back to a
+        // text message with the button, so title/price/link never disappear.
         const caption = [a.title, a.body].filter(Boolean).join('\n').slice(0, 1000) || undefined;
         const markup = a.url ? { reply_markup: { inline_keyboard: [[{ text: (a.buttonText || 'Ver produto').slice(0, 64), url: a.url }]] } } : {};
         let delivered = false;
@@ -197,20 +197,20 @@ async function sendAttachments(token, chatId, attachments, getMedia) {
   }
 }
 
-// Envia um vídeo (bytes) pro chat como player inline. Usado pela entrega
-// proativa de vídeo gerado (poller de video_jobs), fora de um turno.
+// Sends a video (bytes) to the chat as an inline player. Used by the proactive
+// delivery of generated video (video_jobs poller), outside of a turn.
 export async function sendTelegramVideo(token, chatId, buffer, filename = 'video.mp4', contentType = 'video/mp4') {
   return tgUpload(token, 'sendVideo', chatId, 'video', buffer, filename, contentType);
 }
 
-// Envia um documento (bytes) pro chat. Usado pela entrega proativa da devolutiva
-// da jornada de descoberta (PDF), fora de um turno de conversa.
+// Sends a document (bytes) to the chat. Used by the proactive delivery of the
+// discovery journey feedback (PDF), outside of a conversation turn.
 export async function sendTelegramDocument(token, chatId, buffer, filename = 'documento.pdf', contentType = 'application/pdf', caption) {
   return tgUpload(token, 'sendDocument', chatId, 'document', buffer, filename, contentType, caption ? { caption: String(caption).slice(0, 1000) } : undefined);
 }
 
-// Baixa uma mídia recebida (voz/áudio/foto) pelo file_id: getFile devolve o
-// file_path, o binário vem do endpoint /file/bot<token>/<path>.
+// Downloads a received media file (voice/audio/photo) by file_id: getFile returns the
+// file_path, the binary comes from the /file/bot<token>/<path> endpoint.
 async function downloadFile(token, fileId, mimeHint) {
   const file = await tg(token, 'getFile', { file_id: fileId });
   const path = file.file_path;
@@ -233,11 +233,11 @@ async function downloadFile(token, fileId, mimeHint) {
   return { buffer, mime };
 }
 
-// Gerencia os pollers. Injeta as dependências do server (evita import circular).
+// Manages the pollers. Injects the server's dependencies (avoids circular import).
 // runConversation(agent, userId, text, images) -> reply ; loadAgent(agentId, userId) -> agent
-// transcribe(buffer, mime, userId) -> texto (STT); db = { getTelegramBot, bindTelegramChat, setTelegramOffset }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): idioma do aviso de erro e
-// registro dele no histórico da thread Telegram.
+// transcribe(buffer, mime, userId) -> text (STT); db = { getTelegramBot, bindTelegramChat, setTelegramOffset }
+// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// its logging in the Telegram thread history.
 export function createTelegramManager({ runConversation, reactionConfirm, loadAgent, db, getMedia, transcribe, avisoCanal = {} }) {
   const avisar = criarAvisoCanal({ rotulo: 'telegram', ...avisoCanal });
   const running = new Map(); // token -> { stop: boolean }
@@ -245,13 +245,13 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
   const TURN_HEARTBEAT_MS = Number.isFinite(configuredHeartbeatMs) && configuredHeartbeatMs > 0
     ? configuredHeartbeatMs : 0;
 
-  // Reaction (👍/👎) numa msg: confirma/cancela a ação pendente sem texto.
+  // Reaction (👍/👎) on a msg: confirms/cancels the pending action without text.
   async function handleReaction(bot, mr, updateId) {
     const chatId = String(mr.chat?.id ?? '');
     const fresh = await db.getTelegramBot(bot.token);
     if (!fresh || !fresh.enabled || !fresh.chat_id || fresh.chat_id !== chatId) return;
     const emojis = (mr.new_reaction || []).filter((r) => r.type === 'emoji').map((r) => r.emoji);
-    if (!emojis.length) return; // reação removida
+    if (!emojis.length) return; // reaction removed
     const positive = emojis.some((e) => ['👍', '✅', '👌', '💯'].includes(e));
     const negative = emojis.some((e) => ['👎', '❌'].includes(e));
     if (!positive && !negative) return;
@@ -279,11 +279,11 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     if (!msg) return;
     const chatId = String(msg.chat.id);
 
-    // Primeiro contato: o chat só é amarrado por "/start <código de pareamento>".
-    // O código nasce quando o dono cadastra o token e só aparece na tela de
-    // Conexões dele (sessão autenticada). Sem isso, bastava QUALQUER mensagem de
-    // QUALQUER pessoa pra amarrar o bot: quem achasse o @username antes do dono
-    // virava o dono do chat privado dele.
+    // First contact: the chat is only bound via "/start <pairing code>".
+    // The code is created when the owner registers the token and only appears on their
+    // Connections screen (authenticated session). Without this, ANY message from
+    // ANY person would be enough to bind the bot: whoever found the @username before the owner
+    // would become the owner of their private chat.
     let fresh = await db.getTelegramBot(bot.token);
     if (!fresh || !fresh.enabled) return;
     if (!fresh.chat_id) {
@@ -296,7 +296,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
       await db.bindTelegramChat(bot.token, chatId);
       fresh = { ...fresh, chat_id: chatId };
     }
-    // Só atende o chat amarrado (bot privado do dono).
+    // Only serves the bound chat (bot private to the owner).
     if (fresh.chat_id !== chatId) {
       await sendMessage(bot.token, chatId, 'Este assistente é privado.').catch(() => {});
       return;
@@ -306,7 +306,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
       return;
     }
 
-    // Monta a entrada do turno: texto + legenda, áudio (transcrito) e/ou imagem (visão).
+    // Builds the turn input: text + caption, audio (transcribed) and/or image (vision).
     let text = (msg.text || msg.caption || '').trim();
     let images = null;
     let files = null;
@@ -327,13 +327,13 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
           throw e;
         }
       } else if (msg.photo) {
-        // msg.photo é um array de tamanhos; o último é o maior.
+        // msg.photo is an array of sizes; the last one is the biggest.
         const largest = msg.photo[msg.photo.length - 1];
         const { buffer, mime } = await downloadFile(bot.token, largest.file_id, 'image/jpeg');
         images = [{ mimeType: mime, data: buffer.toString('base64') }];
       } else if (msg.document) {
-        // Documento: PDF ou arquivo de texto (HTML/txt/markdown/csv/json/xml)
-        // usado como referência. O server extrai/lê e injeta no turno.
+        // Document: PDF or text file (HTML/txt/markdown/csv/json/xml)
+        // used as reference. The server extracts/reads it and injects it into the turn.
         const dmime = msg.document.mime_type || '';
         const dname = msg.document.file_name || 'documento';
         const okDoc = /\.(pdf|html?|txt|md|markdown|csv|tsv|json|xml|svg)$/i.test(dname)
@@ -377,8 +377,8 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     } finally {
       await finishHeartbeat();
     }
-    // Daqui pra baixo o turno já terminou e a resposta está no histórico: falha
-    // aqui é só de entrega, e rodar o turno de novo poderia repetir ações.
+    // From here on the turn has already finished and the reply is in the history: a failure
+    // here is delivery-only, and rerunning the turn could repeat actions.
     let entregou = true;
     const reply = typeof res === 'string' ? res : res?.text;
     const attachments = typeof res === 'string' ? [] : (res?.attachments || []);
@@ -402,9 +402,9 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
   }
 
   async function poll(bot) {
-    // Retoma do offset persistido: com offset só em memória, um restart voltava
-    // pro 0 e o getUpdates re-entregava tudo que ainda não tinha sido confirmado
-    // (resposta em dobro pro usuário). 0 = bot novo, pega o que estiver pendente.
+    // Resumes from the persisted offset: with an in-memory-only offset, a restart would go
+    // back to 0 and getUpdates would redeliver everything that hadn't yet been confirmed
+    // (double reply to the user). 0 = new bot, picks up whatever is pending.
     let offset = Number(bot.last_update_id || 0) > 0 ? Number(bot.last_update_id) + 1 : 0;
     const state = running.get(bot.token);
     while (state && !state.stop) {
@@ -415,8 +415,8 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
         for (const u of updates) {
           offset = u.update_id + 1;
           await handleUpdate(bot, u).catch((e) => console.error('[telegram] update:', e?.message ?? e));
-          // Persiste DEPOIS de tratar: crash no meio re-entrega só o update em
-          // curso (responder de novo é melhor que perder a mensagem).
+          // Persists AFTER handling: a crash in the middle redelivers only the update
+          // in progress (replying again is better than losing the message).
           await db.setTelegramOffset(bot.token, u.update_id).catch(() => {});
         }
       } catch (e) {
@@ -435,9 +435,9 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
 
   return {
     addBot(bot) {
-      if (running.has(bot.token)) return; // já rodando
+      if (running.has(bot.token)) return; // already running
       running.set(bot.token, { stop: false });
-      poll(bot); // não-await: roda em background
+      poll(bot); // not awaited: runs in background
     },
     removeBot(token) {
       const s = running.get(token);
@@ -445,8 +445,8 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
       running.delete(token);
     },
     isRunning(token) { return running.has(token); },
-    // Ponto de entrada de UM update, sem o long-polling em volta. Exposto porque
-    // é onde mora a regra de pareamento do chat, que precisa de teste direto.
+    // Entry point for ONE update, without the long-polling wrapper. Exposed because
+    // this is where the chat pairing rule lives, which needs direct testing.
     handleUpdate,
   };
 }

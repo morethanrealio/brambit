@@ -1,8 +1,8 @@
-// Frases do cartão para as tools que entraram no portão em 28/09 (auditoria das
-// ~41 ferramentas que gravavam/enviavam só por decisão do modelo). Cada entrada:
-// [pedido(args), feito(args)] por idioma. O confirm.mjs usa o pt-BR; o
-// confirm-textos.mjs usa en/es. Ficam num arquivo só pra nenhuma tool nova do
-// portão aparecer com o genérico "executar a ação x".
+// Card phrases for the tools that entered the gate on 2026-09-28 (audit of the
+// ~41 tools that wrote/sent based only on the model's decision). Each entry:
+// [pedido(args), feito(args)] per language. confirm.mjs uses pt-BR; the
+// confirm-textos.mjs uses en/es. They live in a single file so no new gate tool
+// shows up with the generic "executar a ação x".
 const q = (v, d = '') => String(v ?? d);
 
 export const PORTAO_TEXTOS = {
@@ -158,7 +158,7 @@ export const PORTAO_TEXTOS = {
   },
 };
 
-// Apagam de vez, saem para terceiros ou tiram o app do ar: joinha não basta.
+// Delete for good, go out to third parties, or take the app offline: a thumbs-up isn't enough.
 export const PORTAO_IRREVERSIVEIS = [
   'falar_com_agente', 'responder_pergunta_externa', 'convidar_contato',
   'apagar_nota', 'remover_do_espaco', 'apagar_skill',

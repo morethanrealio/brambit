@@ -1,11 +1,11 @@
-// ── Monitores: engine determinística de monitoramento de compras (Fase 2) ─────
-// O par estruturado da rotina de monitoramento. O problema da Fase 1 (só
-// comportamento): o dedup ("o que eu já avisei?") ficava na cabeça do modelo /
-// no histórico da thread — soft, sujeito a re-avisar o mesmo drop. Aqui o dedup
-// é uma UNIQUE em SQL: a cada rodada a rotina raspa as fontes e chama
-// checar_monitor com os itens; só os que ENTRAM na tabela (ON CONFLICT DO
-// NOTHING) contam como novidade. A 1ª rodada é BASELINE: registra o estado atual
-// e não avisa ninguém. Ver projetos/skill-monitor-compras.md.
+// ── Monitors: deterministic purchase-monitoring engine (Phase 2) ──────────────
+// The structured counterpart of the monitoring routine. Phase 1's problem (behavior
+// only): the dedup ("have I already notified about this?") lived in the model's head /
+// in the thread history — soft, prone to re-notifying the same drop. Here the dedup
+// is a SQL UNIQUE: each round the routine scrapes the sources and calls
+// checar_monitor with the items; only the ones that ENTER the table (ON CONFLICT DO
+// NOTHING) count as news. The 1st round is BASELINE: it records the current state
+// and notifies no one. See projetos/skill-monitor-compras.md.
 
 import {
   resolveOrCreateMonitor, resolveMonitor, listMonitors,

@@ -3,7 +3,7 @@ import { ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { CURATION_EVIDENCE_CONTRACT, validateCurationEvidence } from './curation-evidence.mjs';
 const plain=(v,max,label='texto',{empty=false}={})=>{
  if(typeof v!=='string'||(!empty&&!v.trim())||v.length>max||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(v))throw Error(`${label} inválido`);
- // URLs extras não passam escondidas no resumo/autor/título.
+ // Extra URLs don't sneak into the summary/author/title unnoticed.
  if(/https?:\/\/|www\./i.test(v))throw Error(`${label} contém URL`);
  const clean=v.replace(/[\r\n\t]+/g,' ').replace(/[<>`]/g,'').trim();
  if(!empty&&!clean)throw Error(`${label} inválido`);
@@ -13,10 +13,11 @@ const articleAuthor=(value,url)=>{
  try {return plain(value,160,'autor');}catch{return new URL(url).hostname.replace(/^www\./i,'');}
 };
 const safeCheckDetail=(_v,status,language)=>{
- // `detail` é diagnóstico auxiliar, não conteúdo do artigo. Um caso real gerou
- // 567/658 caracteres aqui; o teto antigo de 400 derrubava a edição inteira.
- // Mantemos o status, mas não renderizamos a prosa livre: na simulação ela dizia
- // "2 itens entregues" quando o filtro determinístico havia aceitado só um.
+ // `detail` is auxiliary diagnostic info, not article content. A real case
+ // generated 567/658 characters here; the old 400 ceiling dropped the whole
+ // edition. We keep the status, but don't render the free-form prose: in the
+ // simulation it said "2 items delivered" when the deterministic filter had
+ // only accepted one.
  if(status==='complete')return '';
  const failed=status==='failed';
  return ({
@@ -95,18 +96,19 @@ export async function finalizeCuration({text,config,userId,routineId,history,par
  try {
   const parsed=extractCurationManifest(text);
   if(!Array.isArray(parsed.items)||parsed.items.length>30||!Array.isArray(parsed.checks)||parsed.checks.length>40)throw Error('manifesto inválido');
-  // Um campo opcional ausente ou um candidato ruim não pode apagar todos os
-  // artigos válidos de uma busca cara. Validamos cada item isoladamente, omitimos
-  // apenas o candidato inválido e forçamos o relatório a sair como parcial. O
-  // autor pode faltar na página; nesse caso o hostname verificado é uma fonte
-  // factual e determinística, não uma autoria inventada.
+  // A missing optional field or a bad candidate must not wipe out every valid
+  // article from an expensive search. We validate each item in isolation,
+  // omit only the invalid candidate, and force the report to come out as
+  // partial. The author may be missing from the page; in that case the
+  // verified hostname is a factual, deterministic source, not an invented
+  // authorship.
   const rejectedItems=[],rejectedSections=new Set(),repairableEvidence=[];let missingWhyCount=0;
   const evidence=typeof sourceEvidence?.snapshot==='function'?sourceEvidence.snapshot():sourceEvidence;
   let items=parsed.items.flatMap((i,index)=>{
    try{
     if(!i||typeof i!=='object'||Array.isArray(i)||!curationArticleKey(i.url)||/[<>()[\]"'`]/.test(i.url))throw Error('link inválido');
     const u=new URL(i.url);
-    // O probe legado pula destinos locais; nunca interpretar essa omissão como OK.
+    // The legacy probe skips local destinations; never interpret that omission as OK.
     if(u.protocol!=='https:'||u.port||!u.hostname.includes('.')||/^(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.|\[)/i.test(u.hostname)||/^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)||/\.(?:local|localhost|internal)$/i.test(u.hostname)||/[?&]X-Amz-Signature=/i.test(i.url)||(u.pathname==='/'&&!(c.source==='gmail'&&u.hostname==='mail.google.com')))throw Error('link não elegível');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(i.date||'')||!Number.isFinite(Date.parse(i.date))||new Date(i.date).toISOString().slice(0,10)!==i.date)throw Error('data inválida');
     if(!Array.isArray(i.summary)||i.summary.length!==(c.summaryBullets||3))throw Error('resumo inválido');
@@ -159,7 +161,7 @@ export async function finalizeCuration({text,config,userId,routineId,history,par
   const candidates=items.filter(i=>{const age=c.source==='gmail'?(Date.parse(now)-Date.parse(i.receivedAt))/86400000:(today-Date.parse(i.date+'T00:00:00Z'))/86400000;const s=c.sections.find(s=>s.id===i.section);return s && age>=0 && age<s.maxAgeDays && !excluded.has(curationArticleKey(i.url));});
   const first=evaluateCuration({userId,routineId,sections:c.sections,items:candidates,delivered:history,historyAvailable:true});
   if(first.state==='blocked')return failure('histórico indisponível','history_unavailable');
-  // Primeiro remove repetidos; só depois gasta conferência nos até8selecionados.
+  // First removes duplicates; only then spends verification effort on up to 8 selected ones.
   const selected=first.accepted.map(a=>candidates[a.index]);
   const publicItems=selected.filter(i=>!(c.source==='gmail'&&i.url===`https://mail.google.com/mail/u/0/#all/${i.sourceId}`));
   stage='links';

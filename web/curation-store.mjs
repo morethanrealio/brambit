@@ -1,4 +1,4 @@
-// Somente factory: não abre conexão nem cria tabela ao importar.
+// Factory only: doesn't open a connection nor create a table on import.
 import { createHash } from 'node:crypto';
 import { curationArticleKey } from './curation-policy.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,7 +18,7 @@ export function createCurationStore(pool) {
       const owner=await pool.query('SELECT id FROM mtr_harness.routines WHERE id=$1 AND user_id=$2',[a.routineId,a.userId]);
       if(!owner.rows.length)throw Error('Rotina não pertence ao usuário.');
       const {rows}=await pool.query(`SELECT status,article_keys FROM ${table} WHERE user_id=$1 AND routine_id=$2 ORDER BY created_at DESC LIMIT 1001`,[a.userId,a.routineId]);
-      // Sem truncar silenciosamente o conjunto de artigos já enviados.
+      // Without silently truncating the set of already-sent articles.
       if(rows.length>1000||rows.some(r=>r.status!=='confirmed'))throw Error('Histórico de entrega incompleto ou incerto; revisão necessária.');
       const delivered=rows.flatMap(r=>r.article_keys.map(url=>({userId:a.userId,routineId:a.routineId,url,confirmed:true})));
       if(delivered.length>10000)throw Error('Histórico excede o limite seguro.');
@@ -52,7 +52,7 @@ export function createCurationStore(pool) {
 }
 export async function deliverCurationEdition(edition,{store,send,persist=async()=>{}}) {
   if(edition?.type!=='curation-v1'||!['email','whatsapp','telegram','none','app'].includes(edition.channel))throw Error('Entrega de curadoria inválida.');
-  // Sem artigos: aviso honesto de falha/parcialidade, não vira histórico de itens.
+  // No articles: an honest failure/partial notice, doesn't become an item history.
   if(!edition.urls.length){const receipt=await send(edition.text);if(receipt?.ok!==true||receipt.skipped||!receipt.id)throw Error('Aviso não entregue.');await persist(edition.text);return;}
   await store.reserve(edition); // erro antes do envio: nenhum efeito no canal
   let receipt;
@@ -60,8 +60,8 @@ export async function deliverCurationEdition(edition,{store,send,persist=async()
     receipt=await send(edition.text);
     if(receipt?.ok!==true||receipt.skipped||typeof receipt.id!=='string'||!receipt.id.trim())throw Error('Envio não confirmado.');
   } catch(e){await store.uncertain(edition).catch(()=>{});throw e;}
-  // Se SMTP aceitou mas gravar falhou, reserva bloqueia próxima execução.
-  // Nunca tentar enviar novamente para "consertar" histórico.
+  // If SMTP accepted but writing failed, the reservation blocks the next run.
+  // Never try to resend to "fix" the history.
   await store.confirm(edition,receipt);
   await persist(edition.text);
 }

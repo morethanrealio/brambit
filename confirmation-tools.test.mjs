@@ -94,7 +94,7 @@ test('checkout restores the encrypted session after cache loss and rechecks pric
     produto:{nome:'Synthetic product',qtd:1},valor:1000,frete:{preco:0},pix:{id:125}};
   carts.set(`${f.scope.userId}:cart`,cart);
   const src=readFileSync(new URL('./web/compras.mjs',import.meta.url),'utf8');
-  const factory=src.slice(src.indexOf('export function comprasTools('),src.indexOf('// Bloco curto pro fim do prompt:')).replace('export function','function');
+  const factory=src.slice(src.indexOf('export function comprasTools('),src.indexOf('// Short block for the end of the prompt:')).replace('export function','function');
   const ctx=vm.createContext({Map,Date,JSON,URL,console:{log(){}},CARTS:carts,CART_TTL_MS:40*60_000,
     getCarrinho:(u,id)=>carts.get(`${u}:${id}`),brl:n=>String(n/100),carrinhoVivoDoThread:()=>null,
     req:async(url,opts={})=>{calls.push({url,method:opts.method || 'GET',cookies:[...opts.jar]});return {status:200,json:{value:1200}};}});

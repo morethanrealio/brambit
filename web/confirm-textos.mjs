@@ -1,38 +1,38 @@
 import { configurationLabel, completionLabel, retryLabel } from './discovery-conversation.mjs';
-// Textos do PORTÃO DE CONFIRMAÇÃO em inglês e espanhol.
+// Texts for the CONFIRMATION GATE in English and Spanish.
 //
-// Por que um arquivo separado, e não uma tabela de mensagens substituindo o
-// português do confirm.mjs: o texto de confirmação é o único lugar do produto
-// onde a frase que o usuário lê é escrita por CÓDIGO, não pelo modelo. Ela é o
-// que ele aprova ("posso enviar?") e o que ele recebe depois ("✅ E-mail
-// enviado"). Reescrever o caminho do pt-BR pra encaixar num catálogo de i18n
-// mexeria em ~110 frases que hoje estão certas e em produção, sem ganho nenhum
-// pra quem fala português: qualquer erro de digitação ali seria uma regressão
-// nova num texto que já funciona. Então o pt-BR do confirm.mjs fica INTACTO,
-// byte a byte, e en/es entram como tabelas paralelas que só são consultadas
-// quando o idioma do usuário não é o padrão.
+// Why a separate file, and not a message table replacing the
+// Portuguese in confirm.mjs: the confirmation text is the only place in the product
+// where the sentence the user reads is written by CODE, not by the model. It's
+// what they approve ("posso enviar?") and what they receive afterward ("✅ E-mail
+// enviado"). Rewriting the pt-BR path to fit into an i18n catalog
+// would touch ~110 sentences that are currently correct and in production, with no gain
+// for Portuguese speakers: any typo there would be a new regression
+// in text that already works. So confirm.mjs's pt-BR stays INTACT,
+// byte for byte, and en/es come in as parallel tables that are only consulted
+// when the user's language isn't the default.
 //
-// O que isto NÃO cobre, de propósito:
-//  • `descreverCarrinho` (compras.mjs) devolve o resumo do carrinho em
-//    português. Traduzir aquilo é mexer no subsistema de compras, que tem
-//    lógica própria de preço/frete; ficou fora desta fase e está declarado
-//    abaixo no lugar onde aparece.
-//  • `routineDaysLabel`/`intervalLabel` (scheduler.mjs) também são em
-//    português e são usados na LISTA de rotinas, não só aqui. Em vez de
-//    traduzir lá e arrastar a tela de rotinas junto, a cadência do cartão é
-//    montada aqui, a partir do mesmo `parseRoutineDays` que a tool usa pra
-//    gravar. Assim o cartão não pode descrever um dia diferente do que vai ser
-//    salvo, que era o motivo de existir aquele reaproveitamento.
+// What this does NOT cover, on purpose:
+//  • `descreverCarrinho` (compras.mjs) returns the cart summary in
+//    Portuguese. Translating that means touching the purchasing subsystem, which has
+//    its own price/shipping logic; it was left out of this phase and is declared
+//    below where it appears.
+//  • `routineDaysLabel`/`intervalLabel` (scheduler.mjs) are also in
+//    Portuguese and are used in the routine LIST, not just here. Instead of
+//    translating it there and dragging the routines screen along, the card's cadence is
+//    built here, from the same `parseRoutineDays` that the tool uses to
+//    save. This way the card can't describe a day different from what's going to be
+//    saved, which was the reason that reuse existed.
 import { normalizeRoutineDays, parseRoutineDays } from './scheduler.mjs';
 import { routineArgsTimeLabel } from './routine-time.mjs';
 import { descreverCarrinho, plataformaDoCarrinho } from './compras.mjs';
 import { portaoTexto } from './confirm-textos-portao.mjs';
 import { marca } from './marca.mjs';
 
-// O cc sai no envio de verdade mas não aparecia no cartão de confirmação: a pessoa
-// autorizava "mandar pra X" sem saber que uma cópia também ia pra Y. Como
-// gmail_send/hotmail_send são irreversíveis, esse cartão é a única barreira antes
-// do envio, então ele tem que descrever a ação inteira.
+// The cc goes out in the actual send but didn't show up in the confirmation card: the person
+// was authorizing "mandar pra X" without knowing a copy was also going to Y. Since
+// gmail_send/hotmail_send are irreversible, this card is the only barrier before
+// sending, so it has to describe the entire action.
 export function copiaLabel(cc, lang = 'pt') {
   const v = String(cc == null ? '' : cc).trim();
   if (!v) return '';
@@ -41,8 +41,8 @@ export function copiaLabel(cc, lang = 'pt') {
   return ` (com cópia para ${v})`;
 }
 
-// Campos de um item do Infinity como vieram do modelo ({ nome_do_campo: valor }),
-// em uma linha. O cartão precisa mostrar TODOS os valores que vão ser gravados.
+// Fields of an Infinity item as they came from the model ({ nome_do_campo: valor }),
+// on one line. The card needs to show ALL the values that are going to be saved.
 export function camposInfinity(campos) {
   if (!campos || typeof campos !== 'object') return '';
   return Object.entries(campos)
@@ -52,14 +52,14 @@ export function camposInfinity(campos) {
 
 export const IDIOMAS_TEXTO = ['en', 'es'];
 
-// ── Data e hora ─────────────────────────────────────────────────────────────
-// Mesma regra do formatWhen do confirm.mjs: mostra o horário de PAREDE como
-// veio no ISO, sem converter fuso (converter distorcia a hora de quem está
-// fora de São Paulo).
+// ── Date and time ────────────────────────────────────────────────────────
+// Same rule as confirm.mjs's formatWhen: shows the WALL-CLOCK time as it
+// came in the ISO, without converting timezone (converting would distort the time for someone
+// outside São Paulo).
 //
-// Em inglês o dia NÃO pode sair como número: "09/07/2026" é 9 de julho pra
-// quem lê DD/MM e 7 de setembro pra quem lê MM/DD, e aqui o usuário está
-// aprovando um horário de agenda. Mês por nome resolve a ambiguidade.
+// In English the day CANNOT come out as a number: "09/07/2026" is July 9
+// for someone who reads DD/MM and September 7 for someone who reads MM/DD, and here the user is
+// approving a calendar time. Month by name resolves the ambiguity.
 const MES_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function quando(s, lang) {
@@ -78,7 +78,7 @@ export function quando(s, lang) {
   return `${dia}/${mes}/${ano}${hora}`;
 }
 
-// ── Cadência de rotina ──────────────────────────────────────────────────────
+// ── Routine cadence ──────────────────────────────────────────────────────
 const DOW = {
   en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
   es: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
@@ -104,8 +104,8 @@ function cadencia(args, lang) {
     const nomes = d.mes.map((n) => (n === -1
       ? (en ? 'the last day' : 'el último día')
       : (en ? `day ${n}` : `el día ${n}`)));
-    // Diz o que a plataforma faz quando o dia não existe no mês, senão o dono
-    // confirma "todo dia 31" achando que fevereiro não recebe nada.
+    // States what the platform does when the day doesn't exist in the month, otherwise the owner
+    // confirms "todo dia 31" thinking February gets nothing.
     const curto = d.mes.some((n) => n > 28)
       ? (en ? ' (in shorter months, on the last day)' : ' (en los meses más cortos, el último día)')
       : '';
@@ -127,10 +127,10 @@ function intervalo(min, lang) {
   return `${m} min`;
 }
 
-// Cadência COMPLETA pro cartão. A rotina tem dois modos (intervalo e horário
-// fixo) e o cartão precisa descrever o modo certo: no modo INTERVALO não existe
-// hora nem dia, e uma frase de "todo dia às 0?h" descreveria uma rotina que não
-// é a que vai ser criada.
+// COMPLETE cadence for the card. The routine has two modes (interval and
+// fixed time) and the card needs to describe the correct mode: in INTERVAL mode there's no
+// hour or day, and a sentence like "todo dia às 0?h" would describe a routine that isn't
+// the one that's going to be created.
 function cadenciaFrase(args, lang) {
   const en = lang === 'en';
   const n = Number(args.repetir_cada_min);
@@ -145,9 +145,9 @@ function cadenciaFrase(args, lang) {
   return en ? `${dias} at ${hora}` : `${dias} a las ${hora}`;
 }
 
-// ── Frase do PEDIDO (o que vai ser feito, ainda não foi) ────────────────────
-// Infinitivo, porque a frase é encaixada em outra ("I couldn't complete: send
-// an email to …"), exatamente como o pt-BR faz.
+// ── REQUEST sentence (what's going to be done, hasn't happened yet) ────────
+// Infinitive, because the sentence gets embedded in another ("I couldn't complete: send
+// an email to …"), exactly like pt-BR does.
 const PEDIDO = {
   en: {
     gmail_send: (a) => `send an email to ${a.to || '(recipient?)'}${a.subject ? ` with the subject "${a.subject}"` : ''}${copiaLabel(a.cc, 'en')}`,
@@ -366,14 +366,14 @@ const PEDIDO = {
     remover_segredo: (a) => `quitar el secreto "${a.chave || '(?)'}" del sistema "${a.nome_do_sistema || '(sin nombre)'}" (la app se reinicia sin esa variable; el valor no se puede recuperar)`,
   },
 };
-// Mesma implementação das duas tools de upload do OneDrive, igual ao pt-BR.
+// Same implementation as the two OneDrive upload tools, same as pt-BR.
 PEDIDO.en.onedrive_upload_arquivo = PEDIDO.en.onedrive_upload;
 PEDIDO.es.onedrive_upload_arquivo = PEDIDO.es.onedrive_upload;
 
-// `fechar_pedido` fica fora da tabela porque depende do CARRINHO, não dos args:
-// o valor que o dono aprova tem que ser o do carrinho montado na loja, não um
-// número repetido pelo modelo. O resumo em si (`descreverCarrinho`) segue em
-// português nesta fase: traduzir aquilo é mexer no subsistema de compras.
+// `fechar_pedido` stays out of the table because it depends on the CART, not the args:
+// the value the owner approves has to be the one from the cart built at the store, not a
+// number repeated by the model. The summary itself (`descreverCarrinho`) stays in
+// Portuguese in this phase: translating that means touching the purchasing subsystem.
 PEDIDO.en.fechar_pedido = (a) => {
   const resumo = descreverCarrinho(a.carrinho_id);
   if (!resumo) return 'PLACE A REAL ORDER at the store (but the cart no longer exists, so it has to be built again first)';
@@ -391,7 +391,7 @@ PEDIDO.es.fechar_pedido = (a) => {
   return `HACER EL PEDIDO DE VERDAD: ${resumo}. Esto crea un pedido real a tu nombre y genera el cobro; no se puede deshacer desde aquí`;
 };
 
-// ── Frase do FEITO (passado, é o que o usuário recebe depois do "pode") ─────
+// ── DONE sentence (past tense, what the user receives after "pode") ────────
 const FEITO = {
   en: {
     gmail_send: (a) => `Email sent to ${a.to || 'the recipient'}${a.subject ? ` with the subject "${a.subject}"` : ''}${copiaLabel(a.cc, 'en')}.`,
@@ -474,13 +474,13 @@ const FEITO = {
     asaas_transferir_pix: (a) => `PIX of R$ ${a.valor ?? ''} sent from your Asaas account to the key ${a.chave_pix || ''}${a.agendar_para ? ` (scheduled for ${a.agendar_para})` : ''}.`,
     asaas_enviar_comprovante_email: (a) => `Receipt emailed to ${a.para || 'the recipient'}.`,
     salvar_credencial: (a) => `${a.servico || 'Service'} API key stored in the Vault (encrypted).`,
-    // Só o cabeçalho: o detalhe (número, total, Pix) vem no corpo que a própria
-    // tool devolve, e o renderConfirmed cola aqui embaixo.
+    // Just the header: the detail (number, total, Pix) comes in the body that the
+    // tool itself returns, and renderConfirmed pastes it right below.
     fechar_pedido: () => 'Order placed at the store. Only the payment is left:',
     criar_conta_brambs: () => `${marca().nome} account opened at Asaas. The documentation is still missing:`,
-    // O pt-BR não tem frase própria pra estas duas (cai no genérico "Ação X
-    // concluída"). Aqui elas ganham frase mesmo assim: o genérico é a última
-    // rede, não o texto desejado.
+    // pt-BR doesn't have its own sentence for these two (it falls to the generic "Ação X
+    // concluída"). Here they get a sentence anyway: the generic is the last
+    // net, not the desired text.
     remover_arquivo_do_app: (a) => `File ${a.caminho || ''} removed from the draft of "${a.nome_do_sistema || ''}".`,
     remover_segredo: (a) => `Secret "${a.chave || ''}" removed from the system "${a.nome_do_sistema || ''}".`,
   },
@@ -574,13 +574,13 @@ const FEITO = {
 FEITO.en.onedrive_upload_arquivo = FEITO.en.onedrive_upload;
 FEITO.es.onedrive_upload_arquivo = FEITO.es.onedrive_upload;
 
-// ── Moldura do renderConfirmed ──────────────────────────────────────────────
-// As frases que envolvem o resultado. `falhou` embute a frase do PEDIDO, que é
-// o único texto do cartão que o usuário lê direto do código no caminho de erro.
-// `acaoPedido`/`acaoFeita` são o genérico: a rede que pega uma tool que entrou
-// no portão mas ainda não tem frase própria. Sem eles o caminho caía no
-// `default` em português das funções do confirm.mjs, e uma tool nova apareceria
-// em português no cartão de um usuário de inglês sem erro nenhum aparecendo.
+// ── Frame for renderConfirmed ───────────────────────────────────────────────
+// The sentences that wrap the result. `falhou` embeds the REQUEST sentence, which is
+// the only card text the user reads straight from the code on the error path.
+// `acaoPedido`/`acaoFeita` are the generic: the net that catches a tool that entered
+// the gate but still doesn't have its own sentence. Without them the path would fall to the
+// Portuguese `default` of confirm.mjs's functions, and a new tool would show up
+// in Portuguese on an English user's card with no error appearing at all.
 export const MOLDURA = {
   en: {
     falhou: (label) => `I couldn't finish: ${label}.`,
@@ -596,17 +596,17 @@ export const MOLDURA = {
   },
 };
 
-// ── Portas de entrada ───────────────────────────────────────────────────────
-// Devolvem null quando não há tradução pro par (idioma, tool). O chamador cai
-// no pt-BR, que é o comportamento de hoje: idioma sem tradução nunca pode virar
-// texto vazio nem "undefined" num cartão que autoriza gastar dinheiro.
-// Sem tradução pra este par (idioma, tool) devolve null e o chamador cai no
-// português DETALHADO, de propósito. A tentação é devolver o genérico
-// traduzido ("run the action asaas_transferir_pix"), que sai na língua certa;
-// mas aí o cartão perde o valor e a chave PIX, e o dono autoriza no escuro.
-// Entre frase certa na língua errada e frase vazia na língua certa, o portão
-// tem que mostrar a ação real. O genérico traduzido só entra onde o próprio
-// pt-BR também é genérico (ver acaoPedido/acaoFeita).
+// ── Entry points ─────────────────────────────────────────────────────────
+// Return null when there's no translation for the (language, tool) pair. The caller falls
+// back to pt-BR, which is today's behavior: a language with no translation can never turn into
+// empty text or "undefined" on a card that authorizes spending money.
+// With no translation for this (language, tool) pair, it returns null and the caller falls to
+// DETAILED Portuguese, on purpose. The temptation is to return the translated
+// generic ("run the action asaas_transferir_pix"), which comes out in the right language;
+// but then the card loses the value and the PIX key, and the owner authorizes blind.
+// Between the right sentence in the wrong language and an empty sentence in the right language, the gate
+// has to show the real action. The translated generic only applies where
+// pt-BR itself is also generic (see acaoPedido/acaoFeita).
 export function pedidoEm(lang, name, args = {}) {
   if (['en','es'].includes(lang) && name === 'jornada_refazer_devolutiva') return retryLabel(lang);
   if (['en','es'].includes(lang) && name === 'jornada_concluir') return completionLabel(lang);
@@ -631,7 +631,7 @@ export function molduraEm(lang) {
   return MOLDURA[lang] || null;
 }
 
-// Só pro teste: permite conferir que as tabelas cobrem as MESMAS tools que o
-// pt-BR cobre, sem depender de eu ter lembrado de conferir na mão.
+// Test only: lets us check that the tables cover the SAME tools that
+// pt-BR covers, without depending on me having remembered to check by hand.
 export const _TOOLS_PEDIDO = { en: Object.keys(PEDIDO.en), es: Object.keys(PEDIDO.es) };
 export const _TOOLS_FEITO = { en: Object.keys(FEITO.en), es: Object.keys(FEITO.es) };

@@ -17,7 +17,8 @@ export function jevEnabled() {
   return !!process.env.TYPESAFE_API_KEY && process.env.JEV_TRAVAS !== '0';
 }
 
-// Uma pergunta `choice`. Devolve o rótulo escolhido (uma das chaves de criteria) ou null.
+// A single `choice` question. Returns the chosen label (one of the criteria
+// keys) or null.
 export async function jevChoice({ state, instructions, criteria, trava = '' }) {
   if (!jevEnabled()) return null;
   const ac = new AbortController();
@@ -41,7 +42,8 @@ export async function jevChoice({ state, instructions, criteria, trava = '' }) {
   } finally { clearTimeout(timer); }
 }
 
-// Estado no formato do eval: contexto fixo, última fala do assistente, mensagem do dono.
+// State in the eval's format: fixed context, the assistant's last message,
+// the owner's message.
 function conversa({ fato = '', focus = '', previousAssistantText = '', message = '' }) {
   const lines = [];
   if (fato) lines.push('Contexto: ' + fato);
@@ -54,7 +56,7 @@ function conversa({ fato = '', focus = '', previousAssistantText = '', message =
 const DONO = 'Classifique a ÚLTIMA mensagem do usuário (dono do assistente) considerando o contexto.';
 const ASSISTENTE = 'Classifique a ÚLTIMA mensagem do assistente (dono do assistente) considerando o contexto.';
 
-// #3 controle de tarefa de programação em segundo plano.
+// #3 background coding task control.
 export function jevCodingControl({ message, app = '', previousAssistantText = '' }) {
   return jevChoice({ trava: '#3', instructions: DONO,
     state: conversa({ message, previousAssistantText,
@@ -62,7 +64,7 @@ export function jevCodingControl({ message, app = '', previousAssistantText = ''
     criteria: { status_job: 'pergunta como está/andamento da tarefa de programação em segundo plano', cancelar_job: 'manda parar/cancelar a tarefa de programação', retomar_job: 'manda continuar/retomar a tarefa de programação', nenhuma: 'outra coisa (jornada, lembrete, pendência, pergunta sobre o app, relato de bug)' } });
 }
 
-// #7 turno de recuperação de app sem crédito.
+// #7 app-recovery turn with no credit.
 export function jevAppEmergency({ message, apps = [] }) {
   return jevChoice({ trava: '#7', instructions: DONO,
     state: conversa({ message,
@@ -70,17 +72,19 @@ export function jevAppEmergency({ message, apps = [] }) {
     criteria: { recuperar_app: 'relata que um app/sistema publicado dele quebrou, sumiu dado, regrediu ou não abre', nenhuma: 'qualquer outra coisa (site de terceiros, link, exercício, conversa)' } });
 }
 
-// #12 o turno mira um app básico do dono (tira o sandbox do turno)?
+// #12 does the turn target a basic app of the owner's (takes the sandbox
+// out of the turn)?
 export function jevAppFocus({ message, apps = [], focus = '' }) {
   return jevChoice({ trava: '#12', instructions: DONO,
     state: conversa({ message, focus,
-      // Só os nomes: contar ao Jev que o sandbox some quando é app puxou a resposta
-      // pra "app" (prova em prod 28/09: 9/13 com a frase, 12/13 sem).
+      // Only the names: telling Jev that the sandbox disappears when it's
+      // an app pulled the response toward "app" (proof in prod from 2026-09-28:
+      // 9/13 with the sentence, 12/13 without).
       fato: `Apps básicos do dono: ${apps.map(a => `"${a}"`).join(', ')}.` }),
     criteria: { app: 'operar/editar/publicar/consultar um app DELE', codigo_sandbox: 'gerar arquivo ou rodar código (QR code, planilha, conversão)', imagem: 'gerar imagem ilustrativa', nenhuma: 'conversa, arquivo, documento ou outro assunto' } });
 }
 
-// #32 memória permanente x notas da jornada.
+// #32 permanent memory vs. journey notes.
 export function jevPermanentMemory({ message, previousAssistantText = '' }) {
   return jevChoice({ trava: '#32', instructions: DONO,
     state: conversa({ message, previousAssistantText,
@@ -88,14 +92,16 @@ export function jevPermanentMemory({ message, previousAssistantText = '' }) {
     criteria: { memoria_permanente: 'o dono pede para guardar/alterar/apagar algo na memória permanente', notas_jornada: 'relato do dia a dia para a jornada', nenhuma: 'nenhuma escrita (pergunta, leitura)' } });
 }
 
-// #43 resposta do assistente promete trabalho de programação sem ter chamado a tool.
+// #43 the assistant's response promises coding work without having called
+// the tool.
 export function jevCodingPromise(text) {
   return jevChoice({ trava: '#43', instructions: ASSISTENTE,
     state: `Contexto: Texto é a resposta do ASSISTENTE num turno em que ele NÃO chamou ferramenta de programação.\nResposta do assistente:\n${text}`,
     criteria: { promessa: 'afirma que está/vai construir ou alterar agora (trabalho em andamento)', nao_promessa: 'oferece, pede info, condiciona ou fala de trabalho passado' } });
 }
 
-// #48 resposta do assistente diz que verificou algo agora sem ter chamado nenhuma tool.
+// #48 the assistant's response says it just verified something without
+// having called any tool.
 export function jevFreshCheckClaim(text) {
   return jevChoice({ trava: '#48', instructions: ASSISTENTE,
     state: `Contexto: Texto é a resposta do ASSISTENTE num turno em que ele NÃO chamou nenhuma ferramenta.\nResposta do assistente:\n${text}`,

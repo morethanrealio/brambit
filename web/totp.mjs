@@ -1,9 +1,9 @@
-// TOTP (RFC 6238) sem dependência externa — usado pro segundo fator do dashboard
-// admin (/metrics, /broadcast). HMAC-SHA1, passo de 30s, código de 6 dígitos.
+// TOTP (RFC 6238) with no external dependency — used for the second factor of the admin
+// dashboard (/metrics, /broadcast). HMAC-SHA1, 30s step, 6-digit code.
 import crypto from 'crypto';
 
-// Decodifica uma secret em Base32 (RFC 4648, alfabeto A-Z2-7). Ignora espaços e
-// padding "=". Retorna Buffer com os bytes da chave.
+// Decodes a Base32 secret (RFC 4648, A-Z2-7 alphabet). Ignores spaces and
+// "=" padding. Returns a Buffer with the key bytes.
 function base32Decode(input) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   const clean = String(input || '').toUpperCase().replace(/=+$/, '').replace(/\s+/g, '');
@@ -19,7 +19,7 @@ function base32Decode(input) {
   return Buffer.from(out);
 }
 
-// Gera o código HOTP de 6 dígitos pro contador informado.
+// Generates the 6-digit HOTP code for the given counter.
 function hotp(keyBuf, counter) {
   const buf = Buffer.alloc(8);
   buf.writeBigUInt64BE(BigInt(counter));
@@ -29,8 +29,8 @@ function hotp(keyBuf, counter) {
   return String(bin % 1_000_000).padStart(6, '0');
 }
 
-// Verifica um código TOTP contra a secret. Aceita janela de +/- `window` passos
-// (30s cada) pra tolerar clock skew. Comparação em tempo constante.
+// Verifies a TOTP code against the secret. Accepts a window of +/- `window` steps
+// (30s each) to tolerate clock skew. Constant-time comparison.
 export function verifyTotp(secret, token, { step = 30, window = 1, now = Date.now() } = {}) {
   const code = String(token || '').trim();
   if (!/^\d{6}$/.test(code)) return false;

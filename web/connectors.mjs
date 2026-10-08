@@ -5,11 +5,11 @@ import { emailHeader } from './security-boundaries.mjs';
 import { searchPagination, searchCursorSchema, SEARCH_PAGINATION_RULE, searchItems, driveSearchMeta } from './search-pagination.mjs';
 import { emailPagination, emailCursorSchema, EMAIL_PAGINATION_RULE } from './email-pagination.mjs';
 import { recurrenceSchema, calendarRecurrence, recurrenceDefaultEnd, calendarWindow, recurrenceLabel, recurrenceOccurrences } from './calendar-recurrence.mjs';
-// ── Conectores Google como tools do core ──
-// Cada conector vira uma tool (JSON Schema) que entra no tool-loop do harness.
-// Recebem um `token()` async que devolve um access_token válido (já renovado).
-// Leitura sempre; escrita (enviar e-mail, criar evento, subir arquivo) quando o
-// usuário concedeu o escopo de escrita do serviço.
+// ── Google connectors as core tools ──
+// Each connector becomes a tool (JSON Schema) that enters the harness tool-loop.
+// They receive an async `token()` that returns a valid access_token (already
+// refreshed). Reading is always allowed; writing (sending email, creating an
+// event, uploading a file) when the user granted that service's write scope.
 import { extractPdfText } from './pdf.mjs';
 import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
 import { ocrPdf, describeImage } from './media.mjs';
@@ -27,8 +27,8 @@ async function gget(token, url) {
   return r.json();
 }
 
-// Uma busca anterior à escrita deve provar ausência ou um alvo único.
-// Nunca tratar indisponibilidade, resposta inválida ou página parcial como vazio.
+// A search prior to a write must prove absence or a single target.
+// Never treat unavailability, an invalid response, or a partial page as empty.
 const validDriveId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]+$/.test(id);
 async function uniqueDriveWriteTarget(token, q, label) {
   let r;
@@ -52,8 +52,8 @@ async function uniqueDriveWriteTarget(token, q, label) {
   return r.files[0] || null;
 }
 
-// Pasta identificada pela marca do app, não pelo nome. Duplicatas e falhas de
-// busca também precisam parar AQUI, antes de criar pasta ou procurar arquivos.
+// Folder identified by the app's marker, not by name. Duplicates and search
+// failures also need to stop HERE, before creating a folder or searching for files.
 const APP_FOLDER_TAG = { key: 'brambsAssistant', value: '1' };
 export async function ensureAssistantFolder(token, folderName = marca().nome) {
   const q = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and appProperties has { key='${APP_FOLDER_TAG.key}' and value='${APP_FOLDER_TAG.value}' }`;
@@ -71,7 +71,7 @@ export async function ensureAssistantFolder(token, folderName = marca().nome) {
   return created.id;
 }
 
-// POST JSON autenticado (usado pelas ações de escrita).
+// Authenticated JSON POST (used by write actions).
 async function gpost(token, url, body) {
   const r = await fetch(url, {
     method: 'POST',
@@ -82,7 +82,7 @@ async function gpost(token, url, body) {
   return r.json();
 }
 
-// PATCH JSON autenticado (atualização parcial; usado pra editar evento).
+// Authenticated JSON PATCH (partial update; used to edit an event).
 async function gpatch(token, url, body, ifMatch = null) {
   const r = await fetch(url, {
     method: 'PATCH',
@@ -93,7 +93,7 @@ async function gpatch(token, url, body, ifMatch = null) {
   return r.json();
 }
 
-// DELETE autenticado (usado pra apagar evento). 204 = sem corpo.
+// Authenticated DELETE (used to delete an event). 204 = no body.
 async function gdel(token, url, ifMatch = null) {
   const r = await fetch(url, {
     method: 'DELETE',
@@ -106,12 +106,12 @@ async function gdel(token, url, ifMatch = null) {
 const b64urlEncode = (buf) =>
   Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-// Codifica um header MIME quando tem caractere não-ASCII (ex: assunto com acento).
+// Encodes a MIME header when it has a non-ASCII character (e.g. a subject with an accent).
 const mimeWord = (s) =>
   /[^\x00-\x7F]/.test(s || '') ? `=?UTF-8?B?${Buffer.from(s, 'utf8').toString('base64')}?=` : (s || '');
 
-// Monta o corpo MIME cru (base64url) de um e-mail. Usado tanto pelo rascunho
-// quanto pelo envio.
+// Builds the raw MIME body (base64url) of an email. Used both by the draft
+// and by sending.
 function buildRawEmail({ to, subject, body, cc }) {
   const safeTo=emailHeader(to,'destinatário'), safeCc=emailHeader(cc,'cópia'), safeSubject=emailHeader(subject,'assunto');
   const headers = [`To: ${safeTo}`];
@@ -121,13 +121,13 @@ function buildRawEmail({ to, subject, body, cc }) {
   return b64urlEncode(`${headers.join('\r\n')}\r\n\r\n${body}`);
 }
 
-// Normaliza a hora de parede pro RFC3339 que o Google exige. O modelo às vezes
-// emite só HH:MM (sem segundos), ex "2026-08-18T14:09", e o Calendar responde
-// 400 Bad Request genérico porque RFC3339 exige segundos. Aqui completamos:
-// zero-pad na hora e :00 nos segundos quando faltam, preservando fração/offset
-// se vierem. Se não casar o formato de data-hora local (tem offset estranho ou
-// coisa inesperada), deixa passar como veio. Caso de 16/08: consulta médica
-// não entrava por causa disso.
+// Normalizes wall-clock time to the RFC3339 that Google requires. The model
+// sometimes emits only HH:MM (no seconds), e.g. "2026-08-18T14:09", and Calendar
+// responds with a generic 400 Bad Request because RFC3339 requires seconds. Here
+// we complete it: zero-pad the hour and :00 in the seconds when missing, preserving
+// fraction/offset if present. If it doesn't match the local date-time format (has
+// a strange offset or something unexpected), lets it pass as is. Case from
+// 2026-08-16: a medical appointment wasn't going in because of this.
 const rfc3339Local = (v) => {
   const s = String(v ?? '').trim();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})(?::(\d{2}))?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
@@ -136,24 +136,25 @@ const rfc3339Local = (v) => {
   return `${Y}-${Mo}-${D}T${h.padStart(2, '0')}:${mi}:${se || '00'}${frac || ''}${off || ''}`;
 };
 
-// start/end pro Calendar: ISO com hora -> dateTime+tz; só data -> all-day.
-// O tz (IANA) define o fuso do evento; default São Paulo, mas o agente deve
-// passar o fuso real do usuário (ex America/Zurich pra quem está em Basileia).
+// start/end for Calendar: ISO with time -> dateTime+tz; date only -> all-day.
+// The tz (IANA) sets the event's timezone; default São Paulo, but the agent
+// should pass the user's real timezone (e.g. America/Zurich for someone in Basel).
 const calTime = (v, tz) =>
   /T\d/.test(v || '') ? { dateTime: rfc3339Local(v), timeZone: tz || 'America/Sao_Paulo' } : { date: v };
 
-// ── Agendas do Google (calendarList) ────────────────────────────────────────
-// O produto lia e escrevia só em `primary`. Quem organiza a vida em mais de uma
-// agenda (trabalho, produtora, agenda de outra pessoa compartilhada com ele)
-// recebia meia resposta, e a tool nem sabia que faltava coisa: não havia
-// nenhuma chamada a calendarList no código (auditoria 04/09).
-// Aqui o conjunto de agendas passa a ser DESCOBERTO. Nenhum escopo OAuth novo:
-// calendar.readonly/calendar.events já valem pra conta inteira.
+// ── Google calendars (calendarList) ──────────────────────────────────────────
+// The product only read and wrote to `primary`. Whoever organizes their life
+// across more than one calendar (work, a production company, a calendar someone
+// else shared with them) got half an answer, and the tool didn't even know
+// something was missing: there was no call to calendarList in the code at all
+// (audit 2026-09-04).
+// Here the set of calendars starts being DISCOVERED. No new OAuth scope:
+// calendar.readonly/calendar.events already cover the whole account.
 const CAL_FEED = /(holiday|contacts)@group\.v\.calendar\.google\.com$/i;
 const semAcento = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-// Lista as agendas da conta. Nunca lança: se a chamada falhar (permissão antiga,
-// erro do Google), a leitura continua na principal, como era antes.
+// Lists the account's calendars. Never throws: if the call fails (old
+// permission, Google error), reading continues on the primary one, as before.
 async function listCalendars(token) {
   try {
     const r = await gget(token, `${CAL}/users/me/calendarList?minAccessRole=reader&maxResults=250`);
@@ -161,8 +162,8 @@ async function listCalendars(token) {
       id: c.id,
       nome: c.summaryOverride || c.summary || c.id,
       principal: !!c.primary,
-      // Feed automático (feriados, aniversários): fica FORA do padrão porque
-      // entope a agenda do dia, mas segue acessível pedindo pelo nome.
+      // Automatic feed (holidays, birthdays): stays OUT of the default because
+      // it clutters the day's calendar, but is still reachable by asking by name.
       feed: CAL_FEED.test(c.id),
       acesso: c.accessRole || '',
       catalog_partial: !!r.nextPageToken,
@@ -172,8 +173,8 @@ async function listCalendars(token) {
   return [{ id: 'primary', nome: 'principal', principal: true, feed: false, acesso: 'owner', catalog_partial:true }];
 }
 
-// Qual(is) agenda(s) o dono quis. Sem `agenda`, TODAS as de verdade (sem feed).
-// Casa por id exato, nome exato e depois nome parcial, tudo sem acento.
+// Which calendar(s) the owner meant. Without `agenda`, ALL the real ones (no feed).
+// Matches by exact id, exact name and then partial name, all accent-insensitive.
 function pickCalendars(cals, agenda) {
   const q = semAcento(agenda);
   if (!q) return cals.filter((c) => !c.feed);
@@ -189,27 +190,29 @@ function pickCalendars(cals, agenda) {
 
 const calId = (c) => encodeURIComponent(c.id);
 
-// Junta os eventos das várias agendas em UMA lista: ordena por instante e corta
-// no teto, dizendo quando cortou. Fora da tool pra poder ser testada sozinha.
-// Por que instante e não texto: cada agenda pode ter fuso próprio e o Google
-// devolve o offset dentro do ISO, então "T09:00:00Z" viria antes de
-// "T08:00:00-03:00" (que é 11:00Z) e o corte derrubaria o evento errado.
+// Merges events from several calendars into ONE list: sorts by instant and cuts
+// at the ceiling, stating when it cut. Outside the tool so it can be tested on
+// its own. Why instant and not text: each calendar can have its own timezone and
+// Google returns the offset inside the ISO, so "T09:00:00Z" would come before
+// "T08:00:00-03:00" (which is 11:00Z) and the cut would drop the wrong event.
 export function ordenarECortar(eventos, teto) {
   const inst = (s) => { const t = Date.parse(s || ''); return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER; };
   const todos = [...eventos].sort((a, b) => inst(a.start) - inst(b.start) || String(a.start || '').localeCompare(String(b.start || '')));
   const items = todos.slice(0, Math.max(1, teto));
-  // Com várias agendas o teto é dividido entre elas e a lista pode parar no meio
-  // da janela pedida. Sem esta nota o assistente diria "não tem nada dia 28"
-  // olhando uma lista que acabou no dia 12.
+  // With several calendars the ceiling is split between them and the list might
+  // stop in the middle of the requested window. Without this note the assistant
+  // would say "there's nothing on the 28th" while looking at a list that ended
+  // on the 12th.
   const corte = todos.length > items.length
     ? `Couberam só os ${items.length} eventos mais próximos (${todos.length - items.length} ficaram de fora). A lista cobre até ${items[items.length - 1]?.start || '?'} e NÃO diz nada sobre o resto da janela: pra ver mais adiante, peça um período menor, uma agenda só, ou um max maior.`
     : null;
   return { items, corte };
 }
 
-// Agenda pra ESCREVER. Sem `agenda`, a principal (default de sempre: ninguém
-// cria evento na agenda compartilhada de outra pessoa por acidente). Com nome,
-// resolve e exige permissão de escrita, senão o Google devolveria 403 seco.
+// Calendar to WRITE to. Without `agenda`, the primary one (the usual default:
+// nobody creates an event on someone else's shared calendar by accident). With
+// a name, it resolves and requires write permission, otherwise Google would
+// return a bare 403.
 async function resolveWriteCalendar(token, agenda, {confirm = false} = {}) {
   if (!agenda && !confirm) return { cal: { id: 'primary', nome: 'principal' } };
   const cals = await listCalendars(token);
@@ -335,15 +338,15 @@ export function calendarWritesPorConta(tools, { contas = [], padrao = '', constr
   });
 }
 
-// 404/410 = o evento REALMENTE não está nessa agenda. Qualquer outro erro
-// (401, 403, 429, 5xx, rede) quer dizer que a checagem não aconteceu: tratar
-// isso como ausência faz a tool jurar pro dono que o evento não existe quando
-// o Google só tropeçou.
+// 404/410 = the event REALLY isn't in that calendar. Any other error
+// (401, 403, 429, 5xx, network) means the check didn't actually happen: treating
+// this as absence makes the tool swear to the owner that the event doesn't exist
+// when Google just stumbled.
 const naoRespondeu = (e) => !/^(404|410)\b/.test(String(e?.message || ''));
 
-// Em qual agenda está esse evento? Procura em paralelo, com teto. Devolve
-// também as agendas que não deram resposta, pra quem chama não confundir
-// "não está lá" com "não deu pra olhar".
+// Which calendar is this event in? Searches in parallel, with a ceiling. Also
+// returns the calendars that didn't respond, so the caller doesn't confuse
+// "it's not there" with "couldn't check".
 async function findEventCalendar(token, eventId, cals) {
   const alvos = cals.slice(0, 12);
   const incertas = [];
@@ -359,10 +362,11 @@ async function findEventCalendar(token, eventId, cals) {
   return { cal: achados.find(Boolean) || null, incertas };
 }
 
-// Agenda de um evento pra EDITAR/APAGAR. O id do evento sozinho não diz de qual
-// agenda ele veio, e agora que a leitura cobre todas, a IA acha evento que a
-// escrita não alcançava (404 em cima de evento que existe). Tenta a principal
-// primeiro (1 requisição, o caso comum) e só então procura nas outras.
+// Calendar of an event to EDIT/DELETE. The event id alone doesn't say which
+// calendar it came from, and now that reading covers all of them, the AI finds
+// an event that writing couldn't reach (404 on top of an event that exists).
+// Tries the primary one first (1 request, the common case) and only then
+// searches the others.
 async function resolveEventCalendar(token, eventId, agenda) {
   if (agenda) return resolveWriteCalendar(token, agenda);
   const incertas = [];
@@ -370,7 +374,7 @@ async function resolveEventCalendar(token, eventId, agenda) {
     await gget(token, `${CAL}/calendars/primary/events/${encodeURIComponent(eventId)}`);
     return { cal: { id: 'primary', nome: 'principal' } };
   } catch (e) {
-    // pode estar em outra agenda; se o Google nem respondeu, isso fica marcado
+    // may be in another calendar; if Google didn't even respond, this gets flagged
     if (naoRespondeu(e)) incertas.push('principal');
   }
   const cals = await listCalendars(token);
@@ -378,8 +382,8 @@ async function resolveEventCalendar(token, eventId, agenda) {
   const r = editaveis.length ? await findEventCalendar(token, eventId, editaveis) : { cal: null, incertas: [] };
   if (r.cal) return { cal: r.cal };
   const duvida = [...incertas, ...r.incertas];
-  // Este texto chega CRU no dono (renderConfirmed cola o `error` na mensagem),
-  // então é frase de fato, não ordem pro modelo.
+  // This text reaches the owner RAW (renderConfirmed glues `error` into the
+  // message), so it's an actual sentence, not an instruction to the model.
   if (duvida.length) {
     const quais = duvida.length === 1 ? `a agenda "${duvida[0]}"` : `${duvida.length} agendas (${duvida.join(', ')})`;
     return { error: `Não consegui checar ${quais} agora: o Google não respondeu. Isso não quer dizer que o evento sumiu; vale tentar de novo em instantes.` };
@@ -387,26 +391,26 @@ async function resolveEventCalendar(token, eventId, agenda) {
   return { error: 'Evento não encontrado em nenhuma agenda que você pode editar. Confira o id com calendar_list.' };
 }
 
-// Leitura do payload do Gmail vive em gmail-payload.mjs (sem rede),
-// reexportada aqui pra quem já importava do conector.
+// Reading Gmail's payload lives in gmail-payload.mjs (no network calls),
+// re-exported here for whoever already imported it from the connector.
 import { extractGmailBody, readGmailBody, collectAttachments } from './gmail-payload.mjs';
 export { extractGmailBody, collectAttachments };
 
-// Decodifica base64url pra bytes (anexos do Gmail vêm em base64url).
+// Decodes base64url to bytes (Gmail attachments come in base64url).
 function b64urlBytes(data) {
   return Buffer.from((data || '').replace(/-/g, '+').replace(/_/g, '/'), 'base64');
 }
 
-// Identifica o tipo de um binário pelos magic bytes, pra quando o Gmail não
-// entrega nome/mime do anexo (ver fetchGmailAttachment). Só os formatos que
-// aparecem em anexo de verdade; sem match devolve null.
+// Identifies the type of a binary by its magic bytes, for when Gmail doesn't
+// deliver the attachment's name/mime (see fetchGmailAttachment). Only the
+// formats that actually show up as attachments; returns null with no match.
 const MAGIC = [
   { ext: 'pdf', mime: 'application/pdf', test: (b) => b.slice(0, 5).toString('latin1') === '%PDF-' },
   { ext: 'png', mime: 'image/png', test: (b) => b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' },
   { ext: 'jpg', mime: 'image/jpeg', test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
   { ext: 'gif', mime: 'image/gif', test: (b) => b.slice(0, 3).toString('latin1') === 'GIF' },
   { ext: 'webp', mime: 'image/webp', test: (b) => b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP' },
-  // OOXML (docx/xlsx/pptx) é um zip: o tipo real vem do nome da 1ª entrada.
+  // OOXML (docx/xlsx/pptx) is a zip: the real type comes from the 1st entry's name.
   { ext: 'zip', mime: 'application/zip', test: (b) => b[0] === 0x50 && b[1] === 0x4b && (b[2] === 0x03 || b[2] === 0x05 || b[2] === 0x07) },
 ];
 const OOXML = [
@@ -419,7 +423,7 @@ export function sniffBinary(buf) {
   const hit = MAGIC.find((m) => { try { return m.test(buf); } catch { return false; } });
   if (!hit) return null;
   if (hit.ext === 'zip') {
-    // Nos OOXML o caminho da 1ª entrada do zip já diz qual é (word/, xl/, ppt/).
+    // In OOXML files the path of the zip's 1st entry already says which one it is (word/, xl/, ppt/).
     const head = buf.slice(0, 2000).toString('latin1');
     const kind = OOXML.find((o) => head.includes(o.needle));
     if (kind) return { ext: kind.ext, mime: kind.mime };
@@ -427,12 +431,13 @@ export function sniffBinary(buf) {
   return { ext: hit.ext, mime: hit.mime };
 }
 
-// Baixa os BYTES de um anexo do Gmail e resolve nome/tipo.
-// O metadado (filename/mimeType) vive no payload da MENSAGEM, e o `find` por
-// attachmentId volta vazio quando o id de mensagem passado não é o da mensagem
-// dona do anexo (thread com várias mensagens): o download funciona, mas o
-// arquivo sai como "anexo" sem mime. Por isso: se não achar na mensagem, varre
-// a THREAD inteira; se ainda assim não achar, deduz pelos magic bytes.
+// Downloads the BYTES of a Gmail attachment and resolves name/type.
+// The metadata (filename/mimeType) lives in the MESSAGE's payload, and the
+// `find` by attachmentId comes back empty when the passed message id isn't the
+// id of the message that owns the attachment (thread with several messages):
+// the download works, but the file comes out as "attachment" with no mime.
+// That's why: if not found in the message, sweeps the WHOLE thread; if still
+// not found, infers it from the magic bytes.
 export async function fetchGmailAttachment({ token, messageId, attachmentId }) {
   const m = await gget(token, `${GMAIL}/messages/${messageId}?format=full`);
   let att = collectAttachments(m.payload).find((a) => a.attachmentId === attachmentId);
@@ -456,15 +461,15 @@ export async function fetchGmailAttachment({ token, messageId, attachmentId }) {
 const header = (msg, name) =>
   (msg.payload?.headers || []).find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 
-// Monta as tools dos serviços concedidos a partir das capacidades read/write.
+// Builds the tools for granted services from the read/write capabilities.
 // `caps` = { gmail: { read, write }, drive: {...}, calendar: {...}, docs: {...} }.
 export function googleTools({ token, caps = {}, account = '', onUsage = () => {}, onAccess = () => {}, folderName = marca().nome, onSheetLoad = null }) {
   // Trilha de auditoria: registra cada leitura de dado sensivel (Gmail/Drive/
   // Docs/Calendar). Fire-and-forget — nunca deixa a auditoria quebrar a tool.
   const audit = (tool, resource, detail) => { try { onAccess({ tool, resource, detail }); } catch { /* nunca quebra */ } };
-  // Fallback de OCR pra PDF escaneado (sem camada de texto): quando o
-  // extractPdfText volta vazio, manda os bytes pro Gemini ler. Devolve o JSON
-  // pronto da tool (com ocr:true) ou null se também não conseguir.
+  // OCR fallback for a scanned PDF (no text layer): when extractPdfText
+  // comes back empty, sends the bytes to Gemini to read. Returns the tool's
+  // ready-made JSON (with ocr:true) or null if that also fails.
   const ocrPdfFallback = async (buf, name, mime) => {
     try {
       const { text, usage } = await ocrPdf(buf);
@@ -475,7 +480,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     }
     return null;
   };
-  // OCR/visão de imagem (anexo escaneado que veio como .jpg/.png em vez de PDF).
+  // Image OCR/vision (scanned attachment that came as .jpg/.png instead of PDF).
   const ocrImageFallback = async (buf, name, mime) => {
     try {
       const { text, usage } = await describeImage(buf, mime, 'Extraia TODO o texto legível desta imagem em português do Brasil. Se for um boleto ou guia (DAS, DARF, boleto bancário), destaque no início a LINHA DIGITÁVEL completa, o valor e a data de vencimento.');
@@ -486,11 +491,11 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     }
     return null;
   };
-  // Detecta PDF pelos magic bytes (%PDF-), pra pegar anexo que veio com mime
-  // errado (ex: application/octet-stream) ou sem extensão no nome.
+  // Detects a PDF by its magic bytes (%PDF-), to catch an attachment that came
+  // with the wrong mime (e.g. application/octet-stream) or no extension in the name.
   const sniffPdf = (buf) => !!buf && buf.length > 4 && buf.slice(0, 5).toString('latin1') === '%PDF-';
-  // Lê um buffer de PDF: tenta extrair o texto; se vier vazio OU o extrator
-  // lançar erro, cai no OCR (Gemini). Sempre devolve um JSON pronto de tool.
+  // Reads a PDF buffer: tries to extract text; if it comes back empty OR the
+  // extractor throws, falls back to OCR (Gemini). Always returns a ready-made tool JSON.
   const readPdfBuf = async (buf, name, mime) => {
     let text = '', pages, truncated;
     try { ({ text, pages, truncated } = await extractPdfText(buf, { maxChars: 20000 })); }
@@ -502,10 +507,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   const tools = [];
   const can = (svc, op) => !!caps[svc]?.[op];
 
-  // Marcadores (labels) do Gmail. Busca a lista uma vez e monta um mapa
-  // nome→id (case-insensitive) + os marcadores de sistema por nome canônico
-  // (INBOX, UNREAD, STARRED, IMPORTANT, SPAM, TRASH...). Usado pra resolver
-  // nomes que a IA passa (organizar inbox, criar filtro) em ids reais.
+  // Gmail labels. Fetches the list once and builds a name→id map
+  // (case-insensitive) + the system labels by canonical name
+  // (INBOX, UNREAD, STARRED, IMPORTANT, SPAM, TRASH...). Used to resolve
+  // names the AI passes (organize inbox, create filter) into real ids.
   async function fetchLabels(token) {
     const r = await gget(token, `${GMAIL}/labels`);
     return r.labels || [];
@@ -554,9 +559,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         const m = await gget(token, `${GMAIL}/messages/${encodeURIComponent(id)}?format=full`);
         const content = readGmailBody(m.payload);
         const attachments = collectAttachments(m.payload).map((a) => ({ attachmentId: a.attachmentId, filename: a.filename, mimeType: a.mimeType, size: a.size }));
-        // E-mail comprido (thread longa, newsletter) era cortado sem marcar, e o
-        // modelo respondia "o e-mail diz X" tendo lido só o começo. O caminho de
-        // PDF e o de planilha já devolvem `truncated`; agora este também.
+        // A long email (long thread, newsletter) was being cut without a flag, and
+        // the model would answer "the email says X" having only read the start.
+        // The PDF path and the spreadsheet path already return `truncated`; now
+        // this one does too.
         return JSON.stringify({ id: m.id || id, account: currentAccount, link: `https://mail.google.com/mail/${currentAccount ? `?authuser=${encodeURIComponent(currentAccount)}` : ''}#all/${encodeURIComponent(id)}`, from: header(m, 'From'), subject: header(m, 'Subject'), date: header(m, 'Date'), receivedAt: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null, ...content, attachments });
       },
     });
@@ -576,7 +582,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
           const ocr = await ocrImageFallback(buf, name, mime || 'image/jpeg');
           return ocr || JSON.stringify({ name, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
-        // Planilha não volta como texto (ver planilha.mjs).
+        // A spreadsheet doesn't come back as text (see planilha.mjs).
         if (tipoPlanilha(name, mime)) {
           return JSON.stringify({ name, mimeType: mime, analise: await analisePlanilhaConector(onSheetLoad, buf, name, mime) });
         }
@@ -600,9 +606,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
   }
 
-  // ── Gestão de marcadores do Gmail (gmail.labels, escopo sensível): criar/
-  // editar/apagar marcador. NÃO inclui organizar a inbox já recebida (aplicar
-  // marcador/arquivar em massa exige gmail.modify, que é restrito → CASA). ──
+  // ── Gmail label management (gmail.labels, sensitive scope): create/
+  // edit/delete a label. Does NOT include organizing the already-received inbox
+  // (bulk apply label/archive requires gmail.modify, which is CASA-restricted). ──
   if (can('gmail', 'manage')) {
     tools.push({
       name: 'gmail_label_create',
@@ -743,8 +749,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         return drivePages.result(page, searchItems(j.files === undefined ? [] : j.files,page,'id'), driveSearchMeta(j));
       }),
     });
-    // Fallback de planilha do Google grande demais pro export .xlsx: o CSV do
-    // Drive só traz a primeira aba, então o resultado diz isso com todas as letras.
+    // Fallback for a Google spreadsheet too large for the .xlsx export: Drive's
+    // CSV only brings the first sheet, so the result states this plainly.
     const lerSheetsCsv = async (id, meta) => {
       const r = await fetch(`${DRIVE}/files/${id}/export?mimeType=text/csv`, { headers: { Authorization: `Bearer ${await token()}` } });
       if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -760,7 +766,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         audit('drive_read', 'drive', `file=${id}`);
         const meta = await gget(token, `${DRIVE}/files/${id}?fields=id,name,mimeType&supportsAllDrives=true`);
         const mime = meta.mimeType || '';
-        // PDF: baixa os bytes e extrai o texto (mesmo pipeline dos PDFs anexados).
+        // PDF: downloads the bytes and extracts the text (same pipeline as attached PDFs).
         if (mime === 'application/pdf' || /\.pdf$/i.test(meta.name || '')) {
           const r = await fetch(`${DRIVE}/files/${id}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${await token()}` } });
           if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -774,11 +780,12 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
           const ocr = await ocrImageFallback(buf, meta.name, mime || 'image/jpeg');
           return ocr || JSON.stringify({ name: meta.name, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
-        // Planilha (Google Sheets, Excel, CSV): baixa os bytes e manda pro
-        // ambiente de análise; o resultado leva só a estrutura (ver planilha.mjs).
-        // A nativa do Google Sheets é exportada como .xlsx: o export em CSV do
-        // Drive só traz a PRIMEIRA aba, e a planilha de várias abas ficava cega
-        // (caso de 30/09). Mesmo escopo drive.readonly; nada novo no OAuth.
+        // Spreadsheet (Google Sheets, Excel, CSV): downloads the bytes and sends
+        // them to the analysis environment; the result only carries the structure
+        // (see planilha.mjs). Google Sheets' native format is exported as .xlsx:
+        // Drive's CSV export only brings the FIRST sheet, and a multi-sheet
+        // spreadsheet was going blind (case from 2026-09-30). Same drive.readonly
+        // scope; nothing new in the OAuth.
         const sheetsNativo = mime === 'application/vnd.google-apps.spreadsheet';
         if (sheetsNativo || tipoPlanilha(meta.name, mime)) {
           const url = sheetsNativo
@@ -787,8 +794,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
           const r = await fetch(url, { headers: { Authorization: `Bearer ${await token()}` } });
           if (!r.ok) {
             const erro = (await r.text()).slice(0, 200);
-            // O export do Drive tem teto de tamanho (exportSizeLimitExceeded).
-            // Aí cai no CSV, que lê só a primeira aba, e AVISA o modelo disso.
+            // Drive's export has a size ceiling (exportSizeLimitExceeded). It then
+            // falls back to CSV, which only reads the first sheet, and WARNS the
+            // model about it.
             if (sheetsNativo && r.status === 403 && /exportSizeLimitExceeded/i.test(erro)) return await lerSheetsCsv(id, meta);
             throw new Error(`${r.status}: ${erro}`);
           }
@@ -823,12 +831,12 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         if (!alvos.length) {
           return JSON.stringify({ erro: `Não achei agenda com o nome "${agenda}".`, agendas_disponiveis: cals.map((c) => c.nome) });
         }
-        // Teto de agendas por chamada: quem tem 30 calendários compartilhados não
-        // pode transformar um "o que tenho hoje" em 30 requisições ao Google.
+        // Ceiling of calendars per call: whoever has 30 shared calendars can't
+        // turn a "what do I have today" into 30 requests to Google.
         const lidas = alvos.slice(0, 12);
         audit('calendar_list', 'calendar', `days=${days} agendas=${lidas.length}`);
-        // Sem `q` pro Google: filtro de texto na origem já fez a IA perder evento
-        // (busca estreita demais). Puxamos a janela inteira e filtramos localmente.
+        // No `q` for Google: a text filter at the source already made the AI miss
+        // an event (search too narrow). We pull the whole window and filter locally.
         const porAgenda = String(Math.min(Math.max(1, max), 100));
         const falhas = [];
         const incompletas = [];
@@ -844,20 +852,21 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
               location: e.location || '', attendees: (e.attendees || []).map((a) => a.email).slice(0, 8),
             }));
           } catch {
-            // Uma agenda quebrada não pode derrubar a resposta inteira, mas o dono
-            // precisa saber que ela ficou de fora (senão some em silêncio).
+            // A broken calendar can't bring down the entire response, but the owner
+            // needs to know it was left out (otherwise it disappears silently).
             falhas.push(c.nome);
             return [];
           }
         }));
         const { items, corte } = ordenarECortar(listas.flat(), Math.min(Math.max(1, max), 100));
         const catalogPartial = (!agenda || ['todas','todas as agendas','all'].includes(semAcento(agenda))) && cals.some(c=>c.catalog_partial);
-        // O que a resposta cobriu. Sem isso o assistente não tem como avisar que
-        // leu 12 de 30 agendas, e diria "não tem nada" sobre o que não leu.
+        // What the response covered. Without this the assistant has no way to warn
+        // that it read 12 of 30 calendars, and would say "there's nothing" about
+        // what it didn't read.
         const contaLida = typeof account === 'function' ? await account() : account;
         const cobertura = {
-          // Conta Google de onde vieram os eventos: pra editar/apagar um deles
-          // quando não é a conta padrão do assistente, a escrita precisa dela.
+          // Google account the events came from: to edit/delete one of them when
+          // it's not the assistant's default account, writing needs it.
           ...(contaLida ? { conta: contaLida } : {}),
           periodo: {inicio:timeMin,fim:timeMax},
           partial: !!(catalogPartial || incompletas.length || falhas.length || corte || alvos.length > lidas.length),
@@ -873,7 +882,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
           const q = semAcento(query);
           const matched = items.filter((e) => semAcento(`${e.title} ${e.location}`).includes(q));
           if (matched.length) return JSON.stringify({ ...cobertura, eventos: matched });
-          // Filtro não casou: devolve a agenda completa pra NUNCA esconder um evento.
+          // Filter didn't match: returns the full calendar so an event is NEVER hidden.
           return JSON.stringify({ nota: `Nenhum evento casou com "${query}"; segue a agenda completa dos próximos ${days} dias pra você conferir.`, ...cobertura, eventos: items });
         }
         return JSON.stringify({ ...cobertura, eventos: items });
@@ -895,9 +904,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
   }
 
-  // ── Escrita ──
-  // Gmail RASCUNHO: vem com a conexão (escopo gmail.compose). Cria um draft, NÃO
-  // envia. Ação segura/reversível, não passa pela trava de confirmação.
+  // ── Writing ──
+  // Gmail DRAFT: comes with the connection (gmail.compose scope). Creates a draft,
+  // does NOT send. Safe/reversible action, doesn't go through the confirmation gate.
   if (can('gmail', 'write')) {
     tools.push({
       name: 'gmail_create_draft',
@@ -916,8 +925,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
   }
 
-  // Gmail ENVIO: só quando o usuário ATIVOU explicitamente o envio no app
-  // (caps.gmail.send). Mesmo assim passa pela trava de confirmação por ação.
+  // Gmail SEND: only when the user explicitly TURNED ON sending in the app
+  // (caps.gmail.send). Even so, it goes through the per-action confirmation gate.
   if (can('gmail', 'send')) {
     tools.push({
       name: 'gmail_send',
@@ -994,8 +1003,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         if (location != null) patch.location = location;
         if (Array.isArray(attendees)) patch.attendees = attendees.map((email) => ({ email }));
         if (!Object.keys(patch).length) return JSON.stringify({ ok: false, error: 'Nada pra mudar; passe ao menos um campo.' });
-        // Convidado sempre fica sabendo: mudar horário ou local sem avisar deixa
-        // o outro lado na reunião errada.
+        // The guest always finds out: changing time or location without notice
+        // leaves the other side at the wrong meeting.
         const q = '?sendUpdates=all';
         const alvo = await resolveEventCalendar(token, id, agenda);
         if (alvo.error) return JSON.stringify({ ok: false, error: alvo.error });
@@ -1043,10 +1052,11 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         mimeType: { type: 'string', description: 'File MIME type (default text/plain).' },
       }, required: ['name', 'content'] },
       async run({ name, content, mimeType = 'text/plain' }) {
-        // GUARD anti "undefined": se o conteúdo não veio (arg truncado numa geração
-        // longa, tool-call sem o campo, etc.), NUNCA gravar o arquivo — senão o Drive
-        // fica com a string literal "undefined"/vazio (bug de 28/07). Falha com
-        // erro claro e acionável em vez de corromper silenciosamente.
+        // GUARD against "undefined": if the content didn't arrive (arg truncated
+        // in a long generation, tool-call missing the field, etc.), NEVER write
+        // the file — otherwise Drive ends up with the literal string "undefined"/
+        // empty (bug from 2026-07-28). Fails with a clear, actionable error instead
+        // of silently corrupting data.
         if (content == null || String(content).trim() === '' || String(content).trim() === 'undefined') {
           return JSON.stringify({ ok: false, error: 'Não recebi o conteúdo do arquivo (veio vazio/undefined). Não gravei nada. Se o texto for longo, ele pode ter sido cortado na chamada: reenvie o conteúdo, ou quebre em partes menores, ou salve o texto num arquivo do sandbox e use drive_upload_arquivo.' });
         }
@@ -1068,10 +1078,11 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
       },
     });
 
-    // Cria um Google Doc NATIVO a partir de texto. Diferente do drive_upload (que
-    // gera um .txt solto), aqui o Drive CONVERTE o corpo num documento Google de
-    // verdade (metadata com mimeType-alvo google-apps.document), que abre/edita no
-    // Docs e pode ser exportado pra PDF depois. Escopo drive.file cobre a criação.
+    // Creates a NATIVE Google Doc from text. Unlike drive_upload (which
+    // generates a standalone .txt), here Drive CONVERTS the body into a real
+    // Google document (metadata with a target mimeType of google-apps.document),
+    // which opens/edits in Docs and can later be exported to PDF. The drive.file
+    // scope covers the creation.
     tools.push({
       name: 'docs_create',
       description: 'Creates a NATIVE Google Doc (a Google document, not a .txt) from text, inside the assistant\'s folder in Drive. Use when the user asks to "montar/criar um Google Doc". Accepts simple HTML in the content for layout (headings <h1>, bold <b>, lists <ul>) — pass html=true in that case. Returns the document link. Confirm name and content first.',
@@ -1104,10 +1115,10 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
       },
     });
 
-    // Exporta um arquivo GOOGLE (Doc/Sheet/Slides) pra PDF e salva o PDF na pasta
-    // do assistente no Drive. Cobre "transforma esse Google Doc num PDF". O export
-    // do Drive só vale pros formatos nativos do Google; PDF já é PDF, binário comum
-    // não exporta.
+    // Exports a GOOGLE file (Doc/Sheet/Slides) to PDF and saves the PDF in the
+    // assistant's folder on Drive. Covers "turn this Google Doc into a PDF".
+    // Drive's export only works for Google's native formats; PDF is already PDF,
+    // a regular binary doesn't export.
     tools.push({
       name: 'drive_export_pdf',
       description: 'Turns a Google Doc (or Sheet/Presentation) into a PDF: exports the file to PDF and saves it in the assistant\'s folder in Drive, returning the PDF link. Pass the file id (comes from drive_search/google). Use when the user asks "gera um PDF desse Google Doc / transforma em PDF". To combine new content and turn it into a PDF, create the Google Doc first with docs_create and then export its id here.',
@@ -1141,9 +1152,9 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     ? calendarWriteConfirmation(tool,token,account) : tool);
 }
 
-// Procura pelo nome EXATO, restrito à pasta recebida.
-// O escopo OAuth existente continua valendo.
-// Nome não é identificador único: só reusar quando a busca completa acha UM.
+// Searches by EXACT name, restricted to the given folder.
+// The existing OAuth scope still applies.
+// Name isn't a unique identifier: only reuse it when the full search finds ONE.
 async function findFileInFolder(token, folderId, name) {
   if (!validDriveId(folderId) || typeof name !== 'string' || !name.trim()) {
     throw new Error('Não recebi pasta e nome válidos para conferir o arquivo no Drive. A gravação foi interrompida.');
@@ -1157,17 +1168,19 @@ async function findFileInFolder(token, folderId, name) {
   return existing;
 }
 
-// Sobe um arquivo BINÁRIO (PDF, imagem, planilha…) pro Drive do usuário.
-// `buffer` é um Buffer com os bytes crus; monta um multipart/related com o corpo
-// binário (não string), diferente do drive_upload de texto. Escopo drive.file
-// cobre a escrita. Usado pela tool drive_upload_arquivo (lê os bytes do sandbox).
+// Uploads a BINARY file (PDF, image, spreadsheet…) to the user's Drive.
+// `buffer` is a Buffer with the raw bytes; builds a multipart/related with a
+// binary body (not a string), unlike the text drive_upload. The drive.file
+// scope covers the write. Used by the drive_upload_arquivo tool (reads the
+// bytes from the sandbox).
 //
-// ATUALIZA NO LUGAR: se já existe arquivo com o MESMO nome na pasta do
-// assistente, reescreve os bytes dele (PATCH uploadType=media) em vez de criar
-// cópia nova. O id e o LINK continuam os mesmos, que é o que a pessoa espera ao
-// pedir "atualiza a planilha" (antes cada envio gerava link novo e o anterior
-// virava lixo). Passe update:false pra forçar cópia nova. Não mexe em escopo
-// OAuth: drive.file já permite atualizar arquivo criado pelo app.
+// UPDATES IN PLACE: if a file with the SAME name already exists in the
+// assistant's folder, overwrites its bytes (PATCH uploadType=media) instead of
+// creating a new copy. The id and the LINK stay the same, which is what the
+// person expects when asking to "update the spreadsheet" (before, every send
+// generated a new link and the previous one became junk). Pass update:false to
+// force a new copy. Doesn't touch OAuth scope: drive.file already allows
+// updating a file the app created.
 export async function uploadBinaryToDrive({ token, name, buffer, mimeType = 'application/octet-stream', folderId = null, update = true }) {
   if (update) {
     const existing = await findFileInFolder(token, folderId, name);

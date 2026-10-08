@@ -1,8 +1,8 @@
-// ── Wiki de memória por usuário (modelo Karpathy) ──
-// Páginas markdown que o agente lê/escreve, COMPARTILHADAS entre todos os Claws
-// da mesma pessoa (camada "usuário"). Vive no Postgres (multi-tenant, não em
-// arquivo solto). Expõe tools file-like no tool-loop + injeta um índice + a
-// página `perfil` no system prompt. Ver projetos/arquitetura-memoria.md.
+// ── Per-user memory wiki (Karpathy model) ──
+// Markdown pages the agent reads/writes, SHARED across all Claws
+// of the same person (the "user" layer). Lives in Postgres (multi-tenant, not in a
+// loose file). Exposes file-like tools in the tool loop + injects an index + the
+// `perfil` page into the system prompt. See projetos/arquitetura-memoria.md.
 
 import { listWikiPages, listWikiPagesFull, getWikiPage, upsertWikiPage, searchWikiPages, normWikiSlug, listCurrentFacts, listAllFacts, setFact, closeFact, updateFactLine, addHistorico, listMemoryAmbiguities, getMemoryAmbiguity, closeMemoryAmbiguity, reopenMemoryAmbiguity, revertFactSwap } from './db.mjs';
 import { makeMemoriaModel } from './memoria-modelo.mjs';
@@ -10,7 +10,7 @@ import { tagIdioma } from './locale.mjs';
 import { buscaV2Ligada, buscarNaMemoria, formatarAchados } from './memoria-busca.mjs';
 import { reconciliarLigado, planejarOp } from './wiki-reconciliar.mjs';
 
-// Página sempre-injetada: o "quem você é" curto e estável (sucessora do perfil plano).
+// Always-injected page: the short and stable "who you are" (successor to the flat profile).
 const PERFIL = 'perfil';
 
 // ── PHASE 2: perfil = short OVERVIEW linking to the areas ──
@@ -20,7 +20,7 @@ const PERFIL = 'perfil';
 // truncated. The profile cap doesn't cut lines: it ROUTES the new fact to an
 // area page. What is already written only moves in Phase 4, with a dry run.
 const AREAS = {
-  // facetas (o corte por FUNÇÃO que o Town usa)
+  // facets (the cut by FUNCTION that Town uses)
   comunicacao: 'Como se comunica',
   preferencias: 'Preferências',
   background: 'Background profissional',
@@ -29,7 +29,7 @@ const AREAS = {
   objetivos: 'Objetivos',
   projetos: 'Projetos',
   notas: 'Notas',
-  // páginas por assunto que já existiam antes da Fase 2 (seguem valendo)
+  // subject pages that already existed before Phase 2 (still apply)
   pessoas: 'Pessoas',
   trabalho: 'Trabalho',
   saude: 'Saúde',
@@ -39,15 +39,15 @@ const AREAS = {
   casa: 'Casa',
   compras: 'Compras',
 };
-const OVERFLOW = 'notas';            // onde o fato cai quando o perfil está no teto
-// R4 (flag MEMORIA_HISTORICO=1): nenhuma linha sai da página sem deixar a versão
-// antiga no histórico (memory_facts encerrado), inclusive linha que não é de fato.
+const OVERFLOW = 'notas';            // where the fact falls when the profile is at the cap
+// R4 (flag MEMORIA_HISTORICO=1): no line leaves the page without leaving the old
+// version in the history (closed memory_facts), including a line that isn't a fact.
 export const historicoLigado = () => process.env.MEMORIA_HISTORICO === '1';
-const ATUALIZACOES = 'atualizacoes'; // registro do que mudou; mantido só pelo servidor
+const ATUALIZACOES = 'atualizacoes'; // record of what changed; maintained only by the server
 const MARCA_LINKS = '## Mais detalhe';
 const CAB_ATUALIZACOES = 'O que mudou na sua memória (mais recente primeiro). Página mantida automaticamente.';
 const MAX_ATUALIZACOES = 60;
-// Teto de FATOS do perfil (o resto vira link). Sobrescrevível sem deploy.
+// Cap of FACTS in the profile (the rest becomes a link). Overridable without a deploy.
 const PERFIL_MAX = Math.max(5, Number(process.env.PERFIL_MAX_LINHAS || 15));
 
 // One page per person (`pessoa-ana`), instead of a line in a `pessoas` page.
@@ -64,7 +64,7 @@ export function tituloDe(slug) {
   return slug;
 }
 
-// Monta as tools de wiki pra ESTE usuário (entram no registry por requisição).
+// Builds the wiki tools for THIS user (enter the registry per request).
 export function wikiTools(userId, { fonte = {} } = {}) {
   return [
     {
@@ -136,11 +136,11 @@ export function wikiTools(userId, { fonte = {} } = {}) {
         ];
         if (!ops.length) return 'Nada pra anotar: mande add, corrigir ou remover.';
         const atual = await getWikiPage(userId, slug);
-        // A chave do slug entra no mapa mesmo vazia: assim `aplicarOps` aceita o
-        // destino e a página é CRIADA no primeiro `add`, sem precisar de outra tool.
+        // The slug key enters the map even empty: this way `aplicarOps` accepts the
+        // destination and the page is CREATED on the first `add`, without needing another tool.
         const antesPor = { [slug]: atual?.body || '' };
-        // Se o destino é o perfil, carrega também a página de overflow: o teto do
-        // perfil ROTEIA o fato pra lá, e gravar sem ter lido apagaria o que havia.
+        // If the destination is the profile, also loads the overflow page: the profile's
+        // cap ROUTES the fact there, and writing without having read it would erase what was there.
         if (slug === PERFIL) antesPor[OVERFLOW] = (await getWikiPage(userId, OVERFLOW))?.body || '';
         const res = await escreverComFatos(userId, ops, {
           paginas: antesPor, titulos: atual?.title ? { [slug]: atual.title } : {},
@@ -150,8 +150,8 @@ export function wikiTools(userId, { fonte = {} } = {}) {
           return `Já estava anotado (${res.puladas.join(', ')}). Nada a gravar.`;
         }
         if (!res.feitas.length) {
-          // Falha VISÍVEL (âncora que não casa, texto curto, duplicado): o modelo
-          // recebe o motivo e pode tentar de novo, em vez de achar que gravou.
+          // VISIBLE failure (anchor that doesn't match, short text, duplicate): the model
+          // gets the reason and can try again, instead of thinking it saved.
           return `Nada gravado (${res.puladas.join(', ') || 'nenhuma operação válida'}). Se a âncora não casou, leia a página com memoria_ler e use um trecho literal.`;
         }
         return `Memória atualizada: ${res.feitas.join(', ')}${res.puladas.length ? ` | puladas: ${res.puladas.join(', ')}` : ''}`;
@@ -221,10 +221,10 @@ export function wikiTools(userId, { fonte = {} } = {}) {
         }
         const atual = await getWikiPage(userId, slug);
         const antes = atual?.body || '';
-        // Guarda-corpo determinístico: a reescrita só passa se NÃO perder fato.
-        // O A/B de 01/09 mostrou as duas formas de estrago (condensar e mutar) e
-        // as duas aparecem aqui como linha que sai sem par. Página vazia (criação)
-        // e pedido explícito do dono (substituir) seguem livres.
+        // Deterministic guardrail: the rewrite only goes through if it does NOT lose a fact.
+        // The A/B test from 2026-09-01 showed the two kinds of damage (condensing and mutating) and
+        // both show up here as a line that leaves without a pair. An empty page (creation)
+        // and an explicit owner request (replace) remain unrestricted.
         if (antes.trim() && !substituir) {
           const d = diffPerfil(antes, conteudo);
           if (d.del > 0) {
@@ -240,9 +240,9 @@ export function wikiTools(userId, { fonte = {} } = {}) {
   ];
 }
 
-// Texto pro system prompt: a página `perfil` em cheio + índice das outras páginas.
-// Desde a Fase 2 o próprio perfil já carrega a seção de links (gerada), então aqui
-// só entram as páginas que ficaram FORA dessa seção, pra não pagar o índice 2x.
+// Text for the system prompt: the `perfil` page in full + index of the other pages.
+// Since Phase 2 the profile itself already carries the (generated) links section, so here
+// only the pages that fell OUTSIDE that section are included, so as not to pay for the index twice.
 export async function wikiContext(userId, owner) {
   const pages = await listWikiPages(userId);
   if (!pages.length) return '';
@@ -262,22 +262,22 @@ export async function wikiContext(userId, owner) {
       ...outras.map((p) => `• ${p.slug} — ${p.title}`),
     );
   }
-  // Chaves dos fatos vigentes: sem elas o assistente inventa uma chave nova pro
-  // mesmo assunto e o fato antigo nunca é substituído.
-  // R2 (MEMORIA_BUSCA_V2=1): todas as chaves, não só as 40 mais novas; fato antigo
-  // fora da lista era regravado com chave nova.
+  // Keys of the current facts: without them the assistant invents a new key for the
+  // same subject and the old fact is never replaced.
+  // R2 (MEMORIA_BUSCA_V2=1): all keys, not just the 40 newest; an old fact
+  // outside the list used to get rewritten with a new key.
   const fatos = await listCurrentFacts(userId, { limit: buscaV2Ligada() ? 400 : 40 }).catch(() => []);
   if (fatos.length) {
     lines.push(
       '',
       'Fatos com chave (quando um deles MUDAR, use memoria_atualizar com a MESMA chave):',
-      // Valor longo é cortado com "…" e o ponteiro pra página: sem a marca o modelo
-      // tomava o pedaço como o valor inteiro (título de dissertação saiu truncado no teste 23/09).
+      // A long value is cut with "…" and the pointer to the page: without the mark the model
+      // took the chunk as the whole value (a dissertation title came out truncated in the 2026-09-23 test).
       ...fatos.map((f) => { const v = String(f.valor); return `• ${f.assunto} [${f.pagina}]: ${v.length > 80 ? v.slice(0, 80) + `… (completo em ${f.pagina})` : v}`; }),
     );
   }
-  // Dúvidas abertas: todas listadas (o modelo precisa saber qual assunto é incerto),
-  // mas só se pergunta quando a tarefa do momento depende daquele fato.
+  // Open questions: all listed (the model needs to know which subject is uncertain),
+  // but it only asks when the task at hand depends on that fact.
   const duvidas = await listMemoryAmbiguities({ userId, limit: 20 }).catch(() => []);
   if (duvidas.length) {
     lines.push(
@@ -289,20 +289,20 @@ export async function wikiContext(userId, owner) {
   return lines.join('\n');
 }
 
-// ── FASE 0: detector de perda linha-a-linha ──
-// Todo housekeeping compara a página ANTES e DEPOIS e loga quantas linhas
-// entraram, saíram e mudaram. Existe porque as duas classes de erro medidas no
-// A/B de 01/09/2026 (gemini MUTA um fato, V4 Flash CONDENSA e come linhas) são
-// invisíveis no resultado: a página fica plausível, só menor. Sem esse contador,
-// qualquer mudança na operação de memória é fé.
-// Conteúdo das linhas só sai no log com PERFIL_DIFF_VERBOSE=1 (o perfil é dado
-// pessoal; o padrão loga só os números).
+// ── PHASE 0: line-by-line loss detector ──
+// Every housekeeping run compares the page BEFORE and AFTER and logs how many lines
+// came in, went out and changed. Exists because the two error classes measured in the
+// 2026-09-01 A/B test (gemini MUTATES a fact, V4 Flash CONDENSES and eats lines) are
+// invisible in the result: the page stays plausible, just smaller. Without this counter,
+// any change to the memory operation is a matter of faith.
+// Line content only goes into the log with PERFIL_DIFF_VERBOSE=1 (the profile is personal
+// data; the default logs only the numbers).
 const norm = (s) => String(s || '').replace(/^\s*[-*•]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase();
 const linhasDe = (txt) => String(txt || '').split('\n').map((l) => l.trim()).filter(Boolean);
-// Linhas como estão na página (recuo e linhas em branco preservados), só sem
-// espaço no fim e sem linha vazia sobrando no fim. É o que a escrita por patch
-// edita: com linhasDe, qualquer op numa página achatava subitens e juntava
-// blocos (visto em prod 25/09 numa página editada à mão no site).
+// Lines as they are on the page (indentation and blank lines preserved), just without
+// trailing whitespace and without a leftover blank line at the end. This is what patch
+// writing edits: with linhasDe, any op on a page used to flatten subitems and merge
+// blocks (seen in prod on 2026-09-25 on a page edited by hand on the site).
 const linhasCruas = (txt) => {
   const L = String(txt || '').split('\n').map((l) => l.trimEnd());
   while (L.length && !L[L.length - 1]) L.pop();
@@ -310,12 +310,12 @@ const linhasCruas = (txt) => {
 };
 const recuoDe = (l) => String(l || '').match(/^\s*/)[0];
 
-// Semelhança por palavras (Jaccard). Serve pra separar "mudou" de "saiu+entrou":
-// uma linha reescrita casa forte com a que saiu; uma linha perdida não casa com nada.
-// Conta TODAS as palavras (inclusive as curtas): sem elas, linha curta editada
-// ("treina A e B na academia" -> "...no parque") caía abaixo do corte e virava
-// um falso "perdeu". O erro que importa não passar batido é a PERDA, então o
-// desempate fica do lado de reportar demais, nunca de menos.
+// Word-based similarity (Jaccard). Used to tell "changed" apart from "left+entered":
+// a rewritten line matches strongly with the one that left; a lost line matches nothing.
+// Counts ALL words (including short ones): without them, a short edited line
+// ("trains A and B at the gym" -> "...at the park") used to fall below the cutoff and became
+// a false "lost". The error that matters not to let through is the LOSS, so the
+// tie-break favors reporting too much, never too little.
 function parecido(a, b) {
   const A = new Set(norm(a).split(' ').filter(Boolean));
   const B = new Set(norm(b).split(' ').filter(Boolean));
@@ -331,7 +331,7 @@ export function diffPerfil(antes, depois) {
   const setD = new Map(d.map((l) => [norm(l), l]));
   const saiu = a.filter((l) => !setD.has(norm(l)));
   const entrou = d.filter((l) => !setA.has(norm(l)));
-  // Casa cada linha que saiu com a melhor candidata que entrou: par forte = edição.
+  // Matches each line that left with the best candidate that entered: a strong pair = an edit.
   const mudou = [], perdeu = [], usados = new Set();
   for (const s of saiu) {
     let best = -1, score = 0;
@@ -365,22 +365,22 @@ export function logDiffPerfil(userId, slug, antes, depois, extra = '') {
   return d;
 }
 
-// ── FASE 1: escrita por PATCH ──
-// O housekeeping não pede mais o texto da página: pede uma LISTA DE OPERAÇÕES e o
-// servidor aplica de forma determinística. Assim condensar/mutar deixa de ser
-// possível por construção (o texto antigo nunca passa pelo modelo pra voltar).
-// Âncora que não casa (ou casa em duas linhas) = NO-OP + log, nunca escrita parcial.
+// ── PHASE 1: PATCH-based writing ──
+// Housekeeping no longer asks for the page text: it asks for a LIST OF OPERATIONS and the
+// server applies them deterministically. This way condensing/mutating becomes
+// impossible by construction (the old text never passes through the model to come back).
+// An anchor that doesn't match (or matches two lines) = NO-OP + log, never a partial write.
 const MAX_OPS = 5;            // teto por ciclo: perfil muda devagar
 const CANONICAS = Object.keys(AREAS);
 
-// A seção de links do perfil é GERADA (ver sincronizarLinks): fato novo entra
-// ANTES dela, e ela não conta pro teto.
+// The profile's links section is GENERATED (see sincronizarLinks): a new fact goes in
+// BEFORE it, and it doesn't count toward the cap.
 const iMarca = (L) => L.findIndex((l) => String(l).trimStart().startsWith(MARCA_LINKS));
-// Formato EXATO das linhas que sincronizarLinks gera ("- slug — Título"). Serve
-// pra separar o bloco gerado do que o dono escreveu embaixo dele.
+// EXACT format of the lines sincronizarLinks generates ("- slug — Title"). Used
+// to separate the generated block from what the owner wrote below it.
 const EH_LINK_GERADO = /^-\s+[a-z0-9-]+\s+—\s+\S/;
 const fatosDe = (L) => { const i = iMarca(L); return (i < 0 ? L : L.slice(0, i)).filter((l) => String(l).trim() && !String(l).trimStart().startsWith('#')); };
-// Antes da seção de links (e das linhas em branco que a separam dos fatos).
+// Before the links section (and the blank lines that separate it from the facts).
 const inserirFato = (L, linha) => {
   let i = iMarca(L);
   if (i < 0) { L.push(linha); return; }
@@ -388,11 +388,11 @@ const inserirFato = (L, linha) => {
   L.splice(i, 0, linha);
 };
 
-// Acha a ÚNICA linha que a âncora identifica. Devolve {i} ou {erro}.
+// Finds the ONLY line that the anchor identifies. Returns {i} or {erro}.
 function acharAncora(linhas, ancora) {
   const alvo = norm(ancora);
   if (alvo.length < 8) return { erro: 'ancora_curta' };
-  // Linha em branco (norm vazio) nunca é alvo: "".includes casaria com tudo.
+  // A blank line (empty norm) is never a target: "".includes would match everything.
   const ns = linhas.map((l, i) => [norm(l), i]).filter(([n]) => n);
   let hits = ns.filter(([n]) => n === alvo).map(([, i]) => i);
   if (!hits.length) hits = ns.filter(([n]) => n.includes(alvo) || alvo.includes(n)).map(([, i]) => i);
@@ -401,7 +401,7 @@ function acharAncora(linhas, ancora) {
   return { i: hits[0] };
 }
 
-// Aplica as operações. Puro (não toca o banco): devolve as páginas a gravar + o log.
+// Applies the operations. Pure (doesn't touch the database): returns the pages to save + the log.
 export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
   const out = new Map();  // slug -> array de linhas
   const linhasDoSlug = (slug) => {
@@ -410,13 +410,13 @@ export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
   };
   const feitas = [], puladas = [], mudancas = [];
   for (const op of (Array.isArray(ops) ? ops : []).slice(0, maxOps)) {
-    // `fato` = índice da definição (op definir) que gerou esta op; quem grava
-    // o fato usa pra saber onde a linha foi parar.
+    // `fato` = index of the definition (op definir) that generated this op; whoever saves
+    // the fact uses it to know where the line ended up.
     const tag = { ...(op?._fato != null ? { fato: op._fato } : {}), ...(op?._de ? { de: op._de } : {}) };
     const tipo = String(op?.op || '').toLowerCase();
-    // Nome canonico (mesma funcao que o banco usa pra gravar). Com duas regras
-    // diferentes, "pessoa-joão" era lido de uma pagina e gravado noutra, e a
-    // pagina existente voltava com so a linha nova (achado #18).
+    // Canonical name (same function the database uses to save). With two different
+    // rules, "pessoa-joão" used to be read from one page and saved to another, and the
+    // existing page came back with only the new line (finding #18).
     let destino = normWikiSlug(op?.pagina || PERFIL);
     const existe = destino === PERFIL || Object.prototype.hasOwnProperty.call(paginas, destino)
       || CANONICAS.includes(destino) || ehPaginaDePessoa(destino);
@@ -426,9 +426,9 @@ export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
     if (tipo === 'add') {
       const texto = String(op?.texto || '').replace(/\s+/g, ' ').trim();
       if (texto.length < 8) { puladas.push('add:texto_curto'); continue; }
-      // TETO DO PERFIL: não corta nada. Quando o resumão já está cheio, o fato
-      // novo vai pra página de área (o chamador precisa ter carregado ela, senão
-      // gravar sobrescreveria conteúdo que não foi lido).
+      // PROFILE CAP: doesn't cut anything. When the summary is already full, the new
+      // fact goes to the area page (the caller needs to have loaded it, otherwise
+      // saving would overwrite content that wasn't read).
       let rota = '';
       if (destino === PERFIL && fatosDe(linhasDoSlug(PERFIL)).length >= PERFIL_MAX) {
         if (Object.prototype.hasOwnProperty.call(paginas, OVERFLOW)) { destino = OVERFLOW; rota = ' [perfil-cheio]'; }
@@ -447,14 +447,14 @@ export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
       const texto = String(op?.texto || '').replace(/\s+/g, ' ').trim();
       if (texto.length < 8) { puladas.push('fix:texto_curto'); continue; }
       const antes = L[r.i];
-      // A linha corrigida fica no mesmo nível (subitem continua subitem).
+      // The corrected line stays at the same level (a subitem remains a subitem).
       L[r.i] = recuoDe(antes) + (texto.startsWith('-') ? texto : `- ${texto}`);
       feitas.push(`fix(${destino})`);
       mudancas.push({ op: 'fix', pagina: destino, texto, antes, ...tag });
     } else if (tipo === 'remove') {
-      // Só a tool `memoria_anotar` emite 'remove' (o housekeeping nunca apaga
-      // sozinho). Existe pra o dono poder dizer "tira isso da memória" sem que
-      // o modelo precise reescrever a página inteira pra apagar uma linha.
+      // Only the `memoria_anotar` tool emits 'remove' (housekeeping never deletes
+      // on its own). Exists so the owner can say "take that out of memory" without
+      // the model needing to rewrite the whole page just to delete a line.
       const L = linhasDoSlug(destino);
       const r = acharAncora(L, op?.ancora);
       if (r.erro) { puladas.push(`remove:${r.erro}`); continue; }
@@ -477,7 +477,7 @@ export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
       puladas.push(`op_desconhecida(${tipo})`);
     }
   }
-  // Devolve SÓ as páginas que de fato mudaram: quem chama grava o que vier aqui.
+  // Returns ONLY the pages that actually changed: the caller saves whatever comes out of here.
   const paginasNovas = {};
   for (const [slug, L] of out) {
     const body = L.join('\n');
@@ -486,11 +486,11 @@ export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
   return { paginas: paginasNovas, feitas, puladas, mudancas };
 }
 
-// ── MEMÓRIA v2, Fase 1: fatos com chave e vigência ──
-// Fato que tem UM valor atual (onde mora, empresa, cargo, tamanho) ganha uma
-// CHAVE (assunto). Escrever de novo o mesmo assunto troca a linha antiga em vez
-// de acrescentar outra: é o que impede "mora em SP" e "mora em Curitiba" de
-// conviverem na página. O fato vive em memory_facts; a página mostra a linha.
+// ── MEMORY v2, Phase 1: facts with key and validity ──
+// A fact that has ONE current value (where they live, company, job title, size) gets a
+// KEY (subject). Writing the same subject again swaps the old line instead
+// of adding another one: that's what keeps "lives in SP" and "lives in Curitiba" from
+// coexisting on the page. The fact lives in memory_facts; the page shows the line.
 const MAX_FATOS_PROMPT = 80;
 
 export function normAssunto(s) {
@@ -498,9 +498,9 @@ export function normAssunto(s) {
     .toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 }
 
-// Aceita AAAA-MM-DD, AAAA-MM, AAAA e DD/MM/AAAA. Devolve a data (primeiro dia
-// do período, pro banco) e o texto na MESMA precisão que veio (pra página não
-// afirmar um dia que ninguém disse).
+// Accepts YYYY-MM-DD, YYYY-MM, YYYY and DD/MM/YYYY. Returns the date (first day
+// of the period, for the database) and the text at the SAME precision it came in (so the page doesn't
+// state a day nobody said).
 export function parseDesde(v) {
   const t = String(v || '').trim();
   let m;
@@ -518,14 +518,14 @@ export function linhaDoFato(valor, desdeTxt = '', antigo = '') {
   return `- ${limpaValor(valor)}${extra.length ? ` (${extra.join('; ')})` : ''}`;
 }
 
-// Valor a partir de uma linha que o dono corrigiu na mão: tira o marcador e o
-// sufixo que linhaDoFato acrescenta.
+// Value from a line the owner corrected by hand: strips the marker and the
+// suffix that linhaDoFato adds.
 export function valorDaLinha(linha) {
   return limpaValor(linha).replace(/\s\((?:desde|antes:)[^()]*\)$/, '').trim();
 }
 
-// Troca `velho` por `novo` dentro da linha só quando `velho` aparece UMA vez,
-// como palavra inteira (sem diferenciar maiúscula). Senão devolve null.
+// Swaps `velho` for `novo` within the line only when `velho` appears ONCE,
+// as a whole word (case-insensitive). Otherwise returns null.
 export function trocarNaLinha(linha, velho, novo) {
   const v = limpaValor(velho);
   if (v.length < 3) return null;
@@ -535,9 +535,9 @@ export function trocarNaLinha(linha, velho, novo) {
   return String(linha).replace(re, () => limpaValor(novo));
 }
 
-// Puro. Troca cada op `definir` pelas ops de linha equivalentes (fix na linha
-// que o fato já ocupa; add se é novo ou se a linha sumiu; remove+add se mudou
-// de página). Devolve as ops expandidas + a lista de definições pra gravar.
+// Pure. Swaps each `definir` op for the equivalent line ops (fix on the line
+// the fact already occupies; add if it's new or if the line disappeared; remove+add if it
+// moved to a different page). Returns the expanded ops + the list of definitions to save.
 export function expandirDefinir(ops, fatos, paginas, { maxOps = MAX_OPS } = {}) {
   const porAssunto = new Map((fatos || []).map((f) => [f.assunto, f]));
   const out = [], definicoes = [], puladas = [];
@@ -551,7 +551,7 @@ export function expandirDefinir(ops, fatos, paginas, { maxOps = MAX_OPS } = {}) 
     const destino = normWikiSlug(op.pagina || velho?.pagina || PERFIL);
     const desde = parseDesde(op.desde);
     if (velho && norm(velho.valor) === norm(valor) && !desde) { puladas.push('definir:igual'); continue; }
-    // Mesmo valor com data nova só completa a data; não vira "antes: ele mesmo".
+    // Same value with a new date only fills in the date; it doesn't become "before: itself".
     const antigo = velho && norm(velho.valor) !== norm(valor) ? velho.valor : '';
     const linha = linhaDoFato(valor, desde?.txt, antigo);
     const idx = definicoes.length;
@@ -559,13 +559,13 @@ export function expandirDefinir(ops, fatos, paginas, { maxOps = MAX_OPS } = {}) 
     const corpoVelho = velho ? paginas[velho.pagina] : undefined;
     const velhoNaPagina = !!(velho?.linha_pagina && corpoVelho !== undefined
       && !acharAncora(linhasDe(corpoVelho), velho.linha_pagina).erro);
-    // Linha composta (ex.: a do perfil com nome, CPF e e-mail juntos, comum nos
-    // fatos que vieram da migração): trocar a linha inteira apagaria o resto.
-    // Troca só o valor velho dentro dela, se ele aparece uma vez só; se não dá
-    // pra achar sem ambiguidade, a linha velha fica e o fato ganha linha própria.
+    // Composite line (e.g. the profile one with name, CPF and e-mail together, common in the
+    // facts that came from migration): swapping the whole line would erase the rest.
+    // Swaps only the old value within it, if it appears just once; if it can't
+    // be found unambiguously, the old line stays and the fact gets its own line.
     const composta = velhoNaPagina && norm(valorDaLinha(velho.linha_pagina)) !== norm(velho.valor);
     if (composta && velho.pagina === destino && !antigo) {
-      // Mesmo valor, só a data nova: a linha fica como está.
+      // Same value, just the new date: the line stays as is.
       definicoes[idx].linha = velho.linha_pagina;
     } else if (composta) {
       const trocada = velho.pagina === destino ? trocarNaLinha(velho.linha_pagina, velho.valor, valor) : null;
@@ -581,10 +581,10 @@ export function expandirDefinir(ops, fatos, paginas, { maxOps = MAX_OPS } = {}) 
   return { ops: out, definicoes, puladas };
 }
 
-// Fecha uma dúvida da memória. Nunca decide sozinho: quem chama é o dono (tool)
-// ou o admin (/metrics). Depois de gravar o fato, as versões que perderam são
-// tiradas das páginas (senão o assistente continua vendo as duas e a dúvida volta
-// na prática). Tudo que mudou fica em `desfazer`, e a página antiga fica nas cópias.
+// Closes a memory question. Never decides on its own: the caller is either the owner (tool)
+// or the admin (/metrics). After saving the fact, the versions that lost are
+// removed from the pages (otherwise the assistant keeps seeing both and the question comes back
+// in practice). Everything that changed stays in `desfazer`, and the old page stays in the copies.
 export async function resolverDuvida(userId, id, { opcao = null, valor = null, descartar = false, por = 'dono', fonte = {} } = {}) {
   const d = await getMemoryAmbiguity(id);
   if (!d || d.user_id !== userId) return { ok: false, erro: 'dúvida não encontrada' };
@@ -617,7 +617,7 @@ export async function resolverDuvida(userId, id, { opcao = null, valor = null, d
       paginas: {}, titulos, fonte: { ...fonte, origem: 'duvida', duvida: d.id, por }, origem: 'conversa',
       logTag: `duvida=${d.id}`, criarPagina: true,
     });
-    // "definir:igual" = o fato vigente já tem esse valor: a dúvida está respondida.
+    // "definir:igual" = the current fact already has this value: the question is answered.
     if (!res.fatos.length && !res.puladas.includes('definir:igual')) return { ok: false, erro: res.puladas.join(', ') || 'não gravou' };
   }
   const depois = (await listCurrentFacts(userId)).find((f) => f.assunto === d.assunto) || null;
@@ -629,8 +629,8 @@ export async function resolverDuvida(userId, id, { opcao = null, valor = null, d
   return { ok: true, resolucao, paginas_ajustadas: edicoes.length };
 }
 
-// Palavras de conteúdo (sem acento; 3+ letras ou com dígito): é com elas que a
-// checagem decide se apagar uma linha perderia alguma coisa.
+// Content words (no accents; 3+ letters or with a digit): these are what the
+// check uses to decide if deleting a line would lose something.
 const palavrasDe = (s) => new Set(String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   .split(/[^a-z0-9]+/).filter((w) => w.length >= 3 || /\d/.test(w)));
 
@@ -667,10 +667,10 @@ async function corrigirPerdedora(assunto, velha, vencedora) {
   return { depois, trocou: { de, para } };
 }
 
-// Planeja a correção de TODAS as perdedoras antes de gravar qualquer coisa: se uma
-// não dá pra corrigir sem perda, a dúvida não é resolvida e nenhuma página muda.
-// Linha que sustenta fato de OUTRO assunto não é tocada (o fato ficaria apontando
-// pra uma linha que não existe).
+// Plans the fix for ALL the losing versions before saving anything: if one
+// can't be fixed without loss, the question isn't resolved and no page changes.
+// A line that backs a fact from ANOTHER subject isn't touched (the fact would end up pointing
+// to a line that doesn't exist).
 export async function planoPerdedoras(userId, d, vencedora) {
   const outros = (await listCurrentFacts(userId)).filter((f) => f.assunto !== d.assunto).map((f) => norm(f.linha_pagina));
   const plano = [];
@@ -686,7 +686,7 @@ export async function planoPerdedoras(userId, d, vencedora) {
   return { plano };
 }
 
-// Aplica o plano linha a linha, guardando o índice pra desfazer achar o lugar certo.
+// Applies the plan line by line, keeping the index so undo can find the right place.
 async function aplicarPerdedoras(userId, plano, vencedora) {
   const edicoes = [];
   const porPagina = new Map();
@@ -717,16 +717,16 @@ async function aplicarPerdedoras(userId, plano, vencedora) {
   return edicoes;
 }
 
-// Índice da ocorrência de `alvo` mais perto de `idx` (a página pode ter mudado
-// desde a resolução; o texto manda, o índice só desempata).
+// Index of the occurrence of `alvo` closest to `idx` (the page may have changed
+// since the resolution; the text rules, the index only breaks ties).
 function acharPerto(linhas, alvo, idx) {
   let melhor = -1;
   linhas.forEach((l, i) => { if (norm(l) === norm(alvo) && (melhor < 0 || Math.abs(i - idx) < Math.abs(melhor - idx))) melhor = i; });
   return melhor;
 }
 
-// Desfaz uma resolução: devolve as linhas às páginas, desfaz a troca de fato e
-// reabre a dúvida. Descartada só reabre.
+// Undoes a resolution: returns the lines to the pages, undoes the fact swap and
+// reopens the question. A discarded one just reopens.
 export async function desfazerDuvida(userId, id) {
   const d = await getMemoryAmbiguity(id);
   if (!d || d.user_id !== userId) return { ok: false, erro: 'dúvida não encontrada' };
@@ -741,7 +741,7 @@ export async function desfazerDuvida(userId, id) {
   for (const [slug, eds] of porPagina) {
     const pag = await getWikiPage(userId, slug);
     const linhas = (pag?.body || '').split('\n');
-    // De trás pra frente: desfaz na ordem inversa da aplicação.
+    // Back to front: undoes in the reverse order of application.
     for (const e of [...eds].reverse()) {
       if (e.depois != null) {
         const i = acharPerto(linhas, e.depois, e.idx);
@@ -759,15 +759,15 @@ export async function desfazerDuvida(userId, id) {
   return { ok: true, linhas_que_nao_voltaram: naoVoltou };
 }
 
-// Escrita única de memória (tool e housekeeping): expande `definir`, aplica,
-// grava páginas, grava fatos e mantém os fatos em dia com correções de linha
-// feitas pelos caminhos antigos (fix/remove/move). `paginas` = corpos já lidos;
-// as páginas que os fatos tocam são carregadas aqui.
-// R1+R3 (ver wiki-reconciliar.mjs): troca cada add/definir pelo que o conciliador
-// decidiu. "Já está" pula a op; "atualizar" vira definir na linha que já existe
-// (linha sem fato ganha um fato sintético com o valor antigo, pra troca deixar
-// histórico em memory_facts); as outras páginas que repetem o valor antigo
-// ganham um fix só no trecho. Erro do modelo = a op segue como veio.
+// Single memory write path (tool and housekeeping): expands `definir`, applies,
+// saves pages, saves facts and keeps facts in sync with line fixes
+// made via the old paths (fix/remove/move). `paginas` = bodies already read;
+// the pages the facts touch are loaded here.
+// R1+R3 (see wiki-reconciliar.mjs): swaps each add/definir for what the reconciler
+// decided. "Already there" skips the op; "update" becomes a definir on the line that already
+// exists (a line without a fact gets a synthetic fact with the old value, so the swap leaves
+// history in memory_facts); the other pages that repeat the old value
+// get a fix on just the excerpt. Model error = the op goes through as it came.
 async function reconciliar(userId, ops, { paginas, fatos, titulos, dryRun, fonte }) {
   const ALVO = new Set(['add', 'definir']);
   if (!ops.some((op) => ALVO.has(String(op?.op || '').toLowerCase()))) return { ops, puladas: [] };
@@ -826,12 +826,12 @@ async function reconciliar(userId, ops, { paginas, fatos, titulos, dryRun, fonte
   return { ops: out, puladas };
 }
 
-// O housekeeping roda depois do turno, lendo só a conversa. Se no MESMO turno
-// o assistente já gravou o fato pela tool (ou o conciliador decidiu), essa
-// escrita é a mais nova e explícita: o housekeeping não pode sobrescrever
-// com um valor que tirou de uma mensagem mais antiga (visto em prod 25/09:
-// R$619 gravado pela tool virou R$522 três segundos depois). Filtra ANTES do
-// conciliador, que também grava fato direto.
+// Housekeeping runs after the turn, reading only the conversation. If in the SAME turn
+// the assistant already saved the fact via the tool (or the reconciler decided), that
+// write is the newest and most explicit: housekeeping can't overwrite it
+// with a value it pulled from an older message (seen in prod on 2026-09-25:
+// R$619 saved by the tool became R$522 three seconds later). Filters BEFORE the
+// reconciler, which also writes facts directly.
 export function filtrarEscritoNoTurno(ops, fatos, origem, turnId) {
   const puladas = [];
   if (origem !== 'housekeeping' || !turnId) return { ops, puladas };
@@ -867,8 +867,8 @@ async function escreverComFatos(userId, ops, { paginas, titulos = {}, fonte = {}
     if (String(op?.op || '').toLowerCase() !== 'definir') continue;
     const velho = porAssunto.get(normAssunto(op.assunto));
     const destino = normWikiSlug(op.pagina || velho?.pagina || PERFIL);
-    // Housekeeping não cria página fora da lista conhecida (igual ao add dele);
-    // a tool pode, como o memoria_anotar sempre pôde.
+    // Housekeeping doesn't create a page outside the known list (same as its add);
+    // the tool can, as memoria_anotar always could.
     if (criarPagina || destino === PERFIL || titulos[destino] || CANONICAS.includes(destino) || ehPaginaDePessoa(destino)) await carregar(destino);
     if (destino === PERFIL) await carregar(OVERFLOW);
     if (velho) await carregar(velho.pagina);
@@ -886,7 +886,7 @@ async function escreverComFatos(userId, ops, { paginas, titulos = {}, fonte = {}
       const m = res.mudancas.find((x) => x.fato === idx && (x.op === 'add' || x.op === 'fix'));
       let pagina = m?.pagina, linha = m ? (m.texto.startsWith('-') ? m.texto : `- ${m.texto}`) : '';
       if (!m) {
-        // Linha idêntica já estava na página (add:duplicado): o fato passa a apontar pra ela.
+        // An identical line was already on the page (add:duplicate): the fact starts pointing to it.
         const corpo = res.paginas[d.destino] ?? paginas[d.destino] ?? '';
         if (linhasDe(corpo).some((l) => norm(l) === norm(d.linha))) { pagina = d.destino; linha = d.linha; }
       }
@@ -894,14 +894,14 @@ async function escreverComFatos(userId, ops, { paginas, titulos = {}, fonte = {}
       await setFact(userId, { pagina, assunto: d.assunto, valor: d.valor, desde: d.desde, linha, fonte: { ...fonte, origem: fonte.origem || origem } });
       gravados.push(d.assunto);
     }
-    // Caminhos antigos mexendo em linha que é de um fato: o fato acompanha.
+    // Old paths touching a line that belongs to a fact: the fact follows along.
     for (const m of res.mudancas) {
       if (m.fato != null) continue;
       const alvo = m.op === 'fix' ? m.antes : m.texto;
       const pag = m.op === 'move' ? m.de : m.pagina;
       const f = fatos.find((x) => x.pagina === pag && norm(x.linha_pagina) === norm(alvo));
       if (!f) {
-        // Linha sem fato corrigida ou apagada: a versão antiga vira histórico.
+        // A line without a fact that got corrected or deleted: the old version becomes history.
         if (historicoLigado() && (m.op === 'fix' || m.op === 'remove')) {
           const velha = m.op === 'fix' ? m.antes : m.texto;
           if (norm(velha) !== norm(m.op === 'fix' ? m.texto : '')) {
@@ -914,16 +914,16 @@ async function escreverComFatos(userId, ops, { paginas, titulos = {}, fonte = {}
       const nova = m.texto.startsWith('-') ? m.texto : `- ${m.texto}`;
       if (m.op === 'remove') await closeFact(userId, f.id);
       else if (m.op === 'fix') {
-        // Linha composta: o valor do fato é só um pedaço dela. Se o pedaço
-        // continua lá, só a linha muda; valor = linha inteira só pra linha simples.
+        // Composite line: the fact's value is only a piece of it. If the piece
+        // is still there, only the line changes; value = whole line only for a simple line.
         const composta = norm(valorDaLinha(f.linha_pagina)) !== norm(f.valor);
         const aindaLa = composta && norm(nova).includes(norm(f.valor));
         if (!aindaLa && historicoLigado() && norm(valorDaLinha(nova)) !== norm(f.valor)) {
-          // Valor mudou na mão: encerra o fato e abre outro, em vez de sobrescrever
-          // (sobrescrever apagava o valor antigo sem deixar histórico).
+          // Value changed by hand: closes the fact and opens another, instead of overwriting
+          // (overwriting erased the old value without leaving history).
           await setFact(userId, { pagina: m.pagina, assunto: f.assunto, valor: valorDaLinha(nova), linha: nova, fonte: { ...fonte, origem: fonte.origem || origem } });
         } else {
-          // Linha composta: o valor do fato ficou, mas outro pedaço da linha mudou.
+          // Composite line: the fact's value stayed, but another piece of the line changed.
           if (historicoLigado() && norm(f.linha_pagina) !== norm(nova)) {
             await addHistorico(userId, { pagina: pag, linha: f.linha_pagina, valor: valorDaLinha(f.linha_pagina), fonte: { ...fonte, origem: fonte.origem || origem, op: 'fix', virou: nova } });
           }
@@ -937,22 +937,22 @@ async function escreverComFatos(userId, ops, { paginas, titulos = {}, fonte = {}
   return { ...res, fatos: gravados, definicoes: exp.definicoes };
 }
 
-// ── Seção de links do perfil (gerada, nunca escrita pelo modelo) ──
-// O perfil vira o "overview" do Town: os fatos curtos + um índice das páginas de
-// área. Só a seção depois do marcador é reescrita; o texto acima dela é copiado
-// VERBATIM (inclusive linhas em branco), então isso nunca perde nem reformata fato.
-// Parte PURA (sem banco, por isso tem teste): recebe o corpo atual do perfil e a
-// lista de páginas, devolve o corpo com a seção de links refeita, ou null se a
-// troca perderia alguma linha que não é do bloco gerado.
+// ── Profile links section (generated, never written by the model) ──
+// The profile becomes Town's "overview": the short facts + an index of the area
+// pages. Only the section after the marker is rewritten; the text above it is copied
+// VERBATIM (including blank lines), so this never loses or reformats a fact.
+// PURE part (no database, which is why it has a test): receives the profile's current body and the
+// list of pages, returns the body with the links section redone, or null if the
+// swap would lose a line that isn't part of the generated block.
 export function montarPerfilComLinks(antes, outras) {
   const cru = String(antes || '').split('\n');
   const i = iMarca(cru);
   const fatos = i < 0 ? cru.slice() : cru.slice(0, i);
   while (fatos.length && !fatos[fatos.length - 1].trim()) fatos.pop();
-  // Só o BLOCO GERADO sai daqui: o marcador e as linhas no formato exato que
-  // esta função escreve. O que vier depois é do dono e é copiado verbatim.
-  // Antes o corte era "tudo abaixo do marcador", então qualquer coisa escrita
-  // sob a seção de links sumia a cada escrita de memória (achado #17).
+  // Only the GENERATED BLOCK comes out of here: the marker and the lines in the exact format
+  // this function writes. Whatever comes after belongs to the owner and is copied verbatim.
+  // Before, the cutoff was "everything below the marker", so anything written
+  // under the links section disappeared on every memory write (finding #17).
   let j = i < 0 ? -1 : i + 1;
   while (j >= 0 && j < cru.length && (!cru[j].trim() || EH_LINK_GERADO.test(cru[j].trim()))) j++;
   const rabo = j < 0 ? [] : cru.slice(j);
@@ -962,9 +962,9 @@ export function montarPerfilComLinks(antes, outras) {
     ? ['', `${MARCA_LINKS} (leia com memoria_ler quando a tarefa pedir)`, ...outras.map((p) => `- ${p.slug} — ${p.title || tituloDe(p.slug)}`)]
     : [];
   const body = [...fatos, ...secao, ...(rabo.length ? ['', ...rabo] : [])].join('\n');
-  // Trava de segurança: esta função é automática e roda depois de TODA escrita,
-  // então ela nunca pode ser o motivo de uma linha sumir. Se sobrar perda que
-  // não seja do bloco gerado, o chamador não grava nada.
+  // Safety guard: this function is automatic and runs after EVERY write,
+  // so it can never be the reason a line disappears. If any loss remains that
+  // isn't from the generated block, the caller doesn't save anything.
   const perdidas = diffPerfil(antes, body).perdidas
     .filter((l) => !EH_LINK_GERADO.test(l) && !l.trimStart().startsWith(MARCA_LINKS));
   return perdidas.length ? null : body;
@@ -986,10 +986,10 @@ export async function sincronizarLinks(userId) {
   return true;
 }
 
-// ── "Atualizações recentes" (o box que o Town mostra) ──
-// Gerada de graça a partir das operações que o servidor JÁ aplicou: zero chamada
-// de modelo, zero chance de inventar. É um LOG (os fatos vivem nas páginas), então
-// aqui sim tem teto de entradas.
+// ── "Recent updates" (the box Town shows) ──
+// Generated for free from the operations the server HAS ALREADY applied: zero model
+// call, zero chance of making things up. It's a LOG (the facts live on the pages), so
+// here there IS a cap on entries.
 export async function registrarAtualizacao(userId, mudancas, origem = '') {
   const lista = (Array.isArray(mudancas) ? mudancas : []).filter((m) => m?.pagina);
   if (!lista.length) return false;
@@ -1020,16 +1020,16 @@ export async function registrarAtualizacao(userId, mudancas, origem = '') {
   return true;
 }
 
-// Chamada depois de toda escrita de memória: registra o que mudou e refaz os
-// links do perfil. Nunca deixa um erro daqui derrubar a escrita que já aconteceu.
+// Called after every memory write: records what changed and redoes the
+// profile links. Never lets an error here bring down a write that already happened.
 async function posEscrita(userId, mudancas, origem) {
   try { await registrarAtualizacao(userId, mudancas, origem); } catch (e) { console.error('[memoria atualizacoes]', e?.message ?? e); }
   try { await sincronizarLinks(userId); } catch (e) { console.error('[memoria links]', e?.message ?? e); }
 }
 
-// Valores concretos do texto (link, domínio, e-mail, número de 4+ dígitos) que não
-// aparecem na fonte. Compara sem caixa, sem barra final e com dígitos colados
-// ("(11) 98765-4321" casa com "11987654321").
+// Concrete values from the text (link, domain, e-mail, 4+ digit number) that don't
+// appear in the source. Compares case-insensitively, without a trailing slash and with digits
+// stuck together ("(11) 98765-4321" matches "11987654321").
 const colaDigitos = (t) => String(t || '').toLowerCase().replace(/(\d)[\s.\-/()]+(?=\d)/g, '$1');
 export function valoresSemBase(texto, fonte) {
   const t = String(texto || '').toLowerCase();
@@ -1102,16 +1102,16 @@ export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun =
     ops = m ? JSON.parse(m[0])?.ops : null;
   } catch { ops = null; }
   if (!Array.isArray(ops)) {
-    // Falha VISÍVEL: não escreve nada. A memória fica como estava e o próximo
-    // ciclo tenta de novo (o fato ainda está no history).
+    // VISIBLE failure: writes nothing. Memory stays as it was and the next
+    // cycle tries again (the fact is still in the history).
     console.log(`[perfil patch] u=${String(userId).slice(0, 8)} json_invalido len=${bruto.length}`);
     return { usage: r.usage, ops: [], feitas: [], puladas: ['json_invalido'] };
   }
   if (!ops.length) return { usage: r.usage, ops, feitas: [], puladas: [] };
 
-  // Portão sem modelo: valor concreto (link, e-mail, número de 4+ dígitos) que não
-  // está escrito na troca nem na memória foi inventado. Em 24/09 o eval pegou
-  // "mudei o link" sem link virar um endereço plausível gravado como atual.
+  // Model-free gate: a concrete value (link, e-mail, 4+ digit number) that isn't
+  // written in the change nor in memory was made up. On 2026-09-24 the eval caught
+  // "I changed the link" with no link turning into a plausible address saved as current.
   const base = [userMsg, assistantMsg, perfilBody, ...fatos.map((f) => f.valor), `hoje: ano ${new Date().getFullYear()}`];
   for (const slug of outras) base.push((await getWikiPage(userId, slug))?.body || '');
   const semBase = [];
@@ -1131,8 +1131,8 @@ export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun =
     if (slug && slug !== PERFIL && outras.includes(slug)) {
       paginas[slug] = (await getWikiPage(userId, slug))?.body || '';
     }
-    // Destino perfil + teto batido = o fato é ROTEADO pra página de overflow;
-    // ela precisa estar carregada pra gravação não sobrescrever o que já existe.
+    // Destination profile + cap reached = the fact is ROUTED to the overflow page;
+    // it needs to be loaded so the write doesn't overwrite what already exists.
     if ((!slug || slug === PERFIL) && !Object.prototype.hasOwnProperty.call(paginas, OVERFLOW)) {
       paginas[OVERFLOW] = (await getWikiPage(userId, OVERFLOW))?.body || '';
     }
@@ -1148,9 +1148,9 @@ export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun =
   return { usage: r.usage, ops, feitas: res.feitas, puladas: res.puladas, paginas: res.paginas, antes: paginas, fatos: res.fatos };
 }
 
-// Manutenção automática por turno da página `perfil` (camada usuário, por pessoa).
-// Desde 02/09/2026 o padrão é PATCH (acima); `PERFIL_MODO=rewrite` volta pro
-// comportamento antigo de reescrita sem precisar de deploy.
+// Automatic per-turn maintenance of the `perfil` page (user layer, per person).
+// Since 2026-09-02 the default is PATCH (above); `PERFIL_MODO=rewrite` reverts to the
+// old rewrite behavior without needing a deploy.
 export async function updateUserProfile(userId, userMsg, assistantMsg, { language = null, fonte = {} } = {}) {
   if (process.env.PERFIL_MODO !== 'rewrite') {
     try {
@@ -1170,8 +1170,8 @@ export async function updateUserProfile(userId, userMsg, assistantMsg, { languag
   ].join('\n');
   const prompt = `Current profile:\n${atual.trim() || '(empty)'}\n\nNew exchange:\nUser: ${userMsg}\nAgent: ${assistantMsg}`;
   try {
-    // Housekeeping: extração de fatos não precisa de raciocínio caro -> zera
-    // o pensamento (que dominava o custo desta chamada por turno).
+    // Housekeeping: fact extraction doesn't need expensive reasoning -> zeroes
+    // out the thinking (which dominated the cost of this per-turn call).
     const r = await makeMemoriaModel().forBillingPhase({kind:'housekeeping'}).complete({
       system: sys, messages: [{ role: 'user', content: prompt }], tools: [],
     });
@@ -1180,10 +1180,10 @@ export async function updateUserProfile(userId, userMsg, assistantMsg, { languag
       await upsertWikiPage(userId, { slug: PERFIL, title: 'Perfil', body: novo });
       logDiffPerfil(userId, PERFIL, atual, novo, 'modo=rewrite');
     }
-    // Devolve o usage pra quem chamou gravar o custo (kind='housekeeping').
+    // Returns the usage to the caller to save the cost (kind='housekeeping').
     return { usage: r.usage };
   } catch {
-    // se falhar, mantém o perfil que já tinha
+    // if it fails, keeps the profile it already had
     return null;
   }
 }

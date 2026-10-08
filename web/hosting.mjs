@@ -1,14 +1,16 @@
 import {rejectedEdit} from './coding-effects.mjs';
 import { searchAppCode } from './app-code-search.mjs';
-// ── Tools de hosting (mini-PaaS por usuário) ──
-// Cada usuário tem um subdomínio (fulano.<domínio dos apps>, ver appshost.mjs). O agente pode:
-//   • publicar "sisteminhas" (apps Node ou Flask) em /nome_do_sistema (container)
-//   • parar / reiniciar / apagar / ver logs / listar esses sistemas
-//   • acrescentar conteúdo na HOME do subdomínio (fulano.<domínio>/ raiz),
-//     que é o "app default" do usuário — sem container, servido no roteador.
+// ── Hosting tools (per-user mini-PaaS) ──
+// Each user has a subdomain (someuser.<apps domain>, see appshost.mjs). The
+// agent can:
+//   • publish "little systems" (Node or Flask apps) at /system_name (container)
+//   • stop / restart / delete / view logs / list those systems
+//   • add content to the subdomain's HOME (someuser.<domain>/ root), which is
+//     the user's "default app" — no container, served by the router.
 //
-// Fala com o host de apps pelo control-plane SSH (appshost.mjs → ctl.py).
-// Liga só se hostingEnabled() (APPS_HOST_SSH + APPS_HOST_KEY no ambiente).
+// Talks to the apps host through the SSH control-plane (appshost.mjs → ctl.py).
+// Only turns on if hostingEnabled() (APPS_HOST_SSH + APPS_HOST_KEY in the
+// environment).
 
 import { filePage } from '../core-proto/file-page.mjs';
 import { validateDraft, validationPage, draftRevision } from './app-draft-validation.mjs';
@@ -56,67 +58,72 @@ const MAX_FILE_BYTES  = 512 * 1024;    // 512 KB por arquivo
 const MAX_TOTAL_BYTES = 2 * 1024 * 1024; // 2 MB por app
 const RE_SYSTEM = /^[a-z0-9][a-z0-9_-]{0,30}$/;
 
-// Hash curto do conteúdo de um arquivo (entrada em base64). Serve de "versão"
-// pra concorrência otimista: ler_arquivo/listar devolvem, escrever_arquivo
-// aceita hash_esperado e falha alto se o arquivo mudou desde a leitura.
+// Short hash of a file's content (input in base64). Serves as the "version"
+// for optimistic concurrency: ler_arquivo/listar return it, escrever_arquivo
+// accepts hash_esperado and fails loudly if the file changed since the read.
 const fileHash = (b64) => createHash('sha256').update(Buffer.from(b64 || '', 'base64')).digest('hex').slice(0, 12);
 
-// ── Acesso à URL do app: PRIVADO por padrão ──
-// Todo app NOVO nasce trancado com usuário/senha (HTTP Basic verificado no
-// ROTEADOR, antes de acordar o container). Público é opt-in explícito, decidido
-// pelo usuário, e o assistente tem que PERGUNTAR antes de publicar.
-// Isto é ortogonal a `visibilidade` (biblioteca/cópia do código): um app pode
-// ser copiável e trancado, ou aberto e fora da biblioteca.
-// Alfabeto sem caracteres ambíguos (0/O, 1/l/I) porque a senha é ditada/copiada
-// à mão pelo usuário. 10 chars nesse alfabeto ≈ 51 bits de entropia.
+// ── App URL access: PRIVATE by default ──
+// Every NEW app is born locked with a username/password (HTTP Basic checked
+// at the ROUTER, before waking the container). Public is an explicit opt-in,
+// decided by the user, and the assistant has to ASK before publishing.
+// This is orthogonal to `visibilidade` (library/code copying): an app can be
+// copyable and locked, or open and outside the library.
+// Alphabet with no ambiguous characters (0/O, 1/l/I) because the password is
+// dictated/copied by hand by the user. 10 chars in this alphabet ≈ 51 bits of
+// entropy.
 const PWD_ALPHABET = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function randomToken(len) {
   const bytes = randomBytes(len * 2);
   let out = '';
   for (let i = 0; out.length < len && i < bytes.length; i++) {
     const v = bytes[i];
-    if (v >= 256 - (256 % PWD_ALPHABET.length)) continue; // descarta pra não viesar
+    if (v >= 256 - (256 % PWD_ALPHABET.length)) continue; // discards to avoid biasing it
     out += PWD_ALPHABET[v % PWD_ALPHABET.length];
   }
   return out.length === len ? out : out + randomToken(len - out.length);
 }
-// Usuário derivado do nome do sistema (fácil de lembrar), senha aleatória.
+// Username derived from the system name (easy to remember), random password.
 const genAccessCreds = (system) => ({
   user: (String(system || 'app').replace(/[^a-z0-9]/g, '') || 'app').slice(0, 20),
   pass: randomToken(10),
 });
 
-// Decide o portão a mandar pro host num publish, e o que gravar no banco.
-// Regras: app NOVO sem escolha explícita => privado com credencial gerada;
-// app JÁ publicado => PRESERVA o que já existe (republicar nunca destranca nem
-// troca senha por esquecimento do chamador); "publico" só quando pedido.
-// Devolve { authSpec, access, creds } — authSpec vai no ctl (undefined = preserva
-// no host), creds só existe quando a credencial foi GERADA agora (pra mostrar).
+// Decides the gate to send to the host on a publish, and what to write to the
+// database. Rules: a NEW app with no explicit choice => private with a
+// generated credential; an app ALREADY published => PRESERVES whatever
+// already exists (republishing never unlocks or swaps the password just
+// because the caller forgot); "público" only when asked. Returns { authSpec,
+// access, creds } — authSpec goes to ctl (undefined = preserve on the host),
+// creds only exists when the credential was GENERATED just now (to display
+// it).
 async function resolveAccessForPublish(ownerUserId, system, isNew, acesso) {
   const pedido = String(acesso || '').toLowerCase();
   if (pedido === 'publico') return { authSpec: { mode: 'none' }, access: 'public', creds: null };
   const atual = (!isNew && await getAppAccess(ownerUserId, system).catch(() => null)) || null;
   if (atual && atual.user && atual.pass && atual.access !== 'public') {
-    // Já tem credencial: reenvia a MESMA. O host (ctl.py _auth_entry) reconhece
-    // que a credencial não mudou e PRESERVA o salt, e é o salt que versiona o
-    // realm do HTTP Basic no roteador. Re-salgar a cada republish faria o
-    // navegador esquecer uma senha válida e pedir login de novo à toa.
+    // Already has a credential: resends the SAME one. The host
+    // (ctl.py _auth_entry) recognizes the credential hasn't changed and
+    // PRESERVES the salt, and it's the salt that versions the HTTP Basic
+    // realm at the router. Re-salting on every republish would make the
+    // browser forget a valid password and ask to log in again for no reason.
     return { authSpec: { user: atual.user, password: atual.pass }, access: 'private', creds: null };
   }
   if (!isNew && pedido !== 'privado') {
-    // App JÁ publicado, sem portão registrado (público explícito ou app antigo
-    // de antes desta mudança) e ninguém pediu pra trancar: NÃO trancar por conta
-    // própria. Republicar não pode invalidar um link que o dono já distribuiu —
-    // trancar app existente é decisão dele, via definir_acesso_sistema.
+    // An app ALREADY published, with no gate registered (explicitly
+    // público, or an old app from before this change) and nobody asked to
+    // lock it: do NOT lock it on our own. Republishing can't invalidate a
+    // link the owner already handed out — locking an existing app is their
+    // decision, via definir_acesso_sistema.
     return { authSpec: undefined, access: atual?.access || null, creds: null };
   }
   const creds = genAccessCreds(system);
   return { authSpec: { user: creds.user, password: creds.pass }, access: 'private', creds };
 }
 
-// O host e o banco precisam concordar sobre o portão. Repetimos falhas
-// transitórias e devolvemos um aviso explícito; nunca fingimos que o registro
-// ficou recuperável quando o host publicou mas o banco não confirmou.
+// The host and the database need to agree on the gate. We retry transient
+// failures and return an explicit notice; we never pretend the record is
+// recoverable when the host published but the database didn't confirm it.
 async function persistAccess(ownerUserId, system, { access, creds }) {
   if (!access) return true;
   for(let attempt=1;attempt<=3;attempt++)try {
@@ -129,11 +136,12 @@ async function persistAccess(ownerUserId, system, { access, creds }) {
   return false;
 }
 
-// ── Publish gate: nenhum segredo pode ir INLINE no código de um app ──
-// Isolamento por construção: chave/senha/token vão pro cofre (definir_segredo) e
-// o código usa só process.env.X. Se algo com cara de segredo aparecer no fonte,
-// o publish é RECUSADO. Heurístico (rede de segurança); a trava real é o agente
-// sempre pôr segredo no cofre. Linhas com placeholder/uso de env são ignoradas.
+// ── Publish gate: no secret may go INLINE in an app's code ──
+// Isolation by construction: key/password/token go to the vault
+// (definir_segredo) and the code only uses process.env.X. If something that
+// looks like a secret shows up in the source, the publish is REJECTED.
+// Heuristic (safety net); the real guard is the agent always putting the
+// secret in the vault. Lines with a placeholder/env usage are ignored.
 const SECRET_PATTERNS = [
   { re: /AKIA[0-9A-Z]{16}/, what: 'AWS access key' },
   { re: /\bASIA[0-9A-Z]{16}\b/, what: 'AWS temp key' },
@@ -173,10 +181,10 @@ function scanSecrets(files) {
   return out;
 }
 
-// Snapshot de código pra replicação (Fase 2). `files` = {caminho: b64} do fonte
-// enviado no publish (nunca inclui dado de runtime). Comprime e serializa num
-// blob de texto guardável no banco. Devolve null se passar do teto (não bloqueia
-// o publish; só não fica replicável).
+// Code snapshot for replication (Phase 2). `files` = {path: b64} of the
+// source sent on publish (never includes runtime data). Compresses and
+// serializes into a text blob storable in the database. Returns null if it
+// goes over the cap (doesn't block the publish; it just isn't replicable).
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024; // teto do blob comprimido no banco
 function buildSnapshot(files) {
   try {
@@ -187,7 +195,7 @@ function buildSnapshot(files) {
   } catch { return null; }
 }
 
-// Inverso de buildSnapshot: blob de texto -> {caminho: b64}. Usado na replicação.
+// Inverse of buildSnapshot: text blob -> {path: b64}. Used in replication.
 export function readSnapshot(blob) {
   if (typeof blob !== 'string' || !blob.startsWith('gz1:')) return null;
   try {
@@ -196,8 +204,8 @@ export function readSnapshot(blob) {
   } catch { return null; }
 }
 
-// Resolve a origem de uma replicação: aceita "label/system" ou uma URL
-// https://<label>.<domínio dos apps>/<system>/. Devolve {label, system} ou null.
+// Resolves the source of a replication: accepts "label/system" or a URL
+// https://<label>.<apps domain>/<system>/. Returns {label, system} or null.
 function parseOrigin(origem) {
   const s = String(origem || '').trim();
   if (!s) return null;
@@ -209,7 +217,8 @@ function parseOrigin(origem) {
   return null;
 }
 
-// Resolve o subdomínio do dono e garante que a landing saiba o nome dele.
+// Resolves the owner's subdomain and makes sure the landing page knows their
+// name.
 async function resolveLabel(userId) {
   const { label, name } = await ensureUserSubdomain(userId);
   ctl({ verb: 'seed_user', label, name }).catch(() => { /* best-effort */ });
@@ -218,16 +227,17 @@ async function resolveLabel(userId) {
 
 function sysOk(s) { return RE_SYSTEM.test((s || '').toLowerCase()); }
 
-// ── App corrente por usuário (pedido de um usuário) ──
-// Exigir o slug em CADA chamada de arquivo é atrito puro quando o app é óbvio no
-// trabalho em andamento: no caso dele, a escrita do rascunho falhou porque a tool
-// cobrou o nome do sistema no meio de uma sequência que já estava naquele app.
-// Aqui o último app resolvido com sucesso fica LEMBRADO por usuário e serve de
-// DEFAULT quando `nome_do_sistema` vem vazio. Só nas tools de RASCUNHO e LEITURA;
-// publicar/apagar/replicar/acesso seguem exigindo o nome, porque ali errar de app
-// é irreversível. Memória de processo com validade curta: se o processo reinicia
-// (ou a memória expira), cai no caminho de sempre (app único ou pergunta), nunca
-// num app errado.
+// ── Current app per user (requested by a user) ──
+// Requiring the slug on EVERY file call is pure friction when the app is
+// obvious from the work in progress: in his case, the draft write failed
+// because the tool demanded the system name in the middle of a sequence that
+// was already in that app. Here the last successfully resolved app is
+// REMEMBERED per user and serves as the DEFAULT when `nome_do_sistema` comes
+// in empty. Only for the DRAFT and READ tools; publish/delete/replicate/access
+// still require the name, because getting the app wrong there is
+// irreversible. Short-lived process memory: if the process restarts (or the
+// memory expires), it falls back to the usual path (single app or ask),
+// never into the wrong app.
 const APP_ATUAL = new Map(); // userId -> { system, ts }
 const APP_ATUAL_TTL_MS = 6 * 60 * 60 * 1000;
 export function lembrarAppAtual(userId, system) {
@@ -242,15 +252,16 @@ function appAtual(userId) {
   return e.system;
 }
 
-// ── Resolução de app para colaboração Modo B ──
-// Descobre QUAL app uma tool deve operar e sob QUAL dono, cobrindo o caso do
-// colaborador mexer na instância única do dono (mesmo código, mesmo /app/data).
-//  • `dono` informado: resolve o usuário CONECTADO (conexão aceita), confere que
-//    o CHAMADOR está no roster do app dele, e devolve o app do DONO.
-//  • `dono` ausente: tenta um app PRÓPRIO do chamador; se não tiver, procura
-//    entre os apps COMPARTILHADOS com ele. Se houver mais de um com o mesmo
-//    nome, pede pra desambiguar com `dono`.
-// Devolve { ok, app, ownerUserId, ownerLabel, ownerName, shared } ou { error }.
+// ── App resolution for Mode B collaboration ──
+// Figures out WHICH app a tool should operate on and under WHICH owner,
+// covering the case of a collaborator working on the owner's single instance
+// (same code, same /app/data).
+//  • `dono` given: resolves the CONNECTED user (connection accepted), checks
+//    that the CALLER is on their app's roster, and returns the OWNER's app.
+//  • `dono` absent: tries a caller's OWN app; if there isn't one, looks among
+//    the apps SHARED with them. If there's more than one with the same name,
+//    asks to disambiguate with `dono`.
+// Returns { ok, app, ownerUserId, ownerLabel, ownerName, shared } or { error }.
 async function resolveApp(callerUserId, system, dono) {
   const sys = (system || '').toLowerCase();
   if (dono && String(dono).trim()) {
@@ -267,15 +278,15 @@ async function resolveApp(callerUserId, system, dono) {
       const { label, name } = await ensureUserSubdomain(who.userId);
       return { ok: true, app, ownerUserId: who.userId, ownerLabel: label, ownerName: name, shared: true };
     }
-    // "dono" apontou pra mim mesmo: trata como app próprio.
+    // "dono" pointed to myself: treat it as my own app.
   }
-  // App próprio primeiro.
+  // Own app first.
   const own = await getAppRow(callerUserId, sys);
   if (own) {
     const { label, name } = await ensureUserSubdomain(callerUserId);
     return { ok: true, app: own, ownerUserId: callerUserId, ownerLabel: label, ownerName: name, shared: false };
   }
-  // Sem app próprio: procura entre os compartilhados comigo.
+  // No own app: looks among the ones shared with me.
   const shared = await listSharedAppsForCollaborator(callerUserId);
   const matches = shared.filter((s) => s.system === sys);
   if (matches.length === 1) {
@@ -290,20 +301,21 @@ async function resolveApp(callerUserId, system, dono) {
   return { error: `Não achei o sistema "${sys}". Use listar_sistemas.` };
 }
 
-// Nome de exibição do chamador (autor do commit numa publicação colaborativa).
+// Caller's display name (commit author in a collaborative publish).
 async function callerName(userId) {
   try { const u = await getUserById(userId); return (u && u.name) || null; } catch { return null; }
 }
 
-// Resolve o DONO do app pra operações de ESCRITA (rascunho + publish). Aceita app
-// NOVO (ainda sem row): nesse caso o dono é o próprio chamador (app: null). É a
-// mesma lógica que o publish usava inline, extraída pra ser reusada pelas tools de
-// rascunho. Devolve {ownerUserId, ownerLabel, ownerName, shared, app} ou {error}.
+// Resolves the app's OWNER for WRITE operations (draft + publish). Accepts a
+// NEW app (no row yet): in that case the owner is the caller itself
+// (app: null). Same logic publish used to use inline, extracted to be reused
+// by the draft tools. Returns {ownerUserId, ownerLabel, ownerName, shared,
+// app} or {error}.
 async function resolveOwnerForWrite(userId, system, dono) {
   if (dono && String(dono).trim()) {
     const who = await resolveConnectedUser(userId, dono);
-    // Ambíguo não pode cair no ramo de baixo: o dono foi informado de propósito,
-    // e seguir sem ele escreveria no app PRÓPRIO do chamador.
+    // Ambiguous can't fall into the branch below: the owner was deliberately
+    // given, and proceeding without it would write to the caller's OWN app.
     if (who.error === 'contato_ambiguo') return { error: contatoAmbiguoMsg(dono, who.opcoes) };
     if (who.ok && who.userId !== userId) {
       const r = await resolveApp(userId, system, dono);
@@ -357,13 +369,14 @@ async function readDraftFiles(ownerUserId, system, app) {
   return (snapshot && readSnapshot(snapshot.source_snapshot)) || {};
 }
 
-// Semeia o rascunho de um app publicado com o último código no ar (snapshot),
-// mas só se o rascunho ainda estiver vazio. Idempotente. Devolve o rascunho.
-// Usado pelas tools de leitura/listagem pra que o agente enxergue o código atual
-// de um app já publicado sem precisar reescrever nada (nem, jamais, pedir SSH).
-// Rascunho de app NOVO já é criar app: checa o teto aqui, antes de gastar a
-// construção inteira (caso de 24/09: app montado no Básico, barrado só ao
-// publicar). Rascunho já começado ou app publicado seguem editáveis.
+// Seeds a published app's draft with the last code that's live (snapshot),
+// but only if the draft is still empty. Idempotent. Returns the draft. Used
+// by the read/list tools so the agent can see a published app's current code
+// without needing to rewrite anything (or, ever, ask for SSH). A draft for a
+// NEW app already counts as creating an app: checks the cap here, before
+// spending the whole build (case from 2026-09-24: app built on the Básico plan,
+// blocked only at publish time). A draft already started or a published app
+// stay editable.
 async function newDraftQuotaBlock(ownerUserId, system, app, opts) {
   if (app) return null;
   if (Object.keys(await getAppDraft(ownerUserId, system)).length) return null;
@@ -394,7 +407,7 @@ function perm() {
   return permissoes;
 }
 async function appQuotaBlock(ownerUserId, system, { appClient = false } = {}) {
-  if (system && await getAppRow(ownerUserId, system)) return null; // já existe: é edição
+  if (system && await getAppRow(ownerUserId, system)) return null; // already exists: it's an edit
   const atuais = (await listAppsForUser(ownerUserId)).length;
   return perm().bloqueioDeApp({ ownerUserId, atuais, appClient });
 }
@@ -410,23 +423,26 @@ export function cotaDeDisco(dono) {
   return `${perm().discoDoAppMb(dono)}m`;
 }
 
-// ── Reconciliação da cota de disco ──
-// A cota só era aplicada DENTRO do publish, e vale no LABEL (por usuário). Ou seja:
-// trocar de plano não mexia no disco. Quem subia de plano não recebia o espaço que
-// passou a pagar até publicar um app de novo, e quem descia continuava com o espaço
-// do plano grande. Em 17/09 isso já tinha desalinhado 7 das 13 pessoas com app.
-// Nem toda troca de plano passa por código nosso (a virada mensal e os scripts de
-// classificação fazem UPDATE direto no banco), então o conserto certo é varrer e
-// reconciliar, não pendurar um gancho em cada caminho que escreve users.plan.
+// ── Disk quota reconciliation ──
+// The quota was only applied INSIDE publish, and it's keyed on the LABEL
+// (per user). In other words: switching plans didn't touch the disk. Someone
+// who upgraded didn't get the extra space they now paid for until they
+// published an app again, and someone who downgraded kept the big plan's
+// space. By 2026-09-17 this had already misaligned 7 of the 13 people with an
+// app. Not every plan switch goes through our code (the monthly rollover and
+// the classification scripts do a direct UPDATE on the database), so the
+// right fix is to sweep and reconcile, not hang a hook on every path that
+// writes users.plan.
 export function montarCotasDesejadas(donos) {
   return (donos || [])
     .filter((d) => d && d.label)
     .map((d) => ({ label: String(d.label), quota: cotaDeDisco(d) }));
 }
 
-// Resultado de uma reconciliação, olhando o antes/depois que o host devolveu.
-// "ajustados" conta só quem REALMENTE mudou de cota, pra varredura silenciosa
-// quando está tudo certo (que é o caso normal) e log quando algo mudou.
+// Result of a reconciliation, looking at the before/after the host returned.
+// "ajustados" only counts whoever REALLY had their quota change, so the
+// sweep stays silent when everything is fine (the normal case) and logs when
+// something changed.
 export function lerRespostaDeCota(resp) {
   const itens = Array.isArray(resp?.itens) ? resp.itens : [];
   const ajustados = [], falhas = [];
@@ -447,11 +463,12 @@ export async function reconciliarCotasDeDisco({ listar = listAppOwnersForQuota, 
   return lerRespostaDeCota(resp);
 }
 
-// ── Núcleo da replicação (Fase 3 + biblioteca web) ──
-// Copia SÓ o código de um app público pro espaço de `userId` e publica como um
-// sistema dele. Nenhum segredo (ficam no cofre do dono) nem dado de runtime
-// (fica no /app/data do dono) viaja. Usado tanto pela tool replicar_sistema
-// quanto pela rota web POST /api/library/copy. Devolve {ok, url, sistema, ...}.
+// ── Core of replication (Phase 3 + web library) ──
+// Copies ONLY a public app's code into `userId`'s space and publishes it as
+// one of their systems. No secret (those stay in the owner's vault) and no
+// runtime data (stays in the owner's /app/data) travels. Used both by the
+// replicar_sistema tool and by the web route POST /api/library/copy. Returns
+// {ok, url, sistema, ...}.
 export async function replicateApp({ userId, agentId, origem, novo_nome, appClient = false }) {
   const src = parseOrigin(origem);
   if (!src) return { ok: false, error: 'Origem inválida. Use "dono/nome_do_sistema" ou a URL pública.' };
@@ -463,23 +480,28 @@ export async function replicateApp({ userId, agentId, origem, novo_nome, appClie
   if (!sysOk(target)) return { ok: false, error: 'Nome de destino inválido (minúsculas, números, - ou _, até 31 chars).' };
   const existing = await getAppRow(userId, target);
   if (existing) return { ok: false, error: `Você já tem um sistema chamado "${target}". Escolha um nome diferente pra não sobrescrever.`, ja_existe: true };
-  // Replicar/instalar da biblioteca também CRIA app, então passa pelo mesmo teto
-  // (senão a regra teria uma porta dos fundos pela rota /api/library/copy).
+  // Replicating/installing from the library also CREATES an app, so it goes
+  // through the same cap (otherwise the rule would have a back door through
+  // the /api/library/copy route).
   const quota = await appQuotaBlock(userId, target, { appClient });
   if (quota) return quota;
-  // Rede de segurança: o gate já rodou na origem, mas re-checa antes de subir.
+  // Safety net: the gate already ran at the source, but it re-checks before
+  // going up.
   const leaks = scanSecrets(files);
   if (leaks.length) return { ok: false, error: 'O código da origem tem segredo embutido; não vou replicar.', segredos_encontrados: leaks };
   const { label, name } = await resolveLabel(userId);
-  const env = await getAppSecretsDecrypted(userId, target); // segredos SEUS (provável vazio)
-  // Réplica também é app NOVO => nasce PRIVADO com credencial própria (nunca a
-  // do dono original: só o código viaja). Quem quiser abrir usa definir_acesso_sistema.
+  const env = await getAppSecretsDecrypted(userId, target); // YOUR secrets (likely empty)
+  // A replica is also a NEW app => it's born PRIVATE with its own credential
+  // (never the original owner's: only the code travels). Whoever wants to
+  // open it uses definir_acesso_sistema.
   const acc = await resolveAccessForPublish(userId, target, true, null);
-  // Cota de disco = entitlement do plano de QUEM está replicando (a réplica nasce
-  // no espaço dele). Obrigatório passar: o ctl.py aplica a cota no LABEL, que é por
-  // USUÁRIO, e sem este campo cai no default de 200 MB, derrubando de uma vez a cota
-  // de TODOS os apps de quem paga. Mesmo cálculo do publicar_sistema, inclusive o
-  // sufixo "m" (sem unidade o XFS lê o número como bytes e zera a cota).
+  // Disk quota = the entitlement of WHOEVER is replicating's plan (the
+  // replica is born in their space). Mandatory to pass: ctl.py applies the
+  // quota on the LABEL, which is per USER, and without this field it falls
+  // back to the 200 MB default, dropping the quota of ALL of a paying
+  // user's apps at once. Same calculation as publicar_sistema, including the
+  // "m" suffix (without a unit, XFS reads the number as bytes and zeroes the
+  // quota).
   const donoRow = await getUserById(userId).catch(() => null);
   const res = await ctl({ verb: 'publish', label, system: target, runtime: pub.runtime, files, env,
     author: name, message: `replicado de ${src.label}/${src.system}`, quota: cotaDeDisco(donoRow),
@@ -489,8 +511,9 @@ export async function replicateApp({ userId, agentId, origem, novo_nome, appClie
   if (res.error === 'smoke_funcional_falhou') return { ok: false, error: 'O app replicado subiu, mas seu endpoint de diagnóstico falhou no teste funcional e ele NÃO foi publicado.', falhas_funcionais: (res.broken || []).map((b) => `${b.ref} (${b.status})`).join(', ') };
   if (!res.ok) return { ok: false, error: `Falha ao replicar: ${res.error || 'erro no host'}` };
   await registerApp({ userId, agentId, label, system: target, runtime: pub.runtime, url: res.url });
-  await setAppSnapshot(userId, target, pub.source_snapshot).catch(() => {}); // a réplica também é replicável
-  // Só afirma "privado" se o HOST confirmou o portão (mesma regra do publish).
+  await setAppSnapshot(userId, target, pub.source_snapshot).catch(() => {}); // the replica is also replicable
+  // Only states "private" if the HOST confirmed the gate (same rule as
+  // publish).
   const gateOk = !acc.authSpec || res.privado === true;
   if (!gateOk) { acc.access = null; acc.creds = null; }
   const accessPersisted=await persistAccess(userId, target, acc);
@@ -501,14 +524,14 @@ export async function replicateApp({ userId, agentId, origem, novo_nome, appClie
       : !accessPersisted ? 'O portão foi aplicado no host, mas o registro interno de acesso não confirmou após três tentativas. Entregue as credenciais agora e encaminhe o incidente; não prometa que será possível recuperá-las depois.' : undefined };
 }
 
-// Apaga de VERDADE um app do usuário: remove o container do host de apps e a
-// linha no banco. Usado pela UI (botão apagar, com confirmação) e reusa a
-// mesma mecânica da tool apagar_sistema.
-// O que EXISTE hoje dentro do app, em linguagem de gente — pra ninguém apagar às
-// cegas. Apagar um app destrói também o /app/data (o banco de dados do próprio
-// app), que de propósito não vai em snapshot nem em git: não tem como voltar.
-// Best-effort: se o host não responder, devolve null e quem chama segue sem o
-// detalhe (a confirmação continua obrigatória).
+// REALLY deletes a user's app: removes the container from the apps host and
+// the row in the database. Used by the UI (delete button, with confirmation)
+// and reuses the same mechanics as the apagar_sistema tool.
+// What EXISTS today inside the app, in plain language — so nobody deletes
+// blind. Deleting an app also destroys the /app/data (the app's own
+// database), which deliberately doesn't go into a snapshot or git: there's
+// no way back. Best-effort: if the host doesn't respond, returns null and
+// the caller proceeds without the detail (confirmation is still mandatory).
 export async function appContentsSummary(userId, system) {
   const sys = (system || '').toLowerCase();
   if (!hostingEnabled() || !sys) return null;
@@ -530,7 +553,7 @@ export async function appContentsSummary(userId, system) {
       registros: totalRegistros,
       detalhe: partes,
       versoes: inv.versoes ?? null,
-      // Uma linha só, pronta pra entrar num texto de confirmação.
+      // A single line, ready to drop into a confirmation text.
       resumo: inv.dados?.existe
         ? (partes.length
           ? `dados do app: ${partes.join(', ')}`
@@ -552,10 +575,11 @@ export async function deleteAppForUser(userId, system) {
   return { ok: true, sistema: sys };
 }
 
-// server.js padrão injetado quando o agente manda só o frontend (sem server.js).
-// Serve os arquivos estáticos do app (raiz ou public/) sem o agente precisar
-// escrever servidor nenhum — assim o front NUNCA vive dentro de uma template
-// string do Node, que era a origem dos crashes de `${...}` no boot.
+// Default server.js injected when the agent only sends the frontend (no
+// server.js). Serves the app's static files (root or public/) without the
+// agent needing to write any server — that way the frontend NEVER lives
+// inside a Node template string, which was the source of the `${...}` boot
+// crashes.
 const DEFAULT_STATIC_SERVER = () => `// Gerado automaticamente pelo ${marca().nome}: serve seus arquivos estáticos.
 // Seu frontend fica em public/ (ou na raiz). Não precisa editar este arquivo.
 const http = require('http');
@@ -586,12 +610,13 @@ http.createServer((req, res) => {
 }).listen(PORT, () => console.log('static server on ' + PORT));
 `;
 
-// ── Esqueleto modular de app node (tool iniciar_estrutura_do_app) ──
-// Gera no HOST (zero tokens de runtime) a estrutura que o resgate do KhaosClass
-// provou funcionar: server.js FINO + lib/ (db, helpers, rotas por área) + public/
-// (um .js por área). O app nasce funcional (api/status + página) e já nasce no
-// formato que passa no lint e nunca esbarra no guarda de tamanho. Exportada pra
-// dar pra testar sem harness.
+// ── Modular Node app skeleton (iniciar_estrutura_do_app tool) ──
+// Generates on the HOST (zero runtime tokens) the structure that the
+// KhaosClass rescue proved works: a THIN server.js + lib/ (db, helpers,
+// per-area routes) + public/ (one .js per area). The app is born functional
+// (api/status + a page) and already born in a shape that passes lint and
+// never bumps into the size guard. Exported so it can be tested without the
+// harness.
 export function scaffoldNodeApp(system, titulo) {
   const t = String(titulo || system)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -876,12 +901,13 @@ h1 { margin-top: 0; }
 
 export function hostingTools(userId, agentId, opts = {}) {
   if (!hostingEnabled()) return [];
-  // #6: sink pra mostrar link de app como CARD com botão "Abrir app" (mesmo
-  // mecanismo do mostrar_produtos), em vez de URL crua no texto. Quando presente,
-  // publicar/replicar/listar emitem o card; sem sink (ex.: caminho de emergência),
-  // as tools seguem só com o texto de sempre.
-  // `Raw` porque o listar_sistemas o desliga quando a chamada é sondagem interna
-  // (intencao:"consulta"); publicar/replicar sempre emitem, ali o card É o resultado.
+  // #6: sink to show the app link as a CARD with an "Open app" button (same
+  // mechanism as mostrar_produtos), instead of a raw URL in the text. When
+  // present, publicar/replicar/listar emit the card; with no sink (e.g. the
+  // emergency path), the tools just keep the usual text.
+  // `Raw` because listar_sistemas turns it off when the call is an internal
+  // probe (intencao:"consulta"); publicar/replicar always emit it, there the
+  // card IS the result.
   const emitAppCardRaw = typeof opts.onAppLink === 'function' ? opts.onAppLink : null;
   const emitAppCard = emitAppCardRaw;
   // Conversa vinda do app iOS: ver appQuotaBlock.
@@ -903,17 +929,18 @@ export function hostingTools(userId, agentId, opts = {}) {
   }
   async function guardAgentOwner(res) {
     if (!res || res.error) return res;
-    if (!res.app || res.shared || res.ownerUserId !== userId) return res; // app novo ou colaboração => libera
+    if (!res.app || res.shared || res.ownerUserId !== userId) return res; // new app or collaboration => allows it
     const owner = res.app.agent_id;
-    if (!owner || !agentId || owner === agentId) return res;               // sem dono definido ou é o próprio => libera
+    if (!owner || !agentId || owner === agentId) return res;               // no owner set or it's their own => allows it
     return { error: routeToOwnerMsg(res.app.system, await ownerAgentName(owner)) };
   }
   const rApp = async (system, dono) => guardAgentOwner(await resolveApp(userId, system, dono));
   const rOwner = async (system, dono) => guardAgentOwner(await resolveOwnerForWrite(userId, system, dono));
-  // ── Qual app quando `nome_do_sistema` vem vazio (só rascunho/leitura) ──
-  // Ordem: nome dado > app lembrado nesta sessão > rascunho aberto único >
-  // app publicado único > PERGUNTA. Nunca escolhe entre vários: se há ambiguidade
-  // devolve a lista pro assistente perguntar. Nome dado sempre ganha.
+  // ── Which app when `nome_do_sistema` comes in empty (draft/read only) ──
+  // Order: given name > app remembered in this session > single open draft >
+  // single published app > ASK. Never picks among several: if there's
+  // ambiguity, it returns the list for the assistant to ask. A given name
+  // always wins.
   async function slugAlvo(nome_do_sistema) {
     const dado = String(nome_do_sistema || '').trim().toLowerCase();
     if (dado) {
@@ -934,7 +961,8 @@ export function hostingTools(userId, agentId, opts = {}) {
     }
     return { error: 'Informe o nome do sistema (nome_do_sistema).' };
   }
-  // Resolve o alvo e já LEMBRA (o próximo passo da mesma sequência não precisa repetir).
+  // Resolves the target and already REMEMBERS it (the next step in the same
+  // sequence doesn't need to repeat it).
   async function alvoRascunho(nome_do_sistema, dono) {
     const alvo = await slugAlvo(nome_do_sistema);
     if (alvo.error) return { error: alvo.error };
@@ -960,8 +988,8 @@ export function hostingTools(userId, agentId, opts = {}) {
     const revision = fileOnly ? draftRevision({ [rel]:files[rel] }) : draftRevision(files);
     return createHash('sha256').update(JSON.stringify([alvo.owner.ownerUserId, alvo.system, revision])).digest('hex');
   }
-  // Mesma coisa pras tools de INSPEÇÃO de app publicado (logs/histórico/diff),
-  // que resolvem por rApp e devolvem erro como texto puro.
+  // Same thing for the INSPECTION tools of a published app (logs/history/diff),
+  // which resolve through rApp and return the error as plain text.
   async function alvoPublicado(nome_do_sistema, dono) {
     const alvo = await slugAlvo(nome_do_sistema);
     if (alvo.error) return { error: alvo.error };
@@ -1019,18 +1047,21 @@ export function hostingTools(userId, agentId, opts = {}) {
         const system = (nome_do_sistema || '').toLowerCase();
         if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido (use minúsculas, números, - ou _, até 31 chars).' };
         if (!['node', 'flask'].includes(runtime)) return { ok: false, error: 'runtime deve ser node ou flask.' };
-        // Resolve o DONO cedo: o rascunho (staging) pertence ao dono do app, e é a
-        // base dos arquivos a publicar. Cobre app novo (dono = chamador) e Modo B.
+        // Resolves the OWNER early: the draft (staging) belongs to the
+        // app's owner, and it's the basis for the files to publish. Covers a
+        // new app (owner = caller) and Mode B.
         const owner = await rOwner(system, dono);
         if (owner.error) return { ok: false, error: owner.error };
-        lembrarAppAtual(userId, system); // vira o app corrente da sequência
-        // Teto de apps do plano do dono. Cedo de propósito: barra antes de gastar
-        // build/publish no host. Só pega app NOVO (ver appQuotaBlock).
+        lembrarAppAtual(userId, system); // becomes the sequence's current app
+        // The owner's plan's app cap. Deliberately early: blocks before
+        // spending a build/publish on the host. Only catches a NEW app (see
+        // appQuotaBlock).
         const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
         if (quota) return quota;
-        // Monta os arquivos: base = rascunho salvo (escrito com escrever_arquivo_do_app),
-        // com os arquivos passados INLINE nesta chamada por cima (retrocompat + edição
-        // pontual). Assim o modelo não precisa mandar todo o código numa tacada só.
+        // Assembles the files: base = saved draft (written with
+        // escrever_arquivo_do_app), with the files passed INLINE in this
+        // call layered on top (backward compat + one-off edit). This way the
+        // model doesn't need to send all the code in one shot.
         const files = { ...(await getAppDraft(owner.ownerUserId, system)) };
         if (Array.isArray(arquivos)) {
           for (const a of arquivos) {
@@ -1049,9 +1080,10 @@ export function hostingTools(userId, agentId, opts = {}) {
         }
         const paths = Object.keys(files);
         if (runtime === 'node' && !paths.includes('server.js')) {
-          // Sem server.js: se veio frontend (algum index.html), injeta um servidor
-          // estático padrão. Assim o agente não precisa escrever servidor e o front
-          // fica em arquivos próprios (nada de HTML dentro de template string).
+          // No server.js: if a frontend came in (some index.html), injects a
+          // default static server. This way the agent doesn't need to write
+          // a server and the frontend stays in its own files (no HTML inside
+          // a template string).
           const hasIndex = paths.some((p) => p === 'index.html' || p === 'public/index.html' || p.endsWith('/index.html'));
           if (!hasIndex) return { ok: false, error: `Pra um app estático, mande um public/index.html (o ${marca().nome} serve sozinho). Pra um backend, mande um server.js.` };
           files['server.js'] = Buffer.from(DEFAULT_STATIC_SERVER(), 'utf8').toString('base64');
@@ -1065,7 +1097,8 @@ export function hostingTools(userId, agentId, opts = {}) {
           total += n;
           if (total > MAX_TOTAL_BYTES) return { ok: false, error: 'App passou do limite de 2 MB no total.' };
         }
-        // Publish gate: recusa segredo escrito no código (força uso do cofre).
+        // Publish gate: rejects a secret written into the code (forces use
+        // of the vault).
         const leaks = scanSecrets(files);
         if (leaks.length) {
           const lst = leaks.map((l) => `${l.arquivo}: ${l.tipo}`).join('; ');
@@ -1073,25 +1106,29 @@ export function hostingTools(userId, agentId, opts = {}) {
             ok: false,
             reentrar: true,
             error: 'Encontrei um segredo (chave/senha/token) escrito direto no código, então não publiquei por segurança.',
-            // `usuario` = a frase que o DONO do app precisa ler. Sem ela, um publish
-            // barrado some da resposta quando o modelo volta a mexer no rascunho, e a
-            // pessoa fica esperando uma publicação que nunca aconteceu (caso de 17/09).
+            // `usuario` = the sentence the app's OWNER needs to read.
+            // Without it, a blocked publish disappears from the response
+            // when the model goes back to editing the draft, and the person
+            // is left waiting for a publication that never happened (case
+            // from 2026-09-17).
             usuario: 'Não publiquei: achei uma chave/senha escrita direto no código do app, e publicar assim deixaria ela exposta. Vou guardar no cofre do app e publicar de novo.',
             agente: 'NUNCA escreva chave/senha/token direto no fonte. Guarde cada segredo com a tool definir_segredo (cofre cifrado) e no código use só process.env.NOME (Node) ou os.environ["NOME"] (Flask). '
               + 'Encontrei: ' + lst + '. Tire do código, defina no cofre e publique de novo.',
             segredos_encontrados: leaks,
           };
         }
-        // Shrink-guard: app JÁ publicado não pode ENCOLHER demais num publish sem
-        // confirmação explícita. Protege contra o pior modo de falha observado:
-        // reescrita de arquivo inteiro a partir de uma versão VELHA no contexto do
-        // modelo (turno truncado/compaction) → publish full-replace apaga código bom.
-        // App novo (sem snapshot) não passa por aqui.
+        // Shrink-guard: an app ALREADY published can't SHRINK too much in a
+        // publish without explicit confirmation. Protects against the worst
+        // observed failure mode: rewriting a whole file from an OLD version
+        // in the model's context (truncated turn/compaction) → a
+        // full-replace publish wipes out good code. A new app (no snapshot)
+        // doesn't go through this.
         if (owner.app && !String(confirmo_reducao || '').trim()) {
           const snapRow = await getAppSnapshot(owner.ownerUserId, system).catch(() => null);
           const prev = (snapRow && readSnapshot(snapRow.source_snapshot)) || null;
           if (prev && Object.keys(prev).length) {
-            // Reorganização (código mudou de arquivo, app cresceu, rotas mantidas) passa; ver app-shrink-guard.mjs.
+            // Reorganization (code moved to a different file, app grew,
+            // routes kept) passes; see app-shrink-guard.mjs.
             const { bloquear, reducoes, oldTotal, newTotal } = avaliarReducao(prev, files);
             if (bloquear) {
               return {
@@ -1110,11 +1147,12 @@ export function hostingTools(userId, agentId, opts = {}) {
             }
           }
         }
-        // Lint de consistência (determinístico, roda no host, zero tokens):
-        // (1) handler on* referenciado em HTML/template sem função definida;
-        // (2) função declarada em dois arquivos de cliente. Ambos BLOQUEIAM: são
-        // exatamente os bugs "botão que não faz nada" que custam turnos de caçada.
-        // (3) api()/fetch() sem rota no servidor vira só AVISO (heurístico).
+        // Consistency lint (deterministic, runs on the host, zero tokens):
+        // (1) an on* handler referenced in HTML/template with no function
+        // defined; (2) a function declared in two client files. Both BLOCK:
+        // these are exactly the "button that does nothing" bugs that cost
+        // turns of hunting. (3) an api()/fetch() with no matching server
+        // route only becomes a WARNING (heuristic).
         const lint = lintAppB64(files);
         if (lint.erros.length && !String(confirmo_lint || '').trim()) {
           return {
@@ -1131,9 +1169,10 @@ export function hostingTools(userId, agentId, opts = {}) {
             ...(lint.avisos.length ? { lint_avisos: lint.avisos } : {}),
           };
         }
-        // Arquivos de código inchados (≥400 linhas) viram aviso no sucesso — o
-        // bloqueio duro (≥800) fica na ESCRITA (escrever_arquivo_do_app), não aqui:
-        // bloquear o publish de código que já entrou no rascunho só travaria o app.
+        // Bloated code files (≥400 lines) become a warning on success — the
+        // hard block (≥800) stays at WRITE time (escrever_arquivo_do_app),
+        // not here: blocking the publish of code that already made it into
+        // the draft would just lock the app up.
         const arquivosGrandes = Object.entries(files)
           .filter(([rel]) => /\.(js|mjs|cjs|py|html|htm)$/i.test(rel))
           .map(([rel, b64]) => {
@@ -1141,26 +1180,28 @@ export function hostingTools(userId, agentId, opts = {}) {
             catch { return null; }
           })
           .filter((f) => f && f.linhas >= 400);
-        // O DONO do app (Modo B / app novo) já foi resolvido no topo (owner). O
-        // AUTOR do commit é sempre quem publicou.
+        // The app's OWNER (Mode B / new app) was already resolved at the
+        // top (owner). The commit's AUTHOR is always whoever published.
         const label = owner.ownerLabel;
         const author = (await callerName(userId)) || owner.ownerName;
         const env = await getAppSecretsDecrypted(owner.ownerUserId, system);
-        // Cota de disco = entitlement do plano do DONO do app (recurso reservado,
-        // NÃO usa crédito). ctl.py aplica via XFS project quota (ensure_quota);
-        // o formato vem de cotaDeDisco().
+        // Disk quota = the app OWNER's plan entitlement (a reserved
+        // resource, does NOT use credit). ctl.py applies it via XFS project
+        // quota (ensure_quota); the format comes from cotaDeDisco().
         const ownerRow = await getUserById(owner.ownerUserId).catch(() => null);
-        // Portão de acesso à URL. App novo nasce privado (usuário/senha pedidos
-        // pelo roteador antes de acordar o container); republicação preserva.
-        // `acesso` só vale na primeira publicação — depois é definir_acesso_sistema.
+        // URL access gate. A new app is born private (username/password
+        // requested by the router before waking the container);
+        // republishing preserves it. `acesso` only applies on the first
+        // publish — after that it's definir_acesso_sistema.
         const acc = await resolveAccessForPublish(owner.ownerUserId, system, !owner.app, owner.app ? null : acesso);
         const res = await ctl({ verb: 'publish', label, system, runtime, files, env,
           author, message: mensagem, quota: cotaDeDisco(ownerRow),
           ...(acc.authSpec ? { auth: acc.authSpec } : {}) }, { timeoutMs: 120_000 });
         if (res.error === 'app_crashed') {
-          // O app subiu e CRASHOU no boot. NÃO foi publicado. O `error` é o texto
-          // LIMPO pro usuário; as instruções técnicas ficam em `agente` (só pro
-          // modelo) e a re-entrada no loop é sinalizada por `reentrar`.
+          // The app came up and CRASHED at boot. It was NOT published. The
+          // `error` is the CLEAN text for the user; the technical
+          // instructions stay in `agente` (model-only) and re-entry into the
+          // loop is signaled by `reentrar`.
           return {
             ok: false,
             reentrar: true,
@@ -1172,8 +1213,9 @@ export function hostingTools(userId, agentId, opts = {}) {
           };
         }
         if (res.error === 'assets_quebrados') {
-          // O app subiu, mas um CSS/JS referenciado no HTML não carrega (arquivo
-          // faltando ou caminho errado). NÃO foi publicado. Diz o que quebrou.
+          // The app came up, but a CSS/JS referenced in the HTML doesn't
+          // load (missing file or wrong path). It was NOT published. States
+          // what broke.
           const lst = (res.broken || []).map((b) => `${b.ref} (${b.status})`).join(', ');
           return {
             ok: false,
@@ -1199,31 +1241,35 @@ export function hostingTools(userId, agentId, opts = {}) {
           error: 'Não consegui publicar o app agora (erro no host).',
           agente: `Falha ao publicar: ${res.error || 'erro no host'}. Se parecer transitório, tente de novo; senão veja ver_logs_sistema.`,
         };
-        // Registra sob o DONO do app. Numa publicação colaborativa, preserva o
-        // agente do dono (não reatribui a app pro agente do colaborador).
+        // Registers under the app's OWNER. In a collaborative publish,
+        // preserves the owner's agent (doesn't reassign the app to the
+        // collaborator's agent).
         const regAgent = owner.shared ? (owner.app && owner.app.agent_id) || null : agentId;
         await registerApp({ userId: owner.ownerUserId, agentId: regAgent, label, system, runtime, url: res.url });
-        // O portão de acesso mora no host (ctl.py grava a entrada `auth`, router.py
-        // valida). Só afirmamos que o app está trancado se o HOST confirmou
-        // (`privado:true`): host antigo ignora o `auth` e devolveria a URL aberta —
-        // aí é melhor avisar o assistente do que prometer privacidade que não existe.
+        // The access gate lives on the host (ctl.py writes the `auth`
+        // entry, router.py validates it). We only state the app is locked
+        // if the HOST confirmed it (`privado:true`): an old host ignores
+        // `auth` and would return the URL open — in that case it's better to
+        // warn the assistant than to promise a privacy that doesn't exist.
         const gateOk = !acc.authSpec || res.privado === true;
         if (!gateOk) { acc.access = null; acc.creds = null; }
         const accessPersisted=await persistAccess(owner.ownerUserId, system, acc);
-        // Snapshot do código (só o fonte enviado) pra permitir replicar depois.
-        // Dado de runtime (em /app/data) não é enviado, então não entra aqui.
-        // SÓ limpa o rascunho se o snapshot NOVO ficou salvo: o rascunho re-semeia
-        // do snapshot, então limpar com snapshot velho/ausente faria a próxima
-        // edição partir de código STALE (um dos vetores do incidente KhaosClass).
+        // Code snapshot (only the submitted source) to allow replicating
+        // later. Runtime data (in /app/data) isn't sent, so it doesn't go in
+        // here. ONLY clears the draft if the NEW snapshot was saved: the
+        // draft re-seeds from the snapshot, so clearing with an old/missing
+        // snapshot would make the next edit start from STALE code (one of
+        // the vectors in the KhaosClass incident).
         const snap = buildSnapshot(files);
         let snapshotOk = false;
         if (snap) {
-          try { await setAppSnapshot(owner.ownerUserId, system, snap); snapshotOk = true; } catch { /* mantém o rascunho */ }
+          try { await setAppSnapshot(owner.ownerUserId, system, snap); snapshotOk = true; } catch { /* keeps the draft */ }
         }
         if (snapshotOk) await clearAppDraft(owner.ownerUserId, system).catch(() => {});
-        // Espia o log logo após o publish (best-effort, não bloqueia): o boot foi
-        // validado pelo host, mas erro de runtime nas primeiras requisições só
-        // aparece aqui (ex: "no such column" do SQLite).
+        // Peeks at the log right after the publish (best-effort, doesn't
+        // block): boot was validated by the host, but a runtime error on the
+        // first requests only shows up here (e.g. SQLite's "no such
+        // column").
         let avisosDeLog;
         try {
           const lg = await ctl({ verb: 'logs', label, system, tail: 80 }, { timeoutMs: 20_000 });
@@ -1264,24 +1310,26 @@ export function hostingTools(userId, agentId, opts = {}) {
           colaborativo: owner.shared || undefined, dono: owner.shared ? owner.ownerName : undefined };
       },
     },
-    // ── Prova de vida (Fase 2 do item 3 das frustrações de 16/09) ─────────────
-    // O lint só enxerga o que é ESTÁTICO. O erro de Tipo 2 (o nome existe, mas o
-    // VALOR está errado: `/api/pign` no lugar de `/api/ping`) só aparece quando o
-    // código RODA. Esta tool sobe o rascunho num container DESCARTÁVEL no host,
-    // vê se ele fica de pé e exercita os GET literais que o próprio app declara.
+    // ── Proof of life (Phase 2 of item 3 from the 2026-09-16 frustrations) ───────
+    // Lint only sees what's STATIC. The Type 2 error (the name exists, but
+    // the VALUE is wrong: `/api/pign` instead of `/api/ping`) only shows up
+    // when the code RUNS. This tool brings the draft up in a DISPOSABLE
+    // container on the host, checks whether it stays up, and exercises the
+    // literal GETs the app itself declares.
     //
-    // NÃO é ferramenta do modelo: fica fora de READS/EDITS no app-task-runner, que
-    // é quem a dispara no fim da tarefa de app. Custo de schema no prompt = zero, e
-    // o modelo não consegue chamá-la em loop. É portão que INFORMA, não que bloqueia.
+    // NOT a model tool: it's kept outside READS/EDITS in the
+    // app-task-runner, which is what fires it at the end of an app task.
+    // Prompt schema cost = zero, and the model can't call it in a loop. It's
+    // a gate that INFORMS, not one that blocks.
     //
-    // Nunca publica, nunca registra o app, nunca limpa o rascunho, nunca encosta no
-    // container publicado nem no /app/data real (o verbo `probe` do ctl.py roda em
-    // diretório e nome próprios, com teto de 1 prova viva por pessoa, TTL e teardown
-    // garantido inclusive no erro).
+    // Never publishes, never registers the app, never clears the draft,
+    // never touches the published container or the real /app/data (ctl.py's
+    // `probe` verb runs in its own directory and name, with a cap of 1 live
+    // proof per person, a TTL and guaranteed teardown even on error).
     //
-    // Contrato herdado do `probe`: ok:false = a PROVA não rodou (não diz nada sobre
-    // o app). App quebrado é resultado VÁLIDO da prova: ok:true com `veredito` em
-    // passou | quebrado | crashou | nao_subiu.
+    // Contract inherited from `probe`: ok:false = the PROOF didn't run (says
+    // nothing about the app). A broken app is a VALID proof result: ok:true
+    // with `veredito` in passou | quebrado | crashou | nao_subiu.
     {
       name: 'provar_app',
       description: 'Internal platform use: boots the app draft in a disposable container and reports whether it stays up. Publishes nothing.',
@@ -1292,9 +1340,10 @@ export function hostingTools(userId, agentId, opts = {}) {
         const { system, owner } = alvo;
         const files = { ...(await getAppDraft(owner.ownerUserId, system)) };
         if (!Object.keys(files).length) return { ok: false, prova: 'nao_rodou', error: 'Não há rascunho pra provar.' };
-        // Mesma montagem do publish, pra provar EXATAMENTE o que seria publicado:
-        // o runtime do app que já existe manda; em app novo, app.py sem server.js
-        // é flask e o resto é node.
+        // Same assembly as publish, to prove EXACTLY what would be
+        // published: the runtime of an already-existing app rules; for a
+        // new app, app.py with no server.js means flask and everything else
+        // is node.
         const paths = Object.keys(files);
         const runtime = ['node', 'flask'].includes(owner.app?.runtime)
           ? owner.app.runtime
@@ -1313,8 +1362,9 @@ export function hostingTools(userId, agentId, opts = {}) {
           total += n;
           if (total > MAX_TOTAL_BYTES) return { ok: false, prova: 'nao_rodou', error: 'App passou do limite de 2 MB no total.' };
         }
-        // Os segredos do cofre entram como no publish: sem eles um app que lê
-        // process.env.X morre no boot e a prova acusaria um defeito que não existe.
+        // The vault's secrets go in the same as in publish: without them an
+        // app reading process.env.X dies at boot and the proof would flag a
+        // defect that doesn't exist.
         const env = await getAppSecretsDecrypted(owner.ownerUserId, system);
         const ownerRow = await getUserById(owner.ownerUserId).catch(() => null);
         const res = await ctl({ verb: 'probe', label: owner.ownerLabel, runtime, files, env,
@@ -1374,7 +1424,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido: use minúsculas, números, hífen ou underscore (até 31 caracteres, começando com letra/número).' };
         const owner = await rOwner(system, undefined);
         if (owner.error) return owner;
-        lembrarAppAtual(userId, system); // vira o app corrente da sequência
+        lembrarAppAtual(userId, system); // becomes the sequence's current app
         if (owner.app) {
           return { ok: false, error: `O sistema "${system}" já está publicado. Esta tool é só pra COMEÇAR app novo; num app existente o rascunho já parte do código atual — use ler_arquivo_do_app + editar_arquivo_do_app/escrever_arquivo_do_app.` };
         }
@@ -1426,10 +1476,11 @@ export function hostingTools(userId, agentId, opts = {}) {
         const owner = alvo.owner;
         const buf = Buffer.from(String(conteudo ?? ''), 'utf8');
         if (buf.length > MAX_FILE_BYTES) return rejectedEdit(`Arquivo ${rel} passou de 512 KB.`);
-        // Guarda de tamanho (lição do incidente KhaosClass): arquivo de código
-        // gigante vira reescrita integral a cada mudança → contexto estoura no meio,
-        // versões pela metade, loop de conserta-quebra. Métrica = LINHAS (vendor
-        // minificado é 1 linha e passa). Bloqueia ≥800; a partir de 400 só avisa.
+        // Size guard (lesson from the KhaosClass incident): a giant code
+        // file turns into a full rewrite on every change → context overflows
+        // mid-way, half-finished versions, a fix-break loop. Metric = LINES
+        // (a minified vendor file is 1 line and passes). Blocks at ≥800;
+        // from 400 it just warns.
         let avisoTamanho;
         if (/\.(js|mjs|cjs|py|html|htm)$/i.test(rel)) {
           const linhas = countLines(String(conteudo ?? ''));
@@ -1445,14 +1496,16 @@ export function hostingTools(userId, agentId, opts = {}) {
             avisoTamanho = `"${rel}" está com ${linhas} linhas. Acima de 800 a escrita passa a ser bloqueada — se for crescer mais, já divida em módulos (lib/routes/ no servidor, um .js por área no cliente).`;
           }
         }
-        // Edição incremental: se ainda não há rascunho e o app já foi publicado,
-        // semeia o rascunho com o último código publicado (snapshot) antes de aplicar.
+        // Incremental edit: if there's no draft yet and the app was already
+        // published, seeds the draft with the last published code (snapshot)
+        // before applying.
         const quota = await newDraftQuotaBlock(owner.ownerUserId, system, owner.app, { appClient });
         if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais });
         const draft = await ensureDraftSeeded(owner.ownerUserId, system, owner.app);
-        // Concorrência otimista: se o agente diz qual versão ele LEU, a escrita só
-        // vale se o arquivo ainda for aquela versão. Evita gravar por cima de
-        // mudança que o agente não viu (contexto stale de turno truncado).
+        // Optimistic concurrency: if the agent says which version it READ,
+        // the write only counts if the file is still that version. Avoids
+        // writing over a change the agent never saw (stale context from a
+        // truncated turn).
         const esperado = String(hash_esperado || '').trim();
         if (esperado) {
           const atualB64 = draft[rel];
@@ -1509,7 +1562,8 @@ export function hostingTools(userId, agentId, opts = {}) {
       async run({ nome_do_sistema, caminho, trecho_antigo, trecho_novo, edicoes, dono }) {
         const rel = String(caminho || '').replace(/^\/+/, '').trim();
         if (!rel) return rejectedEdit('Informe o caminho do arquivo (ex: server.js, public/app.js).');
-        // Normaliza pra lista de edições: usa "edicoes" se veio, senão o par único.
+        // Normalizes to a list of edits: uses "edicoes" if it came in,
+        // otherwise the single pair.
         let lista;
         if (Array.isArray(edicoes) && edicoes.length) {
           lista = edicoes;
@@ -1518,7 +1572,7 @@ export function hostingTools(userId, agentId, opts = {}) {
           if (typeof trecho_novo !== 'string') return rejectedEdit('Informe trecho_novo (o texto que entra no lugar).');
           lista = [{ trecho_antigo, trecho_novo }];
         }
-        // Valida a forma de cada edição antes de mexer em qualquer coisa.
+        // Validates the shape of each edit before touching anything.
         for (let i = 0; i < lista.length; i++) {
           const e = lista[i] || {};
           if (typeof e.trecho_antigo !== 'string' || e.trecho_antigo === '') return rejectedEdit(`Edição ${i + 1}: trecho_antigo vazio.`);
@@ -1528,17 +1582,19 @@ export function hostingTools(userId, agentId, opts = {}) {
         if (alvo.error) return rejectedEdit(alvo.error);
         const system = alvo.system;
         const owner = alvo.owner;
-        // Semeia o rascunho com o código publicado, se preciso, e lê o arquivo atual.
+        // Seeds the draft with the published code, if needed, and reads the
+        // current file.
         const files = await ensureDraftSeeded(owner.ownerUserId, system, owner.app);
         const b64 = files[rel];
         if (b64 == null) {
           return rejectedEdit(`Não achei "${rel}" no app "${system}". Liste com listar_arquivos_do_app.`,
             { arquivos_disponiveis: Object.keys(files) });
         }
-        // Aplica as edições EM MEMÓRIA, em ordem, cada uma exigindo match único no
-        // estado corrente (após as anteriores). Atômico: se qualquer uma falhar,
-        // nada é gravado. Substituição por índice (não usa String.replace pra não
-        // interpretar $ no trecho_novo).
+        // Applies the edits IN MEMORY, in order, each one requiring a
+        // unique match in the current state (after the previous ones).
+        // Atomic: if any one fails, nothing is written. Replacement by index
+        // (doesn't use String.replace so it doesn't interpret $ in
+        // trecho_novo).
         const fonteAntes = Buffer.from(b64, 'base64').toString('utf8');
         let atual = fonteAntes;
         const aproximadas = [];
@@ -1548,10 +1604,11 @@ export function hostingTools(userId, agentId, opts = {}) {
           while (idx !== -1) { if (firstIdx === -1) firstIdx = idx; count++; idx = atual.indexOf(ta, idx + ta.length); }
           const rot = lista.length > 1 ? `Edição ${i + 1}: ` : '';
           if (count === 0) {
-            // Sem casamento byte a byte, o host tenta ANCORAR por similaridade
-            // (≥90%, com folga sobre o 2º lugar e corpo mínimo — ver app-anchor.mjs).
-            // Medido em produção: 12 de 12 recusas reais eram diferença de um
-            // espaço/quebra de linha, e nenhum trecho de outro arquivo ancorou.
+            // Without a byte-for-byte match, the host tries to ANCHOR by
+            // similarity (≥90%, with a margin over 2nd place and a minimum
+            // body — see app-anchor.mjs). Measured in production: 12 out of
+            // 12 real rejections were a single space/line-break difference,
+            // and no snippet from another file ever anchored.
             const ancora = resolverAncora(atual, ta);
             if (!ancora.ok) {
               return rejectedEdit(`${rot}trecho_antigo não encontrado. Leia o arquivo com ler_arquivo_do_app e copie o texto EXATO (mesmos espaços e quebras de linha). Nada foi gravado.`,
@@ -1568,16 +1625,16 @@ export function hostingTools(userId, agentId, opts = {}) {
         }
         const buf = Buffer.from(atual, 'utf8');
         if (buf.length > MAX_FILE_BYTES) return rejectedEdit(`Arquivo ${rel} passaria de 512 KB. Nada foi gravado.`);
-        // Portão de sintaxe: só barra quando a edição QUEBRA um arquivo que estava
-        // íntegro (se já estava quebrado, pode ser justamente o conserto).
+        // Syntax gate: only blocks when the edit BREAKS a file that was
+        // intact (if it was already broken, this might be exactly the fix).
         const quebra = await pioraSintaxe(rel, fonteAntes, atual);
         if (quebra) {
           return rejectedEdit(`A edição deixaria "${rel}" com erro de sintaxe, então nada foi gravado. O compilador disse:\n${quebra.erro}\nCorrija o trecho_novo e mande de novo.`,
             { erro_de_sintaxe: quebra.erro });
         }
         await putAppDraftFile(owner.ownerUserId, system, rel, buf.toString('base64'));
-        // Patch nunca bloqueia por tamanho (é o jeito CERTO de mexer em arquivo
-        // grande já existente), mas avisa quando o arquivo está inchado.
+        // A patch never blocks on size (it's the RIGHT way to touch an
+        // existing large file), but it warns when the file is bloated.
         const linhasNovas = /\.(js|mjs|cjs|py|html|htm)$/i.test(rel) ? countLines(atual) : 0;
         return { ok: true, sistema:system, alvo_validacao:`${owner.ownerUserId}:${system}`, arquivo: rel, ocorrencias: lista.length, bytes_novos: buf.length, hash: fileHash(buf.toString('base64')),
           ...(aproximadas.length ? { ancora_aproximada: aproximadas, obs_ancora: 'O texto no arquivo não era idêntico ao trecho_antigo (diferença de espaços/quebras de linha); o host ancorou pela posição de maior semelhança. Confira o resultado com ler_arquivo_do_app se a edição for sensível.' } : {}),
@@ -1718,7 +1775,8 @@ export function hostingTools(userId, agentId, opts = {}) {
         if (r.error === 'valor_grande') return { ok: false, error: 'Valor muito grande (máx 8 KB).' };
         if (r.error === 'cofre_indisponivel') return { ok: false, error: 'O cofre não está configurado no servidor. Avise o suporte.' };
         if (!r.ok) return { ok: false, error: 'Falha ao guardar o segredo.' };
-        // Se o app já existe, aplica agora (recria o container com o novo env).
+        // If the app already exists, applies it now (recreates the
+        // container with the new env).
         const app = await getAppRow(userId, system);
         if (app) {
           const env = await getAppSecretsDecrypted(userId, system);
@@ -1798,15 +1856,16 @@ export function hostingTools(userId, agentId, opts = {}) {
         if (vis === 'public') {
           const snap = await getAppSnapshot(userId, system);
           const replicavel = !!(snap && snap.source_snapshot);
-          // Anonimização única no publish-para-biblioteca: limpa conteúdo do dono
-          // do snapshot copiável (nome/cidade/dados reais → genéricos/exemplo).
-          // Best-effort: falha aqui não bloqueia a publicação.
+          // One-time anonymization on publish-to-library: cleans the
+          // owner's content out of the copyable snapshot (name/city/real
+          // data → generic/placeholder). Best-effort: a failure here doesn't
+          // block the publication.
           let anonimizado = false;
           if (replicavel) {
             try {
               const res = await anonymizeSnapshotBlob(snap.source_snapshot);
               if (res.changed) { await setAppSnapshot(userId, system, res.blob); anonimizado = true; }
-            } catch { /* mantém snapshot original */ }
+            } catch { /* keeps the original snapshot */ }
           }
           return {
             ok: true, visibilidade: 'público', replicavel, anonimizado,
@@ -1894,10 +1953,11 @@ export function hostingTools(userId, agentId, opts = {}) {
       },
       async run({ busca }) {
         let rows = await listPublicApps({ q: busca, limit: 30 });
-        // A busca é por substring (LIKE), não semântica. Se um termo específico não
-        // casar, cai pra lista completa pra você julgar quais servem pelo sentido —
-        // ex: "acervo de produtos" não bate em "catálogo de peças" no LIKE, mas você
-        // consegue reconhecer que servem lendo as descrições.
+        // The search is by substring (LIKE), not semantic. If a specific
+        // term doesn't match, it falls back to the full list for you to
+        // judge which ones fit by meaning — e.g. "acervo de produtos"
+        // doesn't hit "catálogo de peças" in a LIKE, but you can recognize
+        // they fit by reading the descriptions.
         let fallback = false;
         if (busca && String(busca).trim() && !rows.length) {
           rows = await listPublicApps({ limit: 30 });
@@ -1976,7 +2036,8 @@ export function hostingTools(userId, agentId, opts = {}) {
             const s = st[`${label}/${r.system}`];
             const estado = s === 'running' ? 'ligado' : s === 'exited' || s === 'created' ? 'dormindo' : (s || r.status);
             const appUrl = urlDoApp(label, r.system);
-            // `access` NULL = app publicado antes do portão existir: URL aberta.
+            // `access` NULL = app published before the gate existed: open
+            // URL.
             const acesso = r.access === 'private' ? `privado, login "${r.access_user || '?'}"` : 'público';
             if (emitAppCard && cardCount < MAX_CARDS) { emitAppCard({ name: r.system, url: appUrl, description: `${r.runtime}, ${estado}, ${acesso}` }); cardCount++; }
             return `• ${r.system} (${r.runtime}, ${estado}, ${acesso}) → ${appUrl}`;
@@ -2026,18 +2087,20 @@ export function hostingTools(userId, agentId, opts = {}) {
         const r = await rApp(system, dono);
         if (r.error) return { ok: false, error: r.error, efeito: { versao: 1, operacao: 'chamada_http', estado: 'nao_aplicado' } };
         const app = r.app;
-        // Caminho: relativo à raiz do app, sem escapar o path do sistema.
+        // Path: relative to the app's root, without escaping the system's
+        // path.
         let rel = String(caminho || '').trim().replace(/^\/+/, '');
         if (/^https?:\/\//i.test(rel) || rel.includes('..')) {
           return { ok: false, error: 'caminho inválido: use um caminho relativo à raiz do app (ex: "api/contas"), sem domínio nem "..".', efeito: { versao: 1, operacao: 'chamada_http', estado: 'nao_aplicado' } };
         }
         const method = (metodo || 'GET').toUpperCase();
-        // Recibo de efeito, pro executor de tarefas saber se uma chamada que deu
-        // errado pode ou não ter alterado algo no app. Sem isso QUALQUER resposta
-        // não-2xx era "efeito incerto" e travava a tarefa de programação inteira
-        // (caso de 17/09: um GET em api/status voltou erro e a tarefa morreu).
-        // GET não altera dado por definição de HTTP; nos demais métodos a gente
-        // continua honesto e não afirma nada.
+        // Effect receipt, so the task runner knows whether a call that
+        // failed may or may not have changed something in the app. Without
+        // this ANY non-2xx response was "uncertain effect" and locked up
+        // the whole coding task (case from 2026-09-17: a GET on api/status came
+        // back with an error and the task died). GET doesn't change data by
+        // HTTP definition; for the other methods we stay honest and claim
+        // nothing.
         const NAO_APLICADO = { versao: 1, operacao: 'chamada_http', estado: 'nao_aplicado' };
         const efeitoDoMetodo = method === 'GET' ? NAO_APLICADO : undefined;
         const base = urlDoApp(app.label, system);
@@ -2046,21 +2109,23 @@ export function hostingTools(userId, agentId, opts = {}) {
         if (cabecalhos && typeof cabecalhos === 'object') {
           for (const [k, v] of Object.entries(cabecalhos)) headers[String(k)] = String(v);
         }
-        // Assinatura interna do PRÓPRIO app: o agente não tem (nem deve ter) o
-        // valor do segredo, então a plataforma injeta o x-internal-key a partir
-        // do cofre pra ele conseguir escrever/ler as rotas internas do seu app.
-        // Só pra app PRÓPRIO (não compartilhado) e só se o agente não mandou o
-        // header explicitamente. O valor nunca é exposto ao modelo/usuário.
+        // The app's OWN internal signature: the agent doesn't have (and
+        // shouldn't have) the secret's value, so the platform injects the
+        // x-internal-key from the vault so it can write/read its app's
+        // internal routes. Only for an OWN app (not shared) and only if the
+        // agent didn't send the header explicitly. The value is never
+        // exposed to the model/user.
         try {
           const hasInternal = Object.keys(headers).some((k) => k.toLowerCase() === 'x-internal-key');
           if (!r.shared && !hasInternal) {
             const secrets = await getAppSecretsDecrypted(r.ownerUserId, system);
             if (secrets && secrets.INTERNAL_API_KEY) headers['x-internal-key'] = secrets.INTERNAL_API_KEY;
           }
-        } catch { /* cofre indisponível: segue sem injetar, a chamada pode voltar 401 */ }
-        // Portão de acesso do app (app privado): o roteador pede HTTP Basic antes
-        // de qualquer coisa. A plataforma assina por você a partir do registro do
-        // dono — o modelo nunca vê a senha. Só se o agente não mandou Authorization.
+        } catch { /* vault unavailable: proceeds without injecting, the call may come back 401 */ }
+        // The app's access gate (private app): the router asks for HTTP
+        // Basic before anything else. The platform signs it for you from the
+        // owner's record — the model never sees the password. Only if the
+        // agent didn't send Authorization.
         try {
           const temAuth = Object.keys(headers).some((k) => k.toLowerCase() === 'authorization');
           if (!temAuth) {
@@ -2079,12 +2144,13 @@ export function hostingTools(userId, agentId, opts = {}) {
         // Timeout generoso: o app pode estar dormindo (scale-to-zero) e acordar no 1º acesso.
         const timer = setTimeout(() => ctrl.abort(), 30_000);
         try {
-          // Redirect NUNCA no automático: a requisição carrega o x-internal-key do
-          // cofre e o Basic do portão do app, e o código do app é do usuário. Um
-          // 302 pra fora levaria o header custom junto (o fetch só tira o
-          // Authorization ao trocar de origem, não headers próprios) e entregaria
-          // o segredo do app pra qualquer host. Seguimos só dentro da própria
-          // origem do app; saiu dali, a gente para e conta o que aconteceu.
+          // NEVER follow redirects automatically: the request carries the
+          // vault's x-internal-key and the app gate's Basic auth, and the
+          // app's code belongs to the user. A 302 going out would carry the
+          // custom header along (fetch only strips Authorization on an
+          // origin change, not custom headers) and would hand the app's
+          // secret to any host. We only follow within the app's own origin;
+          // once it leaves that, we stop and report what happened.
           let alvoAtual = target;
           let r;
           for (let salto = 0; ; salto++) {
@@ -2181,9 +2247,9 @@ export function hostingTools(userId, agentId, opts = {}) {
         properties: { nome_do_sistema: { type: 'string' } },
         required: ['nome_do_sistema'],
       },
-      // Roda ANTES da confirmação: enriquece o texto que o usuário vai ler com o
-      // que existe de fato dentro do app (nº de registros), pra ele não confirmar
-      // no escuro. Nunca escreve nada.
+      // Runs BEFORE the confirmation: enriches the text the user is going
+      // to read with what actually exists inside the app (number of
+      // records), so they don't confirm in the dark. Never writes anything.
       async preflight({ nome_do_sistema }) {
         const system = (nome_do_sistema || '').toLowerCase();
         if (!sysOk(system)) return null;
@@ -2316,7 +2382,7 @@ export function hostingTools(userId, agentId, opts = {}) {
           return { ok: false, error: `Não achei a versão "${versao}". Confira o hash em ver_historico.` };
         }
         if (!res.ok) return { ok: false, error: `Falha no rollback: ${res.error || 'erro no host'}` };
-        // Atualiza o snapshot da biblioteca com o código restaurado.
+        // Updates the library's snapshot with the restored code.
         let snapshotAtualizado = false;
         if (res.files && Object.keys(res.files).length) {
           const snap = buildSnapshot(res.files);
@@ -2324,9 +2390,10 @@ export function hostingTools(userId, agentId, opts = {}) {
             try { await setAppSnapshot(r.ownerUserId, system, snap); snapshotAtualizado = true; } catch { /* aviso abaixo */ }
           }
         }
-        // O rascunho apontava pro código de ANTES do rollback: limpa pra próxima
-        // edição re-semear do código restaurado. Sem isso, um publish depois do
-        // rollback re-aplicaria a versão errada por cima (estado misto).
+        // The draft pointed at the code from BEFORE the rollback: clears it
+        // so the next edit re-seeds from the restored code. Without this, a
+        // publish after the rollback would re-apply the wrong version on
+        // top (mixed state).
         await clearAppDraft(r.ownerUserId, system).catch(() => {});
         await setAppStatus(r.ownerUserId, system, 'running').catch(() => {});
         return { ok: true, voltou_para: res.reverted_to || versao, url: urlDoApp(app.label, system),
@@ -2400,8 +2467,8 @@ export function hostingTools(userId, agentId, opts = {}) {
         const who = await resolveConnectedUser(userId, contato);
         if (who.error === 'contato_ambiguo') return contatoAmbiguoMsg(contato, who.opcoes);
         let collabUserId = who.ok ? who.userId : null;
-        // Se a conexão foi desfeita, ainda dá pra remover casando pelo nome/e-mail
-        // no próprio roster de colaboradores do sistema.
+        // If the connection was undone, it's still possible to remove by
+        // matching name/e-mail in the system's own collaborator roster.
         if (!collabUserId) {
           const rows = await listAppCollaborators(userId, system);
           const q = String(contato || '').trim().toLowerCase();

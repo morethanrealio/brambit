@@ -4,32 +4,32 @@ import {routineConfirmationSnapshot} from './confirmation-bindings.mjs';
 const fold = value => String(value || '').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/\s+/g,' ').trim();
 const greeting = /^(?:oi|ola|bom dia|boa tarde|boa noite|hi|hello|good morning|good afternoon|good evening|hola|buenos dias|buenas tardes|buenas noches)(?:[,!.]\s*|\s+)/;
 
-// Linguagem de controle fechada: nunca interpreta uma recusa simples, trecho
-// citado, condição ou o conteúdo de uma rotina como autorização para pará-la.
+// Closed control language: it never interprets a simple refusal, quoted
+// snippet, condition or a routine's content as authorization to stop it.
 export function routinePauseIntent(message, {hasPendingProposals = false, language = null} = {}) {
   if (typeof message !== 'string' || message.length > 500 || /[\n\r\u2063]/u.test(message)) return null;
   let text = fold(message).replace(/^[¿¡]\s*/,'').replace(/[.!?]+$/,'').trim();
-  // Referências explícitas a propostas pertencem ao fluxo de confirmação.
+  // Explicit references to proposals belong to the confirmation flow.
   if (/\b(?:pedido|request|solicitud)\s*#?\s*\d+\b/.test(text)) return null;
   for (let n = 0; n < 2; n++) text = text.replace(greeting,'').trim();
   text = text.replace(/^[¿¡]\s*/,'');
   const request = text.match(/^(?:(?:por favor|please)[, ]+)?(?:(?:pode|poderia|can you|could you|puedes?|podrias?)\s+)?(?:(?:por favor|please)\s+)?(?:pausa|pause|pausar|pare|parar|encerrar|encerre|suspender|suspenda|desative|desativar|stop|disable|halt|end|detener|deten|detenga|suspende|desactivar|desactiva|cancela|cancele|cancelar|cancel|desliga|desligue|desligar|turn off|switch off|shut off)\s+(.+)$/)
-    // "apaga" é o "desliga" do espanhol, mas em português é apagar (excluir):
-    // só vale quando a conversa está em espanhol.
+    // "apaga" is Spanish's "desliga" ("turn off"), but in Portuguese it means delete (remove):
+    // only counts when the conversation is in Spanish.
     || (language && tagIdioma(language) === 'es'
       ? text.match(/^(?:(?:por favor)[, ]+)?(?:(?:puedes?|podrias?)\s+)?(?:(?:por favor)\s+)?(?:apaga|apague|apagar)\s+(.+)$/) : null);
   if (!request) return null;
-  // "Cancela a rotina" logo depois de um cartão de criar rotina é recusa da
-  // proposta: com proposta pendente, o verbo cancelar fica com a confirmação.
+  // "Cancel the routine" right after a create-routine card is a refusal of the
+  // proposal: with a pending proposal, the verb "cancel" belongs to the confirmation.
   if (hasPendingProposals && /^(?:(?:por favor|please)[, ]+)?(?:(?:pode|poderia|can you|could you|puedes?|podrias?)\s+)?(?:(?:por favor|please)\s+)?cancel/.test(text)) return null;
   let all = /^(?:todas as|todos os|all the|all|todas las|todos los)\s+/.test(request[1]);
   const subject = request[1].replace(/^(?:todas as|todos os|all the|all|todas las|todos los|a|o|as|os|the|el|la|los|las|minha|minhas|meu|meus|my|mi|mis|estes|esses|estas|essas|these|those|estos|estas)\s+/,'')
-    // Inglês põe o adjetivo antes: "all scheduled routines".
+    // English puts the adjective first: "all scheduled routines".
     .replace(/^(?:scheduled|automatic|automated|recurring)\s+/,'');
   const noun = subject.match(/^(?:rotinas?|monitoramentos?|monitors?|monitoring|routines?|monitoreos?|monitorizaciones?|rutinas?)(?:\s+(.*))?$/);
   if (!noun) return null;
   let target = (noun[1] || '').replace(/[, ]+(?:por favor|please|obrigad[oa]|thanks|thank you|gracias)$/,'').trim();
-  // "o monitoramento programado, todos" descreve o conjunto, não um título.
+  // "the scheduled monitoring, all of them" describes the set, not a title.
   target = target.replace(/^(?:programad[oa]s?|agendad[oa]s?|automatic[oa]s?|recorrentes?|scheduled|automatic|recurring|automatizad[oa]s?)(?=$|[, ])/,'')
     .trim().replace(/^[, ]*(?:todos|todas|all)$/,() => { all = true; return ''; }).trim();
   target = target.replace(/^(?:de|do|da|del|named|chamad[oa]|llamad[oa])\s+/,'');
@@ -92,9 +92,9 @@ export async function handleRoutinePause({message,userId,agent,language = 'pt-BR
   const t = TEXT[tagIdioma(language)] || TEXT['pt-BR'];
   const reply = text => ({text,attachments:[]});
   try {
-    // A leitura é escopada ao dono no banco, igual a listar_rotinas/editar_rotina:
-    // quem pede por um assistente pode parar a rotina que outro assistente do mesmo dono roda.
-    // Nunca infere "monitoramento" pelo prompt da rotina, só pelo título.
+    // The read is scoped to the owner in the database, same as listar_rotinas/editar_rotina:
+    // whoever asks via one assistant can stop the routine another assistant of the same owner runs.
+    // Never infers "monitoring" from the routine's prompt, only from the title.
     const rows = (await listRoutines(userId)).filter(row => row.user_id === undefined || row.user_id === userId);
     if (!rows.length) return reply(t.none);
     if (intent.all) {
@@ -125,12 +125,12 @@ export async function handleRoutinePause({message,userId,agent,language = 'pt-BR
     const saved = result?.routine;
     if (result?.ok !== true || saved?.id !== row.id || saved.user_id !== userId || saved.agent_id !== row.agent_id || saved.enabled !== false) return reply(t.failed);
     let text = row.enabled === false ? t.already(titleOf(saved)) : t.done(titleOf(saved));
-    // Um extra pode ter sido selecionado antes da pausa, ainda sem heartbeat.
-    // Pausar a cadência não é abortar trabalho já encaminhado pelo agendador.
+    // An extra may have been selected before the pause, still without a heartbeat.
+    // Pausing the cadence is not aborting work already dispatched by the scheduler.
     text += ` ${t.running}`;
     return reply(text);
   } catch {
-    // Uma falha de gravação/recibo pode ser incerta; não diga que nada mudou.
+    // A write/receipt failure can be uncertain; don't say nothing changed.
     return reply(t.failed);
   }
 }

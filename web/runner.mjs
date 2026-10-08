@@ -19,15 +19,15 @@
 import { marca } from './marca.mjs';
 
 const HOLD_MS = 25_000;        // quanto o long-poll segura a resposta antes de mandar idle
-const ONLINE_TTL_MS = 45_000;  // device é "online" se pollou/respondeu dentro disso
-const MAX_OUT = 200_000;       // teto de saída acumulada por comando (memória)
-const REQ_GRACE_MS = 15_000;   // folga sobre o timeout do comando antes de desistir
+const ONLINE_TTL_MS = 45_000;  // device is "online" if it polled/responded within this
+const MAX_OUT = 200_000;       // accumulated output ceiling per command (memory)
+const REQ_GRACE_MS = 15_000;   // slack over the command's timeout before giving up
 
-// Canal de ARQUIVO (v2.1.0). Teto PRÓPRIO, separado do MAX_OUT de propósito: o
-// MAX_OUT existe pra proteger o CONTEXTO DO MODELO (a saída do terminal vira
-// texto no prompt), e neste caminho os bytes nunca chegam perto do modelo — vão
-// direto pro nosso S3. Aqui o limite é só memória do processo.
-const MAX_FILE = 25 * 1024 * 1024;   // teto de bytes por arquivo trazido da máquina
+// FILE channel (v2.1.0). OWN ceiling, deliberately separate from MAX_OUT: the
+// MAX_OUT exists to protect the MODEL'S CONTEXT (terminal output becomes
+// text in the prompt), and in this path the bytes never get close to the model — they go
+// straight to OUR S3. Here the limit is only the process's memory.
+const MAX_FILE = 25 * 1024 * 1024;   // byte ceiling per file brought from the machine
 const FILE_GRACE_MS = 20_000;        // folga sobre o timeout do pedido de arquivo
 const MIN_FILE_VERSION = '2.1.0';    // runner mais velho descarta o frame calado
 
@@ -43,7 +43,7 @@ const DEVICES = new Map();
 const PENDING = new Map();
 // reqId -> { userId, parts, size, cap, nextSeq, host, path, done, resolve, timer }
 const FILES = new Map();
-// `${userId}:${threadId}:${deviceId}` -> cwd remoto atual (persistência de `cd`)
+// `${userId}:${threadId}:${deviceId}` -> current remote cwd (`cd` persistence)
 const CWD = new Map();
 
 let SEQ = 0;
@@ -52,8 +52,8 @@ function now() { return Date.now(); }
 
 function devKey(userId, deviceId) { return `${userId}:${deviceId}`; }
 
-// Device online mais recentemente visto do usuário (Fase 0 assume ~1 runner por
-// pessoa; com vários, escolhe o de heartbeat mais novo). Anota-se como limite.
+// User's most recently seen online device (Phase 0 assumes ~1 runner per
+// person; with several, picks the one with the newest heartbeat). Noted as a limitation.
 function pickDevice(userId) {
   let best = null;
   const cut = now() - ONLINE_TTL_MS;
@@ -65,8 +65,8 @@ function pickDevice(userId) {
   return best;
 }
 
-// Existe um runner online pro usuário? Usado pra ligar o modo livre e pra tool
-// `terminal` decidir o transporte. Síncrono de propósito (checagem em memória).
+// Is there an online runner for the user? Used to enable free mode and for the
+// `terminal` tool to decide the transport. Synchronous on purpose (in-memory check).
 export function runnerOnline(userId) {
   return !!pickDevice(userId);
 }
@@ -81,18 +81,18 @@ function touch(userId, deviceId, meta, activeAgentId) {
   return d;
 }
 
-// Qual assistente está amarrado ao runner online do usuário (device_tokens
-// .active_agent_id, propagado no poll). null => o chamador cai no primeiro
-// assistente, igual ao default do device-chat. Só o assistente amarrado usa o
-// runner; assim o modo livre não vaza pra todos os assistentes do dono.
+// Which assistant is bound to the user's online runner (device_tokens
+// .active_agent_id, propagated on poll). null => the caller falls back to the first
+// assistant, same as the device-chat default. Only the bound assistant uses the
+// runner; this way free mode doesn't leak to every assistant of the owner.
 export function runnerBoundAgentId(userId) {
   const d = pickDevice(userId);
   return d ? (d.activeAgentId || null) : null;
 }
 
-// Aplica na hora o assistente amarrado ao runner online do usuário (o next poll
-// já traria do banco em <=HOLD_MS, isto só evita a janela). Devolve o deviceId
-// afetado, ou null se não há runner online.
+// Immediately applies the assistant bound to the user's online runner (the next poll
+// would already bring it from the database within <=HOLD_MS, this just avoids the window). Returns the
+// affected deviceId, or null if there's no online runner.
 export function runnerSetBoundAgent(userId, agentId) {
   const d = pickDevice(userId);
   if (!d) return null;
@@ -102,8 +102,8 @@ export function runnerSetBoundAgent(userId, agentId) {
 
 // ── Lado do canal (chamado pelas rotas /api/runner/*) ──────────────────────
 
-// Long-poll: o runner chama isto e recebe o próximo comando (ou {type:'idle'}
-// após HOLD_MS, quando deve re-pollar na hora). deviceId = id do device token.
+// Long-poll: the runner calls this and receives the next command (or {type:'idle'}
+// after HOLD_MS, when it should re-poll right away). deviceId = device token id.
 export async function runnerPoll(userId, deviceId, meta, activeAgentId) {
   const d = touch(userId, deviceId, meta, activeAgentId);
   if (d.queue.length) return d.queue.shift();
@@ -118,9 +118,9 @@ export async function runnerPoll(userId, deviceId, meta, activeAgentId) {
   });
 }
 
-// O runner devolve frames de saída pela MESMA correlação por reqId:
+// The runner returns output frames correlated by reqId:
 //   { reqId, type:'stdout'|'stderr'|'exit', chunk?, exitCode?, cwd? }
-// userId é do device autenticado; barra frame pra reqId de OUTRO usuário.
+// userId is from the authenticated device; blocks a frame for ANOTHER user's reqId.
 export function runnerResult(userId, deviceId, frame) {
   if (deviceId != null) touch(userId, deviceId, null);
   if (frame && (frame.type === 'filechunk' || frame.type === 'filedone')) {
@@ -165,8 +165,8 @@ function finishReq(reqId, { exit, cwd, error } = {}) {
   });
 }
 
-// ── Provider por trás da tool `terminal` (mesma assinatura de retorno do
-// livreExec do ssh.mjs). A tool faz o maskSecrets na saída, como já fazia. ──
+// ── Provider behind the `terminal` tool (same return signature as
+// ssh.mjs's livreExec). The tool does maskSecrets on the output, as it already did. ──
 export async function runnerExec(userId, comando, { threadId, timeout = 180_000 } = {}) {
   if (!comando) return { ok: false, error: 'Sem comando pra rodar.' };
   const d = pickDevice(userId);
@@ -182,14 +182,14 @@ export async function runnerExec(userId, comando, { threadId, timeout = 180_000 
   return p;
 }
 
-// ── Canal de ARQUIVO (v2.1.0) ─────────────────────────────────────────────────
+// ── FILE channel (v2.1.0) ─────────────────────────────────────────────────
 //
-// Por que existe: o canal exec só devolve TEXTO e com teto. Pra trazer um
-// binário da máquina do dono (foto, PDF, zip) não havia caminho interno, e a
-// falta dele empurrava pra gambiarra — no caso limite, subir o arquivo num host
-// de terceiro pra "buscar de volta", que é vazamento. Aqui os bytes saem da
-// máquina dele direto pro NOSSO backend, em frames próprios, e de lá pro nosso
-// S3 (putMedia). Nada passa pela saída do terminal nem pelo contexto do modelo.
+// Why it exists: the exec channel only returns TEXT and with a ceiling. To bring a
+// binary from the owner's machine (photo, PDF, zip) there was no internal path, and the
+// lack of one pushed toward a workaround — in the worst case, uploading the file to a third-party
+// host to "fetch it back," which is a leak. Here the bytes leave the
+// owner's machine straight to OUR backend, in their own frames, and from there to our
+// S3 (putMedia). Nothing passes through the terminal's output nor the model's context.
 
 function versionAtLeast(v, min) {
   const a = String(v || '').split('.').map((n) => parseInt(n, 10) || 0);
@@ -216,8 +216,8 @@ function finishFile(reqId, { error } = {}) {
   rec.resolve({ ok: true, host: rec.host, path: rec.remotePath || rec.path, nome: rec.name || rec.path.split(/[\\/]/).pop(), tamanho: bytes.length, bytes });
 }
 
-// Frames filechunk/filedone chegam pelo MESMO /api/runner/result, correlacionados
-// pelo reqId. Ordem: o runner posta em sequência, e o `seq` confere.
+// filechunk/filedone frames arrive through the SAME /api/runner/result, correlated
+// by reqId. Order: the runner posts in sequence, and `seq` checks it.
 function fileResult(userId, frame) {
   const rec = FILES.get(frame.reqId);
   if (!rec) return { ok: true, ignored: true };
@@ -253,17 +253,17 @@ function fileResult(userId, frame) {
   return { ok: true };
 }
 
-// Irmão do runnerExec: pede UM arquivo da máquina do dono e devolve os bytes.
-// Quem chama é responsável por guardar (putMedia) e por NÃO jogar o conteúdo no
-// contexto do modelo.
+// Sibling of runnerExec: requests ONE file from the owner's machine and returns the
+// bytes. The caller is responsible for storing it (putMedia) and for NOT throwing the content into
+// the model's context.
 export async function runnerReadFile(userId, caminho, { maxBytes = MAX_FILE, timeout = 120_000 } = {}) {
   if (!caminho) return { ok: false, error: 'Sem caminho de arquivo.' };
   const d = pickDevice(userId);
   if (!d) return { ok: false, error: `Runner offline. Abra o ${marca().nome} Runner na máquina pra eu conseguir pegar o arquivo aí.` };
   const v = d.meta && (d.meta.version || d.meta.v);
   if (!versionAtLeast(v, MIN_FILE_VERSION)) {
-    // Gate obrigatório: runner < 2.1.0 descarta frame desconhecido em silêncio
-    // (runner-go pollOnce), então o pedido ficaria pendurado até o timeout.
+    // Mandatory gate: runner < 2.1.0 silently discards an unknown frame
+    // (runner-go pollOnce), so the request would hang until the timeout.
     return { ok: false, error: `O ${marca().nome} Runner aí (${v || 'versão desconhecida'}) ainda não sabe transferir arquivo. Atualize pra ${MIN_FILE_VERSION} ou mais novo em /runner e peça de novo.` };
   }
   const cap = Math.min(Math.max(1, Number(maxBytes) || MAX_FILE), MAX_FILE);
@@ -277,13 +277,13 @@ export async function runnerReadFile(userId, caminho, { maxBytes = MAX_FILE, tim
   return p;
 }
 
-// Diagnóstico/inspeção (pode servir a uma futura UI /runner).
+// Diagnostics/inspection (may serve a future /runner UI).
 export function runnerStatus(userId) {
   const d = pickDevice(userId);
-  // `currentVersion` sai sempre (mesmo offline) porque a tela precisa dizer qual
-  // versão o download entrega. `outdated` é comparado AQUI, não no browser: o
-  // compare é por componente numérico (2.10.0 > 2.1.0), e comparar string no JS
-  // da página daria falso negativo.
+  // `currentVersion` always goes out (even offline) because the screen needs to say which
+  // version the download delivers. `outdated` is compared HERE, not in the browser: the
+  // comparison is per numeric component (2.10.0 > 2.1.0), and comparing strings in the page's
+  // JS would give a false negative.
   if (!d) return { online: false, currentVersion: RUNNER_VERSION };
   const v = (d.meta && (d.meta.version || d.meta.v)) || null;
   return {
@@ -309,16 +309,16 @@ export function runnerContext(userId) {
   if (!s.online) return '';
   const m = s.meta || {};
   const quem = [m.hostname, [m.os, m.arch].filter(Boolean).join('/')].filter(Boolean).join(', ');
-  // Cerca de escrita: só afirma confinamento com o dado NA MÃO. Ausência é
-  // DESCONHECIDO (Runner antigo, poll sem o campo), nunca "está cercado": o
-  // degrade honesto é invariante do Runner (projetos/runner-local.md), e chutar
-  // pro lado otimista é exatamente o que o daemon evita na máquina do dono.
+  // Write fence: only asserts confinement with the data IN HAND. Absence is
+  // UNKNOWN (old Runner, poll without the field), never "it's fenced": honest
+  // degradation is a Runner invariant (projetos/runner-local.md), and defaulting
+  // to the optimistic side is exactly what the daemon avoids on the owner's machine.
   const confinado = m.confined === '1' || m.confined === true;
   const semCerca = m.confined === '0' || m.confined === false;
   const modo = m.mode || (confinado ? 'workspace-write' : 'não informado');
-  // Em full-access o daemon manda confined=1 (não há o que cercar), então o
-  // modo vem antes: acesso total escolhido pelo dono não é escrita cercada.
-  // Desde a 2.2.0, sem cerca no modo restrito o daemon RECUSA todo comando.
+  // In full-access the daemon sends confined=1 (there's nothing to fence), so the
+  // mode comes first: full access chosen by the owner is not fenced write.
+  // Since 2.2.0, without a fence in restricted mode the daemon REFUSES every command.
   const escopo = modo === 'full-access'
     ? `Escopo: o dono escolheu ACESSO TOTAL nesta máquina: LEITURA e ESCRITA em qualquer pasta, sem cerca do sistema operacional. Confirme com o dono antes de criar, alterar ou apagar arquivo fora do que ele acabou de pedir.`
     : semCerca && versionAtLeast(m.version || m.v, '2.2.0')
@@ -350,8 +350,8 @@ export function runnerAvailability(userId) {
   return {state:seen?'offline':'unknown',activeAgentId:null};
 }
 
-// Contexto factual, não promessa de execução. Grupo/rascunho nunca recebem
-// dados sobre a máquina. Os gates do registry continuam decidindo as tools.
+// Factual context, not a promise of execution. Group/draft never receive
+// data about the machine. The registry's gates still decide the tools.
 export function runnerContextForTurn(userId, {
   agentId, agentCategory='pessoal', ephemeral=false,
   runnerForThisAgent=false, terminalAvailable=false,
@@ -370,8 +370,8 @@ export function runnerContextForTurn(userId, {
     'há Runner online, mas ele não foi habilitado para este assistente neste turno. Verifique o vínculo em /runner e tente novamente. Não infira acesso só porque a máquina está online.'+boundary;
   if (!terminalAvailable) return prefix+
     'há Runner online vinculado a este assistente, mas o terminal local não está disponível neste turno devido às restrições do ambiente/roteamento. Não peça ligar um Runner que já está conectado. Só use transferência de arquivos se a ferramenta correspondente estiver disponível; não prometa executar comandos.'+boundary;
-  // Preserve o contexto ativo existente (inclui confinamento/versão), sem criar
-  // caminho alternativo de execução ou ampliar as permissões do registry.
+  // Preserve the existing active context (includes confinement/version), without creating
+  // an alternative execution path or expanding the registry's permissions.
   const active=runnerContext(userId);
   return active ? active+boundary : prefix+'o estado da conexão mudou durante a preparação deste turno. Verifique /runner e tente novamente.'+boundary;
 }

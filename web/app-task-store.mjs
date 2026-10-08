@@ -8,9 +8,10 @@ import pg from 'pg';
 export async function acquireTaskLock(file) {
   const h=await fs.open(file,'a',0o600);await h.close();
   const child=spawn('flock',['--exclusive','--nonblock','--',file,process.execPath,'-e',"process.stdout.write('LOCKED\\n');process.stdin.resume();"],{stdio:['pipe','pipe','pipe']});
-  // Mesmo motivo do appshost (achado #23): fechar/destruir o stdin de um filho
-  // que já morreu emite EPIPE assíncrono, e stream sem listener de 'error' joga a
-  // exceção e mata o processo. Aqui o desfecho vem do 'exit' do filho.
+  // Same reason as appshost (finding #23): closing/destroying the stdin of a
+  // child that already died emits an async EPIPE, and a stream with no
+  // 'error' listener throws the exception and kills the process. Here the
+  // outcome comes from the child's 'exit'.
   child.stdin.on('error',()=>{});
   let released=false;
   const exited=new Promise(resolve=>{child.once('exit',resolve);child.once('error',()=>resolve(-1));});

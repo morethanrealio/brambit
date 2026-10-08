@@ -13,8 +13,9 @@ import { createBuildState } from './app-build-state.mjs';
 const EDITS=new Set(['escrever_arquivo_do_app','editar_arquivo_do_app','iniciar_estrutura_do_app','definir_segredo','listar_segredos','ver_logs_sistema','ver_diff','ver_historico','chamar_sistema']);
 const INSPECTIONS=new Set(['listar_segredos','ver_logs_sistema','ver_diff','ver_historico']);
 const READS=new Set(['listar_arquivos_do_app','ler_arquivo_do_app','buscar_codigo_do_app','validar_rascunho_do_app','recuperar_contexto_de_codigo']);
-// Gravações de arquivo: quando uma delas é RECUSADA (nada gravado), reler o arquivo
-// é o conserto pedido pela própria tool, não teimosia. Perdão limitado por época.
+// File writes: when one of them is REFUSED (nothing written), re-reading the
+// file is the fix the tool itself asked for, not stubbornness. Forgiveness
+// limited per epoch.
 const FILE_WRITES=new Set(['editar_arquivo_do_app','escrever_arquivo_do_app']);
 const PARDONS_AFTER_REJECT=3;
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -218,7 +219,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       async afterTool({call,out,messages}) {
         const sig=digest(executionSignature(call));const effect=effectState(call,out);
         if(effect!=='not_applied')seen.add(sig);task.signatures=[...seen];
-        // Edição recusada: libera UMA releitura sem punição (teto por época).
+        // Refused edit: allows ONE re-read with no penalty (cap per epoch).
         if(mode==='edicao'&&effect==='not_applied'&&FILE_WRITES.has(call.name)&&task.editReadState&&(task.editReadState.pardons||0)<PARDONS_AFTER_REJECT)
           task.editReadState.pardonNextRead=true;
         // Registry catches tool exceptions; absence of a success receipt after a
@@ -237,8 +238,9 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
             const noProgress=mode==='edicao'
               ?editMeasured?.chars_solicitados>0&&editMeasured.novos_chars===0&&availability?.novos_chars===0
               :measured.chars_solicitados>0&&measured.novos_chars<128&&measured.novos_chars<measured.chars_solicitados*.1;
-            // A releitura que vem logo depois de uma edição recusada é trabalho
-            // legítimo (achar o texto exato); não avança o freio anti-loop.
+            // The re-read that comes right after a refused edit is
+            // legitimate work (finding the exact text); it does not advance
+            // the anti-loop guard.
             const pardoned=mode==='edicao'&&task.editReadState?.pardonNextRead===true;
             lowProgressReads=noProgress?(pardoned?lowProgressReads:lowProgressReads+1):0;
             if(pardoned){task.editReadState.pardonNextRead=false;if(noProgress)task.editReadState.pardons=(task.editReadState.pardons||0)+1;}
@@ -386,22 +388,24 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
     if(mode==='edicao'&&result.termination==='completed'&&!out.ok){
       result.termination='edit_validation_pending';out.app_build.motivo='edit_validation_pending';out.app_build.estado='interrompido';
     }
-    // ── Prova de vida (Fase 2 do item 3 das frustrações de 16/09) ──────────────
-    // Consistência estática prova que o código FECHA, não que ele SOBE: o erro de
-    // Tipo 2 (o nome existe, o VALOR é que está errado, `/api/pign` por `/api/ping`)
-    // só aparece quando roda. Aqui, no fim da edição já validada, o HOST (nunca o
-    // modelo) sobe o rascunho num container descartável e anexa o que observou.
+    // ── Proof of life (Phase 2 of item 3 of the 2026-09-16 frustrations) ────────────
+    // Static consistency proves the code CLOSES, not that it RUNS: the Type 2
+    // error (the name exists, the VALUE is what's wrong, `/api/pign` instead of
+    // `/api/ping`) only shows up when it runs. Here, at the end of the
+    // already-validated edit, the HOST (never the model) boots the draft in a
+    // disposable container and attaches what it observed.
     //
-    // Portão que INFORMA, nunca que bloqueia: o veredito é anexado ao recibo e não
-    // muda `out.ok`, `task.status` nem `result.termination`. Se a prova não roda,
-    // o que se registra é exatamente isso (`prova:'nao_rodou'`), nunca um aprovado
-    // nem um reprovado inventado.
+    // A gate that INFORMS, never one that blocks: the verdict is attached to
+    // the receipt and does not change `out.ok`, `task.status` nor
+    // `result.termination`. If the proof does not run, what gets recorded is
+    // exactly that (`prova:'nao_rodou'`), never a made-up pass or fail.
     if(mode==='edicao'&&result.termination==='completed'&&out.app_build.estado==='consistencia_validada'&&tools.map.has('provar_app')){
       let prova;
       try{ prova=await tools.run('provar_app',{}); }
       catch(e){ prova={ok:false,prova:'nao_rodou',error:String(e?.message||e).slice(0,300)}; }
-      // ToolRegistry.run devolve string `ERRO: ...` quando a tool estoura; normaliza
-      // pro mesmo contrato pra quem lê o recibo não precisar saber disso.
+      // ToolRegistry.run returns a string `ERRO: ...` when the tool blows
+      // up; normalizes to the same contract so whoever reads the receipt
+      // doesn't need to know about that.
       if(typeof prova==='string')prova={ok:false,prova:'nao_rodou',error:prova.slice(0,300)};
       if(prova&&typeof prova==='object')out.app_build.prova_de_vida=prova;
       appendJournal({event:'prova_de_vida',ok:prova?.ok===true,prova:prova?.prova||null,veredito:prova?.veredito||null,at:now()});

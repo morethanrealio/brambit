@@ -1,21 +1,21 @@
-// Aqui "marca" já é a marca da operação na Asaas (externalReference); o nome do
-// produto vem como marcaDoProduto pra não ser sombreado por ela.
+// Here "marca" is already the operation's mark on Asaas (externalReference); the
+// product's name comes as marcaDoProduto so it isn't shadowed by it.
 import { hostDaMarca, marca as marcaDoProduto, uaApi } from './marca.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-// ── Conectores por API key/token do COFRE (Notion, Splitwise, Infinity) ──
+// ── Connectors by VAULT API key/token (Notion, Splitwise, Infinity) ──
 //
-// Diferente dos conectores OAuth (connectors-ext.mjs, GitHub/Slack/Microsoft),
-// aqui não há fluxo OAuth: o próprio usuário gera um token no serviço e guarda
-// no Cofre de credenciais (Conexões › Cofre, kind 'apikey'/'token'). Cada
-// função recebe um `secret()` async que devolve o token decifrado do cofre (ou
-// null se ainda não tiver sido guardado). Mesmo shape das outras tools:
-// { name, description, parameters, async run(args) } -> string.
+// Unlike OAuth connectors (connectors-ext.mjs, GitHub/Slack/Microsoft), there's
+// no OAuth flow here: the user themselves generates a token on the service and
+// stores it in the credentials Vault (Connections › Vault, kind 'apikey'/'token').
+// Each function receives an async `secret()` that returns the token decrypted
+// from the vault (or null if it hasn't been stored yet). Same shape as the other
+// tools: { name, description, parameters, async run(args) } -> string.
 //
-// Leitura roda direto; ESCRITA (criar página, lançar despesa) é gated no
-// server.mjs (trava de confirmação em confirm.mjs). Quando não há token no
-// cofre, cada tool devolve um passo-a-passo de como conectar (o "caminho
-// técnico" do Cofre) em vez de estourar erro.
+// Reading runs directly; WRITING (creating a page, logging an expense) is gated
+// in server.mjs (the confirmation gate in confirm.mjs). When there's no token in
+// the vault, each tool returns a step-by-step on how to connect (the Vault's
+// "technical path") instead of throwing an error.
 
 // Extrai texto puro de um trecho de rich_text do Notion.
 const rich = (arr) => (Array.isArray(arr) ? arr.map((t) => t?.plain_text || t?.text?.content || '').join('') : '');
@@ -34,9 +34,9 @@ const NOTION_SETUP = () => [
   'Depois me avisa que eu já consigo ler e escrever no seu Notion. O token fica cifrado no cofre; nunca aparece no chat.',
 ].join('\n');
 
-// Quando a instância tem o OAuth do Notion ligado, o passo-a-passo acima vira
-// desnecessário: o clique já resolve o token E a liberação das páginas (o page
-// picker aparece na própria tela de autorização do Notion).
+// When the instance has Notion's OAuth enabled, the step-by-step above becomes
+// unnecessary: the click alone resolves the token AND the page access grant (the
+// page picker shows up right in Notion's own authorization screen).
 const NOTION_SETUP_OAUTH = () => [
   'Seu Notion ainda não está conectado. É um clique:',
   '',
@@ -58,8 +58,8 @@ async function nReq(secret, path, { method = 'GET', body } = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  // Chave guardada não autentica mais (inválida/revogada/expirada): sinaliza pro
-  // assistante pedir uma nova em vez de estourar um erro cru e desistir.
+  // A stored key no longer authenticates (invalid/revoked/expired): signals the
+  // assistant to ask for a new one instead of throwing a raw error and giving up.
   if (r.status === 401 || r.status === 403) return { __badCredential: true };
   if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.json();
@@ -83,7 +83,7 @@ const NOTION_BAD_OAUTH = () => [
   'Se ele já tinha conectado e parou de funcionar só numa página específica, o mais provável é que a página não esteja marcada na autorização: reconectar e marcá-la resolve.',
 ].join('\n');
 
-// Título de uma página/base a partir das properties (acha a prop do tipo title).
+// Title of a page/database from its properties (finds the title-type property).
 function notionTitle(obj) {
   if (!obj) return '(sem título)';
   const props = obj.properties || {};
@@ -91,12 +91,12 @@ function notionTitle(obj) {
     const p = props[k];
     if (p?.type === 'title') return rich(p.title) || '(sem título)';
   }
-  // Bases (database) têm title no topo.
+  // Databases have the title at the top.
   if (Array.isArray(obj.title)) return rich(obj.title) || '(sem título)';
   return '(sem título)';
 }
 
-// Texto de um bloco (os tipos mais comuns).
+// Text of a block (the most common types).
 function blockText(b) {
   const t = b?.type;
   if (!t) return '';
@@ -117,7 +117,7 @@ function blockText(b) {
   }
 }
 
-// Transforma texto (linhas) em blocos de parágrafo do Notion.
+// Turns text (lines) into Notion paragraph blocks.
 function textToBlocks(texto) {
   return String(texto || '')
     .split('\n')
@@ -128,10 +128,10 @@ function textToBlocks(texto) {
     }));
 }
 
-// `oneClick` = esta instância tem o OAuth do Notion configurado. Muda só o texto
-// de quando NÃO está conectado: não adianta mandar a pessoa criar integração à
-// mão se ela resolve com um clique. As tools são as mesmas nos dois caminhos (a
-// API do Notion aceita os dois tokens como Bearer).
+// `oneClick` = this instance has Notion's OAuth configured. Only changes the
+// text for when it's NOT connected: no point telling the person to create an
+// integration by hand if it's solved in one click. The tools are the same on
+// both paths (Notion's API accepts both tokens as Bearer).
 export function notionTools({ secret, oneClick = false }) {
   const setup = oneClick ? NOTION_SETUP_OAUTH() : NOTION_SETUP();
   const bad = oneClick ? NOTION_BAD_OAUTH() : NOTION_BAD();
@@ -165,11 +165,12 @@ export function notionTools({ secret, oneClick = false }) {
         const page = await nReq(secret, `/pages/${encodeURIComponent(id)}`);
         if (page.__notConnected) return setup;
         if (page.__badCredential) return bad;
-        // O Notion devolve no máximo 100 blocos por chamada, e a leitura parava
-        // na primeira: página comprida (doc de projeto, ata de reunião) chegava
-        // pela metade, e o `clipped` só falava do corte de caracteres, nunca dos
-        // blocos que sequer foram buscados. Agora segue o cursor até o fim, com
-        // um teto de segurança pra não varrer página gigante sem parar.
+        // Notion returns at most 100 blocks per call, and reading used to stop
+        // at the first one: a long page (project doc, meeting minutes) came back
+        // only halfway, and `clipped` only talked about the character cut, never
+        // about the blocks that weren't even fetched. Now it follows the cursor
+        // to the end, with a safety ceiling so it doesn't sweep through a giant
+        // page endlessly.
         const MAX_PAGINAS_BLOCOS = 10;
         const linhas = [];
         let cursor = null, paginas = 0, faltaramBlocos = false;
@@ -255,7 +256,7 @@ async function swReq(secret, path, { method = 'GET', body } = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  // Chave guardada não autentica mais: sinaliza pro assistente pedir uma nova.
+  // A stored key no longer authenticates: signals the assistant to ask for a new one.
   if (r.status === 401 || r.status === 403) return { __badCredential: true };
   if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.json();
@@ -345,14 +346,14 @@ export function splitwiseTools({ secret }) {
 }
 
 // ── Infinity (StartInfinity) ──
-// API v2 com versão por header (X-API-Version). Autenticação por Personal
-// Access Token como Bearer. Hierarquia: workspace (id inteiro) › board (id
-// string) › folder › item. Item não tem campo fixo de título: tudo é `values`,
-// uma lista de { attribute_id, data } em que o formato de `data` depende do
-// tipo do atributo (label = ids de etiqueta, members = ids de usuário etc.).
-// Por isso as tools falam em NOME de campo e de etiqueta com o assistente e a
-// tradução pra id acontece aqui, com os atributos lidos do próprio board.
-// Limite da API: 180 requisições por minuto.
+// API v2 with version by header (X-API-Version). Authentication by Personal
+// Access Token as Bearer. Hierarchy: workspace (integer id) › board (string
+// id) › folder › item. An item has no fixed title field: everything is `values`,
+// a list of { attribute_id, data } where the shape of `data` depends on the
+// attribute's type (label = tag ids, members = user ids, etc.).
+// That's why the tools talk about field and tag NAMES with the assistant and
+// the translation to id happens here, with the attributes read from the board itself.
+// API limit: 180 requests per minute.
 const INF = 'https://app.startinfinity.com/api/v2';
 const INF_VERSION = '2026-04-20.morava';
 
@@ -401,9 +402,9 @@ async function infReq(secret, path, { method = 'GET', body, query } = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  // 401 = token não autentica (conferido: token inválido volta 401
-  // "Unauthenticated."). 403 é outra coisa: token bom, mas sem acesso àquele
-  // workspace/board; não pode virar "troque a chave".
+  // 401 = token doesn't authenticate (checked: an invalid token returns 401
+  // "Unauthenticated."). 403 is something else: good token, but no access to
+  // that workspace/board; can't turn into "change the key".
   if (r.status === 401) return { __badCredential: true };
   if (r.status === 403) throw new Error('403: o token não tem acesso a esse workspace ou board no Infinity.');
   if (r.status === 429) throw new Error('429: limite de requisições do Infinity (180 por minuto). Espere um pouco e tente de novo.');
@@ -412,7 +413,7 @@ async function infReq(secret, path, { method = 'GET', body, query } = {}) {
   return r.json();
 }
 
-// Uma página, ou várias seguindo o cursor `after` enquanto `has_more`.
+// One page, or several following the `after` cursor while `has_more`.
 async function infList(secret, path, { query = {}, pages = 1, limit = 100 } = {}) {
   const out = [];
   let after = null;
@@ -432,14 +433,14 @@ const stripHtml = (h) => String(h ?? '').replace(/<br\s*\/?>/gi, '\n').replace(/
 const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const textToHtml = (t) => {
   const s = String(t ?? '');
-  // Já veio em HTML de bloco (o modelo às vezes formata): passa como está.
-  // Qualquer outro `<` é texto do usuário e é escapado.
+  // Already came as block HTML (the model sometimes formats it): passes as is.
+  // Any other `<` is user text and gets escaped.
   if (/^\s*<(p|div|ul|ol|h[1-6]|blockquote)[\s>]/i.test(s)) return s;
   return s.split('\n').map((l) => `<p>${escHtml(l)}</p>`).join('');
 };
 const memberName = (m) => m?.name || m?.email || (m?.id != null ? `#${m.id}` : '');
 
-// Valor gravado no Infinity → algo legível pro assistente.
+// Value stored in Infinity → something readable for the assistant.
 export function infinityReadValue(attr, data, members = []) {
   const type = attr?.type;
   if (data == null) return null;
@@ -460,15 +461,16 @@ export function infinityReadValue(attr, data, members = []) {
   }
 }
 
-// Acha o atributo pelo id ou pelo nome (sem acento e sem caixa).
+// Finds the attribute by id or by name (accent- and case-insensitive).
 export function infinityFindAttr(attrs, chave) {
   const k = norm(chave);
   return attrs.find((a) => a.id === chave) || attrs.find((a) => norm(a.name) === k) || null;
 }
 
-// Valor em linguagem do usuário → `data` no formato do tipo do atributo.
-// Lança Error com a lista de opções quando não dá pra traduzir (etiqueta ou
-// membro que não existe), pra o assistente corrigir em vez de gravar lixo.
+// Value in the user's language → `data` in the attribute's type format.
+// Throws an Error with the list of options when it can't translate (a tag or
+// member that doesn't exist), so the assistant can correct it instead of
+// writing garbage.
 export function infinityWriteValue(attr, valor, members = []) {
   const type = attr?.type;
   const lista = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]);
@@ -551,8 +553,8 @@ const infAttrBrief = (a) => ({
 
 export function infinityTools({ secret }) {
   const guard = (j) => (j.__notConnected ? INF_SETUP() : j.__badCredential ? INF_BAD() : null);
-  // Contexto de um board: atributos, pastas e membros do workspace. É o que
-  // traduz id ↔ nome nas duas direções.
+  // Context of a board: attributes, folders and workspace members. This is what
+  // translates id ↔ name in both directions.
   async function boardCtx(ws, board) {
     const base = `/workspaces/${encodeURIComponent(ws)}`;
     const attrs = await infList(secret, `${base}/boards/${encodeURIComponent(board)}/attributes`, { pages: 3 });
@@ -632,8 +634,8 @@ export function infinityTools({ secret }) {
         const ctx = await boardCtx(workspace_id, board_id);
         if (guard(ctx)) return guard(ctx);
         const lim = Math.max(1, Math.min(Number(max) || 20, 50));
-        // Sem busca, uma página basta. Com busca, a API não filtra por texto:
-        // varre até 5 páginas (500 itens) e filtra aqui.
+        // Without search, one page is enough. With search, the API doesn't filter
+        // by text: sweeps up to 5 pages (500 items) and filters here.
         const j = await infList(secret, `/workspaces/${encodeURIComponent(workspace_id)}/boards/${encodeURIComponent(board_id)}/items`, {
           query: { folder_id, expand: ['values'] },
           pages: busca ? 5 : 1,
@@ -728,11 +730,11 @@ export function infinityTools({ secret }) {
   ];
 }
 
-// ── Asaas (conta digital: saldo, pagar boleto, PIX) ──
-// API v3. Autenticação por header `access_token` (não é Bearer). O ambiente
-// (produção x sandbox) vem no PREFIXO da própria chave: `$aact_prod_` = produção,
-// `$aact_hmlg_` = sandbox; qualquer outra coisa cai em produção (chaves legadas
-// são de produção). User-Agent é obrigatório pra contas novas.
+// ── Asaas (digital account: balance, pay boleto, PIX) ──
+// API v3. Authentication by `access_token` header (not Bearer). The environment
+// (production x sandbox) comes from the key's own PREFIX: `$aact_prod_` =
+// production, `$aact_hmlg_` = sandbox; anything else falls back to production
+// (legacy keys are production keys). User-Agent is required for new accounts.
 const ASAAS_PROD = 'https://api.asaas.com';
 const ASAAS_SBX = 'https://api-sandbox.asaas.com';
 function asaasBase(key) {
@@ -782,7 +784,7 @@ export async function asaasCall(key, path, { method = 'GET', body, form, query }
   let json = null;
   try { json = text ? JSON.parse(text) : {}; } catch { json = { __raw: text }; }
   if (!r.ok) {
-    // A Asaas devolve validação em { errors: [{ code, description }] } (HTTP 400).
+    // Asaas returns validation errors as { errors: [{ code, description }] } (HTTP 400).
     const msg = Array.isArray(json?.errors)
       ? json.errors.map((e) => e.description || e.code).filter(Boolean).join('; ')
       : (json?.__raw || `HTTP ${r.status}`);
@@ -791,17 +793,17 @@ export async function asaasCall(key, path, { method = 'GET', body, form, query }
   return json;
 }
 
-// Mesma chamada, com a chave vindo do cofre do usuário (pode não existir).
+// Same call, with the key coming from the user's vault (might not exist).
 async function aReq(secret, path, opts = {}) {
   const key = await secret();
   if (!key) return { __notConnected: true };
   return asaasCall(key, path, opts);
 }
 
-// Limpa espaços/pontos de linha digitável / código de barras.
+// Strips spaces/dots from a typeable line / barcode.
 const onlyDigitsish = (s) => String(s || '').replace(/[\s.]/g, '');
 
-// Síncrono por design: usado tanto no caminho do POST quanto no webhook HTTP.
+// Synchronous by design: used both on the POST path and the HTTP webhook.
 export function asaasAuthorizationHash(payload = {}) {
   const type = String(payload.type || '').toUpperCase();
   const op = type === 'BILL' ? payload.bill : type === 'TRANSFER' ? payload.transfer : null;
@@ -848,20 +850,21 @@ export function asaasBillScheduleHash(args = {}, resumo = {}) {
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-// ── Marca de idempotência das ações financeiras (achado #10) ──
-// A Asaas não oferece cabeçalho de idempotência em /v3/bill nem em /v3/transfers:
-// mandar o mesmo POST duas vezes paga duas vezes. O que ela oferece é o
-// `externalReference`, um identificador NOSSO que vai junto no POST e volta em
-// toda leitura daquela operação. Então a marca é gerada UMA vez, na hora em que
-// a confirmação é montada, e vira a prova de identidade do pedido: se a resposta
-// do POST se perder no caminho (conexão caiu, erro de servidor, tempo esgotado),
-// dá pra PROCURAR a operação pela marca em vez de reenviar no escuro.
+// ── Idempotency mark for financial actions (finding #10) ──
+// Asaas doesn't offer an idempotency header on /v3/bill or /v3/transfers:
+// sending the same POST twice pays twice. What it does offer is
+// `externalReference`, an identifier OF OURS that goes along with the POST and
+// comes back on every read of that operation. So the mark is generated ONCE,
+// at the moment the confirmation is built, and becomes the request's proof of
+// identity: if the POST's response gets lost along the way (connection dropped,
+// server error, timeout), we can SEARCH for the operation by the mark instead of
+// resending blindly.
 const novaMarca = (prefixo) => `brambs-${prefixo}-${Date.now().toString(36)}-${globalThis.crypto.randomUUID().slice(0, 8)}`;
 
-// Desfecho que não dá pra ler como "não aconteceu nada": sem resposta, erro de
-// servidor ou tempo esgotado. Nesses casos o pedido PODE ter sido aplicado do
-// outro lado. Recusa de validação (HTTP 400) não entra aqui: essa a Asaas
-// rejeitou de fato, e o dinheiro não saiu.
+// An outcome that can't be read as "nothing happened": no response, server error
+// or timeout. In these cases the request MAY have been applied on the other
+// side. A validation refusal (HTTP 400) doesn't belong here: that one Asaas
+// actually rejected, and the money didn't go out.
 const desfechoIncerto = (j) => {
   if (j?.__semResposta) return true;
   if (!j?.__apiError) return false;
@@ -869,10 +872,11 @@ const desfechoIncerto = (j) => {
   return !Number.isFinite(s) || s === 408 || s >= 500;
 };
 
-// Procura uma operação já criada, pela marca. A listagem da Asaas NÃO filtra por
-// `externalReference` (só por data), então varre a janela recente e compara
-// aqui. NÃO achar não prova que a operação não existe, por isso quem chama trata
-// "não achei" como incerteza, nunca como permissão pra mandar de novo.
+// Looks for an already-created operation, by the mark. Asaas's listing does NOT
+// filter by `externalReference` (only by date), so it sweeps the recent window
+// and compares here. NOT finding it doesn't prove the operation doesn't exist,
+// which is why the caller treats "didn't find it" as uncertainty, never as
+// permission to send it again.
 const procurarPorMarca = async (request, caminho, marca) => {
   const dia = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
   const base = { limit: '100' };
@@ -893,10 +897,10 @@ const procurarPorMarca = async (request, caminho, marca) => {
   return null;
 };
 
-// POST de ação financeira. Nunca deixa uma falha de transporte virar "a Asaas
-// recusou": quando o desfecho é incerto, confere pela marca antes de responder
-// qualquer coisa. Se a operação estiver lá, segue o fluxo normal com o estado
-// REAL dela; se não estiver, devolve incerteza explícita.
+// POST of a financial action. Never lets a transport failure become "Asaas
+// refused": when the outcome is uncertain, checks by the mark before responding
+// anything. If the operation is there, follows the normal flow with its REAL
+// state; if it isn't, returns explicit uncertainty.
 const postComMarca = async (request, caminho, body, marca) => {
   let j;
   try { j = await request(caminho, { method: 'POST', body: { ...body, externalReference: marca } }); }
@@ -962,10 +966,10 @@ export async function submitAsaasBillImmediate(request, args, marca, expectedSch
   const body = { ...sim.body };
   if (args.valor != null) body.value = Number(args.valor);
   if (args.descricao) body.description = String(args.descricao).slice(0, 500);
-  // A API da Asaas pode assumir o vencimento quando scheduleDate é omitido,
-  // mesmo quando a pessoa pediu para pagar agora. A simulação devolve a
-  // primeira data aceita pelo provedor; no worker ela precisa ser o próprio dia
-  // da execução. Isso não cria agenda antecipada na Asaas.
+  // Asaas's API may assume the due date when scheduleDate is omitted, even when
+  // the person asked to pay now. The simulation returns the first date accepted
+  // by the provider; in the worker it needs to be the execution day itself. This
+  // doesn't create an early schedule in Asaas.
   if (!sim.resumo.data_minima_pagamento) {
     return { sim, result: { __apiError: 'A Asaas não informou a primeira data em que aceita processar este boleto.' } };
   }
@@ -1010,11 +1014,11 @@ export function asaasTools({
     catch (e) { console.error('[asaas] não consegui registrar a operação:', e?.message || e); }
   };
 
-  // A resposta do POST da Asaas pode ser PENDING e o webhook chegar poucos
-  // segundos depois com DONE/PAID. O turno aguarda uma janela curta pelo estado
-  // que já foi persistido pelo webhook; nunca repete o POST financeiro. Se a
-  // janela acabar, uma única consulta por id é agendada para 60 s depois como
-  // reconciliação de segurança. O timer não mantém o processo vivo.
+  // Asaas's POST response may be PENDING and the webhook may arrive a few
+  // seconds later with DONE/PAID. The turn waits a short window for the state
+  // already persisted by the webhook; it never repeats the financial POST. If
+  // the window runs out, a single query by id is scheduled for 60s later as a
+  // safety reconciliation. The timer doesn't keep the process alive.
   const agendarReconciliacaoSaida = ({
     id, tipo = 'pix', request, accountId = '', contaUsada = null,
     modoExecucao = null, agendadaParaSolicitada = null,
@@ -1046,7 +1050,7 @@ export function asaasTools({
           status,
           valor: j.value,
           comprovante: concluido ? (j.transactionReceiptUrl || null) : null,
-          // A reconciliação não falou com o usuário; deixa a outbox entregar.
+          // The reconciliation didn't talk to the user; lets the outbox deliver it.
           comprovanteEntregue: false,
           contaUsada,
           modoExecucao,
@@ -1128,19 +1132,20 @@ export function asaasTools({
     };
   };
 
-  // Ações financeiras não confiam apenas no nome da tool dentro do registry.
-  // O próprio conector separa preparo read-only da execução mutável: `run`
-  // direto recusa, e só o closure devolvido por prepareConfirmation pode fazer
-  // POST depois que o gate determinístico consumir a confirmação humana.
+  // Financial actions don't rely solely on the tool's name within the registry.
+  // The connector itself separates read-only preparation from the mutable
+  // execution: a direct `run` refuses, and only the closure returned by
+  // prepareConfirmation can POST after the deterministic gate consumes human
+  // confirmation.
   const confirmacaoObrigatoria = () => JSON.stringify({
     ok: false,
     error: 'Esta ação financeira exige confirmação explícita do usuário no turno seguinte. Nenhuma operação foi executada.',
   });
 
-  // A credencial também faz parte da proposta. Sem este vínculo, trocar a
-  // conta selecionada entre o cartão e o "sim" poderia executar a mesma ação
-  // em outra conta Asaas. O segredo fica apenas no closure em memória e nunca
-  // entra nos argumentos, no label ou no descriptor persistido.
+  // The credential is also part of the proposal. Without this link, swapping the
+  // selected account between the card and the "yes" could execute the same
+  // action on a different Asaas account. The secret stays only in the in-memory
+  // closure and never enters the arguments, the label, or the persisted descriptor.
   const vincularContaFinanceira = async () => {
     let escolhida = null;
     if (conta) {
@@ -1178,8 +1183,8 @@ export function asaasTools({
     return {
       ativa,
       ativando,
-      // A confirmação fica vinculada ao estado consultado. Se a chave mudar
-      // entre a proposta e o "sim", falha fechado e pede nova confirmação.
+      // The confirmation stays bound to the queried state. If the key changes
+      // between the proposal and the "yes", it fails closed and asks for a new confirmation.
       assinatura: ativa
         ? `active:${ativa.id || ''}:${ativa.key || ''}`
         : ativando
@@ -1258,9 +1263,9 @@ export function asaasTools({
     return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : null;
   };
 
-  // Data futura só pode nascer de um pedido literal do dono neste turno. A data
-  // de vencimento que a simulação devolve é informação, não autoriza o modelo
-  // a transformá-la em `scheduleDate`.
+  // A future date can only be born from a literal request from the owner in this
+  // turn. The due date the simulation returns is information, it doesn't
+  // authorize the model to turn it into `scheduleDate`.
   const pediuAgendamentoDeBoleto = (texto) => {
     const s = String(texto || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
     if (/\b(?:agend\w*|program\w*|no vencimento|na data (?:de|do) vencimento|on (?:the )?due date|al vencimiento|en la fecha de vencimiento|amanha|tomorrow|mañana|depois de amanha|day after tomorrow|pasado mañana)\b/.test(s)) return true;
@@ -1398,9 +1403,9 @@ export function asaasTools({
     if (!atual.resumo.data_minima_pagamento) {
       return JSON.stringify({ ok: false, error: 'A Asaas não informou a primeira data em que aceita processar este boleto. Nada foi criado.' });
     }
-    // A data vem da simulação mostrada na confirmação e participa da assinatura
-    // revalidada. Assim "pagar agora" solicita a primeira data aceita, em vez de
-    // deixar a Asaas assumir silenciosamente o vencimento.
+    // The date comes from the simulation shown in the confirmation and takes
+    // part in the revalidated signature. So "pay now" requests the first
+    // accepted date, instead of letting Asaas silently assume the due date.
     body.scheduleDate = atual.resumo.data_minima_pagamento;
     let j = await postComMarca(request, '/v3/bill', body, marca);
     if (j.__incerto) {
@@ -1436,8 +1441,8 @@ export function asaasTools({
     let pago = ['PAID', 'DONE'].includes(st);
     let pendenteAuth = j.awaitingCriticalActionAuthorization === true || j.authorized === false;
 
-    // Registra antes da espera para o webhook conservar o vínculo com a
-    // conversa mesmo quando BILL_PAID chega durante estes dez segundos.
+    // Registers before the wait so the webhook keeps the link to the
+    // conversation even when BILL_PAID arrives during these ten seconds.
     await registrar({
       id: j.id,
       tipo: 'boleto',
@@ -1452,8 +1457,8 @@ export function asaasTools({
       vencimento: j.dueDate || atual.resumo.vencimento || null,
     });
 
-    // Pagamento imediato aceito e ainda pendente: observa somente o estado
-    // local escrito pelo webhook. Não refaz o POST nem consulta a Asaas em loop.
+    // Immediate payment accepted and still pending: only watches the local
+    // state written by the webhook. Doesn't redo the POST nor poll Asaas in a loop.
     if (!args.agendar_para && !falhou && !pago && !pendenteAuth && j.id
         && typeof aguardarOperacao === 'function') {
       let final = null;
@@ -1543,10 +1548,10 @@ export function asaasTools({
     const j = await request('/v3/pix/addressKeys/external', { query: { type: tipo, key: chave } });
     const erro = erroAsaas(j, 'a conferência da chave Pix');
     if (erro) throw new Error(erro);
-    // O contrato atual da consulta externa devolve titular e instituição em
-    // objetos aninhados (`owner` e `financialInstitution`). Os fallbacks
-    // preservam respostas antigas/alternativas sem transformar uma mudança de
-    // shape bem-sucedida em "chave não cadastrada".
+    // The external query's current contract returns the holder and institution
+    // in nested objects (`owner` and `financialInstitution`). The fallbacks
+    // preserve old/alternative responses without turning a successful shape
+    // change into "key not registered".
     const nome = j.owner?.name || j.name || j.ownerName || j.account?.name || j.bankAccount?.ownerName || null;
     const documento = j.owner?.cpfCnpj || j.cpfCnpj || j.account?.cpfCnpj || j.bankAccount?.cpfCnpj || null;
     const instituicao = j.financialInstitution?.name || j.ispbName || j.bank?.name || j.institutionName || j.account?.bank?.name || null;
@@ -1610,8 +1615,8 @@ export function asaasTools({
     let concluido = st === 'DONE';
     let pendenteAuth = j.awaitingCriticalActionAuthorization === true || j.authorized === false;
 
-    // Registra o id antes de esperar: assim o webhook que chega durante esta
-    // janela conserva o vínculo com usuário, assistente e conversa de origem.
+    // Registers the id before waiting: this way the webhook that arrives during
+    // this window keeps the link to the user, assistant and originating conversation.
     await registrar({
       id: j.id,
       tipo: 'pix',
@@ -1622,8 +1627,8 @@ export function asaasTools({
       comprovanteEntregue: concluido && !!j.transactionReceiptUrl,
     });
 
-    // Pix imediato, aceito e ainda pendente: aguarda somente o webhook/estado
-    // local por até 10 s. Nenhuma chamada de criação é refeita.
+    // Immediate Pix, accepted and still pending: waits only for the webhook/
+    // local state for up to 10s. No creation call is redone.
     if (!args.agendar_para && !falhou && !concluido && !pendenteAuth && j.id
         && typeof aguardarOperacao === 'function') {
       let final = null;
@@ -1671,8 +1676,8 @@ export function asaasTools({
       status: st,
       valor: j.value,
       comprovante: concluido ? (j.transactionReceiptUrl || null) : null,
-      // Se a espera curta viu DONE, esta resposta já entrega o comprovante e
-      // marca a notificação como concluída para o webhook não duplicá-la.
+      // If the short wait saw DONE, this response already delivers the receipt
+      // and marks the notification as done so the webhook doesn't duplicate it.
       comprovanteEntregue: concluido && !!j.transactionReceiptUrl,
     });
     if (!falhou && !concluido && !pendenteAuth && !args.agendar_para) {
@@ -2023,9 +2028,9 @@ export function asaasTools({
             if (typeof garantirWebhookComprovante === 'function') {
               try { await garantirWebhookComprovante(vinculada.boundAccount); }
               catch (e) {
-                // Cancelar não pode ficar bloqueado por uma falha de canal. A
-                // consulta única aos 60 s continua fechando o ciclo; o erro do
-                // webhook fica observável no log, sem pedir outro POST.
+                // Cancelling can't be blocked by a channel failure. The single
+                // query at 60s still closes the loop; the webhook's error stays
+                // observable in the log, without requiring another POST.
                 console.error('[asaas] não consegui preparar o webhook antes do cancelamento:', e?.message || e);
               }
             }
@@ -2121,8 +2126,8 @@ export function asaasTools({
         }
         const data = dataIsoValida(args.agendar_para);
         if (!data && pediuNoVencimento(ownerText)) {
-          // A data virá da simulação oficial do próprio boleto. Não pedir ao
-          // usuário para redigitar um dado que a instituição já fornece.
+          // The date will come from the boleto's own official simulation. Don't
+          // ask the user to retype data the institution already provides.
           args.__agendar_no_vencimento = true;
           return args;
         }
@@ -2155,9 +2160,10 @@ export function asaasTools({
         const whenEs = args.agendar_para ? `, programado para ${String(args.agendar_para).slice(0, 10)}` : '';
         const docEn = sim.resumo.cpf_cnpj_beneficiario ? `, tax ID ${sim.resumo.cpf_cnpj_beneficiario}` : '';
         const docEs = sim.resumo.cpf_cnpj_beneficiario ? `, documento ${sim.resumo.cpf_cnpj_beneficiario}` : '';
-        // A marca nasce junto com a confirmação (não na hora do POST): assim,
-        // se o envio falhar e for refeito, ele carrega a MESMA marca e dá pra
-        // reconhecer a operação que já existe em vez de pagar de novo (achado #10).
+        // The mark is born together with the confirmation (not at POST time): this
+        // way, if the send fails and is redone, it carries the SAME mark and we
+        // can recognize the operation that already exists instead of paying again
+        // (finding #10).
         const marca = novaMarca('bill');
         let consumida = false;
         return {
@@ -2207,9 +2213,10 @@ export function asaasTools({
         const docEs = titular.resumo.documento ? `, documento ${titular.resumo.documento}` : '';
         const bankEn = titular.resumo.instituicao ? `, institution ${titular.resumo.instituicao}` : '';
         const bankEs = titular.resumo.instituicao ? `, institución ${titular.resumo.instituicao}` : '';
-        // A marca nasce junto com a confirmação (não na hora do POST): assim,
-        // se o envio falhar e for refeito, ele carrega a MESMA marca e dá pra
-        // reconhecer a operação que já existe em vez de pagar de novo (achado #10).
+        // The mark is born together with the confirmation (not at POST time): this
+        // way, if the send fails and is redone, it carries the SAME mark and we
+        // can recognize the operation that already exists instead of paying again
+        // (finding #10).
         const marca = novaMarca('pix');
         let consumida = false;
         return {

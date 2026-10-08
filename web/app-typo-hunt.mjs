@@ -1,40 +1,43 @@
-// ── Caça-typo determinístico para rascunho de app (Tipo 1: nome que não existe) ──
-// Buraco medido em 19-20/09/2026: o `applint.mjs` são 3 regras de regex SEM
-// análise de escopo, então "chamei calcularTotal(), declarei calcularTotais()"
-// passa com "aprovado, 0 erros, 0 avisos" e o modelo declara a tarefa concluída.
+// ── Deterministic typo hunt for app draft (Type 1: name that does not exist) ──
+// Gap measured on 2026-09-19/20: `applint.mjs` is 3 regex rules with NO scope
+// analysis, so "called calcularTotal(), declared calcularTotais()" passes with
+// "aprovado, 0 erros, 0 avisos" and the model declares the task done.
 //
-// Esta peça levanta a mão SÓ quando as duas coisas valem ao mesmo tempo:
-//   1. o nome chamado não aparece em lugar nenhum do app a não ser como chamada
-//      (ou seja, não é parâmetro, import, destructuring, propriedade, nada), e
-//   2. existe no próprio app um nome DECLARADO quase idêntico a ele.
-// A segunda condição é o que separa TYPO de biblioteca externa: `dayjs()` ou
-// `Chart()` não parecem com nada declarado no app, então nunca viram aviso.
+// This piece only raises a flag when both of these hold at the same time:
+//   1. the called name does not appear anywhere in the app except as a call
+//      (i.e. it's not a parameter, import, destructuring, property, nothing), and
+//   2. the app itself has a DECLARED name almost identical to it.
+// The second condition is what separates a TYPO from an external library:
+// `dayjs()` or `Chart()` don't look like anything declared in the app, so they
+// never become a warning.
 //
-// Saída é sempre AVISO, nunca ERRO: portão que informa melhora, portão que
-// bloqueia engessa. E o aviso é insumo PRO MODELO, nunca texto pro dono do app.
+// Output is always a WARNING, never an ERROR: a gate that informs improves, a
+// gate that blocks stiffens. And the warning is input FOR THE MODEL, never text
+// for the app's owner.
 //
-// Viés deliberado para o SILÊNCIO (mesmo espírito do "generoso de propósito" do
-// applint): qualquer ocorrência do nome fora de posição de chamada já cala o
-// aviso, porque nesse caso o nome existe no vocabulário do app e a chance de ser
-// engano de digitação despenca.
+// Deliberate bias towards SILENCE (same spirit as applint's "generous on
+// purpose"): any occurrence of the name outside call position already
+// silences the warning, because in that case the name exists in the app's
+// vocabulary and the chance of it being a typo drops sharply.
 //
-// Funções puras (files = {caminho: texto}); nada executa código nem toca disco.
+// Pure functions (files = {caminho: texto}); nothing executes code or touches disk.
 
 import { similaridade } from './app-anchor.mjs';
 
-// Limiar calibrado contra os nomes reais dos apps em produção (ver
-// `projetos/app-prova-de-execucao.md`). Na prática 0,85 exige nome de 7+
-// caracteres com 1 caractere de diferença, ou de 14+ com 2, que é a assinatura
-// do typo. Abaixo disso o nome é curto demais pra distinguir engano de decisão.
+// Threshold calibrated against the real app names in production (see
+// `projetos/app-prova-de-execucao.md`). In practice 0,85 requires a name of
+// 7+ characters with 1 character of difference, or of 14+ with 2, which is
+// the typo's signature. Below that the name is too short to tell a mistake
+// from a deliberate choice.
 export const LIMIAR_TYPO = 0.85;
 export const TAMANHO_MINIMO = 6;
 export const MAX_AVISOS = 8;
 
 const CODE_EXTS = /\.(js|mjs|cjs|html|htm)$/i;
 
-// Nomes que um app pode chamar sem declarar. Palavra-chave, global de browser,
-// global de Node e método de biblioteca/DOM do dia a dia. Lista grande de
-// propósito: cada nome aqui é um falso positivo a menos.
+// Names an app can call without declaring. Keyword, browser global, Node
+// global, and everyday library/DOM method. Deliberately large list: every
+// name here is one less false positive.
 const CONHECIDOS = new Set(`
 if else for while do switch case return function class new typeof void delete in of
 instanceof try catch finally throw await async yield this super import export default
@@ -83,7 +86,7 @@ log warn info debug table group groupEnd time timeEnd trace assert count dir
 
 const ident = '[A-Za-z_$][\\w$]*';
 
-// Nomes DECLARADOS como função de primeira classe (alvo de chamada global).
+// Names DECLARED as a first-class function (target of a global call).
 const RE_FUNCOES = [
   new RegExp(`\\b(?:async\\s+)?function\\s*\\*?\\s*(${ident})`, 'g'),
   new RegExp(`\\bclass\\s+(${ident})`, 'g'),
@@ -91,7 +94,7 @@ const RE_FUNCOES = [
   new RegExp(`\\b(?:window|globalThis|self)\\.(${ident})\\s*=`, 'g'),
 ];
 
-// Nomes DECLARADOS como método/propriedade-função (alvo de chamada com ponto).
+// Names DECLARED as a method/function-property (target of a dotted call).
 const RE_METODOS = [
   new RegExp(`(${ident})\\s*:\\s*(?:async\\s+)?function\\b`, 'g'),
   new RegExp(`(${ident})\\s*:\\s*(?:async\\s*)?(?:\\([^()]*\\)|${ident})\\s*=>`, 'g'),
@@ -101,11 +104,11 @@ const RE_METODOS = [
   new RegExp(`\\bprototype\\.(${ident})\\s*=`, 'g'),
 ];
 
-// Toda ocorrência de identificador, com o caractere anterior e se é chamada.
+// Every identifier occurrence, with the previous character and whether it's a call.
 const RE_OCORRENCIA = new RegExp(`(.?)\\b(${ident})\\b\\s*(\\(?)`, 'g');
 
-// Tira comentário sem quebrar URL dentro de string (o `//` de `https://` vem
-// depois de `:` e por isso é preservado).
+// Strips comments without breaking a URL inside a string (the `//` of
+// `https://` comes after `:` and is therefore preserved).
 function semComentarios(txt) {
   return txt.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\w'"`\\/])\/\/[^\n]*/g, '$1');
 }
@@ -114,14 +117,15 @@ function coletar(regexes, txt, destino) {
   for (const re of regexes) {
     re.lastIndex = 0;
     let m;
-    // Palavra-chave nunca entra: `if (x) {` casa com a forma de método curto.
+    // A keyword never counts: `if (x) {` matches the short-method shape.
     while ((m = re.exec(txt)) !== null) if (!CONHECIDOS.has(m[1])) destino.add(m[1]);
   }
 }
 
 /**
- * Procura nome chamado que não existe no app e é quase idêntico a um declarado.
- * files = {caminho: texto}. Devolve lista de avisos (nunca erros).
+ * Looks for a called name that does not exist in the app and is almost
+ * identical to a declared one. files = {caminho: texto}. Returns a list of
+ * warnings (never errors).
  */
 export function huntTypos(files, opcoes = {}) {
   const limiar = opcoes.limiar ?? LIMIAR_TYPO;
@@ -130,7 +134,7 @@ export function huntTypos(files, opcoes = {}) {
 
   const funcoes = new Set();   // declaradas, alvo de chamada global
   const metodos = new Set();   // declaradas, alvo de chamada com ponto
-  const vocabulario = new Set(); // QUALQUER ocorrência fora de posição de chamada
+  const vocabulario = new Set(); // ANY occurrence outside call position
   const usos = new Map();      // nome -> { arquivo, ponto }
 
   const limpos = {};
@@ -163,9 +167,10 @@ export function huntTypos(files, opcoes = {}) {
     if (nome.length < minimo) continue;
     if (CONHECIDOS.has(nome) || vocabulario.has(nome)) continue;
     if (funcoes.has(nome) || metodos.has(nome)) continue;
-    // Chamada com ponto compara com métodos E com funções: app real exporta função
-    // de topo num objeto (`const Chat = { criarChat }` → `Chat.criarChat()`), e sem
-    // a união o caçador calava em 17 dos 22 typos plantados que ele deixou passar.
+    // A dotted call compares against both methods AND functions: a real app
+    // exports a top-level function in an object (`const Chat = { criarChat }`
+    // → `Chat.criarChat()`), and without that union the hunter stayed silent
+    // on 17 of the 22 planted typos it let through.
     const pool = ponto ? new Set([...metodos, ...funcoes]) : funcoes;
     let melhor = null, melhorSim = 0;
     for (const cand of pool) {

@@ -1,6 +1,6 @@
-// Escopos OAuth da Microsoft por serviço (agenda, e-mail) e quais tools do
-// conector cada consentimento parcial libera. Nenhum escopo arbitrário vem do
-// navegador: o pedido é montado aqui a partir da lista fechada de serviços.
+// Microsoft OAuth scopes per service (calendar, email) and which connector
+// tools each partial consent unlocks. No arbitrary scope comes from the
+// browser: the request is assembled here from the closed list of services.
 export function microsoftOnboardingScope(services) {
     const selected = services.split(',').map(s => s.trim());
     if (!selected.includes('calendar') || selected.some(s => !['calendar', 'gmail'].includes(s)))

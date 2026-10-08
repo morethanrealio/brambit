@@ -1,7 +1,7 @@
-// Porta de mídia publicada (C2, passo 11a2). O /api/media só serve a key de
-// outra pessoa se algum plugin disser que o dono a publicou (a Comunidade
-// registra os anexos de post do feed). Na versão aberta ninguém registra e o
-// proxy fica só do dono.
+// Published-media port (C2, step 11a2). /api/media only serves another person's
+// key if some plugin says the owner published it (the Comunidade
+// registers the feed post attachments). In the open version nobody registers, and the
+// proxy stays owner-only.
 export function createMidiaPublica() {
   const fontes = [];
   return {

@@ -1,12 +1,12 @@
-// Liga o atendimento ao público (publico.mjs) ao servidor e ao WhatsApp.
+// Connects public support (publico.mjs) to the server and to WhatsApp.
 //
-// Fase 1 usa o número único da instalação. Quem instala escolhe QUAL assistente
-// atende quem não tem conta (ATENDIMENTO_PUBLICO_AGENTE = id do agente); o dono
-// desse assistente liga e desliga em public_agents.ativo. Sem a variável, ou com
-// o atendimento desligado, nada muda: número não vinculado segue recebendo a
-// mensagem de login. A escolha é da instalação, e não de cada usuário, porque o
-// número é um só: se qualquer dono pudesse ligar, todo desconhecido iria pro
-// assistente dele.
+// Phase 1 uses the installation's single number. Whoever installs it chooses WHICH assistant
+// handles those without an account (ATENDIMENTO_PUBLICO_AGENTE = agent id); the owner
+// of that assistant turns it on and off in public_agents.ativo. Without the variable, or with
+// support turned off, nothing changes: an unlinked number keeps receiving the
+// login message. The choice belongs to the installation, not to each user, because the
+// number is a single one: if any owner could turn it on, every stranger would go to
+// their assistant.
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './publico.mjs';
 import { registrarRotasDoDono } from './publico-dono.mjs';
@@ -26,14 +26,14 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
   timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-// deps: pool/S do banco; makeProvider(ident) já preso ao gasto do dono;
-// recordUsages e creditStatus do servidor; ferramentas = porta de ferramentas;
-// ganchos = porta atendimentoPublico do plugin (roteiro; ver publico.mjs).
-// Devolve o que o canal do WhatsApp usa: atende() diz se há atendimento ligado
-// pro número; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
-// A retenção (apagar o que passou de retencao_dias) roda sozinha a cada
-// limpezaMs, a primeira um minuto depois do boot; limpezaMs=0 desliga.
-// Com rotas (+ send/fail/tooManyRequests do servidor), registra a visão do dono
+// deps: database pool/S; makeProvider(ident) already tied to the owner's spend;
+// recordUsages and creditStatus from the server; ferramentas = tools port;
+// ganchos = plugin's atendimentoPublico port (script; see publico.mjs).
+// Returns what the WhatsApp channel uses: atende() says whether support is on
+// for the number; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
+// Retention (deleting what's past retencao_dias) runs on its own every
+// limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
+// With routes (+ send/fail/tooManyRequests from the server), registers the owner's view
 // (publico-dono.mjs).
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
   rotas, send, fail, tooManyRequests }) {

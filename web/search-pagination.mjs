@@ -5,8 +5,8 @@ export const searchCursorSchema = { type: 'string', description: 'Copy next_curs
 const invalid = () => { throw new Error('Resposta de busca/paginação inválida; não conclua ausência nem busca completa.'); };
 const nat = n => Number.isSafeInteger(n) && n >= 0;
 
-// Mesmo contrato de continuação dos e-mails, separado para não mudar o formato
-// legado. Cache local à tool autenticada, 15 min/100 cursores, sem DB/timers.
+// Same continuation contract as emails, kept separate so as not to change the
+// legacy format. Cache local to the authenticated tool, 15 min/100 cursors, no DB/timers.
 export function searchPagination({ defaultMax, cap, now = Date.now }) {
   const cursors = new Map();
   const prune = () => { for (const [k,v] of cursors) if (now()-v.at >= 900000) cursors.delete(k); };
@@ -71,7 +71,7 @@ export function slackSearchMeta(j, page) {
   const m = j?.messages, p = m?.paging;
   const raw = p ? { page: p.page, pages: p.pages, total: p.total } : { page: m?.pagination?.page, pages: m?.pagination?.page_count, total: m?.pagination?.total_count };
   if (!nat(raw.page) || raw.page !== page.page || !nat(raw.pages) || !nat(raw.total) || (raw.pages < raw.page && !(raw.pages === 0 && raw.total === 0 && page.page === 1))) invalid();
-  // Slack limita page a 100; não emitir cursor impossível nem chamar isso de fim completo.
+  // Slack limits page to 100; don't emit an impossible cursor nor call this complete end.
   const remaining = raw.page < raw.pages || raw.total > raw.page * page.pageSize;
   return { next: remaining && raw.page < 100 ? String(raw.page+1) : null, total: raw.total, limitReached: remaining && raw.page >= 100 };
 }
@@ -83,8 +83,8 @@ export function graphSearchNextPath(link, expectedPath) {
 }
 
 const SEARCH_TOOLS = new Set(['drive_search','onedrive_search','slack_search','github_search_repos','github_search_issues']);
-// Continuação e limitações chegam também ao principal, mesmo se a síntese do
-// worker as omitir. Cadeias independentes não apagam o aviso umas das outras.
+// Continuation and limitations also reach the main one, even if the worker's
+// synthesis omits them. Independent chains don't erase each other's notice.
 export function trackSearchPagination(readTools, {account=''} = {}) {
   const rows = new Map(), failures = new Map();
   const requestKey=(tool,args)=>JSON.stringify([tool,args.query??args.q??'',args.terms??null,args.search_in??null,args.file_type??null,args.shared_with_me??null,args.folder_id??null]);
@@ -93,7 +93,7 @@ export function trackSearchPagination(readTools, {account=''} = {}) {
       try {
         const raw = await tool.run(args);
         let result;
-        try { result = JSON.parse(raw); } catch { /* reconexão/erro em texto não é busca vazia */ }
+        try { result = JSON.parse(raw); } catch { /* reconnection/error as text is not an empty search */ }
         if (!result?.search_id || typeof result.partial !== 'boolean') failures.set(requestKey(tool.name,args), {tool:tool.name,account,status:'failed',reason:'query_failed'});
         else {
           failures.delete(requestKey(tool.name,args));

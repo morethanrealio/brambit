@@ -1,14 +1,14 @@
-// Encaixes do app (C2, passo 11c6c). O app logado (web/public/index.html) tem
-// marcadores onde um plugin pode pôr tela própria: <!--encaixe:NOME--> no HTML e
-// /*encaixe:NOME*/ dentro de <style> e <script>, cada um sozinho na linha. O
-// plugin traz uma pasta (campo `app`) com um arquivo por encaixe, NOME.<ext>
-// (estilo.css, menu.html, script.js...), e o servidor troca a linha do marcador
-// pelo conteúdo dos arquivos, na ordem da lista de plugins. Encaixe sem plugin
-// some sem deixar linha. A troca acontece antes do nonce e da tradução, então
-// os pedaços ganham as duas coisas como o resto da página.
-// O script do plugin se pendura em `ganchosDoApp` (declarado no index.html):
-// rotas da aba, o que roda ao entrar no app, a cada troca de aba e quando a
-// conta é criada (aoCadastrar, com o método: email ou google).
+// App ports (C2, step 11c6c). The logged-in app (web/public/index.html) has
+// markers where a plugin can put its own screen: <!--encaixe:NAME--> in HTML
+// and /*encaixe:NAME*/ inside <style> and <script>, each alone on its line.
+// The plugin brings a folder (field `app`) with one file per port, NAME.<ext>
+// (estilo.css, menu.html, script.js...), and the server swaps the marker line
+// for the files' content, in the plugin list's order. A port with no plugin
+// disappears without leaving a line. The swap happens before the nonce and
+// the translation, so the pieces get both just like the rest of the page.
+// The plugin's script hangs off `ganchosDoApp` (declared in index.html): tab
+// routes, what runs on entering the app, on every tab switch, and when the
+// account is created (aoCadastrar, with the method: email or google).
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -35,8 +35,8 @@ export function montarApp(html, pastas) {
   return html.replace(MARCADOR, (_, a, b) => p[a || b] || '');
 }
 
-// Leitor das páginas do site: o app sai montado, o resto sai como está no disco.
-// Confere os encaixes já na criação, ou seja, no boot.
+// Site pages reader: the app comes out assembled, the rest comes out as it
+// is on disk. Checks the ports right at creation, i.e. at boot.
 export function leitorDePagina(app, pastas) {
   conferirEncaixes(fs.readFileSync(app, 'utf8'), pastas);
   return (arq) => {
@@ -45,8 +45,8 @@ export function leitorDePagina(app, pastas) {
   };
 }
 
-// No boot: pedaço sem marcador (nome com erro de digitação) falha logo, e não
-// vira tela que some calada.
+// At boot: a piece with no marker (typo'd name) fails right away, and does
+// not become a screen that silently disappears.
 export function conferirEncaixes(html, pastas) {
   const existe = new Set(marcadores(html));
   for (const pasta of pastas) {

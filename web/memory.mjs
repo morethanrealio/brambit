@@ -1,30 +1,30 @@
 import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
-// ── Compactação de history (resumo rolante por token) ──
-// Quando a conversa cresce, dobramos os turnos antigos num "resumo rolante" e
-// mantemos só os turnos recentes verbatim. O resumo entra no system prompt.
-// Métrica = token estimado (chars/4). Histerese: dispara no HIGH, corta até o LOW.
-// Tudo tunável por env. Ver projetos/arquitetura-memoria.md (seção 6).
+// ── History compaction (rolling token-based summary) ──
+// When the conversation grows, we fold the old turns into a "rolling summary" and
+// keep only the recent turns verbatim. The summary goes into the system prompt.
+// Metric = estimated token count (chars/4). Hysteresis: triggers at HIGH, trims down to LOW.
+// Everything tunable via env. See projetos/arquitetura-memoria.md (section 6).
 
 import { makeMemoriaModel } from './memoria-modelo.mjs';
 
 export const COMPACT_HIGH = Number(process.env.COMPACT_HIGH || 24000); // gatilho
-export const COMPACT_LOW = Number(process.env.COMPACT_LOW || 12000);   // alvo pós-corte
+export const COMPACT_LOW = Number(process.env.COMPACT_LOW || 12000);   // post-trim target
 export const SUMMARY_CAP = Number(process.env.SUMMARY_CAP || 3000);    // teto da prosa do resumo
 export const LEDGER_CAP = Number(process.env.LEDGER_CAP || 6000);      // teto do ledger de dados concretos (chars)
 
-// ── Ledger de dados concretos (verbatim, à prova de compressão) ──
-// A prosa do resumo (via Flash) tende a engolir dado duro que o usuário COLA
-// (datas, horários, endereços, preços, links, escolhas). O ledger guarda essas
-// linhas VERBATIM fora da compressão do modelo e acumula entre compactações.
+// ── Concrete-data ledger (verbatim, compression-proof) ──
+// The summary's prose (via Flash) tends to swallow hard data the user PASTES
+// (dates, times, addresses, prices, links, choices). The ledger keeps these
+// lines VERBATIM outside the model's compression and accumulates across compactions.
 const LEDGER_MARK = '━━ DADOS DO USUÁRIO (verbatim, não alterar) ━━';
 
-// Sinais de "dado concreto" numa linha colada pelo usuário.
+// Signals of "concrete data" in a line pasted by the user.
 const FACT_PATTERNS = [
   /\b\d{1,2}[\/.\-]\d{1,2}(?:[\/.\-]\d{2,4})?\b/,                         // datas 22/07, 22-07-2026
-  /\b\d{1,2}\s?[:hH]\s?\d{2}\b/,                                          // horários 21:26, 9h30
-  /R\$\s?\d/,                                                             // preços R$ 180
+  /\b\d{1,2}\s?[:hH]\s?\d{2}\b/,                                          // times 21:26, 9h30
+  /R\$\s?\d/,                                                             // prices R$ 180
   /\bhttps?:\/\/\S+/i,                                                    // links
-  /\b(rua|av\.?|avenida|alameda|travessa|estrada|rodovia|pça|praça)\b/i,  // endereço
+  /\b(rua|av\.?|avenida|alameda|travessa|estrada|rodovia|pça|praça)\b/i,  // address
   /\b\d{5}-?\d{3}\b/,                                                     // CEP
   /\b(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i,        // dias da semana
   /\b\d{1,3}\s?(reais|real|brl|usd|d[óo]lares?)\b/i,                      // valores por extenso
@@ -33,7 +33,7 @@ const FACT_PATTERNS = [
 
 const normFact = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
-// Extrai as linhas de dado concreto das mensagens do USUÁRIO (é o que ele "cola").
+// Extracts the concrete-data lines from the USER's messages (what they "paste").
 function extractFacts(messages) {
   const out = [];
   for (const m of messages || []) {
@@ -61,8 +61,8 @@ function splitSummary(s) {
   return { prose, ledger };
 }
 
-// Junta ledger antigo + novos fatos, dedupe (mantém 1ª ocorrência), cap por chars
-// preservando os MAIS RECENTES (dropa os mais antigos se estourar).
+// Joins old ledger + new facts, dedupes (keeps 1st occurrence), caps by chars
+// preserving the MOST RECENT ones (drops the oldest if it overflows).
 function mergeLedger(oldLedger, newFacts) {
   const seen = new Set();
   const merged = [];
@@ -82,7 +82,7 @@ function mergeLedger(oldLedger, newFacts) {
   return kept;
 }
 
-// Compõe prosa + ledger numa única string de resumo.
+// Composes prose + ledger into a single summary string.
 function composeSummary(prose, ledger) {
   let p = (prose || '').trim();
   if (estTokens(p) > SUMMARY_CAP) p = p.slice(0, SUMMARY_CAP * 4);
@@ -90,10 +90,10 @@ function composeSummary(prose, ledger) {
   return `${p}\n\n${LEDGER_MARK}\n${ledger.map((l) => `- ${l}`).join('\n')}`.trim();
 }
 
-// Estima tokens de um texto (heurística barata, sem tokenizer).
+// Estimates tokens for a text (cheap heuristic, no tokenizer).
 export const estTokens = (s) => Math.ceil((s || '').length / 4);
 
-// Serializa uma mensagem do core pra texto (pra estimar e pra resumir).
+// Serializes a core message to text (for estimating and for summarizing).
 function renderMsg(m) {
   if (m.role === 'tool') return `[tool:${m.name}] ${m.content || ''}`;
   if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -107,18 +107,18 @@ function renderMsg(m) {
 export const msgTokens = (m) => estTokens(renderMsg(m));
 export const historyTokens = (messages) => (messages || []).reduce((n, m) => n + msgTokens(m), 0);
 
-// ── Corte de resultado CRU de tool de LEITURA (dentro da compactação) ──
-// Tool de LEITURA = o resultado é CONSUMIDO no turno e não é estado: a resposta
-// do assistente já carrega o que importava dele. Guardar o JSON/HTML cru no
-// history só paga input token de novo em todo turno seguinte. Medido em replay
-// offline sobre 20 threads reais (01/09/2026): -30% de history sem perda de
-// qualidade detectável (o braço de CONTROLE, com input idêntico, marcou "perdeu
-// info" nos mesmos 4 casos — é ruído de geração, não do corte).
+// ── Trimming RAW results of READ tools (inside compaction) ──
+// READ tool = the result is CONSUMED within the turn and is not state: the assistant's
+// reply already carries what mattered from it. Keeping the raw JSON/HTML in the
+// history just pays the input token again on every following turn. Measured via
+// offline replay over 20 real threads (2026-09-01): -30% history with no detectable
+// loss of quality (the CONTROL arm, with identical input, flagged "lost
+// info" in the same 4 cases — that's generation noise, not the trim's).
 //
-// FICAM DE FORA de propósito:
-// • sandbox_*/escrever_*/planilha/app files → é ESTADO de trabalho, não consumo;
-// • listar_lembretes, calendar_list, gmail_* → agenda e caixa que a pessoa está
-//   manuseando AGORA; o resultado costuma ser o assunto do próximo turno.
+// DELIBERATELY LEFT OUT:
+// • sandbox_*/escrever_*/planilha/app files → this is working STATE, not consumption;
+// • listar_lembretes, calendar_list, gmail_* → the agenda and inbox the person is
+//   handling RIGHT NOW; the result is usually the subject of the next turn.
 export const READ_TOOLS_CUT = new Set([
   'buscar_web', 'pesquisar', 'google', 'abrir_link', 'memoria_ler', 'ver_midia',
   'listar_midia', 'ler_arquivo_do_app', 'ler_conversa', 'reler_esta_conversa',
@@ -129,13 +129,13 @@ export const READ_TOOLS_CUT = new Set([
   'abrir_ferramentas', 'buscar_conversas', 'listar_arquivos_do_app',
 ]);
 
-// Abaixo disso o stub sai igual ou maior que o conteúdo: não vale trocar.
+// Below this, the stub comes out equal to or bigger than the content: not worth swapping.
 const CUT_MIN_TOKENS = 60;
 const stubFor = (name) => `[resultado de ${name} não guardado no histórico; refaça a chamada se precisar de novo]`;
 
-// Substitui por stub os resultados crus de leitura nos índices < `upto`.
-// Preserva role/name/tool_call_id e o TAMANHO do array (o pareamento
-// toolCall↔resultado que o provider exige continua de pé).
+// Replaces raw read results with a stub at indices < `upto`.
+// Preserves role/name/tool_call_id and the array's SIZE (the
+// toolCall↔result pairing the provider requires still holds).
 export function stubRawReads(messages, upto) {
   let cutTok = 0;
   const out = (messages || []).map((m, i) => {
@@ -148,39 +148,39 @@ export function stubRawReads(messages, upto) {
   return { messages: out, cutTok };
 }
 
-// Índice onde começa o ÚLTIMO turno (fronteira 'user'). O turno mais recente
-// nunca é enxugado: é o "e o segundo?" logo depois de uma busca.
+// Index where the LAST turn begins ('user' boundary). The most recent turn
+// is never trimmed: it's the "and the second one?" right after a search.
 function lastTurnStart(messages) {
   for (let i = (messages?.length || 0) - 1; i >= 0; i--) if (messages[i].role === 'user') return i;
   return messages?.length || 0;
 }
 
-// Acha o índice de corte: mantém o MAIOR sufixo de turnos (começando num 'user')
-// cujo total de tokens <= LOW. Devolve o índice onde começa a parte "recente".
+// Finds the cut index: keeps the LARGEST suffix of turns (starting at a 'user')
+// whose total tokens <= LOW. Returns the index where the "recent" part begins.
 function splitIndex(messages, lowTokens) {
-  // índices de fronteira de turno = onde role === 'user'
+  // turn-boundary indices = where role === 'user'
   const bounds = [];
   for (let i = 0; i < messages.length; i++) if (messages[i].role === 'user') bounds.push(i);
-  if (bounds.length <= 1) return 0; // 0 ou 1 turno: não dá pra compactar com segurança
+  if (bounds.length <= 1) return 0; // 0 or 1 turn: can't safely compact
 
-  // do último turno pro mais antigo, acumula até estourar o LOW
+  // from the last turn to the oldest, accumulates until it overflows LOW
   let acc = 0;
-  let chosen = bounds[bounds.length - 1]; // pelo menos o último turno fica
+  let chosen = bounds[bounds.length - 1]; // at least the last turn stays
   for (let b = bounds.length - 1; b >= 0; b--) {
     const start = bounds[b];
     const end = b + 1 < bounds.length ? bounds[b + 1] : messages.length;
     let turnTok = 0;
     for (let i = start; i < end; i++) turnTok += msgTokens(messages[i]);
-    if (acc + turnTok > lowTokens && acc > 0) break; // já temos algo e estouraria
+    if (acc + turnTok > lowTokens && acc > 0) break; // we already have something and it would overflow
     acc += turnTok;
     chosen = start;
   }
   return chosen;
 }
 
-// Resume os turnos antigos, incorporando o resumo anterior.
-// A prosa é comprimida pelo Flash (cap SUMMARY_CAP); o ledger de dados concretos
-// é preservado VERBATIM fora da compressão e acumulado entre compactações.
+// Summarizes the old turns, incorporating the previous summary.
+// The prose is compressed by Flash (cap SUMMARY_CAP); the concrete-data ledger
+// is preserved VERBATIM outside the compression and accumulated across compactions.
 async function summarize(prevSummary, oldMessages, onUsage) {
   const { prose: prevProse, ledger: prevLedger } = splitSummary(prevSummary);
   const sys = [
@@ -198,51 +198,51 @@ async function summarize(prevSummary, oldMessages, onUsage) {
   const r = await (summarizer.forBillingPhase?.({kind:'compact',noBill:true})||summarizer).complete({
     system: sys, messages: [{ role: 'user', content: prompt }], tools: [],
   });
-  // Esta chamada é paga e era invisível: o usage voltava do provider e era
-  // descartado aqui, então nenhuma linha de usage_events representava a
-  // compactação. Toda análise de custo por thread saía subestimada, e sem número
-  // não há como decidir se o resumo se paga (ele troca turnos crus reenviados a
-  // cada passo por uma chamada só, mas isso é hipótese até ser medido).
+  // This call is paid and was invisible: the usage came back from the provider and was
+  // discarded here, so no usage_events line represented the
+  // compaction. Every per-thread cost analysis came out underestimated, and without a number
+  // there's no way to decide if the summary pays for itself (it trades raw turns resent at
+  // every step for a single call, but that's a hypothesis until it's measured).
   if (r?.usage && onUsage) { try { onUsage(r.usage); } catch {} }
   const prose = (r.text || '').trim() || prevProse || '';
   const ledger = mergeLedger(prevLedger, extractFacts(oldMessages));
   return composeSummary(prose, ledger) || prevSummary || '';
 }
 
-// Compacta se passar do HIGH. Devolve { history, summary, compacted }.
-// `messages` = history completo já com o turno novo; `prevSummary` = resumo atual do agente.
+// Compacts if it passes HIGH. Returns { history, summary, compacted }.
+// `messages` = full history already with the new turn; `prevSummary` = the agent's current summary.
 //
-// O enxugamento dos resultados crus de leitura acontece SÓ AQUI, no mesmo evento
-// da compactação, de propósito: é o único momento em que o prefixo do prompt já
-// vai ser reescrito de qualquer forma, então o cache não paga nada a mais. Fazer
-// isso a cada turno derrubaria o cache toda vez (frequência de compactação e
-// tuning de cache seguem intocados).
+// The trimming of raw read results happens ONLY HERE, in the same compaction
+// event, on purpose: it's the only moment the prompt prefix is
+// already going to be rewritten anyway, so the cache doesn't pay any extra cost. Doing
+// this every turn would drop the cache every time (compaction frequency and
+// cache tuning remain untouched).
 export async function compactIfNeeded({ messages, prevSummary = '', onUsage }) {
   const total = historyTokens(messages);
   if (total <= COMPACT_HIGH) return { history: messages, summary: prevSummary, compacted: false };
 
-  // 1) Enxuga o cru de leitura (menos o último turno). O splitIndex roda sobre a
-  // versão enxuta, então o MESMO orçamento de LOW passa a caber MAIS conversa
-  // verbatim — o que sai é resultado de tool já consumido, não turno.
+  // 1) Trims the read raw (except the last turn). splitIndex runs over the
+  // trimmed version, so the SAME LOW budget now fits MORE conversation
+  // verbatim — what leaves is already-consumed tool result, not a turn.
   const { messages: leaned, cutTok } = stubRawReads(messages, lastTurnStart(messages));
   const leanedTotal = historyTokens(leaned);
 
   const cut = splitIndex(leaned, COMPACT_LOW);
-  // Se só o enxugamento já resolveu (ou não há fronteira segura de turno pra
-  // cortar), devolve o history enxuto sem resumir: nenhum turno é perdido e o
-  // cru consumido não volta a ser cobrado nos turnos seguintes.
+  // If trimming alone already solved it (or there's no safe turn boundary to
+  // cut at), returns the trimmed history without summarizing: no turn is lost and the
+  // consumed raw doesn't get charged again on the following turns.
   if (cut <= 0) {
     if (cutTok > 0) console.log(`[compact] leaned-only ${total}->${leanedTotal} tok (-${cutTok})`);
     return { history: cutTok > 0 ? leaned : messages, summary: prevSummary, compacted: false, leanedTok: cutTok };
   }
 
-  const old = messages.slice(0, cut);   // CRU: o resumo tem que ver o dado original
-  const recent = leaned.slice(cut);     // ENXUTO: é o que segue no prompt
+  const old = messages.slice(0, cut);   // RAW: the summary has to see the original data
+  const recent = leaned.slice(cut);     // TRIMMED: this is what goes on in the prompt
   let summary = prevSummary;
   try {
     summary = await summarize(prevSummary, old, onUsage);
   } catch {
-    // se o resumo falhar, NÃO descarta turnos: mantém tudo pra não perder contexto
+    // if the summary fails, do NOT discard turns: keep everything so as not to lose context
     return { history: messages, summary: prevSummary, compacted: false };
   }
   return { history: recent, summary, compacted: true, droppedTurns: old.length, leanedTok: cutTok };

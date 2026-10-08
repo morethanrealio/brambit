@@ -8,11 +8,11 @@
 // any spend port that says "ran out" (credits in a plugin, USD cap in the core).
 export const ROUTINE_CREDIT_WARN_MS = 7 * 86400_000;
 
-// Decide se a rotina agendada deve ENTREGAR o aviso agora. `marca` é o que está
-// gravado pra essa pessoa ({ at, period }) ou null/{} na primeira vez.
-// Avisa quando: nunca avisou, a marca está corrompida, passou a janela, ou o
-// ciclo de crédito virou (quem renovou e estourou de novo dias depois precisa
-// saber, mesmo dentro dos 7 dias).
+// Decides whether the scheduled routine should DELIVER the warning now. `marca` is what's
+// stored for this person ({ at, period }) or null/{} the first time.
+// Warns when: it never warned, the marker is corrupted, the window has passed, or
+// the credit cycle turned over (whoever renewed and ran out again days later needs
+// to know, even within the 7 days).
 export function deveAvisarRotinaSemCredito({ marca, periodStart = null, agora = Date.now(), janelaMs = ROUTINE_CREDIT_WARN_MS } = {}) {
   const at = Date.parse(marca?.at || '');
   if (!Number.isFinite(at)) return true;

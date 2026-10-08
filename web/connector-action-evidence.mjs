@@ -32,8 +32,9 @@ const definitions = {
   slack_post_message: ['message', 'accepted', d => d.ts, (a,d) => d.channel],
   hotmail_send: ['message', 'accepted', d => d.requestId, a => a.to],
 };
-// Link do Google Docs/Drive abre igual sem a query; ela carrega o ID da conta
-// Google do dono (ouid) e parâmetros internos que não têm por que aparecer.
+// The Google Docs/Drive link opens the same without the query; it carries the
+// owner's Google account ID (ouid) and internal parameters that have no reason
+// to show up.
 export function shareableLink(link) {
   if (typeof link !== 'string' || !/^https:\/\//.test(link)) return '';
   try {

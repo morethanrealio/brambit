@@ -1,9 +1,9 @@
 import { tagIdioma } from './locale.mjs';
 import { hostDaMarca } from './marca.mjs';
 
-// Textos que a plataforma escreve por conta própria em volta do que a rotina ou
-// o lembrete produziu. Sem modelo no meio, então precisam existir nos três
-// idiomas. Em pt-BR saem byte a byte iguais ao que era antes.
+// Texts the platform writes on its own around what the routine or
+// the reminder produced. No model in the middle, so they need to exist in the three
+// languages. In pt-BR they come out byte for byte identical to how they were before.
 const TEXTOS_ENTREGA = {
   'pt-BR': {
     oi: nome => `Oi, ${nome}!`,
@@ -45,14 +45,14 @@ const TEXTOS_ENTREGA = {
 export const textosEntrega = l => TEXTOS_ENTREGA[tagIdioma(l)] || TEXTOS_ENTREGA['pt-BR'];
 const primeiroNome = n => (n || '').split(' ')[0] || '';
 
-// Rotina longa vai inteira por e-mail e o chat só avisa. O aviso é: frase fixa
-// com o TEMA de hoje (senão seria igual toda noite) + explicação fixa do e-mail.
-// Sem saudação: o template já abre com "Oi! Conforme combinado:". O agente só
-// preenche o tema, curto: frase livre saía telegráfica e com jargão do material
-// (teste de 02/10: "o risco de sequenciamento"). Tema fora do formato vira null
-// e cai em `prontoHoje`.
+// A long routine goes whole by email and the chat only notifies. The notice is: a fixed sentence
+// with today's TOPIC (otherwise it would be the same every night) + a fixed explanation of the email.
+// No greeting: the template already opens with "Oi! Conforme combinado:". The agent only
+// fills in the topic, short: free-form text came out telegraphic and with jargon from the
+// material (2026-10-02 test: "o risco de sequenciamento"). A topic outside the format becomes null
+// and falls back to `prontoHoje`.
 export const TEMA_MAX_PALAVRAS = 8;
-const TEMA_MAX_CHARS = 80; // 8 palavras normais cabem; palavra-lixo gigante não
+const TEMA_MAX_CHARS = 80; // 8 normal words fit; one giant garbage word doesn't
 const MOLDE_TEMA = { 'pt-BR': ['Brazilian Portuguese', 'O conteúdo de hoje é sobre ___.', 'o futuro do trabalho com a IA'],
   en: ['English', "Today's content is about ___.", 'the future of work with AI'],
   es: ['Spanish', 'El contenido de hoy trata sobre ___.', 'el futuro del trabajo con la IA'] };
@@ -72,15 +72,15 @@ export function temaAvisoValido(out) {
   let t = String(out || '').replace(/\s+/g, ' ').trim().replace(/^["“'‘]+|["”'’]+$/g, '').replace(/[.!]+$/, '').trim();
   t = t.replace(ECO_MOLDE, '');
   if (!t || t.length > TEMA_MAX_CHARS || t.split(' ').length > TEMA_MAX_PALAVRAS || /[:;•|()[\]"“”]|https?:|www\./i.test(t) || SAUDACAO.test(t)) return null;
-  // "O futuro..." vira "o futuro..." no meio da frase. Só artigo: nome próprio
-  // e sigla ("Netflix", "IA") ficam como vieram.
+  // "O futuro..." becomes "o futuro..." in the middle of the sentence. Only an article: proper
+  // noun and acronym ("Netflix", "IA") stay as they came.
   return t.replace(/^(O|A|Os|As|Um|Uma|The|An|El|La|Los|Las|Un|Una)(?= )/, w => w.toLowerCase());
 }
 
-// O conteúdo foi escrito pro chat ("manda o áudio por aqui") e vai por e-mail.
-// O agente reescreve SÓ as frases que falam do canal; o resto tem que voltar
-// igual. Validação: mesmas linhas, poucas mudadas, nenhum link perdido. Se não
-// passar, null (cai na nota fixa no topo do e-mail).
+// The content was written for the chat ("send me the audio here") and goes by email.
+// The agent rewrites ONLY the sentences that talk about the channel; the rest has to come back
+// unchanged. Validation: same lines, few changed, no lost link. If it doesn't
+// pass, null (falls back to the fixed note at the top of the email).
 export function pedidoAdaptarEmail(canal, body) {
   return `DRAFT (do not send anything, do not use any tool): the text below was written for ${canal}, ` +
     `but it will be delivered by email. Rewrite ONLY the sentences that refer to the channel as if the person were ` +
@@ -134,9 +134,9 @@ export function createScheduledDelivery({
     return `${frase || tx.prontoHoje(r.title)} ${janelaFechada ? tx.emailJanela : tx.emailTamanho}`;
   }
 
-  // Fora da janela de 24h o WhatsApp só aceita template, e o template corta o
-  // texto em `whatsappTemplateMax`. Rotina maior que isso iria truncada (as
-  // perguntas do fim sumiam), então vai inteira por e-mail e o WhatsApp só avisa.
+  // Outside the 24h window WhatsApp only accepts a template, and the template cuts
+  // the text at `whatsappTemplateMax`. A routine bigger than that would go truncated (the
+  // questions at the end would disappear), so it goes whole by email and WhatsApp only notifies.
   async function whatsappWouldTruncate(r, fullText) {
     if (r.channel !== 'whatsapp' || !whatsappWindowOpen || fullText.length <= whatsappTemplateMax) return false;
     try {
@@ -243,10 +243,10 @@ export function createScheduledDelivery({
           channel: r.channel, status: error?.definitive === true ? 'failed' : 'uncertain',
         } };
       }
-      // O thread guarda o que a pessoa VIU no canal (o aviso) e o conteúdo marcado
-      // como e-mail. Só com o conteúdo, o assistente achava que já tinha mandado
-      // tudo por aqui e, no "me manda aqui o conteúdo", pegou outra coisa
-      // (caso real 02/10/2026: mandou a devolutiva da jornada).
+      // The thread keeps what the person SAW on the channel (the notice) and the content marked
+      // as email. With only the content, the assistant thought it had already sent
+      // everything here and, on "send me the content here," picked up something else
+      // (real 2026-10-02 case: it sent the journey feedback).
       await persistProactiveToThread(r, `${aviso}\n\n${textosEntrega(r.user_language).conteudoEmail}\n\n${body}`);
       return { ...channelReceipt, fullContent: 'email', fullContentReceiptId: emailReceipt.id };
     }

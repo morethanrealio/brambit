@@ -1,6 +1,6 @@
-// Helpers de busca na wiki (termos e trecho da linha que casou). A leitura de
-// página devolve a página inteira: o recorte de páginas financeiras sumiu com o
-// dado pedido pelo dono (29/09/2026). Não repetir dado alheio é regra do prompt.
+// Wiki search helpers (terms and the matching line's snippet). Reading a
+// page returns the whole page: the clipping of financial pages went away with the
+// data requested by the owner (2026-09-29). Not repeating someone else's data is a prompt rule.
 
 const STOP = new Set([
   'a','as','o','os','de','da','das','do','dos','e','em','no','na','nos','nas','um','uma',

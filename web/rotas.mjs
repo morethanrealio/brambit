@@ -26,7 +26,7 @@ export function createRotas(){
    if(typeof tratar!=='function')throw Error('Manipulador sem função');
    livres.push(tratar);
   },
-  // true = alguma rota plugada respondeu (o handler para aí).
+  // true = some plugged-in route answered (the handler stops there).
   async atender(req,res,url,ctx={}){
    const tratar=mapa.get(`${req.method} ${url.pathname}`);
    if(tratar&&(await tratar(req,res,url,ctx))!==SEGUE)return true;

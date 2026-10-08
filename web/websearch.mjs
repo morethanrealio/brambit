@@ -1,17 +1,17 @@
-// ── Tool de busca na web pra modelos SEM grounding embutido ──
-// O Gemini tem busca nativa (google_search); OpenAI/GLM não. Pra dar grounding a
-// esses modelos no nosso tool-loop, expomos a tool `buscar_web`.
+// ── Web search tool for models WITHOUT built-in grounding ──
+// Gemini has native search (google_search); OpenAI/GLM don't. To give grounding to
+// those models in our tool-loop, we expose the `buscar_web` tool.
 //
-// Dois backends possíveis:
-//  1. TAVILY (preferido quando TAVILY_API_KEY existe): API de busca feita pra LLM,
-//     ~1-2s por consulta, devolve snippets + um "answer" curto. NÃO gera texto,
-//     então é MUITO mais rápido que o Gemini (que faz uma geração inteira por
-//     busca, ~10-20s). Custo ~$0,008/busca (basic), free tier 1000/mês.
-//  2. GEMINI groundedSearch (fallback): faz uma busca grounded + síntese no
-//     Gemini. Mais lento, mas reaproveita a cota grátis de busca (5k/mês).
+// Two possible backends:
+//  1. TAVILY (preferred when TAVILY_API_KEY exists): a search API built for LLMs,
+//     ~1-2s per query, returns snippets + a short "answer". Does NOT generate text,
+//     so it is MUCH faster than Gemini (which does a whole generation per
+//     search, ~10-20s). Cost ~$0.008/search (basic), free tier 1000/month.
+//  2. GEMINI groundedSearch (fallback): does a grounded search + synthesis in
+//     Gemini. Slower, but reuses the free search quota (5k/month).
 //
-// O custo de cada busca é reportado via onUsage (kind='search') pra cair no mesmo
-// pipeline de crédito das outras chamadas.
+// The cost of each search is reported via onUsage (kind='search') to fall into the same
+// credit pipeline as the other calls.
 import { uaBot } from './marca.mjs';
 import { isDeepSeekTurn } from '../core-proto/deepseek/scope.mjs';
 import { groundedSearch } from '../core-proto/providers/gemini.mjs';
@@ -23,17 +23,17 @@ import { fetchFixado } from './net-pin.mjs';
 import { pageContentQuality, improvePageReading, PARTIAL_PAGE_MARKER } from './page-content-quality.mjs';
 import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
 
-// ── Proteção anti-SSRF pra abrir_link ──
-// abrir_link busca uma URL controlada pelo modelo/usuário DE DENTRO da VPC. Sem
-// filtro, dá pra alcançar o endpoint de metadata da cloud (169.254.169.254) ou
-// serviços internos (172.31.x.x, localhost). Aqui a gente: (1) só aceita http/https
-// nas portas 80/443, (2) resolve o host e recusa se QUALQUER IP cair em faixa
-// privada/loopback/link-local, e (3) segue redirects manualmente revalidando cada
-// hop (um destino público que redireciona pra um interno não passa) e (4) a conexão
-// sai por fetchFixado, que resolve o host UMA vez e amarra o socket nos IPs já
-// validados. O (4) fecha o DNS rebinding: antes, o fetch nativo refazia a
-// resolução por conta própria depois do check, e um domínio com TTL curto podia
-// devolver IP público na validação e IP interno na conexão.
+// ── Anti-SSRF protection for abrir_link ──
+// abrir_link fetches a URL controlled by the model/user FROM INSIDE the VPC. Without a
+// filter, it's possible to reach the cloud metadata endpoint (169.254.169.254) or
+// internal services (172.31.x.x, localhost). Here we: (1) only accept http/https
+// on ports 80/443, (2) resolve the host and refuse if ANY IP falls in a
+// private/loopback/link-local range, and (3) follow redirects manually, revalidating each
+// hop (a public destination that redirects to an internal one doesn't pass), and (4) the connection
+// goes out through fetchFixado, which resolves the host ONCE and ties the socket to the already
+// validated IPs. (4) closes off DNS rebinding: before, the native fetch would redo the
+// resolution on its own after the check, and a domain with a short TTL could
+// return a public IP at validation time and an internal IP at connection time.
 function ipv4Private(ip) {
   const p = ip.split('.').map(Number);
   if (p.length !== 4 || p.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return true;
@@ -99,11 +99,11 @@ export function tavilyEnabled() {
   return !!process.env.TAVILY_API_KEY;
 }
 
-// Extrai o conteúdo REAL de uma URL (título + texto legível da página). É o jeito
-// certo de descobrir o que é um link que o usuário mandou — MUITO mais confiável
-// que buscar por palavra-chave num link solto (a busca "ancora" no contexto da
-// conversa e pode devolver o produto errado; bug reportado por um usuário em 01/07, em
-// que um link de pratos foi confundido com um produto da conversa anterior).
+// Extracts the REAL content of a URL (title + readable page text). It's the right
+// way to find out what a link the user sent is — MUCH more reliable
+// than searching by keyword for a bare link (the search "anchors" on the conversation
+// context and can return the wrong product; bug reported by a user on 2026-07-01, where
+// a link to dishes was confused with a product from an earlier conversation).
 async function tavilyExtract(url) {
   const res = await fetch(TAVILY_EXTRACT_URL, {
     method: 'POST',
@@ -114,19 +114,19 @@ async function tavilyExtract(url) {
   const data = await res.json();
   const r = Array.isArray(data.results) ? data.results[0] : null;
   const raw = r?.raw_content ? String(r.raw_content) : '';
-  // Custo modelado como 1 busca (mesma linha de pricing).
+  // Cost modeled as 1 search (same pricing line).
   const usage = { model: 'tavily-search', in: 0, cached: 0, out: 1, think: 0, total: 1 };
   console.log(`[tavily extract] url="${String(url).slice(0, 80)}" ok=${!!raw} len=${raw.length}`);
   return { text: raw, url: r?.url || url, usage };
 }
 
-// "Relaxa" uma query que provavelmente se auto-sabotou: tira operador site:
-// (com domínio chutado ele zera tudo) e aspas de frase exata (matam o recall).
-// Só serve pra REFAZER quando a busca original volta vazia.
+// "Relaxes" a query that probably sabotaged itself: removes the site:
+// operator (with a guessed domain it zeroes everything out) and exact-phrase quotes (which kill recall).
+// Only used to REDO the search when the original one comes back empty.
 function relaxQuery(q) {
   return String(q || '')
     .replace(/-?site:\S+/gi, ' ')          // operador site:dominio
-    .replace(/["""'']/g, ' ')              // aspas retas e tipográficas
+    .replace(/["""'']/g, ' ')              // straight and typographic quotes
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -147,7 +147,7 @@ function searchDateFilters(dataInicio, dataFim) {
   return filters;
 }
 
-// Uma chamada crua ao Tavily. depth 'basic' (rápido) ou 'advanced' (mais recall).
+// A raw call to Tavily. depth 'basic' (fast) or 'advanced' (more recall).
 async function tavilyCall(query, { maxResults = 10, depth = 'basic', dateFilters = {} } = {}) {
   const res = await fetch(TAVILY_URL, {
     method: 'POST',
@@ -171,12 +171,12 @@ async function tavilyCall(query, { maxResults = 10, depth = 'basic', dateFilters
   return { results, answer: data.answer || '' };
 }
 
-// Busca "crua" no Tavily: devolve { text, sources, usage } no MESMO shape do
-// groundedSearch, pra o run() abaixo tratar os dois iguais. Se a busca voltar
-// VAZIA, refaz UMA vez com a query relaxada (sem aspas/site:) e depth advanced,
-// pra não devolver "0 resultados" cru — foi assim que a IA disse "não existe" pra
-// um site que existia (caso TAB, Flávio 03/08). O determinismo aqui evita que o
-// modelo interprete busca falha como "não existe".
+// "Raw" Tavily search: returns { text, sources, usage } in the SAME shape as
+// groundedSearch, so the run() below treats both the same. If the search comes back
+// EMPTY, redoes it ONCE with the relaxed query (no quotes/site:) and depth advanced,
+// so it doesn't return a raw "0 results" — that's how the AI said a site "doesn't exist" for
+// a site that did exist (TAB case, Flávio 2026-08-03). The determinism here prevents the
+// model from interpreting a failed search as "doesn't exist".
 async function tavilySearch(query, { maxResults = 10, dateFilters = {} } = {}) {
   let calls = 1;
   let { results, answer } = await tavilyCall(query, { maxResults, dateFilters });
@@ -193,8 +193,8 @@ async function tavilySearch(query, { maxResults = 10, dateFilters = {} } = {}) {
     }
   }
   const sources = results.map((r) => ({ title: r.title || r.url, uri: r.url }));
-  // Texto = o "answer" do Tavily (se veio) + os snippets dos resultados, pra dar
-  // ao modelo conteúdo concreto pra sintetizar (Tavily não escreve resposta longa).
+  // Text = Tavily's "answer" (if it came back) + the snippets of the results, to give
+  // the model concrete content to synthesize (Tavily doesn't write a long reply).
   const parts = [];
   if (answer) parts.push(answer);
   for (const r of results) {
@@ -206,34 +206,34 @@ async function tavilySearch(query, { maxResults = 10, dateFilters = {} } = {}) {
     if (r.content || filtered) parts.push(`• ${r.title || r.url}${date}: ${r.content ? String(r.content).slice(0, 500) : '(sem trecho; leia a página)'}`);
   }
   const text = parts.join('\n');
-  // Custo por CHAMADA (não por token): modelamos cada chamada Tavily como 1 token
-  // de saída na linha 'tavily-search' do pricing → costOf ≈ $0,008/busca.
+  // Cost per CALL (not per token): we model each Tavily call as 1 output
+  // token on the 'tavily-search' pricing line → costOf ≈ $0.008/search.
   const usage = { model: 'tavily-search', in: 0, cached: 0, out: calls, think: 0, total: calls };
   return { text, sources, usage, empty: !results.length, relaxedNote };
 }
 
-// `resolveGroundingUri` e `renderFontes` moraram aqui até 08/09/2026. Foram pro
-// `links.mjs` junto com a conferência de link (é tudo a mesma coisa: URL que sai
-// pro usuário) e porque o caminho de turno precisa delas sem arrastar este módulo
-// inteiro atrás. Seguem reexportadas daqui pra não quebrar quem já importava.
-// ATENÇÃO: `export { x } from` NÃO cria o nome dentro deste módulo; o import
-// explícito acima é o que deixa o run() abaixo chamar renderFontes. Sem ele, toda
-// busca caiu em "renderFontes is not defined" de 08/09 a 12/09/2026 e o log
-// culpou a Tavily ("TAVILY CAIU") por um bug nosso.
+// `resolveGroundingUri` and `renderFontes` lived here until 2026-09-08. They moved to
+// `links.mjs` together with link checking (it's all the same thing: a URL that goes out
+// to the user), and because the turn code path needs them without dragging this whole
+// module along. They remain re-exported from here so as not to break whoever already imported them.
+// ATTENTION: `export { x } from` does NOT create the name inside this module; the
+// explicit import above is what lets the run() below call renderFontes. Without it, every
+// search fell into "renderFontes is not defined" from 2026-09-08 to 2026-09-12 and the log
+// blamed Tavily ("TAVILY CAIU") for a bug of ours.
 export { resolveGroundingUri, renderFontes } from './links.mjs';
 
-// O caminho rápido (Tavily) cair não pode ser SILENCIOSO. Antes, o catch abaixo
-// caía no Gemini sem deixar rastro: a Tavily estourou a cota em 13/08/2026 (HTTP
-// 432) e a plataforma inteira rodou 17 dias no caminho lento (~15s por busca em
-// vez de ~2s) sem ninguém perceber. Agora toda queda grita em duas frentes:
-// no log (tag fixa, greppável no journalctl) e no usage_events com
-// kind='search_degraded', que dá pra contar em SQL sem schema novo.
-// Quota estourada é permanente até alguém trocar o plano, então ela é marcada
-// separado de falha transitória (timeout, 5xx).
+// The fast path (Tavily) going down can't be SILENT. Before, the catch below
+// would fall back to Gemini without leaving a trace: Tavily blew its quota on 2026-08-13 (HTTP
+// 432) and the entire platform ran for 17 days on the slow path (~15s per search instead
+// of ~2s) without anyone noticing. Now every drop shouts on two fronts:
+// in the log (fixed tag, greppable in journalctl) and in usage_events with
+// kind='search_degraded', which can be counted in SQL with no new schema.
+// A blown quota is permanent until someone changes the plan, so it's marked
+// separately from a transient failure (timeout, 5xx).
 let _tavilyFails = 0;
-// Erro de PROGRAMAÇÃO (ReferenceError/TypeError/SyntaxError) não é a Tavily caindo:
-// a resposta dela já chegou e quebramos depois. Fica com tag própria pra ninguém
-// gastar dias olhando pro provedor errado (foi o que aconteceu em 09-12/09/2026).
+// A PROGRAMMING error (ReferenceError/TypeError/SyntaxError) is not Tavily going down:
+// its response already arrived and we broke afterward. Gets its own tag so nobody
+// spends days looking at the wrong provider (that's what happened 2026-09-09 to 2026-09-12).
 function isBugInterno(err) {
   return err instanceof ReferenceError || err instanceof TypeError || err instanceof SyntaxError;
 }
@@ -249,15 +249,15 @@ function noteTavilyFailure(err, onUsage, planoB = 'fallback Gemini (lento)') {
       usage: { model: bug ? 'websearch-bug' : quota ? 'tavily-quota' : 'tavily-erro', in: 0, cached: 0, out: 0, think: 0, total: 0 },
       kind: 'search_degraded',
     });
-  } catch { /* nunca deixa a métrica derrubar a busca */ }
+  } catch { /* never let the metric bring the search down */ }
 }
 
-// Modelo do FALLBACK de busca (quando o Tavily cai/estoura cota). Era o
-// gemini-3.5-flash, que é o modelo mais CARO que a gente tem (1,50 in / 9,00 out
-// contra 0,75 / 3,75 do primário): na queda do Tavily de 22 a 30/08/2026 a busca
-// ficou 2x mais cara em vez de degradar barato. O 3.7 responde grounding com o
-// mesmo número de fontes (probado 02/09), então o fallback passa a ser ele.
-// Trocável por env pra rollback sem deploy.
+// Search FALLBACK model (for when Tavily goes down/blows its quota). Used to be
+// gemini-3.5-flash, which is the most EXPENSIVE model we have (1.50 in / 9.00 out
+// versus 0.75 / 3.75 for the primary): during Tavily's outage from 2026-08-22 to 2026-08-30, search
+// ended up 2x more expensive instead of degrading cheaply. 3.7 responds to grounding with the
+// same number of sources (tested 2026-09-02), so the fallback becomes it.
+// Swappable via env for rollback with no deploy.
 const SEARCH_FALLBACK_MODEL = process.env.SEARCH_FALLBACK_MODEL || 'gemini-3.7-flash';
 
 // ── Search budget PER TURN (case of 28/09/2026) ──
@@ -274,9 +274,9 @@ const SEARCH_FALLBACK_MODEL = process.env.SEARCH_FALLBACK_MODEL || 'gemini-3.7-f
 // without cutting a large legitimate request.
 export const MAX_SEARCHES_PER_TURN = Number(process.env.MAX_SEARCHES_PER_TURN) || 50;
 
-// Chave "quase igual": sem acento, sem pontuação, sem palavra curta e com as
-// palavras em ordem alfabética, pra "Bacurau onde assistir streaming" e
-// "onde assistir Bacurau (streaming)" caírem na mesma busca.
+// "Near-equal" key: no accents, no punctuation, no short words, and with the
+// words in alphabetical order, so that "Bacurau onde assistir streaming" and
+// "onde assistir Bacurau (streaming)" fall into the same search.
 export function searchKey(consulta, dataInicio, dataFim) {
   const palavras = String(consulta || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w.length > 2);
@@ -296,8 +296,8 @@ export function createSearchBudget({ max = MAX_SEARCHES_PER_TURN } = {}) {
     get hits() { return hits; },
     get blocked() { return blocked; },
     get exhausted() { return used >= max; },
-    // Envolve UMA busca real. Mesma chave: devolve o resultado já obtido
-    // (inclusive se a primeira ainda estiver em andamento). Teto: não busca.
+    // Wraps ONE real search. Same key: returns the result already obtained
+    // (including if the first one is still in progress). Ceiling: doesn't search.
     async run(key, doSearch) {
       if (cache.has(key)) { hits += 1; return { text: await cache.get(key), cached: true }; }
       if (used >= max) { blocked += 1; return { text: SEARCH_LIMIT_MSG(max), limited: true }; }
@@ -306,7 +306,7 @@ export function createSearchBudget({ max = MAX_SEARCHES_PER_TURN } = {}) {
       cache.set(key, p);
       try {
         const text = await p;
-        // Erro não fica no cache: a próxima tentativa pode dar certo.
+        // Error doesn't stay in the cache: the next attempt might succeed.
         if (typeof text !== 'string' || text.startsWith('ERRO')) cache.delete(key);
         return { text };
       } catch (e) { cache.delete(key); throw e; }
@@ -353,17 +353,17 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
         if (usage && onUsage) onUsage({ usage, kind: 'search' });
         if (empty || (!text && !sources.length)) {
           if (filtered) return `${dateNote}Não achei resultados com esses filtros. A janela foi preservada, inclusive ao simplificar a consulta quando aplicável. Isso não comprova ausência de publicações; não amplie o período nem preencha com fontes antigas.`;
-          // Não devolve "0 resultados" seco: instrui a IA a NÃO afirmar ausência
-          // e a tentar o caminho certo (busca simples / abrir o site oficial).
+          // Doesn't return a bare "0 results": instructs the AI to NOT assert absence
+          // and to try the right path (simple search / open the official site).
           return 'Não achei resultados, mesmo depois de ampliar a busca (tirei aspas e operadores). NÃO conclua que a informação não existe a partir disso. Refaça com uma busca mais SIMPLES (poucas palavras em pt-BR); se o usuário citou um site ou empresa, procure o site oficial e use abrir_link pra ler a página direto.';
         }
         const lista = await renderFontes(sources, fontes);
         const prefix = dateNote + (relaxedNote ? `${relaxedNote}\n` : '');
         return `${prefix}${text || '(sem resumo)'}\n\nFontes:\n${lista || '(sem fontes)'}`;
       } catch (e) {
-        // Se o Tavily falhar, cai no Gemini como rede de segurança.
-        // Datas são uma restrição: não gastar uma segunda busca sem suporte
-        // que silenciosamente devolva notícias fora da janela pedida.
+        // If Tavily fails, falls back to Gemini as a safety net.
+        // Dates are a constraint: don't spend a second search with no support
+        // that silently returns news outside the requested window.
         if (useTavily && filtered) {
           noteTavilyFailure(e, onUsage, 'sem fallback: filtros estruturados de data não suportados pelo provedor alternativo');
           return 'ERRO: a busca com filtros de data falhou. O provedor alternativo não suporta esses filtros nesta ferramenta, então não fiz uma busca sem eles. Não consegui verificar a janela solicitada.';
@@ -389,11 +389,11 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL, budget =
   }
 }
 
-// Tool pra ABRIR um link específico e ler o conteúdo real da página. Use SEMPRE
-// que o usuário mandar uma URL (produto, artigo, etc.) e você precisar saber o que
-// é — em vez de deduzir pela conversa ou buscar por palavra-chave num link solto.
-// Só faz sentido com Tavily (extract); sem ele, o agente cai no sandbox/curl.
-// Deriva um nome de arquivo a partir da URL (pra legenda no bucket).
+// Tool to OPEN a specific link and read the page's real content. ALWAYS use it
+// when the user sends a URL (product, article, etc.) and you need to know what it
+// is — instead of guessing from the conversation or searching by keyword for a bare link.
+// Only makes sense with Tavily (extract); without it, the agent falls back to sandbox/curl.
+// Derives a file name from the URL (for the caption in the bucket).
 function nameFromUrl(u) {
   try {
     const p = new URL(u).pathname;
@@ -404,19 +404,19 @@ function nameFromUrl(u) {
   return 'documento.pdf';
 }
 
-// savePdf: callback opcional (buffer, nome) pra persistir o PDF no bucket privado
-// do usuário (regra: toda mídia vai pra pasta do dono). Injetado pelo server.
+// savePdf: optional callback (buffer, name) to persist the PDF in the user's
+// private bucket (rule: all media goes into the owner's folder). Injected by the server.
 
-// ── Planilha por link ──
-// Planilha nunca chega ao modelo como texto (ver planilha.mjs): o texto da página
-// do Google Sheets ou do Tavily traz só um pedaço das células, e o modelo
-// respondia "não está na planilha" olhando esse pedaço. Link de Google Sheets
-// vira o export .xlsx (todas as abas) e vai pro ambiente de análise; link direto
-// pra .xlsx/.csv idem.
+// ── Spreadsheet by link ──
+// A spreadsheet never reaches the model as text (see planilha.mjs): the page text
+// from Google Sheets or Tavily only brings a piece of the cells, and the model
+// used to answer "it's not in the spreadsheet" looking at that piece. A Google Sheets link
+// becomes the .xlsx export (all tabs) and goes to the analysis environment; a direct link
+// to .xlsx/.csv likewise.
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-// Link de Google Sheets → URL do export xlsx. Cobre o link de edição/visualização
-// (/spreadsheets/d/<id>/...) e o de "publicar na web" (/spreadsheets/d/e/<id>/...).
+// Google Sheets link → xlsx export URL. Covers the edit/view link
+// (/spreadsheets/d/<id>/...) and the "publish to web" one (/spreadsheets/d/e/<id>/...).
 export function exportGoogleSheets(raw) {
   let url;
   try { url = new URL(raw); } catch { return null; }
@@ -452,7 +452,7 @@ async function abrirPlanilhaGoogle(sheet, onSheetLoad) {
     return `ERRO: não consegui baixar a planilha do Google Sheets (${e?.message ?? e}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`;
   }
   const ct = res.headers.get('content-type') || '';
-  // Planilha privada não dá erro: o Google redireciona pra tela de login (HTML).
+  // A private spreadsheet doesn't error out: Google redirects to the login screen (HTML).
   if (!res.ok || !/spreadsheetml/i.test(ct)) {
     try { await res.body?.cancel?.(); } catch { /* noop */ }
     console.warn(`[abrir_link] Sheets ${sheet.id} sem acesso público status=${res.status} ct=${ct.slice(0, 60)}`);
@@ -462,28 +462,28 @@ async function abrirPlanilhaGoogle(sheet, onSheetLoad) {
   const nome = nomeDoDownload(res, `planilha-${sheet.id.slice(0, 12)}.xlsx`);
   return analisePlanilhaConector(onSheetLoad, buf, nome, XLSX_MIME);
 }
-// ── Leitura DIRETA de página (rede de segurança do abrir_link) ──
-// Ler link dependia 100% do Tavily: se ele caísse, `abrir_link` devolvia erro e
-// pronto. Foi esse o buraco que deixou a leitura de links 17 dias quebrada em
-// agosto/2026 sem ninguém ver (o erro voltava como texto pro modelo, nunca ia
-// pro log). Aqui a gente baixa a página e arranca o texto por conta própria.
-// A extração do Tavily é MELHOR (ele tira menu, rodapé e propaganda), então ele
-// segue sendo o caminho principal; isto é plano B. Ler uma página torta é muito
-// melhor que não ler nada.
-// Só roda no caminho de FALHA, então não custa nada no fluxo normal.
-const MAX_HTML_BYTES = 2 * 1024 * 1024; // página maior que isso não vale a pena
+// ── DIRECT page reading (abrir_link safety net) ──
+// Reading a link depended 100% on Tavily: if it went down, `abrir_link` returned an error
+// and that was it. That was the hole that left link reading broken for 17 days in
+// August 2026 with nobody seeing it (the error came back as text to the model, never went
+// to the log). Here we download the page and extract the text ourselves.
+// Tavily's extraction is BETTER (it strips menu, footer and ads), so it
+// remains the main path; this is plan B. Reading a messy page is much
+// better than reading nothing at all.
+// Only runs on the FAILURE path, so it costs nothing in the normal flow.
+const MAX_HTML_BYTES = 2 * 1024 * 1024; // a page bigger than this isn't worth it
 
-// Teto de texto entregue ao modelo quando ele abre uma página. Era 6.000, o que
-// cortava página comum no meio (a da Canção Nova, 15k de texto, chegava pela
-// metade sem ninguém saber). 20.000 é o mesmo teto que o caminho de PDF já usa.
+// Ceiling for text delivered to the model when it opens a page. It used to be 6,000, which
+// cut a common page in half (Canção Nova's, with 15k of text, arrived
+// half-way with nobody knowing). 20,000 is the same ceiling the PDF path already uses.
 export const MAX_PAGE_CHARS = 20000;
 
 export function recortarPagina(texto) {
   const t = String(texto ?? '');
   return {
     corpo: t.slice(0, MAX_PAGE_CHARS),
-    // Silêncio no corte é o que esconde leitura pela metade: o caminho de PDF já
-    // avisa, o de página não avisava.
+    // Silence on truncation is what hides a half-read page: the PDF path already
+    // warns, the page path didn't.
     corte: t.length > MAX_PAGE_CHARS ? ' (página longa, mostrando o começo)' : '',
   };
 }
@@ -500,7 +500,7 @@ function htmlToText(html) {
     .replace(/<(script|style|noscript|svg|iframe|template)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
   const titulo = (/<title[^>]*>([\s\S]*?)<\/title>/i.exec(semRuido)?.[1] || '').trim();
   const corpo = semRuido
-    // quebra de bloco vira quebra de linha, senão o texto inteiro vira um parágrafo só
+    // block break becomes a line break, otherwise the whole text becomes a single paragraph
     .replace(/<\/(p|div|section|article|li|tr|h[1-6]|br)\s*>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]+>/g, ' ');
@@ -524,8 +524,8 @@ async function lerPaginaDireto(url) {
 }
 
 export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = {}) {
-  // Página lida entra no registro de fontes do turno (citacoes.mjs): o número
-  // vai junto do conteúdo pro modelo citar com [n].
+  // A page that was read enters the turn's source registry (citacoes.mjs): the number
+  // goes along with the content for the model to cite with [n].
   const ref = (url, title) => {
     const n = fontes?.add({ title: title || url, uri: url });
     return n ? ` (cite como [${n}])` : '';
@@ -544,13 +544,13 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
       const u = String(url || '').trim();
       if (!/^https?:\/\//i.test(u)) return 'ERRO: url inválida (precisa começar com http:// ou https://).';
       try { await assertPublicUrl(u); } catch (e) { return `ERRO: não posso abrir esse link (${e.message}).`; }
-      // 0) Google Sheets: baixa o export xlsx pro ambiente de análise. Nunca cai
-      //    no texto da página (Tavily/leitura direta), nem quando o export falha.
+      // 0) Google Sheets: downloads the xlsx export to the analysis environment. Never falls
+      //    back to the page text (Tavily/direct read), even when the export fails.
       const sheet = exportGoogleSheets(u);
       if (sheet) return abrirPlanilhaGoogle(sheet, onSheetLoad);
-      // 1) Tenta detectar PDF: baixa checando o content-type. Se for PDF, extrai o
-      //    texto aqui (o Tavily não parseia binário de PDF) e guarda o arquivo no
-      //    bucket do usuário. Se NÃO for PDF, cancela o corpo e cai no Tavily (HTML).
+      // 1) Tries to detect a PDF: downloads while checking the content-type. If it's a PDF, extracts the
+      //    text here (Tavily doesn't parse PDF binary) and stores the file in the
+      //    user's bucket. If it's NOT a PDF, cancels the body and falls back to Tavily (HTML).
       try {
         const res = await safeFetch(u, { headers: { 'user-agent': uaBot({ comSite: false }) } });
         const ct = res.headers.get('content-type') || '';
@@ -564,8 +564,8 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
           if (!text) return `Abri o PDF (${u}) mas ele não tem texto extraível (provavelmente é escaneado, só imagem). Avise o usuário disso.`;
           return `Conteúdo do PDF ${u}${ref(res.url || u, name)}${pages ? ` (${pages} página(s))` : ''}${truncated ? ' — texto longo, mostrando o começo' : ''}:\n\n${text}`;
         }
-        // Arquivo de planilha (xlsx, xls, csv, tsv) servido direto: mesma regra,
-        // vai pro ambiente de análise e só a estrutura volta.
+        // Spreadsheet file (xlsx, xls, csv, tsv) served directly: same rule,
+        // goes to the analysis environment and only the structure comes back.
         const nomeArq = nomeDoDownload(res, nomeDoPath(res.url || u));
         if (!/text\/html|application\/xhtml/i.test(ct) && tipoPlanilha(nomeArq, ct)) {
           if (!res.ok) { try { await res.body?.cancel?.(); } catch { /* noop */ } return `ERRO: não consegui baixar a planilha desse link (HTTP ${res.status}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`; }
@@ -573,18 +573,18 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
           const buf = Buffer.from(await res.arrayBuffer());
           return analisePlanilhaConector(onSheetLoad, buf, nomeArq || 'planilha', ct);
         }
-        // não é PDF nem planilha: descarta o corpo pra não baixar HTML grande à toa.
+        // not a PDF nor a spreadsheet: discards the body so as not to download a big HTML for nothing.
         try { await res.body?.cancel?.(); } catch { /* noop */ }
       } catch (e) {
         console.error('[abrir_link] pré-check:', e?.message ?? e);
-        // Link que é claramente arquivo de planilha não cai no texto do Tavily.
+        // A link that is clearly a spreadsheet file doesn't fall back to Tavily's text.
         if (tipoPlanilha(nomeDoPath(u), '')) return `ERRO: não consegui baixar a planilha desse link (${e?.message ?? e}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`;
         // segue pro Tavily como fallback
       }
-      // 2) Página HTML normal via Tavily (melhor extração de conteúdo legível),
-      //    com leitura direta como rede de segurança em TODA saída ruim: sem
-      //    chave, exceção (cota/timeout/5xx) ou extração vazia (site que bloqueia
-      //    o Tavily mas responde pra gente).
+      // 2) Normal HTML page via Tavily (better readable-content extraction),
+      //    with direct reading as a safety net for EVERY bad outcome: no
+      //    key, exception (quota/timeout/5xx), or empty extraction (a site that blocks
+      //    Tavily but responds to us).
       const direto = async (motivo) => {
         try {
           const { titulo, texto, url: finalUrl } = await lerPaginaDireto(u);
@@ -616,12 +616,12 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
   };
 }
 
-// ── Busca REVERSA por imagem (SerpApi Google Lens) ──
-// Dada uma URL PÚBLICA e temporária de uma imagem (gerada via presignGet no
-// bucket privado do usuário), acha o MESMO produto / produtos visualmente
-// parecidos à venda. Descoberta empírica (14/08): passar hl/country ZERA os
-// resultados do google_lens; a chamada crua já traz lojas BR naturalmente.
-// Retry porque às vezes volta vazio/503 no 1º tiro.
+// ── REVERSE image search (SerpApi Google Lens) ──
+// Given a PUBLIC, temporary URL of an image (generated via presignGet in the
+// user's private bucket), finds the SAME product / visually similar products
+// for sale. Empirical finding (2026-08-14): passing hl/country ZEROES OUT the
+// google_lens results; the raw call already brings BR stores naturally.
+// Retry because it sometimes comes back empty/503 on the 1st try.
 const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BR_RX = /\.com\.br|mercadolivre|mercadolibre|shopee|americanas|magazineluiza|magalu|casasbahia|amazon\.com\.br|elo7|enjoei|dafiti|renner|leroymerlin|madeiramadeira|tokstok|westwing|camicado|\bR\$/i;
 
@@ -660,9 +660,9 @@ export async function lensSearchByUrl(imageUrl, { max = 24, tries = 4 } = {}) {
   throw e;
 }
 
-// Busca estruturada de produtos via Google Shopping (SerpApi).
-// Uma chamada devolve nome/preço/loja/link/imagem JUNTOS, na mesma fonte
-// autoritativa, sem o modelo inventar URL de imagem nem o servidor raspar og:image.
+// Structured product search via Google Shopping (SerpApi).
+// One call returns name/price/store/link/image TOGETHER, from the same authoritative
+// source, with no model making up an image URL nor the server scraping og:image.
 export async function shoppingSearch(query, { max = 12, tries = 3 } = {}) {
   const key = process.env.SERPAPI_KEY;
   if (!key) { const e = new Error('SERPAPI_KEY ausente'); throw e; }

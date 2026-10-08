@@ -1,5 +1,5 @@
-// Caminho exclusivamente textual: não conhece threads, confirmação, ferramentas,
-// scheduler, delivery, housekeeping ou o modo de emergência do chat.
+// Text-only path: it doesn't know about threads, confirmation, tools,
+// scheduler, delivery, housekeeping or the chat's emergency mode.
 export class DraftUnavailableError extends Error {
   constructor(reason) {
     super('Não foi possível gerar o rascunho interno.');
@@ -10,17 +10,17 @@ export class DraftUnavailableError extends Error {
 
 export async function generateMessageDraft({ task, readCredit, readContext, makeProvider, recordUsage }) {
   if (typeof task !== 'string' || !task.trim()) throw new DraftUnavailableError('empty_task');
-  // Mantém o portão comercial existente, mas NÃO transforma bloqueio em texto
-  // entregável. O chamador decide entre preservar original ou exibir erro no admin.
+  // Keeps the existing commercial gate, but does NOT turn a block into deliverable
+  // text. The caller decides between preserving the original or showing an error in the admin.
   const credit = await readCredit();
   if (!credit || credit.over !== false) throw new DraftUnavailableError('credit_unavailable');
   const system = await readContext();
   const provider = makeProvider();
-  // Uma única etapa, sem tool-loop. Até uma chamada de tool alucinada é recusada,
-  // nunca executada. Nenhum histórico anterior/prompt de rascunho é persistido.
+  // A single step, no tool-loop. Even a hallucinated tool call is refused,
+  // never executed. No previous history/draft prompt is persisted.
   const result = await provider.complete({ system, messages: [{ role: 'user', content: task }], tools: [] });
-  // Medição/cobrança de uso continuam existentes, sem vincular a conversa fictícia.
-  // Não passar texto nem prompt ao ledger.
+  // Usage measurement/billing still exist, without linking to a fictitious conversation.
+  // Don't pass text or prompt to the ledger.
   if (result?.usage) await recordUsage(result.usage);
   if (result?.unavailable || result?.stop !== 'end' || result?.toolCalls?.length || typeof result?.text !== 'string' || !result.text.trim()) {
     throw new DraftUnavailableError('invalid_model_result');

@@ -29,25 +29,25 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-let _cachedKey = null; // chave crua de 32 bytes, resolvida uma vez (KMS ou env)
+let _cachedKey = null; // raw 32-byte key, resolved once (KMS or env)
 
-// Porta da chave do cofre: { nome, desembrulhar(blob) → Buffer }. Sem registro,
-// VAULT_KEY_ENC não tem como abrir e o boot acusa; VAULT_KEY e a chave local
-// seguem valendo.
+// Vault key port: { name, unwrap(blob) → Buffer }. Without registration,
+// VAULT_KEY_ENC has no way to open and the boot flags it; VAULT_KEY and the local
+// key remain valid.
 let _externa = null;
 export function definirChaveDoCofre({ nome, desembrulhar } = {}) {
   if (typeof desembrulhar !== 'function') throw new Error('chave do cofre: desembrulhar(blob) precisa ser função');
   _externa = { nome: String(nome || 'serviço de chaves'), desembrulhar };
 }
-// Nome do serviço que abre a VAULT_KEY_ENC (pro log do boot), ou null.
+// Name of the service that opens VAULT_KEY_ENC (for the boot log), or null.
 export const nomeDaChaveExterna = () => _externa?.nome ?? null;
 
-// Desembrulha e cacheia a chave mestra. Idempotente. Chamar UMA vez no boot,
-// antes de o servidor começar a atender. Se VAULT_KEY_ENC estiver setada,
-// desembrulha via KMS; senão cai na VAULT_KEY do env (legado/dev).
-// Erro de configuração da chave (não se resolve sozinho). Falha de rede/permissão
-// do KMS é Error comum. Nos dois casos o servidor sobe e recusa gravar segredo
-// (encMaybe); a diferença é só a mensagem do alarme.
+// Unwraps and caches the master key. Idempotent. Call it ONCE at boot,
+// before the server starts serving. If VAULT_KEY_ENC is set,
+// unwraps via KMS; otherwise falls back to the env's VAULT_KEY (legacy/dev).
+// Key configuration error (doesn't resolve itself). KMS network/permission
+// failure is a plain Error. In both cases the server comes up and refuses to write secrets
+// (encMaybe); the only difference is the alarm message.
 export class VaultBootError extends Error {
   constructor(msg) { super(msg); this.name = 'VaultBootError'; this.code = 'VAULT_BOOT'; }
 }
@@ -55,9 +55,9 @@ export class VaultBootError extends Error {
 const localMode = () => /^(1|true|on|yes)$/i.test(process.env.BRAMBS_LOCAL || '');
 export const localKeyPath = () => process.env.VAULT_KEY_FILE || path.join(os.homedir(), '.brambs', 'vault.key');
 
-// Lê a chave local; se o arquivo não existe, cria com 32 bytes aleatórios.
-// Arquivo que existe e não dá 32 bytes é erro: sobrescrever perderia o acesso
-// a tudo que já foi cifrado com ele.
+// Reads the local key; if the file doesn't exist, creates it with 32 random bytes.
+// A file that exists and isn't 32 bytes is an error: overwriting it would lose access
+// to everything already encrypted with it.
 function localKey() {
   const file = localKeyPath();
   const ler = () => {
@@ -95,8 +95,8 @@ export async function initVault() {
   throw new VaultBootError('nenhuma chave do cofre configurada: use VAULT_KEY_ENC (KMS) ou VAULT_KEY; rodando na própria máquina, BRAMBS_LOCAL=1 gera uma chave local');
 }
 
-// Versão do boot: nunca derruba o servidor por causa do cofre. Problema na chave
-// tira do ar só o que depende de segredo (encMaybe recusa gravar), não o resto.
+// Boot version: never brings the server down because of the vault. A key problem
+// only takes down what depends on secrets (encMaybe refuses to write), not the rest.
 export async function initVaultNoBoot(log = console) {
   try { await initVault(); return { ok: true }; }
   catch (e) {
@@ -109,8 +109,8 @@ export async function initVaultNoBoot(log = console) {
 
 function key() {
   if (_cachedKey) return _cachedKey;
-  // Em modo KMS a chave SÓ pode vir do initVault(). Cair na VAULT_KEY aqui
-  // cifraria com uma chave diferente da que decifra o resto do banco.
+  // In KMS mode the key can ONLY come from initVault(). Falling back to VAULT_KEY here
+  // would encrypt with a different key than the one that decrypts the rest of the database.
   if (process.env.VAULT_KEY_ENC) {
     throw new Error('cofre em modo KMS não inicializado (initVault falhou ou não foi chamado)');
   }
@@ -122,16 +122,16 @@ function key() {
   return buf;
 }
 
-// Instalação que PRETENDE ter cofre (mesmo que a chave ainda não tenha carregado).
-// VAULT_KEY malformada conta como cofre configurado e QUEBRADO (antes contava
-// como "sem cofre" e liberava texto puro).
+// Installation that INTENDS to have a vault (even if the key hasn't loaded yet).
+// A malformed VAULT_KEY counts as a vault that's configured and BROKEN (it used to count
+// as "no vault" and would allow plain text).
 export function vaultConfigured() {
   return !!(_cachedKey || process.env.VAULT_KEY_ENC || process.env.VAULT_KEY || localMode());
 }
 
-// Só é "enabled" se a chave está REALMENTE carregável agora. Em modo KMS isso
-// significa initVault() ter concluído; se o unwrap falhou, isso aqui é false e
-// quem cifra tem que falhar fechado (encMaybe), não gravar texto puro.
+// Only "enabled" if the key is REALLY loadable right now. In KMS mode this
+// means initVault() has completed; if the unwrap failed, this is false and
+// whoever encrypts has to fail closed (encMaybe), not write plain text.
 export function vaultEnabled() {
   if (_cachedKey) return true;
   if (process.env.VAULT_KEY_ENC) return false;
@@ -160,13 +160,13 @@ export function decryptSecret(blob) {
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
 }
 
-// Helpers p/ cifrar tokens em repouso (Google/OAuth). Preservam null e, na leitura,
-// só decifram blobs no formato "v1:" — assim linhas legadas em texto puro continuam
-// funcionando durante a migração.
+// Helpers to encrypt tokens at rest (Google/OAuth). Preserve null and, on read,
+// only decrypt blobs in "v1:" format — so legacy plain-text rows keep
+// working during the migration.
 //
-// Escrita FALHA FECHADA: sem chave carregada, lança em vez de gravar o segredo
-// em claro no banco, seja cofre configurado que não abriu (unwrap do KMS falhou,
-// VAULT_KEY malformada) ou instalação sem chave nenhuma.
+// Write FAILS CLOSED: with no key loaded, it throws instead of writing the secret
+// in the clear to the database, whether it's a configured vault that didn't open (KMS unwrap
+// failed, malformed VAULT_KEY) or an installation with no key at all.
 export function encMaybe(v) {
   if (v == null) return v;
   if (vaultEnabled()) return encryptSecret(v);
@@ -182,11 +182,11 @@ export function decMaybe(v) {
   return s.startsWith('v1:') ? decryptSecret(s) : v;
 }
 
-// Índice cego: o mesmo texto sempre dá o mesmo valor, pra achar uma linha sem
-// guardar o dado em claro (ex.: telefone de quem fala com o assistente público).
-// HMAC com chave derivada da chave do cofre por contexto, então um índice não
-// serve pra comparar com outro contexto nem dá pra recalcular sem a chave
-// (telefone tem poucas combinações; hash puro seria quebrado por força bruta).
+// Blind index: the same text always gives the same value, to find a row without
+// storing the data in the clear (e.g. the phone number of whoever talks to the public assistant).
+// HMAC with a key derived from the vault key per context, so an index doesn't
+// work for comparing against another context, nor can it be recomputed without the key
+// (a phone number has few combinations; a plain hash would be broken by brute force).
 export function indiceCego(texto, contexto) {
   const k = Buffer.from(crypto.hkdfSync('sha256', key(), Buffer.alloc(0), 'indice-cego:' + contexto, 32));
   return crypto.createHmac('sha256', k).update(String(texto)).digest('base64url');

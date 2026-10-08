@@ -35,14 +35,14 @@ import { encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
 
 const PROVIDER = 'perfil_compra';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
-const CART_TTL_MS = 40 * 60_000;   // carrinho VTEX morre sozinho; 40min é folga suficiente
-const MAX_CUPONS = 4;              // testar cupom é 1 request cada; teto pra não virar loop
+const CART_TTL_MS = 40 * 60_000;   // VTEX cart dies on its own; 40min is enough slack
+const MAX_CUPONS = 4;              // testing a coupon is 1 request each; cap so it doesn't turn into a loop
 
-// `${userId}:${carrinhoId}` -> { host, orderFormId, jar, ... } (memória, igual runner.mjs)
+// `${userId}:${carrinhoId}` -> { host, orderFormId, jar, ... } (in memory, same as runner.mjs)
 const CARTS = new Map();
 
 
-// ── cookie jar (fetch não tem jar; sem ele o checkout VTEX quebra) ──────────
+// ── cookie jar (fetch has no jar; without it the VTEX checkout breaks) ──────
 function absorb(jar, res) {
   const list = res.headers.getSetCookie?.() || [];
   for (const c of list) {
@@ -67,28 +67,28 @@ async function req(url, { jar, method = 'GET', body, timeout = 25_000 } = {}) {
       signal: AbortSignal.timeout(timeout),
     });
   } catch (e) {
-    // Loja que não responde (Cloudflare, timeout) tem que virar erro honesto e
-    // não retry infinito: já vimos www.farmrio.com.br pendurar no POST /items.
+    // A store that doesn't respond (Cloudflare, timeout) has to become an honest error and
+    // not an infinite retry: we've already seen www.farmrio.com.br hang on POST /items.
     throw new Error(`a loja não respondeu (${e?.name === 'TimeoutError' ? 'timeout' : e?.message || e})`);
   }
   if (jar) absorb(jar, res);
   const text = await res.text();
   let json = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* HTML/vazio */ }
-  // `url` é a URL FINAL: loja Shopify redireciona www→apex (visto na farmrio) e o
-  // cookie do carrinho nasce no destino. Montar link no host errado perde o carrinho.
+  // `url` is the FINAL URL: a Shopify store redirects www→apex (seen on farmrio) and the
+  // cart cookie is born at the destination. Building the link on the wrong host loses the cart.
   return { status: res.status, ok: res.ok, json, text, url: res.url || url };
 }
 
 // ── util ───────────────────────────────────────────────────────────────────
 const dig = (s) => String(s ?? '').replace(/\D+/g, '');
-// Loja Shopify que vende pra fora cobra na moeda dela (a farmrio devolveu frete em
-// USD pro CEP brasileiro), então o valor nunca é "R$" por suposição.
+// A Shopify store that sells abroad charges in its own currency (farmrio returned shipping in
+// USD for a Brazilian CEP), so the value is never "R$" by assumption.
 const brl = (cents, moeda = 'BRL') => (moeda === 'BRL'
   ? `R$ ${(Number(cents || 0) / 100).toFixed(2).replace('.', ',')}`
   : `${moeda} ${(Number(cents || 0) / 100).toFixed(2)}`);
-// Mesma coisa pra valor já em unidade (o catálogo devolve preço em reais/dólares,
-// o checkout devolve em centavos).
+// Same thing for a value already in whole units (the catalog returns price in reais/dollars,
+// the checkout returns it in cents).
 const val = (n, moeda = 'BRL') => brl(Math.round(Number(n || 0) * 100), moeda);
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
@@ -111,10 +111,10 @@ function prazo(estimate) {
   return `${n}min`;
 }
 
-// Shopify quer a província pelo NOME por extenso: com "SC" ela devolve lista de
-// frete VAZIA, com "Santa Catarina" devolve as opções (testado na farmrio 25/08).
-// A faixa de CEP → UF é tabela fixa dos Correios, então isso sai do próprio CEP
-// sem precisar perguntar mais nada ao dono nem depender de serviço externo.
+// Shopify wants the province by its FULL name: with "SC" it returns an EMPTY
+// shipping list, with "Santa Catarina" it returns the options (tested on farmrio on 2026-08-25).
+// The CEP → state range is a fixed Correios table, so this comes from the CEP
+// itself without needing to ask the owner anything else or depend on an external service.
 const FAIXAS_CEP = [
   [1000, 19999, 'SP'], [20000, 28999, 'RJ'], [29000, 29999, 'ES'], [30000, 39999, 'MG'],
   [40000, 48999, 'BA'], [49000, 49999, 'SE'], [50000, 56999, 'PE'], [57000, 57999, 'AL'],
@@ -149,9 +149,9 @@ function slugDaUrl(u) {
   return decodeURIComponent(parts[parts.length - 1]);
 }
 
-// Cupons ANUNCIADOS na própria página. O VTEX guarda isso em clusterHighlights
-// (mapa id->nome, ex: {"3292":"Use o Cupom: EXTRA20"}); às vezes também nos
-// productClusters. Achado ao vivo: EXTRA20 (-R$10) venceu PRIMEIRA15 (-R$7,50).
+// Coupons ADVERTISED on the page itself. VTEX stores this in clusterHighlights
+// (id->name map, e.g.: {"3292":"Use o Cupom: EXTRA20"}); sometimes also in
+// productClusters. Found live: EXTRA20 (-R$10) beat PRIMEIRA15 (-R$7,50).
 function cuponsAnunciados(p) {
   const fontes = [
     ...Object.values(p?.clusterHighlights || {}),
@@ -191,18 +191,18 @@ function resumoProduto(p) {
   };
 }
 
-// ── Shopify ────────────────────────────────────────────────────────────────
-// Superfícies públicas verificadas ao vivo 25/08 (allbirds + farmrio), sem
-// credencial nenhuma: /products/<handle>.js (catálogo), /cart/add.js e /cart.js
-// (carrinho), /cart/shipping_rates.json (frete real) e /cart/<variante>:<qtd>
-// (link que já abre o checkout com o carrinho montado). O que NÃO existe: um
-// endpoint público de fechar pedido. Por isso a Shopify para no link.
+// ── Shopify ──────────────────────────────────────────────────────────────
+// Public surfaces verified live on 2026-08-25 (allbirds + farmrio), with no
+// credentials at all: /products/<handle>.js (catalog), /cart/add.js and /cart.js
+// (cart), /cart/shipping_rates.json (real shipping) and /cart/<variante>:<qtd>
+// (link that already opens checkout with the cart built). What does NOT exist: a
+// public endpoint to close the order. That's why Shopify stops at the link.
 function resumoShopify(p, link, moeda = 'BRL') {
   const itens = (p.variants || []).map((v) => ({
     skuId: String(v.id),
     variacao: v.title === 'Default Title' ? '' : (v.title || ''),
-    // Shopify não expõe quantidade, só o booleano `available`. Traduzo pro mesmo
-    // formato da VTEX sem fingir número que eu não tenho.
+    // Shopify doesn't expose quantity, only the boolean `available`. I translate it to the same
+    // format as VTEX without faking a number I don't have.
     estoque: v.available ? 999 : 0,
     preco: Number(v.price || 0) / 100,
     de: Number(v.compare_at_price || 0) / 100,
@@ -218,14 +218,14 @@ function resumoShopify(p, link, moeda = 'BRL') {
     cor: null,
     imagem: itens.find((i) => i.imagem)?.imagem || p.featured_image || null,
     itens,
-    // A Shopify não anuncia cupom em lugar nenhum legível por API: o desconto só
-    // é validado dentro do checkout. Nunca inventar um aqui.
+    // Shopify doesn't advertise a coupon anywhere readable via API: the discount is only
+    // validated inside checkout. Never make one up here.
     cupons: [],
   };
 }
 
-// Carrinho Shopify serve só pra PRECIFICAR (o jar é meu, não do dono). O que o
-// dono recebe no fim é o permalink, que remonta o mesmo carrinho no browser dele.
+// Shopify cart serves only to PRICE (the jar is mine, not the owner's). What the
+// owner receives in the end is the permalink, which rebuilds the same cart in their browser.
 async function shopifyPrecificar(origin, { skuId, quantidade = 1, cep, estado }) {
   const jar = new Map();
   const add = await req(`${origin}/cart/add.js`, { method: 'POST', jar, body: { id: Number(skuId), quantity: quantidade } });
@@ -258,10 +258,10 @@ async function shopifyPrecificar(origin, { skuId, quantidade = 1, cep, estado })
   return { moeda, subtotal, fretes, uf };
 }
 
-// ── plataforma ─────────────────────────────────────────────────────────────
-// A URL já diz muito (/<slug>/p é VTEX, /products/<handle> é Shopify), então
-// tento primeiro a plataforma provável e só caio na outra se ela negar. Sondar
-// o checkout VTEX cria um orderForm à toa, por isso é sempre o último recurso.
+// ── platform ─────────────────────────────────────────────────────────────
+// The URL already says a lot (/<slug>/p is VTEX, /products/<handle> is Shopify), so
+// I try the likely platform first and only fall back to the other if it refuses. Probing
+// VTEX's checkout creates an orderForm for nothing, so it's always the last resort.
 async function resolverProduto(url) {
   const u = new URL(url);
   const origin = u.origin;
@@ -274,11 +274,11 @@ async function resolverProduto(url) {
     if (!handle) return null;
     const r = await req(`${origin}/products/${encodeURIComponent(handle)}.js`).catch(() => null);
     if (!r?.json?.variants?.length) return null;
-    // O origin da resposta manda: se a loja redirecionou, é lá que o carrinho vive.
+    // The response's origin rules: if the store redirected, that's where the cart lives.
     let fim = origin;
     try { fim = new URL(r.url).origin; } catch { /* fica o original */ }
-    // Loja Shopify não vende só em real (allbirds e farmrio cobram em USD, mesmo
-    // atendendo o Brasil). A moeda vem do /meta.json da loja, não de suposição.
+    // A Shopify store doesn't sell only in reais (allbirds and farmrio charge in USD, even
+    // while serving Brazil). The currency comes from the store's /meta.json, not from assumption.
     const meta = await req(`${fim}/meta.json`).catch(() => null);
     const moeda = meta?.json?.currency || 'BRL';
     return { plataforma: 'shopify', origin: fim, produto: resumoShopify(r.json, `${fim}/products/${handle}`, moeda) };
@@ -300,7 +300,7 @@ async function resolverProduto(url) {
   throw new Error('não consegui consultar esta oferta pela integração da loja. Preço, estoque, variante e capacidade de montar carrinho não foram confirmados. A compra desta oferta precisa ser conferida e finalizada no site da loja; não prometa checkout ou Pix pelo assistente.');
 }
 
-// Simulação de carrinho: preço, frete e MEIOS DE PAGAMENTO sem criar orderForm.
+// Cart simulation: price, shipping and PAYMENT METHODS without creating an orderForm.
 async function simular(origin, { skuId, seller = '1', quantidade = 1, cep }) {
   const r = await req(`${origin}/api/checkout/pub/orderForms/simulation?sc=1`, {
     method: 'POST',
@@ -311,9 +311,9 @@ async function simular(origin, { skuId, seller = '1', quantidade = 1, cep }) {
   const sistemas = r.json.paymentData?.paymentSystems || [];
   return {
     total: (r.json.totals || []).reduce((a, t) => a + Number(t.value || 0), 0),
-    // canal importa: "Retirada (loja X)" vem como pickup-in-point e costuma ser a
-    // mais barata (R$0), mas NÃO é entrega e exige ponto de retirada. Selecionar
-    // ela como 'delivery' faz a loja ignorar em silêncio e cobrar outro frete.
+    // channel matters: "Retirada (loja X)" comes as pickup-in-point and is usually the
+    // cheapest (R$0), but is NOT delivery and requires a pickup point. Selecting
+    // it as 'delivery' makes the store silently ignore it and charge different shipping.
     fretes: (li.slas || []).map((s) => ({
       nome: s.id || s.name, preco: Number(s.price || 0), prazo: prazo(s.shippingEstimate),
       canal: s.deliveryChannel || 'delivery', retirada: !!s.pickupStoreInfo?.isPickupStore,
@@ -348,8 +348,8 @@ async function gravarPerfil(userId, perfil) {
   return addConnection(userId, { provider: PROVIDER, kind: 'profile', label: perfil.nome || '', secretEnc: blob, meta: { tipo: 'perfil de comprador' } });
 }
 
-// Junta o que veio na hora com o que está salvo (o da hora ganha). Devolve
-// {perfil} ou {falta:[campos]} — nunca inventa dado de comprador.
+// Merges what came in at request time with what's saved (the request-time one wins). Returns
+// {perfil} or {falta:[campos]} — never makes up buyer data.
 function montarComprador(salvo, dado = {}) {
   const p = {
     nome: dado.nome || salvo?.nome || '',
@@ -384,23 +384,23 @@ export function getCarrinho(userId, id) {
   return CARTS.get(`${userId}:${id}`) || null;
 }
 
-// Resumo do carrinho pro texto de CONFIRMAÇÃO (confirm.mjs). Quem monta a frase
-// é este código, nunca o modelo: o dono tem que aprovar o valor REAL do carrinho,
-// não um número que o modelo repetiu de memória. Busca só pelo id (o confirm não
-// conhece o userId), então devolve de propósito só item/loja/total, sem CPF nem
-// endereço — a execução de verdade continua escopada por usuário em getCarrinho.
-// Em que plataforma o carrinho vive. O confirm.mjs usa isso pra não pedir ao dono
-// que autorize "fechar o pedido" numa loja onde fechar não é comigo.
+// Cart summary for the CONFIRMATION text (confirm.mjs). The sentence is built by
+// this code, never the model: the owner has to approve the cart's REAL value,
+// not a number the model repeated from memory. Looks up only by id (confirm doesn't
+// know the userId), so it returns on purpose only item/store/total, with no CPF or
+// address — the actual execution stays scoped by user in getCarrinho.
+// Which platform the cart lives on. confirm.mjs uses this so it doesn't ask the owner
+// to authorize "closing the order" at a store where closing isn't up to me.
 export function plataformaDoCarrinho(id) {
   limparCarrinhos();
   for (const [k, c] of CARTS) if (k.endsWith(`:${id}`)) return c.plataforma || 'vtex';
   return null;
 }
 
-// O carrinho VIVO mais recente desta conversa. O id que o modelo passa pra
-// fechar_pedido sai do histórico do chat, e ali continuam visíveis os ids de
-// montagens ANTERIORES (inclusive de carrinhos que já morreram). Com isto dá
-// pra apontar o certo na hora, em vez de levar um id morto até o dono.
+// The most recent LIVE cart in this conversation. The id the model passes to
+// fechar_pedido comes from the chat history, and the ids from PREVIOUS
+// builds (including carts that have already died) remain visible there. This makes it
+// possible to point at the right one when needed, instead of carrying a dead id to the owner.
 export function carrinhoVivoDoThread(userId, threadId) {
   limparCarrinhos();
   const prefixo = `${userId}:`;
@@ -434,9 +434,9 @@ function pixComCrcInvalido(s) {
   return reason==='crc_missing'||reason==='crc_mismatch';
 }
 
-// A loja manda o vencimento em ISO UTC. Jogar isso cru no chat
-// ("2026-09-10T14:26:28Z") não diz nada pra quem vai pagar: o que importa é a
-// hora daqui.
+// The store sends the expiration in ISO UTC. Dumping that raw into the chat
+// ("2026-09-10T14:26:28Z") says nothing to whoever is going to pay: what matters is the
+// time here.
 function ateQueHoras(v) {
   if (!v) return null;
   const d = new Date(v);
@@ -480,8 +480,8 @@ function lerPayloadConector(raw) {
   const url = p.url || p.paymentUrl || p.redirectUrl || p.checkoutUrl || null;
   const link = linkPagamento(url);
   if (link) return { url: link };
-  // Nada de URL e o que veio no campo do código tem cara de Pix mas não fecha o
-  // CRC: é código corrompido, e isso o dono precisa saber.
+  // No URL and what came in the code field looks like Pix but the
+  // CRC doesn't check out: it's a corrupted code, and the owner needs to know that.
   if (pixComCrcInvalido(bruto)) return { quebrado: true };
   return null;
 }
@@ -507,8 +507,8 @@ function extrairPix(...respostas) {
     if (lidoApp?.quebrado && !quebrado) quebrado = { tipo: 'quebrado', app: app?.appName || null };
 
     const col = Array.isArray(o.paymentAuthorizationAppCollection) ? o.paymentAuthorizationAppCollection : [];
-    // Quando é URL, tem que ser usada INTEIRA: tirar parâmetro (u, cb, cr) quebra
-    // a tela do conector, testado ao vivo 25/08.
+    // When it's a URL, it has to be used WHOLE: stripping a parameter (u, cb, cr) breaks
+    // the connector's screen, tested live on 2026-08-25.
     const lidoCol = col[0]?.appPayload != null ? lerPayloadConector(col[0].appPayload) : null;
     if (lidoCol?.code) return { tipo: 'copia-e-cola', code: lidoCol.code, expira: lidoCol.expira || null, app: col[0].appName || null };
     if (lidoCol?.url) return { tipo: 'link', url: lidoCol.url, app: col[0].appName || null };
@@ -587,8 +587,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         catch (e) { return `Não consegui abrir esse produto: ${e.message}`; }
         const p = r.produto;
         const disp = p.itens.filter((i) => i.estoque > 0);
-        // Estoque grande na VTEX costuma ser 99999 (= "tem"); só o número baixo
-        // é informação útil ("corre que tá acabando").
+        // A large stock number on VTEX is usually 99999 (= "in stock"); only a low number
+        // is useful information ("corre que tá acabando").
         const estoqueTxt = (n) => (n <= 0 ? 'SEM ESTOQUE' : n > 20 ? 'em estoque' : `só ${n} em estoque`);
         const mo = p.moeda || 'BRL';
         const linhas = p.itens.map((i) => `  • ${i.variacao || '(única)'} — ${estoqueTxt(i.estoque)} — ${val(i.preco, mo)}${i.de > i.preco ? ` (de ${val(i.de, mo)})` : ''} [sku ${i.skuId}]`);
@@ -613,8 +613,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           const pr = await shopifyPrecificar(r.origin, { skuId: alvo.skuId, cep: cepUso, estado: perfil?.estado }).catch(() => null);
           if (pr?.fretes?.length) out.push(`frete pro CEP ${cepUso}: ` + pr.fretes.map((f) => `${f.nome} ${brl(f.preco, f.moeda)}${f.prazo ? ` (${f.prazo})` : ''}`).join(' | '));
           else out.push(`frete: essa loja só calcula no checkout (não respondeu pro CEP ${cepUso}).`);
-          // Meio de pagamento na Shopify só aparece dentro do checkout dela: não
-          // dá pra afirmar Pix nem cartão daqui, então não afirmo.
+          // Payment method on Shopify only appears inside its own checkout: there's no
+          // way to state Pix or card from here, so I don't state it.
         }
         if (mo !== 'BRL') out.push(`ATENÇÃO: essa loja cobra em ${mo}, não em real (o dono paga com conversão e possível IOF).`);
         out.push(disp.length
@@ -670,7 +670,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         catch (e) { return `Não consegui abrir esse produto: ${e.message}`; }
         const { origin, produto } = r;
 
-        // variação → sku
+        // variant → sku
         const alvoTxt = norm(variacao);
         let item = null;
         if (!alvoTxt) item = produto.itens.find((i) => i.estoque > 0) || produto.itens[0];
@@ -680,10 +680,10 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         if (!item) return `Não achei a variação "${variacao}". Disponíveis: ${produto.itens.map((i) => i.variacao).join(', ')}.`;
         if (item.estoque < qtd) return `"${item.variacao}" está com ${item.estoque} em estoque (pedido: ${qtd}). Escolha outra variação ou reduza a quantidade.`;
 
-        // ── Shopify: precifica e entrega o link do checkout com o carrinho montado ──
-        // Aqui a jornada é mais curta de propósito: quem preenche nome, CPF e
-        // endereço é a própria loja, na tela do dono. O único dado que eu preciso
-        // é o CEP, e só pra ele já ver o frete antes de clicar.
+        // ── Shopify: prices and delivers the checkout link with the cart built ──
+        // Here the journey is shorter on purpose: whoever fills in name, CPF and
+        // address is the store itself, on the owner's screen. The only data I need
+        // is the CEP, and just so they can already see the shipping before clicking.
         if (r.plataforma === 'shopify') {
           const perfilS = await lerPerfil(userId).catch(() => null);
           const cepS = dig(comprador?.cep) || perfilS?.cep || '';
@@ -698,8 +698,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
             || null;
           const total = pr.subtotal + (freteS?.preco || 0);
           const cupomS = cupom ? String(cupom).trim() : null;
-          // Permalink de carrinho: a Shopify remonta o mesmo carrinho no browser de
-          // quem abrir. O nosso jar acima serviu só pra precificar, e morre aqui.
+          // Cart permalink: Shopify rebuilds the same cart in the browser of
+          // whoever opens it. Our jar above only served to price it, and dies here.
           const link = `${origin}/cart/${item.skuId}:${qtd}` + (cupomS ? `?discount=${encodeURIComponent(cupomS)}` : '');
 
           const idS = 'c' + randomUUID().replaceAll('-', '');
@@ -726,7 +726,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           ].filter(Boolean).join('\n');
         }
 
-        // comprador: cofre + o que veio na hora
+        // buyer: vault + what came in at request time
         const salvo = await lerPerfil(userId).catch(() => null);
         const m = montarComprador(salvo, comprador || {});
         if (m.falta) {
@@ -735,7 +735,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         }
         const c = m.perfil;
 
-        // endereço: completa pelo CEP o que não veio
+        // address: fills in by CEP whatever didn't come
         if (!c.rua || !c.cidade || !c.estado) {
           const a = await cepLookup(origin, c.cep).catch(() => null);
           if (!a) return `A loja não reconheceu o CEP ${c.cep}. Confirme o CEP com o dono, ou passe rua/bairro/cidade/estado em \`comprador\`.`;
@@ -743,7 +743,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           c.cidade = c.cidade || a.city; c.estado = c.estado || a.state;
         }
 
-        // frete disponível pro CEP (descobre as SLAs sem criar carrinho)
+        // shipping available for the CEP (discovers the SLAs without creating a cart)
         const sim = await simular(origin, { skuId: item.skuId, seller: item.seller, quantidade: qtd, cep: c.cep }).catch(() => null);
         if (!sim?.fretes?.length) return `A loja não entrega no CEP ${c.cep} (nenhuma opção de frete pra esse item). Avise o dono.`;
         const entregas = sim.fretes.filter((f) => f.canal === 'delivery' && !f.retirada);
@@ -752,7 +752,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         const frete = (pedido && entregas.find((f) => norm(f.nome).includes(pedido)))
           || [...entregas].sort((a, b) => a.preco - b.preco)[0];
 
-        // ── carrinho real (jar compartilhado do começo ao fim) ──
+        // ── real cart (jar shared from start to finish) ──
         const jar = new Map();
         const of = await req(`${origin}/api/checkout/pub/orderForm`, { method: 'POST', body: {}, jar });
         const ofId = of.json?.orderFormId;
@@ -783,9 +783,9 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           },
         });
         if (!ship.json) return `A loja recusou o endereço (HTTP ${ship.status}). Confirme CEP e número com o dono.`;
-        // Nunca reportar o frete que EU pedi: reportar o que a loja de fato
-        // selecionou. Quando o pedido é ignorado (caso da retirada), o carrinho
-        // volta com outra SLA e outro valor, e mentir aqui vira total errado.
+        // Never report the shipping I asked for: report what the store actually
+        // selected. When the request is ignored (the pickup case), the cart
+        // comes back with a different SLA and a different value, and lying here means a wrong total.
         const liOf = ship.json.shippingData?.logisticsInfo?.[0] || {};
         const slaOf = (liOf.slas || []).find((s) => (s.id || s.name) === liOf.selectedSla);
         const freteReal = slaOf
@@ -793,7 +793,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           : frete;
         const outras = entregas.filter((f) => f.nome !== freteReal.nome);
 
-        // cupom: testa os candidatos e fica com o de maior desconto (só um por vez)
+        // coupon: tests the candidates and keeps the one with the biggest discount (only one at a time)
         let carrinho = ship.json;
         const candidatos = [...new Set([...(cupom ? [String(cupom).trim().toUpperCase()] : []), ...produto.cupons])].slice(0, MAX_CUPONS);
         let melhor = { codigo: null, valor: Number(carrinho.value || 0) };
@@ -873,18 +873,18 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         }
         return { erro: 'não existe nenhum carrinho montado nesta conversa (carrinho vale ~40 min). Monte de novo com montar_carrinho e mostre o total ao dono antes de fechar.' };
       },
-      // ATENÇÃO ao formato do retorno: esta tool é GATED, e o que ela devolve vai
-      // DIRETO pro dono (confirm.mjs → renderConfirmed), sem passar pelo modelo.
-      // Por isso o texto é escrito PRA ELE, e vem em `saida` dentro de um objeto:
-      // string pura o renderConfirmed descarta, e o Pix se perderia no caminho.
+      // ATTENTION to the return format: this tool is GATED, and what it returns goes
+      // DIRECTLY to the owner (confirm.mjs → renderConfirmed), without going through the model.
+      // That's why the text is written FOR THEM, and comes in `saida` inside an object:
+      // a plain string gets discarded by renderConfirmed, and the Pix would get lost along the way.
       run: async ({ carrinho_id } = {}) => {
         const cart = getCarrinho(userId, String(carrinho_id || '').trim());
-        // Não afirmar "expirou na loja": a loja nem foi consultada. O que
-        // aconteceu foi eu perder a referência do carrinho aqui (TTL de ~40 min
-        // ou reinício do serviço). Dizer o que de fato sei, nada além disso.
+        // Don't claim "expirou na loja": the store wasn't even consulted. What
+        // happened was I lost the cart's reference here (TTL of ~40 min
+        // or a service restart). Say only what I actually know, nothing beyond that.
         if (!cart) return { ok: false, error: 'Perdi a referência desse carrinho aqui do meu lado (ele vale uns 40 minutos e some se o serviço reinicia), então não fechei nada e nada foi cobrado. Me peça pra montar de novo e eu te mostro o total atualizado antes.' };
-        // Loja Shopify não tem como fechar por fora (o pagamento é na tela dela).
-        // Em vez de tentar e falhar, devolvo o link que já monta o carrinho lá.
+        // A Shopify store has no way to be closed externally (payment happens on its own screen).
+        // Instead of trying and failing, I return the link that already builds the cart there.
         if (cart.plataforma && cart.plataforma !== 'vtex') {
           return { ok: false, error: `Essa loja não deixa eu fechar o pedido por fora, o pagamento acontece na tela dela. Nada foi cobrado. O carrinho já está montado, é só abrir e finalizar:\n${cart.checkoutUrl || cart.produto?.link || ''}` };
         }
@@ -898,9 +898,9 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           const base = `${origin}/api/checkout/pub/orderForm/${ofId}`;
           const loja = (() => { try { return new URL(origin).host; } catch { return origin; } })();
 
-          // 1) Reler o carrinho na loja ANTES de criar o pedido. O dono aprovou um
-          // valor; se a loja mudou preço, frete ou derrubou o cupom nesse meio-tempo,
-          // fechar seria cobrar um valor que ele não aprovou. Aí eu paro.
+          // 1) Re-read the cart at the store BEFORE creating the order. The owner approved a
+          // value; if the store changed the price, shipping or dropped the coupon in the meantime,
+          // closing would mean charging a value they didn't approve. So I stop there.
           const atual = await req(base, { jar }).catch(() => null);
           const valor = Number(atual?.json?.value || 0);
           if (!(atual?.status >= 200 && atual.status < 300) || !Number.isSafeInteger(valor) || valor <= 0) return { ok: false, error: `A loja não me devolveu o carrinho agora (HTTP ${atual?.status ?? 'sem resposta'}). Nada foi cobrado. Me peça pra montar de novo.` };
@@ -908,18 +908,18 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
             return { ok: false, error: `parei sem fechar: o total mudou na loja depois que você aprovou (era ${brl(cart.valor)}, agora ${brl(valor)}). Nada foi cobrado e nenhum pedido foi criado. Quer que eu feche por ${brl(valor)}?` };
           }
 
-          // 2) paymentData ANTES do transaction. Sem isto o transaction devolve 200
-          // com id/orderGroup null e a mensagem CHK0210 ("valor não confere"), ou
-          // seja, falha silenciosa parecendo sucesso.
+          // 2) paymentData BEFORE the transaction. Without this the transaction returns 200
+          // with id/orderGroup null and the message CHK0210 ("valor não confere"), i.e.
+          // a silent failure that looks like success.
           const pd = await req(`${base}/attachments/paymentData`, {
             method: 'POST', jar,
             body: { payments: [{ paymentSystem: String(cart.pix.id), referenceValue: valor, value: valor, installments: 1, installmentsInterestRate: 0 }] },
           }).catch(() => null);
           if (!(pd?.status >= 200 && pd.status < 300) || !pd.json || (Array.isArray(pd.json.messages) && pd.json.messages.some(m=>String(m?.status).toLowerCase()==='error'))) return checkoutFailure('payment_data',pd,`Não consegui preparar o pagamento no carrinho (HTTP ${pd?.status ?? 'sem resposta'}). A criação do pedido não foi iniciada.`);
 
-          // 3) Depois de enviar transaction, uma falha de resposta NÃO prova que
-          // nada foi criado. Só prosseguir no pagamento com resposta de sucesso
-          // e ambas as referências. Nunca repetir automaticamente o POST.
+          // 3) After sending the transaction, a response failure does NOT prove that
+          // nothing was created. Only proceed to payment with a success response
+          // and both references. Never automatically retry the POST.
           let recoveryRecord;
           try { recoveryRecord=await checkoutRecoveryStore.reserve(recoveryScope,{origin,total:valor}); }
           catch { return {ok:false,error:'Não consegui preparar o registro protegido para recuperar o Pix. Parei antes de criar pedido ou enviar pagamento.'}; }
@@ -945,7 +945,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           }
           try { await checkoutRecoveryStore.save(recoveryScope,recoveryRecord,og,'created'); }
           catch { return {ok:false,error:`A loja retornou a referência ${og}, mas não consegui preservá-la com segurança. Parei antes de enviar pagamento. Não repita: o estado do pedido precisa ser conferido.`}; }
-          // Validade do código Pix não determina o estado/cancelamento do pedido.
+          // Pix code validity doesn't determine the order's state/cancellation.
           const avisoPix = 'O vencimento do Pix não confirma o cancelamento do pedido. ' + conferirPedido;
 
           // There is NO payment link to deliver. The purchase is made as a
@@ -962,8 +962,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
             `Total a pagar: *${brl(valor)}*`,
           ];
 
-          // 4) Enviar o pagamento. Janela de ~5 min desde o passo 3, por isso 3-5
-          // rodam numa tacada só, sem voltar pro modelo no meio.
+          // 4) Send the payment. A window of ~5 min since step 3, so 3-5
+          // run in a single shot, without going back to the model in between.
           let request;
           try { request = paymentRequest(tr.json, cart.pix, valor); }
           catch (e) { return checkoutFailure('payment_contract',null,[...cabecalho,'','Recebi a referência da loja, mas não consegui validar os dados necessários para enviar o pagamento. Não enviei o pagamento nem obtive Pix.',avisoPix].join('\n'),e?.message); }
@@ -973,9 +973,9 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
             return checkoutFailure('payment',pay,[...cabecalho,'',`Recebi a identificação do pedido, mas não consegui confirmar o resultado do envio do pagamento (HTTP ${pay?.status ?? 'sem resposta'}). Não obtive um Pix para te entregar; isso não comprova que nenhuma cobrança foi gerada.`,avisoPix].join('\n'));
           }
 
-          // 5) gatewayCallback: é aqui que o conector devolve o Pix (copia-e-cola ou
-          // a URL da tela dele). O 428 NÃO é erro: é o conector dizendo "o pagamento
-          // precisa de continuação", por appPayload OU RedirectResponseCollection.
+          // 5) gatewayCallback: this is where the connector returns the Pix (copy-paste or
+          // its screen's URL). The 428 is NOT an error: it's the connector saying "o pagamento
+          // precisa de continuação", via appPayload OR RedirectResponseCollection.
           const cb = await req(`${origin}/api/checkout/pub/gatewayCallback/${og}`, { method: 'POST', jar }).catch(() => null);
           const callbackAccepted=!!cb&&((cb.status>=200&&cb.status<300)||cb.status===428);
           try { await checkoutRecoveryStore.save(recoveryScope,recoveryRecord,og,callbackAccepted?'pix_received':'callback_failed',[pay.json,cb?.json]); }
@@ -985,9 +985,9 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
 
           if (pix?.tipo === 'copia-e-cola') {
             const hora = ateQueHoras(pix.expira);
-            // O código vai SOZINHO numa linha, sem cerca de crase: em canal que
-            // não renderiza markdown a crase é copiada junto e o banco recusa o
-            // código. Uma linha limpa funciona em todos os canais.
+            // The code goes ALONE on a line, with no backtick fence: in a channel that
+            // doesn't render markdown the backtick gets copied along and the bank rejects the
+            // code. A clean line works on every channel.
             return { ok: true, saida: [...cabecalho, '',
               'Pix copia-e-cola (copie a linha inteira abaixo, e só ela):',
               pix.code,
@@ -1044,8 +1044,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
         if (!vaultEnabled()) return 'ERRO: o cofre não está configurado nesta instância, então não posso guardar CPF cifrado. Dá pra comprar mesmo assim: é só me passar os dados na hora.';
         const m = montarComprador(null, args);
         if (m.falta) return `Faltou: ${m.falta.join(', ')}.`;
-        // Rua/bairro/cidade ficam em branco de propósito quando não vieram: quem
-        // completa é a PRÓPRIA loja pelo CEP, na hora do carrinho (endpoint dela).
+        // Street/neighborhood/city are left blank on purpose when they didn't come in: the
+        // one who fills them in is the store itself via the CEP, at cart time (its own endpoint).
         const c = m.perfil;
         try { await gravarPerfil(userId, c); }
         catch (e) { return `ERRO ao guardar: ${e?.message ?? e}`; }
@@ -1072,7 +1072,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
   //    "está com 0 em estoque..."), indistinguishable from success narration to
   //    whoever only reads text. A hard prefix stops the model from continuing
   //    the purchase thinking a cart exists.
-  // 2. the log gives the trace missing from the post-mortem of 10/09/2026,
+  // 2. the log gives the trace missing from the post-mortem of 2026-09-10,
   //    when the only way to know if the build worked was to infer it from the
   //    result size in the cache. No URL, no CPF, no address.
   const marcar = (t) => {
@@ -1096,8 +1096,8 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
   return tools.map(marcar);
 }
 
-// Bloco curto pro fim do prompt: a capacidade de comprar não é óbvia a partir do
-// nome das tools, e o caso de uso nasce de um LINK colado no chat.
+// Short block for the end of the prompt: the ability to buy isn't obvious from the
+// tools' names, and the use case starts from a LINK pasted into the chat.
 export function comprasContext() {
   return 'RECUPERAR PIX: se o dono pedir o Pix de um pedido existente, use recuperar_pix_pedido com a referência. Nunca use fechar_pedido nem monte carrinho como substituto de recuperação. A ferramenta lê o retorno protegido, revalida e não gera cobrança. Se não houver registro ou estiver vencido, informe o motivo sem inventar cancelamento. COMPRA POR LINK: consulte analisar_produto para verificar o que é possível na loja e oferta exatas; somente após sucesso use montar_carrinho para conferir variante, quantidade, preço, frete e total. Preserve as restrições já pedidas mesmo ao mudar o link ou vendedor. Essas consultas não cobram. Não prometa que consegue comprar, montar carrinho ou gerar Pix antes do retorno correspondente. Internamente: VTEX permite fechar_pedido depois de total e confirmação; Shopify fornece link de checkout, cujo pagamento cabe ao dono. Na conversa, descreva a capacidade efetivamente comprovada em linguagem simples, sem nomes de plataformas internas; uma loja sem suporte exige finalizar no site. Preço/estoque de outra oferta e anúncio de potência/qualidade não comprovam as características desta compra.';
 }

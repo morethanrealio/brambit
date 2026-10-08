@@ -1,52 +1,52 @@
-// ── Edição de planilha POR CÓDIGO (caminho de ESCRITA) ──
+// ── Spreadsheet editing BY CODE (WRITE path) ──
 //
-// Por que este módulo existe. Até aqui a planilha só tinha caminho de escrita
-// "reescreve do zero": `gerar_documento` recebia a TABELA INTEIRA em markdown
-// num argumento de tool e montava o .xlsx. Numa conversa real de 09/09/2026 a
-// matriz da usuária passou dos 99 mil caracteres, bateu no limitador de blob da
-// janela recente (core-proto/core.mjs, capRecentBlob, TURN_RECENT_MAX) e, na
-// regeneração seguinte, o modelo reconstruiu o arquivo a partir da PRÓPRIA
-// chamada anterior já truncada: a planilha caiu de 62 linhas / 18 fontes para
-// 21 linhas, e o marcador de corte foi escrito como LINHA DE DADOS dentro do
-// xlsx. Subir o teto do limitador só adia isso.
+// Why this module exists. Until now the spreadsheet only had the "rewrite
+// from scratch" write path: `gerar_documento` received the WHOLE TABLE in markdown
+// in a tool argument and built the .xlsx. In a real conversation on 2026-09-09 the
+// user's matrix passed 99 thousand characters, hit the recent-window blob
+// cap (core-proto/core.mjs, capRecentBlob, TURN_RECENT_MAX) and, on the
+// next regeneration, the model rebuilt the file from its OWN already-truncated
+// previous call: the spreadsheet dropped from 62 rows / 18 sources to
+// 21 rows, and the truncation marker was written as a DATA ROW inside the
+// xlsx. Raising the cap's ceiling only postpones this.
 //
-// A correção é estrutural: o conteúdo da planilha nunca mais passa pelo contexto
-// do modelo pra ser editado. A planilha canônica vem da biblioteca (S3), é
-// gravada no sandbox do usuário, um SUB-AGENTE a muta com openpyxl (dados crus
-// morrem no worker) e os bytes voltam por `sandboxReadBytes`. O agente principal
-// só vê um resumo do que mudou.
+// The fix is structural: the spreadsheet content never again passes through the
+// model's context to be edited. The canonical spreadsheet comes from the
+// library (S3), is written to the user's sandbox, a SUB-AGENT mutates it with openpyxl
+// (raw data dies in the worker) and the bytes come back via `sandboxReadBytes`. The main agent
+// only sees a summary of what changed.
 //
-// Três invariantes que este módulo tem que preservar:
-//  1. Cada geração é um ASSET NOVO no S3, nunca um overwrite. Foi exatamente
-//     essa propriedade que permitiu recuperar as 13 versões da usuária depois do
-//     incidente. A versão nova fica com o nome canônico; a que era canônica é
-//     RENOMEADA pra `nome_aaaammddhhmmss.ext` (só o caption no banco muda — os
-//     bytes de nenhuma versão são tocados).
-//  2. Atomicidade: script que falha (ou arquivo que volta corrompido) não gera
-//     asset e não encosta no Drive. O erro volta pro modelo decidir. Quando o
-//     erro é SILENCIOSO (xlsx válido, mas conteúdo perdido), a edição é REFEITA
-//     a partir dos bytes originais — não se entrega arquivo ruim nem se manda o
-//     usuário "olhar a versão anterior": ou a mudança sai certa, ou nada muda.
-//  3. Serialização por usuário: turnos encavalados ("acrescenta 4 linhas" e, antes
-//     de terminar, "corrige o ano do ART-07") rodariam dois sub-agentes contra o
-//     MESMO arquivo, e o segundo recarregaria a cópia do S3 por cima do trabalho
-//     do primeiro — perda silenciosa de edição. A fila abaixo resolve.
+// Three invariants this module has to preserve:
+//  1. Each generation is a NEW ASSET in S3, never an overwrite. It was exactly
+//     this property that allowed recovering the user's 13 versions after the
+//     incident. The new version keeps the canonical name; the one that was canonical is
+//     RENAMED to `name_yyyymmddhhmmss.ext` (only the caption in the database changes — the
+//     bytes of no version are touched).
+//  2. Atomicity: a script that fails (or a file that comes back corrupted) does not generate
+//     an asset and does not touch Drive. The error goes back to the model to decide. When the
+//     error is SILENT (valid xlsx, but lost content), the edit is REDONE
+//     from the original bytes — a bad file is never delivered nor is the
+//     user told to "look at the previous version": either the change comes out right, or nothing changes.
+//  3. Serialization per user: overlapping turns ("add 4 rows" and, before
+//     finishing, "fix the year on ART-07") would run two sub-agents against the
+//     SAME file, and the second would reload the S3 copy on top of the first's
+//     work — silent loss of an edit. The queue below solves this.
 
 import { sheetSandboxPath } from './planilha.mjs';
 
-// ── Lógica pura (testável offline, sem banco e sem sandbox) ──
+// ── Pure logic (testable offline, without a database or sandbox) ──
 
-// Marcador que o capRecentBlob injeta no meio de um blob cortado. Se ele aparece
-// num conteúdo que o modelo está mandando ESCREVER, o modelo está copiando a
-// própria chamada truncada — foi o mecanismo do incidente de 09/09/2026.
+// Marker that capRecentBlob injects in the middle of a truncated blob. If it appears
+// in content the model is sending to WRITE, the model is copying its
+// own truncated call — this was the mechanism of the 2026-09-09 incident.
 export const CUT_MARKER_RE = /…\[cortado: ?\d+ chars\]…/;
 
 export function hasCutMarker(s) {
   return typeof s === 'string' && CUT_MARKER_RE.test(s);
 }
 
-// Tentativas do sub-agente por edição. 2 = a original + uma refeita com o
-// diagnóstico do que saiu errado. Só a 2ª custa token, e só quando a 1ª errou.
+// Sub-agent attempts per edit. 2 = the original plus one redone with the
+// diagnosis of what went wrong. Only the 2nd costs tokens, and only when the 1st failed.
 const MAX_TENTATIVAS = 2;
 
 const SHEET_EXT_RE = /\.(xlsx|xlsm)$/i;
@@ -79,9 +79,9 @@ export function pickSheetAsset(assets, { id = null } = {}) {
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
-// Nome da versão ARQUIVADA: `nome_aaaammddhhmmss.ext`, com o timestamp de criação
-// da própria versão (não o de agora) — assim o histórico fica ordenável e o nome
-// diz quando aquele conteúdo nasceu. Sem data utilizável, cai pra `_v` + id.
+// Name of the ARCHIVED version: `name_yyyymmddhhmmss.ext`, with the creation
+// timestamp of that version itself (not the current one) — this way the history stays
+// sortable and the name tells when that content was born. Without a usable date, it falls back to `_v` + id.
 export function versionedCaption(caption, createdAt, { id = null } = {}) {
   const raw = String(caption || 'planilha.xlsx');
   const m = raw.match(SHEET_EXT_RE);
@@ -94,25 +94,25 @@ export function versionedCaption(caption, createdAt, { id = null } = {}) {
   return `${base}_${stamp}${ext}`;
 }
 
-// Fila por chave: garante que duas edições do mesmo usuário nunca rodem
-// sobrepostas. Cada chamada espera a anterior TERMINAR (inclusive quando ela
-// falha) e só então roda — é o que faz "sempre recarregar do S3" ser correto,
-// porque a segunda edição já pega o asset que a primeira acabou de gravar.
-const chains = new Map(); // key -> Promise da última operação enfileirada
+// Queue by key: guarantees that two edits of the same user never run
+// overlapped. Each call waits for the previous one to FINISH (even when it
+// fails) and only then runs — this is what makes "always reload from S3" correct,
+// because the second edit already picks up the asset the first one just wrote.
+const chains = new Map(); // key -> Promise of the last queued operation
 
 export function withKeyLock(key, fn) {
   const prev = chains.get(key) || Promise.resolve();
-  const next = prev.then(fn, fn); // roda mesmo que a anterior tenha rejeitado
-  // Mantém a corrente viva mas sem vazar rejeição pra fora do enfileiramento.
+  const next = prev.then(fn, fn); // runs even if the previous one rejected
+  // Keeps the chain alive but without leaking a rejection out of the queueing.
   const tail = next.then(() => {}, () => {});
   chains.set(key, tail);
   tail.then(() => { if (chains.get(key) === tail) chains.delete(key); });
   return next;
 }
 
-// Resumo determinístico do que mudou nas DIMENSÕES do arquivo (linhas/abas). É
-// contado dos bytes, não da narrativa do sub-agente: se ele disser "acrescentei
-// 4 linhas" e o arquivo tiver perdido 40, isto aparece.
+// Deterministic summary of what changed in the file's DIMENSIONS (rows/sheets). It is
+// counted from the bytes, not from the sub-agent's narrative: if it says "I added
+// 4 rows" and the file lost 40, this shows it.
 export function describeDelta(before, after) {
   const parts = [];
   const b = before || {}, a = after || {};
@@ -130,9 +130,9 @@ export function describeDelta(before, after) {
   return parts.join(', ');
 }
 
-// Palavra que o sub-agente escreve no resumo pra confirmar que a planilha
-// encolheu DE PROPÓSITO (a instrução pedia remoção). Sem ela, encolhimento
-// grande é tratado como erro e a edição é refeita.
+// Word the sub-agent writes in the summary to confirm that the spreadsheet
+// shrank ON PURPOSE (the instruction asked for removal). Without it, a large
+// shrink is treated as an error and the edit is redone.
 export const DECLARACAO_REMOCAO = 'REMOCAO_INTENCIONAL';
 
 export function declarouRemocao(resumo) {
@@ -140,38 +140,38 @@ export function declarouRemocao(resumo) {
   return s.includes('REMOCAO_INTENCIONAL') || s.includes('REMOÇÃO_INTENCIONAL');
 }
 
-// ── Fidelidade de round-trip: as PEÇAS internas do arquivo ──
+// ── Round-trip fidelity: the file's internal PARTS ──
 //
-// Um .xlsx é um ZIP. Gráfico, imagem, tabela dinâmica e macro são PEÇAS
-// separadas (xl/charts/, xl/media/, xl/pivotCache/, xl/vbaProject.bin). Quando um
-// script recria o arquivo — ou quando a lib não entende a peça — ela simplesmente
-// DESAPARECE do zip, sem erro nenhum. Comparar a lista de peças antes/depois pega
-// essa classe inteira de dano, incluindo recursos que eu não consigo testar aqui
-// (tabela dinâmica, macro, slicer), sem precisar prever cada um.
+// An .xlsx is a ZIP. Chart, image, pivot table and macro are separate
+// PARTS (xl/charts/, xl/media/, xl/pivotCache/, xl/vbaProject.bin). When a
+// script recreates the file — or when the lib doesn't understand the part — it simply
+// DISAPPEARS from the zip, with no error at all. Comparing the list of parts before/after catches
+// this whole class of damage, including features I can't
+// test here (pivot table, macro, slicer), without needing to predict each one.
 //
-// A política é de dois níveis porque um nível só quebraria a ferramenta:
-//  • peça de CONTEÚDO perdida = ERRO (refaz; se insistir, não grava). Medido:
-//    sem Pillow instalado, o openpyxl apaga xl/drawings/* e xl/media/* EM
-//    SILÊNCIO — é exatamente esse caso.
-//  • peça ACESSÓRIA perdida = só AVISO. Medido num .xlsx real saído do Excel: o
-//    round-trip perde customXml/* (9 peças), docMetadata/LabelInfo.xml (rótulo
-//    de sensibilidade) e xl/sharedStrings.xml (o openpyxl grava string inline —
-//    não é perda de conteúdo). Tratar isso como erro deixaria qualquer planilha
-//    vinda do Excel impossível de editar.
+// The policy has two levels because a single level would break the tool:
+//  • lost CONTENT part = ERROR (redo; if it persists, don't save). Measured:
+//    without Pillow installed, openpyxl deletes xl/drawings/* and xl/media/* IN
+//    SILENCE — this is exactly that case.
+//  • lost ACCESSORY part = just a WARNING. Measured on a real .xlsx from Excel: the
+//    round-trip loses customXml/* (9 parts), docMetadata/LabelInfo.xml (sensitivity
+//    label) and xl/sharedStrings.xml (openpyxl writes inline strings —
+//    not a content loss). Treating this as an error would make any spreadsheet
+//    coming from Excel impossible to edit.
 const PECA_ACESSORIA_RE = new RegExp([
   '^customxml/',                            // XML customizado do Office
-  '^docmetadata/',                          // rótulo de sensibilidade (MIP)
-  '^docprops/',                             // autor, título, tempo de edição
+  '^docmetadata/',                          // sensitivity label (MIP)
+  '^docprops/',                             // author, title, editing time
   '^xl/sharedstrings\\.xml$',               // openpyxl grava string inline
-  '^xl/calcchain\\.xml$',                   // cache de ordem de cálculo (Excel refaz)
+  '^xl/calcchain\\.xml$',                   // calculation chain cache (Excel rebuilds it)
   '^xl/metadata\\.xml$',
   '^xl/richdata/', '^xl/rdrichvalue',       // tipos de dado ricos
-  '^xl/threadedcomments/', '^xl/persons/',  // comentário com thread
+  '^xl/threadedcomments/', '^xl/persons/',  // comment with thread
   '^xl/revisions/', '^xl/usernames\\.xml$',
 ].join('|'), 'i');
 
-// Peças que existiam no original e não existem no arquivo salvo, separadas por
-// gravidade. Sem lista de peças nos dois lados, não opina.
+// Parts that existed in the original and do not exist in the saved file, separated by
+// severity. Without a list of parts on both sides, it offers no opinion.
 export function pecasPerdidas(before, after) {
   const b = Array.isArray(before?.parts) ? before.parts : null;
   const a = Array.isArray(after?.parts) ? after.parts : null;
@@ -185,11 +185,11 @@ export function pecasPerdidas(before, after) {
   return { conteudo, acessorias };
 }
 
-// Falha SILENCIOSA: o script rodou sem erro e salvou um xlsx VÁLIDO, e ainda
-// assim o resultado está errado (recriou o arquivo em vez de editar, salvou em
-// outro caminho, escreveu conteúdo truncado). Nenhuma verificação técnica pega
-// isso — a única defesa é medir o arquivo e comparar com o de antes.
-// Devolve null quando está bom, ou { motivo, instrucao } pra REFAZER a edição.
+// SILENT failure: the script ran with no error and saved a VALID xlsx, and
+// still the result is wrong (recreated the file instead of editing, saved to
+// another path, wrote truncated content). No technical check catches
+// this — the only defense is to measure the file and compare it with the one before.
+// Returns null when it's good, or { motivo, instrucao } to REDO the edit.
 export function detectarProblema({ before, after, resumo, identical = false }) {
   if (identical) {
     return {
@@ -227,13 +227,13 @@ export function detectarProblema({ before, after, resumo, identical = false }) {
   return null;
 }
 
-// ── Canal de dúvida: o sub-agente pode perguntar em vez de adivinhar ──
+// ── Question channel: the sub-agent can ask instead of guessing ──
 //
-// "Atualiza a coluna de status" numa planilha com três abas e duas colunas
-// parecidas é ambíguo. Chutar a interpretação errada gera uma versão nova
-// plausível e ERRADA — o pior desfecho possível, porque o usuário não tem como
-// saber. Com esta sentinela o sub-agente devolve a PERGUNTA, nada é gravado e
-// quem decide é o usuário.
+// "Update the status column" in a spreadsheet with three sheets and two similar
+// columns is ambiguous. Guessing the wrong interpretation generates a new,
+// plausible and WRONG version — the worst possible outcome, because the user has no way to
+// know. With this sentinel the sub-agent returns the QUESTION, nothing is saved and
+// the user is the one who decides.
 export const SENTINELA_CLARIFICACAO = 'PRECISO_DE_CLARIFICACAO';
 
 export function pedeClarificacao(resumo) {
@@ -243,14 +243,14 @@ export function pedeClarificacao(resumo) {
   return pergunta || 'O editor precisou de mais detalhes pra aplicar a mudança, mas não disse quais.';
 }
 
-// ── Evidência de célula: conferência do CONTEÚDO, do lado de fora ──
+// ── Cell evidence: content verification, from the outside ──
 //
-// As checagens acima são dimensionais (linhas, abas, peças, fórmulas): pegam
-// arquivo destruído, não pegam mudança feita no lugar errado. Então o sub-agente
-// DECLARA as células que mudou ("EVIDENCIA: Artigos!C8=2019") e o orquestrador
-// relê exatamente essas células dos bytes SALVOS pra confirmar. Custa ~nada de
-// token (só as refs voltam ao contexto, nunca a planilha) e transforma "o
-// sub-agente disse que fez" em "está no arquivo".
+// The checks above are dimensional (rows, sheets, parts, formulas): they catch
+// a destroyed file, not a change made in the wrong place. So the sub-agent
+// DECLARES the cells it changed ("EVIDENCIA: Artigos!C8=2019") and the orchestrator
+// re-reads exactly those cells from the SAVED bytes to confirm. Costs almost no
+// tokens (only the refs go back into context, never the spreadsheet) and turns "the
+// sub-agent said it did it" into "it's in the file."
 const MAX_EVIDENCIAS = 20;
 const REF_A1_RE = /^(?:'?[^!']+'?!)?\$?[A-Za-z]{1,3}\$?\d{1,7}$/;
 
@@ -276,9 +276,9 @@ function normTexto(s) {
   return String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-// Candidatos numéricos de um valor declarado em português ("1.234,56", "R$ 80",
-// "15%"). Percentual devolve dois candidatos porque não há como saber se o
-// declarado é a fração armazenada (0.15) ou a aparência formatada (15%).
+// Numeric candidates for a value declared in Portuguese ("1.234,56", "R$ 80",
+// "15%"). Percentage returns two candidates because there's no way to know whether the
+// declared value is the stored fraction (0.15) or the formatted appearance (15%).
 function numerosDe(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? [v] : [];
   let s = String(v ?? '').trim();
@@ -299,11 +299,11 @@ function pareceData(s) {
     || /\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i.test(String(s || ''));
 }
 
-// Compara o que o sub-agente declarou com o que está gravado. Conservadora de
-// propósito: só acusa erro quando a célula está claramente diferente, não existe
-// ou está em aba inexistente. Caso duvidoso (data virou número de série, célula
-// é fórmula ainda não calculada) entra em `naoVerificaveis` — vira aviso, não
-// motivo pra jogar fora uma edição provavelmente correta.
+// Compares what the sub-agent declared with what's recorded. Deliberately
+// conservative: only flags an error when the cell is clearly different, doesn't exist,
+// or is on a nonexistent sheet. A doubtful case (date became a serial number, cell
+// is a formula not yet calculated) goes into `naoVerificaveis` — becomes a warning, not a
+// reason to discard a probably correct edit.
 export function conferirEvidencia(evidencias, lidas) {
   const porRef = new Map((lidas || []).map((c) => [String(c.ref), c]));
   const erros = [], naoVerificaveis = [];
@@ -314,8 +314,8 @@ export function conferirEvidencia(evidencias, lidas) {
     if (cel.noSheet) { erros.push(`${ev.ref}: essa aba não existe no arquivo salvo`); continue; }
     if (!cel.exists) { erros.push(`${ev.ref}: célula VAZIA no arquivo salvo, mas você declarou "${ev.esperado}"`); continue; }
 
-    // Fórmula declarada: o openpyxl não recalcula, então o valor fica vazio —
-    // o que se confere é o TEXTO da fórmula.
+    // Declared formula: openpyxl doesn't recalculate, so the value stays empty —
+    // what's checked is the formula's TEXT.
     if (/^=/.test(ev.esperado)) {
       const gravada = cel.formula ? `=${cel.formula}` : '';
       if (normTexto(gravada.replace(/\s+/g, '')) === normTexto(ev.esperado.replace(/\s+/g, ''))) conferidas++;
@@ -335,8 +335,8 @@ export function conferirEvidencia(evidencias, lidas) {
       else erros.push(`${ev.ref}: valor salvo ${cel.value}, você declarou ${ev.esperado}`);
       continue;
     }
-    // Data gravada como número de série do Excel vs declarada como texto (ou o
-    // contrário): correto, mas incomparável aqui.
+    // Date stored as an Excel serial number vs. declared as text (or the
+    // other way around): correct, but not comparable here.
     if (esp.length !== got.length && (pareceData(ev.esperado) || pareceData(cel.value))) {
       naoVerificaveis.push(`${ev.ref} (data: declarada "${ev.esperado}", gravada como "${cel.value}")`);
       continue;
@@ -367,12 +367,12 @@ EVIDENCIA: Sheet!C8=1234.50
 Use at most 20 (the most representative ones if you changed a lot). Formula: declare the formula text, starting with = (e.g. EVIDENCIA: Summary!D2==SUM(B2:B10)). These cells are RE-READ from the saved file by code: if what you declared is not there, the edit is redone. Do not invent evidence; declare only what you checked by reopening the file.
 • FINAL ANSWER: only the SUMMARY of the change: what changed, in which sheet, how many rows were affected, the assumptions and the EVIDENCIA lines. Do NOT paste the spreadsheet content, do NOT list all the rows, do NOT return a table: the spreadsheet content must not go back to the main agent. At most ~10 lines of text besides the evidence.`;
 
-// ── Orquestração ──
+// ── Orchestration ──
 //
-// Todas as dependências entram por parâmetro (`deps`) pra este fluxo poder ser
-// testado offline, sem banco, sem S3 e sem sandbox — o que inclui os caminhos
-// que importam: falha do script (nenhum asset gravado) e edições encavaladas
-// (a segunda parte do arquivo que a primeira gravou).
+// All dependencies come in via parameter (`deps`) so this flow can be
+// tested offline, without a database, S3 or sandbox — which includes the
+// paths that matter: script failure (no asset written) and overlapping edits
+// (the second part of the file the first one wrote).
 //
 // deps:
 //   listAssets(userId, { limit })   -> [asset]
@@ -380,15 +380,15 @@ Use at most 20 (the most representative ones if you changed a lot). Formula: dec
 //   fetchBytes(s3Key)               -> { buffer, contentType }
 //   loadIntoSandbox(userId, buffer, filename) -> { ok, path, filename, sheets, rows }
 //   readBytes(userId, path)         -> { ok, buffer } | { ok:false, error }
-//   inspect(buffer)                 -> { sheets, rows, text, parts?, formulas? }  (lança se corrompido)
-//   readCells(buffer, refs)         -> [{ ref, exists, value, formula, ... }]  (opcional)
+//   inspect(buffer)                 -> { sheets, rows, text, parts?, formulas? }  (throws if corrupted)
+//   readCells(buffer, refs)         -> [{ ref, exists, value, formula, ... }]  (optional)
 //   runEditor({ objetivo, path, filename, sheets, rows, tentativa }) -> string
 //   saveAsset({ buffer, ext, mime, caption }) -> { url, key, assetId }
 //   renameAsset(userId, id, caption) -> boolean
 export async function editSpreadsheet({ userId, objetivo, id = null, deps }) {
   if (!objetivo || !String(objetivo).trim()) return { ok: false, error: 'objetivo vazio.' };
-  // Serializa por USUÁRIO (não por arquivo): a escolha do asset acontece DENTRO
-  // do lock, então a segunda edição enxerga a versão que a primeira gravou.
+  // Serializes by USER (not by file): the asset choice happens INSIDE
+  // the lock, so the second edit sees the version the first one saved.
   return withKeyLock(`sheet:${userId}`, () => editOnce({ userId, objetivo, id, deps }));
 }
 
@@ -400,11 +400,11 @@ async function editOnce({ userId, objetivo, id, deps }) {
   if (pick.error) return { ok: false, error: pick.error };
   const asset = pick.asset;
 
-  // Sempre recarrega do S3: o registro de planilhas carregadas é um Map em
-  // memória do processo com TTL de 6h (planilha.mjs), então fica vazio depois de
-  // todo restart do serviço — e planilha GERADA por gerar_documento nunca passou
-  // pelo sandbox. Recarregar é barato e garante que o sub-agente edita a versão
-  // canônica, não uma cópia velha que sobrou no /workspace.
+  // Always reloads from S3: the loaded-spreadsheets registry is an in-process
+  // in-memory Map with a 6h TTL (planilha.mjs), so it's empty after
+  // every service restart — and a spreadsheet GENERATED by gerar_documento never went
+  // through the sandbox. Reloading is cheap and guarantees the sub-agent edits the
+  // canonical version, not a stale copy left in /workspace.
   let src;
   try { src = await deps.fetchBytes(asset.s3_key); } catch (e) { src = null; }
   if (!src || !src.buffer) return { ok: false, error: 'Não consegui ler os bytes da planilha na biblioteca.' };
@@ -413,11 +413,11 @@ async function editOnce({ userId, objetivo, id, deps }) {
   try { before = deps.inspect(src.buffer); }
   catch (e) { return { ok: false, error: `A planilha da biblioteca não abriu (${e?.message ?? e}).` }; }
 
-  // Refaz a edição quando o resultado sai errado SEM erro técnico (recriou o
-  // arquivo, salvou em outro caminho, escreveu conteúdo truncado). Devolver "olha
-  // a versão anterior" seria jogar o problema no colo do usuário, que pediu uma
-  // mudança e ficaria sem ela. Cada tentativa parte dos bytes ORIGINAIS: o
-  // loadIntoSandbox sobrescreve o arquivo estragado da tentativa passada.
+  // Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated
+  // the file, saved to another path, wrote truncated content). Returning "look at
+  // the previous version" would dump the problem on the user, who asked for a
+  // change and would be left without it. Each attempt starts from the ORIGINAL bytes: the
+  // loadIntoSandbox overwrites the broken file from the previous attempt.
   const filename = asset.caption || 'planilha.xlsx';
   const podeConferir = typeof deps.readCells === 'function';
   let out = null, after = null, resumo = null, problema = null, tentativas = 0;
@@ -440,10 +440,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
       return { ok: false, error: `O editor falhou: ${e?.message ?? e}. Nada foi gravado; a planilha da biblioteca está intacta.` };
     }
 
-    // Ambiguidade real: o editor devolve a PERGUNTA em vez de chutar. Não grava
-    // nada e não repete a tentativa — insistir com a mesma instrução ambígua só
-    // gastaria token pra chegar no mesmo lugar. O agente principal pergunta ao
-    // usuário e chama a tool de novo com a instrução resolvida.
+    // Real ambiguity: the editor returns the QUESTION instead of guessing. It doesn't save
+    // anything and doesn't repeat the attempt — insisting with the same ambiguous instruction would only
+    // spend tokens to reach the same place. The main agent asks the
+    // user and calls the tool again with the resolved instruction.
     clarificacao = pedeClarificacao(resumo);
     if (clarificacao) {
       return {
@@ -463,14 +463,14 @@ async function editOnce({ userId, objetivo, id, deps }) {
 
     problema = detectarProblema({ before, after, resumo, identical: out.buffer.equals(src.buffer) });
 
-    // Conferência de evidência: o editor declara as células que mudou e a gente
-    // RELÊ exatamente essas células dos bytes salvos. É o único jeito de pegar o
-    // erro que nenhuma contagem pega — a planilha ficou íntegra, do tamanho
-    // certo, e o valor foi escrito no lugar errado (ou não foi escrito). A
-    // comparação é deliberadamente frouxa (número por valor, texto por conteúdo,
-    // fórmula por texto) porque um falso positivo aqui joga a edição boa no lixo.
-    // Cada tentativa precisa de prova própria: sucesso/erro anterior não prova
-    // nada sobre os bytes desta tentativa. Falta de leitura nunca vira sucesso.
+    // Evidence check: the editor declares the cells it changed and we
+    // RE-READ exactly those cells from the saved bytes. It's the only way to catch
+    // the error that no count catches — the spreadsheet stayed intact, the right
+    // size, and the value was written in the wrong place (or not written at all). The
+    // comparison is deliberately loose (number by value, text by content,
+    // formula by text) because a false positive here would throw a good edit away.
+    // Each attempt needs its own proof: previous success/error proves
+    // nothing about this attempt's bytes. Lack of a read never becomes a success.
     evid = null;
     semProva = true;
     motivoSemProva = 'A conferência das células não está disponível nesta execução.';
@@ -493,11 +493,11 @@ async function editOnce({ userId, objetivo, id, deps }) {
           }
         }
       } else {
-        // Sem evidência não dá pra conferir nada. Vale uma segunda passada
-        // pedindo, mas não vale recusar a edição no fim: entregar com ressalva é
-        // melhor que gastar o token do usuário e não entregar nada. Por isso o
-        // semEvidencia só vira `problema` (= refaz) enquanto sobra tentativa; na
-        // última ele fica só como flag e a edição é gravada com aviso.
+        // Without evidence there's nothing to check. A second pass asking for it is worth
+        // it, but refusing the edit at the end is not: delivering with a caveat is
+        // better than spending the user's tokens and delivering nothing. That's why
+        // semEvidencia only becomes a `problema` (= redo) while attempts remain; on the
+        // last one it's kept only as a flag and the edit is saved with a warning.
         semProva = true;
         motivoSemProva = 'O editor não declarou as células que mudou.';
         if (t < MAX_TENTATIVAS) {
@@ -510,13 +510,13 @@ async function editOnce({ userId, objetivo, id, deps }) {
     }
     if (!problema) break;
   }
-  // Esgotou as tentativas: não grava nada. A planilha do usuário fica exatamente
-  // como estava, com o mesmo nome — não existe "versão anterior" pra ele caçar,
-  // e o modelo tem o motivo concreto pra explicar o que não deu.
-  // Exceção: falta de evidência não é defeito na planilha, é falta de prova. O
-  // arquivo passou em todas as checagens objetivas (não foi recriado, não
-  // encolheu, não perdeu peça, não tem marcador de corte). Nesse caso grava e
-  // avisa que a mudança não foi conferida célula a célula.
+  // Ran out of attempts: saves nothing. The user's spreadsheet stays exactly
+  // as it was, with the same name — there is no "previous version" for them to hunt down,
+  // and the model has a concrete reason to explain what didn't work out.
+  // Exception: lack of evidence is not a defect in the spreadsheet, it's a lack of proof. The
+  // file passed all the objective checks (wasn't recreated, didn't
+  // shrink, didn't lose a part, has no truncation marker). In this case it saves and
+  // warns that the change wasn't checked cell by cell.
   if (problema) {
     return {
       ok: false, tentativas,
@@ -524,10 +524,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
     };
   }
 
-  // Grava a versão NOVA primeiro (com o nome canônico) e só depois arquiva a
-  // anterior. Nessa ordem, uma falha na renomeação deixa duas linhas com o mesmo
-  // nome — recuperável, e a mais nova continua ganhando por created_at DESC.
-  // Na ordem inversa, uma falha na gravação perderia o nome canônico.
+  // Saves the NEW version first (with the canonical name) and only then archives
+  // the previous one. In this order, a rename failure leaves two rows with the same
+  // name — recoverable, and the newest one keeps winning by created_at DESC.
+  // In the reverse order, a save failure would lose the canonical name.
   const caption = filename;
   const ext = (String(caption).match(SHEET_EXT_RE)?.[0] || '.xlsx').slice(1).toLowerCase();
   let saved;

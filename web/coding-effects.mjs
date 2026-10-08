@@ -18,13 +18,13 @@ function legacyPrewriteRejection(call,out) {
     return args.edicoes.some(e=>!e||typeof e.trecho_antigo!=='string'||e.trecho_antigo===''||typeof e.trecho_novo!=='string');
   return typeof args.trecho_antigo!=='string'||args.trecho_antigo===''||typeof args.trecho_novo!=='string';
 }
-// Checkpoints gravados antes do recibo de efeito da chamada HTTP guardam o
-// resultado mas ficam marcados como escrita incerta. Aqui também só os
-// ARGUMENTOS decidem, nunca o texto do erro: GET não altera dado por definição
-// de HTTP, então repetir a chamada não pode duplicar mutação nenhuma.
+// Checkpoints recorded before the HTTP call's effect receipt store the
+// result but are marked as an uncertain write. Here too, only the
+// ARGUMENTS decide, never the error text: GET doesn't change data by HTTP's
+// definition, so repeating the call can never duplicate any mutation.
 function legacyHttpRead(call,out) {
   if(out?.ok!==false||call?.name!=='chamar_sistema')return false;
-  if(out?.efeito!==undefined)return false; // já tem recibo: quem decide é a cláusula acima.
+  if(out?.efeito!==undefined)return false; // already has a receipt: the clause above decides.
   const args=call?.args&&typeof call.args==='object'&&!Array.isArray(call.args)?call.args:{};
   return String(args.metodo||'GET').toUpperCase()==='GET';
 }
@@ -33,9 +33,9 @@ export function effectState(call,out) {
   if(['editar_arquivo_do_app','escrever_arquivo_do_app'].includes(call?.name)&&
     out?.ok===false&&out?.effect?.version===1&&out.effect.operation==='file_edit'&&out.effect.state==='not_applied')return 'not_applied';
   if(legacyPrewriteRejection(call,out))return 'not_applied';
-  // Chamada HTTP ao app do usuário: a tool sabe, e só ela sabe, se a requisição
-  // chegou a sair e se o método podia alterar alguma coisa. Um GET que voltou 404
-  // não é "efeito incerto"; tratá-lo como tal travava a tarefa inteira.
+  // HTTP call to the user's app: the tool knows, and only it knows, whether the request
+  // actually went out and whether the method could change anything. A GET that returned 404
+  // is not an "uncertain effect"; treating it as such used to lock up the entire task.
   if(call?.name==='chamar_sistema'&&out?.ok===false&&out?.efeito?.versao===1&&
     out.efeito.operacao==='chamada_http'&&out.efeito.estado==='nao_aplicado')return 'not_applied';
   if(legacyHttpRead(call,out))return 'not_applied';

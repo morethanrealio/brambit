@@ -1,5 +1,5 @@
-// ── Helpers de autenticação ──
-// Hash de senha com scrypt (nativo, sem dependências) e parsing de cookie.
+// ── Authentication helpers ──
+// Password hashing with scrypt (native, no dependencies) and cookie parsing.
 
 import crypto from 'crypto';
 
@@ -21,32 +21,34 @@ export function newToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Lê um cookie qualquer do header.
+// Reads any cookie from the header.
 export function readCookie(req, name) {
   const raw = req.headers.cookie || '';
   for (const part of raw.split(';')) {
     const [k, ...v] = part.trim().split('=');
     if (k === name) {
-      // Cookie com percent-encoding inválido (%%, %zz) faz decodeURIComponent
-      // lançar URIError. Como quem lê cookie está dentro do handler async do
-      // servidor, esse throw virava rejeição não tratada e derrubava o processo
-      // inteiro (achado #21). Valor estragado vale menos que o serviço no ar:
-      // devolve o texto cru e quem valida o formato recusa depois.
+      // A cookie with invalid percent-encoding (%%, %zz) makes
+      // decodeURIComponent throw a URIError. Since whoever reads the cookie
+      // is inside the server's async handler, that throw used to become an
+      // unhandled rejection and bring down the whole process (finding #21). A
+      // broken value is worth less than the service staying up: returns the
+      // raw text and whoever validates the format rejects it afterwards.
       const bruto = v.join('=');
       try { return decodeURIComponent(bruto); } catch { return bruto; }
     }
   }
   return null;
 }
-// O site continua autenticando pelo cookie HttpOnly. O app mobile, por outro
-// lado, recebe a sessão no corpo do login e a guarda no SecureStore: tentar
-// remontar `Cookie: sid=...` manualmente no fetch do React Native/iOS não é
-// confiável. Para o cliente que se identifica explicitamente como mobile,
-// aceitamos o mesmo token em Authorization: Bearer.
+// The site keeps authenticating via the HttpOnly cookie. The mobile app, on
+// the other hand, gets the session in the login body and keeps it in
+// SecureStore: trying to manually rebuild `Cookie: sid=...` in React
+// Native/iOS's fetch is not reliable. For a client that explicitly
+// identifies as mobile, we accept the same token in Authorization: Bearer.
 //
-// O Bearer tem precedência sobre um cookie antigo. Assim uma sessão que ficou no
-// cookie jar nativo não consegue sobrepor a sessão recém-obtida pelo app. Fora do
-// mobile o comportamento permanece byte a byte igual: somente o cookie vale.
+// The Bearer takes precedence over an old cookie. This way a session left in
+// the native cookie jar cannot override the session the app just obtained.
+// Outside of mobile the behavior stays byte-for-byte the same: only the
+// cookie counts.
 const SESSION_TOKEN_RE = /^[0-9a-f]{64}$/;
 export function readSid(req) {
   const cookie = readCookie(req, 'sid');
@@ -57,7 +59,7 @@ export function readSid(req) {
   return SESSION_TOKEN_RE.test(bearer) ? bearer : cookie;
 }
 
-// Cookie de sessão: HttpOnly + Secure (https) + SameSite=Lax, válido 30 dias.
+// Session cookie: HttpOnly + Secure (https) + SameSite=Lax, valid 30 days.
 export function sessionCookie(token) {
   const days = 30;
   return `sid=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${days * 86400}`;
@@ -102,10 +104,11 @@ export const GOOGLE_SCOPES = {
 };
 const BASE_SCOPE = 'openid email profile';
 
-// URL pra onde mandamos o usuário se autenticar no Google.
-//  - login simples: só BASE_SCOPE, online, select_account.
-//  - conectar serviços (incremental): BASE + escopos pedidos, offline + consent
-//    (pra vir o refresh_token) e include_granted_scopes (mantém o que já tinha).
+// URL where we send the user to authenticate with Google.
+//  - simple login: only BASE_SCOPE, online, select_account.
+//  - connecting services (incremental): BASE + requested scopes, offline +
+//    consent (so the refresh_token comes back) and include_granted_scopes
+//    (keeps what it already had).
 export function googleAuthUrl(state, { scopes = [], loginHint = '' } = {}) {
   const connect = scopes.length > 0;
   const scope = connect ? [BASE_SCOPE, ...scopes].join(' ') : BASE_SCOPE;
@@ -116,18 +119,18 @@ export function googleAuthUrl(state, { scopes = [], loginHint = '' } = {}) {
     scope,
     state,
     access_type: connect ? 'offline' : 'online',
-    // No connect forçamos o seletor de conta + consentimento pra o usuário poder
-    // ADICIONAR uma conta Google diferente (multi-conta), não só reusar a ativa.
+    // In connect we force the account selector + consent so the user can ADD
+    // a different Google account (multi-account), not just reuse the active one.
     prompt: connect ? 'select_account consent' : 'select_account',
   });
   if (connect) p.set('include_granted_scopes', 'true');
-  // RECONECTAR uma conta já existente: pré-seleciona o e-mail no Google.
+  // RECONNECTING an existing account: pre-selects the email on Google.
   if (loginHint) p.set('login_hint', loginHint);
   return `${GOOGLE_AUTH}?${p.toString()}`;
 }
 
-// Resolve a lista de serviços pedidos (ex: ['gmail','drive']) em escopos
-// (leitura + escrita de cada um).
+// Resolves the list of requested services (e.g. ['gmail','drive']) into
+// scopes (read + write for each one).
 export const scopesFor = (services) =>
   services.flatMap((s) => {
     const def = GOOGLE_SCOPES[s];
@@ -135,8 +138,8 @@ export const scopesFor = (services) =>
     return Object.values(def).filter(Boolean);
   });
 
-// Quais serviços (gmail/drive/docs/calendar) um conjunto de escopos concedidos
-// cobre (presente se tiver pelo menos o escopo de leitura OU o de escrita).
+// Which services (gmail/drive/docs/calendar) a set of granted scopes covers
+// (present if it has at least the read OR the write scope).
 export function servicesFromScope(scope = '') {
   const granted = new Set(scope.split(/\s+/));
   return Object.entries(GOOGLE_SCOPES)
@@ -144,8 +147,8 @@ export function servicesFromScope(scope = '') {
     .map(([k]) => k);
 }
 
-// Capacidades read/write por serviço a partir dos escopos concedidos.
-// Ex: { gmail: { read: true, write: true }, calendar: { read: true, write: false } }.
+// Read/write capabilities per service from the granted scopes.
+// E.g.: { gmail: { read: true, write: true }, calendar: { read: true, write: false } }.
 export function serviceCaps(scope = '') {
   const granted = new Set(scope.split(/\s+/));
   const caps = {};
@@ -170,9 +173,10 @@ export async function googleRefresh(refreshToken) {
   });
   if (!r.ok) {
     const raw = await r.text();
-    // invalid_grant = o refresh_token foi revogado/expirou (troca de senha, revogação
-    // manual, 6 meses sem uso). É irreversível: só reconectando. Sinaliza pro caller
-    // via .code em vez de vazar o JSON cru do Google no chat do usuário.
+    // invalid_grant = the refresh_token was revoked/expired (password change,
+    // manual revocation, 6 months unused). It's irreversible: only
+    // reconnecting fixes it. Signals the caller via .code instead of leaking
+    // Google's raw JSON into the user's chat.
     const err = new Error(`google refresh ${r.status}`);
     if (/invalid_grant/i.test(raw)) err.code = 'invalid_grant';
     throw err;
@@ -196,29 +200,30 @@ export async function googleExchange(code) {
   return r.json(); // { access_token, id_token, ... }
 }
 
-// Busca nome + e-mail do usuário a partir do access_token.
+// Fetches the user's name + email from the access_token.
 export async function googleUserInfo(accessToken) {
   const r = await fetch(GOOGLE_USERINFO, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!r.ok) throw new Error(`userinfo ${r.status}: ${await r.text()}`);
   return r.json(); // { sub, email, email_verified, name, ... }
 }
 
-// Cookie curto pra guardar o state (proteção CSRF) entre start e callback.
-// 30 min (era 10): 10 não cobria o tempo real de quem cria/confirma conta no
-// meio do consentimento. Caso observado no Hotmail: 19min29s entre start e
-// callback, a Microsoft devolvia um code válido e a gente descartava calado.
-// O oflow acompanha o mesmo prazo: ele decide se o retorno vai pro deep link
-// do app ou pra home web, e vencer antes do ostate jogaria o usuário mobile
-// pro lugar errado.
+// Short-lived cookie to hold the state (CSRF protection) between start and
+// callback. 30 min (was 10): 10 did not cover the real time it takes someone
+// to create/confirm an account in the middle of consent. Case observed on
+// Hotmail: 19min29s between start and callback, Microsoft returned a valid
+// code and we silently discarded it. oflow follows the same TTL: it decides
+// whether the return goes to the app's deep link or to the web home, and
+// expiring before ostate would throw the mobile user to the wrong place.
 export const stateCookie = (state) => `ostate=${state}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1800`;
 export const clearStateCookie = () => 'ostate=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
 
-// Guarda o code_verifier do PKCE entre o /start e o /callback (providers OAuth
-// 2.1, tipo Canva). Só o desafio (SHA-256) viaja na URL de autorização; o
-// segredo fica aqui, no mesmo prazo e nas mesmas condições do ostate.
+// Stores the PKCE code_verifier between /start and /callback (OAuth 2.1
+// providers, like Canva). Only the challenge (SHA-256) travels in the
+// authorization URL; the secret stays here, with the same TTL and conditions
+// as ostate.
 export const verifierCookie = (v) => `overif=${v}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1800`;
 export const clearVerifierCookie = () => 'overif=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
 
-// Marca se o fluxo OAuth em andamento é 'login' ou 'connect' (mesmo callback).
+// Marks whether the OAuth flow in progress is 'login' or 'connect' (same callback).
 export const flowCookie = (flow) => `oflow=${flow}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1800`;
 export const clearFlowCookie = () => 'oflow=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';

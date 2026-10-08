@@ -15,8 +15,8 @@ import {
 } from './db.mjs';
 import { marca } from './marca.mjs';
 
-// Normaliza o que o usuário deu como "repo" numa URL clonável.
-// Aceita URL completa (https/ssh) ou o atalho "owner/repo".
+// Normalizes what the user gave as "repo" in a clonable URL.
+// Accepts a full URL (https/ssh) or the "owner/repo" shortcut.
 function normalizeRepo(repo) {
   const r = String(repo || '').trim();
   if (!r) return '';

@@ -19,27 +19,27 @@ const COMFY_URL = () => (process.env.COMFY_URL || '').replace(/\/+$/, '');
 const COMFY_TOKEN = () => process.env.COMFY_TOKEN || '';
 
 export const MAX_VIDEO_SECONDS = 15;
-// Teto de download do mp4. Um vídeo de até 15s não chega perto disso; o teto está
-// aqui pra um corpo que não acaba nunca não comer a memória do processo.
+// Download ceiling for the mp4. A video of up to 15s doesn't come close to this; the ceiling is
+// here so a body that never ends doesn't eat up the process's memory.
 export const MAX_VIDEO_BYTES = 256 * 1024 * 1024;
 
-// Só habilita a feature quando as duas variáveis estão presentes. Enquanto o
-// endpoint não estiver vivo, a tool nem se oferece a gerar (fica "em breve").
+// Only enables the feature when both variables are present. While the
+// endpoint isn't alive, the tool doesn't even offer to generate (stays "coming soon").
 export function videoGenEnabled() {
   return !!(COMFY_URL() && COMFY_TOKEN());
 }
 
-// ── Freio de PRODUTO: geração de vídeo EM REVISÃO (22/09/2026) ──
-// Diferente do videoGenEnabled() acima (que só diz se o worker GPU está de pé),
-// este é o freio de PRODUTO: enquanto a feature está em revisão pelo time, a tool
-// `gerar_video` não é registrada e a seção de verificação de identidade some do
-// app. Assim o assistente nem sabe que vídeo existe e não promete o que não pode
-// entregar (era o que acontecia: a promessa nascia da descrição da tool, e o
-// freio só aparecia depois, dentro do run).
-// LIGADO POR PADRÃO: religar a feature é um ato explícito (VIDEO_EM_REVISAO=0 no
-// .env do box), nunca um esquecimento.
-// O poller (pollVideoJobs) segue rodando de propósito: job criado ANTES da
-// revisão continua sendo entregue ao dono.
+// ── PRODUCT guard: video generation UNDER REVIEW (2026-09-22) ──
+// Unlike videoGenEnabled() above (which only says whether the GPU worker is up),
+// this is the PRODUCT guard: while the feature is under review by the team, the
+// `gerar_video` tool is not registered and the identity verification section disappears from the
+// app. This way the assistant doesn't even know video exists and doesn't promise what it can't
+// deliver (that's what used to happen: the promise originated from the tool's description, and the
+// guard only kicked in later, inside the run).
+// ON BY DEFAULT: turning the feature back on is an explicit act (VIDEO_EM_REVISAO=0 in
+// the box's .env), never an oversight.
+// The poller (pollVideoJobs) keeps running on purpose: a job created BEFORE the
+// review keeps being delivered to the owner.
 export function videoEmRevisao() {
   return String(process.env.VIDEO_EM_REVISAO ?? '1') !== '0';
 }
@@ -48,10 +48,10 @@ function authHeaders(extra = {}) {
   return { Authorization: `Bearer ${COMFY_TOKEN()}`, ...extra };
 }
 
-// ATENÇÃO (achado #26): o relógio vale só enquanto a função de dentro está
-// rodando. O finally limpa o timer, então LER O CORPO da resposta depois que o
-// withTimeout retornou é ler sem prazo nenhum e sem ninguém pra abortar. Tudo que
-// precisa caber no prazo tem que acontecer DENTRO do callback.
+// ATTENTION (finding #26): the clock only applies while the inner function is
+// running. The finally clears the timer, so READING THE BODY of the response after
+// withTimeout has returned means reading with no deadline at all and nobody to abort it. Anything that
+// needs to fit within the deadline has to happen INSIDE the callback.
 async function withTimeout(promise, ms, label) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -96,11 +96,11 @@ export async function createRender({ imageUrl, prompt, audioUrl = null, voiceClo
   const body = { image_url: imageUrl, prompt: String(prompt) };
   if (audioUrl) body.audio_url = audioUrl;
   if (voiceCloneOnly) { body.voice_clone_only = true; body.speech_text = String(speechText); }
-  // No modo clone a duração sai do speech_text; só mandamos duration fora do clone.
+  // In clone mode the duration comes from speech_text; we only send duration outside of clone mode.
   if (duration != null && !voiceCloneOnly) body.duration = Number(duration);
   if (appImageUrl) body.app_image_url = appImageUrl;
-  // Fotos extras do mesmo rosto (máx 2). Só strings não-vazias; corta em 2 pra não
-  // tomar 400 do worker (a validação dele exige lista de strings, tamanho <= 2).
+  // Extra photos of the same face (max 2). Only non-empty strings; capped at 2 so it doesn't
+  // get a 400 from the worker (its validation requires a list of strings, length <= 2).
   const refs = (Array.isArray(faceRefUrls) ? faceRefUrls : [])
     .filter((u) => typeof u === 'string' && u).slice(0, 2);
   if (refs.length) body.face_ref_urls = refs;
@@ -131,15 +131,15 @@ export async function getRender(jobId) {
   }, 20_000, 'getRender');
 }
 
-// Baixa o mp4 gerado. Retorna { buffer, contentType }.
+// Downloads the generated mp4. Returns { buffer, contentType }.
 //
-// Achado #26: os 120s cobriam só o aperto de mão. O withTimeout devolvia a
-// resposta assim que os CABEÇALHOS chegavam e o finally já limpava o timer, então
-// o download do arquivo (que é justamente a parte demorada) corria sem prazo e sem
-// ninguém pra abortar. Worker lento ou socket meio-morto travava o poller de vídeo
-// PRA SEMPRE, e como o dono só pode ter 1 vídeo em andamento, ele ficava sem poder
-// pedir outro. Agora a leitura do corpo acontece dentro do mesmo relógio, e com
-// teto de bytes.
+// Finding #26: the 120s only covered the handshake. withTimeout returned the
+// response as soon as the HEADERS arrived and the finally already cleared the timer, so
+// the file download (which is exactly the slow part) ran with no deadline and
+// nobody to abort it. A slow worker or a half-dead socket would hang the video poller
+// FOREVER, and since the owner can only have 1 video in progress, they'd be stuck unable to
+// request another. Now reading the body happens within the same clock, and with a
+// byte ceiling.
 export async function fetchRenderVideo(jobId, { timeoutMs = 120_000, maxBytes = MAX_VIDEO_BYTES } = {}) {
   if (!videoGenEnabled()) throw new Error('video gen desabilitado');
   if (!jobId) throw new Error('jobId obrigatório');
