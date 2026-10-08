@@ -1,7 +1,7 @@
-// Achado #21: cookie com percent-encoding inválido derrubava o PROCESSO inteiro.
-// O caminho: readCookie chama decodeURIComponent sem proteção, e quem lê cookie
-// está dentro do handler async do http.createServer, que não tinha catch nenhum,
-// então o URIError virava rejeição não tratada e o Node morria.
+// Finding #21: a cookie with invalid percent-encoding brought down the whole PROCESS.
+// The path: readCookie calls decodeURIComponent without protection, and whoever reads the cookie
+// is inside the async handler of http.createServer, which had no catch at all,
+// so the URIError turned into an unhandled rejection and Node died.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -39,8 +39,8 @@ test('readSid sobrevive a um sid malformado (não derruba o login)', () => {
 test('o handler do servidor não pode mais ser async solto', () => {
   const src = fs.readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
   assert.ok(!/http\.createServer\(async /.test(src), 'callback async sem catch mata o processo');
-  // O callback síncrono pode registrar listeners antes (ex.: req.on('error')),
-  // mas a primeira coisa assíncrona dele tem que ser atenderRequest(...).catch(.
+  // The synchronous callback may register listeners beforehand (e.g.: req.on('error')),
+  // but its first asynchronous thing has to be atenderRequest(...).catch(.
   const ini = src.search(/http\.createServer\(\(req, res\) => \{/);
   assert.ok(ini >= 0, 'createServer com callback síncrono');
   const corpo = src.slice(ini, src.indexOf('atenderRequest(req, res)', ini));

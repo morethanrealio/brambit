@@ -2,37 +2,37 @@ import {wrapProvider,providerAttempt,throwIfAttemptControl,chatAttemptUsage} fro
 import {STOP} from '../provider.mjs';
 import {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './ferramenta-em-texto.mjs';
 import {validarChamadas,mensagemProtocolo,comRetentativa} from './regras.mjs';
-// ── Motor único pra qualquer provedor compatível com OpenAI ──
-// Together, DeepInfra, OpenAI, Nemotron e qualquer endereço do modelos.yaml falam
-// o mesmo protocolo: POST /chat/completions com chave Bearer. O que muda entre
-// eles é configuração (endereço, chave, campos do corpo) e manias de MODELO
-// (escrever a ferramenta como texto, raciocinar até esgotar a saída). Cada
-// adaptador (together.mjs, deepinfra.mjs, openai.mjs, nemotron.mjs) virou só uma
-// predefinição destas opções, com a MESMA assinatura de antes.
+// ── Single engine for any OpenAI-compatible provider ──
+// Together, DeepInfra, OpenAI, Nemotron and any address from modelos.yaml speak
+// the same protocol: POST /chat/completions with a Bearer key. What changes between
+// them is configuration (address, key, body fields) and MODEL quirks
+// (writing the tool call as text, reasoning until it exhausts the output). Each
+// adapter (together.mjs, deepinfra.mjs, openai.mjs, nemotron.mjs) became just a
+// preset of these options, with the SAME signature as before.
 //
-//   provedor            nome nos logs, no erro HTTP e no nome do provider
-//   url, chave          chave null = provedor sem chave (sem cabeçalho de auth)
-//   campos(comTools)    campos do corpo depois de model/messages, na ordem
-//   camposDiretos()     campos das novas tentativas com o raciocínio desligado
-//   limiteTools         { max, aviso(n) }: corta a lista de ferramentas
-//   extras              mesclados no corpo por último
-//   visao               false = imagens não viram partes image_url
-//   stream              { inatividadeMs, diagnosticoRecusa } = transporte SSE
-//   contarEntrada       estimativa de entrada pra reserva de crédito
-//   limparTexto         tira raciocínio do texto final (Nemotron)
-//   usoSemCache         provedor que não informa cache: loga e grava cached 0
-//   cortePorTeto        finish 'length' vira protocolError (default true)
-//   ferramentaEmTexto   'sempre' | 'comTools' | false: recupera GLM/DSML do texto
-//   reamostrarResiduo   re-amostragens sem raciocínio quando sobra resíduo (Together)
-//   residuoGlmLanca     resíduo GLM no texto final lança (DeepInfra)
-//   vazioSemUsoLanca    resposta vazia E sem uso medido lança (Together)
-//   retryVazio          'completo' | 'simples' | false: refaz resposta vazia
-//   erroSemUrl          mensagem quando o endereço não foi configurado
-//   semProntidao        não informa prontidão à camada de crédito (servidor próprio)
+//   provedor            name in the logs, in the HTTP error and in the provider's name
+//   url, chave          null key = provider with no key (no auth header)
+//   campos(comTools)    body fields after model/messages, in order
+//   camposDiretos()     fields for retries with reasoning turned off
+//   limiteTools         { max, aviso(n) }: trims the tool list
+//   extras              merged into the body last
+//   visao               false = images don't become image_url parts
+//   stream               { inatividadeMs, diagnosticoRecusa } = SSE transport
+//   contarEntrada       input estimate for credit reservation
+//   limparTexto         strips reasoning from the final text (Nemotron)
+//   usoSemCache         provider that doesn't report cache: logs it and records cached 0
+//   cortePorTeto        finish 'length' becomes protocolError (default true)
+//   ferramentaEmTexto   'sempre' | 'comTools' | false: recovers GLM/DSML from the text
+//   reamostrarResiduo   reasoning-less re-samples when there's leftover residue (Together)
+//   residuoGlmLanca     GLM residue in the final text throws (DeepInfra)
+//   vazioSemUsoLanca    empty response AND no measured usage throws (Together)
+//   retryVazio          'completo' | 'simples' | false: redoes an empty response
+//   erroSemUrl          message when the address wasn't configured
+//   semProntidao        doesn't report readiness to the credit layer (own server)
 //
-// Regras comuns (regras.mjs), iguais pra todos: chamada malformada (JSON quebrado,
-// id faltando/repetido) recusa o lote sem executar nada; nome fora do catálogo
-// passa e o core avisa o modelo; recusa passageira (429/5xx) tenta de novo.
+// Common rules (regras.mjs), the same for everyone: malformed call (broken JSON,
+// missing/duplicate id) refuses the whole batch without executing anything; a name outside the
+// catalog passes through and the core warns the model; a transient refusal (429/5xx) retries.
 
 const GLM_RESIDUO=/<tool_call>|<\/?arg_key>|<\/?arg_value>/;
 const temGlm=s=>GLM_RESIDUO.test(String(s??''));
@@ -82,11 +82,11 @@ export function makeCompativel({
         if(ferramentaEmTexto==='sempre'||(ferramentaEmTexto==='comTools'&&tools?.length))
           ({toolCalls,text}=recuperar(toolCalls,text,provedor));
 
-        // Resíduo de chamada que o leitor não conseguiu recuperar (ex.: só os
-        // <arg_key>/<arg_value> soltos, sem nome de função): re-amostra no próprio
-        // modelo com o raciocínio desligado, que tende a preencher tool_calls. Se não
-        // resolver, LANÇA, pra cadeia de fallback assumir; resíduo nunca vai pro
-        // usuário (bug do instalar_skill, 14/08).
+        // Call residue that the reader couldn't recover (e.g.: just loose
+        // <arg_key>/<arg_value> pairs, with no function name): re-samples on the same
+        // model with reasoning turned off, which tends to fill in tool_calls. If it doesn't
+        // resolve, THROWS, so the fallback chain takes over; residue never goes to the
+        // user (instalar_skill bug, 2026-08-14).
         if(reamostrarResiduo&&!toolCalls.length&&tools?.length&&temResiduo(text)&&!pendente){
           for(let i=0;i<reamostrarResiduo&&!toolCalls.length;i++){
             console.log(`[${provedor} malformed-toolcall] resíduo sem chamada estruturada; retry ${i+1}/${reamostrarResiduo} sem raciocínio`);
@@ -107,11 +107,11 @@ export function makeCompativel({
           if(!toolCalls.length&&temResiduo(text))throw new Error(`${provedor}: tool-call malformada não recuperável após ${reamostrarResiduo} re-amostragens`);
         }
         if(reamostrarResiduo&&pendente&&!toolCalls.length&&temResiduo(text))text='';
-        // Stream que terminou sem o trailer de uso E sem nada utilizável. A camada de
-        // crédito já guardou a resposta exata e manteve a reserva, então lançar aqui
-        // não repete a requisição física: a cadeia de fallback pode seguir, e um
-        // restart reaproveita os mesmos bytes e chega na mesma decisão. Com texto ou
-        // chamada, não lança: a saída pode ser consumida uma vez só.
+        // Stream that ended without the usage trailer AND without anything usable. The
+        // credit layer already stored the exact response and kept the reservation, so throwing here
+        // doesn't repeat the physical request: the fallback chain can proceed, and a
+        // restart reuses the same bytes and reaches the same decision. With text or
+        // a call, it doesn't throw: the output can only be consumed once.
         if(vazioSemUsoLanca&&pendente&&!toolCalls.length&&!text.trim()){
           const meta=data?._streamMeta||{};
           console.error(`[${provedor} unusable unmetered]`,JSON.stringify({
@@ -128,10 +128,10 @@ export function makeCompativel({
         }
         if(toolCalls.length)return lote(toolCalls,text);
 
-        // Resposta vazia (tipicamente o raciocínio consumiu todo o teto de saída):
-        // refaz sem raciocínio e sem ferramentas. Nunca entregar vazio (bug do
-        // caso de 02/07). 'completo' ainda recupera a ação escrita como texto (caso
-        // Naval Strike: o retry trouxe `<｜DSML｜ invoke ...>`) e mede o cache.
+        // Empty response (typically reasoning consumed the entire output cap):
+        // redoes without reasoning and without tools. Never deliver empty (bug from the
+        // 2026-07-02 case). 'completo' still recovers the action written as text (Naval
+        // Strike case: the retry brought back `<｜DSML｜ invoke ...>`) and measures the cache.
         if(retryVazio&&!text.trim()&&!pendente){
           console.log(`[${provedor} empty] finish=${finish} out=${usage.out}; retry sem raciocínio`);
           try{
@@ -157,7 +157,7 @@ export function makeCompativel({
           }
         }
         if(toolCalls.length)return lote(toolCalls,text);
-        // Última barreira: nenhum resíduo de chamada sai como resposta final.
+        // Last barrier: no call residue goes out as a final response.
         if(reamostrarResiduo&&temResiduo(text))throw new Error(`${provedor}: resíduo de tool-call não recuperável após retry vazio`);
         if(residuoGlmLanca&&tools?.length&&temGlm(text)){
           if(pendente)text='';
@@ -180,7 +180,7 @@ function mensagens(system,messages,visao){
       tool_calls:m.toolCalls.map(c=>({id:c.id,type:'function',function:{name:c.name,arguments:JSON.stringify(c.args)}})),
     });
     else if(visao&&m.images?.length){
-      // Visão: content vira array com o texto + cada imagem como data URL.
+      // Vision: content becomes an array with the text + each image as a data URL.
       const parts=[];
       if(m.content)parts.push({type:'text',text:m.content});
       for(const im of m.images)if(im?.data)parts.push({type:'image_url',image_url:{url:`data:${im.mimeType||'image/jpeg'};base64,${im.data}`}});
@@ -190,22 +190,22 @@ function mensagens(system,messages,visao){
   return omsgs;
 }
 
-// Lote recusado por regra comum: vira protocolError, nada é executado.
+// Batch refused by a common rule: becomes protocolError, nothing is executed.
 class Recusa{constructor(code){this.code=code;}}
 function estruturadas(msg){
   const v=validarChamadas(msg.tool_calls);
   if(v.code)throw new Recusa(v.code);
   return v.calls;
 }
-// Chamada recuperada do texto passa pelas MESMAS regras (nome oferecido, id único).
+// Call recovered from the text goes through the SAME rules (name offered, unique id).
 function conferir(calls){
   const v=validarChamadas(calls.map(c=>({id:c.id,function:{name:c.name,arguments:c.args}})));
   if(v.code)throw new Recusa(v.code);
   return v.calls;
 }
 
-// Chamada que veio escrita no texto, nos dois dialetos (GLM e DSML do DeepSeek).
-// Preserva o texto que veio ANTES da marcação. Com `provedor`, loga a recuperação.
+// Call that came written in the text, in both dialects (GLM and DeepSeek's DSML).
+// Preserves the text that came BEFORE the marking. With `provedor`, logs the recovery.
 function recuperar(toolCalls,text,provedor){
   if(!toolCalls.length&&text.includes('<tool_call>')){
     const p=parseGlmToolCalls(text);
@@ -221,7 +221,7 @@ function recuperar(toolCalls,text,provedor){
   return {toolCalls,text};
 }
 
-// completion_tokens já inclui o raciocínio: think=0 (não somar de novo no custo).
+// completion_tokens already includes reasoning: think=0 (don't add it again to the cost).
 function usoDe(data,model,provedor,semCache){
   const u=data.usage??{};
   const inTok=u.prompt_tokens??0;
@@ -238,9 +238,9 @@ function usoDe(data,model,provedor,semCache){
 }
 const somarUso=(a,b)=>({model:a.model,in:a.in+b.in,cached:a.cached+b.cached,out:a.out+b.out,think:0,total:a.total+b.total});
 
-// Uma invocação de providerAttempt = UMA requisição física (a camada de crédito
-// conta cada uma). chave null = provedor sem chave: sem auth e sempre pronto;
-// semProntidao = nem informa prontidão (o observador trata ausência como pronto).
+// One invocation of providerAttempt = ONE physical request (the credit layer
+// counts each one). null key = provider with no key: no auth and always ready;
+// semProntidao = doesn't even report readiness (the observer treats absence as ready).
 function tentativa(body,{provedor,chave,contarEntrada,semProntidao},dispatch){
   return providerAttempt({provider:provedor,model:body.model,body,
     ...(semProntidao?{}:{ready:()=>chave===null||!!chave}),
@@ -264,9 +264,9 @@ function chamarJson(body,cfg){
   }));
 }
 
-// Streaming com timeout de INATIVIDADE (não de request total): o cronômetro rearma
-// a cada pedaço recebido, então resposta longa legítima nunca é cortada, só conexão
-// pendurada.
+// Streaming with an INACTIVITY timeout (not total request time): the timer rearms
+// with every chunk received, so a legitimately long reply is never cut, only a hung
+// connection.
 function chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream}){
   const streamBody={...body,stream:true,stream_options:{include_usage:true}};
   return comRetentativa(()=>tentativa(streamBody,{provedor,chave,contarEntrada,semProntidao},async wire=>{
@@ -284,8 +284,8 @@ function chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream
   }));
 }
 
-// Consome o SSE e reconstrói o formato non-stream (choices[0].message + usage), pra
-// o resto do motor não depender do transporte. `onChunk` rearma o watchdog.
+// Consumes the SSE and rebuilds the non-stream format (choices[0].message + usage), so
+// the rest of the engine doesn't depend on the transport. `onChunk` rearms the watchdog.
 async function lerStream(body,onChunk){
   const reader=body.getReader();
   const decoder=new TextDecoder();
@@ -333,8 +333,8 @@ async function lerStream(body,onChunk){
   return {
     choices:[{message:{content,tool_calls:tool_calls.length?tool_calls:undefined},finish_reason:finish}],
     usage:usage||{},
-    // Só metadado: o bastante pra diagnosticar deriva de protocolo sem guardar
-    // frames SSE crus nem texto de raciocínio em checkpoint/log.
+    // Metadata only: enough to diagnose protocol drift without storing
+    // raw SSE frames or reasoning text in checkpoint/log.
     _streamMeta:{chunks,events,done:doneMarker,reasoningChars,unknownDeltaKeys:[...unknownDeltaKeys],responseId},
   };
 }

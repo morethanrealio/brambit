@@ -1,14 +1,14 @@
-// Criar uma rotina qualquer não é aceitar a oferta que o assistente fez.
+// Creating any routine is not the same as accepting the offer the assistant made.
 //
-// Achado do placar de 18/09: um usuário recebeu no dia 16 uma oferta de "resumo da
-// agenda do dia às 7h", nunca respondeu, e no dia 17 criou por conta própria uma
-// rotina de triagem de e-mails. A oferta foi fechada como ACEITA de carona,
-// porque o fechamento pegava TODA oferta aberta da pessoa. Resultado: a régua
-// contava uma conversão que não houve e a pessoa sumia da lista de quem ainda
-// não respondeu.
+// Finding from the 2026-09-18 scoreboard: a user received, on day 16, an offer of "resumo da
+// agenda do dia às 7h", never replied, and on day 17 created an
+// email-triage routine on their own. The offer was closed as ACCEPTED as a free ride,
+// because the closing logic grabbed EVERY open offer the person had. Result: the
+// ruler counted a conversion that never happened, and the person disappeared from the list of
+// those who hadn't replied yet.
 //
-// Os casos abaixo são as quatro ofertas fechadas que existiam em produção em
-// 18/09: duas aceitações de verdade e duas caronas.
+// The cases below are the four closed offers that existed in production on
+// 2026-09-18: two genuine acceptances and two free rides.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ofertaCorresponde, OFERTA_ACEITE_JANELA_MIN } from './web/db.mjs';
@@ -18,10 +18,10 @@ const base = new Date('2026-09-16T13:19:16Z').getTime();
 const oferta = (titulo, offsetMin = 0) => ({ titulo, offered_at: new Date(base + offsetMin * MIN).toISOString() });
 
 test('rotina criada na mesma conversa, logo depois da oferta, é aceitação', () => {
-  // Caso real da Bianca: oferta às 18:39, rotina às 18:41.
+  // Bianca's real case: offer at 18:39, routine at 18:41.
   const o = oferta('Resumo semanal de gastos');
   assert.equal(ofertaCorresponde(o, { titulo: 'Resumo Semanal de Gastos', criadaEm: base + 2 * MIN }), true);
-  // Mesmo com título reescrito pelo assistente, a proximidade basta.
+  // Even with the title rewritten by the assistant, the proximity is enough.
   assert.equal(ofertaCorresponde(o, { titulo: 'Fechamento da semana', criadaEm: base + 2 * MIN }), true);
 });
 
@@ -45,9 +45,9 @@ test('outra carona: varredura semanal de faturas não aceita lembrete mensal de 
 
 test('uma palavra de conteúdo em comum não basta, palavra de ligação não conta', () => {
   const tarde = base + 24 * 60 * MIN;
-  // "resumo" sozinho casaria com metade das rotinas do produto.
+  // "summary" alone would match half the product's routines.
   assert.equal(ofertaCorresponde(oferta('Resumo da agenda do dia'), { titulo: 'Resumo dos treinos', criadaEm: tarde }), false);
-  // Só palavras de ligação em comum ("para", "todos") não dizem nada do assunto.
+  // Only shared connector words ("para", "todos") don't say anything about the subject.
   assert.equal(ofertaCorresponde(oferta('Aviso para pagar todos os boletos'), { titulo: 'Playlist para todos os dias', criadaEm: tarde }), false);
 });
 

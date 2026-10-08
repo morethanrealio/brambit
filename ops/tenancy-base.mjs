@@ -1,9 +1,9 @@
-// Alvo das sondas de isolamento entre contas (ops/tenancy-*.mjs).
+// Target of the cross-account isolation probes (ops/tenancy-*.mjs).
 //
-// Sem BASE, a sonda bate no servidor LOCAL. Endereço fora da própria máquina
-// (produção inclusive) só com ALLOW_REMOTE=1 junto: a sonda de escrita cria e
-// apaga coisa de verdade na conta A, e antes o padrão era o endereço de produção,
-// ou seja, esquecer o BASE rodava contra produção.
+// Without BASE, the probe hits the LOCAL server. An address outside the machine itself
+// (production included) only with ALLOW_REMOTE=1 alongside it: the write probe creates and
+// deletes real stuff in account A, and the default used to be the production address,
+// meaning forgetting BASE would run against production.
 export const DEFAULT_BASE = 'http://127.0.0.1:8080';
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
@@ -20,7 +20,7 @@ export function resolveBase(env = process.env) {
   return { base: raw, remote };
 }
 
-// Para os scripts: resolve ou sai com 2 (erro de setup), dizendo o alvo.
+// For the scripts: resolves or exits with 2 (setup error), stating the target.
 export function baseOrExit(env = process.env) {
   try {
     const r = resolveBase(env);

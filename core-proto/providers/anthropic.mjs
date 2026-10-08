@@ -1,6 +1,6 @@
-// ── Adapter real: Anthropic Messages API ──
-// Pronto pra uso assim que houver credencial pra api.anthropic.com no gateway.
-// Repare: implementa o MESMO contrato (~40 linhas). Trocar de modelo = isto.
+// ── Real adapter: Anthropic Messages API ──
+// Ready to use as soon as there's a credential for api.anthropic.com in the gateway.
+// Notice: implements the SAME contract (~40 lines). Swapping models = this.
 
 import { STOP } from '../provider.mjs';
 

@@ -194,7 +194,7 @@ test('com PDF disponível, todo canal recebe texto curto e o arquivo, e a conver
     const f = pdfFixture({ deliverToChannel: async () => assert.fail('o aviso de texto só existe quando o PDF falha') });
     const receipt = await createDiscoveryReportDelivery(f.deps)(participant(channel), REPORT);
     assert.equal(receipt.ok, true);
-    // A conversa recebe o texto curto com o PDF anexado, nunca o relatório cru.
+    // The conversation receives the short text with the PDF attached, never the raw report.
     assert.equal(f.published.length, 1);
     assert.doesNotMatch(f.published[0][1], /PRIVATE_SYNTHETIC_REPORT/);
     assert.match(f.published[0][1], /PDF em anexo/);
@@ -217,7 +217,7 @@ test('WhatsApp fora da janela: PDF por e-mail e aviso por mensagem de utilidade'
   assert.equal(p.mails.length, 1);
   assert.equal(p.mails[0][1].filename, 'Jornada de descoberta.pdf');
   assert.ok(p.mails[0][1].buffer.length);
-  // O aviso sai pelo mesmo caminho de template de utilidade usado nas rotinas.
+  // The notice goes out through the same utility-template path used in routines.
   const [[, , text, options]] = f.calls;
   assert.match(text, /enviei o PDF para o seu e-mail/);
   assert.doesNotMatch(text, /PRIVATE_SYNTHETIC_REPORT/);

@@ -1,6 +1,6 @@
-// Atendimento ao público: o turno de quem não é o dono não alcança nada do dono
-// e um contato não alcança o de outro. Banco real (PGlite) e o tool-loop real do
-// núcleo; só o modelo é falso, e ele grava tudo o que recebeu.
+// Public support: the turn of someone who is not the owner does not reach anything of the owner's
+// and one contact does not reach another's. Real database (PGlite) and the real tool-loop of the
+// core; only the model is fake, and it records everything it received.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,7 +32,7 @@ async function montar(t) {
   return { db, store, dono, outro, ag, ag2 };
 }
 
-// Modelo falso: grava o que recebeu; na 1ª chamada pode pedir uma tool.
+// Fake model: records what it received; on the 1st call it may request a tool.
 function modelo(roteiro = []) {
   const chamadas = [];
   return { chamadas, provider: () => ({ name: 'falso', async complete(input) {
@@ -83,7 +83,7 @@ test('contatos separados: histórico e anotações de um não chegam ao outro, n
   await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000002', mensagem: 'oi' });
   await a.turno({ agentId: ag2, canal: 'whatsapp', endereco: '5511000000001', mensagem: 'oi' });
   assert.ok(!JSON.stringify(m.chamadas).includes('ANA'));
-  // Mesmo contato no mesmo assistente: volta o histórico e a anotação dele.
+  // Same contact on the same assistant: brings back its history and its note.
   const m2 = modelo([{ name: 'consultar_contato', args: {} }]);
   await atendimento(store, m2).turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000001', mensagem: 'lembra de mim?' });
   assert.ok(JSON.stringify(m2.chamadas[0].messages).includes('CONVERSA-ANA'));
@@ -100,7 +100,7 @@ test('telefone não fica em claro no banco; só o dono liga o atendimento', asyn
   assert.ok(!JSON.stringify(rows).includes('987654321'));
   assert.equal((await store.contato(ag, 'whatsapp', '5511987654321')).endereco, '5511987654321');
   assert.equal((await db.query('SELECT count(*)::int n FROM mtr_harness.public_contacts')).rows[0].n, 1);
-  // Desligado pelo dono: não responde nada (o canal segue o fluxo de hoje).
+  // Turned off by the owner: does not respond at all (the channel follows today's flow).
   await store.configurar(ag, outro, { ativo: false });
   assert.equal((await store.agente(ag)).ativo, true);
   await store.configurar(ag, dono, { ativo: false });
@@ -165,7 +165,7 @@ test('parar, voltar e apagar meus dados: resolvidos antes do modelo', async (t) 
   assert.equal(m.chamadas.length, chamadas, 'contato parado não pode chegar ao modelo');
   assert.equal((await fala('voltar')).text, RESPOSTA_VOLTOU);
   assert.match((await fala('tudo bem?')).text, /^resposta/);
-  // Apagar: some contato, mensagens e anotações; quem volta começa do zero.
+  // Delete: contact, messages and notes disappear; whoever comes back starts from zero.
   await fala('5511000000008', '5511000000008');
   assert.equal((await fala('Apagar meus dados.')).text, RESPOSTA_APAGADO);
   const conta = async (tab) => (await db.query(`SELECT count(*)::int n FROM mtr_harness.${tab}`)).rows[0].n;
@@ -186,7 +186,7 @@ test('limite por hora do contato e teto diário do assistente', async (t) => {
   assert.equal((await fala('d')).text, null, 'um aviso por hora, depois silêncio');
   assert.equal(m.chamadas.length, 2);
   assert.match((await fala('oi', '2')).text, /^resposta/, 'o limite é por contato');
-  // Teto: só conta o custo do atendimento público deste assistente, de hoje.
+  // Cap: only counts the cost of this assistant's public support, from today.
   await store.configurar(ag, dono, { tetoDiarioUsd: 0.5, limitePorHora: 10 });
   await db.query(`INSERT INTO mtr_harness.usage_events (agent_id, kind, cost_usd, ts) VALUES
     ($1, 'chat', 9, now()), ($1, 'publico', 9, now() - interval '2 days'), ($1, 'publico', 0.4, now())`, [ag]);
@@ -235,7 +235,7 @@ test('bloqueado pelo dono: silêncio sem gravar nada; apagar meus dados limpa a 
   await fala('apagar meus dados');
   assert.deepEqual([await conta('public_messages'), await conta('public_contact_state')], [0, 0]);
   assert.ok((await store.exportar(contatoId)).contato.bloqueadoEm);
-  // A retenção também não leva o contato bloqueado (levaria o bloqueio junto).
+  // Retention also doesn't carry the blocked contact (it would carry the block along).
   await db.query(`UPDATE mtr_harness.public_contacts SET ultima_em = now() - interval '31 days'`);
   assert.equal((await store.limparVencidos()).contatos, 0);
   await store.bloquear(contatoId, false);
@@ -279,7 +279,7 @@ test('visão do dono: só os próprios assistentes, contatos e conversas', async
   assert.equal((await store.agente(ag)).ativo, true);
   assert.equal(await store.agente(ag2), null);
   assert.equal((await store.exportar(contatoId)).contato.bloqueadoEm, null);
-  // Configuração: valor fora da faixa não grava; vazio no teto = sem teto.
+  // Configuration: value outside the range is not saved; empty cap = no cap.
   assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, retencaoDias: 0 })).status, 400);
   assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, tetoDiarioUsd: -1 })).status, 400);
   assert.equal((await pede(dono, 'POST', '/api/publico/configurar', { agentId: ag, ativo: 'sim' })).status, 400);
@@ -291,8 +291,8 @@ test('visão do dono: só os próprios assistentes, contatos e conversas', async
   assert.equal(await store.exportar(contatoId), null);
 });
 
-// O isolamento é por construção: o módulo não pode passar a importar quem lê
-// dado do dono (memória, conectores, canais, rotinas). Import novo aqui = revisar.
+// Isolation is by construction: the module must not start importing whatever reads
+// the owner's data (memory, connectors, channels, routines). A new import here = review it.
 test('publico.mjs só importa o tool-loop, o cofre, a regra de saúde e as saídas', () => {
   const src = fs.readFileSync(new URL('./web/publico.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();

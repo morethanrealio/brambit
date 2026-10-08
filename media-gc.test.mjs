@@ -1,11 +1,11 @@
-// Regressão do bloco G: arquivo apagado pelo usuário tem que sumir do BUCKET,
-// não só do banco. Antes, a falha do S3 era engolida e o objeto ficava lá pra
-// sempre, sem nenhum registro pra tentar de novo (achados #36 e #37).
+// Regression of block G: a file deleted by the user has to disappear from the BUCKET,
+// not just from the database. Before, the S3 failure was swallowed and the object stayed there
+// forever, with no record to retry (findings #36 and #37).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { apagarObjetoComLapide, varrerLapides } from './web/media-gc.mjs';
 
-// Lápides em memória, no mesmo formato da tabela media_deletions.
+// In-memory tombstones, in the same format as the media_deletions table.
 function criarLapidario() {
   const linhas = new Map();
   let proximo = 1;
@@ -58,10 +58,10 @@ test('o varredor apaga de verdade quando o S3 volta', async () => {
   const deleteMedia = async () => { if (!noAr) throw new Error('s3 indisponível'); };
   // 1ª tentativa (na hora do pedido) falha
   await apagarObjetoComLapide({ key: 'u1/rosto.jpg', tombstoneId: id, deleteMedia, settle: lap.settle });
-  // varredura com o S3 ainda fora: segue pendente
+  // sweep with S3 still down: stays pending
   let r = await varrerLapides({ claim: lap.claim, deleteMedia, settle: lap.settle });
   assert.deepEqual([r.vistos, r.apagados, r.falhas], [1, 0, 1]);
-  // S3 volta: a próxima varredura fecha
+  // S3 comes back: the next sweep closes it
   noAr = true;
   r = await varrerLapides({ claim: lap.claim, deleteMedia, settle: lap.settle });
   assert.deepEqual([r.vistos, r.apagados, r.falhas], [1, 1, 0]);

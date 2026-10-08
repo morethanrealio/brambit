@@ -5,7 +5,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let checks = 0;
 const eq = (actual, expected) => { assert.deepEqual(actual, expected); checks++; };
 
-// Turno rápido cancela o recibo.
+// Fast turn cancels the receipt.
 {
   let sends = 0;
   const finish = startTurnHeartbeat({ afterMs: 15, send: async () => { sends++; } });
@@ -14,7 +14,7 @@ const eq = (actual, expected) => { assert.deepEqual(actual, expected); checks++;
   eq(sends, 0);
 }
 
-// Turno longo envia uma vez só e finish espera o envio em voo.
+// Long turn sends only once and finish waits for the in-flight send.
 {
   const events = [];
   let release;
@@ -38,7 +38,7 @@ const eq = (actual, expected) => { assert.deepEqual(actual, expected); checks++;
   eq(events, ['started', 'sent', 'finished']);
 }
 
-// Falha no recibo é observável, mas não derruba o turno.
+// Failure in the receipt is observable, but doesn't bring down the turn.
 {
   const errors = [];
   const finish = startTurnHeartbeat({
@@ -53,8 +53,8 @@ const eq = (actual, expected) => { assert.deepEqual(actual, expected); checks++;
 
 console.log(`${checks} verificações passaram: heartbeat único, ordenado e tolerante a falha.`);
 
-// Integração Telegram: o recibo sai enquanto o modelo está trabalhando e a
-// resposta final só vem depois. Fetch é inteiramente simulado.
+// Telegram integration: the receipt goes out while the model is working and the
+// final reply only comes after. Fetch is entirely simulated.
 {
   process.env.TELEGRAM_TURN_HEARTBEAT_MS = '10';
   const sent = [];
@@ -70,7 +70,7 @@ console.log(`${checks} verificações passaram: heartbeat único, ordenado e tol
           message: { message_id: 2, chat: { id: 123 }, text: 'faça algo demorado' },
         }] }) };
       }
-      return new Promise(() => {}); // poll seguinte fica estacionado, sem I/O
+      return new Promise(() => {}); // next poll stays parked, no I/O
     }
     if (method === 'sendMessage') sent.push(body.text);
     return { json: async () => ({ ok: true, result: { message_id: sent.length + 10 } }) };

@@ -1,16 +1,16 @@
-// Retentativa não pode pagar duas vezes (achado #10), e o cartão tem que dizer a
-// verdade sobre o que aconteceu (achados #11, #12 e #13).
+// A retry can't pay twice (finding #10), and the card has to tell the
+// truth about what happened (findings #11, #12 and #13).
 //
-// A Asaas não tem cabeçalho de idempotência em /v3/bill nem em /v3/transfers.
-// O que ela tem é o `externalReference`: um identificador NOSSO que vai no POST
-// e volta em toda leitura. Então o contrato provado aqui é:
-//   1. todo POST financeiro leva uma marca própria;
-//   2. a marca nasce junto com a confirmação, não na hora do envio;
-//   3. quando o desfecho é incerto (conexão caiu, erro de servidor), o código
-//      PROCURA a operação pela marca antes de responder qualquer coisa;
-//   4. não achar vira incerteza explícita, nunca "não aconteceu nada";
-//   5. recusa de validação (HTTP 400/429) continua sendo recusa, sem busca.
-// Tudo offline: nenhuma chamada sai deste processo.
+// Asaas has no idempotency header on /v3/bill nor on /v3/transfers.
+// What it has is `externalReference`: an identifier of OURS that goes in the POST
+// and comes back on every read. So the contract proven here is:
+//   1. every financial POST carries its own mark;
+//   2. the mark is born together with the confirmation, not at send time;
+//   3. when the outcome is uncertain (connection dropped, server error), the code
+//      LOOKS UP the operation by the mark before responding with anything;
+//   4. not finding it becomes explicit uncertainty, never "nothing happened";
+//   5. a validation refusal (HTTP 400/429) stays a refusal, without a lookup.
+// All offline: no call leaves this process.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { asaasTools } from './web/connectors-vault.mjs';
@@ -21,10 +21,10 @@ const ok = (value, label) => { assert.ok(value, label); checks++; };
 const eq = (actual, expected, label) => { assert.deepEqual(actual, expected, label); checks++; };
 
 const originalFetch = globalThis.fetch;
-// Cada resposta pode ser: um corpo (HTTP 200), `{ __erro: <status>, corpo }`,
-// `{ __cai: 'motivo' }` (conexão morre antes de qualquer resposta) ou uma função
-// que recebe as chamadas já feitas e devolve o corpo (pra montar a listagem de
-// reconciliação com a MESMA marca que o POST acabou de mandar).
+// Each response can be: a body (HTTP 200), `{ __erro: <status>, corpo }`,
+// `{ __cai: 'motivo' }` (connection dies before any response) or a function
+// that receives the calls already made and returns the body (to build the reconciliation
+// listing with the SAME mark the POST just sent).
 const withFetch = async (answers, fn) => {
   const calls = [];
   globalThis.fetch = async (url, opts = {}) => {
@@ -54,8 +54,8 @@ const named = (list, name) => {
 };
 const posts = (calls, caminho) => calls.filter((c) => c.method === 'POST' && c.url.split('?')[0].endsWith(caminho));
 const marcaDoPost = (calls, caminho) => posts(calls, caminho)[0]?.body?.externalReference;
-// Devolve a operação já existente do lado da Asaas, carimbada com a marca que o
-// POST perdido levou. É o cenário "o pedido chegou, a resposta é que se perdeu".
+// Returns the operation that already exists on Asaas's side, stamped with the mark the
+// lost POST carried. It's the "the request arrived, it was the response that got lost" scenario.
 const achadaComAMarca = (caminho, dados) => (calls) => ({
   data: [{ ...dados, externalReference: marcaDoPost(calls, caminho) }],
   hasMore: false,
@@ -66,8 +66,8 @@ const boleto = {
     value: 42, dueDate: '2026-09-22', beneficiaryName: 'Empresa Estável',
     beneficiaryCpfCnpj: '***1234', allowChangeValue: false,
   },
-  // A simulação real da Asaas devolve a primeira data aceita; sem ela o produto
-  // se recusa a propor o pagamento (não deixa a Asaas assumir o vencimento).
+  // Asaas's real simulation returns the first accepted date; without it the product
+  // refuses to propose the payment (doesn't let Asaas take over the due date).
   minimumScheduleDate: '2026-09-22',
 };
 const titular = { name: 'Pessoa Estável', cpfCnpj: '***3333', institutionName: 'Banco C' };
@@ -83,7 +83,7 @@ const prepararPix = async (thread) => {
   return takePending(thread);
 };
 
-// ── 1. Todo POST financeiro sai carimbado, e o caminho feliz não ganha chamada nenhuma a mais ──
+// ── 1. Every financial POST goes out stamped, and the happy path doesn't gain a single extra call ──
 await withFetch([boleto, boleto, { id: 'bill-1', status: 'PENDING', authorized: true, value: 42 }], async (calls) => {
   const pending = await prepararBoleto('marca-bill-feliz');
   const r = JSON.parse(await pending.run());
@@ -100,9 +100,9 @@ await withFetch([titular, titular, { id: 'pix-1', status: 'DONE', authorized: tr
   eq(calls.length, 3, 'caminho feliz do Pix não faz consulta extra');
 });
 
-// ── 2. A marca nasce com a confirmação, não com o envio ──
-// É o que torna uma retentativa RECONHECÍVEL: o mesmo pedido confirmado carrega
-// sempre o mesmo identificador, então dá pra achar a operação em vez de repetir.
+// ── 2. The mark is born with the confirmation, not with the send ──
+// This is what makes a retry RECOGNIZABLE: the same confirmed request always carries
+// the same identifier, so the operation can be found instead of repeated.
 const fonte = readFileSync(new URL('./web/connectors-vault.mjs', import.meta.url), 'utf8');
 eq((fonte.match(/const marca = novaMarca\(/g) || []).length, 2, 'as duas ações financeiras mintam a marca na confirmação');
 ok(/executarPagamento\(args, sim, vinculada\.request, vinculada\.rotulo, vinculada\.boundAccount, marca\)/.test(fonte),
@@ -110,7 +110,7 @@ ok(/executarPagamento\(args, sim, vinculada\.request, vinculada\.rotulo, vincula
 ok(/executarTransferencia\(args, titular, vinculada\.request, vinculada\.rotulo, vinculada\.boundAccount, marca\)/.test(fonte),
   'a confirmação do Pix repassa a marca pra execução');
 
-// ── 3. Resposta perdida: procura pela marca e usa o estado REAL, sem reenviar ──
+// ── 3. Lost response: looks up by the mark and uses the REAL state, without resending ──
 await withFetch([
   boleto, boleto,
   { __cai: 'socket hang up' },
@@ -140,7 +140,7 @@ await withFetch([
     'a listagem de transferências usa a janela de data (a Asaas não filtra por marca)');
 });
 
-// ── 4. Não achar vira incerteza explícita, nunca "nada aconteceu" ──
+// ── 4. Not finding it becomes explicit uncertainty, never "nothing happened" ──
 for (const caso of [
   { rotulo: 'erro de servidor', resposta: { __erro: 500, corpo: { __raw: 'Internal Server Error' } } },
   { rotulo: 'tempo esgotado', resposta: { __erro: 408, corpo: {} } },
@@ -172,7 +172,7 @@ await withFetch([titular, titular, { __erro: 502, corpo: {} }, { data: [], hasMo
   ok(renderConfirmed(pending, bruto).includes('pode ter saído'), 'o cartão do Pix avisa que ele pode ter saído');
 });
 
-// Operação de OUTRO pedido na mesma janela não pode ser confundida com a nossa.
+// An operation from ANOTHER request in the same window can't be mistaken for ours.
 await withFetch([
   boleto, boleto,
   { __cai: 'socket hang up' },
@@ -184,7 +184,7 @@ await withFetch([
   eq(r.id, undefined, 'não adota o id de outro pagamento');
 });
 
-// ── 5. Recusa continua sendo recusa: aí o dinheiro NÃO saiu ──
+// ── 5. A refusal stays a refusal: in that case the money did NOT go out ──
 for (const caso of [
   { status: 400, corpo: { errors: [{ description: 'Boleto já pago' }] }, rotulo: 'validação' },
   { status: 429, corpo: { __raw: 'Too Many Requests' }, rotulo: 'excesso de chamadas' },
@@ -198,7 +198,7 @@ for (const caso of [
   });
 }
 
-// ── #11 — "Pix enviado" só quando o Pix saiu mesmo (já corrigido na main) ──
+// ── #11 — "Pix sent" only when the Pix really went out (already fixed on main) ──
 await withFetch([titular, titular, { id: 'pix-nao-autorizado', status: 'PENDING', authorized: false, value: 12.5 }], async () => {
   const pending = await prepararPix('pix-sem-autorizacao');
   const bruto = await pending.run();
@@ -218,7 +218,7 @@ await withFetch([boleto, boleto, { id: 'bill-nao-autorizado', status: 'PENDING',
   ok(cartao.includes('autorização'), 'o cartão diz que falta autorizar');
 });
 
-// ── #12 e #13 — ação concluída entrega prova, e o cartão para de dizer "sem confirmação" ──
+// ── #12 and #13 — completed action delivers proof, and the card stops saying "no confirmation" ──
 await withFetch([boleto, boleto, {
   id: 'bill-pago', status: 'PAID', authorized: true, value: 42,
   paymentDate: '2026-09-17', transactionReceiptUrl: 'https://www.asaas.com/comprovantes/bill-pago',

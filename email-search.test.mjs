@@ -1,5 +1,5 @@
-// Rotina tipo "busca_email": config/normalização, composição com curadoria,
-// consulta Gmail/Graph e execução paginada com fetch falso (sem rede, sem DB).
+// "busca_email"-type routine: config/normalization, composition with curation,
+// Gmail/Graph query, and paginated execution with fake fetch (no network, no DB).
 import assert from 'node:assert/strict';
 import {
   normalizeEmailSearchConfig, prepareEmailSearchChange, looksLikeEmailSearch,
@@ -17,7 +17,7 @@ let passed = 0;
 const test = async (name, fn) => { await fn(); passed++; console.log('ok -', name); };
 const throwsPt = (fn, re) => assert.throws(fn, (e) => { assert.match(e.message, re); return true; });
 
-// ---- normalização ----
+// ---- normalization ----
 await test('normalize aplica defaults e limpa aspas/parênteses', () => {
   const c = normalizeEmailSearchConfig({ terms: ['quinto andar', '"docusign"', ' (x) '], senders: ['QuintoAndar.com.br'] });
   assert.deepEqual(c, { version: 1, provider: 'gmail', account: null, terms: ['quinto andar', 'docusign', 'x'], senders: ['quintoandar.com.br'], days: 2, unreadOnly: false, withAttachment: false });
@@ -38,7 +38,7 @@ await test('normalize aceita lista como string separada por vírgula e account',
   assert.deepEqual(c.terms, ['a', 'b', 'c']); assert.equal(c.account, 'x@y.com'); assert.equal(c.provider, 'outlook'); assert.equal(c.days, 7); assert.equal(c.unreadOnly, true);
 });
 
-// ---- heurística ----
+// ---- heuristic ----
 await test('looksLikeEmailSearch', () => {
   assert.equal(looksLikeEmailSearch('verifique meus e-mails do quinto andar e me resuma'), true);
   assert.equal(looksLikeEmailSearch('Busque no Gmail mensagens da QuintoAndar'), true);
@@ -65,7 +65,7 @@ await test('prepare: edição de rotina tipada preserva resto do config e não v
   assert.deepEqual(cfg.email_search.terms, ['b']); assert.equal(cfg.email_search.days, 3); assert.deepEqual(cfg.execution, { x: 1 });
   throwsPt(() => prepareEmailSearchChange(row, { tipo: 'geral', prompt: 'outra coisa' }), /é uma busca de e-mail/);
   throwsPt(() => prepareEmailSearchChange(row, { tipo: 'curadoria' }), /não vira curadoria/);
-  assert.equal(prepareEmailSearchChange(row, { prompt: 'novo texto' }), undefined); // só prompt: nada muda no config
+  assert.equal(prepareEmailSearchChange(row, { prompt: 'novo texto' }), undefined); // prompt only: nothing changes in the config
   throwsPt(() => prepareEmailSearchChange(row, { channel: 'sms' }), /Canal inválido/);
 });
 await test('prepare: curadoria/monitor não vira busca de e-mail; e curation-config recusa o inverso', () => {
@@ -73,11 +73,11 @@ await test('prepare: curadoria/monitor não vira busca de e-mail; e curation-con
   throwsPt(() => prepareEmailSearchChange(cur, { busca_email: { terms: ['a'] } }), /não vira busca de e-mail/);
   throwsPt(() => prepareCurationChange(cur, { tipo: 'busca_email' }), /curadoria; não vira busca de e-mail/);
   throwsPt(() => prepareCurationChange(null, { tipo: 'busca_email', curadoria: { source: 'web' }, prompt: 'x', channel: 'email' }), /OU busca_email/);
-  // tipo busca_email passa pela curadoria sem exigir critérios nem acionar a heurística de curadoria
+  // busca_email type goes through curation without requiring criteria or triggering the curation heuristic
   assert.equal(prepareCurationChange(null, { tipo: 'busca_email', prompt: 'resuma as notícias e artigos de IA', channel: 'email' }), undefined);
 });
 
-// ---- descrições / prune ----
+// ---- descriptions / prune ----
 await test('describe/editable/prune', () => {
   const c = normalizeEmailSearchConfig({ terms: ['quintoandar', 'quinto andar'], senders: ['quintoandar.com.br'], days: 2, unreadOnly: true, account: 'a@b.com' });
   const d = describeEmailSearch(c);
@@ -101,7 +101,7 @@ await test('buildGraphQuery', () => {
   assert.deepEqual(buildGraphQuery(normalizeEmailSearchConfig({ withAttachment: true }), since), { mode: 'filter', text: 'receivedDateTime ge 2026-09-11T12:00:00.000Z and hasAttachments eq true' });
 });
 
-// ---- execução Gmail com fetch falso ----
+// ---- Gmail execution with fake fetch ----
 const gmailFake = ({ perPage = 3, total = 7, failIds = [] } = {}) => {
   const calls = [];
   const ids = Array.from({ length: total }, (_, i) => 'm' + (i + 1));
@@ -164,7 +164,7 @@ await test('executeEmailSearch: listagem 401 lança (token/conta) e exige token 
   await assert.rejects(executeEmailSearch(normalizeEmailSearchConfig({}), { fetchImpl, token: 'abc' }), /token deve ser função/);
 });
 
-// ---- execução Graph ----
+// ---- Graph execution ----
 await test('executeEmailSearch Outlook: $search sem $orderby, $top<=25, nextLink, filtro de data, corpo html→texto', async () => {
   const calls = [];
   const now = new Date('2026-09-13T12:00:00Z');

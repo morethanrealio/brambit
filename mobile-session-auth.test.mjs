@@ -9,7 +9,7 @@ const req = (headers = {}) => ({ headers });
 assert.equal(readSid(req({ cookie: `sid=${stale}` })), stale);
 assert.equal(readSid(req({ authorization: `Bearer ${fresh}` })), null);
 
-// Mobile usa Bearer e a sessão nova ganha de qualquer cookie antigo.
+// Mobile uses Bearer and the new session wins over any old cookie.
 assert.equal(readSid(req({ 'x-brambs-mobile': '1', authorization: `Bearer ${fresh}` })), fresh);
 assert.equal(readSid(req({
   'x-brambs-mobile': '1',
@@ -17,10 +17,10 @@ assert.equal(readSid(req({
   cookie: `sid=${stale}`,
 })), fresh);
 
-// Compatibilidade temporária: build antigo sem Bearer ainda pode usar cookie.
+// Temporary compatibility: an old build without Bearer can still use the cookie.
 assert.equal(readSid(req({ 'x-brambs-mobile': '1', cookie: `sid=${stale}` })), stale);
 
-// Bearer malformado nunca vira chave de banco; cookie válido ainda funciona.
+// Malformed Bearer never becomes a database key; a valid cookie still works.
 assert.equal(readSid(req({
   'x-brambs-mobile': '1',
   authorization: 'Bearer invalido',

@@ -1,7 +1,7 @@
-// Achado #17: toda escrita na memória rodava sincronizarLinks, que cortava TUDO
-// abaixo de "## Mais detalhe" e regravava só o bloco de links. Qualquer linha que
-// o dono (ou o assistente) tivesse escrito embaixo dessa seção sumia em silêncio.
-// Aqui testo a parte pura (montarPerfilComLinks), que é onde mora o corte.
+// Finding #17: every memory write ran sincronizarLinks, which cut EVERYTHING
+// below "## Mais detalhe" and rewrote only the links block. Any line that
+// the owner (or the assistant) had written below that section disappeared silently.
+// Here I test the pure part (montarPerfilComLinks), which is where the cut lives.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ const { montarPerfilComLinks } = await import('./web/wiki.mjs');
 const MARCA = '## Mais detalhe';
 const PAGS = [{ slug: 'pessoa-joao', title: 'Pessoa João' }, { slug: 'projeto-x', title: 'Projeto X' }];
 
-// Perfil típico: fatos em cima, seção de links gerada, e um rabo escrito pelo dono.
+// Typical profile: facts on top, generated links section, and a tail written by the owner.
 const comRabo = [
   '# Perfil',
   '- mora em São Paulo',
@@ -79,8 +79,8 @@ test('linha parecida com link mas escrita pelo dono não é comida', () => {
 });
 
 test('trava de segurança: se fosse perder linha do dono, devolve null (não grava)', () => {
-  // Simula regressão futura chamando com um perfil cujo rabo some: aqui garanto
-  // que a trava existe no fonte e que o chamador respeita o null.
+  // Simulates a future regression by calling with a profile whose tail disappears: here I ensure
+  // that the guard exists in the source and that the caller respects the null.
   const src = fs.readFileSync(new URL('./web/wiki.mjs', import.meta.url), 'utf8');
   assert.match(src, /return perdidas\.length \? null : body;/);
   assert.match(src, /if \(body === null\) \{/);

@@ -5,19 +5,19 @@ import { composeImage, comporTools, registrarFontes, cor } from './web/compor.mj
 import { renderPdfPagesToPng } from './web/pdf.mjs';
 import { pdfSoDesenho, pdfComTexto } from './test-support/pdf-minimo.mjs';
 
-// O caso que originou tudo isto: um usuário pediu, várias vezes, um cartão de
-// felicitação com o LOGO DELE dentro, e nunca recebeu. gerar_imagem manda uma
-// descrição pro modelo, que REDESENHA o emblema e erra letra em português. O
-// fix é não pedir ao modelo o que precisa ser exato: a plataforma cola o
-// arquivo original em pixel e escreve o texto com fonte de verdade.
+// The case that originated all of this: a user asked, several times, for a
+// congratulations card with THEIR LOGO inside, and never received it. gerar_imagem sends a
+// description to the model, which REDRAWS the emblem and gets a letter wrong in Portuguese. The
+// fix is to not ask the model for something that needs to be exact: the platform pastes the
+// original file pixel-for-pixel and writes the text with a real font.
 //
-// Estes testes verificam justamente as partes que não podem "sair parecidas":
-// a peça colada está onde foi pedida, o branco da folha não vira retângulo por
-// cima da arte, o texto cabe, e uma peça que falta NUNCA vira imagem entregue
-// em silêncio.
+// These tests verify exactly the parts that can't "come out approximate":
+// the pasted piece is where it was asked to be, the sheet's white background doesn't turn into a rectangle
+// on top of the artwork, the text fits, and a missing piece NEVER silently becomes a delivered
+// image.
 
-// Lê um pixel do PNG produzido, que é o único jeito de provar posição/cor sem
-// depender da palavra da própria função que desenhou.
+// Reads a pixel from the produced PNG, which is the only way to prove position/color without
+// relying on the word of the very function that drew it.
 async function pixel(png, x, y) {
   const img = await loadImage(png);
   const c = createCanvas(img.width, img.height);
@@ -27,9 +27,9 @@ async function pixel(png, x, y) {
   return [d[0], d[1], d[2], d[3]];
 }
 
-// Peça de teste: folha branca de 200x200 com um quadrado vermelho de 40x40 no
-// meio. É o formato em que um logo chega de um PDF (arte pequena, muita margem
-// branca em volta).
+// Test piece: a 200x200 white sheet with a 40x40 red square in the
+// middle. It's the format a logo arrives in from a PDF (small artwork, lots of white
+// margin around it).
 function pecaComMargemBranca() {
   const c = createCanvas(200, 200);
   const ctx = c.getContext('2d');
@@ -41,8 +41,8 @@ function pecaComMargemBranca() {
 }
 
 test('as fontes embutidas registram (sem elas o texto sairia invisível no servidor)', () => {
-  // O box de produção não tem nenhuma fonte instalada: fillText desenharia
-  // NADA, sem erro nenhum. Por isso as fontes viajam no repositório.
+  // The production box has no font installed: fillText would draw
+  // NOTHING, with no error at all. That's why the fonts travel inside the repository.
   assert.equal(registrarFontes(), true);
 });
 
@@ -71,12 +71,12 @@ test('remover_fundo_branco tira a folha branca e apara a margem vazia', async ()
     camadas: [{ tipo: 'imagem', imagem: 'logo', x: 50, y: 50, largura: 50, remover_fundo_branco: true }],
   }, { carregarImagem: async () => peca });
   assert.deepEqual(r.avisos, []);
-  // Aparada, a peça é só o quadrado vermelho, então 50% da largura = 100px
-  // centrados: o centro é vermelho e a borda continua sendo o fundo preto.
+  // Trimmed, the piece is just the red square, so 50% of the width = 100px
+  // centered: the center is red and the border remains the black background.
   assert.deepEqual(await pixel(r.png, 100, 100), [255, 0, 0, 255]);
   assert.deepEqual(await pixel(r.png, 5, 5), [0, 0, 0, 255]);
-  // Sem aparar nem tirar branco, a MESMA peça cobriria o centro de branco: é o
-  // retângulo branco por cima da arte que o fix evita.
+  // Without trimming or removing white, the SAME piece would cover the center in white: it's
+  // the white rectangle on top of the artwork that the fix avoids.
   const semTratar = await composeImage({
     largura: 200, altura: 200,
     fundo: { cor: 'preto' },
@@ -105,8 +105,8 @@ test('âncora posiciona a peça pelo ponto pedido', async () => {
 });
 
 test('proporção da peça é preservada quando só a largura é dada (logo não estica)', async () => {
-  // Peça 40x20 (retângulo deitado): pedindo 50% de largura num quadrado de 200,
-  // a altura tem que sair 50px, não 100.
+  // 40x20 piece (landscape rectangle): asking for 50% width on a 200 square,
+  // the height has to come out 50px, not 100.
   const c = createCanvas(40, 20);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#ff0000';
@@ -118,7 +118,7 @@ test('proporção da peça é preservada quando só a largura é dada (logo não
     camadas: [{ tipo: 'imagem', imagem: 'x', x: 0, y: 0, largura: 50, ancora: 'topo-esquerda' }],
   }, { carregarImagem: async () => peca });
   assert.deepEqual(await pixel(r.png, 50, 45), [255, 0, 0, 255]);  // dentro dos 100x50
-  assert.deepEqual(await pixel(r.png, 50, 60), [0, 0, 0, 255]);    // abaixo, já é fundo
+  assert.deepEqual(await pixel(r.png, 50, 60), [0, 0, 0, 255]);    // below, it's already background
 });
 
 test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', async () => {
@@ -127,7 +127,7 @@ test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', a
     camadas: [{ tipo: 'texto', texto: 'oi', x: 50, y: 50, tamanho: 20, cor: 'preto' }],
   });
   assert.deepEqual(curto.avisos, []);
-  // Prova que saiu tinta na tela (sem fonte registrada, o PNG ficaria todo branco).
+  // Proof that ink hit the canvas (without a registered font, the PNG would come out all white).
   const img = await loadImage(curto.png);
   const cv = createCanvas(img.width, img.height);
   const cx = cv.getContext('2d');
@@ -137,9 +137,9 @@ test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', a
   for (let i = 0; i < dados.length; i += 4) if (dados[i] < 100) escuros++;
   assert.ok(escuros > 50, `esperava texto desenhado, achei ${escuros} pixels escuros`);
 
-  // Texto longo com acento: não pode vazar pra fora da faixa pedida. Com
-  // largura_max 50% num canvas de 400, as colunas de 0 a ~99 e de ~301 a 399
-  // têm que continuar limpas.
+  // Long text with an accent: can't leak outside the requested band. With
+  // largura_max 50% on a 400 canvas, columns 0 to ~99 and ~301 to 399
+  // have to remain clean.
   const longo = await composeImage({
     largura: 400, altura: 400, fundo: { cor: 'branco' },
     camadas: [{
@@ -173,8 +173,8 @@ test('peça que falta nunca some em silêncio: vira aviso, não imagem entregue 
 });
 
 test('PDF de logo (sem camada de texto) vira imagem e entra na composição', async () => {
-  // O beco sem saída original: extractPdfText devolve vazio nesse PDF, então o
-  // arquivo não tinha como ser usado. Agora ele vira PNG e é colado em pixel.
+  // The original dead end: extractPdfText returns empty on this PDF, so the
+  // file had no way to be used. Now it becomes a PNG and is pasted pixel-for-pixel.
   const { imagens, total } = await renderPdfPagesToPng(pdfSoDesenho(), { pages: 1, width: 400 });
   assert.equal(total, 1);
   assert.equal(imagens.length, 1);
@@ -189,7 +189,7 @@ test('PDF de logo (sem camada de texto) vira imagem e entra na composição', as
     ],
   }, { carregarImagem: async () => imagens[0].png });
   assert.deepEqual(r.avisos, []);
-  // A tarja do rodapé é determinística: os 10% de baixo são azul-escuro.
+  // The footer band is deterministic: the bottom 10% is dark blue.
   assert.deepEqual(await pixel(r.png, 300, 580), [11, 42, 74, 255]);
 });
 

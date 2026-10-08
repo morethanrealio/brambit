@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// Trava dos testes que leem o TEXTO do código de produção (fase A do plano open
-// source). Hoje uns 90 testes abrem web/server.mjs (ou outro módulo) como texto:
-// recortam um trecho e executam à parte, ou só procuram uma frase. Quebram quando
-// o código muda de lugar, sem bug nenhum.
+// Guard for tests that read the TEXT of the production code (phase A of the open
+// source plan). Today about 90 tests open web/server.mjs (or another module) as text:
+// they cut out a chunk and run it separately, or just look for a phrase. They break when
+// the code moves, with no bug at all.
 //
-// A lista test-support/testes-que-leem-codigo.txt é o backlog desses testes e só
-// pode encolher: teste novo nesse estilo reprova o CI, e teste da lista que
-// deixou de ler o código (foi reescrito importando o módulo) tem que sair dela.
-// Na fase E, quem extrair um módulo do server.mjs reescreve, no mesmo PR, os
-// testes da lista que recortavam aquele trecho.
+// The test-support/testes-que-leem-codigo.txt list is the backlog of these tests and can
+// only shrink: a new test in this style fails the CI, and a test from the list that
+// stopped reading the code (was rewritten importing the module) has to come off it.
+// In phase E, whoever extracts a module out of server.mjs rewrites, in the same PR, the
+// list's tests that used to cut out that chunk.
 //
-// Uso: node test-support/fragile-guard.mjs
+// Usage: node test-support/fragile-guard.mjs
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -18,13 +18,13 @@ import { fileURLToPath } from 'node:url';
 import { buildGraph } from './affected.mjs';
 import { listTests } from './run-suite.mjs';
 
-// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
-// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+// Root = folder it runs from (npm/CI run at the root): whoever installs Brambit as a
+// package runs the same guard in their own repo, with node node_modules/brambit/....
 const root = process.cwd();
 export const LIST = 'test-support/testes-que-leem-codigo.txt';
 
-// Código de produção lido como texto. Fica de fora o que é servido ao navegador
-// (web/public): teste de navegador serve a pasta inteira, e isso é legítimo.
+// Production code read as text. Excludes what's served to the browser
+// (web/public): browser tests serve the whole folder, and that's legitimate.
 export function readsProductionCode(test, deps, tests) {
   const prod = (f) => /\.(?:c|m)?(?:j|t)s$/.test(f) && !tests.has(f) && !f.startsWith('web/public/')
     && !/^(?:test-support|test-fixtures)\//.test(f) && !/\.test\./.test(f);
@@ -38,9 +38,9 @@ export function check({ tests, deps, listed }) {
   return { found, news, gone };
 }
 
-// Quem instala o Brambit como pacote: os arquivos do núcleo entram no mapa com o
-// caminho de dentro do pacote, e teste que lê nucleo('web/server.mjs') como texto
-// continua contando. Arquivo do mesmo nome no repo de quem instala vale o dele.
+// Whoever installs Brambit as a package: the core's files go into the map with the
+// path inside the package, and a test that reads nucleo('web/server.mjs') as text
+// still counts. A file with the same name in the installer's repo counts as theirs.
 const PACOTE = path.join(root, 'node_modules/brambit');
 function arquivosDoPacote(dir = '', out = []) {
   for (const nome of readdirSync(path.join(PACOTE, dir))) {

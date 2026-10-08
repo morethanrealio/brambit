@@ -1,17 +1,17 @@
-// ── Edição de app sem exigir byte a byte ──────────────────────────────────────
-// Item 3 das frustrações de 16/09: o editor de app exigia que o trecho_antigo
-// casasse EXATAMENTE, e o construtor entrava em loop de reler/tentar/ser
-// recusado. A medição em produção (12 recusas reais do caso âncora) mostrou que
-// TODAS as 12 eram diferença de espaço/quebra de linha, com semelhança entre
-// 93,9% e 96,7%. As três peças verificadas aqui:
-//   1. resolverAncora (web/app-anchor.mjs): ancora por semelhança ≥90%, com
-//      margem sobre o segundo lugar e corpo mínimo. Prova de segurança: trecho
-//      de OUTRO arquivo e trecho ambíguo continuam recusados.
-//   2. pioraSintaxe (web/app-syntax.mjs): a gravação só passa se o arquivo
-//      compilar. Nunca bloqueia o que já estava quebrado antes.
-//   3. Freio anti-loop (web/app-task-runner.mjs): a releitura que vem logo
-//      depois de uma edição RECUSADA não conta como teimosia (teto de 3).
-// Tudo offline: nenhum SSH, nenhum banco, nenhum app de usuário.
+// ── App editing without requiring a byte-for-byte match ──────────────────────────────────────
+// Item 3 of the 2026-09-16 frustrations: the app editor required trecho_antigo
+// to match EXACTLY, and the builder would loop re-reading/retrying/getting
+// refused. Measurement in production (12 real refusals from the anchor case) showed that
+// ALL 12 were a space/line-break difference, with similarity between
+// 93.9% and 96.7%. The three pieces verified here:
+//   1. resolverAncora (web/app-anchor.mjs): anchors by similarity ≥90%, with
+//      a margin over second place and a minimum body size. Safety proof: an excerpt
+//      from ANOTHER file and an ambiguous excerpt are still refused.
+//   2. pioraSintaxe (web/app-syntax.mjs): the write only goes through if the file
+//      compiles. Never blocks what was already broken before.
+//   3. Anti-loop guard (web/app-task-runner.mjs): the re-read that comes right
+//      after a REFUSED edit doesn't count as stubbornness (cap of 3).
+// All offline: no SSH, no database, no user app.
 import { dominioDosApps, urlDoApp } from './web/appshost.mjs';
 import { linkDaPagina, marca } from './web/marca.mjs';
 import test from 'node:test';
@@ -50,10 +50,10 @@ app.post('/api/rega', async (req, res) => {
 module.exports = app;
 `;
 
-// ── 1. Âncora por semelhança ────────────────────────────────────────────────
+// ── 1. Similarity-based anchor ────────────────────────────────────────────────
 test('âncora resolve a diferença de espaço/quebra de linha que causava a recusa', () => {
-  // O jeito como o modelo erra na vida real: indentação a mais, espaço depois
-  // da vírgula, aspas trocadas, uma linha em branco que sumiu.
+  // The way the model gets it wrong in real life: extra indentation, a space after
+  // the comma, swapped quotes, a blank line that disappeared.
   const variacoes = [
     "app.post('/api/rega', async (req, res) => {\n    const { planta_id, quando } = req.body || {};",
     "app.post('/api/rega', async (req,res) => {\n  const { planta_id, quando } = req.body || {};",
@@ -64,7 +64,7 @@ test('âncora resolve a diferença de espaço/quebra de linha que causava a recu
     assert.equal(r.ok, true, `deveria ancorar: ${JSON.stringify(trecho)}`);
     assert.ok(r.similaridade >= LIMIAR_PADRAO);
     assert.ok(r.trecho_no_arquivo.includes("app.post('/api/rega'"));
-    // A âncora cobre linhas inteiras, então a troca não corta o arquivo no meio.
+    // The anchor covers whole lines, so the swap doesn't cut the file in the middle.
     assert.equal(SERVIDOR[r.inicio - 1], '\n');
     assert.ok(r.fim === SERVIDOR.length || SERVIDOR[r.fim] === '\n');
   }
@@ -79,43 +79,43 @@ test('trecho idêntico ancora com similaridade 1', () => {
 });
 
 test('âncora NÃO aceita trecho de outro arquivo nem trecho ambíguo nem trecho curto demais', () => {
-  // Segurança 1: código que não é deste arquivo.
+  // Safety 1: code that isn't from this file.
   const outro = "function desenharCarta(ctx, carta) {\n  ctx.fillStyle = '#fff';\n  ctx.fillRect(carta.x, carta.y, 60, 90);\n}";
   assert.equal(resolverAncora(SERVIDOR, outro).ok, false);
-  // Segurança 2: o mesmo bloco duas vezes no arquivo = não dá pra adivinhar.
+  // Safety 2: the same block twice in the file = can't guess.
   const repetido = SERVIDOR + '\n' + SERVIDOR;
   const r = resolverAncora(repetido, "app.get('/api/plantas', async (req, res) => {");
   assert.equal(r.ok, false);
   assert.ok(['ambiguo', 'sem_candidato'].includes(r.motivo));
-  // Segurança 3: corpo mínimo, senão "}" ancoraria em qualquer lugar.
+  // Safety 3: minimum body size, otherwise "}" would anchor anywhere.
   assert.equal(resolverAncora(SERVIDOR, '}').motivo, 'corpo_insuficiente');
   assert.equal(resolverAncora(SERVIDOR, '  });').motivo, 'corpo_insuficiente');
   assert.ok(CORPO_MINIMO >= 12);
-  // Entradas degeneradas não explodem.
+  // Degenerate inputs don't blow up.
   assert.equal(resolverAncora(SERVIDOR, '').ok, false);
   assert.equal(resolverAncora(null, 'x').ok, false);
 });
 
 test('mudança de verdade no código (não só espaço) fica abaixo do limiar', () => {
-  // 90% tolera espaço; não tolera trocar a lógica. Aqui o "trecho_antigo" cita
-  // uma tabela/coluna que não existe no arquivo: tem que recusar.
+  // 90% tolerates whitespace; it doesn't tolerate swapping the logic. Here the "trecho_antigo" cites
+  // a table/column that doesn't exist in the file: it has to be refused.
   const inventado = "  const linhas = await db.all('SELECT id, apelido FROM jardim WHERE ativo = 1 ORDER BY criado_em DESC');";
   const r = resolverAncora(SERVIDOR, inventado);
   assert.equal(r.ok, false);
   assert.ok(r.melhor_similaridade === undefined || r.melhor_similaridade < LIMIAR_PADRAO);
 });
 
-// ── 2. Portão de sintaxe ────────────────────────────────────────────────────
+// ── 2. Syntax gate ────────────────────────────────────────────────────
 test('portão de sintaxe: bloqueia só quando a edição QUEBRA um arquivo íntegro', async () => {
   const quebrado = SERVIDOR.replace('res.json({ ok: true });', 'res.json({ ok: true );');
   const piora = await pioraSintaxe('server.js', SERVIDOR, quebrado);
   assert.ok(piora, 'edição que quebra tem que ser barrada');
   assert.match(piora.erro, /SyntaxError|Error/);
   assert.ok(!piora.erro.includes('/tmp/'), 'o erro não pode vazar caminho temporário');
-  // Já estava quebrado antes: a edição pode ser justamente o conserto.
+  // Was already broken before: the edit may be exactly the fix.
   assert.equal(await pioraSintaxe('server.js', quebrado, quebrado.replace('40', '41')), null);
   assert.equal(await pioraSintaxe('server.js', quebrado, SERVIDOR), null);
-  // Edição boa passa.
+  // A good edit goes through.
   assert.equal(await pioraSintaxe('server.js', SERVIDOR, SERVIDOR + '\n// nota\n'), null);
 });
 
@@ -124,15 +124,15 @@ test('portão de sintaxe entende CommonJS, ESM e JSON, e pula o que não sabe pa
   assert.equal((await checarSintaxe('public/app.js', "import x from 'y';\nexport const a = 1;")).estado, 'ok');
   assert.equal((await checarSintaxe('a.json', '{"a":1}')).estado, 'ok');
   assert.equal((await checarSintaxe('a.json', '{"a":}')).estado, 'erro');
-  // HTML/CSS não têm parser aqui: não inventa veredito.
+  // HTML/CSS have no parser here: doesn't make up a verdict.
   assert.equal((await checarSintaxe('index.html', '<div>')).estado, 'pulado');
   assert.equal((await checarSintaxe('estilo.css', 'body {')).estado, 'pulado');
   assert.equal(await pioraSintaxe('index.html', '<div>', '<div'), null);
 });
 
-// ── 3. As duas peças costuradas na tool real (hosting.mjs) ──────────────────
-// Carrega o hosting de verdade com os imports trocados por dublês: nenhum SSH,
-// nenhum banco. Só putAppDraftFile é observado, pra provar o que foi gravado.
+// ── 3. Both pieces stitched together in the real tool (hosting.mjs) ──────────────────
+// Loads the real hosting with the imports swapped for stand-ins: no SSH,
+// no database. Only putAppDraftFile is observed, to prove what was written.
 function hostFixture(arquivos) {
   const conteudo = { ...arquivos };
   let gravacoes = 0, externo = 0;
@@ -168,8 +168,8 @@ test('editar_arquivo_do_app grava mesmo com espaço fora do lugar, e avisa que a
   assert.equal(f.texto('server.js').includes('planta_id obrigatório'), false);
   assert.equal(f.externo, 0);
 
-  // Mesmo trecho, agora com indentação errada e espaço a mais: tem que gravar
-  // e declarar no recibo que a âncora foi aproximada (o modelo precisa saber).
+  // Same excerpt, now with wrong indentation and an extra space: it has to save
+  // and state in the receipt that the anchor was approximate (the model needs to know).
   const g = hostFixture({ 'server.js': b64(SERVIDOR) });
   const r2 = await g.tool('editar_arquivo_do_app').run({ nome_do_sistema: 'demo', caminho: 'server.js',
     trecho_antigo: "    if (!planta_id)  return res.status(400).json({ erro: 'planta_id obrigatório' });",
@@ -218,7 +218,7 @@ test('as recusas que continuam valendo: trecho inexistente e trecho ambíguo', a
   assert.equal(ambiguo.gravacoes, 0);
 });
 
-// ── 4. Freio anti-loop: releitura pós-recusa não é teimosia ─────────────────
+// ── 4. Anti-loop guard: re-read after a refusal isn't stubbornness ─────────────────
 const HTML = '<html>\n<div id="alpha">A</div>\n<div id="beta">B</div>\n<div id="gamma">C</div>\n</html>';
 function runnerFixture() {
   const arquivos = { 'public/index.html': b64(HTML) };
@@ -241,9 +241,9 @@ function runnerFixture() {
 const chamada = (name, args, id) => ({ id, name, args });
 const lote = (...toolCalls) => ({ stop: 'tool', toolCalls, usage: { in: 3, out: 2 } });
 const busca = (texto, id) => chamada('buscar_codigo_do_app', { caminho: 'public/index.html', texto }, id);
-// Cada tentativa manda um trecho_antigo diferente: é assim que o modelo erra na
-// vida real (chuta outro recorte depois da recusa), e repetir a MESMA chamada
-// idêntica já é barrado por outro freio (identical_call), que não é o daqui.
+// Each attempt sends a different trecho_antigo: that's how the model gets it wrong in
+// real life (guesses another excerpt after the refusal), and repeating the SAME
+// identical call is already blocked by another guard (identical_call), which isn't this one.
 const edicao = id => chamada('editar_arquivo_do_app', { caminho: 'public/index.html', trecho_antigo: `<div id="${id}">`, trecho_novo: '<div>' }, id);
 const fim = { stop: 'end', text: 'Pronto.', usage: { in: 3, out: 2 } };
 const roteiro = passos => { let n = 0; return { get calls() { return n; }, complete: async () => passos[n++] || fim }; };
@@ -266,9 +266,9 @@ test('a releitura logo depois de uma edição recusada não conta como loop', as
   assert.notEqual(out.app_build.motivo, 'read_coverage_loop');
   const saved = await f.read();
   assert.equal(saved.editReadState.consecutive, 0, 'nenhuma das releituras pode ter avançado o freio');
-  // A primeira busca trouxe trecho novo (progresso de verdade), então nem
-  // precisou de perdão; as duas seguintes repetiram o mesmo pedaço e foram
-  // perdoadas por virem logo depois de uma recusa.
+  // The first search brought a new excerpt (real progress), so it didn't even
+  // need forgiveness; the next two repeated the same chunk and were
+  // forgiven for coming right after a refusal.
   assert.equal(saved.editReadState.pardons, 2);
 });
 

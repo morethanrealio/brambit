@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// Trava do .env.example (fase C do plano open source). Quem baixa o código copia
-// esse arquivo pra subir o servidor, então ele tem que (1) listar toda variável que
-// o código de produção lê, (2) não listar variável que ninguém lê mais e (3) não
-// carregar nada nosso: IP de rede interna, host da nossa infra ou valor de segredo.
+// .env.example guard (phase C of the open source plan). Whoever downloads the code copies
+// this file to bring up the server, so it has to (1) list every variable that
+// the production code reads, (2) not list a variable that nobody reads anymore, and (3) not
+// carry any of our own stuff: internal network IP, our infra's host or a secret value.
 //
-// Uso: node test-support/env-example-guard.mjs
+// Usage: node test-support/env-example-guard.mjs
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
-// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+// Root = folder it runs from (npm/CI run at the root): whoever installs Brambit as a
+// package runs the same guard in their own repo, with node node_modules/brambit/....
 const root = process.cwd();
 export const EXAMPLE = '.env.example';
 
-// Lidas no código mas que NÃO são configuração do servidor.
+// Read in the code but that are NOT server configuration.
 export const IGNORE = new Map([
   ['TSC_PATH', 'build dos .mts (*/build.mts)'],
   ['PGLITE_MODULE', 'prévia local do painel com banco em memória (engagement/preview.mts)'],
@@ -29,8 +29,8 @@ export const IGNORE = new Map([
   ['XDG_DATA_HOME', 'where Linux keeps app menu entries (installer/desktop.mjs)'],
 ]);
 
-// Código de produção: fica de fora teste, apoio de teste, scripts de operação (ops/),
-// automação do repositório (.github/) e o que é servido ao navegador.
+// Production code: excludes tests, test support, operations scripts (ops/),
+// repository automation (.github/) and what's served to the browser.
 export const isProductionSource = (f) => /\.(?:c|m)?(?:j|t)s$/.test(f) && !/\.test\./.test(f)
   && !/^(?:test-support|test-fixtures|ops|dev|\.github|web\/public)\//.test(f);
 

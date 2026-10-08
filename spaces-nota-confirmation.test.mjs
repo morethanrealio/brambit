@@ -5,7 +5,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 const denied=()=>{throw Error('EXTERNAL IO FORBIDDEN');};
 net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;
-// Banco do Space em memória: o teste controla a nota gravada e vê cada gravação.
+// In-memory Space DB: the test controls the saved note and sees each save.
 const fakeDb=`const F=()=>globalThis.__spaceFake;const nada=async()=>({});
 export const createSpace=nada,listSpacesForUser=nada,addSpaceEntry=nada,listSpaceEntries=nada,listSpaceMembers=nada,
 addSpaceMember=nada,removeSpaceMember=nada,resolveConnectedUser=nada,contatoAmbiguoMsg=()=>'',deleteSpaceEntry=nada,setSpaceMode=nada;

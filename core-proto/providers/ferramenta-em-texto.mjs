@@ -1,17 +1,17 @@
-// ── Chamada de ferramenta escrita como TEXTO ──
-// Modelos abertos às vezes escrevem a chamada no content em vez de preencher o
-// campo tool_calls estruturado. Isso é do MODELO (GLM, DeepSeek), não do provedor:
-// o mesmo modelo faz igual em qualquer endereço. Por isso os leitores ficam aqui,
-// fora de qualquer adaptador, e o motor compatível (compativel.mjs) usa conforme
-// a configuração de cada provedor.
+// ── Tool call written as TEXT ──
+// Open models sometimes write the call in the content instead of filling the
+// structured tool_calls field. This is a MODEL thing (GLM, DeepSeek), not a provider
+// thing: the same model does the same at any endpoint. That's why the readers live here,
+// outside any adapter, and the compatible engine (compativel.mjs) uses them according to
+// each provider's configuration.
 
-// Parseia o formato de tool-call em TEXTO do GLM:
+// Parses the GLM TEXT tool-call format:
 //   <tool_call>nome_da_funcao
 //   <arg_key>chave</arg_key><arg_value>valor</arg_value>
 //   ...
 //   </tool_call>
-// Robusto a múltiplos blocos, valores multilinha (código) e tag final ausente
-// (truncamento). Valor vira JSON quando parece número/bool/objeto; senão string.
+// Robust to multiple blocks, multiline values (code) and missing closing tag
+// (truncation). Value becomes JSON when it looks like number/bool/object; otherwise string.
 export function parseGlmToolCalls(content) {
   if (!content || !content.includes('<tool_call>')) return [];
   const calls = [];
@@ -23,9 +23,9 @@ export function parseGlmToolCalls(content) {
     const name = (nameMatch ? nameMatch[1] : '').replace(/[\r\n]+/g, ' ').trim();
     if (!name) continue;
     const args = {};
-    // O <arg_key> de ABERTURA às vezes some na saída do GLM (visto 15/07:
-    // "...<arg_value>x</arg_value>chave</arg_key><arg_value>y..."), então ele é
-    // opcional; a chave é o texto sem '<' até </arg_key>.
+    // The OPENING <arg_key> sometimes disappears from GLM's output (seen on 2026-07-15:
+    // "...<arg_value>x</arg_value>chave</arg_key><arg_value>y..."), so it is
+    // optional; the key is the text without '<' up to </arg_key>.
     const argRe = /(?:<arg_key>)?([^<]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)(?:<\/arg_value>|$)/g;
     let am;
     while ((am = argRe.exec(block)) !== null) {
@@ -43,22 +43,22 @@ export function parseGlmToolCalls(content) {
   return calls;
 }
 
-// ── Dialeto do DeepSeek (DSML) ──
-// Desde 29/08 o primário é o DeepSeek V4 Pro, servido pelo MESMO adaptador que
-// nasceu pro GLM. Quando o parser da Together falha, ele não emite <tool_call>
-// (formato do GLM): emite o formato NATIVO dele, com a barra vertical fullwidth
+// ── DeepSeek dialect (DSML) ──
+// Since 2026-08-29 the primary is DeepSeek V4 Pro, served by the SAME adapter that
+// was born for GLM. When the Together parser fails, it doesn't emit <tool_call>
+// (GLM's format): it emits its NATIVE format, with the fullwidth vertical bar
 // U+FF5C:
 //   <｜DSML｜tool_calls>
 //   <｜DSML｜invoke name="sandbox_shell">
 //   <｜DSML｜parameter name="command" string="true">valor</｜DSML｜parameter>
 //   </｜DSML｜invoke>
 //   </｜DSML｜tool_calls>
-// A Together também pode serializar o mesmo dialeto com espaço depois do
-// marcador (`<｜DSML｜ invoke ...>` / `</｜DSML｜ invoke>`). O espaço é só uma
-// variação de wire-format: não pode transformar a tool-call em texto final.
-// Como nada aqui reconhecia isso, o resíduo passava batido pelo guard e vazava
-// CRU pro usuário, com a ferramenta nunca rodando (8 mensagens, 2 pessoas,
-// 01/09: três casos, o último num enviar_mensagem).
+// Together can also serialize the same dialect with a space after the
+// marker (`<｜DSML｜ invoke ...>` / `</｜DSML｜ invoke>`). The space is just a
+// wire-format variation: it must not turn the tool-call into final text.
+// Since nothing here recognized this, the residue slipped past the guard and leaked
+// RAW to the user, with the tool never running (8 messages, 2 people,
+// 2026-09-01: three cases, the last one in an enviar_mensagem).
 const DSML = '｜'; // ｜ (fullwidth vertical line), o separador do DeepSeek
 const DSML_TAG = `<${DSML}DSML${DSML}`;
 export function parseDsmlToolCalls(content) {
@@ -66,11 +66,11 @@ export function parseDsmlToolCalls(content) {
   if (!s.includes(DSML_TAG)) return [];
   const D = DSML;
   const calls = [];
-  // Robusto a bloco truncado (sem a tag de fechamento) pelo mesmo motivo do GLM.
-  // `\\s*` depois do marcador aceita tanto o formato compacto oficial quanto
-  // a variante espaçada observada ao vivo, sem aceitar tags que não contenham o
-  // marcador DSML completo em fullwidth. Nome e args continuam passando pela
-  // validação normal do ToolRegistry antes de qualquer execução.
+  // Robust to truncated block (missing the closing tag) for the same reason as GLM.
+  // `\\s*` after the marker accepts both the official compact format and
+  // the spaced variant observed live, without accepting tags that don't contain the
+  // full DSML marker in fullwidth. Name and args still go through the
+  // normal ToolRegistry validation before any execution.
   const open = `<${D}DSML${D}\\s*`;
   const close = `</${D}DSML${D}\\s*`;
   const invokeRe = new RegExp(`${open}invoke\\s+name="([^"]+)"\\s*>([\\s\\S]*?)(?:${close}invoke\\s*>|$)`, 'g');
@@ -87,8 +87,8 @@ export function parseDsmlToolCalls(content) {
       const v = pm[2].replace(/^\r?\n/, '').replace(/\r?\n$/, '');
       const t = v.trim();
       let val = v;
-      // Mesmo critério do GLM: só converte quando o valor É JSON, senão string
-      // crua (o `string="true"` do DeepSeek é dica, não garantia).
+      // Same criterion as GLM: only converts when the value IS JSON, otherwise raw
+      // string (DeepSeek's `string="true"` is a hint, not a guarantee).
       if (/^(\{[\s\S]*\}|\[[\s\S]*\]|-?\d+(\.\d+)?|true|false|null)$/.test(t)) {
         try { val = JSON.parse(t); } catch { val = v; }
       }
@@ -98,7 +98,7 @@ export function parseDsmlToolCalls(content) {
   }
   return calls;
 }
-// Texto que sobra pro usuário: o que veio ANTES da primeira marcação DSML.
+// Text left over for the user: whatever came BEFORE the first DSML marker.
 export function stripDsml(content) {
   const s = String(content ?? '');
   const i = s.indexOf(DSML_TAG);

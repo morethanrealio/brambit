@@ -1,10 +1,10 @@
-// Regra única de planilha (01/10/2026): venha de onde vier (anexo no chat,
-// ler_arquivo, Drive, Gmail, OneDrive, link aberto com abrir_link), a planilha é
-// carregada no pandas do ambiente de análise e o modelo recebe só a estrutura
-// (abas, colunas, quantidade de linhas), nunca as células. Se o ambiente falhar,
-// o resultado diz que não conseguiu ler; não existe volta pro texto.
-// Rede real bloqueada. O único processo que roda é o python local da sonda
-// (PLANILHA_PY ou /tmp/pdvenv/bin/python), pulado se não houver pandas.
+// Single spreadsheet rule (2026-10-01): no matter where it comes from (chat attachment,
+// ler_arquivo, Drive, Gmail, OneDrive, link opened with abrir_link), the spreadsheet is
+// loaded into pandas in the analysis environment and the model receives only the structure
+// (sheets, columns, row count), never the cells. If the environment fails,
+// the result says it could not read it; there is no fallback to text.
+// Real network blocked. The only process that runs is the probe's local python
+// (PLANILHA_PY or /tmp/pdvenv/bin/python), skipped if pandas is not present.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -19,7 +19,7 @@ import vm from 'node:vm';
 
 const denied = () => { throw Error('EXTERNAL IO FORBIDDEN'); };
 net.Socket.prototype.connect = denied; tls.connect = denied; globalThis.fetch = denied;
-// assertPublicUrl do abrir_link resolve o host: todo host vira um IP público fixo.
+// assertPublicUrl of abrir_link resolves the host: every host becomes a fixed public IP.
 dns.promises.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
 
 // Sandbox falso: o teste decide o que gravar/rodar devolve (globalThis.__sb).
@@ -55,7 +55,7 @@ const duasAbas = () => workbookFixture(`<row r="1">${cell('A1', 'Banco')}${cell(
 const CELULAS = ['Itaú', '1500', 'Energia', 'aguardando', 'pago'];
 const semCelulas = (txt) => { for (const c of CELULAS) assert.ok(!String(txt).includes(c), `célula "${c}" vazou: ${txt}`); };
 
-// Sandbox de mentira que responde a sonda com uma estrutura pronta.
+// Fake sandbox that answers the probe with a ready-made structure.
 const sondaOk = (abas) => ({ enabled: true, gravados: [], comandos: [],
   async write(userId, path, buf) { this.gravados.push({ userId, path, buf }); return { ok: true }; },
   async shell(userId, cmd) { this.comandos.push(cmd); return { exitCode: 0, stdout: JSON.stringify({ ok: true, abas }) + '\n', stderr: '' }; } });
@@ -164,7 +164,7 @@ test('sonda real: arquivo que não é planilha falha com nota, sem texto', { ski
   assert.ok(!lr.note.includes('login'));
 });
 
-// ── Conectores: o resultado nunca leva células ──
+// ── Connectors: the result never carries cells ──
 const resposta = (r) => ({ ok: (r.status || 200) < 400, status: r.status || 200, json: async () => r.json, text: async () => r.text ?? '', arrayBuffer: async () => { const b = r.bytes || Buffer.from(r.text ?? ''); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); } });
 async function comFetch(rotas, fn) {
   const chamadas = [];
@@ -215,7 +215,7 @@ function comRede(rotas, fn) {
     const r = rotas(String(url));
     return new Response(r.body ?? null, { status: r.status || 200, headers: r.headers || {} });
   };
-  // Qualquer ida ao Tavily (texto da página) é falha do teste.
+  // Any call to Tavily (page text) is a test failure.
   globalThis.fetch = async (url) => { throw Error(`fetch inesperado (texto da página): ${url}`); };
   return fn(chamadas).finally(() => { globalThis.fetch = denied; delete globalThis.__net; });
 }

@@ -1,5 +1,5 @@
-// Regressões da revisão de qualidade de 23/09. Store real em PGlite isolado;
-// ferramentas sintéticas e rede bloqueada para não tocar serviços externos.
+// Regressions from the 2026-09-23 quality review. Real store in isolated PGlite;
+// synthetic tools and blocked network so as not to touch external services.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';

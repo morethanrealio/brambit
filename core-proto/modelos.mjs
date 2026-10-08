@@ -1,13 +1,13 @@
-// ── Provedores e modelos por função (modelos.yaml) ──
+// ── Providers and models per function (modelos.yaml) ──
 // Whoever installs Brambit picks, in a commented file, WHICH providers to use
 // and WHICH model each function uses (with an optional fallback model). A
 // provider is data, not code: name + address + the .env variable holding the key.
 // Any service speaking the OpenAI protocol (/chat/completions) fits this way;
 // Gemini has its own protocol and comes in with `tipo: gemini`.
 //
-// Sem o arquivo, tudo devolve null e o servidor segue o roteamento embutido de
-// sempre (é o caso da nossa produção hoje). O modelo de exemplo, com cada campo
-// explicado, está em modelos.example.yaml na raiz do repo.
+// Without the file, everything returns null and the server follows the usual
+// built-in routing (which is the case for our production today). The example model, with each field
+// explained, is in modelos.example.yaml at the root of the repo.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +19,7 @@ import { throwIfAttemptControl } from './provider-attempt.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TIPOS = new Set(['openai', 'gemini']);
 
-// Função sem linha no arquivo usa a da função "mãe"; `padrao` é a raiz de todas.
+// A function without a line in the file uses its "parent" function's; `padrao` is the root of all of them.
 export const FUNCOES = {
   padrao: { mae: null, o: 'tudo que não tiver linha própria' },
   conversa: { mae: 'padrao', o: 'turno do assistente com o usuário (precisa chamar ferramentas)' },
@@ -35,8 +35,8 @@ export function arquivoModelos(env = process.env) {
   return env.MODELOS_ARQUIVO ? path.resolve(env.MODELOS_ARQUIVO) : path.join(ROOT, 'modelos.yaml');
 }
 
-// Lê e valida. Erro de digitação no arquivo derruba o boot com a linha do
-// problema, em vez de virar um "serviço indisponível" misterioso no chat.
+// Reads and validates. A typo in the file brings down the boot with the
+// problem's line, instead of turning into a mysterious "serviço indisponível" in the chat.
 export function lerModelos(texto, origem = 'modelos.yaml') {
   const erro = (msg) => { throw new Error(`${origem}: ${msg}`); };
   let doc;
@@ -89,7 +89,7 @@ export function carregarModelos({ env = process.env, recarregar = false } = {}) 
   return cache;
 }
 
-// Resolve a herança: { funcao, de, principal, reserva } ou null.
+// Resolves the inheritance: { funcao, de, principal, reserva } or null.
 export function escolhaDe(funcao, cfg = carregarModelos()) {
   if (!cfg) return null;
   for (let f = funcao; f; f = FUNCOES[f]?.mae) {
@@ -111,8 +111,8 @@ export function construirModelo(alvo, { maxTokens = 8192, cfg = carregarModelos(
   });
 }
 
-// Reserva simples pros módulos auxiliares; o servidor passa a dele (withFallback),
-// que também cuida da cobrança quando o principal cai no meio de um turno.
+// Simple fallback for auxiliary modules; the server passes its own (withFallback),
+// which also handles billing when the primary fails mid-turn.
 function juntarSimples(principal, reserva, tag) {
   let usePrincipal = true;
   return {
@@ -131,7 +131,7 @@ function juntarSimples(principal, reserva, tag) {
   };
 }
 
-// Provider pronto pra função, ou null quando o arquivo não existe (roteamento de sempre).
+// Provider ready for the function, or null when the file doesn't exist (the usual routing).
 export function modeloPara(funcao, { maxTokens = 8192, juntar = juntarSimples } = {}) {
   const e = escolhaDe(funcao);
   if (!e) return null;
@@ -139,7 +139,7 @@ export function modeloPara(funcao, { maxTokens = 8192, juntar = juntarSimples } 
   return e.reserva ? juntar(principal, construirModelo(e.reserva, { maxTokens }), `modelos:${funcao}`) : principal;
 }
 
-// Linhas da tabela "função → modelo" do boot e do `npm run modelos`.
+// Rows of the "function → model" table from boot and from `npm run modelos`.
 export function descreverModelos({ cfg = carregarModelos(), env = process.env } = {}) {
   if (!cfg) return null;
   const rotulo = (a) => {

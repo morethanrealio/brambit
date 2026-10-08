@@ -1,7 +1,7 @@
-// DRY-RUN offline: a busca web (buscar_web) tem que devolver o bloco "Fontes:" quando a
-// Tavily responde. Regressão do bug de 08-12/09/2026: renderFontes passou a ser só
-// REEXPORTADA de links.mjs (`export { x } from` não cria o nome local) e toda busca
-// caía em "renderFontes is not defined", com o log culpando a Tavily.
+// Offline DRY-RUN: web search (buscar_web) has to return the "Fontes:" block when
+// Tavily responds. Regression from the 2026-09-08 to 2026-09-12 bug: renderFontes became only
+// RE-EXPORTED from links.mjs (`export { x } from` doesn't create the local name) and every search
+// fell into "renderFontes is not defined", with the log blaming Tavily.
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import tls from 'node:tls';
@@ -49,8 +49,8 @@ check(usos.some(u => u.kind === 'search' && u.usage.model === 'tavily-search'), 
 check(!usos.some(u => u.kind === 'search_degraded'), 'NÃO marca busca degradada quando deu certo');
 check(fetchCalls.length === 1, 'uma chamada só (sem relaxar nem fallback)');
 
-// 1b) com o registro do turno, a numeração é a do turno inteiro: a 2ª busca
-// reaproveita o número de quem já apareceu (é ele que vai pra lista final).
+// 1b) with the turn's registry, the numbering is for the whole turn: the 2nd search
+// reuses the number of whoever already appeared (that's the one that goes to the final list).
 const { registroDeFontes } = await import('./web/citacoes.mjs');
 const reg = registroDeFontes();
 reg.add({ title: 'Outra', uri: 'https://outra.example.invalid/' });
@@ -58,7 +58,7 @@ const comReg = await webSearchTool({ onUsage: () => {}, fontes: reg }).run({ con
 check(comReg.includes('[2] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento') && comReg.includes('[3] INMET'), 'numera pelo registro do turno');
 check(reg.size === 3, 'fontes da busca entram no registro');
 
-// 2) queda REAL de rede em turno DeepSeek: erro honesto, rotulado como Tavily, sem Gemini.
+// 2) REAL network drop in a DeepSeek turn: honest error, labeled as Tavily, no Gemini.
 fetchMode = 'rede'; usos.length = 0;
 const err = await withDeepSeek(() => ({}), () => tool.run({ consulta: 'x' }));
 check(/^ERRO: a busca Tavily falhou/.test(err), `erro honesto no DeepSeek: ${err.slice(0, 80)}`);

@@ -1,4 +1,4 @@
-// Dry-run offline: sem DB, contas, provedores ou canais reais.
+// Offline dry-run: no real DB, accounts, providers or channels.
 import assert from 'node:assert/strict';
 import net from 'node:net'; import tls from 'node:tls'; import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module'; import { readFileSync } from 'node:fs';
@@ -40,7 +40,7 @@ const response=(name,page=1,more=true)=>{
  if(name==='slack_search')return {ok:true,messages:{matches:[{ts:id,text:id}],paging:{page,pages:more?2:page,total:2}}};
  return {items:[{number:page,title:id,full_name:id}],total_count:2,incomplete_results:false};
 };
-// Cinco ferramentas reais: alvo só na segunda página, estado/cursor privados.
+// Five real tools: target only on the second page, private state/cursor.
 for(const name of Object.keys(factories)){
  const t=tool(name);const args={query:'alvo',max:1};
  mock(response(name));const first=JSON.parse(await t.run(args));
@@ -61,7 +61,7 @@ for(const name of Object.keys(factories)){
  // A new instance exercises the provider error instead of its successful cache.
  mock({error:429});await reject(()=>tool(name).run(args));eq(requests.length,1);
 }
-// Limites padrão e cap existentes, sem varredura automática.
+// Default limits and existing cap, no automatic scanning.
 for(const [name,def,cap] of [['drive_search',8,15],['onedrive_search',10,25],['slack_search',10,20],['github_search_repos',8,15],['github_search_issues',10,20]]){
  for(const [max,size] of [[undefined,def],[999,cap]]){
   mock(response(name));const r=JSON.parse(await tool(name).run({query:'alvo',max}));eq(r.page_size,size);eq(requests.length,1);
@@ -98,7 +98,7 @@ for(const link of ['https://evil.invalid/v1.0/me/drive/root/children','http://gr
 }
 for(const bad of [null,{}, {value:null},{value:{}},{value:[{}]},{value:Array(11).fill({id:'x'})}]){mock(bad);await reject(()=>od.run());}
 mock();const restricted=microsoftTools({token,scopes:'User.Read Mail.Read'}).find(t=>t.name==='onedrive_search');ok((await restricted.run()).includes('conect'));eq(requests.length,0);
-// GitHub: timeout parcial mesmo sem cursor; limite de 1000 não vira busca completa.
+// GitHub: partial timeout even without a cursor; limit of 1000 doesn't turn into a complete search.
 for(const name of ['github_search_repos','github_search_issues']){
  const t=tool(name);mock({items:[],total_count:0,incomplete_results:true});r=JSON.parse(await t.run({query:'timeout'}));eq(r.partial,true);eq(r.has_more,false);
  for(const bad of [{},{items:null,total_count:0,incomplete_results:false},{items:[],total_count:'0',incomplete_results:false},{items:[],total_count:0,incomplete_results:'false'}]){mock(bad);await reject(()=>t.run({query:'bad'}));}
@@ -106,7 +106,7 @@ for(const name of ['github_search_repos','github_search_issues']){
 let meta=githubSearchMeta({total_count:1001,incomplete_results:false},{page:50,pageSize:20});eq(meta.next,null);eq(meta.limitReached,true);
 meta=githubSearchMeta({total_count:1000,incomplete_results:false},{page:50,pageSize:20});eq(meta.limitReached,false);
 meta=githubSearchMeta({total_count:1001,incomplete_results:false},{page:49,pageSize:20});eq(meta.next,'50');
-// Paginação real das tools até o limite, com respostas sintéticas (nenhuma API).
+// Real pagination of the tools up to the limit, with synthetic responses (no API).
 for(const [name,size,count] of [['github_search_repos',15,67],['github_search_issues',20,50]]) {
  const t=tool(name);let cursor;
  for(let n=1;n<=count;n++) {
@@ -116,7 +116,7 @@ for(const [name,size,count] of [['github_search_repos',15,67],['github_search_is
   if(n<count)ok(cursor);else {eq(cursor,null);eq(page.partial,true);ok(page.note.includes('limite'));}
  }
 }
-// Slack: ambas versões de metadata, truncamento de trecho, limite page100.
+// Slack: both metadata versions, snippet truncation, page100 limit.
 const sl=tool('slack_search');mock({ok:true,messages:{matches:[{ts:'1',text:'x'.repeat(801)}],pagination:{page:1,page_count:1,total_count:1}}});
 r=JSON.parse(await sl.run({query:'texto'}));eq(r.items[0].text.length,800);eq(r.items[0].text_truncated,true);eq(r.partial,false);
 mock({ok:true,messages:{matches:[],paging:{page:1,pages:0,total:0}}});r=JSON.parse(await sl.run({query:'vazio'}));eq(r.partial,false);
@@ -128,7 +128,7 @@ const old=JSON.parse(pg.result(req,[] ,{next:'A'}));time=900000;throws(()=>pg.re
 const first=JSON.parse(pg.result(req,[],{next:'A'}));for(let i=0;i<100;i++)pg.result(req,[],{next:String(i)});
 throws(()=>pg.request('x',undefined,first.next_cursor));
 r=JSON.parse(pg.result({...req,page:200},[],{next:'more'}));eq(r.partial,true);eq(r.has_more,true);eq(r.next_cursor,null);
-// Wrapper real usado pelo server mantém aviso no worker -> principal.
+// Real wrapper used by the server keeps the notice flowing worker -> main.
 let reply={search_id:'a',partial:true};const fake={name:'drive_search',run:async()=>JSON.stringify(reply)};
 const tracker=trackEmailPagination([fake,{name:'unrelated',run:async()=> 'raw'}]);
 await tracker.tools[0].run({});ok(tracker.finish('Nada.').includes('AVISO DE BUSCA PARCIAL'));
@@ -137,7 +137,7 @@ reply={search_id:'a',partial:false};await tracker.tools[0].run({});eq(tracker.fi
 for(const action of [async()=> 'Reconecte sua conta',async()=>{throw Error('erro simulado');}]){
  const tr=trackSearchPagination([{name:'slack_search',run:action}]);try{await tr.tools[0].run({});}catch{}ok(tr.finish('Nada').includes('AVISO'));
 }
-// Tool-loop real e funções reais de orquestração (server nunca importado).
+// Real tool-loop and real orchestration functions (server never imported).
 const {createEmailResearchSession}=await import('./web/email-research-session.mjs');
 const {EMAIL_RESEARCH_CONTRACT}=await import('./web/email-answer-contract.mjs');
 const src=readFileSync('./web/server.mjs','utf8');

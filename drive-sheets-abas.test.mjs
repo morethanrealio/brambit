@@ -1,7 +1,7 @@
-// drive_read com planilha nativa do Google Sheets: tem que ler TODAS as abas
-// (export .xlsx), não só a primeira (export CSV). Caso de 30/09/2026.
-// Desde 01/10 a planilha vai inteira pro ambiente de análise (pandas) e o
-// resultado do drive_read nunca traz as células, só a estrutura.
+// drive_read with a native Google Sheets spreadsheet: has to read ALL tabs
+// (export .xlsx), not just the first one (export CSV). 2026-09-30 case.
+// Since 2026-10-01 the whole spreadsheet goes to the analysis environment (pandas) and the
+// drive_read result never carries the cells, only the structure.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { googleTools } from './web/connectors.mjs';

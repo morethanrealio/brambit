@@ -1,19 +1,19 @@
 import { retainedSearchPage } from './search-page.mjs';
 import { REVISION_READS, callSignature } from './repetition.mjs';
 // ── Core harness (model-agnostic) ──
-// Dono do tool-loop e do estado de mensagens. Roda QUALQUER provider que
-// satisfaça o contrato em provider.mjs. ~50 linhas de lógica de verdade.
+// Owner of the tool-loop and message state. Runs ANY provider that
+// satisfies the contract in provider.mjs. ~50 lines of actual logic.
 
 import { retainedFilePage } from './file-page.mjs';
 import { STOP } from './provider.mjs';
 import { protocolCode, CODING_TOOLS, codingAvailable, CODING_EXECUTION_POLICY, protocolRepairFor, PROMISE_REPAIR,
   codingPromise, codingTurnContext, codingFallback, protocolFallback, executionSignature } from './turn-recovery.mjs';
 
-// Sanitiza texto que entra no history/nas mensagens: remove surrogates UTF-16
-// SOLTOS (um par de emoji cortado no meio por um .slice()) e o caractere NUL.
-// Sem isso, um único code point inválido faz o parser JSON do provider (ex.: o
-// Go da Together, "unexpected end of hex escape") E o Postgres jsonb ("invalid
-// input syntax for type json") rejeitarem a mensagem inteira, e a resposta some.
+// Sanitizes text entering history/messages: removes LOOSE UTF-16
+// surrogates (an emoji pair cut in half by a .slice()) and the NUL character.
+// Without this, a single invalid code point makes the provider's JSON parser (e.g. Together's
+// Go, "unexpected end of hex escape") AND Postgres jsonb ("invalid
+// input syntax for type json") reject the entire message, and the reply disappears.
 const REPLACEMENT = String.fromCharCode(0xFFFD);
 const NUL = String.fromCharCode(0);
 function sanitizeText(s) {
@@ -24,93 +24,93 @@ function sanitizeText(s) {
     .split(NUL).join('');
 }
 
-// Resultado de tool -> texto pro modelo. String passa direto. Objeto/array vira
-// JSON (senão `String(obj)` colapsava tudo em "[object Object]" e o modelo ficava
-// CEGO ao conteúdo — o que quebrava justamente as tools de app que devolvem
-// objeto: listar_arquivos_do_app, ler_arquivo_do_app, publicar_sistema, ...).
+// Tool result -> text for the model. String passes through directly. Object/array becomes
+// JSON (otherwise `String(obj)` collapsed everything into "[object Object]" and the model was
+// BLIND to the content — which broke precisely the app tools that return
+// an object: listar_arquivos_do_app, ler_arquivo_do_app, publicar_sistema, ...).
 function toToolText(out) {
   if (out == null) return '';
   if (typeof out === 'string') return out;
   try { return JSON.stringify(out); }
-  catch { return String(out); } // fallback: circular/serialização impossível
+  catch { return String(out); } // fallback: circular/serialization impossible
 }
 
-// Progressive disclosure DENTRO do turno. Um turno de build chama o modelo várias
-// vezes (ler → pensar → escrever → publicar → ver log) e CADA resultado grande
-// (conteúdo de ler_arquivo_do_app, args de escrever_arquivo_do_app) fica no working
-// set e é RE-ENVIADO ao modelo em todo passo seguinte do MESMO turno — foi o que
-// levou o tok_in a 150k-210k por chamada e um turno inteiro a 2,4M tokens no build
-// de um usuário (app.js de 123k lido/reenviado dezenas de vezes num turno de 23
-// passos). Antes de cada nova chamada colapsamos os blobs ANTIGOS deste turno num
-// marcador curto (mantendo os mais recentes intactos, que o modelo ainda pode
-// precisar). É o que o Claude Code faz (context editing / clear tool results).
+// Progressive disclosure WITHIN the turn. A build turn calls the model several
+// times (read → think → write → publish → check log) and EVERY large result
+// (content of ler_arquivo_do_app, args of escrever_arquivo_do_app) stays in the working
+// set and is RESENT to the model on every subsequent step of the SAME turn — this is what
+// drove tok_in to 150k-210k per call and a whole turn to 2.4M tokens in one user's
+// build (a 123k app.js read/resent dozens of times in a 23-step
+// turn). Before each new call we collapse the OLD blobs from this turn into a
+// short marker (keeping the most recent ones intact, since the model may still
+// need them). This is what Claude Code does (context editing / clear tool results).
 //
-// thoughtSignature do Gemini 3: a assinatura vive no `c.meta.thoughtSignature`
-// (o provider a reemite como uma PART separada do functionCall, não dentro dos
-// args — ver gemini.mjs). Colapsar o VALOR de um arg NÃO toca o meta, então a
-// assinatura fica intacta. Verificado ao vivo contra o gemini-3.7-flash: colapsar
-// os args do assistant mantendo o meta NÃO dá 400 de thought_signature. Por isso
-// colapsamos os DOIS lados em todo provider: o resultado de tool (role:'tool', a
-// LEITURA do arquivo) E os args do assistant (role:'assistant', a ESCRITA do
-// arquivo). Naquele build a escrita era o que mais pesava: o modelo
-// reescreve o arquivo inteiro a cada passo (out de 10k-16k) e esses args ficavam
-// circulando no input, que crescia 53k->111k dentro do MESMO turno. ANTES o trim
-// inteiro era pulado no gemini (primário), depois colapsava só a leitura; agora
-// colapsa a escrita também, que era o grosso.
-const TURN_BLOB_MAX = 2000;   // chars; acima disso é blob que vale colapsar
-const TURN_KEEP_RECENT = 4;   // últimas N mensagens do turno nunca são colapsadas
+// Gemini 3's thoughtSignature: the signature lives in `c.meta.thoughtSignature`
+// (the provider re-emits it as a PART separate from the functionCall, not inside the
+// args — see gemini.mjs). Collapsing the VALUE of an arg does NOT touch the meta, so the
+// signature stays intact. Verified live against gemini-3.7-flash: collapsing
+// the assistant's args while keeping the meta does NOT produce a 400 for thought_signature. That's why
+// we collapse BOTH sides on every provider: the tool result (role:'tool', the
+// file READ) AND the assistant's args (role:'assistant', the file WRITE).
+// In that build the write was what weighed the most: the model
+// rewrites the entire file on every step (out of 10k-16k) and those args kept
+// circulating in the input, which grew 53k->111k within the SAME turn. BEFORE, the
+// entire trim was skipped on gemini (primary), then it collapsed only the read; now
+// it collapses the write too, which was the bulk of it.
+const TURN_BLOB_MAX = 2000;   // chars; above this it's a blob worth collapsing
+const TURN_KEEP_RECENT = 4;   // last N messages of the turn are never collapsed
 
-// Teto pros blobs DENTRO da janela recente. As últimas TURN_KEEP_RECENT
-// mensagens não são colapsadas (o modelo ainda está trabalhando nelas), mas
-// também não podem ser ilimitadas: um `ler_arquivo_do_app` de 100k ou uma
-// saída de terminal gigante circula INTEIRA a cada passo enquanto está na
-// janela. Cortamos head+tail (começo tem o que importa: shebang/imports/
-// estrutura; fim tem o erro/resultado) com marcador explícito no meio. 24k
-// chars ≈ 6k tokens por blob recente — grande o bastante pra qualquer arquivo
-// de app razoável passar inteiro, pequeno o bastante pra não dominar o input.
+// Cap for blobs WITHIN the recent window. The last TURN_KEEP_RECENT
+// messages are not collapsed (the model is still working on them), but
+// they can't be unlimited either: a 100k `ler_arquivo_do_app` or a
+// giant terminal output circulates IN FULL on every step while it's in the
+// window. We cut head+tail (the start has what matters: shebang/imports/
+// structure; the end has the error/result) with an explicit marker in the middle. 24k
+// chars ≈ 6k tokens per recent blob — big enough for any reasonable
+// app file to go through in full, small enough to not dominate the input.
 const TURN_RECENT_MAX = 24000;  // chars; teto de blob na janela recente
-const TURN_RECENT_HEAD = 15800; // chars mantidos do começo
+const TURN_RECENT_HEAD = 15800; // chars kept from the start
 const TURN_RECENT_TAIL = 8000;  // chars mantidos do fim
-// HEAD+TAIL+marcador < TURN_RECENT_MAX de propósito: o resultado do corte fica
-// abaixo do teto, então a segunda passada não retoca (idempotente).
+// HEAD+TAIL+marker < TURN_RECENT_MAX on purpose: the result of the cut stays
+// below the cap, so the second pass doesn't touch it again (idempotent).
 function capRecentBlob(s) {
   if (typeof s !== 'string' || s.length <= TURN_RECENT_MAX) return s;
   const cut = s.length - TURN_RECENT_HEAD - TURN_RECENT_TAIL;
   return s.slice(0, TURN_RECENT_HEAD) + `\n…[cortado: ${cut} chars]…\n` + s.slice(s.length - TURN_RECENT_TAIL);
 }
 
-// Freio anti-loop DENTRO do turno. Se o modelo reemite uma chamada IDÊNTICA
-// (mesma tool + mesmos args) repetidas vezes, ele está preso: o resultado já
-// está no working set e rechamar não avança (ex.: tentar aplicar de novo um
-// editar_arquivo_do_app cujo trecho já foi substituído → "não encontrado" →
-// tenta de novo). Isso queimou passos/crédito naquele build. Ao atingir
-// REPEAT_LIMIT chamadas idênticas, cortamos pro salvage em vez de gastar o resto
-// do teto de passos. É o que permite subir maxSteps com segurança nos turnos de
-// build sem risco de loop infinito.
-const REPEAT_LIMIT = 3;       // 3ª chamada idêntica = preso; corta pro salvage
+// Anti-loop guard WITHIN the turn. If the model re-emits an IDENTICAL call
+// (same tool + same args) repeatedly, it's stuck: the result is already
+// in the working set and calling again doesn't move forward (e.g. trying to apply again an
+// editar_arquivo_do_app whose snippet was already replaced → "não encontrado" →
+// tries again). This burned steps/credit in that build. On reaching
+// REPEAT_LIMIT identical calls, we cut to salvage instead of spending the rest
+// of the step cap. This is what allows safely raising maxSteps on build turns
+// without risk of an infinite loop.
+const REPEAT_LIMIT = 3;       // 3rd identical call = stuck; cuts to salvage
 
-// Mensagem que chega NO MEIO do turno (o usuário manda outra antes de a primeira
-// ser respondida). Antes ela era invisível pro turno em andamento: o agente
-// entregava a resposta da primeira em full — mesmo já obsoleta — e só então rodava
-// um segundo turno pra segunda. Agora ela é injetada nas fronteiras de passo, do
-// jeito que o Claude Code faz: o modelo lê e decide se ajusta, abandona ou segue.
-// Teto por turno pra uma rajada de mensagens não virar contexto infinito nem
-// impedir o turno de fechar; o que passar do teto fica pro turno seguinte.
+// Message that arrives MID-turn (the user sends another one before the first
+// is answered). Before, it was invisible to the turn in progress: the agent
+// delivered the first reply in full — even if already stale — and only then ran
+// a second turn for the second one. Now it's injected at step boundaries, the
+// way Claude Code does it: the model reads it and decides whether to adjust, abandon or continue.
+// Cap per turn so a burst of messages doesn't become infinite context nor
+// prevent the turn from closing; whatever exceeds the cap is left for the next turn.
 const MAX_INTERJECTIONS = 3;
-// Injetada como role:'user' (mesmo idioma da nota de estado abaixo). O aviso de
-// "uma resposta só" é essencial: sem ele o modelo tende a responder a mensagem 1,
-// depois a 2, e o usuário recebe dois blocos pro que era uma conversa.
+// Injected as role:'user' (same language as the state note below). The notice about
+// "only one reply" is essential: without it the model tends to answer message 1,
+// then 2, and the user gets two blocks for what was one conversation.
 const INTERJECT_PREFIX = '[o usuário mandou esta mensagem AGORA, no meio do seu trabalho — ela é mais recente que tudo acima]';
 const INTERJECT_SUFFIX = 'Decida antes de continuar: se isso muda o que você estava fazendo, ajuste ou abandone o rumo anterior; se não muda, siga. Entregue UMA resposta só no fim, contemplando tudo — não mande uma resposta por mensagem.';
 
-// Nota de estado do turno interrompido. Quando um turno de build é cortado
-// (teto de passos, loop, geração truncada), a "memória" do que já foi feito
-// vivia só na cabeça do modelo — e o turno seguinte ("continua") partia de um
-// contexto podado/compactado e REESCREVIA arquivos a partir de versões velhas
-// (o incidente KhaosClass, 2×). Antes do salvage, injetamos uma mensagem
-// DETERMINÍSTICA (montada em código, sem chamada de modelo) listando as tools
-// já executadas neste turno com seus args-chave. Ela persiste no history, então
-// a continuação sabe exatamente onde o turno anterior parou.
+// State note for the interrupted turn. When a build turn is cut short
+// (step cap, loop, truncated generation), the "memory" of what was already done
+// used to live only in the model's head — and the next turn ("continua") started from a
+// pruned/compacted context and REWROTE files from old versions
+// (the KhaosClass incident, 2×). Before the salvage, we inject a
+// DETERMINISTIC message (built in code, without a model call) listing the tools
+// already executed this turn with their key args. It persists in history, so
+// the continuation knows exactly where the previous turn stopped.
 const STATE_NOTE_MAX_CALLS = 30; // teto de linhas na nota (turnos de 40 passos)
 const STATE_NOTE_KEYS = ['nome_do_sistema', 'caminho', 'arquivo', 'comando', 'rotulo', 'host', 'versao', 'dono'];
 function callHint(c) {
@@ -139,19 +139,19 @@ function buildStateNote(turnLog, motivo) {
 const callSig = callSignature;
 
 function pruneTurnBlobs(messages, turnStart, providerName, consumedUpTo = Infinity, retainedToolResult = null) {
-  // Colapsa blobs ANTIGOS do turno (além da janela recente) em todo provider.
-  // Só tocamos o VALOR de args/content; o meta (thoughtSignature do gemini) fica
-  // intacto, então a assinatura não é desassociada. providerName mantido na
-  // assinatura por compat/log; hoje o tratamento é o mesmo pra todos.
+  // Collapses OLD blobs from the turn (beyond the recent window) on every provider.
+  // We only touch the VALUE of args/content; the meta (gemini's thoughtSignature) stays
+  // intact, so the signature isn't disassociated. providerName kept in the
+  // signature for compat/log; today the handling is the same for everyone.
   //
-  // `consumedUpTo` = quantas mensagens o modelo JÁ VIU (tamanho do array na última
-  // chamada a complete()). Nada além disso pode ser colapsado: os resultados de uma
-  // rodada são empilhados no FIM do passo N e esta função roda no TOPO do passo N+1,
-  // antes do complete(). Sem essa trava, uma rodada com mais de TURN_KEEP_RECENT
-  // resultados grandes tinha os primeiros trocados por "Você já viu esse conteúdo
-  // antes neste turno" — uma afirmação falsa, sobre um conteúdo que o modelo nunca
-  // leu. O que ainda não foi consumido segue pro corte brando da janela recente
-  // (capRecentBlob) e só vira stub no passo seguinte, depois de lido de fato.
+  // `consumedUpTo` = how many messages the model has ALREADY SEEN (array size on the last
+  // call to complete()). Nothing beyond that can be collapsed: the results of a
+  // round are stacked at the END of step N and this function runs at the TOP of step N+1,
+  // before complete(). Without this guard, a round with more than TURN_KEEP_RECENT
+  // large results had the first ones swapped for "Você já viu esse conteúdo
+  // antes neste turno" — a false claim, about content the model never
+  // read. Whatever hasn't been consumed yet goes through the soft cut of the recent window
+  // (capRecentBlob) and only becomes a stub on the next step, after actually being read.
   const lastKeep = Math.min(messages.length - TURN_KEEP_RECENT, consumedUpTo);
   for (let i = turnStart; i < lastKeep; i++) {
     const m = messages[i];
@@ -168,9 +168,9 @@ function pruneTurnBlobs(messages, turnStart, providerName, consumedUpTo = Infini
       }
     }
   }
-  // Janela recente: não colapsa, mas TAMBÉM não é ilimitada — blobs acima de
-  // TURN_RECENT_MAX levam corte head+tail com marcador (ver capRecentBlob).
-  // Idempotente: uma mensagem já cortada fica ≤ TURN_RECENT_MAX e não é retocada.
+  // Recent window: doesn't collapse, but is ALSO not unlimited — blobs above
+  // TURN_RECENT_MAX get a head+tail cut with a marker (see capRecentBlob).
+  // Idempotent: a message already cut stays ≤ TURN_RECENT_MAX and isn't touched again.
   for (let i = Math.max(turnStart, lastKeep); i < messages.length; i++) {
     const m = messages[i];
     if (!m) continue;
@@ -186,8 +186,8 @@ function pruneTurnBlobs(messages, turnStart, providerName, consumedUpTo = Infini
 }
 
 /**
- * Registry de tools. As defs viram JSON Schema (mesmo shape que MCP usa),
- * então plugar um MCP server depois é trivial: só mapear suas tools pra cá.
+ * Tool registry. The defs become JSON Schema (the same shape MCP uses),
+ * so plugging in an MCP server later is trivial: just map its tools here.
  */
 export class ToolRegistry {
   constructor() { this.map = new Map(); }
@@ -224,17 +224,17 @@ export class ToolRegistry {
 }
 
 /**
- * O loop. Idêntico pra todo modelo. Troque `provider` e tudo continua igual.
- * `history` permite continuar uma conversa (chat multi-turno): passe as
- * messages devolvidas na chamada anterior.
- * `images` (opcional) anexa imagens à mensagem do usuário DESTE turno (visão):
- * cada item { mimeType, data(base64) }. Só o provider que suporta multimodal as
- * usa; o caller deve removê-las antes de persistir o history (não re-enviar).
- * `pollNewUserMsg` (opcional) é o canal de mensagem-no-meio-do-turno: uma função
- * (async) que devolve `null` ou `{ text }` com o que o usuário mandou DEPOIS que
- * este turno já começou. É consultada em cada fronteira de passo e antes de
- * entregar a resposta — o modelo vê a mensagem nova e decide se muda de rumo, em
- * vez de o usuário receber a resposta obsoleta e só depois a nova.
+ * The loop. Identical for every model. Swap `provider` and everything stays the same.
+ * `history` allows continuing a conversation (multi-turn chat): pass the
+ * messages returned from the previous call.
+ * `images` (optional) attaches images to THIS turn's user message (vision):
+ * each item { mimeType, data(base64) }. Only a provider that supports multimodal
+ * uses them; the caller must remove them before persisting the history (don't resend).
+ * `pollNewUserMsg` (optional) is the mid-turn-message channel: a function
+ * (async) that returns `null` or `{ text }` with what the user sent AFTER
+ * this turn already started. It's checked at every step boundary and before
+ * delivering the reply — the model sees the new message and decides whether to change course, instead
+ * of the user receiving the stale reply and only then the new one.
  * @param {{ provider, tools:ToolRegistry, system:string, userInput:string,
  *           images?:{mimeType:string,data:string}[], history?:object[],
  *           maxSteps?:number, onEvent?:(e:object)=>void,
@@ -246,12 +246,12 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   const userMsg = { role: 'user', content: sanitizeText(userInput) };
   if (images?.length) userMsg.images = images;
   const messages = [...history, userMsg];
-  // Uso/custo de cada chamada ao provider neste turno (1 turno pode ter N chamadas
-  // por causa do tool-loop). O caller persiste isso com as dimensões (usuário,
-  // conversa, tipo). O provider preenche res.usage; aqui só acumulamos.
+  // Usage/cost of every call to the provider in this turn (1 turn can have N calls
+  // because of the tool-loop). The caller persists this with the dimensions (user,
+  // conversation, type). The provider fills res.usage; here we just accumulate.
   const usages = [];
-  // Fontes da busca nativa do provider (grounding), acumuladas do turno inteiro e
-  // sem repetir URL. O provider preenche res.sources; o caller decide se mostra.
+  // Sources from the provider's native search (grounding), accumulated across the whole turn and
+  // without repeating URLs. The provider fills res.sources; the caller decides whether to show them.
   const sources = [];
   const sourceSeen = new Set();
   const coletarFontes = (res) => {
@@ -259,9 +259,9 @@ export async function runAgent({ provider, tools, system, userInput, images, his
       if (s?.uri && !sourceSeen.has(s.uri)) { sourceSeen.add(s.uri); sources.push(s); }
     }
   };
-  let turnStart = messages.length; // só blobs GERADOS neste turno são colapsados
-  let consumedUpTo = messages.length; // quantas mensagens o modelo já viu (ver pruneTurnBlobs)
-  const sigCounts = new Map(); // freio anti-loop: contagem de chamadas idênticas
+  let turnStart = messages.length; // only blobs GENERATED in this turn are collapsed
+  let consumedUpTo = messages.length; // how many messages the model has already seen (see pruneTurnBlobs)
+  const sigCounts = new Map(); // anti-loop guard: count of identical calls
   // Answer text written alongside keepsStepText tools. Without this it was lost,
   // because only the last step's text becomes the reply.
   let carriedText = '';
@@ -274,8 +274,8 @@ export async function runAgent({ provider, tools, system, userInput, images, his
     if (norm(carriedText).includes(norm(final))) return carriedText;
     return `${carriedText}\n\n${final}`;
   };
-  let emptyEnd = false; // fim SEM texto (seco ou truncado no teto de saída) -> vai pro salvage, nunca devolve branco
-  let loopBreak = false; // cortado pelo freio anti-loop -> motivo certo na nota de estado
+  let emptyEnd = false; // end WITHOUT text (dry or truncated at the output cap) -> goes to salvage, never returns blank
+  let loopBreak = false; // cut by the anti-loop guard -> correct reason in the state note
   const turnLog = initialToolLog.map(c => ({ name:c.name, hint:c.hint || c.name, falhou:!!c.falhou })); // toda tool executada neste turno (nome + args-chave) -> nota de estado se o turno for cortado
   let protocolRepairs = 0, promiseRepairs = 0, repairInstruction = '';
   let answerRepairTools = null, answerRepairFallback = '', answerRepairs = 0;
@@ -360,10 +360,10 @@ export async function runAgent({ provider, tools, system, userInput, images, his
     onEvent({ type: 'end', text });
     return { text, messages, usages, sources, termination };
   };
-  let interjections = 0; // quantas mensagens-no-meio-do-turno já entraram (teto MAX_INTERJECTIONS)
-  // Puxa o que chegou desde a última consulta. Nunca deixa o turno morrer por erro
-  // daqui: se o canal falhar, o turno segue como antes (a mensagem fica pendente e
-  // vira o turno seguinte, que é exatamente o comportamento antigo).
+  let interjections = 0; // how many mid-turn messages have already come in (cap MAX_INTERJECTIONS)
+  // Pulls what arrived since the last check. Never lets the turn die from an error
+  // here: if the channel fails, the turn continues as before (the message stays pending and
+  // becomes the next turn, which is exactly the old behavior).
   async function drainNewUserMsg() {
     if (!pollNewUserMsg || interjections >= MAX_INTERJECTIONS) return null;
     let novo;
@@ -379,20 +379,20 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   for (let step = 0; step < maxSteps; step++) {
     if(typeof control?.prepareContext==='function')await control.prepareContext({messages,consumedUpTo,step});
     else if (step > 0) pruneTurnBlobs(messages, turnStart, provider.name, consumedUpTo, retainedToolResult);
-    // Fronteira de passo: é aqui que a mensagem nova entra. Nunca no meio de uma
-    // rodada de tools (a turn de assistant+tool_results tem que ficar intacta).
+    // Step boundary: this is where the new message comes in. Never in the middle of a
+    // round of tools (the assistant+tool_results turn has to stay intact).
     const entrou = await drainNewUserMsg();
     if (entrou) {
-      // `raw` = só a fala do usuário. O invólucro (prefixo/sufixo de instrução) e o
-      // rascunho descartado abaixo servem pro modelo DESTE turno; no history persiste
-      // apenas o raw (server.mjs troca content por raw antes de gravar), senão cada
-      // interjeição carregaria a moldura — e o rascunho de até 4000 chars — em todo
-      // turno futuro daquela thread até a compactação.
+      // `raw` = only the user's utterance. The wrapper (instruction prefix/suffix) and the
+      // discarded draft below serve the model of THIS turn; in the history only
+      // the raw persists (server.mjs swaps content for raw before saving), otherwise every
+      // interjection would carry the framing — and the draft of up to 4000 chars — into every
+      // future turn of that thread until compaction.
       messages.push({ role: 'user', meta: 'interject', raw: entrou, content: sanitizeText(`${INTERJECT_PREFIX}\n\n${entrou}\n\n${INTERJECT_SUFFIX}`) });
       onEvent({ type: 'interject', step, text: entrou });
     }
-    // Marca ANTES da chamada: tudo que está no array agora vai ser lido pelo modelo
-    // nesta chamada, e só a partir daqui pode ser colapsado em passos futuros.
+    // Marks BEFORE the call: everything in the array now will be read by the model
+    // on this call, and only from here on can it be collapsed in future steps.
     consumedUpTo = messages.length;
     if (control?.beforeStep) {
       const boundary = await control.beforeStep({ messages, step, usages });
@@ -435,10 +435,10 @@ export async function runAgent({ provider, tools, system, userInput, images, his
 
     if (res.stop === STOP.END) {
       if (res.text && res.text.trim()) {
-        // Última checagem ANTES de entregar. Se chegou algo agora, o rascunho não
-        // é enviado: vai pro contexto como rascunho não-enviado junto da mensagem
-        // nova e o modelo decide se ainda serve. É o "ainda é pertinente entregar
-        // isso?" — sem isso o usuário recebia a resposta obsoleta e depois a nova.
+        // Last check BEFORE delivering. If something arrived now, the draft is not
+        // sent: it goes into context as an unsent draft alongside the new
+        // message and the model decides whether it's still useful. It's the "is it still relevant to
+        // deliver this?" check — without it the user would get the stale reply and then the new one.
         const tarde = await drainNewUserMsg();
         if (tarde) {
           const rascunho = res.text.length > 4000 ? `${res.text.slice(0, 4000)}\n[…rascunho cortado aqui]` : res.text;
@@ -459,8 +459,8 @@ export async function runAgent({ provider, tools, system, userInput, images, his
           }
           return finish(codingFallback(turnLog));
         }
-        // Classificador opcional (Jev, #43): pega a promessa que a regra perde.
-        // Só pode pedir o MESMO reparo único; nunca troca a resposta pelo fallback.
+        // Optional classifier (Jev, #43): catches the promise that the rule misses.
+        // Can only request the SAME single repair; never swaps the reply for the fallback.
         if (promiseClassifier && promiseRepairs === 0 && step + 1 < maxSteps && codingAvailable(defs)
           && !turnLog.some(c => CODING_TOOLS.has(c.name))
           && await Promise.resolve(promiseClassifier(res.text)).catch(() => null) === 'promessa') {
@@ -492,9 +492,9 @@ export async function runAgent({ provider, tools, system, userInput, images, his
         onEvent({ type: 'end', text: delivered });
         return { text: delivered, messages, usages, sources, termination:'completed' };
       }
-      // Fim SEM texto: o modelo encerrou seco OU a geração foi CORTADA no teto de
-      // saída (res.truncated) antes de emitir a resposta. Nunca devolver branco
-      // pro usuário: sai do loop e cai no salvage abaixo pra arrancar uma resposta.
+      // End WITHOUT text: the model finished dry OR generation was CUT at the output
+      // cap (res.truncated) before emitting the reply. Never return blank
+      // to the user: exits the loop and falls into the salvage below to extract a reply.
       if (carriedText && !res.truncated) {
         messages.push({ role: 'assistant', content: sanitizeText(carriedText) });
         onEvent({ type: 'end', text: carriedText });
@@ -505,10 +505,10 @@ export async function runAgent({ provider, tools, system, userInput, images, his
       break;
     }
 
-    // stop === TOOL: a turn INTEIRA (texto-pensamento + TODAS as functionCalls)
-    // vira UMA única mensagem de assistant. Quebrar em mensagens separadas
-    // desassocia o thoughtSignature que o Gemini 3 exige amarrado à turn — e o
-    // 400 "missing thought_signature" volta. Mantemos a turn intacta.
+    // stop === TOOL: the WHOLE turn (thought-text + ALL functionCalls)
+    // becomes ONE single assistant message. Splitting it into separate messages
+    // disassociates the thoughtSignature that Gemini 3 requires bound to the turn — and the
+    // 400 "missing thought_signature" comes back. We keep the turn intact.
     const calls = res.toolCalls ?? [];
     if (answerRepairTools && calls.some(c => !answerRepairTools.has(c.name))) {
       onEvent({type:'answer_recovery_tool_blocked',step});
@@ -599,10 +599,10 @@ export async function runAgent({ provider, tools, system, userInput, images, his
     if (loopBreak) break;
   }
 
-  // Bateu no teto de passos sem o modelo fechar. Em vez de devolver um texto seco
-  // de erro pro usuário, fazemos UMA última chamada SEM tools, pedindo que ele
-  // responda AGORA com o que já levantou (nada de chamar mais ferramenta). Assim o
-  // usuário sempre recebe uma resposta natural com o parcial, não uma mensagem crua.
+  // Hit the step cap without the model closing. Instead of returning a dry error
+  // text to the user, we make ONE last call WITHOUT tools, asking it to
+  // answer NOW with what it has already gathered (no more tool calling). This way the
+  // user always gets a natural reply with the partial result, not a raw message.
   const termination = loopBreak ? 'repeated_calls' : emptyEnd ? 'empty_end' : 'step_limit';
   onEvent({ type: 'max_steps', steps: maxSteps });
   // A specialized executor owns its structured consolidation; don't spend an
@@ -618,19 +618,19 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   // Short on purpose (26/08): the reader already waited the whole turn and
   // doesn't want an apology paragraph. One line on what happened + the way out.
   const CEILING_MSG = 'Essa tarefa é grande e não coube numa resposta só. Me diz "continua" que eu sigo de onde parei.';
-  // Quando caímos aqui por FIM SEM TEXTO (truncamento no teto de saída), a mensagem
-  // acima não descreve o que houve; usa uma honesta sobre o corte.
+  // When we land here due to END WITHOUT TEXT (truncation at the output cap), the message
+  // above doesn't describe what happened; use an honest one about the cut.
   const FALLBACK_MSG = emptyEnd ? 'Minha resposta ficou longa e foi cortada no meio. Me diz "continua" que eu retomo daqui.' : CEILING_MSG;
-  // Nota de estado ANTES do salvage: entra nas messages (e portanto no history
-  // persistido), então tanto o salvage quanto o turno de "continua" enxergam o
-  // que já foi executado — mesmo que a compactação/poda tenha comido os detalhes.
+  // State note BEFORE the salvage: goes into messages (and therefore into the
+  // persisted history), so both the salvage and the "continua" turn can see
+  // what was already executed — even if compaction/pruning has eaten the details.
   if (turnLog.length) {
     const motivo = emptyEnd ? 'geração cortada no limite de saída'
       : loopBreak ? 'chamadas repetidas em loop'
       : 'teto de passos do turno';
-    // meta:'estado' = mensagem injetada por nós, não é fala do usuário. Quem
-    // persiste o history usa isso pra não sobrescrever esta nota com o texto do
-    // usuário (o caller reescreve a ÚLTIMA mensagem de user com a versão limpa).
+    // meta:'estado' = message injected by us, not the user's utterance. Whoever
+    // persists the history uses this to avoid overwriting this note with the user's
+    // text (the caller rewrites the LAST user message with the clean version).
     messages.push({ role: 'user', meta: 'estado', content: sanitizeText(buildStateNote(turnLog, motivo)) });
   }
   try {

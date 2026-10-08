@@ -1,6 +1,6 @@
-// Cookie sem Secure SÓ no mesmo computador (Safari descarta cookie Secure em
-// http://localhost). O risco é o contrário: o produção ou um túnel perderem o
-// Secure. Servidor http de verdade no loopback; nenhuma rede.
+// Cookie without Secure ONLY on the same computer (Safari discards a Secure cookie on
+// http://localhost). The risk is the opposite: production or a tunnel losing the
+// Secure flag. Real http server on loopback; no network.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';

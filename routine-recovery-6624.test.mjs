@@ -1,4 +1,4 @@
-// Regressão do incidente de 14/09 14h04–14h10. Tudo offline.
+// Regression from the 2026-09-14 14:04–14:10 incident. Everything offline.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {extractCurationManifest,finalizeCuration} from './web/curation-runtime.mjs';
@@ -20,14 +20,14 @@ const cfg={version:1,sections:[{id:'market',label:'Mercado',min:1,max:2,maxAgeDa
 const finalized=await finalizeCuration({text:'Resposta:\n'+json+'\n— fim',config:cfg,userId:'u',routineId:'r',history:[],now:'2026-09-14T17:00:00Z'},{checkLinks:async urls=>({checados:urls.split('\n').length,quebrados:[],indefinidos:[],naoChecados:[]})});
 eq(finalized.executionStatus,'completed');eq(finalized.urls.length,4);
 
-// Campos auxiliares ausentes não apagam uma edição válida inteira. Autor vazio
-// cai no hostname verificado; detail vazio é válido para check complete.
+// Missing auxiliary fields don't erase an entire valid edit. Empty author
+// falls back to the verified hostname; empty detail is valid for check complete.
 const sparse={...manifest,items:manifest.items.map((item,index)=>index?item:{...item,author:null}),checks:manifest.checks.map(c=>({...c,detail:''}))};
 const sparseFinal=await finalizeCuration({text:JSON.stringify(sparse),config:cfg,userId:'u',routineId:'r',history:[],now:'2026-09-14T17:00:00Z'},{checkLinks:async urls=>({checados:urls.split('\n').length,quebrados:[],indefinidos:[],naoChecados:[]})});
 eq(sparseFinal.executionStatus,'completed');eq(sparseFinal.urls.length,4);ok(sparseFinal.text.includes('Autor/Fonte: example.invalid'));
 
-// Um candidato malformado é omitido isoladamente; os válidos continuam no
-// relatório, que sai parcial e auditável em vez de virar um e-mail de falha.
+// A malformed candidate is omitted in isolation; the valid ones remain in the
+// report, which comes out partial and auditable instead of turning into a failure e-mail.
 const mixed={...manifest,items:[...manifest.items,{...manifest.items[0],url:'https://example.invalid/bad',title:''}]};
 const mixedFinal=await finalizeCuration({text:JSON.stringify(mixed),config:cfg,userId:'u',routineId:'r',history:[],now:'2026-09-14T17:00:00Z'},{checkLinks:async urls=>({checados:urls.split('\n').length,quebrados:[],indefinidos:[],naoChecados:[]})});
 eq(mixedFinal.executionStatus,'partial');eq(mixedFinal.urls.length,4);eq(mixedFinal.audit.discarded.invalidFields,1);ok(!mixedFinal.text.includes('omitido(s) por campos inválidos'));ok(mixedFinal.diagnostic.includes('título inválido'));
@@ -36,9 +36,9 @@ const missingWhy={...manifest,items:manifest.items.map((item,index)=>index?item:
 const whyFinal=await finalizeCuration({text:JSON.stringify(missingWhy),config:cfg,userId:'u',routineId:'r',history:[],now:'2026-09-14T17:00:00Z'},{checkLinks:async urls=>({checados:urls.split('\n').length,quebrados:[],indefinidos:[],naoChecados:[]})});
 eq(whyFinal.executionStatus,'partial');eq(whyFinal.urls.length,4);eq(whyFinal.audit.discarded.missingWhy,1);ok(!whyFinal.text.includes('Não informado nesta edição.'));
 
-// Caso exato da simulação de 14/09: checks parciais com 567/658 caracteres não
-// invalidam mais o manifesto. Só o diagnóstico auxiliar é truncado; os quatro
-// artigos válidos continuam no relatório.
+// Exact case from the 2026-09-14 simulation: partial checks with 567/658 characters no longer
+// invalidate the manifest. Only the auxiliary diagnostic gets truncated; the four
+// valid articles remain in the report.
 const longChecks={...manifest,checks:manifest.checks.map((c,index)=>index<2?{...c,status:'partial',detail:'limitação '+String(index+1)+' '+('x'.repeat(index?645:554))}:c)};
 const longFinal=await finalizeCuration({text:JSON.stringify(longChecks),config:cfg,userId:'u',routineId:'r',history:[],now:'2026-09-14T17:00:00Z'},{checkLinks:async urls=>({checados:urls.split('\n').length,quebrados:[],indefinidos:[],naoChecados:[]})});
 eq(longFinal.executionStatus,'partial');eq(longFinal.urls.length,4);ok(!longFinal.diagnostic);eq(longFinal.audit.acceptedBySection[0].searchStatus,'partial');ok(!longFinal.text.includes('somente os itens aceitos pelos filtros determinísticos'));
@@ -47,7 +47,7 @@ const serverSource=readFileSync('web/server.mjs','utf8');
 ok(serverSource.includes('text = curationResult ? text : searchCoverage.finish(text, userLang,'));
 ok(serverSource.includes('audit:curationResult.audit'));
 
-// O recibo real domina a reinterpretação falsa do modelo.
+// The real receipt overrides the model's false reinterpretation.
 const runJournal=createActionJournal({language:'pt-BR'});
 const runOut=actionResult({state:'routine_content_failed',id:'routine-1',target:'email',subject:'Curadoria',delivery:'accepted'},'texto interno');
 runJournal.toolResult({name:'executar_rotina_agora',args:{}},runOut);
@@ -63,8 +63,8 @@ ok(renderedSchedule.includes('Execução extra da rotina agendada'));
 ok(renderedSchedule.includes('cadência normal não foi alterada'));
 ok(!renderedSchedule.includes('lembrete'));
 
-// Fila de execução extra usa o executor real injetado uma vez e não marca o
-// last_run_day da cadência normal.
+// The extra execution queue uses the real executor injected once and does not mark the
+// last_run_day of the normal cadence.
 let claims=0,executions=0,finishes=0,markedNormal=0;
 const job={one_shot_id:'job-1',id:'routine-1',title:'Curadoria',enabled:true,hour:8,days:'[1,4]',tz:'America/Sao_Paulo',last_run_day:'2026-09-14'};
 const scheduler=startScheduler({

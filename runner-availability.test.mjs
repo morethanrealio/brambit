@@ -1,5 +1,5 @@
-// Sem servidor/DB/daemon real. O módulo completo é avaliado em VM; só touch
-// sintético e relógio simulado. Timers, rede e processos reais são proibidos.
+// No real server/DB/daemon. The complete module is evaluated in a VM; only synthetic
+// touch and simulated clock. Real timers, network and processes are forbidden.
 import { marca } from './web/marca.mjs';
 import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
@@ -13,14 +13,14 @@ const p=instance(),opts={agentId:'agent-a',runnerForThisAgent:true,terminalAvail
 eq(p.runnerAvailability('user-a').state,'unknown');ok(p.runnerContextForTurn('user-a',opts).includes('NÃO prova'));ok(p.runnerContextForTurn('user-a',opts).includes('servidor pode ter reiniciado'));
 p.touch('user-b','dev-b',{hostname:'PRIVATE-OTHER-USER',version:'2.1.1'},'agent-b');eq(p.runnerAvailability('user-a').state,'unknown');ok(!p.runnerContextForTurn('user-a',opts).includes('PRIVATE-OTHER-USER'));
 p.touch('user-a','dev-a',{hostname:'synthetic',version:'2.1.1'},'agent-a');eq(p.runnerAvailability('user-a').state,'online');ok(p.runnerContextForTurn('user-a',opts).includes('ATIVO'));ok(p.runnerContextForTurn('user-a',opts).includes('o Runner não informou o modo de escrita'));ok(!p.runnerContextForTurn('user-a',opts).includes('ESCRITA vale só nas pastas autorizadas'));
-// Confinamento só é afirmado quando o Runner o reporta (degrade honesto; sem o campo = desconhecido).
+// Confinement is only asserted when the Runner reports it (honest degrade; no field = unknown).
 {const c=instance();c.touch('user-a','dev-a',{hostname:'synthetic',version:'2.1.1',confined:'1'},'agent-a');const t=c.runnerContextForTurn('user-a',opts);ok(t.includes('ESCRITA vale só nas pastas autorizadas'));ok(t.includes('cercada pelo sistema operacional'));}
-// Acesso total: o daemon manda confined=1 (nada a cercar), mas o texto não pode dizer que a escrita está cercada.
+// Full access: the daemon sends confined=1 (nothing to fence), but the text must not say the write is fenced.
 {const c=instance();c.touch('user-a','dev-a',{hostname:'synthetic',version:'2.2.0',mode:'full-access',confined:'1'},'agent-a');const t=c.runnerContextForTurn('user-a',opts);ok(t.includes('ACESSO TOTAL'));ok(!t.includes('cercada pelo sistema operacional'));}
-// 2.2.0 sem cerca no modo restrito: o Runner recusa tudo, e o assistente aponta o botão do painel em vez de tentar.
+// 2.2.0 without a fence in restricted mode: the Runner refuses everything, and the assistant points to the panel button instead of trying.
 {const c=instance();c.touch('user-a','dev-a',{hostname:'synthetic',version:'2.2.0',os:'win32',mode:'workspace-write',confined:'0'},'agent-a');const t=c.runnerContextForTurn('user-a',opts);ok(t.includes('BLOQUEADO'));ok(t.includes('Liberar acesso total nesta máquina'));ok(!t.includes('bubblewrap'));}
 {const c=instance();c.touch('user-a','dev-a',{hostname:'synthetic',version:'2.2.0',os:'linux',mode:'workspace-write',confined:'0'},'agent-a');ok(c.runnerContextForTurn('user-a',opts).includes('bubblewrap'));}
-// Runner antigo sem cerca ainda roda solto: mantém o aviso de escrita não cercada.
+// Old Runner without a fence still runs loose: keeps the notice that the write is not fenced.
 {const c=instance();c.touch('user-a','dev-a',{hostname:'synthetic',version:'2.1.1',mode:'workspace-write',confined:'0'},'agent-a');const t=c.runnerContextForTurn('user-a',opts);ok(t.includes('NÃO está cercada'));ok(!t.includes('BLOQUEADO'));}
 
 const blocked=p.runnerContextForTurn('user-a',{...opts,terminalAvailable:false});ok(blocked.includes('terminal local não está disponível'));ok(!blocked.includes('Você TEM acesso'));ok(blocked.includes('já está conectado'));
@@ -31,14 +31,14 @@ const offline=p.runnerContextForTurn('user-a',opts);eq(p.runnerAvailability('use
 eq(p.runnerStatus('user-a').online,false);eq(p.runnerContext('user-a'),''); // API/gate legados intocados
 const fresh=instance();eq(fresh.runnerAvailability('user-a').state,'unknown');
 p.touch('user-a','dev-a',null,null);const unbound=p.runnerContextForTurn('user-a',{...opts,runnerForThisAgent:false});ok(unbound.includes('não foi habilitado'));ok(!unbound.includes('OUTRO assistente'));ok(p.runnerContextForTurn('user-a',opts).includes('ATIVO'));
-// Dispositivo recém-online não autoriza agente que já perdeu o gate neste turno.
+// A device that just came online doesn't authorize an agent that already lost the gate this turn.
 p.touch('user-a','dev-a',null,'agent-a');ok(p.runnerContextForTurn('user-a',{...opts,runnerForThisAgent:false}).includes('não foi habilitado'));
-// Múltiplos devices: mesma seleção mais recente do transporte, sem mudar gate.
+// Multiple devices: same most-recent selection from the transport, without changing the gate.
 clock+=10;p.touch('user-a','dev-new',null,'agent-new');ok(p.runnerContextForTurn('user-a',opts).includes('OUTRO assistente'));eq(p.runnerOnline('user-a'),true);
 const server=readFileSync('./web/server.mjs','utf8');
 ok(server.includes('const runner = runnerContextForTurn(userId, {'));ok(server.includes('terminalAvailable:runnerForThisAgent && livreEnv'));
 ok(server.includes("if (agentCategory !== 'grupo' && runnerOnline(userId))"));ok(server.includes('const livreActive = livreEnv && (runnerForThisAgent || sshLivre)'));
-// Expressão de integração REAL extraída, prova que o gate de ambiente chega ao helper.
+// REAL integration expression extracted, proves that the environment gate reaches the helper.
 const start=server.indexOf('  const runner = runnerContextForTurn(userId, {');const end=server.indexOf('  });',start)+5;
 const expr=server.slice(start,end)+';globalThis.result=runner;';
 for(const [env,expected] of [[true,'ATIVO'],[false,'terminal local não está disponível']]){

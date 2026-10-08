@@ -1,7 +1,7 @@
-// Achado #22: imds()/kmsCall() liam o corpo da resposta sem listener de 'error'.
-// Se a conexão cai DEPOIS dos headers, o stream emite 'error'; EventEmitter sem
-// listener de 'error' joga a exceção, que fora de try/catch vira
-// uncaughtException e mata o processo (o harness não tem handler global).
+// Finding #22: imds()/kmsCall() read the response body without an 'error' listener.
+// If the connection drops AFTER the headers, the stream emits 'error'; an EventEmitter without
+// an 'error' listener throws the exception, which outside try/catch turns into an
+// uncaughtException and kills the process (the harness has no global handler).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -29,9 +29,9 @@ test('erro no meio do corpo vira rejeição, não exceção solta', async () => 
 
 test('sem listener de error o emit JOGA a exceção (é o mecanismo do bug)', () => {
   const nu = new EventEmitter();
-  // Prova do mecanismo: EventEmitter sem listener de 'error' transforma o evento
-  // em throw. No cliente HTTP isso acontece dentro do callback do socket, fora de
-  // qualquer try/catch, ou seja, derruba o processo.
+  // Proof of the mechanism: an EventEmitter without an 'error' listener turns the event
+  // into a throw. In the HTTP client this happens inside the socket's callback, outside of
+  // any try/catch, i.e., it brings down the process.
   assert.throws(() => nu.emit('error', new Error('boom')), /boom/);
 });
 

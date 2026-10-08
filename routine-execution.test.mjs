@@ -35,9 +35,9 @@ await db.query("UPDATE mtr_harness.routines SET next_run=$1 WHERE id='s'",[(awai
 const pending=(await db.query("SELECT next_run FROM mtr_harness.routines WHERE id='s'")).rows[0].next_run;const origList=deps.listDueRoutines;deps.listDueRoutines=async()=>[(await origList())[0]].map(x=>({...x,next_run:pending}));
 const scheduler=startScheduler(deps,{intervalMs:100000});const tick=scheduler.tick();await start3;let drained=false;const stopping=scheduler.stop().then(()=>drained=true);await Promise.resolve();ok(!drained);unblock('ok');await tick;await stopping;ok(drained);ok(flow.join(',')==='mark,run,deliver');await scheduler.tick();ok(flow.length===3);
 await db.query("UPDATE mtr_harness.routines SET last_run_day='already' WHERE id='r'");ok(!await store.claim(r,'day:already','stale-scheduler'));
-// Atraso de fila/restart: recupera no mesmo dia dentro da graça, mas não dispara
-// indefinidamente uma rotina velha. O relógio do tick é capturado uma única vez:
-// uma primeira rotina lenta não torna a segunda inelegível no meio do lote.
+// Queue/restart delay: recovers on the same day within the grace period, but doesn't fire
+// an old routine indefinitely. The tick's clock is captured only once:
+// a slow first routine doesn't make the second one ineligible mid-batch.
 const dueBase={enabled:true,hour:8,days:'weekdays',tz:'America/Sao_Paulo',last_run_day:'2026-09-11'};
 ok(ROUTINE_LATE_GRACE_MIN===180);ok(isDue(dueBase,new Date('2026-09-14T12:30:00Z')));ok(!isDue(dueBase,new Date('2026-09-14T14:01:00Z')));
 let clock=new Date('2026-09-14T11:05:00Z'),clockReads=0,fair=[];

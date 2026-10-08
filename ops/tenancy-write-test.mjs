@@ -1,33 +1,33 @@
 #!/usr/bin/env node
-// ── Isolamento entre contas: superfície de ESCRITA (Fase 1, parte 2) ──────────
+// ── Cross-account isolation: the WRITE surface (Phase 1, part 2) ──────────
 //
-// A suíte irmã (ops/tenancy-test.mjs) só faz leitura. Esta cobre os endpoints
-// que MUDAM estado e aceitam um id, que são justamente os perigosos: se a checagem
-// de dono falhar num deles, a conta B não lê o dado de A — ela apaga.
+// The sibling suite (ops/tenancy-test.mjs) only does reads. This one covers the endpoints
+// that CHANGE state and accept an id, which are precisely the dangerous ones: if the owner
+// check fails on one of them, account B doesn't read A's data — it deletes it.
 //
-// Regra que torna isso seguro de rodar em produção: nenhum probe aponta pra
-// recurso real do dono. O teste CRIA antes, na conta A, um conjunto descartável
-// (assistente, conversa, rotina, página, tarefas, sequência, aresta, device,
-// conexão, arquivo), a conta B tenta destruir/alterar ESSES, e no fim tudo é
-// apagado pela própria conta A. Se o isolamento estiver furado, o que se perde é
-// lixo de teste.
+// Rule that makes this safe to run in production: no probe points at the
+// owner's real resource. The test FIRST CREATES, in account A, a disposable set
+// (assistant, conversation, routine, page, tasks, sequence, edge, device,
+// connection, file), account B tries to destroy/alter THESE, and at the end everything is
+// deleted by account A itself. If isolation is broken, what gets lost is
+// test junk.
 //
-// Veredito NÃO é o status HTTP: vários handlers respondem 200 mesmo sem afetar
-// nada (o UPDATE tem `WHERE user_id = $x` e casa zero linhas). O que vale é o
-// EFEITO: antes de cada probe tira-se um retrato do recurso pela sessão de A,
-// roda-se o probe com a sessão de B, e tira-se o retrato de novo. Mudou = FALHOU.
+// The verdict is NOT the HTTP status: several handlers respond 200 even without affecting
+// anything (the UPDATE has `WHERE user_id = $x` and matches zero rows). What counts is the
+// EFFECT: before each probe a snapshot of the resource is taken via A's session,
+// the probe is run with B's session, and the snapshot is taken again. Changed = FAILED.
 //
-// Uso:
-//   SID_A=<sid da conta A> SID_B=<sid da conta B> node ops/tenancy-write-test.mjs
-//   BASE=http://127.0.0.1:8080  (padrão: servidor local)
-//   BASE=https://seu-dominio ALLOW_REMOTE=1  (qualquer alvo fora desta máquina,
-//     produção inclusive, exige ALLOW_REMOTE=1; ver ops/tenancy-base.mjs)
-//   JSON=1  imprime o relatório em JSON no fim (pra CI)
+// Usage:
+//   SID_A=<account A's sid> SID_B=<account B's sid> node ops/tenancy-write-test.mjs
+//   BASE=http://127.0.0.1:8080  (default: local server)
+//   BASE=https://your-domain ALLOW_REMOTE=1  (any target outside this machine,
+//     production included, requires ALLOW_REMOTE=1; see ops/tenancy-base.mjs)
+//   JSON=1  prints the report in JSON at the end (for CI)
 //
-// A limpeza roda em `finally`: se o processo morrer no meio, sobra lixo com o
-// prefixo `zz-tenancy-` na conta A, seguro de apagar à mão.
+// Cleanup runs in `finally`: if the process dies midway, leftover junk with the
+// `zz-tenancy-` prefix stays on account A, safe to delete by hand.
 //
-// Saída: exit 0 se nenhum FALHOU; 1 se algum falhou; 2 em erro de setup.
+// Output: exit 0 if none FAILED; 1 if any failed; 2 on setup error.
 
 import { baseOrExit } from './tenancy-base.mjs';
 
@@ -45,9 +45,9 @@ const INVASOR = 'INVADIDO-POR-B';
 async function call(who, method, path, body) {
   const headers = {};
   if (who !== 'anon') headers.cookie = `sid=${SID[who]}`;
-  // csrfOk() libera GET/HEAD/OPTIONS e exige Origin conhecido no resto. Sem este
-  // header todo probe de escrita tomaria 403 de CSRF e o teste "passaria" sem ter
-  // exercitado nada — falso verde, o pior resultado possível aqui.
+  // csrfOk() allows GET/HEAD/OPTIONS and requires a known Origin for the rest. Without this
+  // header every write probe would get a 403 CSRF and the test would "pass" without having
+  // exercised anything — false green, the worst possible result here.
   if (method !== 'GET' && method !== 'HEAD') headers.origin = BASE;
   if (body !== undefined) headers['content-type'] = 'application/json';
   let r;
@@ -62,14 +62,14 @@ async function call(who, method, path, body) {
   }
   const t = await r.text();
   let data = null;
-  try { data = JSON.parse(t); } catch { /* não-JSON */ }
+  try { data = JSON.parse(t); } catch { /* non-JSON */ }
   return { status: r.status, data, raw: t };
 }
 
-// ── Retratos: o que a conta A vê do próprio recurso, agora ──
-// Cada chave devolve uma string estável. Compara-se a string antes/depois de cada
-// probe; qualquer diferença é efeito colateral do intruso.
-const R = {};   // ids dos recursos descartáveis criados na conta A
+// ── Snapshots: what account A sees of its own resource, right now ──
+// Each key returns a stable string. The string is compared before/after each
+// probe; any difference is a side effect from the intruder.
+const R = {};   // ids of the disposable resources created in account A
 const SNAP = {
   thread: async () => {
     const l = await call('A', 'GET', '/api/threads');
@@ -82,16 +82,16 @@ const SNAP = {
   },
   webhook: async () => {
     const g = await call('A', 'GET', `/api/agent/webhook/get?agentId=${R.agentId}`);
-    // callCount/lastUsedAt mexem sozinhos se o webhook for usado; o que importa
-    // aqui é existir, estar ligado/desligado e o hint do token.
+    // callCount/lastUsedAt change on their own if the webhook is used; what matters
+    // here is existing, being on/off and the token hint.
     const d = g.data || {};
     return JSON.stringify({ status: g.status, exists: d.exists, enabled: d.enabled, hint: d.hint });
   },
   routine: async () => {
     const l = await call('A', 'GET', '/api/routines');
     const r = (l.data?.routines || []).find((x) => x.id === R.routineId);
-    // last_run_at muda quando a rotina roda — e é EXATAMENTE o que o probe de
-    // /api/routine/run tentaria provocar, então fica dentro da comparação.
+    // last_run_at changes when the routine runs — and that's EXACTLY what the
+    // /api/routine/run probe would try to trigger, so it stays within the comparison.
     return JSON.stringify(r || null);
   },
   page: async () => {
@@ -111,8 +111,8 @@ const SNAP = {
   device: async () => {
     const l = await call('A', 'GET', '/api/device/tokens');
     const d = (l.data?.devices || []).find((x) => x.id === R.deviceId);
-    // last_seen_at mexe com heartbeat de runner; este device de teste nunca
-    // pollou, então o objeto inteiro serve.
+    // last_seen_at is tied to the runner heartbeat; this test device never
+    // polled, so the whole object works.
     return JSON.stringify(d || null);
   },
   connection: async () => {
@@ -127,9 +127,9 @@ const SNAP = {
   },
 };
 
-// Um retrato vazio (recurso não existe) faz antes === depois === 'null' e o probe
-// "passa" sem ter alvo nenhum. Isso é falso verde, o pior resultado possível aqui,
-// então retrato vazio vira SKIP explícito.
+// An empty snapshot (resource doesn't exist) makes before === after === 'null' and the probe
+// "passes" without having any target at all. That's a false green, the worst possible result here,
+// so an empty snapshot becomes an explicit SKIP.
 function retratoVazio(chave, s) {
   if (!s || s === 'null') return true;
   if (chave === 'cockpit') {
@@ -149,7 +149,7 @@ function record(nome, chave, r, mudou, obs) {
   console.log(`[${tag}] ${nome} → HTTP ${r.status}${efeito}${obs ? `  · ${obs}` : ''}`);
 }
 
-// ── Setup: cria o descartável na conta A ──
+// ── Setup: creates the disposable in account A ──
 async function setup() {
   const falta = [];
 
@@ -164,16 +164,16 @@ async function setup() {
   const th = await call('A', 'POST', '/api/thread', { agentId: R.agentId, title: `ZZ ${MARCA} thread` });
   if (th.status === 200 && th.data?.id) R.threadId = th.data.id; else falta.push(`thread (HTTP ${th.status})`);
 
-  // Webhook do assistente de teste: o probe de /webhook/enabled só é significativo
-  // se já existir token (o handler recusa ativar sem token), então gera aqui.
+  // Test assistant's webhook: the /webhook/enabled probe is only meaningful
+  // if a token already exists (the handler refuses to enable without a token), so it's generated here.
   const wh = await call('A', 'POST', '/api/agent/webhook/token', { agentId: R.agentId });
   if (wh.status !== 200) falta.push(`webhook do assistente (HTTP ${wh.status})`);
 
   const ro = await call('A', 'POST', '/api/routine', {
     agentId: R.agentId, title: `ZZ ${MARCA} rotina`,
     prompt: 'Recurso descartável do teste de isolamento.',
-    // `days` é coluna de texto (default 'daily'), não array. Hora 3 da manhã e
-    // vida útil de minutos: a rotina morre muito antes de qualquer disparo.
+    // `days` is a text column (default 'daily'), not an array. 3am and
+    // a lifespan of minutes: the routine dies long before any trigger.
     hour: 3, days: 'daily', tz: 'America/Sao_Paulo',
   });
   if (ro.status === 200 && ro.data?.id) R.routineId = ro.data.id; else falta.push(`rotina (HTTP ${ro.status} ${ro.raw?.slice(0, 120)})`);
@@ -197,8 +197,8 @@ async function setup() {
   const gr = await call('A', 'POST', '/api/cockpit/group', { title: `ZZ ${MARCA} sequência`, posX: 200, posY: 200 });
   if (gr.status === 200 && gr.data?.group?.id) {
     R.groupId = gr.data.group.id;
-    // Sequência precisa de agente + fila pra o /group/run chegar na execução; sem
-    // isso o probe morre em 400 de validação e não testa posse nenhuma.
+    // Sequence needs an agent + queue for /group/run to reach execution; without
+    // that the probe dies on a 400 validation error and doesn't test ownership at all.
     await call('A', 'POST', '/api/cockpit/group/update', { id: R.groupId, agentId: R.agentId, taskIds: [R.taskId].filter(Boolean) });
   } else falta.push(`sequência do cockpit (HTTP ${gr.status})`);
 
@@ -226,7 +226,7 @@ async function setup() {
   return { falta };
 }
 
-// ── Probes: a conta B mira os descartáveis de A ──
+// ── Probes: account B targets A's disposables ──
 function probes() {
   const P = [];
   const add = (nome, chave, method, path, body, exige) => P.push({ nome, chave, method, path, body, exige });
@@ -246,8 +246,8 @@ function probes() {
     add('POST /api/agent/rename', 'agent', 'POST', '/api/agent/rename', { agentId, name: INVASOR });
     add('POST /api/agent/webhook/token', 'webhook', 'POST', '/api/agent/webhook/token', { agentId });
     add('POST /api/agent/webhook/enabled', 'webhook', 'POST', '/api/agent/webhook/enabled', { agentId, enabled: false });
-    // Delete do assistente vem por último entre os de 'agent': se passar, os
-    // probes seguintes perdem o alvo.
+    // Assistant delete comes last among the 'agent' ones: if it goes through, the
+    // following probes lose their target.
     add('POST /api/agent/delete', 'agent', 'POST', '/api/agent/delete', { agentId });
   }
   if (R.routineId) {
@@ -257,9 +257,9 @@ function probes() {
     add('POST /api/routine/delete', 'routine', 'POST', '/api/routine/delete', { id });
   }
   if (R.slug) {
-    // Slug é namespaced por usuário: o POST de B com o slug de A cria/atualiza a
-    // página DE B. O que se testa aqui é que a de A não é tocada (e a de B, se
-    // nascer, é apagada na limpeza).
+    // Slug is namespaced by user: B's POST with A's slug creates/updates B's own
+    // page. What's tested here is that A's isn't touched (and B's, if
+    // it's created, gets deleted in cleanup).
     add('POST /api/memory/page (slug de A)', 'page', 'POST', '/api/memory/page', { slug: R.slug, title: INVASOR, body: INVASOR });
     add('POST /api/memory/page/delete', 'page', 'POST', '/api/memory/page/delete', { slug: R.slug });
   }
@@ -288,8 +288,8 @@ function probes() {
   return P;
 }
 
-// Endpoints de escrita com id que continuam DE FORA, com o motivo. Nenhum deles
-// tem como ganhar um alvo descartável sem mexer em coisa real do dono.
+// Write endpoints with id that stay OUT, with the reason. None of them
+// has a way to get a disposable target without touching something real of the owner's.
 const NAO_COBERTO = [
   ['POST /api/home-items/delete', 'item de home é gerado pelo /api/home-refresh; não há como criar um descartável'],
   ['POST /api/apps/visibility', 'publicar/despublicar exige um app real (build de container)'],
@@ -302,7 +302,7 @@ const NAO_COBERTO = [
   ['POST /api/contacts/decline', 'idem'],
 ];
 
-// ── Limpeza: a própria conta A desfaz tudo ──
+// ── Cleanup: account A itself undoes everything ──
 async function cleanup() {
   const sobrou = [];
   const tenta = async (rotulo, who, method, path, body) => {
@@ -316,13 +316,13 @@ async function cleanup() {
   for (const id of [R.taskId, R.taskId2].filter(Boolean)) await tenta('tarefa', 'A', 'DELETE', `/api/cockpit/task?id=${encodeURIComponent(id)}`);
   if (R.slug) {
     await tenta('página de memória (A)', 'A', 'POST', '/api/memory/page/delete', { slug: R.slug });
-    // Se o probe criou a página homônima na conta B, ela sai aqui.
+    // If the probe created the same-named page in account B, it gets removed here.
     const b = await call('B', 'GET', `/api/memory/page?slug=${encodeURIComponent(R.slug)}`);
     if (b.status === 200) await tenta('página de memória (B)', 'B', 'POST', '/api/memory/page/delete', { slug: R.slug });
   }
   if (R.routineId) await tenta('rotina', 'A', 'POST', '/api/routine/delete', { id: R.routineId });
   if (R.threadId) await tenta('conversa', 'A', 'POST', '/api/thread/delete', { id: R.threadId });
-  // Threads órfãs que os probes de chat/run possam ter criado com o nome do teste.
+  // Orphan threads that the chat/run probes may have created with the test's name.
   const th = await call('A', 'GET', '/api/threads');
   for (const t of (th.data?.threads || [])) {
     if (String(t.title || '').includes(MARCA) && t.id !== R.threadId) {
@@ -362,8 +362,8 @@ async function run() {
         continue;
       }
       const r = await call('B', p.method, p.path, p.body);
-      // /task/run e /group/run respondem 200 e seguem em background; dá um respiro
-      // pro efeito (se houver) aparecer no retrato seguinte.
+      // /task/run and /group/run respond 200 and continue in the background; gives a moment
+      // for the effect (if any) to show up in the next snapshot.
       if (/\/run$/.test(p.path)) await new Promise((ok) => setTimeout(ok, 3000));
       const depois = await SNAP[p.chave]();
       const mudou = antes !== depois;

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_PAGE_CHARS, recortarPagina } from './web/websearch.mjs';
 
-// O teto de leitura de página era 6.000 caracteres. A página da quaresma de São
-// Miguel (de uma rotina real) tem ~15.000: chegava ao modelo cortada no meio
-// da ladainha, e sem nenhum aviso de que tinha sido cortada. O teto agora é o
-// mesmo do PDF (20.000) e o corte, quando acontece, é declarado.
+// The page-reading cap was 6,000 characters. The São Miguel Lent page
+// (from a real routine) has ~15,000: it reached the model cut off in the middle
+// of the litany, with no notice at all that it had been cut. The cap is now the
+// same as the PDF's (20,000), and the cut, when it happens, is declared.
 
 test('teto de página é o mesmo do PDF', () => {
   assert.equal(MAX_PAGE_CHARS, 20000);

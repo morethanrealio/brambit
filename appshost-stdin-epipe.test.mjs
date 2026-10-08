@@ -1,6 +1,6 @@
-// Achado #23: ctl() escrevia no stdin do ssh sem listener de 'error'. EPIPE em
-// stream chega ASSÍNCRONO, então o try/catch em volta do write não protegia
-// nada: o stream jogava a exceção fora de try/catch e matava o processo.
+// Finding #23: ctl() wrote to ssh's stdin without an 'error' listener. EPIPE on a
+// stream arrives ASYNCHRONOUSLY, so the try/catch around the write protected
+// nothing: the stream threw the exception outside the try/catch and killed the process.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,8 +8,8 @@ import { EventEmitter } from 'node:events';
 
 const { escreverNoStdin } = await import('./web/appshost.mjs');
 
-// Cano falso: aceita write/end e deixa a gente disparar o EPIPE depois, como o
-// sistema operacional faria.
+// Fake pipe: accepts write/end and lets us fire the EPIPE afterward, the way the
+// operating system would.
 function cano({ lancaNoWrite = null } = {}) {
   const s = new EventEmitter();
   s.escrito = [];
@@ -30,7 +30,7 @@ test('EPIPE assíncrono depois do write não derruba nada', () => {
   const s = cano();
   escreverNoStdin(s, 'x');
   const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
-  // Sem o listener instalado, este emit sozinho seria um throw não tratado.
+  // Without the listener installed, this emit alone would be an unhandled throw.
   assert.doesNotThrow(() => s.emit('error', epipe));
 });
 
@@ -38,7 +38,7 @@ test('o listener de error é instalado ANTES do write', () => {
   const s = cano({ lancaNoWrite: Object.assign(new Error('cano morto'), { code: 'EPIPE' }) });
   const e = escreverNoStdin(s, 'x');
   assert.equal(e?.message, 'cano morto', 'falha síncrona volta pra quem chamou');
-  // mesmo tendo falhado no write, o stream já está protegido
+  // even having failed on write, the stream is already protected
   assert.doesNotThrow(() => s.emit('error', new Error('tardio')));
 });
 
@@ -52,6 +52,6 @@ test('ctl usa o helper e não escreve no stdin no braço', () => {
 test('o lock de tarefa de app também protege o stdin do filho', () => {
   const src = fs.readFileSync(new URL('./web/app-task-store.mjs', import.meta.url), 'utf8');
   assert.match(src, /child\.stdin\.on\('error',\(\)=>\{\}\)/);
-  // e a proteção vem antes de qualquer destroy/end do stdin
+  // and the protection comes before any destroy/end of stdin
   assert.ok(src.indexOf("child.stdin.on('error'") < src.indexOf('child.stdin.destroy()'));
 });

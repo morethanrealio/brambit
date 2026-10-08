@@ -1,9 +1,9 @@
-// Contrato de isolamento entre contas do núcleo (C2, passo 11c4): as sondas de
-// ops/tenancy-* rodam contra o servidor de verdade, num Postgres descartável e
-// com duas contas sintéticas. Pega handler novo ou mexido que aceita id e
-// esquece o dono: com a sessão de B, ler ou mudar coisa de A tem que falhar.
-// Mesmo isolamento do server-boot.test.mjs: socket Unix próprio, nenhuma rede
-// de saída (boot-network-guard), nenhuma credencial herdada.
+// Isolation contract between core accounts (C2, step 11c4): the
+// ops/tenancy-* probes run against the real server, on a disposable Postgres and
+// with two synthetic accounts. Catches a new or changed handler that accepts an id and
+// forgets the owner: with B's session, reading or changing A's stuff must fail.
+// Same isolation as server-boot.test.mjs: its own Unix socket, no outbound
+// network (boot-network-guard), no inherited credentials.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -20,9 +20,9 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const A='00000000-0000-4000-8000-00000000000a',B='00000000-0000-4000-8000-00000000000b';
 const SID_A='sintetica-a-'+'a'.repeat(40),SID_B='sintetica-b-'+'b'.repeat(40);
 
-// Pulos esperados: mídia mora no bucket, que não existe sem rede (pelo mesmo
-// motivo o arquivo descartável da sonda de escrita não nasce e DELETE /api/files
-// fica de fora). Qualquer outro pulo é sonda que deixou de exercitar alguma coisa.
+// Expected skips: media lives in the bucket, which doesn't exist without network (for the same
+// reason the write probe's disposable file is never created and DELETE /api/files
+// is left out). Any other skip is a probe that failed to exercise something.
 const PULOS={
  'ops/tenancy-test.mjs':['GET /api/media?key|A','GET /api/media?key|B'],
  'ops/tenancy-write-test.mjs':[],
@@ -30,7 +30,7 @@ const PULOS={
 };
 const MINIMO={'ops/tenancy-test.mjs':30,'ops/tenancy-write-test.mjs':29,'ops/tenancy-runner-test.mjs':15};
 
-// Roda a sonda e devolve o relatório JSON que ela imprime no fim (JSON=1).
+// Runs the probe and returns the JSON report it prints at the end (JSON=1).
 function sonda(arquivo,base){
  return new Promise((resolve)=>{
   const p=spawn(process.execPath,[path.join(repo,arquivo)],{cwd:repo,env:{PATH:process.env.PATH,BASE:base,SID_A,SID_B,UID_A:A,UID_B:B,JSON:'1'},stdio:['ignore','pipe','pipe']});
@@ -58,8 +58,8 @@ test('sondas de isolamento entre contas passam no servidor real com duas contas 
   await db.query(`INSERT INTO mtr_harness.users(id,name,email,password_hash) VALUES($1,'Conta A','a@example.invalid','x'),($2,'Conta B','b@example.invalid','x')`,[A,B]);
   await db.query(`INSERT INTO mtr_harness.sessions(token,user_id,expires_at,last_seen_at) VALUES($1,$2,now()+interval '1 day',now()),($3,$4,now()+interval '1 day',now())`,[SID_A,A,SID_B,B]);
   const base='http://127.0.0.1:'+port;
-  // A sonda de leitura só prova alguma coisa com dado dos dois lados: cada conta
-  // ganha assistente, conversa e página própria, e as duas uma página de mesmo slug.
+  // The read probe only proves something with data from both sides: each account
+  // gets its own assistant, conversation and page, and both get a page with the same slug.
   const post=async(sid,rota,body)=>{const r=await fetch(base+rota,{method:'POST',headers:{cookie:'sid='+sid,origin:base,'content-type':'application/json'},body:JSON.stringify(body)});const txt=await r.text();assert.equal(r.status,200,rota+': '+txt);return JSON.parse(txt);};
   for(const [sid,nome] of [[SID_A,'a'],[SID_B,'b']]){
    const ag=await post(sid,'/api/agent',{name:'Assistente '+nome,goal:'teste',instructions:'teste'});

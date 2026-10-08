@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// npm run modelos: mostra qual modelo cada função usa, segundo o modelos.yaml,
-// e avisa quando a chave de um provedor está vazia no .env.
+// npm run modelos: shows which model each function uses, according to modelos.yaml,
+// and warns when a provider's key is empty in .env.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

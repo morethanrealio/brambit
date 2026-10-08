@@ -1,15 +1,15 @@
 import { confirmedAction } from './web/action-evidence.mjs';
-// Teste offline dos textos do portão de confirmação em en/es.
-// Nada sai pra rede, nada toca banco. Roda com: node confirm-i18n.test.mjs
+// Offline test of the confirmation gate's texts in en/es.
+// Nothing goes out to the network, nothing touches the database. Run with: node confirm-i18n.test.mjs
 //
-// O que este arquivo defende, em ordem de importância:
-//  1. pt-BR não mudou. É o único idioma em produção hoje; qualquer diferença
-//     aqui é regressão pura, sem ganho pra ninguém.
-//  2. Toda tool do portão tem frase nas três línguas, nos DOIS tempos. Isto é
-//     conferido contra o GATED_TOOLS, não contra uma lista que eu escrevi à
-//     mão: tool nova entra no portão e o teste cobra a tradução.
-//  3. O que o usuário lê não tem português vazado, nem "undefined", nem
-//     interpolação solta.
+// What this file defends, in order of importance:
+//  1. pt-BR didn't change. It's the only language in production today; any difference
+//     here is pure regression, with no gain for anyone.
+//  2. Every tool in the gate has a phrase in all three languages, in BOTH tenses. This is
+//     checked against GATED_TOOLS, not against a list I wrote by
+//     hand: a new tool enters the gate and the test demands the translation.
+//  3. What the user reads has no leaked Portuguese, no "undefined", no
+//     loose interpolation.
 import { GATED_TOOLS, describe, describeDone, renderConfirmed, avisoEnderecoTrocado } from './web/confirm.mjs';
 import { pedidoEm, feitoEm, molduraEm, quando } from './web/confirm-textos.mjs';
 
@@ -19,9 +19,9 @@ const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } els
 const TOOLS = [...GATED_TOOLS];
 const LANGS = ['en', 'es'];
 
-// Args plausíveis por tool, pra frase sair montada de verdade em vez de só
-// bater no caminho dos placeholders. Tool sem entrada aqui é chamada com {},
-// que também é um caso real (o modelo mandando chamada incompleta).
+// Plausible args per tool, so the phrase comes out properly assembled instead of just
+// hitting the placeholder path. A tool with no entry here is called with {},
+// which is also a real case (the model sending an incomplete call).
 const ARGS = {
   jornada_configurar: {action:'accept',channel:'telegram',lunch:'12:30',evening:'20:30',timezone:'America/Sao_Paulo',duration:7,frequency:'twice',sensitive:false},
   jornada_editar_nota: {action:'correct',text:'Review the week'},
@@ -81,10 +81,10 @@ const ARGS = {
 };
 const argsDe = (name) => ARGS[name] || {};
 
-// 1) A PROPRIEDADE DE SEGURANÇA: em pt-BR nada muda, byte a byte. Vale pros
-//    três jeitos de chamar (sem idioma, com null, com 'pt-BR'/'pt-PT'), porque
-//    é o que acontece em produção: thread sem idioma anotado, usuário
-//    português, e o valor vindo do banco.
+// 1) THE SAFETY PROPERTY: in pt-BR nothing changes, byte for byte. This holds for
+//    all three ways of calling (no language, with null, with 'pt-BR'/'pt-PT'), because
+//    that's what happens in production: a thread with no language annotated, a
+//    Portuguese user, and the value coming from the database.
 for (const name of TOOLS) {
   const a = argsDe(name);
   const base = describe(name, a);
@@ -93,14 +93,14 @@ for (const name of TOOLS) {
     base === describe(name, a, null) && base === describe(name, a, 'pt-BR') && base === describe(name, a, 'pt-PT'));
   t(`pt-BR intacto (feito): ${name}`,
     baseF === describeDone(name, a, null) && baseF === describeDone(name, a, 'pt-BR') && baseF === describeDone(name, a, 'pt-PT'));
-  // Idioma que a gente NÃO atende cai no padrão, não em texto vazio.
+  // A language we do NOT support falls back to the default, not to empty text.
   t(`idioma não atendido cai no pt-BR: ${name}`, describe(name, a, 'ja') === base && describeDone(name, a, 'ja') === baseF);
 }
 
-// 2) COBERTURA conferida contra o GATED_TOOLS. Se alguém puser uma tool nova no
-//    portão e esquecer a tradução, a falha aparece aqui e não no cartão do
-//    usuário. `remover_arquivo_do_app`/`remover_segredo` entram nesta conta:
-//    em pt eles caem no genérico, mas em en/es têm frase própria.
+// 2) COVERAGE checked against GATED_TOOLS. If someone puts a new tool in the
+//    gate and forgets the translation, the failure shows up here and not on the
+//    user's card. `remover_arquivo_do_app`/`remover_segredo` fall into this bucket:
+//    in pt they fall back to the generic one, but in en/es they have their own phrase.
 for (const lang of LANGS) {
   for (const name of TOOLS) {
     t(`${lang} tem frase de pedido: ${name}`, typeof pedidoEm(lang, name, argsDe(name)) === 'string');
@@ -108,23 +108,23 @@ for (const lang of LANGS) {
   }
 }
 
-// 3) O texto que sai NÃO pode ter defeito de montagem. "undefined" e "${" num
-//    cartão de confirmação são o pior caso: o dono autoriza uma frase quebrada.
-// Marcadores de português vazado. Só podem entrar palavras que existem em
-// português e NÃO em espanhol: "pedido", "marcador" e "de verdad" são espanhol
-// legítimo, e usá-las como marcador acusa de português uma frase espanhola
-// correta (foi exatamente o que este teste fez na primeira rodada, com o
-// `fechar_pedido`). O par tem que ser divergente: arquivo≠archivo,
+// 3) The text that comes out can NOT have assembly defects. "undefined" and "${" in a
+//    confirmation card are the worst case: the owner authorizes a broken phrase.
+// Leaked-Portuguese markers. Only words that exist in
+// Portuguese and NOT in Spanish can be used: "pedido", "marcador" and "de verdad" are legitimate
+// Spanish, and using them as a marker would accuse a correct Spanish phrase
+// of being Portuguese (that's exactly what this test did on the first run, with
+// `fechar_pedido`). The pair has to diverge: arquivo≠archivo,
 // senha≠contraseña, dinheiro≠dinero, rotina≠rutina, também≠también,
 // você/seu/sua≠su, não≠no, endereço≠dirección.
-// `\b` do JS é ASCII e fecha depois de letra acentuada, então aqui vale
-// (?<!\p{L})/(?!\p{L}) com a flag u — mesma armadilha do bug do "para".
+// JS's `\b` is ASCII and closes right after an accented letter, so here
+// (?<!\p{L})/(?!\p{L}) with the u flag applies, the same trap as the "para" bug.
 const MARCAS_PT = /(?<!\p{L})(arquivo|senha|dinheiro|rotina|também|você|voce|seu|sua|não|nao|endereço|planilha|de verdade|enviar um|excluíd\p{L}*)(?!\p{L})/iu;
-// Antes de usar o detector, provar que ele DISPARA. Uma regex que não casa com
-// nada passa em cima de qualquer vazamento e o teste fica verde por engano; e a
-// lista acima acabou de ser estreitada, que é justamente quando isso acontece.
-// Estas são frases reais do pt-BR do confirm.mjs, que é o que sairia num cartão
-// de inglês se a tradução daquela tool faltasse.
+// Before using the detector, prove that it FIRES. A regex that doesn't match
+// anything glosses over any leak and the test turns green by mistake; and the
+// list above was just narrowed, which is exactly when this happens.
+// These are real pt-BR phrases from confirm.mjs, which is what would show up on an
+// English card if that tool's translation was missing.
 [
   ['gmail_send', describe('gmail_send', { to: 'ana@x.com' })],
   ['salvar_credencial', describe('salvar_credencial', { servico: 'Stripe' })],
@@ -143,8 +143,8 @@ for (const lang of LANGS) {
     }
   }
 }
-// Args VAZIOS também não podem produzir lixo: o modelo manda chamada incompleta
-// e o cartão continua sendo o que o dono lê antes de autorizar.
+// EMPTY args also can't produce garbage: the model sends an incomplete call
+// and the card remains what the owner reads before authorizing.
 for (const lang of LANGS) {
   for (const name of TOOLS) {
     const p = describe(name, {}, lang);
@@ -154,57 +154,57 @@ for (const lang of LANGS) {
   }
 }
 
-// 4) Data e hora. A regra antiga (mostrar o horário de PAREDE, sem converter
-//    fuso) tem que valer nas três línguas: foi ela que consertou o usuário na
-//    Basileia vendo 06:30 em vez de 11:30.
+// 4) Date and time. The old rule (show the WALL-CLOCK time, without converting
+//    time zones) has to hold across all three languages: it's what fixed the user in
+//    Basel seeing 06:30 instead of 11:30.
 t('en não converte fuso', quando('2026-07-09T11:30:00+02:00', 'en').includes('11:30'));
 t('es não converte fuso', quando('2026-07-09T11:30:00+02:00', 'es').includes('11:30'));
-// Em inglês o dia NÃO pode sair como número: 09/07 é 9 de julho pra um leitor e
-// 7 de setembro pra outro, e o dono está aprovando um horário de agenda.
+// In English the day CANNOT come out as a number: 09/07 is July 9 for one reader and
+// September 7 for another, and the owner is approving a calendar schedule time.
 t('en usa mês por nome', quando('2026-07-09T11:30:00-03:00', 'en') === 'Jul 9, 2026, 11:30');
 t('en em data seca', quando('2026-07-09', 'en') === 'Jul 9, 2026');
 t('es mantém DD/MM', quando('2026-07-09T11:30:00-03:00', 'es') === '09/07/2026, 11:30');
 t('es em data seca', quando('2026-07-09', 'es') === '09/07/2026');
-// Formato inesperado devolve o original, não inventa data.
+// Unexpected format returns the original, does not invent a date.
 ['', null, undefined, 'amanhã', '2026-13', 0, {}].forEach((v) => {
   t(`data inválida ${JSON.stringify(v)} não inventa`, [''].includes(quando(v, 'en')) || quando(v, 'en') === String(v).trim());
 });
 
-// 5) Cadência de rotina. O bug que este trecho existe pra não deixar voltar: no
-//    modo INTERVALO não há dia nem hora, e a frase saía "todo dia às 0?h", ou
-//    seja, descrevia uma rotina diferente da que ia ser criada.
+// 5) Routine cadence. The bug this snippet exists to keep from coming back: in
+//    INTERVAL mode there is no day or hour, and the sentence came out as "todo dia às 0?h", that
+//    is, it described a routine different from the one that was going to be created.
 for (const lang of LANGS) {
   const intervalo = describe('criar_rotina', { titulo: 'Ping', repetir_cada_min: 30, repetir_ate: '2026-12-31' }, lang);
   t(`${lang}: intervalo não fala de hora fixa`, /30 min/.test(intervalo) && !/07:00/.test(intervalo));
   t(`${lang}: intervalo diz até quando`, intervalo.includes('2026-12-31'));
   const semFim = describe('criar_rotina', { titulo: 'Ping', repetir_cada_min: 120 }, lang);
   t(`${lang}: intervalo sem fim é declarado`, /2 (hours|horas)/.test(semFim) && /(no end date|sin fecha)/.test(semFim));
-  // Horário fixo: dia e hora aparecem.
+  // Fixed time: day and hour appear.
   const fixo = describe('criar_rotina', { titulo: 'Resumo', dias_da_semana: ['seg', 'qua'], hora: 18 }, lang);
   t(`${lang}: dias da semana aparecem`, /(Monday|lunes)/.test(fixo) && /(Wednesday|miércoles)/.test(fixo) && fixo.includes('18:00'));
-  // Dia do mês que não existe em todo mês: o dono tem que saber o que acontece
-  // em fevereiro antes de confirmar.
+  // Day of the month that doesn't exist in every month: the owner has to know what happens
+  // in February before confirming.
   const mes = describe('criar_rotina', { titulo: 'Fatura', dias_do_mes: [31] }, lang);
   t(`${lang}: dia 31 avisa dos meses curtos`, /(shorter months|meses más cortos)/.test(mes));
-  // Nª ocorrência no mês.
+  // Nth occurrence in the month.
   const nth = describe('criar_rotina', { titulo: 'Fechamento', semana_do_mes: -1, dias_da_semana: ['sex'] }, lang);
   t(`${lang}: última sexta do mês`, /(last Friday of the month|último viernes del mes)/.test(nth));
-  // Sem cadência informada, o default é todo dia (é o que a plataforma grava).
+  // Without cadence informed, the default is every day (that's what the platform records).
   const diario = describe('criar_rotina', { titulo: 'Bom dia' }, lang);
   t(`${lang}: default é todo dia`, /(every day|todos los días)/.test(diario));
 }
 
-// 6) renderConfirmed: é o texto DETERMINÍSTICO, impresso direto pro usuário sem
-//    o modelo no meio. O idioma vem da pendência (gravado no pedido), não de
-//    releitura, pra o par pedido/resultado sair na mesma língua.
+// 6) renderConfirmed: this is the DETERMINISTIC text, printed directly to the user without
+//    the model in between. The language comes from the pending request (recorded in the
+//    request), not from re-reading, so the request/result pair comes out in the same language.
 const pendPt = { name: 'gmail_send', args: { to: 'ana@x.com' }, label: 'enviar um e-mail para ana@x.com' };
 t('pt-BR: recibo real distingue envio de entrega', renderConfirmed(pendPt, { ok: true, id:'fixture-mail' }) === confirmedAction('gmail_send',pendPt.args,{ok:true,id:'fixture-mail'},'pt-BR'));
 t('pt-BR: falha igual à de antes',
   renderConfirmed(pendPt, { ok: false, error: 'quota.' }) === '❌ Não consegui concluir: enviar um e-mail para ana@x.com. quota.');
 t('pt-BR: stderr igual ao de antes',
   renderConfirmed(pendPt, { ok: true, id:'fixture-mail', stderr: 'aviso' }) === confirmedAction('gmail_send',pendPt.args,{ok:true,id:'fixture-mail'},'pt-BR') + '\n\n_stderr:_\naviso');
-// Pendência SEM o campo language (gravada antes desta mudança, ou restaurada do
-// banco) tem que se comportar como pt-BR, não sair vazia.
+// A pending request WITHOUT the language field (recorded before this change, or restored from
+// the database) has to behave as pt-BR, not come out empty.
 t('pendência antiga cai no pt-BR', renderConfirmed({ ...pendPt, language: undefined }, { ok: true, id:'fixture-mail' }).startsWith('Envio aceito'));
 
 const pendEn = { name: 'gmail_send', args: { to: 'ana@x.com' }, label: describe('gmail_send', { to: 'ana@x.com' }, 'en'), language: 'en' };
@@ -213,46 +213,46 @@ t('en: falha em inglês', renderConfirmed(pendEn, { ok: false, error: 'quota.' }
 const pendEs = { name: 'gmail_send', args: { to: 'ana@x.com' }, label: describe('gmail_send', { to: 'ana@x.com' }, 'es'), language: 'es' };
 t('es: sucesso em espanhol', renderConfirmed(pendEs, { ok: true, id:'fixture-mail' }) === confirmedAction('gmail_send',pendEs.args,{ok:true,id:'fixture-mail'},'es'));
 t('es: falha em espanhol', renderConfirmed(pendEs, { ok: false, error: 'quota.' }) === '❌ No pude terminar: enviar un correo a ana@x.com. quota.');
-// Recusa textual é preservada; não vira sucesso genérico por describeDone.
+// Textual refusal is preserved; it does not turn into a generic success via describeDone.
 t('texto puro preservado sem inventar sucesso/tradução', renderConfirmed(pendEn, 'Não enviado: erro.') === 'Não enviado: erro.');
-// Saída de comando: o corpo vem cru da tool (é output de shell, não se
-// traduz), mas a moldura em volta é traduzida.
+// Command output: the body comes raw from the tool (it is shell output, it is not
+// translated), but the frame around it is translated.
 const pendCmd = { name: 'rodar_comando', args: { comando: 'ls' }, label: 'x', language: 'en' };
 t('en: stderr traduzido na moldura', renderConfirmed(pendCmd, { ok: true, saida: 'a.txt', stderr: 'warn' })
   === '✅ Command executed on the server.\n\na.txt\n\n_stderr:_\nwarn');
 
-// 7) O aviso de endereço trocado entra DENTRO do label, então também precisa de
-//    idioma: ele é o que faz o cartão denunciar um destinatário "corrigido" no
-//    caminho, e em português passaria batido por quem não lê português.
+// 7) The changed-address notice goes INSIDE the label, so it also needs
+//    language: it's what makes the card flag a recipient "corrected" along
+//    the way, and in Portuguese it would slip past anyone who doesn't read Portuguese.
 const trocado = (lang) => avisoEnderecoTrocado('ana@x.com', 'manda pra anna@x.com', lang);
 t('pt-BR: aviso igual ao de antes', trocado(null).startsWith('CONFIRA O ENDEREÇO:') && trocado('pt-BR') === trocado(null));
 t('en: aviso em inglês', trocado('en').startsWith('CHECK THE ADDRESS:') && trocado('en').includes('anna@x.com') && trocado('en').includes('ana@x.com'));
 t('es: aviso em espanhol', trocado('es').startsWith('REVISA LA DIRECCIÓN:') && trocado('es').includes('anna@x.com'));
-// A regra estreita não muda com o idioma: sem endereço escrito pelo dono, calado.
+// The narrow rule doesn't change with language: without an address written by the owner, silent.
 LANGS.concat(['pt-BR']).forEach((l) => {
   t(`${l}: sem endereço escrito não avisa`, avisoEnderecoTrocado('ana@x.com', 'manda pra Ana', l) === '');
   t(`${l}: endereço claramente outro não avisa`, avisoEnderecoTrocado('ana@x.com', 'manda pra joao@y.com', l) === '');
 });
 
-// 8) Tool que NÃO está no portão (ou nem existe) cai no genérico da língua, sem
-//    virar português no cartão de quem fala inglês.
+// 8) A tool that is NOT at the gate (or doesn't even exist) falls back to the generic text of the
+//    language, without turning into Portuguese on the card of someone who speaks English.
 t('en: tool desconhecida vira genérico em inglês', describe('tool_que_nao_existe', {}, 'en') === 'run the action "tool_que_nao_existe"');
 t('es: tool desconhecida vira genérico em espanhol', describeDone('tool_que_nao_existe', {}, 'es') === 'Acción "tool_que_nao_existe" completada.');
 t('pt-BR: genérico igual ao de antes',
   describe('tool_que_nao_existe', {}) === 'executar a ação "tool_que_nao_existe"'
   && describeDone('tool_que_nao_existe', {}) === 'Ação "tool_que_nao_existe" concluída.');
 
-// 9) LIMITE DECLARADO: o resumo do CARRINHO (compras.mjs) segue em português
-//    nas três línguas nesta fase. Não é esquecimento; está aqui pra ninguém
-//    dizer que `fechar_pedido` está traduzido de ponta a ponta.
+// 9) DECLARED LIMIT: the CART summary (compras.mjs) stays in Portuguese
+//    across all three languages at this stage. It's not an oversight; it's here so no one
+//    says that `fechar_pedido` is translated end to end.
 t('moldura existe em en e es', !!molduraEm('en') && !!molduraEm('es'));
 t('moldura não existe em pt-BR (é o caminho intacto)', molduraEm('pt-BR') === null);
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
 
-// 8) Tool que devolve frase pronta em pt-BR (criar_rotina): quem confirmou em
-//    inglês ou espanhol recebia "Rotina X criada" em português (dev, 03/10).
+// 8) Tool that returns a ready-made phrase in pt-BR (criar_rotina): whoever confirmed in
+//    English or Spanish received "Rotina X criada" in Portuguese (dev, 2026-10-03).
 const rotinaPt = 'Rotina "Daily quote" criada: roda todo dia às 08h (America/Sao_Paulo). Vou executar sozinho a partir da próxima vez que der o horário.';
 const pendRot = lang => ({ name: 'criar_rotina', args: { titulo: 'Daily quote', hora: 8 }, label: 'x', language: lang });
 t('en: rotina criada em inglês', renderConfirmed(pendRot('en'), rotinaPt).startsWith('Routine "Daily quote" created'));

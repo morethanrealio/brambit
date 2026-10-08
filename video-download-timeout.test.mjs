@@ -1,6 +1,6 @@
-// Regressão do achado #26: o prazo do download do vídeo cobria só os cabeçalhos.
-// Aqui a rede é falsa (nada de socket de verdade), mas ela respeita o AbortSignal
-// igual ao fetch real, que é exatamente o detalhe que o bug ignorava.
+// Regression from finding #26: the video download deadline only covered the headers.
+// Here the network is fake (no real socket), but it respects AbortSignal
+// just like the real fetch, which is exactly the detail the bug ignored.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { lerCorpoComTeto } from './web/baixar-corpo.mjs';
@@ -11,8 +11,8 @@ const { fetchRenderVideo, MAX_VIDEO_BYTES } = await import('./web/videogen.mjs')
 
 const cabecalhos = (obj) => ({ get: (k) => obj[k.toLowerCase()] ?? null });
 
-// Corpo que entrega um pedaço e depois fica pendurado até o signal abortar, que é
-// o que um worker lento (ou um socket meio-morto) faz na vida real.
+// Body that delivers one chunk and then hangs until the signal aborts, which is
+// what a slow worker (or a half-dead socket) does in real life.
 function corpoQueTrava(signal) {
   return (async function* () {
     yield Buffer.from('mp4-comecou');
@@ -28,8 +28,8 @@ function fingirFetch(fn) {
   return () => { globalThis.fetch = original; };
 }
 
-// Relógio de guarda: se o download travar de novo, o teste ACUSA em vez de pendurar
-// a suíte inteira. O timer é unref pra não segurar o processo.
+// Guard clock: if the download hangs again, the test FLAGS it instead of hanging
+// the entire suite. The timer is unref'd so it doesn't hold the process.
 async function comVigia(promessa, ms = 3000) {
   let timer;
   try {
@@ -124,11 +124,11 @@ test('lerCorpoComTeto recusa teto inválido', async () => {
 
 test('o corpo é lido DENTRO do withTimeout no videogen (guarda de fonte)', async () => {
   const fonte = await import('node:fs').then((fs) => fs.readFileSync('web/videogen.mjs', 'utf8'));
-  // O jeito antigo: pegar a resposta do withTimeout e só então ler o arquivo.
+  // The old way: get the response from withTimeout and only then read the file.
   assert.ok(!/\}\), 120_000, 'fetchRenderVideo'\);/.test(fonte), 'fetchRenderVideo voltou a ler o corpo fora do prazo');
   assert.ok(!/Buffer\.from\(await res\.arrayBuffer\(\)\)/.test(fonte), 'leitura do mp4 fora do withTimeout');
   assert.match(fonte, /await lerCorpoComTeto\(res, maxBytes, 'fetchRenderVideo'\)/);
-  // createRender/getRender sofriam do mesmo mal com o JSON.
+  // createRender/getRender suffered from the same problem with the JSON.
   assert.match(fonte, /return res\.json\(\);\n  \}, 20_000, 'getRender'\)/);
   assert.match(fonte, /return res\.json\(\);\n  \}, 30_000, 'createRender'\)/);
 });

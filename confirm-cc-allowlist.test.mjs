@@ -1,8 +1,8 @@
-// Dois achados do portão de confirmação (varredura 17/09):
-//  1. o cartão de gmail_send/hotmail_send não mostrava o cc, então a pessoa
-//     autorizava um envio diferente do que ia acontecer;
-//  2. cmdAllowed() casava só o prefixo, então "git status && rm -rf /x" passava
-//     pela allowlist de "git status" e rodava sem confirmação nenhuma.
+// Two findings from the confirmation gate (2026-09-17 sweep):
+//  1. the gmail_send/hotmail_send card didn't show the cc, so the person
+//     authorized a send different from what would actually happen;
+//  2. cmdAllowed() only matched the prefix, so "git status && rm -rf /x" passed
+//     through the "git status" allowlist and ran without any confirmation.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { describe, describeDone, cmdAllowed } from './web/confirm.mjs';

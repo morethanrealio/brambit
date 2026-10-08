@@ -30,7 +30,7 @@ test('chat without delivery and no chosen channel asks, listing only connected c
 });
 
 test('the channel chosen by the model is used, including from a chat without delivery', async () => {
-  // Eval 28/09 (#35): "aqui pelo telegram", dito no chat web, é pedido de Telegram.
+  // Eval 2026-09-28 (#35): "aqui pelo telegram", said in the web chat, is a request for Telegram.
   const s = fixture({ message: 'me lembra aqui pelo telegram' });
   JSON.parse(await s.tool.run({ ...args, canal: 'telegram' }));
   assert.equal(s.writes.length, 1); assert.equal(s.writes[0].channel, 'telegram');
@@ -69,11 +69,11 @@ test('selection only validates the proposed channel; it does not reread the owne
   assert.equal(reminderChannelSelection({ kind: 'routine', routineChannel: 'telegram' }).channel, 'telegram');
 });
 
-// Teste de 02/10/2026: no chat web, 1ª chamada sem canal é
-// recusada antes de gravar; o modelo refaz com canal e-mail e dá certo. A
-// resposta final dizia "Pronto. Não consegui confirmar isso agora..." em cima do
-// lembrete agendado. Recusa antes de gravar = falha certa, e a 2ª tentativa do
-// MESMO lembrete a substitui. Incerteza depois de gravar continua visível.
+// Test from 2026-10-02: in the web chat, the 1st call without a channel is
+// refused before saving; the model redoes it with the e-mail channel and succeeds. The
+// final reply said "Pronto. Não consegui confirmar isso agora..." on top of the
+// scheduled reminder. Refusal before saving = correct failure, and the 2nd attempt for the
+// SAME reminder replaces it. Uncertainty after saving remains visible.
 const unknownPt = 'Não consegui confirmar isso agora';
 const failedPt = 'A ação não foi concluída';
 async function turn(s, calls) {
@@ -96,7 +96,7 @@ test('a refused attempt redone successfully in the same turn does not leak into 
     assert.equal(s.writes.length, 1);
     assert.match(out, /Lembrete agendado, não enviado\. Destino: e-mail/);
     assert.ok(!out.includes(unknownPt), out); assert.ok(!out.includes(failedPt), out);
-    assert.equal(j.entries.length, 2); assert.equal(j.entries[0].state, 'failed'); // evidência preservada
+    assert.equal(j.entries.length, 2); assert.equal(j.entries[0].state, 'failed'); // evidence preserved
   }
 });
 
@@ -113,7 +113,7 @@ test('a refused DIFFERENT reminder stays visible next to another success', async
 });
 
 test('uncertainty after the write is not hidden by a later success', async () => {
-  // 1ª gravação sem prova (createReminder sem id): pode ter gravado; a 2ª dá certo.
+  // 1st save without proof (createReminder without id): it may have saved; the 2nd succeeds.
   const s = fixture({ saved: n => n > 1 }); const { j } = await turn(s, [{ ...ruffy, canal: 'email' }, { ...ruffy, canal: 'email' }]);
   const out = j.finish('Pronto.');
   assert.equal(s.writes.length, 2); assert.match(out, /Lembrete agendado/); assert.match(out, new RegExp(unknownPt));

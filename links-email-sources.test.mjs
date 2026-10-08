@@ -16,7 +16,7 @@ globalThis.fetch=async(url,options)=>{
   assert.equal(options.redirect,'manual');
   assert.ok(['HEAD','GET'].includes(options.method));
   const status=plans.get(url);
-  // Redirect pra tela de login: segui-lo cai num 302 sem destino, sem veredito.
+  // Redirect to the login screen: following it lands on a 302 with no destination, no verdict.
   if (status==='redirect') return {ok:false,status:302,headers:{get:()=>null},body:{cancel:async()=>{}}};
   return {ok:status>=200 && status<300,status,headers:{get:()=>null},body:{cancel:async()=>{}}};
 };
@@ -87,7 +87,7 @@ test('estado autenticado fica no turno; links privados não observados continuam
 });
 
 test('rotinas estritas conservam exigência de conferência pública, mesmo com fonte autenticada',async()=>{
-  // Desde 29/09/2026 o link sem prova de falha fica no texto, com o aviso.
+  // Since 2026-09-29 a link without proof of failure stays in the text, with the notice.
   const url=gmail('strict-observed');plans.set(url,403);
   const result=await fontesEConferencia(`• [Mensagem](${url})`,[],{strictLinks:true,authenticatedEmailSources:[url]});
   assert.deepEqual(result.authenticatedSources,[]);assert.deepEqual(result.indefinidos,[url]);

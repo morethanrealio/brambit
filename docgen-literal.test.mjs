@@ -1,4 +1,4 @@
-// Offline: verifica o artefato gerado, sem provider, banco ou chamadas externas.
+// Offline: verifies the generated artifact, without provider, database, or external calls.
 import assert from 'node:assert/strict';
 import { generateDocument, extractDocumentText } from './web/docgen.mjs';
 let passed = 0;
@@ -13,7 +13,7 @@ const literals = [
 for (const format of ['docx', 'pdf', 'html', 'txt', 'md']) {
   for (const content of literals) {
     const out = await generateDocument({ format, content });
-    // O PDF mínimo da casa grava o texto do content stream sem compressão.
+    // The house's minimal PDF writes the content-stream text without compression.
     const text = format === 'pdf' ? out.buffer.toString('latin1') : extractDocumentText({ ...out });
     assert.ok(text.includes(content), `${format}: literal alterado: ${content}`);
     passed++;
@@ -27,10 +27,10 @@ for (const format of ['docx', 'html']) {
   if (format === 'html') assert.ok(out.buffer.toString().includes('<strong>Negrito</strong>'));
   passed++;
 }
-// O content stream do PDF é serializado em latin1, mas as fontes são declaradas
-// com /WinAnsiEncoding: bullet, aspas curvas, travessão e reticências têm que
-// virar os bytes 0x95/0x93/0x94/0x97/0x85. Sem a tabela, o resto da divisão por
-// 256 transformava "•" em aspas na devolutiva da jornada.
+// The PDF content stream is serialized in latin1, but the fonts are declared
+// with /WinAnsiEncoding: bullet, curly quotes, dash, and ellipsis have to
+// turn into bytes 0x95/0x93/0x94/0x97/0x85. Without the table, the remainder of division by
+// 256 turned "•" into quotes in the journey's feedback.
 {
   const out = await generateDocument({ format: 'pdf', content: '- Item com “aspas” e travessão — aqui\n- Reticências…' });
   const pdf = out.buffer.toString('latin1');
@@ -40,7 +40,7 @@ for (const format of ['docx', 'html']) {
   assert.ok(!pdf.includes('(" Item com'), 'pdf: bullet não pode virar aspas');
   passed++;
 }
-// O que não existe na tabela de 8 bits vira '?', nunca o byte de outro glifo.
+// What doesn't exist in the 8-bit table turns into '?', never the byte of another glyph.
 {
   const out = await generateDocument({ format: 'pdf', content: 'Kanji 夢 fora da tabela' });
   assert.ok(out.buffer.toString('latin1').includes('Kanji ? fora da tabela'), 'pdf: caractere fora do WinAnsi');

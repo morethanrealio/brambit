@@ -1,4 +1,4 @@
-// Regressão do incidente de 14/09/2026. Tudo offline: nenhum canal, BD ou LLM.
+// Regression from the 2026-09-14 incident. Everything offline: no channel, DB or LLM.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { marca } from './web/marca.mjs';
@@ -8,7 +8,7 @@ import { standaloneRefusal, refusalAcknowledgement, enforceFreshCheckClaims, enf
 let checks=0;const ok=(value,message)=>{assert.ok(value,message);checks++;};
 const routine={channel:'email',email:'user@example.com',config:{execution:{status:'failed',phase:'delivering',startedAt:'2026-09-14T12:00:00Z',finishedAt:'2026-09-14T12:01:00Z'}}};
 
-// Estado legado ambíguo nunca vira a alegação falsa "e-mail não chegou".
+// A legacy ambiguous state must never turn into the false claim "e-mail não chegou".
 const info=routineExecutionInfo(routine),health=routineExecutionText(routine),channel=routineChannelText(routine);
 ok(info.content.status==='failed');
 ok(info.delivery.status==='unknown');
@@ -23,17 +23,17 @@ ok(separated.includes('Conteúdo: falhou'));
 ok(separated.includes('Entrega no canal email: aceita pela plataforma'));
 ok(!separated.includes('Entrega no canal email: falhou'));
 
-// A frase observada no transcript não pode citar uma checagem inexistente.
+// The phrase observed in the transcript must not cite a check that doesn't exist.
 const invented='Fato verificado agora (`status_conta`): o envio de e-mail continua desligado.';
 const guarded=enforceFreshCheckClaims(invented,{toolCounts:{},language:'pt-BR'});
 ok(!guarded.includes('Fato verificado agora'));
 ok(guarded.includes('Não consultei nenhuma ferramenta neste turno'));
-// Uma consulta real no próprio turno preserva a resposta (a semântica do
-// resultado continua sendo responsabilidade da tool/prompt tipados).
+// A real query within the same turn preserves the reply (the semantics of the
+// result remains the responsibility of the typed tool/prompt).
 ok(enforceFreshCheckClaims(invented,{toolCounts:{status_conta:1}})===invented);
 
-// Histórico tóxico não pode reintroduzir a dependência falsa nem mesmo quando
-// o modelo insiste depois de listar/executar a rotina.
+// Toxic history must not reintroduce the false dependency even when
+// the model insists after listing/executing the routine.
 const falseContract='O canal de e-mail da rotina depende da permissão de envio do Gmail, que está desligada.\nPosso ligar?';
 const fixedContract=enforceRoutineEmailContract(falseContract,{language:'pt-BR'});
 ok(!fixedContract.includes('canal de e-mail da rotina depende'));
@@ -48,8 +48,8 @@ for(const text of ['NAO NAO NAO NAO','não','Não, pare','no no'])ok(standaloneR
 for(const text of ['não, mantenha o e-mail da rotina','não funcionou; veja o erro','para amanhã às 9h'])ok(!standaloneRefusal(text),text);
 ok(refusalAcknowledgement('pt-BR').includes('Não vou fazer nem propor'));
 
-// O servidor precisa expor a mesma distinção no system e nas três tools que
-// cercam a conversa: listar, consultar conta e configurar Gmail.
+// The server needs to expose the same distinction in the system prompt and in the three tools that
+// surround the conversation: list, check account and configure Gmail.
 const source=readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');
 for(const required of [
   'ROUTINES ARE A DIFFERENT SYSTEM',

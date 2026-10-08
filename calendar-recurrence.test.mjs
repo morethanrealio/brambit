@@ -1,4 +1,4 @@
-// Offline. APIs são mocks; sockets são bloqueados antes de importar conectores.
+// Offline. APIs are mocks; sockets are blocked before importing connectors.
 import assert from 'node:assert/strict';
 import net from 'node:net';
 net.Socket.prototype.connect = () => { throw new Error('REDE REAL PROIBIDA NO TESTE'); };
@@ -31,7 +31,7 @@ for (const value of invalid) { assert.throws(() => calendarRecurrence(value, sta
 for (const badStart of ['2026-02-30T08:30:00', '2026-09-14', '2026-09-14T25:00:00', start + 'Z', start + '-03:00', '2026-09-30T08:30:00']) { assert.throws(() => calendarRecurrence(monthly, badStart)); checks++; }
 assert.throws(() => calendarRecurrence(monthly, start, 'Not/AZone')); checks++;
 assert.throws(() => calendarRecurrence({ frequencia: 'anual' }, '2028-02-29T08:30:00')); checks++;
-// Imports não inicializam servidor, scheduler nem migram o banco.
+// Imports don't initialize the server, the scheduler, nor migrate the database.
 const { googleTools } = await import('./web/connectors.mjs');
 const { microsoftTools } = await import('./web/connectors-ext.mjs');
 const { gateTool, hasPending, takePending, describe, describeDone, renderConfirmed, setThreadLanguage } = await import('./web/confirm.mjs');
@@ -57,7 +57,7 @@ for (const [tool, args, bodyKey] of [
  const proposal = await gated.run(args);
  check(calls.length === before && hasPending(key), 'proposta pode consultar o destino, mas NÃO executa escrita');
  check(proposal.includes('dia 14') && proposal.includes('08:30') && proposal.includes('sem data final'), 'confirmação mostra cadência, hora e duração');
- const pend = takePending(key); // simula aprovação explícita do dono
+ const pend = takePending(key); // simulates the owner's explicit approval
  const result = await pend.run(pend.args);
  check(JSON.parse(result).ok === true, 'criação retorna sucesso');
  assert.deepEqual(calls.at(-1).body.recurrence, r[bodyKey]); checks++;
@@ -75,7 +75,7 @@ for (const [tool, args, bodyKey] of [
  const bad = { ...args, recorrencia: { ...monthly, intervalo: 0 } };
  check(JSON.parse(await gated.run(bad)).ok === false && !hasPending(key), 'entrada inválida não cria pendência');
  check(JSON.parse(await tool.run(bad)).ok === false && calls.length === n, 'conector também recusa antes de HTTP');
- // Repro do caso: alteração do horário → nova confirmação, sem perder recorrência.
+ // Case repro: time change → new confirmation, without losing recurrence.
  const changed = { ...args, [key === 'calendar_create' ? 'start' : 'inicio']: '2026-09-14T09:00:00' };
  await gated.run(changed);
  check(takePending(key).args.recorrencia.frequencia === 'mensal', 'pendência guarda o contrato da série');

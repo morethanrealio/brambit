@@ -1,33 +1,33 @@
 #!/usr/bin/env node
-// ── Suíte de isolamento entre contas (Fase 1 da revisão de segurança de dados) ──
+// ── Cross-account isolation suite (Phase 1 of the data security review) ──
 //
-// Pergunta que ela responde, com prova em execução e não por leitura de código:
-// "com a sessão da conta B, dá pra ler alguma coisa da conta A?"
+// Question it answers, with proof at runtime rather than by reading the code:
+// "with account B's session, can you read anything from account A?"
 //
-// Como funciona, em duas etapas:
-//   1. DESCOBERTA  — com a sessão de cada conta, lista os ids REAIS dela pelos
-//      endpoints de listagem (threads, arquivos/mídia, agentes, páginas de
-//      memória, spaces, rotinas, cockpit, devices, conexões, MCP, home).
-//   2. PROBE       — repete cada endpoint que aceita id, agora com a sessão da
-//      OUTRA conta (e também sem sessão nenhuma), e exige recusa (401/403/404).
-//      Resposta 200 com conteúdo do dono = FALHA de isolamento.
+// How it works, in two steps:
+//   1. DISCOVERY  — with each account's session, lists its REAL ids via the
+//      listing endpoints (threads, files/media, agents, memory pages,
+//      spaces, routines, cockpit, devices, connections, MCP, home).
+//   2. PROBE       — repeats each endpoint that accepts an id, now with the
+//      OTHER account's session (and also with no session at all), and requires a refusal (401/403/404).
+//      A 200 response with the owner's content = isolation FAILURE.
 //
-// Só GET/HEAD nesta versão: nenhum probe muda estado. Os endpoints de escrita
-// que aceitam id estão catalogados em WRITE_SURFACE lá embaixo e saem como SKIP
-// com o motivo, pra ninguém achar que estão cobertos.
+// Only GET/HEAD in this version: no probe changes state. The write endpoints
+// that accept an id are cataloged in WRITE_SURFACE further down and come out as SKIP
+// with the reason, so nobody thinks they're covered.
 //
-// Uso:
-//   SID_A=<sid da conta A> SID_B=<sid da conta B> node ops/tenancy-test.mjs
-//   BASE=http://127.0.0.1:8080  (padrão: servidor local)
-//   BASE=https://seu-dominio ALLOW_REMOTE=1  (qualquer alvo fora desta máquina,
-//     produção inclusive, exige ALLOW_REMOTE=1; ver ops/tenancy-base.mjs)
-//   JSON=1  imprime o relatório em JSON no fim (pra CI)
+// Usage:
+//   SID_A=<account A's sid> SID_B=<account B's sid> node ops/tenancy-test.mjs
+//   BASE=http://127.0.0.1:8080  (default: local server)
+//   BASE=https://your-domain ALLOW_REMOTE=1  (any target outside this machine,
+//     production included, requires ALLOW_REMOTE=1; see ops/tenancy-base.mjs)
+//   JSON=1  prints the report in JSON at the end (for CI)
 //
-// Os SIDs são cookies de sessão de verdade (tabela `sessions`, coluna `token`).
-// Nunca commitar SID no repo nem imprimir no relatório: o script só mostra os 6
-// primeiros caracteres, o suficiente pra distinguir uma conta da outra.
+// The SIDs are real session cookies (`sessions` table, `token` column).
+// Never commit a SID to the repo nor print it in the report: the script only shows the first
+// 6 characters, enough to tell one account from the other.
 //
-// Saída: exit 0 se nenhum FALHOU; exit 1 se algum falhou.
+// Output: exit 0 if none FAILED; exit 1 if any failed.
 
 import { baseOrExit } from './tenancy-base.mjs';
 
@@ -42,9 +42,9 @@ const BASE = baseOrExit();
 const short = (s) => (s ? String(s).slice(0, 6) + '…' : '(sem sessão)');
 const other = (who) => (who === 'A' ? 'B' : 'A');
 
-// ── Cliente HTTP ──
-// `who` é 'A', 'B' ou 'anon'. Origin só vai em requisição que muda estado (o
-// csrfOk do server exige Origin/Referer conhecido fora de GET/HEAD).
+// ── HTTP client ──
+// `who` is 'A', 'B' or 'anon'. Origin only goes in a request that changes state (the
+// server's csrfOk requires a known Origin/Referer outside of GET/HEAD).
 async function call(who, method, path, { body } = {}) {
   const headers = {};
   if (who !== 'anon') headers.cookie = `sid=${SID[who]}`;
@@ -65,16 +65,16 @@ async function call(who, method, path, { body } = {}) {
   if (ct.includes('json')) {
     const t = await r.text();
     let data = null;
-    try { data = JSON.parse(t); } catch { /* resposta não-JSON com content-type JSON */ }
+    try { data = JSON.parse(t); } catch { /* non-JSON response with JSON content-type */ }
     return { status: r.status, data, bytes: t.length, ct };
   }
   const buf = await r.arrayBuffer();
   return { status: r.status, data: null, bytes: buf.byteLength, ct };
 }
 
-// ── Etapa 1: descoberta ──
-// Cada conta lista o que é dela. Tudo aqui é leitura do PRÓPRIO dado, com a
-// sessão do dono: se algo falhar, é problema de sessão, não de isolamento.
+// ── Step 1: discovery ──
+// Each account lists what's theirs. Everything here is reading its OWN data, with the
+// owner's session: if something fails, it's a session problem, not isolation.
 async function discover(who) {
   const inv = {
     who,
@@ -91,9 +91,9 @@ async function discover(who) {
     inv.error = `/api/me devolveu ${me.status} — sessão inválida ou expirada`;
     return inv;
   }
-  // /api/me não devolve id nem e-mail. O id sai do prefixo da chave de mídia
-  // (o S3 grava em "<userId>/<arquivo>"), que é justamente o que o /api/media
-  // usa pra decidir se a mídia é do requisitante.
+  // /api/me doesn't return id or e-mail. The id comes out of the media key's prefix
+  // (S3 writes to "<userId>/<arquivo>"), which is exactly what /api/media
+  // uses to decide whether the media belongs to the requester.
   inv.nome = me.data?.name || null;
   inv.subdomain = me.data?.subdomain || null;
   inv.apps = (me.data?.apps || []).map((a) => a.system || a.sistema).filter(Boolean);
@@ -131,20 +131,20 @@ async function discover(who) {
   inv.connections = await grab('/api/connections', (d) => (d.connections || []).map((c) => c.id));
   inv.mcp = await grab('/api/mcp', (d) => (d.servers || []).map((s) => s.id));
   inv.homeItems = await grab('/api/home-items', (d) => [...(d.notes || []), ...(d.suggestions || [])].map((i) => i.id));
-  // Admin não é papel no banco, é o e-mail em ADMIN_EMAIL. Descobre pela porta:
-  // a rota de whitelist responde 200 só pra ele e 403 pro resto. Importa porque
-  // alguns endpoints (ex.: /api/usage?user=) mudam de comportamento pra admin.
+  // Admin isn't a role in the database, it's the e-mail in ADMIN_EMAIL. Detected from the
+  // outside: the whitelist route responds 200 only for them and 403 for everyone else. It matters because
+  // some endpoints (e.g.: /api/usage?user=) change behavior for admin.
   inv.admin = (await call(who, 'GET', '/api/admin/whitelist')).status === 200;
   const uuid = /^([0-9a-f-]{36})\//i.exec(inv.mediaKeys[0] || '');
-  // Conta sem nenhuma mídia não revela o próprio id por API; aceita o id vindo
-  // do ambiente (UID_A / UID_B) pra não deixar o probe de /api/usage sem alvo.
+  // An account with no media at all doesn't reveal its own id via the API; accepts the id coming
+  // from the environment (UID_A / UID_B) so as not to leave the /api/usage probe without a target.
   inv.userId = uuid ? uuid[1] : (process.env[`UID_${who}`] || null);
   return inv;
 }
 
-// ── Etapa 2: probes ──
-// Cada probe é: pegar um id do dono e bater no endpoint com a sessão do intruso.
-// `ok` recebe a resposta e devolve true quando o servidor recusou como deveria.
+// ── Step 2: probes ──
+// Each probe is: take an id from the owner and hit the endpoint with the intruder's session.
+// `ok` receives the response and returns true when the server refused as it should.
 const recusou = (r) => r.status === 401 || r.status === 403 || r.status === 404;
 
 const results = [];
@@ -155,7 +155,7 @@ function record(nome, alvo, intruso, r, ok, obs) {
   console.log(obs ? `${linha}  · ${obs}` : linha);
 }
 
-// Probes de leitura: [nome, caminho a partir do id, campo do inventário]
+// Read probes: [name, path from the id, inventory field]
 const READ_PROBES = [
   ['GET /api/thread?id',                (id) => `/api/thread?id=${encodeURIComponent(id)}`,            'threads'],
   ['GET /api/media?key',                (k)  => `/api/media?key=${encodeURIComponent(k)}`,             'mediaKeys'],
@@ -165,9 +165,9 @@ const READ_PROBES = [
   ['GET /api/memory/page?slug',         (s)  => `/api/memory/page?slug=${encodeURIComponent(s)}`,       'pagesSo'],
 ];
 
-// Endpoints de escrita que aceitam id. NÃO são exercitados aqui: se o
-// isolamento estiver furado, o probe apagaria/alteraria dado real do dono.
-// Ficam listados pra o relatório dizer explicitamente o que não foi coberto.
+// Write endpoints that accept an id. They are NOT exercised here: if
+// isolation is broken, the probe would delete/alter the owner's real data.
+// They stay listed so the report explicitly states what wasn't covered.
 const WRITE_SURFACE = [
   'POST /api/thread/read', 'POST /api/thread/update', 'POST /api/thread/delete',
   'DELETE /api/thread', 'POST /api/thread/favorite', 'POST /api/thread/archive',
@@ -204,9 +204,9 @@ async function run() {
   console.log('');
 
   const inv = { A: invA, B: invB };
-  // Slug de página é namespaced por usuário: um 200 num slug que as DUAS contas
-  // têm não prova nada. Os slugs exclusivos vão pro probe de status; os
-  // compartilhados vão pro probe de comparação de conteúdo, mais abaixo.
+  // Page slug is namespaced by user: a 200 on a slug that BOTH accounts
+  // have proves nothing. Exclusive slugs go to the status probe; the
+  // shared ones go to the content-comparison probe, further below.
   const compartilhados = invA.pages.filter((s) => invB.pages.includes(s));
   invA.pagesSo = invA.pages.filter((s) => !compartilhados.includes(s));
   invB.pagesSo = invB.pages.filter((s) => !compartilhados.includes(s));
@@ -220,14 +220,14 @@ async function run() {
       const r = await call(other(dono), 'GET', path);
       record(nome, dono, other(dono), r, recusou(r));
 
-      // Mesmo id, sem sessão nenhuma.
+      // Same id, with no session at all.
       const anon = await call('anon', 'GET', path);
       record(nome + ' (anônimo)', dono, 'anon', anon, recusou(anon));
     }
   }
 
-  // HEAD na mídia: o caminho de bytes tem tratamento próprio (Range/HEAD), então
-  // vale exercitar separado do GET. Idem Range, que responde 206 e é outro ramo.
+  // HEAD on media: the bytes path has its own handling (Range/HEAD), so
+  // it's worth exercising separately from GET. Same for Range, which responds 206 and is a different branch.
   for (const dono of ['A', 'B']) {
     const k = (inv[dono].mediaKeys || [])[0];
     if (!k) continue;
@@ -236,9 +236,9 @@ async function run() {
     record('HEAD /api/media?key', dono, other(dono), h, recusou(h));
   }
 
-  // Slug que as duas contas têm: o teste é de CONTEÚDO. Cada uma lê o mesmo
-  // slug e as respostas têm que ser diferentes (cada um vê a sua página).
-  // Iguais = a mesma página está servindo as duas contas.
+  // Slug that both accounts have: the test is about CONTENT. Each one reads the same
+  // slug and the responses have to be different (each sees their own page).
+  // Equal = the same page is serving both accounts.
   for (const slug of compartilhados) {
     const a = await call('A', 'GET', `/api/memory/page?slug=${encodeURIComponent(slug)}`);
     const b = await call('B', 'GET', `/api/memory/page?slug=${encodeURIComponent(slug)}`);
@@ -248,10 +248,10 @@ async function run() {
       igual ? 'as duas contas recebem a MESMA página' : 'cada conta recebe a sua página');
   }
 
-  // /api/usage?user= não dá pra julgar pelo status: pra não-admin o servidor
-  // ignora o parâmetro e devolve 200 com o consumo do PRÓPRIO requisitante. A
-  // prova é comparar as duas respostas — se pedir o id do outro muda o número,
-  // o parâmetro foi honrado e isso É vazamento.
+  // /api/usage?user= can't be judged by status: for non-admin the server
+  // ignores the parameter and returns 200 with the requester's OWN usage. The
+  // proof is comparing the two responses — if asking for the other's id changes the number,
+  // the parameter was honored and that IS a leak.
   for (const dono of ['A', 'B']) {
     const alvoId = inv[dono].userId;
     const intruso = other(dono);
@@ -268,7 +268,7 @@ async function run() {
       igual ? 'parâmetro ignorado (resposta idêntica à própria)' : 'RESPOSTA MUDOU ao pedir o id do outro');
   }
 
-  // Escalada de privilégio: sessão comum não pode abrir rota de admin.
+  // Privilege escalation: a regular session cannot open the admin route.
   for (const who of ['A', 'B']) {
     if (inv[who].admin) continue;
     for (const rota of ['/api/admin/whitelist', '/api/admin/waitlist', '/api/admin/mobile-errors', '/api/signups']) {

@@ -62,8 +62,8 @@ test('turno que quebra: aviso e pergunta entram no histórico', async () => {
   assert.deepEqual(r.registrados.map((x) => [x.text, x.pergunta]), [[r.sent[0], 'anota que paguei o André']]);
 });
 
-// WhatsApp tem caminho próprio (fila de entrada): até 05/10 a falha de envio com a
-// fila ligada só marcava a mensagem como incerta, e a pessoa ficava sem nada.
+// WhatsApp has its own path (inbound queue): until 2026-10-05 a send failure with the
+// queue enabled only marked the message as uncertain, and the person got nothing.
 async function rodarWa({ falhasDaResposta }) {
   Object.assign(process.env, { WA_PHONE_NUMBER_ID: 'synthetic-phone', WA_TOKEN: 'synthetic', WA_DEBOUNCE_MS: '0', WA_TURN_HEARTBEAT_MS: '0' });
   const { createWhatsAppHandler } = await import('./web/whatsapp.mjs');

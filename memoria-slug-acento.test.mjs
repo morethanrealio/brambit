@@ -1,8 +1,8 @@
-// Página de memória com acento/espaço no nome não pode ser sobrescrita (achado #18).
-// Causa: existiam DUAS regras de nome. O banco troca acento e espaço por hífen
-// ("pessoa joão" -> "pessoa-joao"); o wiki.mjs APAGAVA esses caracteres
-// ("pessoajoo"). Com nomes diferentes, a leitura pegava página vazia e a
-// gravação substituía a página real, perdendo as linhas antigas em silêncio.
+// A memory page with an accent/space in the name must not be overwritten (finding #18).
+// Cause: there were TWO naming rules. The database swaps accent and space for a hyphen
+// ("pessoa joão" -> "pessoa-joao"); wiki.mjs DELETED those characters
+// ("pessoajoo"). With different names, the read got an empty page and the
+// write replaced the real page, silently losing the old lines.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

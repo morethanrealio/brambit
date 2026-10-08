@@ -1,6 +1,6 @@
-// Offline: servidor MCP falso em memória + o gate real. Ferramenta de conector
-// MCP não pode rodar sem o cartão de confirmação: o servidor é de terceiro e
-// pode gravar, apagar ou enviar. Nenhum tools/call sai antes de o dono confirmar.
+// Offline: fake in-memory MCP server + the real gate. An MCP connector
+// tool cannot run without the confirmation card: the server belongs to a third party and
+// may write, delete, or send. No tools/call goes out before the owner confirms.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -23,7 +23,7 @@ registerHooks({
 const { mcpConnect, describeMcpCall } = await import('./web/mcp.mjs');
 const { gateTool, peekPending, takePending, isReactionConfirmable } = await import('./web/confirm.mjs');
 
-// Servidor MCP mínimo: initialize, tools/list e tools/call. Guarda cada chamada.
+// Minimal MCP server: initialize, tools/list, and tools/call. Records every call.
 function fakeServer(tools) {
   const calls = [];
   globalThis.__fakeMcp = async (_url, opts) => {

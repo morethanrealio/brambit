@@ -1,30 +1,30 @@
 #!/usr/bin/env node
-// Suite inteira em UM comando: `npm test` (ou `node test-support/run-suite.mjs`).
+// Whole suite in ONE command: `npm test` (or `node test-support/run-suite.mjs`).
 //
-// Por que existe: `node --test` cru na raiz pega também os `.test.mts` das áreas
-// TypeScript (deepseek, discovery, engagement, onboarding, ...). Esses fontes
-// importam irmãos `./x.mjs` que só existem DEPOIS do `<area>:build` (tsc para
-// `.<area>-build/`), então falham com ERR_MODULE_NOT_FOUND sem nenhum bug.
-// Aqui: (1) roda o build de cada área que tem `build.mts` (o mesmo comando do
-// `npm run <area>:build`), (2) monta a lista com os padrões default do
-// `node --test`, trocando cada `.test.mts` de área compilada pelo `.mjs`
-// compilado, e (3) roda tudo num `node --test` só. Argumentos extras são
-// repassados (ex.: `npm test -- --test-concurrency=2`).
+// Why it exists: a raw `node --test` at the root also picks up the `.test.mts` from the
+// TypeScript areas (deepseek, discovery, engagement, onboarding, ...). Those sources
+// import siblings `./x.mjs` that only exist AFTER `<area>:build` (tsc into
+// `.<area>-build/`), so they fail with ERR_MODULE_NOT_FOUND with no bug at all.
+// Here: (1) runs the build for every area that has `build.mts` (the same command as
+// `npm run <area>:build`), (2) assembles the list with `node --test`'s default
+// patterns, swapping each compiled area's `.test.mts` for the compiled
+// `.mjs`, and (3) runs everything in a single `node --test`. Extra arguments are
+// passed through (e.g.: `npm test -- --test-concurrency=2`).
 //
-// `--changed-since <sha>` roda só os testes que a mudança desde <sha> alcança
-// (test-support/affected.mjs). É o que o CI faz em cada PR.
+// `--changed-since <sha>` runs only the tests that the change since <sha> reaches
+// (test-support/affected.mjs). That's what the CI does on every PR.
 //
-// Fora da suíte, de propósito: sondas de PRODUÇÃO com sessão real (SID_A/SID_B),
-// que não são teste local. E SID_A/SID_B são removidos do ambiente da suíte, para
-// nenhum arquivo (ex.: ops/tenancy-runner-test.mjs) sair batendo em produção.
+// Out of the suite, on purpose: PRODUCTION probes with a real session (SID_A/SID_B),
+// which aren't local tests. And SID_A/SID_B are removed from the suite's environment, so
+// no file (e.g.: ops/tenancy-runner-test.mjs) goes off hitting production.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { affectedTests } from './affected.mjs';
 
-// Raiz = pasta de onde roda (npm/CI rodam na raiz): quem instala o Brambit como
-// pacote roda a mesma trava no próprio repo, com node node_modules/brambit/....
+// Root = folder it runs from (npm/CI run at the root): whoever installs Brambit as a
+// package runs the same guard in their own repo, with node node_modules/brambit/....
 const root = process.cwd();
 
 const PRODUCTION_PROBES = {
@@ -35,7 +35,7 @@ const PRODUCTION_PROBES = {
 const areaDirs = () => readdirSync(root).filter((d) => !d.startsWith('.') && d !== 'node_modules'
   && statSync(path.join(root, d)).isDirectory() && existsSync(path.join(root, d, 'build.mts'))).sort();
 
-// 2) Lista de arquivos, com os padrões default do node --test.
+// 2) List of files, with node --test's default patterns.
 const EXT = '(?:c|m)?(?:j|t)s';
 const PATTERNS = [
   new RegExp(`\\.test\\.${EXT}$`), new RegExp(`-test\\.${EXT}$`), new RegExp(`_test\\.${EXT}$`),
@@ -51,7 +51,7 @@ function walk(dir, out) {
   }
   return out;
 }
-// Cada teste: { source (o que está no git), run (o que o node --test executa) }.
+// Each test: { source (what's in git), run (what node --test executes) }.
 export function listTests() {
   const areas = areaDirs(), out = [];
   for (const rel of walk('.', [])) {
@@ -81,7 +81,7 @@ if (i >= 0) {
   if (!selected.length) { process.stderr.write('[suite] nenhum teste afetado\n'); return 0; }
 }
 
-// 1) Build das áreas TypeScript.
+// 1) Build of the TypeScript areas.
 const git = (a) => { try { return execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return null; } };
 const before = git(['status', '--porcelain']);
 for (const area of areaDirs()) {
@@ -99,7 +99,7 @@ for (const [rel, why] of Object.entries(PRODUCTION_PROBES)) process.stderr.write
 process.stderr.write(`[suite] ${selected.length} arquivos de teste\n`);
 const files = selected.map((t) => t.run);
 
-// 3) Um node --test só. Localhost nunca passa pelo proxy do ambiente.
+// 3) A single node --test. Localhost never goes through the environment's proxy.
 const env = { ...process.env };
 delete env.SID_A; delete env.SID_B;
 const local = '127.0.0.1,localhost,::1';

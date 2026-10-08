@@ -1,40 +1,40 @@
 #!/usr/bin/env node
-// ── Isolamento entre contas: o canal do Runner (Fase 1, parte 3) ─────────────
+// ── Cross-account isolation: the Runner channel (Phase 1, part 3) ─────────────
 //
-// O Runner é a superfície mais séria do produto: um frame aceito no device errado
-// não vaza um registro, executa comando na máquina de alguém ou envenena a saída
-// que o assistente do outro vai ler. A correlação é por `reqId` (uma string), e a
-// pergunta é se o `reqId` de A pode ser respondido pelo device de B.
+// The Runner is the product's most serious surface: a frame accepted on the wrong device
+// doesn't just leak a record, it runs a command on someone's machine or poisons the output
+// the other person's assistant will read. Correlation is by `reqId` (a string), and the
+// question is whether A's `reqId` can be answered by B's device.
 //
-// Duas provas, porque cada uma alcança uma coisa:
+// Two proofs, because each one reaches a different thing:
 //
-//   PARTE 1 (módulo real, em processo) — importa `web/runner.mjs` (sem imports,
-//   estado só em memória) e monta a situação que a HTTP não deixa montar sem
-//   passar pelo modelo: um comando REALMENTE pendente para A. Aí o device de B
-//   tenta responder aquele reqId, mandar chunk de arquivo e fechar o comando.
-//   É onde a defesa `rec.userId !== userId` é de fato exercitada.
+//   PART 1 (real module, in-process) — imports `web/runner.mjs` (no imports,
+//   state only in memory) and sets up the situation that HTTP doesn't let you set up without
+//   going through the model: a command REALLY pending for A. Then B's device
+//   tries to answer that reqId, send a file chunk and close the command.
+//   This is where the `rec.userId !== userId` defense is actually exercised.
 //
-//   PARTE 2 (HTTP, produção) — o mesmo canal pela porta da frente: token de
-//   device é aceito, endereçamento é por dono, e a sessão de B nunca enxerga o
-//   device de A. Prova que o que a parte 1 mostra no módulo vale no processo que
-//   está no ar.
+//   PART 2 (HTTP, production) — the same channel through the front door: device
+//   token is accepted, addressing is by owner, and B's session never sees A's
+//   device. Proves that what part 1 shows at the module level holds in the process that
+//   is actually live.
 //
-// Guarda de segurança: se o Runner de verdade do dono estiver online, a parte 2
-// NÃO registra device falso na conta dele (pickDevice escolhe o heartbeat mais
-// recente e um device falso sequestraria um comando real). Nesse caso o passo é
-// pulado com o motivo escrito, nunca silenciosamente.
+// Security guard: if the owner's real Runner is online, part 2
+// does NOT register a fake device on their account (pickDevice picks the most
+// recent heartbeat and a fake device would hijack a real command). In that case the step is
+// skipped with the reason written down, never silently.
 //
-// Uso:
-//   node ops/tenancy-runner-test.mjs                 (só a parte 1, sem rede)
-//   SID_A=… SID_B=… node ops/tenancy-runner-test.mjs (parte 1 + parte 2, no servidor local)
-//   BASE=https://seu-dominio ALLOW_REMOTE=1 SID_A=… SID_B=… …  (parte 2 em produção;
-//     sem ALLOW_REMOTE=1 a sonda recusa alvo fora desta máquina)
-//   JSON=1  imprime o relatório em JSON no fim (tenancy-contract.test.mjs lê)
+// Usage:
+//   node ops/tenancy-runner-test.mjs                 (only part 1, no network)
+//   SID_A=… SID_B=… node ops/tenancy-runner-test.mjs (part 1 + part 2, on the local server)
+//   BASE=https://your-domain ALLOW_REMOTE=1 SID_A=… SID_B=… …  (part 2 in production;
+//     without ALLOW_REMOTE=1 the probe refuses a target outside this machine)
+//   JSON=1  prints the report in JSON at the end (tenancy-contract.test.mjs reads it)
 
 import { runnerPoll, runnerExec, runnerResult, runnerReadFile, runnerStatus } from '../web/runner.mjs';
 import { baseOrExit } from './tenancy-base.mjs';
 
-let BASE = ''; // resolvido só se a parte 2 for rodar (a parte 1 não usa rede)
+let BASE = ''; // resolved only if part 2 is going to run (part 1 doesn't use the network)
 const SID = { A: process.env.SID_A || '', B: process.env.SID_B || '' };
 const UA = '11111111-1111-1111-1111-111111111111';
 const UB = '22222222-2222-2222-2222-222222222222';
@@ -47,13 +47,13 @@ function check(nome, ok, obs) {
 }
 const sentinela = (ms) => new Promise((r) => setTimeout(() => r({ type: '__nada__' }), ms));
 
-// ── PARTE 1: o módulo real ──
+// ── PART 1: the real module ──
 async function parte1() {
   console.log('── Parte 1: web/runner.mjs em processo (comando de A pendente de verdade) ──');
   const meta = { hostname: 'maquina-de-teste', os: 'linux', version: '2.1.1' };
 
-  // Registra os dois devices e deixa cada um pendurado no long-poll, que é como
-  // o runner de verdade fica.
+  // Registers both devices and leaves each one hanging on the long-poll, which is how
+  // the real runner sits.
   const pollA = runnerPoll(UA, 'devA', meta);
   const pollB = runnerPoll(UB, 'devB', meta);
   await sentinela(50);
@@ -62,27 +62,27 @@ async function parte1() {
     runnerStatus(UA).deviceId === 'devA' && runnerStatus(UB).deviceId === 'devB',
     `A→${runnerStatus(UA).deviceId} B→${runnerStatus(UB).deviceId}`);
 
-  // Comando de A: vai para o device de A e cria o reqId pendente.
+  // A's command: goes to A's device and creates the pending reqId.
   const execA = runnerExec(UA, 'echo saida-legitima', { threadId: 'thread-de-A', timeout: 20_000 });
   const frameA = await pollA;
   check('comando de A chega no device de A', frameA?.type === 'exec' && !!frameA.reqId, `frame=${frameA?.type}`);
 
-  // O device de B não pode receber o comando de A.
+  // B's device cannot receive A's command.
   const oQueBRecebeu = await Promise.race([pollB, sentinela(2000)]);
   check('device de B não recebe o comando de A', oQueBRecebeu?.type === '__nada__',
     `B recebeu: ${JSON.stringify(oQueBRecebeu)}`);
 
-  // B tenta envenenar a saída do comando de A.
+  // B tries to poison the output of A's command.
   const r1 = runnerResult(UB, 'devB', { reqId: frameA.reqId, type: 'stdout', chunk: INVASOR });
   check('B não consegue escrever na saída do comando de A',
     r1?.ok === false && /outro usuário/.test(r1.error || ''), JSON.stringify(r1));
 
-  // B tenta fechar o comando de A (negaria serviço mesmo sem ler nada).
+  // B tries to close A's command (would deny service even without reading anything).
   const r2 = runnerResult(UB, 'devB', { reqId: frameA.reqId, type: 'exit', exitCode: 0 });
   check('B não consegue encerrar o comando de A',
     r2?.ok === false && /outro usuário/.test(r2.error || ''), JSON.stringify(r2));
 
-  // Canal de arquivo: mesma correlação por reqId, checagem própria.
+  // File channel: same reqId correlation, its own check.
   const lerA = runnerReadFile(UA, '/tmp/arquivo-de-teste', { timeout: 8000 });
   const pollA2 = runnerPoll(UA, 'devA', meta);
   const frameF = await Promise.race([pollA2, sentinela(2000)]);
@@ -93,7 +93,7 @@ async function parte1() {
     const r4 = runnerResult(UB, 'devB', { reqId: frameF.reqId, type: 'filedone', size: 0 });
     check('B não consegue encerrar a transferência de A',
       r4?.ok === false && /outro usuário/.test(r4.error || ''), JSON.stringify(r4));
-    // Encerra a transferência pelo dono, senão o teste espera o timeout.
+    // Ends the transfer via the owner, otherwise the test waits for the timeout.
     runnerResult(UA, 'devA', { reqId: frameF.reqId, type: 'filedone', error: 'fim do teste' });
   } else {
     check('B não consegue injetar bytes no arquivo pedido por A', null, 'frame readfile não chegou');
@@ -103,7 +103,7 @@ async function parte1() {
   check('pedido de arquivo de A não trouxe bytes do invasor',
     !JSON.stringify(arq).includes(INVASOR), `resultado=${(arq.error || 'ok').slice(0, 60)}`);
 
-  // Fecha o comando de A pelo device certo e confere que nada do invasor entrou.
+  // Closes A's command via the right device and checks that nothing from the intruder got in.
   runnerResult(UA, 'devA', { reqId: frameA.reqId, type: 'stdout', chunk: 'saida-legitima' });
   runnerResult(UA, 'devA', { reqId: frameA.reqId, type: 'exit', exitCode: 0 });
   const saida = await execA;
@@ -122,7 +122,7 @@ async function parte1() {
   await execB;
 }
 
-// ── PARTE 2: o canal pela porta da frente, em produção ──
+// ── PART 2: the channel through the front door, in production ──
 async function call(who, method, path, { body, bearer } = {}) {
   const headers = {};
   if (bearer) headers.authorization = `Bearer ${bearer}`;
@@ -154,12 +154,12 @@ async function parte2() {
       tk[who] = d.data.token; criados.push([who, d.data.device.id]);
     }
 
-    // Token inválido não entra.
+    // Invalid token doesn't get in.
     const ruim = await call(null, 'GET', '/api/runner/poll', { bearer: 'token-invalido-de-teste' });
     check('poll com token inválido é recusado', ruim.status === 401, `HTTP ${ruim.status}`);
 
-    // Registra o device falso de A (o dono está offline, verificado acima) e
-    // confere que só a conta A o enxerga.
+    // Registers A's fake device (the owner is offline, verified above) and
+    // checks that only account A can see it.
     const pollA = call(null, 'GET', '/api/runner/poll?hostname=zz-tenancy&os=linux&v=2.1.1', { bearer: tk.A });
     await sentinela(1500);
     const stA = await call('A', 'GET', '/api/runner/status');
@@ -167,12 +167,12 @@ async function parte2() {
     check('device de A aparece pra A', stA.data?.online === true, `deviceId=${String(stA.data?.deviceId).slice(0, 8)}`);
     check('device de A NÃO aparece pra B', stB.data?.online !== true, `status de B: online=${stB.data?.online}`);
 
-    // Com o token de B, tentar responder um reqId que não é dele.
+    // With B's token, try to answer a reqId that isn't theirs.
     const forjado = await call(null, 'POST', '/api/runner/result', { bearer: tk.B, body: { reqId: 'reqid-forjado-de-teste', type: 'stdout', chunk: INVASOR } });
     check('result com reqId forjado não é aceito como saída válida',
       forjado.status === 200 && forjado.data?.ignored === true, JSON.stringify(forjado.data));
 
-    // O poll de A não pode ser servido pelo token de B: B recebe idle.
+    // A's poll cannot be served by B's token: B gets idle.
     const pollB = await call(null, 'GET', '/api/runner/poll?hostname=zz-tenancy-b&v=2.1.1', { bearer: tk.B });
     check('poll de B só recebe idle (nunca frame de A)', pollB.data?.type === 'idle', JSON.stringify(pollB.data).slice(0, 80));
     await pollA;

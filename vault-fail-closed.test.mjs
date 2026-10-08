@@ -1,7 +1,7 @@
-// Cofre: gravação de segredo tem que FALHAR FECHADA.
-// Bug: vaultEnabled() olhava só a VAULT_KEY do env, então numa instalação com
-// chave via KMS (VAULT_KEY_ENC) — ou quando o unwrap do KMS falha no boot —
-// encMaybe() devolvia o segredo em TEXTO PURO e ele era gravado assim no banco.
+// Vault: saving a secret has to FAIL CLOSED.
+// Bug: vaultEnabled() only looked at the env's VAULT_KEY, so on an installation with
+// a key via KMS (VAULT_KEY_ENC) — or when the KMS unwrap fails at boot —
+// encMaybe() returned the secret in PLAIN TEXT and it was saved that way in the DB.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -10,7 +10,7 @@ import path from 'node:path';
 
 const ENV_KEYS = ['VAULT_KEY', 'VAULT_KEY_ENC', 'BRAMBS_LOCAL', 'VAULT_KEY_FILE'];
 let n = 0;
-// vault.mjs cacheia a chave no módulo; cada cenário precisa de uma instância nova.
+// vault.mjs caches the key in the module; each scenario needs a fresh instance.
 async function loadVault(env) {
   const saved = {};
   for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
@@ -32,8 +32,8 @@ test('sem chave nenhuma: initVault acusa e gravação recusa texto puro', async 
   } finally { restore(); }
 });
 
-// O bug do plano (fase B item 4): VAULT_KEY malformada contava como "sem cofre"
-// e o segredo ia pro banco em claro, com o servidor de pé.
+// The plan's bug (phase B item 4): a malformed VAULT_KEY counted as "no vault"
+// and the secret went to the DB in the clear, with the server up and running.
 for (const [nome, valor] of [['curta demais', 'abc'], ['hex no lugar de base64', 'a'.repeat(64)], ['lixo', 'não é base64 nenhum!!']]) {
   test(`VAULT_KEY malformada (${nome}): initVault acusa e nada vai em texto puro`, async () => {
     const { mod, restore } = await loadVault({ VAULT_KEY: valor });
@@ -47,8 +47,8 @@ for (const [nome, valor] of [['curta demais', 'abc'], ['hex no lugar de base64',
   });
 }
 
-// Chave ruim não derruba o servidor: o boot (initVaultNoBoot) segue em modo
-// degradado, só com o alarme no log, e a gravação de segredo continua recusando.
+// A bad key doesn't bring down the server: boot (initVaultNoBoot) continues in
+// degraded mode, only with the alarm in the log, and saving a secret keeps refusing.
 for (const [nome, env] of [['sem chave', {}], ['VAULT_KEY malformada', { VAULT_KEY: 'abc' }]]) {
   test(`boot com ${nome}: servidor segue de pé, alarme no log, segredo recusado`, async () => {
     const { mod, restore } = await loadVault(env);

@@ -41,8 +41,8 @@ test('texto do aviso no fuso da pessoa', () => {
   assert.match(dois, /^Mudanças na sua agenda:\n\n• .*\n• "Reunião X", que era .* foi cancelado ou saiu da sua agenda\.$/);
 });
 
-// Pool em memória só com as queries que o módulo usa.
-// `conectados` = quem tem agenda conectada (o que o SELECT de candidatos acharia).
+// In-memory pool with only the queries the module uses.
+// `conectados` = who has a calendar connected (what the candidate SELECT would find).
 function fakePool(conectados = ['u1']) {
   const snap = new Map(); const watch = new Map();
   return { snap, watch, async query(sql, p = []) {
@@ -74,7 +74,7 @@ test('ciclo completo: base calada, depois avisa remarcação e remoção', async
   const avisos = [];
   const w = createCalendarWatch({ pool, fetchImpl, now: () => Date.parse('2026-09-27T12:00:00Z'), notify: async (u, t) => avisos.push(t),
     googleAccounts: async () => [{ email: 'eu@x.invalid', token: async () => 't' }], microsoftToken: async () => null, timezone: async () => 'America/Sao_Paulo' });
-  // Sem ativar nada: ligado por padrão pra quem tem agenda conectada.
+  // Without enabling anything: on by default for whoever has a calendar connected.
   await w.tick();
   assert.equal(avisos.length, 0);
   eventos = [ev({ start: { dateTime: '2026-09-30T17:00:00-03:00' }, end: { dateTime: '2026-09-30T18:00:00-03:00' } })];
@@ -88,7 +88,7 @@ test('ciclo completo: base calada, depois avisa remarcação e remoção', async
   await w.setEnabled('u1', null, false);
   assert.equal(pool.snap.size, 0);
   assert.equal((await w.status('u1')).enabled, false);
-  // Desligado: sai do ciclo, mesmo com mudança na agenda.
+  // Disabled: drops out of the cycle, even with a calendar change.
   eventos = [ev({ start: { dateTime: '2026-10-01T17:00:00-03:00' }, end: { dateTime: '2026-10-01T18:00:00-03:00' } })];
   assert.equal((await w.tick()).usuarios, 0);
   assert.equal(avisos.length, 1);

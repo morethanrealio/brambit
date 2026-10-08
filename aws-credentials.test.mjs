@@ -11,7 +11,7 @@ import {
 const ROLE = { S3_INSTANCE_ROLE: '1' };
 const STATIC = { AWS_ACCESS_KEY_ID: 'AKIATESTE', AWS_SECRET_ACCESS_KEY: 'segredo' };
 
-// IMDS falso: registra as chamadas e devolve uma credencial que vence em `validMs`.
+// Fake IMDS: logs the calls and returns a credential that expires in `validMs`.
 function fakeImds({ validMs = 6 * 3600_000, code = 'Success', n = 1 } = {}) {
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
@@ -95,7 +95,7 @@ test('presign com a role leva o X-Amz-Security-Token; com a chave fixa não', as
     const role = new URL(presignGet('u1/a.jpg', 900, { now }));
     assert.equal(role.searchParams.get('X-Amz-Security-Token'), 'sess1');
     assert.match(role.searchParams.get('X-Amz-Credential'), /^ASIA1\//);
-    // O token entra na query canônica, então muda a assinatura.
+    // The token enters the canonical query, so it changes the signature.
     assert.notEqual(role.searchParams.get('X-Amz-Signature'), fixa.searchParams.get('X-Amz-Signature'));
   } finally {
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];

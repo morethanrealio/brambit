@@ -1,5 +1,5 @@
-// maskSecrets: senha em texto comum (pt/es/en) vira ***, só o valor. Chave Pix,
-// CPF e "clave" passam intactos. Offline, valores sintéticos.
+// maskSecrets: a password in plain text (pt/es/en) turns into ***, only the value. Pix key,
+// CPF, and "clave" pass through intact. Offline, synthetic values.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { maskSecrets } from './web/ssh.mjs';

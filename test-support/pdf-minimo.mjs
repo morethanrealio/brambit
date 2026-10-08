@@ -1,10 +1,10 @@
-// Gera um PDF mínimo VÁLIDO em memória, pra os testes não dependerem de nenhum
-// arquivo binário commitado nem de rede. Dois sabores:
-//   - comTexto: uma página com texto de verdade (camada de texto preenchida)
-//   - soDesenho: uma página só com um retângulo colorido (camada de texto
-//     VAZIA, que é exatamente o caso do logo/arte/escaneado)
-// PDF cru mesmo: objetos numerados, xref com os offsets certos e trailer. Sem
-// compressão, pra o arquivo continuar legível por quem for depurar o teste.
+// Generates a minimal VALID PDF in memory, so tests don't depend on any
+// committed binary file or on the network. Two flavors:
+//   - comTexto: a page with real text (text layer filled in)
+//   - soDesenho: a page with just a colored rectangle (text layer
+//     EMPTY, which is exactly the case for a logo/art/scan)
+// Truly raw PDF: numbered objects, xref with the right offsets and trailer. No
+// compression, so the file stays readable for whoever debugs the test.
 function montar(objetos) {
   const header = '%PDF-1.4\n';
   let corpo = '';
@@ -38,8 +38,8 @@ export function pdfComTexto(texto = 'CONTRATO DE TESTE') {
 }
 
 export function pdfSoDesenho() {
-  // Fundo branco + um bloco azul no meio: é o formato de um logo vetorial
-  // exportado em PDF (sem nenhum texto extraível).
+  // White background + a blue block in the middle: it's the format of a vector logo
+  // exported to PDF (with no extractable text at all).
   return pagina({
     conteudo: '1 1 1 rg 0 0 400 300 re f\n0.05 0.16 0.35 rg 100 90 200 120 re f',
     recursos: '/ProcSet [/PDF]',

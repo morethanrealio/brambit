@@ -1,5 +1,5 @@
-// ── Demo: o MESMO loop + as MESMAS tools, trocando só o provider ──
-// Prova a tese model-agnostic. Rode: node run.mjs
+// ── Demo: the SAME loop + the SAME tools, swapping only the provider ──
+// Proves the model-agnostic thesis. Run: node run.mjs
 
 import { runAgent } from './core.mjs';
 import { buildTools } from './tools.mjs';
@@ -11,7 +11,7 @@ import { makeScripted } from './providers/scripted.mjs';
 const SYSTEM = 'Você é um personal shopper. Ajude a achar o produto certo usando as tools.';
 const PEDIDO = 'Quero um tênis de corrida até 500 reais.';
 
-// Dois "modelos" plugáveis. No futuro: makeAnthropic(), makeOpenAI(), modelo proprietário.
+// Two pluggable "models". In the future: makeAnthropic(), makeOpenAI(), proprietary model.
 const providers = [
   makeScripted({ name: 'modelo-A (foca nota)', strategy: 'melhor_nota' }),
   makeScripted({ name: 'modelo-B (foca preço)', strategy: 'mais_barato' }),

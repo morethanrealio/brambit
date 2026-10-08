@@ -1,15 +1,16 @@
 import {throwIfAttemptControl} from '../provider-attempt.mjs';
-// Regras que valem pra TODO provedor de texto (motor compatível e DeepSeek oficial).
-// Diferença de comportamento entre provedores só pode vir de configuração ou de
-// mania de modelo, nunca de regra própria de um adaptador.
+// Rules that apply to EVERY text provider (compatible engine and official DeepSeek).
+// Behavior differences between providers can only come from configuration or
+// model quirks, never from an adapter's own rule.
 
 const obj=v=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v:{};
 
-// Chamada de ferramenta inválida recusa o LOTE inteiro: nada é executado e o core
-// faz uma tentativa de reparo (turn-recovery). Argumento ausente ou vazio = {}.
-// Nome que não está no catálogo NÃO é recusa: passa, e o core responde ao modelo
-// "tool desconhecida" sem executar nada, pra ele se corrigir quantas vezes precisar
-// (em prod, 9 em 2.226 pedidos; recusar com 1 reparo por pedido piorava 3 deles).
+// An invalid tool call rejects the WHOLE batch: nothing is executed and the core
+// makes one repair attempt (turn-recovery). Missing or empty argument = {}.
+// A name that isn't in the catalog is NOT a rejection: it goes through, and the core
+// tells the model "unknown tool" without executing anything, so it can correct itself
+// as many times as needed (in prod, 9 out of 2,226 requests; rejecting with 1 repair per
+// request made 3 of them worse).
 export function validarChamadas(lista){
   if(lista!==undefined&&lista!==null&&!Array.isArray(lista))return {code:'invalid_calls_shape'};
   const vistos=new Set(),calls=[];
@@ -35,8 +36,8 @@ export function mensagemProtocolo(code,quem='O modelo'){
   return `${quem} retornou uma ferramenta inválida; nenhuma ação foi executada.`;
 }
 
-// Recusa passageira de capacidade: tenta de novo NO MESMO modelo, com espera
-// crescente. Cada tentativa é uma requisição física nova (e conta no crédito).
+// Transient capacity refusal: tries again on the SAME model, with increasing
+// wait. Each attempt is a new physical request (and counts against credit).
 export const RETENTAR={status:[429,502,503,504],tentativas:4,esperaMs:800};
 export async function comRetentativa(fazer){
   for(let tentativa=1;;tentativa++){

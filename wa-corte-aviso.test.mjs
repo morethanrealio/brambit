@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepararTextoWa } from './web/whatsapp.mjs';
 
-// Até 29/09/2026 o WhatsApp tinha teto de 8 balões: o excesso sumia e o último
-// balão levava "[…resposta muito longa, cortei o resto]". Agora a resposta longa
-// vai inteira, em quantos balões precisar, na ordem. Estes testes travam isso.
+// Until 2026-09-29, WhatsApp had a cap of 8 bubbles: the excess disappeared and the last
+// bubble carried "[…resposta muito longa, cortei o resto]". Now the long reply
+// goes out in full, in as many bubbles as needed, in order. These tests guard against this.
 
 const BALAO = 1024;
 

@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const IMAGE = process.env.SANDBOX_IMAGE || 'brambs-sandbox:latest';
-const NETWORK = process.env.SANDBOX_NETWORK || 'brambs-sbx';      // rede docker só-egress
+const NETWORK = process.env.SANDBOX_NETWORK || 'brambs-sbx';      // egress-only docker network
 const MEM = process.env.SANDBOX_MEM || '512m';
 const CPUS = process.env.SANDBOX_CPUS || '1';
 const PIDS = process.env.SANDBOX_PIDS || '256';
@@ -50,7 +50,7 @@ async function isRunning(name) {
   return r.out.trim().length > 0;
 }
 
-// Garante o container do usuário de pé (cria/inicia se preciso). Idempotente.
+// Ensures the user's container is up (creates/starts if needed). Idempotent.
 export async function ensureSandbox(userId) {
   const name = cname(userId), vol = vname(userId);
   if (await isRunning(name)) return name;
@@ -76,7 +76,7 @@ export async function ensureSandbox(userId) {
   return name;
 }
 
-// Roda um comando shell no sandbox do usuário.
+// Runs a shell command in the user's sandbox.
 export async function shellRun(userId, command, { timeout = EXEC_TIMEOUT_MS, cwd = '/workspace' } = {}) {
   const name = await ensureSandbox(userId);
   const r = await run('docker', ['exec', '-w', cwd, name, 'bash', '-lc', command], { timeout });
@@ -88,7 +88,7 @@ export async function shellRun(userId, command, { timeout = EXEC_TIMEOUT_MS, cwd
   };
 }
 
-// Escreve um arquivo no /workspace do usuário (via stdin, sem shell-escaping).
+// Writes a file to the user's /workspace (via stdin, no shell-escaping).
 export async function writeFile(userId, path, content) {
   const name = await ensureSandbox(userId);
   const safe = path.startsWith('/') ? path : `/workspace/${path}`;
@@ -106,15 +106,15 @@ export async function readFile(userId, path) {
   return { ok: true, path: safe, content: r.out.slice(0, 100_000) };
 }
 
-// Metadados de um arquivo do sandbox, confinado a /workspace. Usado pelo
-// /readfile pra checar existência + tamanho ANTES de streamar (mensagem clara e
-// cap de tamanho). Devolve { ok, name, norm, size } ou { ok:false, error }.
+// Metadata of a sandbox file, confined to /workspace. Used by
+// /readfile to check existence + size BEFORE streaming (clear message and
+// size cap). Returns { ok, name, norm, size } or { ok:false, error }.
 export async function statFile(userId, filePath) {
   const raw = String(filePath || '').startsWith('/') ? String(filePath) : `/workspace/${filePath || ''}`;
   const norm = path.posix.normalize(raw);
-  // confinamento defensivo: nada fora de /workspace (barra traversal via `..`).
-  // O `cat`/`stat` já roda dentro do namespace do container (rootfs só-leitura,
-  // sem alcance ao host), isto é cinto+suspensório pra não ler nem o interior da imagem.
+  // defensive confinement: nothing outside /workspace (blocks traversal via `..`).
+  // The `cat`/`stat` already runs inside the container's namespace (read-only rootfs,
+  // no reach to the host), this is belt+suspenders so it doesn't even read the inside of the image.
   if (norm !== '/workspace' && !norm.startsWith('/workspace/')) return { ok: false, error: 'path fora de /workspace' };
   const name = await ensureSandbox(userId);
   const r = await run('docker', ['exec', name, 'stat', '-c', '%s', norm], { timeout: 15_000 });
@@ -122,9 +122,9 @@ export async function statFile(userId, filePath) {
   return { ok: true, name, norm, size: Number((r.out || '').trim()) || 0 };
 }
 
-// Streama os BYTES CRUS de um arquivo do container pro chamador (o runnerd pipa
-// direto na resposta HTTP). NÃO passa pelo run() (sem o teto de 200KB do stdout
-// do shell) — este é o transporte de arquivo binário, com cap próprio no runnerd.
+// Streams the RAW BYTES of a container file to the caller (runnerd pipes it
+// straight into the HTTP response). Does NOT go through run() (no 200KB ceiling on the shell's
+// stdout) — this is the binary file transport, with its own cap in runnerd.
 export function spawnCat(name, norm) {
   return spawn('docker', ['exec', name, 'cat', norm], { stdio: ['ignore', 'pipe', 'pipe'] });
 }

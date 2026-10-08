@@ -1,8 +1,8 @@
-// ── Provider determinístico (simula um "modelo") ──
-// Sem credencial externa: serve pra PROVAR que o mesmo loop + as mesmas tools
-// funcionam trocando só o provider. Duas instâncias com `strategy` diferente
-// representam dois "modelos" distintos. Cada uma faz: turno 1 chama a tool,
-// turno 2 lê o resultado e responde. Exercita o tool-loop de verdade.
+// ── Deterministic provider (simulates a "model") ──
+// No external credential: used to PROVE that the same loop + the same tools
+// work just by swapping the provider. Two instances with different `strategy`
+// represent two distinct "models". Each one does: turn 1 calls the tool,
+// turn 2 reads the result and responds. Exercises the tool-loop for real.
 
 import { STOP } from '../provider.mjs';
 
@@ -15,7 +15,7 @@ export function makeScripted({ name, strategy }) {
     async complete({ messages }) {
       const lastTool = [...messages].reverse().find((m) => m.role === 'tool');
 
-      // Ainda não buscou → chama a tool. (parse bem simples do pedido)
+      // Hasn't searched yet → calls the tool. (very simple parse of the request)
       if (!lastTool) {
         const userText = messages.find((m) => m.role === 'user')?.content ?? '';
         const precoMatch = userText.match(/(\d{2,5})/);
@@ -29,13 +29,13 @@ export function makeScripted({ name, strategy }) {
         };
       }
 
-      // Já tem resultado → escolhe conforme a estratégia do "modelo" e responde.
+      // Already has a result → chooses according to the "model"'s strategy and responds.
       const produtos = JSON.parse(lastTool.content || '[]');
       if (produtos.length === 0) {
         return { stop: STOP.END, text: 'Não achei nada dentro do orçamento. Quer aumentar o limite?' };
       }
       const pick = strategy === 'melhor_nota'
-        ? produtos[0]                                   // já vem ordenado por nota desc
+        ? produtos[0]                                   // already comes sorted by score desc
         : [...produtos].sort((a, b) => a.preco - b.preco)[0]; // mais barato
       const justificativa = strategy === 'melhor_nota' ? 'melhor avaliação' : 'melhor preço';
       return {
