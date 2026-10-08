@@ -14,8 +14,8 @@ requests, issues, `TODO.md`, docs and `CHANGELOG.md`.
 The only exceptions:
 
 - Text the user reads in the product, which is translated into Portuguese,
-  English and Spanish. Some catalogs are keyed by the Portuguese source text
-  (`site-textos`, the message catalogs); keep the key and add the translations.
+  English and Spanish. How that text is written, keyed and translated is in
+  [`docs/i18n.md`](docs/i18n.md); read it before adding or changing any of it.
 - `README.pt-BR.md` and `CLA.md`, which exist in Portuguese on purpose.
 
 Part of the core still has Portuguese names from before the project went open
