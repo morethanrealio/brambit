@@ -99,7 +99,7 @@ export function clean(s) {
     .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, _RPL)
     .split(_NUL).join('');
 }
-// Sanitiza recursivamente o history (array de mensagens) antes do JSON.stringify.
+// Recursively sanitizes the history (array of messages) before JSON.stringify.
 export function cleanDeep(v) {
   if (typeof v === 'string') return clean(v);
   if (Array.isArray(v)) return v.map(cleanDeep);
@@ -2414,7 +2414,7 @@ export function contatoAmbiguoMsg(contato, opcoes = []) {
     + '. Pergunte ao seu dono de qual dessas pessoas ele está falando e me diga o e-mail dela.';
 }
 
-// Adiciona um colaborador ao roster de um app do dono. Idempotente.
+// Adds a collaborator to an app's roster for the owner. Idempotent.
 export async function addAppCollaborator(ownerUserId, system, collabUserId, agentId) {
   const c=await pool.connect();
   try {
@@ -2741,7 +2741,7 @@ export async function listTrackers(userId) {
   }));
 }
 
-// Grava um evento (append-only). eventDate = 'YYYY-MM-DD' (a data do evento).
+// Writes an event (append-only). eventDate = 'YYYY-MM-DD' (the event's date).
 export async function addTrackerEvent(trackerId, userId, agentId, { eventDate, value, note, source }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.tracker_events (tracker_id, user_id, agent_id, event_date, value, note, source)
@@ -2915,11 +2915,11 @@ export async function disableMonitor(userId, monitorId) {
 // (Phase 2) and the Space's resolve/roster pattern. See skill-implementacao.md.
 
 const SKILL_BODY_MAX = 8000;   // cap so it doesn't fill up the context
-const SKILL_MAX_PER_AGENT = 50; // teto de skills instaladas por assistente
+const SKILL_MAX_PER_AGENT = 50; // cap on skills installed per assistant
 const SKILL_SCRIPT_MAX = 20000; // cap for the executable script
 const SKILL_RUNTIMES = new Set(['python', 'bash']);
 
-// Normaliza runtime + script. Devolve {runtime, script} ou {error}.
+// Normalizes runtime + script. Returns {runtime, script} or {error}.
 function normSkillScript(runtime, script) {
   const s = script == null ? null : String(script);
   const rt = String(runtime || '').trim().toLowerCase();
@@ -4025,7 +4025,7 @@ export async function referralCodeExists(code) {
   return rows.length > 0;
 }
 
-// ── Tokens OAuth de conectores externos (GitHub, Slack, ...) ──
+// ── OAuth tokens for external connectors (GitHub, Slack, ...) ──
 export async function saveOAuthToken(userId, provider, { access_token, refresh_token = null, scope = '', expiry = null, meta = null }, { refresh = false } = {}) {
   await pool.query(
     `INSERT INTO ${S}.oauth_tokens (user_id, provider, access_token, refresh_token, scope, expiry, meta, updated_at)
@@ -4069,7 +4069,7 @@ export async function deleteOAuthTokenByStoreId(provider, storeId) {
   return rowCount;
 }
 
-// ── Cofre de credenciais (secret_enc = segredo cifrado AES-256-GCM; NUNCA sai daqui em claro) ──
+// ── Credential vault (secret_enc = AES-256-GCM encrypted secret; NEVER leaves here in plaintext) ──
 export async function addConnection(userId, { provider, kind = 'apikey', label = '', secretEnc, meta = {} }) {
   const { rows } = await pool.query(
     `INSERT INTO ${S}.connections (user_id, provider, kind, label, secret_enc, meta)
@@ -4569,7 +4569,7 @@ export async function getUsage({ by = 'day', from, to, userId } = {}) {
   return rows;
 }
 
-// Totais gerais (cards do topo do dashboard) na janela.
+// General totals (dashboard top cards) in the window.
 export async function getUsageTotals({ from, to, userId } = {}) {
   const where = [SEM_PACOTE_LEVADO], vals = [];
   if (from)   { vals.push(from);   where.push(`ts >= $${vals.length}`); }
@@ -5914,7 +5914,7 @@ export async function consumeWaClaim(phone, text) {
   return { userId: claim.user_id, link };
 }
 
-// Troca o agente ativo daquele telefone (sticky entre mensagens).
+// Switches the active agent for that phone (sticky across messages).
 export async function setWhatsAppActiveAgent(phone, agentId) {
   await pool.query(`UPDATE ${S}.whatsapp_links SET active_agent_id = $2 WHERE wa_phone = $1`, [phone, agentId]);
 }
@@ -6786,7 +6786,7 @@ export async function listDeviceTokens(userId) {
   return rows;
 }
 
-// Ativa/desativa um device sem apagar o token. Valida o dono.
+// Enables/disables a device without deleting the token. Validates the owner.
 export async function setDeviceTokenEnabled(id, userId, enabled) {
   const { rowCount } = await pool.query(
     `UPDATE ${S}.device_tokens SET enabled = $3 WHERE id = $1 AND user_id = $2`,
@@ -7449,7 +7449,7 @@ export async function updateAgentFields(agentId, userId, fields = {}) {
   return { ok: rowCount > 0 };
 }
 
-// ── Rename do assistente: troca o nome e guarda os antigos em former_names ──
+// ── Assistant rename: changes the name and keeps the old ones in former_names ──
 export async function renameAgent(agentId, userId, newName) {
   const name = String(newName || '').trim();
   if (!name) return { ok: false, error: 'nome vazio' };
@@ -7612,7 +7612,7 @@ export async function declineContact(connId, userId) {
   return { ok: true };
 }
 
-// Cada dono pode (re)designar o assistente de entrada do SEU lado.
+// Each owner can (re)assign the inbound assistant on THEIR side.
 export async function setInboundAgent(connId, userId, agentId) {
   const conn = await getConnectionById(connId);
   if (!conn) return { error: 'nao_encontrada' };
@@ -7669,7 +7669,7 @@ export async function listContacts(userId) {
       id: r.id,
       status: r.status,
       created_at: r.created_at,
-      // sou eu quem convidou?
+      // am I the one who invited?
       invitedByMe: iAmA,
       // A OUTRA pessoa:
       personUserId: iAmA ? r.user_b : r.user_a,
@@ -7677,7 +7677,7 @@ export async function listContacts(userId) {
       personEmail: iAmA ? r.email_b : r.email_a,
       // my inbound assistant on this connection:
       myInboundAgent: iAmA ? r.inbound_agent_a : r.inbound_agent_b,
-      // o assistente de entrada da outra pessoa:
+      // the other person's inbound assistant:
       theirInboundAgent: iAmA ? r.inbound_agent_b : r.inbound_agent_a,
     };
   });
@@ -7993,7 +7993,7 @@ export async function getFlightCache(cacheKey, maxAgeMin) {
   return { payload: r.payload, fetchedAt: r.fetched_at, ageMin, stale: false };
 }
 
-// Grava/atualiza o cache de uma busca.
+// Writes/updates the cache for a search.
 export async function putFlightCache(cacheKey, { origin, destination, departDate, returnDate, params, payload }) {
   await pool.query(
     `INSERT INTO ${S}.flight_searches

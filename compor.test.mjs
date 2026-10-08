@@ -100,7 +100,7 @@ test('âncora posiciona a peça pelo ponto pedido', async () => {
     fundo: { cor: 'preto' },
     camadas: [{ tipo: 'imagem', imagem: 'logo', x: 0, y: 0, largura: 25, ancora: 'topo-esquerda', remover_fundo_branco: true }],
   }, { carregarImagem: async () => pecaComMargemBranca() });
-  assert.deepEqual(await pixel(r.png, 10, 10), [255, 0, 0, 255]);   // dentro do canto
+  assert.deepEqual(await pixel(r.png, 10, 10), [255, 0, 0, 255]);   // inside the corner
   assert.deepEqual(await pixel(r.png, 100, 100), [0, 0, 0, 255]);   // meio segue fundo
 });
 
@@ -117,7 +117,7 @@ test('proporção da peça é preservada quando só a largura é dada (logo não
     fundo: { cor: 'preto' },
     camadas: [{ tipo: 'imagem', imagem: 'x', x: 0, y: 0, largura: 50, ancora: 'topo-esquerda' }],
   }, { carregarImagem: async () => peca });
-  assert.deepEqual(await pixel(r.png, 50, 45), [255, 0, 0, 255]);  // dentro dos 100x50
+  assert.deepEqual(await pixel(r.png, 50, 45), [255, 0, 0, 255]);  // inside the 100x50
   assert.deepEqual(await pixel(r.png, 50, 60), [0, 0, 0, 255]);    // below, it's already background
 });
 

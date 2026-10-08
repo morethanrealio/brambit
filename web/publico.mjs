@@ -18,12 +18,12 @@ import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas } from './publico-saidas.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp'];
-export const HISTORICO_MAX = 40;      // mensagens do contato que voltam pro modelo
-export const MENSAGEM_MAX = 4000;     // chars da mensagem recebida
+export const HISTORICO_MAX = 40;      // contact messages that go back to the model
+export const MENSAGEM_MAX = 4000;     // chars of the received message
 export const ESTADO_MAX_CHAVES = 50;  // short-term memory per contact
 export const ESTADO_MAX_VALOR = 500;
 export const PASSOS_MAX = 8;
-export const LIMITE_POR_HORA = 30;    // mensagens de um contato por hora que chegam ao modelo
+export const LIMITE_POR_HORA = 30;    // messages from a contact per hour that reach the model
 export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
 export const CONVERSA_POR_PAGINA = 100;
@@ -97,7 +97,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return rows[0] || null;
     },
 
-    // Config + nome do agente. Nada mais do agente sai daqui.
+    // Agent config + name. Nothing else about the agent leaves here.
     async agente(agentId) {
       const { rows } = await pool.query(
         `SELECT p.agent_id, p.user_id, p.ativo, p.instrucoes, p.retencao_dias, p.limite_por_hora,
@@ -156,7 +156,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
       return rows[0].usd;
     },
 
-    // LGPD: tudo o que existe de um contato (pedido de acesso do titular).
+    // LGPD: everything that exists about a contact (data subject access request).
     async exportar(contatoId) {
       const { rows: [c] } = await pool.query(
         `SELECT id, agent_id, canal, endereco, criado_em, ultima_em, parado_em, bloqueado_em FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
@@ -292,7 +292,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sa
   };
 }
 
-// Ferramentas do contato. contatoId vem do servidor, nunca de argumento do modelo.
+// Contact tools. contatoId comes from the server, never from a model argument.
 export function ferramentasDoContato(store, contatoId) {
   return [
     { name: 'consultar_contato', readOnly: true,

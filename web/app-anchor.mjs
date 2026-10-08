@@ -99,7 +99,7 @@ export function resolverAncora(texto, trecho, opcoes = {}) {
   const corte = Math.max(pre[0].p - 0.2, limiar - 0.2);
   const escolhidas = pre.filter(x => x.p >= corte).slice(0, teto);
 
-  // Comprimento em caracteres da janela [i, i+w) no texto original.
+  // Length in characters of the window [i, i+w) in the original text.
   const spanDe = (i, w) => ({ ini: offs[i], fim: offs[i + w - 1] + linhas[i + w - 1].length });
   const medir = ({ i, w }) => { const { ini, fim } = spanDe(i, w); return { s: similaridade(normalizar(texto.slice(ini, fim)), alvo), ini, fim }; };
 

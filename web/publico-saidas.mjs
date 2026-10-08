@@ -18,7 +18,7 @@ export const SAIDAS_MAX = 10;
 export const SAIDA_TEXTO_MAX = 4000;
 export const LEGENDA_MAX = 1024;
 export const ROTULO_MAX = 20;       // WhatsApp link button accepts up to 20
-export const COMPONENTES_MAX = 20000; // chars do JSON dos componentes de um template
+export const COMPONENTES_MAX = 20000; // chars of the JSON of a template's components
 
 const corte = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
 const https = (v) => {

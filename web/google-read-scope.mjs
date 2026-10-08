@@ -45,7 +45,7 @@ export async function runGoogleReadAccounts({ accounts, currentAccount, requeste
         calls++;
         const raw = await tool.run(args);
         // Errors in JSON/text don't count as a successful read.
-        let parsed; try { parsed = JSON.parse(raw); } catch { /* ferramentas de texto */ }
+        let parsed; try { parsed = JSON.parse(raw); } catch { /* text tools */ }
         if (!parsed?.error && !parsed?.erro && !/^\s*(?:ERRO|ERROR)\b/i.test(String(raw))) succeeded++;
         return raw;
       } }));

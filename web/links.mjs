@@ -71,7 +71,7 @@ const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[IDIOMA_PADRAO
 const TIMEOUT_MS = 3000;       // per request (HEAD or GET), counting the redirect hops
 const MAX_REDIRECTS = 5;
 const MAX_LINKS = 8;          // cap on checks per turn (latency)
-const MAX_FONTES = 5;         // teto de fontes mostradas
+const MAX_FONTES = 5;         // cap on sources shown
 const UA = () => uaBot();
 
 // Short per-URL cache: a thread that repeats the same link across
@@ -132,7 +132,7 @@ function extrairUrls(texto) {
     if (semEsquema(u) && !aceitaSemEsquema(u)) continue;
     let host = '';
     try { host = new URL(paraConferir(u)).hostname; } catch { continue; }
-    // Rede interna/local: nunca sai daqui pra conferir.
+    // Internal/local network: never leaves here to check.
     if (hostInterno(host)) continue;
     if (seen.has(u)) continue;
     seen.add(u);

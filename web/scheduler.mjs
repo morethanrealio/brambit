@@ -21,7 +21,7 @@ export function isPauseOnlyRoutineChange(args = {}) {
     && Object.keys(args).every((key) => ['ativa', 'titulo', 'id'].includes(key));
 }
 
-// Dia local (YYYY-MM-DD) e hora/minuto local pra um timezone IANA.
+// Local day (YYYY-MM-DD) and local hour/minute for an IANA timezone.
 export function localParts(tz, at = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz || 'America/Sao_Paulo',
@@ -151,7 +151,7 @@ export function normalizeRoutineDays({ dias, dias_da_semana, dias_do_mes, semana
     }
     return { days: dias };
   }
-  return { days: null }; // nada informado: quem chama decide o default
+  return { days: null }; // nothing provided: the caller decides the default
 }
 
 // pt-BR label of an interval in minutes: "5 min", "1 hora", "2 horas", "1 dia".
@@ -257,7 +257,7 @@ export function startScheduler(deps, { intervalMs = 60_000, now = () => new Date
           const now = Date.now();
           while (next <= now) next += stepMs;
           if (r.repeat_until && next > new Date(r.repeat_until).getTime()) {
-            await deps.markRoutineNext(r.id, null);                 // fim da janela: desliga
+            await deps.markRoutineNext(r.id, null);                 // end of window: turns off
           } else {
             await deps.markRoutineNext(r.id, new Date(next).toISOString());
           }

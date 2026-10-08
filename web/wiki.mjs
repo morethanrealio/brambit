@@ -403,7 +403,7 @@ function acharAncora(linhas, ancora) {
 
 // Applies the operations. Pure (doesn't touch the database): returns the pages to save + the log.
 export function aplicarOps(ops, paginas, { maxOps = MAX_OPS } = {}) {
-  const out = new Map();  // slug -> array de linhas
+  const out = new Map();  // slug -> array of lines
   const linhasDoSlug = (slug) => {
     if (!out.has(slug)) out.set(slug, linhasCruas(paginas[slug] ?? ''));
     return out.get(slug);
@@ -1098,7 +1098,7 @@ export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun =
   const bruto = (r.text || '').trim();
   let ops = null;
   try {
-    const m = bruto.match(/\{[\s\S]*\}/);           // tolera cerca de markdown
+    const m = bruto.match(/\{[\s\S]*\}/);           // tolerates a markdown fence
     ops = m ? JSON.parse(m[0])?.ops : null;
   } catch { ops = null; }
   if (!Array.isArray(ops)) {

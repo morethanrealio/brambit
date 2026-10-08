@@ -10,9 +10,9 @@ import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { fetchFixado } from './net-pin.mjs';
 
 const MAX_BAIXAR = 10 * 1024 * 1024;
-const MAX_WA = 5 * 1024 * 1024;     // teto de imagem da Cloud API
+const MAX_WA = 5 * 1024 * 1024;     // image cap for the Cloud API
 const LADO_MAX = 1600;
-const VALIDADE_MS = 24 * 60 * 60 * 1000; // media id da Meta vale 30 dias
+const VALIDADE_MS = 24 * 60 * 60 * 1000; // Meta media id is valid for 30 days
 const CACHE_MAX = 1000;
 
 export function tipoDaImagem(buf) {
@@ -49,7 +49,7 @@ async function baixar(url, saltos = 2) {
 
 const cache = new Map(); // url -> {em, id: Promise<string>}
 
-// subir(buffer, mime) devolve o media id (uploadMedia do whatsapp.mjs).
+// subir(buffer, mime) returns the media id (uploadMedia from whatsapp.mjs).
 export async function imagemParaWa(url, subir) {
   const agora = Date.now();
   let c = cache.get(url);

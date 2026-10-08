@@ -68,7 +68,7 @@ export function buildGraph(files, read) {
   }
   const deps = new Map();
   let apelidos = {};
-  try { apelidos = JSON.parse(read('package.json')).imports || {}; } catch { /* sem package.json */ }
+  try { apelidos = JSON.parse(read('package.json')).imports || {}; } catch { /* no package.json */ }
   for (const f of files) {
     if (!CODE.test(f)) continue;
     let src;
@@ -94,7 +94,7 @@ export function closure(start, deps) {
   return seen;
 }
 
-// tests: caminhos de fonte dos testes. Devolve { all, tests, uncovered }.
+// tests: source paths of the tests. Returns { all, tests, uncovered }.
 export function selectAffected({ changed, tests, deps }) {
   if (changed.some((f) => RUN_ALL.includes(f))) return { all: true, tests: [...tests], uncovered: [] };
   const want = new Set(changed), picked = [], covered = new Set();

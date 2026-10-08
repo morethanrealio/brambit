@@ -8,7 +8,7 @@ export const creditUserLockKey=userId=>'execution-credit:'+userId;
 export const creditOrgLockKey=orgId=>'execution-credit:org:'+orgId;
 export const lockCreditUser=(client,userId)=>client.query(LOCK_SQL,[creditUserLockKey(userId)]);
 export const lockCreditOrg=(client,orgId)=>client.query(LOCK_SQL,[creditOrgLockKey(orgId)]);
-// run(client) dentro de BEGIN/COMMIT; ROLLBACK em erro.
+// run(client) inside BEGIN/COMMIT; ROLLBACK on error.
 export async function emTransacao(pool,run){
  const client=await pool.connect();
  try{

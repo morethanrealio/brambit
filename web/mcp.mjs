@@ -52,7 +52,7 @@ async function rpc(url, { id, method, params, headers = {}, notify = false }) {
   return { result: payload.result, session };
 }
 
-// Varre um corpo SSE e devolve o objeto JSON-RPC cujo id casa com o pedido.
+// Scans an SSE body and returns the JSON-RPC object whose id matches the request.
 function parseSseForId(text, id) {
   for (const block of text.split(/\n\n+/)) {
     const data = block
@@ -78,7 +78,7 @@ function renderToolResult(result) {
     .filter(Boolean)
     .join('\n');
   if (text) return result.isError ? `ERRO: ${text}` : text;
-  // Alguns servidores devolvem structuredContent em vez de content textual.
+  // Some servers return structuredContent instead of textual content.
   if (result.structuredContent) return JSON.stringify(result.structuredContent);
   return JSON.stringify(result);
 }

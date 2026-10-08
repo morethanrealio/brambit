@@ -25,7 +25,7 @@ const trace = (e) => {
 };
 
 for (const provider of providers) {
-  const tools = buildTools(); // mesmas tools pra todos
+  const tools = buildTools(); // same tools for everyone
   await runAgent({ provider, tools, system: SYSTEM, userInput: PEDIDO, onEvent: trace });
 }
 console.log('\nMesmo loop, mesmas tools, dois modelos. Trocar de modelo = trocar o provider.');

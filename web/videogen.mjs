@@ -117,7 +117,7 @@ export async function createRender({ imageUrl, prompt, audioUrl = null, voiceClo
   return j;
 }
 
-// Faz o poll de um job. Retorna { status, video_seconds, video_url, error }.
+// Polls a job. Returns { status, video_seconds, video_url, error }.
 // status ∈ queued | processing | done | error.
 export async function getRender(jobId) {
   if (!videoGenEnabled()) throw new Error('video gen desabilitado');

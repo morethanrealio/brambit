@@ -49,8 +49,8 @@ function ascJwt({ issuerId, keyId, p8 }) {
   return `${signingInput}.${b64url(sig)}`;
 }
 
-// GET autenticado. Nunca estoura: devolve marcadores (__notConnected /
-// __badKey / __badCredential / __apiError) pras tools traduzirem em texto.
+// Authenticated GET. Never throws: returns markers (__notConnected /
+// __badKey / __badCredential / __apiError) for the tools to translate into text.
 async function aReq(cred, path) {
   const c = await cred();
   if (!c) return { __notConnected: true };

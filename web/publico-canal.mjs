@@ -14,7 +14,7 @@ import { registrarRotasDoDono } from './publico-dono.mjs';
 const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Entra na lista de esquemas do initDb.
+// Joins the initDb schema list.
 export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.ATENDIMENTO_PUBLICO_AGENTE) => {

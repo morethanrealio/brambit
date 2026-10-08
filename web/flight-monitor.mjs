@@ -155,7 +155,7 @@ async function executeFlightAlerts({config,userId,routineId,tz,now}, deps) {
   if (c.routes.some(r=>r.query.data_ida<today)) return alertEnvelope(['Monitoramento não executado: há data de viagem no passado. Confirme as datas antes de ativar.']);
   const prepared=[];
   try {
-    // Preflight de armazenamento completo antes de consultar/cobrar qualquer rota.
+    // Full storage preflight before querying/charging any route.
     for (const r of c.routes) {
       const key=flightAlertQueryKey(r.query);
       const prev=await deps.readPrevious({userId,routineId,key,day:previousFlightDay(today),tz});

@@ -28,7 +28,7 @@ function ipv4Privado(ip) {
   if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
   const [a, b] = p;
   if (a === 0 || a === 10 || a === 127) return true;               // this-network, privada, loopback
-  if (a === 169 && b === 254) return true;                          // link-local (metadata da nuvem)
+  if (a === 169 && b === 254) return true;                          // link-local (cloud metadata)
   if (a === 172 && b >= 16 && b <= 31) return true;                 // privada
   if (a === 192 && b === 168) return true;                          // privada
   if (a === 100 && b >= 64 && b <= 127) return true;                // CGNAT

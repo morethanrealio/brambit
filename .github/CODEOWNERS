@@ -1,17 +1,17 @@
-# Dono padrão de tudo. Quando houver mantenedores além do Marcos, eles entram
-# nas áreas abaixo (plano open source, seção 9). As linhas explícitas marcam o
-# que é sensível e vai exigir revisão de quem cuida da área.
+# Default owner of everything. Once there are maintainers besides Marcos, they are
+# added to the areas below (open source plan, section 9). The explicit lines mark
+# what is sensitive and will require review from whoever owns the area.
 *                           @marcostrinca
 
-# Governança e cadeia de dependências
+# Governance and dependency chain
 /.github/                   @marcostrinca
 /package.json               @marcostrinca
 /package-lock.json          @marcostrinca
 
-# Banco
+# Database
 /web/db.mjs                 @marcostrinca
 
-# Auth, segredos e cobrança
+# Auth, secrets and billing
 /web/auth.mjs               @marcostrinca
 /web/vault*.mjs             @marcostrinca
 /web/pricing.mjs            @marcostrinca

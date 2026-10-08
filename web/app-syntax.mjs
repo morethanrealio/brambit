@@ -75,7 +75,7 @@ export async function checarSintaxe(rel, fonte) {
     const r2 = await rodar(process.execPath, ['--check', mjs]);
     if (!r2.err) return { estado: 'ok' };
     if (r2.err.killed) return { estado: 'pulado' };
-    // Reporta o dialeto que o arquivo aparenta usar.
+    // Reports the dialect the file appears to use.
     const pareceEsm = /^\s*(import\s|export\s|export\{)/m.test(fonte);
     return { estado: 'erro', erro: pareceEsm ? limparErro(r2.saida, mjs, rel) : limparErro(r1.saida, cjs, rel) };
   } catch {

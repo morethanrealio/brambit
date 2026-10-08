@@ -174,7 +174,7 @@ async function runInline(provider) {
   const reg = new ToolRegistry();
   for (const t of makeBaseTools()) reg.add(t);
   for (const t of makeCodingTools(state)) reg.add(t);
-  const system = `${PRINCIPAL_SYSTEM}\n\n${CODING_SYSTEM}`; // principal carrega o system de coding junto
+  const system = `${PRINCIPAL_SYSTEM}\n\n${CODING_SYSTEM}`; // main loads the coding system together
   const history = [];
   const all = [];
   for (let i = 0; i < Math.min(TURNS, TASKS.length); i++) {

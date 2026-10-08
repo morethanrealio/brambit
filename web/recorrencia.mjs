@@ -139,12 +139,12 @@ function untilUtc(ate, tz) {
     const p = Object.fromEntries(f.formatToParts(new Date(chute)).map((x) => [x.type, x.value]));
     const comoLocal = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
     off = comoLocal - chute; // how far the timezone is ahead of UTC, in ms
-  } catch { off = 0; } // fuso desconhecido: cai no UTC puro em vez de quebrar
+  } catch { off = 0; } // unknown timezone: falls back to plain UTC instead of breaking
   const inst = new Date(chute - off);
   return `${inst.toISOString().slice(0, 19).replace(/[-:]/g, '')}Z`;
 }
 
-/** Google Calendar: campo `recurrence` do evento (array de linhas RFC 5545). */
+/** Google Calendar: event's `recurrence` field (array of RFC 5545 lines). */
 export function paraGoogle(n, tz) {
   const p = [`FREQ=${{ diaria: 'DAILY', semanal: 'WEEKLY', mensal: 'MONTHLY', anual: 'YEARLY' }[n.freq]}`];
   if (n.intervalo > 1) p.push(`INTERVAL=${n.intervalo}`);
@@ -155,7 +155,7 @@ export function paraGoogle(n, tz) {
   return [`RRULE:${p.join(';')}`];
 }
 
-/** Microsoft Graph: campo `recurrence` do evento ({pattern, range}). */
+/** Microsoft Graph: event's `recurrence` field ({pattern, range}). */
 export function paraGraph(n, tz) {
   const pattern = { type: { diaria: 'daily', semanal: 'weekly', mensal: 'absoluteMonthly', anual: 'absoluteYearly' }[n.freq], interval: n.intervalo };
   // The Graph REQUIRES daysOfWeek on weekly and dayOfMonth on absoluteMonthly; on

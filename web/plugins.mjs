@@ -118,7 +118,7 @@ export function textosDoServidor(plugins){
  return plugins.flatMap(p=>p.textosServidor||[]);
 }
 
-// Origens do csp de todos os plugins, por diretiva.
+// CSP origins of all plugins, by directive.
 export function cspDosPlugins(plugins){
  const r={};
  for(const p of plugins)for(const [k,v] of Object.entries(p.csp||{}))(r[k]||=[]).push(...v);

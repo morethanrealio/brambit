@@ -101,7 +101,7 @@ for (const status of [403,429,302,'throw']) {
  for(const u of links)ok(r.texto.includes(u));ok(!r.texto.includes('⚠️'));
  const bad=url(404),s=await fontesEConferencia(`• Item ${bad}`,[],{strictLinks:true});eq(s.quebrados,[bad]);ok(!s.texto.includes(bad));
 }
-// Limpeza final que o server usa (citacoes.mjs), importada de verdade.
+// Final cleanup the server uses (citacoes.mjs), imported for real.
 const {stripCitationMarkers:strip,limparTextoFinal,registroDeFontes,citarFontes}=await import('./web/citacoes.mjs');
 for(const marker of ['[cite: 1]','[cite: 1.1.3]','[cite: 1, 2]','[CITE: 7]']){
  eq(strip('Texto '+marker+'.'),'Texto.');eq(strip('Um '+marker+' texto'),'Um texto');eq(strip(marker+' Texto'),'Texto');
@@ -139,7 +139,7 @@ eq(sanitize('Sem vazamento aqui.'),'Sem vazamento aqui.');
  const propria='Chove [1].\n\nFontes:\n[1] Outra — https://c.example.invalid/';eq(citarFontes(propria,reg),propria);
  // numbered menu, area code, and code are not a citation
  for(const t of ['[1] Sim\n[2] Não','DDD [11] 98888-7777','Código `a[1]`'])eq(citarFontes(t,reg),t);
- // sem registro, volta ao comportamento antigo
+ // without a record, falls back to the old behavior
  eq(citarFontes('Texto [1].',registroDeFontes()),'Texto.');
  eq(citarFontes('It rains [1].',reg,{language:'en'}),'It rains [1].\n\nSources:\n[1] A — '+u1);
 }

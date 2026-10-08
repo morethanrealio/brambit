@@ -21,7 +21,7 @@ export function makeDeepInfra({
   model = 'zai-org/GLM-5.2',
   maxTokens = 8192,     // hard output ceiling (anti-loop, same as Gemini)
   temperature = 0.7,
-  reasoning,            // ex: { enabled: false } desliga o "pensamento" do GLM.
+  reasoning,            // e.g.: { enabled: false } turns off GLM's "thinking".
                         // GLM-4.7 is a model that reasons before responding and
                         // that costs 5-10s + hidden tokens even for a "good morning";
                         // with reasoning off it responds in ~1-2s, without losing

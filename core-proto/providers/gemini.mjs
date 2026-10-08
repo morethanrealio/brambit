@@ -21,7 +21,7 @@ const nextId = () => `call_${++counter}`;
 // safe to retry (generateContent has no side effect on our side); 400/401/403
 // are our own error and surface immediately, without wasting time.
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
-const RETRY_DELAYS = [600, 1800]; // ms; jitter somado na hora
+const RETRY_DELAYS = [600, 1800]; // ms; jitter added at call time
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // fetch + retry. Returns the final response (ok or not); the caller keeps treating

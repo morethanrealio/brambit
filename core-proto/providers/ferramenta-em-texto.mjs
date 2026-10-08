@@ -59,7 +59,7 @@ export function parseGlmToolCalls(content) {
 // Since nothing here recognized this, the residue slipped past the guard and leaked
 // RAW to the user, with the tool never running (8 messages, 2 people,
 // 2026-09-01: three cases, the last one in an enviar_mensagem).
-const DSML = '｜'; // ｜ (fullwidth vertical line), o separador do DeepSeek
+const DSML = '｜'; // ｜ (fullwidth vertical line), the DeepSeek separator
 const DSML_TAG = `<${DSML}DSML${DSML}`;
 export function parseDsmlToolCalls(content) {
   const s = String(content ?? '');

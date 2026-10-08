@@ -669,7 +669,7 @@ func pollOnce() {
 	}
 	if f.Type == "readfile" {
 		logLine("arquivo pedido: " + f.Path)
-		go runReadFile(f) // idem: streaming em paralelo ao poll
+		go runReadFile(f) // same: streaming in parallel with the poll
 	}
 	// idle -> just re-poll
 }

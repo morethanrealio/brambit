@@ -572,7 +572,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
       parameters: { type: 'object', properties: { id: { type: 'string', description: 'email id' }, attachmentId: { type: 'string', description: 'attachmentId of the attachment (comes from gmail_read)' } }, required: ['id', 'attachmentId'] },
       async run({ id, attachmentId }) {
         audit('gmail_read_attachment', 'gmail', `msg=${id} att=${attachmentId}`);
-        // Baixa os bytes e resolve nome/tipo (mensagem → thread → magic bytes).
+        // Downloads the bytes and resolves name/type (message → thread → magic bytes).
         const { buffer: buf, filename: name, mimeType: mime, size, fromMetadata } = await fetchGmailAttachment({ token, messageId: id, attachmentId });
         console.log(`[gmail_read_attachment] name=${name} mime=${mime} size=${buf.length} meta=${fromMetadata}`);
         if (mime === 'application/pdf' || /\.pdf$/i.test(name) || sniffPdf(buf)) {
@@ -659,8 +659,8 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     });
   }
 
-  // ── Filtros do Gmail (gmail.settings.basic) = regras de roteamento: "todo
-  // e-mail de X vai pro marcador Y e pula a inbox". ──
+  // ── Gmail filters (gmail.settings.basic) = routing rules: "every
+  // email from X goes to label Y and skips the inbox". ──
   if (can('gmail', 'settings')) {
     tools.push({
       name: 'gmail_filters_list',

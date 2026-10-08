@@ -55,7 +55,7 @@ function decodeXml(s) {
     .replace(/&amp;/g, '&'); // last
 }
 
-// Texto de um bloco <si>/<is>: concatena todos os <t>...</t> (inclui runs <r><t>).
+// Text of an <si>/<is> block: concatenates all <t>...</t> (includes <r><t> runs).
 function textOfNode(xml) {
   let out = '';
   const re = /<t\b[^>]*?\/>|<t\b[^>]*>([\s\S]*?)<\/t>/g;
@@ -192,7 +192,7 @@ function parseSheet(xml, shared, {maxRows,formats,date1904}) {
   return {rows,totalRows};
 }
 
-// Ordena as planilhas pelo nome do arquivo (sheet1, sheet2, ...).
+// Sorts the sheets by file name (sheet1, sheet2, ...).
 function sheetNames(entries) {
   return Object.keys(entries)
     .filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(k))
@@ -325,8 +325,8 @@ export function xlsxCells(buf, refs = []) {
     }
     if (!file) { out.push({ ref, sheet: tab, cell, exists: false, value: '', formula: '', noSheet: true }); continue; }
     const xml = sheetXml(file);
-    // Autofechada primeiro, senao a celula vazia procurada devolve o valor da
-    // celula seguinte e o conferidor de edicao acusa erro num arquivo certo (achado #19).
+    // Self-closing first, otherwise the empty cell being looked up returns the
+    // value of the next cell and the edit checker flags an error in a correct file (finding #19).
     const cm = xml.match(new RegExp(`<c\\b[^>]*\\br="${cell}"[^>]*?/>|<c\\b[^>]*\\br="${cell}"[^>]*?>([\\s\\S]*?)</c>`));
     if (!cm) { out.push({ ref, sheet: tab, cell, exists: false, value: '', formula: '' }); continue; }
     const inner = cm[1] || '';

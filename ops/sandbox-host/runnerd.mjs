@@ -22,7 +22,7 @@ const PORT = Number(process.env.RUNNERD_PORT || 9000);
 const HOST = process.env.RUNNERD_HOST || '0.0.0.0';
 const TOKEN = process.env.RUNNER_TOKEN || '';
 const MAX_BODY = 2 * 1024 * 1024; // 2MB (writeFile pode mandar arquivo)
-const MAX_FILE = Number(process.env.RUNNER_MAX_FILE || 25 * 1024 * 1024); // teto do /readfile
+const MAX_FILE = Number(process.env.RUNNER_MAX_FILE || 25 * 1024 * 1024); // /readfile cap
 
 if (!TOKEN) { console.error('RUNNER_TOKEN ausente; recusando subir.'); process.exit(1); }
 
@@ -85,7 +85,7 @@ const server = http.createServer(async (req, res) => {
       const abort = () => { if (aborted) return; aborted = true; try { child.kill('SIGKILL'); } catch { /* already dead */ } try { res.destroy(); } catch { /* already closed */ } };
       child.stdout.on('data', (d) => {
         sent += d.length;
-        if (sent > MAX_FILE) return abort(); // guarda extra: arquivo cresceu entre stat e cat
+        if (sent > MAX_FILE) return abort(); // extra guard: file grew between stat and cat
         res.write(d);
       });
       child.stderr.on('data', () => { /* discards noise from docker exec */ });

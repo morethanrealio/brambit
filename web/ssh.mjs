@@ -33,7 +33,7 @@ const KNOWN_HOSTS = `${SSH_DIR}/known_hosts`;
 // in coding.mjs (which imports it to avoid duplication).
 export function maskSecrets(s, { prose = false } = {}) {
   let t = String(s ?? '');
-  // Senha em connection string: scheme://user:SENHA@host  ->  user:***@host
+  // Password in connection string: scheme://user:PASSWORD@host  ->  user:***@host
   t = t.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)([^@\s/]+)(@)/gi, '$1***$3');
   // AWS Access Key ID (AKIA/ASIA + 16 alfanum).
   t = t.replace(/\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/g, '***AWS_KEY***');
@@ -61,7 +61,7 @@ export function maskSecrets(s, { prose = false } = {}) {
     /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|PASS|TOKEN|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CLIENT_SECRET)[A-Za-z0-9_]*)(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
     (m, name, sep) => (prose && !(name.includes('_') || /^[A-Z0-9]+$/.test(name)) ? m : `${name}${sep}***`),
   );
-  // Bloco de chave privada PEM inteiro.
+  // Entire PEM private key block.
   t = t.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '***PRIVATE_KEY***');
   return maskPasswordLabels(t);
 }

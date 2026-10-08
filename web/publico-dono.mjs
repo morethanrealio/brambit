@@ -103,7 +103,7 @@ export function registrarRotasDoDono({ rotas, store, send, fail, tooManyRequests
     return send(res, 200, { ok: true });
   });
 
-  // Pedido de acesso do titular (LGPD): o dono baixa tudo o que existe do contato.
+  // Data subject access request (LGPD): the owner downloads everything that exists about the contact.
   rota('GET', '/api/publico/exportar', async ({ res, url, user }) => {
     const contatoId = await contatoDoPedido(user, url.searchParams.get('contato'));
     if (!contatoId) return naoAchei(res);

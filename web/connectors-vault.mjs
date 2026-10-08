@@ -17,7 +17,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 // the vault, each tool returns a step-by-step on how to connect (the Vault's
 // "technical path") instead of throwing an error.
 
-// Extrai texto puro de um trecho de rich_text do Notion.
+// Extracts plain text from a Notion rich_text snippet.
 const rich = (arr) => (Array.isArray(arr) ? arr.map((t) => t?.plain_text || t?.text?.content || '').join('') : '');
 
 // ── Notion ──
@@ -514,7 +514,7 @@ export function infinityWriteValue(attr, valor, members = []) {
   }
 }
 
-// `campos` ({ nome_ou_id_do_campo: valor }) → `values` da API.
+// `campos` ({ field_name_or_id: value }) → API's `values`.
 export function infinityValues(attrs, campos = {}, members = []) {
   const values = [];
   for (const [chave, valor] of Object.entries(campos || {})) {

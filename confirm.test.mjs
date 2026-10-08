@@ -115,7 +115,7 @@ const cancela = (txt) => t(`cancela : ${JSON.stringify(txt)}`, isConfirmation(tx
  'envia no Le Monde'].forEach(confirma);
 ['no lo hagas', 'No lo hagas', 'no la envíes', 'no te preocupes'].forEach(cancela);
 
-// 7) Nada de confirmar por engano: pergunta, frase longa, vazio.
+// 7) No accidental confirmation: question, long sentence, empty.
 ['deu certo?', 'pode?', 'quando publicar o app me avisa', 'depois eu vejo se pode',
  'você acha que pode mandar isso hoje ainda ou é melhor esperar?',
  '', '   ', 'não\nsim', 'sim\nnão'].forEach(cancela);

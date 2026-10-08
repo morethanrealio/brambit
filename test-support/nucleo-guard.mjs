@@ -46,7 +46,7 @@ export function lerNuvem(texto) {
 // Only cloud file reference allowed in the core: where it looks for the plugins.
 const PONTES = new Set(['web/plugins.mjs>web/plugins/ativos.mjs']);
 
-// Prova 1. Devolve os problemas em texto (vazio = ok).
+// Proof 1. Returns the issues as text (empty = ok).
 export function conferirImports(files, read, nuvem) {
   const problemas = [];
   for (const [e, t] of nuvem.entradas) if (!files.some(t)) problemas.push(`${MANIFESTO}: "${e}" não corresponde a nenhum arquivo (tire a linha)`);
@@ -71,7 +71,7 @@ function pedir(port, rota, { method = 'GET', headers = {}, body } = {}) {
   });
 }
 
-// Prova 2. Joga erro com o log do servidor se algo falhar.
+// Proof 2. Throws an error with the server log if something fails.
 export async function bootSemNuvem(files, nuvem) {
   const bin = process.env.TEST_POSTGRES_BIN || postgresBin();
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'brambs-boot-test-nucleo-'));

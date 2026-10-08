@@ -36,7 +36,7 @@ export function makeScripted({ name, strategy }) {
       }
       const pick = strategy === 'melhor_nota'
         ? produtos[0]                                   // already comes sorted by score desc
-        : [...produtos].sort((a, b) => a.preco - b.preco)[0]; // mais barato
+        : [...produtos].sort((a, b) => a.preco - b.preco)[0]; // cheaper
       const justificativa = strategy === 'melhor_nota' ? 'melhor avaliação' : 'melhor preço';
       return {
         stop: STOP.END,

@@ -1,5 +1,5 @@
--- Somente após aprovação específica. NÃO é executada por initDb. Sem backfill:
--- texto de thread não prova que uma edição foi entregue.
+-- Only after specific approval. NOT run by initDb. No backfill:
+-- thread text doesn't prove that an edition was delivered.
 BEGIN;
 CREATE TABLE mtr_harness.curation_deliveries (
  id uuid PRIMARY KEY,

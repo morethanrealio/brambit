@@ -14,7 +14,7 @@ export function batchedConfirmationTarget(targets = []) {
 // Each card is sent separately so its channel message IDs select just that
 // proposal. Ordinary replies keep the existing single-message behavior.
 export function channelReplyParts(result, fallbackText = '') {
-  // Resposta de saldo repetida em rajada: nada a enviar (ver push-repeat-guard.mjs).
+  // Repeated balance reply in a burst: nothing to send (see push-repeat-guard.mjs).
   if (result?.suppressed) return [];
   if (Array.isArray(result?.confirmationCards) && result.confirmationCards.length) return result.confirmationCards;
   return [{ text: typeof result === 'string' ? result : result?.text || fallbackText,

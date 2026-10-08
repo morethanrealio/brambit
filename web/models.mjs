@@ -65,7 +65,7 @@ export function pickPrimaryTier({ text = '', permMode = 'padrao', hasProject = f
   const t = (text || '').toLowerCase();
   // Pasted code block / program snippet → robust.
   if (/```|\bfunction\b|=>|\bdef \b|\bclass \b|\bimport \b|select .+ from |console\.log|\{[^}]*:[^}]*\}/.test(t)) return 'robusto';
-  // Mensagem longa (documento pra analisar/resumir/revisar) → robusto.
+  // Long message (document to analyze/summarize/review) → robust.
   const words = t.trim() ? t.trim().split(/\s+/).length : 0;
   if (words > 180) return 'robusto';
   // Real reasoning: code, analysis, strategy, planning, long-form writing.

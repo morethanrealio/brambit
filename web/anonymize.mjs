@@ -23,8 +23,8 @@ import { modeloPara } from '../core-proto/modelos.mjs';
 
 const CHEAP_MODEL = 'gemini-3.1-flash-lite';
 const TEXT_EXT = /\.(js|mjs|ts|jsx|tsx|html?|css|json|py|txt|md|csv)$/i;
-const MAX_FILE_CHARS = 12000;   // trecho por arquivo enviado ao modelo
-const MAX_TOTAL_CHARS = 60000;  // teto do prompt inteiro
+const MAX_FILE_CHARS = 12000;   // snippet per file sent to the model
+const MAX_TOTAL_CHARS = 60000;  // cap on the whole prompt
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
 function readSnapshot(blob) {
@@ -85,8 +85,8 @@ function buildPrompt(textFiles) {
   ].join('\n');
 }
 
-// Recebe o blob de snapshot (gz1:...) e devolve { blob, changed, applied, error }.
-// Em qualquer falha, devolve o blob ORIGINAL com changed=false.
+// Receives the snapshot blob (gz1:...) and returns { blob, changed, applied, error }.
+// On any failure, returns the ORIGINAL blob with changed=false.
 export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   const files = readSnapshot(blob);
   if (!files || !Object.keys(files).length) return { blob, changed: false, applied: 0 };

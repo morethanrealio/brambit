@@ -22,7 +22,7 @@ test('erro no meio do corpo vira rejeição, não exceção solta', async () => 
   const fake = new EventEmitter();
   const p = lerCorpo(fake);
   fake.emit('data', 'parcial');
-  // Sem o listener de 'error' esta linha SOZINHA derrubaria o processo.
+  // Without the 'error' listener this line ALONE would crash the process.
   assert.doesNotThrow(() => fake.emit('error', new Error('ECONNRESET')));
   await assert.rejects(p, /ECONNRESET/);
 });

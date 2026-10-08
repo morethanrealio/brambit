@@ -579,7 +579,7 @@ export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = 
         console.error('[abrir_link] pré-check:', e?.message ?? e);
         // A link that is clearly a spreadsheet file doesn't fall back to Tavily's text.
         if (tipoPlanilha(nomeDoPath(u), '')) return `ERRO: não consegui baixar a planilha desse link (${e?.message ?? e}). Não li nada dela; diga isso ao usuário e não descreva o conteúdo.`;
-        // segue pro Tavily como fallback
+        // falls through to Tavily as a fallback
       }
       // 2) Normal HTML page via Tavily (better readable-content extraction),
       //    with direct reading as a safety net for EVERY bad outcome: no

@@ -140,7 +140,7 @@ function ufDoCep(cep) {
   return FAIXAS_CEP.find(([a, b]) => p >= a && p <= b)?.[2] || null;
 }
 
-// Slug do produto a partir da URL do PDP VTEX: /<slug>/p
+// Product slug from the VTEX PDP URL: /<slug>/p
 function slugDaUrl(u) {
   const parts = new URL(u).pathname.split('/').filter(Boolean);
   if (!parts.length) return null;
@@ -276,7 +276,7 @@ async function resolverProduto(url) {
     if (!r?.json?.variants?.length) return null;
     // The response's origin rules: if the store redirected, that's where the cart lives.
     let fim = origin;
-    try { fim = new URL(r.url).origin; } catch { /* fica o original */ }
+    try { fim = new URL(r.url).origin; } catch { /* keeps the original */ }
     // A Shopify store doesn't sell only in reais (allbirds and farmrio charge in USD, even
     // while serving Brazil). The currency comes from the store's /meta.json, not from assumption.
     const meta = await req(`${fim}/meta.json`).catch(() => null);
@@ -812,7 +812,7 @@ export function comprasTools(userId, agentId, { threadId } = {}) {
           if (re?.json) carrinho = re.json;
         }
 
-        if (salvar_perfil) { try { await gravarPerfil(userId, c); } catch { /* cofre off: segue sem salvar */ } }
+        if (salvar_perfil) { try { await gravarPerfil(userId, c); } catch { /* vault off: proceeds without saving */ } }
 
         const t = totais(carrinho);
         const id = 'c' + randomUUID().replaceAll('-', '');

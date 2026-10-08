@@ -131,7 +131,7 @@ test('calibração: o que tem origem não é acusado', () => {
   const sem = (texto, ctx) => assert.deepEqual(kinds(checkGrounding(texto, ctx)), [], texto);
   // an accented word doesn't turn into a code ("DESCART"), "promoções" doesn't open a coupon window
   sem('*2) DESCARTÁVEIS* — propaganda, promoções, newsletter', { toolOutputs: [] });
-  // linha que nega cupom
+  // line that denies the coupon
   sem('Não achei nenhum cupom ativo pra TESTANI hoje.', { toolOutputs: [] });
   // piece of address and email in the coupon line
   sem('Cupom: veja em https://loja.example/promo?utm=VERAO2026 ou fale com VENDAS@loja.example', { toolOutputs: ['loja.example'] });
@@ -143,7 +143,7 @@ test('calibração: o que tem origem não é acusado', () => {
   sem('Use http://localhost:3000/callback no cadastro.', { toolOutputs: [] });
   // link montado a partir de id lido (e-mail)
   sem('Abrir: https://mail.google.com/mail/#all/1a0b54264c258800', { toolOutputs: ['{"id":"1a0b54264c258800"}'] });
-  // conta feita em cima de valor consultado (2 passagens; ida + volta)
+  // calculation made on top of a queried value (2 passes; there and back)
   sem('Cotei agora: R$ 4.240 para duas pessoas, R$ 4.760 ida e volta.', { toolOutputs: ['{"preco":"R$ 2.120"} volta R$ 2.640'] });
   // prose around the source list when there was a consultation
   sem('Fontes: INSS (gov.br), G1, consultados agora.', { toolOutputs: ['inss gov br'], toolCounts: { buscar_web: 1 } });

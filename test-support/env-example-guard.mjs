@@ -40,7 +40,7 @@ export function envReads(text) {
   return out;
 }
 
-// Linha ativa "VAR=valor" ou comentada "# VAR=valor".
+// Active line "VAR=value" or commented out "# VAR=value".
 export function parseExample(text) {
   const entries = [];
   text.split('\n').forEach((line, i) => {

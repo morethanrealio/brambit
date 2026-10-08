@@ -54,7 +54,7 @@ export async function deliverCurationEdition(edition,{store,send,persist=async()
   if(edition?.type!=='curation-v1'||!['email','whatsapp','telegram','none','app'].includes(edition.channel))throw Error('Entrega de curadoria inválida.');
   // No articles: an honest failure/partial notice, doesn't become an item history.
   if(!edition.urls.length){const receipt=await send(edition.text);if(receipt?.ok!==true||receipt.skipped||!receipt.id)throw Error('Aviso não entregue.');await persist(edition.text);return;}
-  await store.reserve(edition); // erro antes do envio: nenhum efeito no canal
+  await store.reserve(edition); // error before sending: no effect on the channel
   let receipt;
   try {
     receipt=await send(edition.text);

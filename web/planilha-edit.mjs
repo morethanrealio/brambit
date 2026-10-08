@@ -159,13 +159,13 @@ export function declarouRemocao(resumo) {
 //    not a content loss). Treating this as an error would make any spreadsheet
 //    coming from Excel impossible to edit.
 const PECA_ACESSORIA_RE = new RegExp([
-  '^customxml/',                            // XML customizado do Office
+  '^customxml/',                            // Custom Office XML
   '^docmetadata/',                          // sensitivity label (MIP)
   '^docprops/',                             // author, title, editing time
-  '^xl/sharedstrings\\.xml$',               // openpyxl grava string inline
+  '^xl/sharedstrings\\.xml$',               // openpyxl writes inline string
   '^xl/calcchain\\.xml$',                   // calculation chain cache (Excel rebuilds it)
   '^xl/metadata\\.xml$',
-  '^xl/richdata/', '^xl/rdrichvalue',       // tipos de dado ricos
+  '^xl/richdata/', '^xl/rdrichvalue',       // rich data types
   '^xl/threadedcomments/', '^xl/persons/',  // comment with thread
   '^xl/revisions/', '^xl/usernames\\.xml$',
 ].join('|'), 'i');
@@ -348,7 +348,7 @@ export function conferirEvidencia(evidencias, lidas) {
   return { total: (evidencias || []).length, conferidas, erros, naoVerificaveis };
 }
 
-// ── Prompt do sub-agente EDITOR ──
+// ── EDITOR sub-agent prompt ──
 
 export const SHEET_EDITOR_SYSTEM = `You are a SPREADSHEET EDITOR sub-agent. You receive ONE Excel spreadsheet ALREADY SAVED at a path in the /workspace of the isolated environment and a change instruction in natural language. Your task is to APPLY the change to the file, with CODE, and return only a SUMMARY of what changed.
 

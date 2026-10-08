@@ -33,7 +33,7 @@ import { comIdioma, tagIdioma } from './locale.mjs';
 import { marca } from './marca.mjs';
 
 const MAX_ROUNDS = Number(process.env.A2A_MAX_ROUNDS || 3);      // rodadas (1 rodada = A fala, B fala)
-const BUDGET_TOKENS = Number(process.env.A2A_BUDGET_TOKENS || 40000); // teto de tokens por conversa
+const BUDGET_TOKENS = Number(process.env.A2A_BUDGET_TOKENS || 40000); // token cap per conversation
 const INTENTS = ['ask', 'answer', 'propose', 'accept', 'decline', 'close', 'question'];
 
 // Normalizes text to compare for dedup (lowercase, no repeated space/punctuation).
@@ -67,7 +67,7 @@ function knowledgeBlock({ ownerName, agent, profileText }) {
 // keywords and uses the whole text.
 function parseTurn(raw, side) {
   const text = String(raw || '').trim();
-  // tenta achar um bloco JSON
+  // tries to find a JSON block
   const m = text.match(/\{[\s\S]*\}/);
   if (m) {
     try {
@@ -144,7 +144,7 @@ ALWAYS reply in JSON, one line:
 - close: already resolved (or no way to resolve it); record the outcome in the message.`;
 }
 
-// Roda um lado isolado (sem tools em v1) e devolve { intent, mensagem, usages }.
+// Runs one side in isolation (no tools in v1) and returns { intent, mensagem, usages }.
 async function runSide({ provider, system, userInput }) {
   const reg = new ToolRegistry(); // v1: no action tools (avoids consequence without the owner)
   const { text, usages } = await runAgent({
@@ -288,7 +288,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
         await addConvoMsg({ convoId: convo.id, senderAgent: toAgent, side: 'b', intent: b.intent, payload: b.mensagem });
         transcript.push({ who: `assistente de ${ownerBName}`, msg: b.mensagem });
 
-        // dedup de B
+        // dedup of B
         if (norm(b.mensagem) && norm(b.mensagem) === prevBMsg) {
           resultado = `Encerrei: o assistente de ${ownerBName} ficou repetindo a mesma resposta. Última: "${b.mensagem}"`;
           status = 'resolved'; break;
@@ -314,7 +314,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
           status = 'escalated'; break;
         }
 
-        // terminais vindos de B
+        // terminal states coming from B
         if (b.intent === 'decline') {
           resultado = `O assistente de ${ownerBName} não pôde atender: "${b.mensagem}"`;
           status = 'declined'; break;
@@ -357,7 +357,7 @@ export function agentToAgentTool({ fromUser, fromAgent, makeProvider, bill, noti
       }
 
       if (status === 'open') {
-        // bateu o teto de rodadas sem fechar
+        // hit the round cap without closing
         status = 'resolved';
         const last = transcript[transcript.length - 1];
         resultado = `Não fechamos em ${MAX_ROUNDS} rodadas. Onde parou: "${last?.msg || '(sem resposta)'}"`;

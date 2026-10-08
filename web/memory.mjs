@@ -9,8 +9,8 @@ import { makeMemoriaModel } from './memoria-modelo.mjs';
 
 export const COMPACT_HIGH = Number(process.env.COMPACT_HIGH || 24000); // gatilho
 export const COMPACT_LOW = Number(process.env.COMPACT_LOW || 12000);   // post-trim target
-export const SUMMARY_CAP = Number(process.env.SUMMARY_CAP || 3000);    // teto da prosa do resumo
-export const LEDGER_CAP = Number(process.env.LEDGER_CAP || 6000);      // teto do ledger de dados concretos (chars)
+export const SUMMARY_CAP = Number(process.env.SUMMARY_CAP || 3000);    // cap on the summary prose
+export const LEDGER_CAP = Number(process.env.LEDGER_CAP || 6000);      // cap on the concrete-data ledger (chars)
 
 // ── Concrete-data ledger (verbatim, compression-proof) ──
 // The summary's prose (via Flash) tends to swallow hard data the user PASTES
@@ -26,7 +26,7 @@ const FACT_PATTERNS = [
   /\bhttps?:\/\/\S+/i,                                                    // links
   /\b(rua|av\.?|avenida|alameda|travessa|estrada|rodovia|pça|praça)\b/i,  // address
   /\b\d{5}-?\d{3}\b/,                                                     // CEP
-  /\b(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i,        // dias da semana
+  /\b(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i,        // days of the week
   /\b\d{1,3}\s?(reais|real|brl|usd|d[óo]lares?)\b/i,                      // valores por extenso
   /\b(voo|check[- ]?in|check[- ]?out|reserva|localizador|confirma[çc][ãa]o|cpf|cnpj|oab)\b/i,
 ];
@@ -47,7 +47,7 @@ function extractFacts(messages) {
   return out;
 }
 
-// Separa uma string de resumo em { prose, ledger:[linhas] }.
+// Splits a summary string into { prose, ledger:[lines] }.
 function splitSummary(s) {
   const text = s || '';
   const i = text.indexOf(LEDGER_MARK);

@@ -57,7 +57,7 @@ configurarPermissoes(permissoes);
 configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Payer account port (conta-pagadora.mjs): who pays for each person's usage.
 if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Business account (empresa.mjs): paid plan, packages, refund and cancellation on entry and on creation.
 const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (ferramentas.mjs): tools that whoever installs plugs into the turn.
-const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Porta da conta de pagamento (conta-pagamento.mjs).
+const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (conta-pagamento.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (eventos.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
 const rotas=createRotas(); // Porta de rotas (rotas.mjs): os plugins registram as deles no ligar.
@@ -221,12 +221,12 @@ async function productImageFromPage(url) {
     const ct = (r.headers.get('content-type') || '').toLowerCase();
     if (ct && !ct.includes('html')) return null;
     let html = await r.text();
-    if (html.length > 400000) html = html.slice(0, 400000); // limita CPU do regex
+    if (html.length > 400000) html = html.slice(0, 400000); // limits regex CPU
     // og:image / og:image:secure_url / twitter:image (a ordem dos atributos varia)
     let m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*content=["']([^"']+)["']/i)
          || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["']/i);
     if (m) { const u = norm(m[1]); if (u) return u; }
-    // Fallback JSON-LD (schema.org Product): "image":"..." ou "image":["...", ...]
+    // JSON-LD fallback (schema.org Product): "image":"..." or "image":["...", ...]
     const ld = html.match(/"image"\s*:\s*"(https?:\/\/[^"]+)"/i) || html.match(/"image"\s*:\s*\[\s*"(https?:\/\/[^"]+)"/i);
     if (ld) { const u = norm(ld[1]); if (u) return u; }
     return null;
@@ -1250,7 +1250,7 @@ async function validGoogleToken(userId, googleEmail = null) {
   const t = await googleAccountFor(userId, googleEmail);
   if (!t) throw new Error('Google não conectado.');
   if (!t.access_token) throw googleReconnectError(googleReconnectMsg(t.google_email));
-  const expired = !t.expiry || new Date(t.expiry).getTime() < Date.now() + 60_000; // margem de 1 min
+  const expired = !t.expiry || new Date(t.expiry).getTime() < Date.now() + 60_000; // 1 min margin
   if (expired) {
     if (!t.refresh_token) throw googleReconnectError(googleReconnectMsg(t.google_email));
     let fresh;
@@ -2305,10 +2305,10 @@ const codingJobs=createCodingJobs({store:codingJobStore,execute:programmingRunti
     if(!await appendAssistantToThread({threadId:job.threadId,userId:job.userId,text,deliveryKey:codingDeliveryKey(job)}))throw Error('Coding conversation unavailable');
   },onError:e=>console.error('[coding-worker]',e?.code||e?.name||'error')});
 
-const _threadTurnChains = new Map(); // threadId -> Promise (cauda da fila)
+const _threadTurnChains = new Map(); // threadId -> Promise (queue tail)
 function withThreadLock(key, fn) {
   const prev = _threadTurnChains.get(key) || Promise.resolve();
-  const next = prev.then(fn, fn); // roda fn mesmo se o turno anterior falhou
+  const next = prev.then(fn, fn); // runs fn even if the previous turn failed
   const tail = next.catch(() => {}); // tail always resolved (doesn't block the queue)
   _threadTurnChains.set(key, tail);
   tail.then(() => { if (_threadTurnChains.get(key) === tail) _threadTurnChains.delete(key); });
@@ -2804,7 +2804,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     return { text: reply, attachments: anexoSelo ? [anexoSelo] : [] };
   }
-  // Opt-in de curadoria: tabela ausente/entrega incerta impede gasto de pesquisa.
+  // Curation opt-in: missing table/uncertain delivery blocks research spend.
   let curationHistory = null;
   const curationEvidence = opts.curationConfig && opts.curationConfig.source !== 'gmail' ? createCurationEvidence() : null;
   if (kind === 'routine' && opts.curationConfig && opts.routineId) {
@@ -2851,7 +2851,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   try {
     const falas = (thread.history || []).filter((h) => h?.role === 'user').slice(-12).map((h) => String(h.content || ''));
     setOwnerText(thread.id, [...falas, String(message || '')].join('\n'), String(message || ''));
-  } catch { /* o gate segue valendo sem o aviso */ }
+  } catch { /* the gate still applies without the notice */ }
   // Owner's language, so the confirmation card comes out in their language. It's set
   // per thread, not as an addGated parameter, because addGated is called at
   // ~20 points in this file: forgetting one of them would leave the card in Portuguese
@@ -4031,7 +4031,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     }).join('\n');
     return { err: `Achei mais de uma rotina com "${titulo}":\n${opts}\nPergunte pro dono qual é, descrevendo pela CADÊNCIA/canal (os títulos podem ser idênticos; ele não precisa ver o código). Quando ele escolher, chame ${tool} de novo passando \`id\` com o código dela.` };
   };
-  // Lista as rotinas do dono (pra ele revisar/ajustar/cancelar).
+  // Lists the owner's routines (for them to review/adjust/cancel).
   registry.add({
     name: 'listar_rotinas',
     readOnly: true,
@@ -5336,7 +5336,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         }
         catch (e) { console.error('[pdf] persist:', e?.message ?? e); }
       }
-      // Extrai o texto pra dar ao modelo.
+      // Extracts the text to give to the model.
       try {
         const { text: ptext, pages, truncated } = await extractPdfText(f.buffer, { maxChars: 20000 });
         if (ptext) {
@@ -6875,7 +6875,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     try { await markDecisionsSeenByA(userId, inbox.responseIds); }
     catch (e) { console.error('[agentinbox seen]', e?.message ?? e); }
   }
-  // Idem pras respostas de PERGUNTAS (ask-human loop): fecha o ciclo (status closed).
+  // Same for answers to QUESTIONS (ask-human loop): closes the cycle (status closed).
   if (inbox.questionIds?.length) {
     try { await markQuestionsSeenByA(userId, inbox.questionIds); }
     catch (e) { console.error('[agentinbox qseen]', e?.message ?? e); }
@@ -7448,7 +7448,7 @@ function parseOnboard(text) {
   return { welcome, suggestions, notes };
 }
 
-// Estado/resultados do wizard agora persistidos por conta/assistente em onboardingStore.
+// Wizard state/results now persisted per account/assistant in onboardingStore.
 
 // Automatic refresh of the home screen boxes. Unlike ONBOARD (first contact,
 // with greeting), this is a refresh: the agent re-reads recent emails/calendar
@@ -8410,7 +8410,7 @@ function csrfOk(req, pathname) {
   const allowed = allowedOrigins(req);
   const origin = req.headers.origin;
   if (origin) return allowed.has(origin);
-  // Sem Origin (alguns browsers antigos): cai pro Referer.
+  // No Origin (some older browsers): falls back to Referer.
   const ref = req.headers.referer;
   if (ref) { try { return allowed.has(new URL(ref).origin); } catch { return false; } }
   // Neither Origin nor Referer on a state-changing request: reject.
@@ -8430,7 +8430,7 @@ function safeStrEq(a, b) {
 }
 function metricsAuthOk(req) {
   const u = process.env.METRICS_USER, p = process.env.METRICS_PASS;
-  if (!u || !p) return false; // sem credenciais configuradas = trancado
+  if (!u || !p) return false; // no credentials configured = locked
   // Two-step login session (signed cookie, 'full' stage). Accepted here so
   // the metrics API (same-origin fetch from the dashboard) works with the cookie.
   if (verifyMetricsSession(readCookie(req, 'msess'), 'full')) return true;
@@ -8898,7 +8898,7 @@ async function atenderRequest(req, res) {
       // the generic one above, which doesn't say whether the e-mail exists or not.
       if (user && !user.deleted_at) {
         const token = newToken();
-        await createPasswordReset(token, user.id, 10); // expira em 10 min (ASVS L1: verificador OOB expira em <=10min)
+        await createPasswordReset(token, user.id, 10); // expires in 10 min (ASVS L1: OOB verifier expires in <=10min)
         const base = (process.env.PUBLIC_BASE_URL || siteDaMarca()).replace(/\/$/, '');
         const link = `${base}/reset?token=${token}`;
         const text = [
@@ -8943,7 +8943,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // ── Login com Google ──
+  // ── Login with Google ──
   if (req.method === 'GET' && url.pathname === '/api/auth/google/start') {
     if (!googleEnabled()) return send(res, 503, { error: 'Login com Google não configurado.' });
     // mobile=1: same base login scope (ZERO impact on OAuth verification);
@@ -9542,7 +9542,7 @@ async function atenderRequest(req, res) {
       }[r.error] || 'Não foi possível trocar o nome de usuário.';
       return send(res, 400, { error: msg, reason: r.error });
     }
-    // Avisa o host de apps o novo label→nome (best-effort) pra landing greetar certo.
+    // Notifies the apps host of the new label→name (best-effort) so the landing greets correctly.
     if (hostingEnabled()) appsCtl({ verb: 'seed_user', label: r.subdomain, name: r.name || user.name }).catch(() => {});
     return send(res, 200, { subdomain: r.subdomain });
   }
@@ -9582,7 +9582,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Remove o token de push do aparelho (logout). Idempotente.
+  // Removes the device's push token (logout). Idempotent.
   if (req.method === 'POST' && url.pathname === '/api/push/unregister') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'não logado' });
@@ -9749,7 +9749,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Central de engajamento: mesmo gate admin e CSRF global. Nunca envia mensagens.
+  // Engagement hub: same admin gate and global CSRF. Never sends messages.
   if (url.pathname.startsWith('/api/discovery') || url.pathname.startsWith('/api/admin/discovery')) res.setHeader('Cache-Control','no-store');
   if(await discoveryRoutes(url.pathname,req.method,discoveryStore,{
     admin:()=>metricsAuthGuard(req,res),user:currentUser,read:()=>readBody(req),
@@ -9975,7 +9975,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Ativa/desativa o webhook do agente sem apagar o token.
+  // Enables/disables the agent's webhook without deleting the token.
   if (req.method === 'POST' && url.pathname === '/api/agent/webhook/enabled') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10020,7 +10020,7 @@ async function atenderRequest(req, res) {
     }
   }
 
-  // Ativa/desativa um device sem apagar o token.
+  // Enables/disables a device without deleting the token.
   if (req.method === 'POST' && url.pathname === '/api/device/tokens/enabled') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -10514,7 +10514,7 @@ async function atenderRequest(req, res) {
     return send(res, 200, { ok: true, connection: r.connection });
   }
 
-  // Aceita um convite recebido e designa qual assistente meu recebe pedidos de fora.
+  // Accepts a received invite and designates which of my assistants receives outside requests.
   if (req.method === 'POST' && url.pathname === '/api/contacts/accept') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'Faça login primeiro.' });
@@ -11358,7 +11358,7 @@ async function atenderRequest(req, res) {
     try { await assertUrlPublica(serverUrl); }
     catch (e) { return send(res, 400, { error: e?.message || 'URL inválida.' }); }
     const headers = token ? { Authorization: `Bearer ${String(token).trim()}` } : {};
-    // Valida conectando e listando as tools antes de salvar.
+    // Validates by connecting and listing the tools before saving.
     let probe;
     try { probe = await mcpListTools({ url: serverUrl, headers, label: label.trim() }); }
     catch (e) { return fail(res, 400, 'Não consegui conectar nesse servidor MCP.', e); }
@@ -12229,7 +12229,7 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
       void discoveryClosingRunner.tick().catch(()=>console.error('[discovery] closing tick failed'));
     },60_000);discoveryTimer.unref();
     console.log(`[mailer] envio de e-mail ${mailEnabled() ? 'ativo' : 'em stub (faltam RESEND_API_KEY/MAIL_FROM)'}`);
-    // Canal e-mail (ingest por IMAP + resposta por SMTP como o assistente).
+    // Email channel (ingest via IMAP + reply via SMTP as the assistant).
     try { emailPoller.start(); } catch (e) { console.error('[email] falha ao subir poller:', e?.message ?? e); }
     startAwsCredentialRefresh(); // S3 via the instance role (S3_INSTANCE_ROLE=1): warms up and renews the credential.
     server.listen(PORT, HOST, () => console.log(`Beta em http://${HOST}:${PORT}  (GEMINI_API_KEY ${process.env.GEMINI_API_KEY ? 'ok' : 'FALTANDO'}, Postgres ok)`));
