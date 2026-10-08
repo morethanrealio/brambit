@@ -26,7 +26,7 @@ import { calendarRecurrence, recurrenceLabel, recurrenceOccurrences } from './ca
 // (the owner would confirm one thing and the platform would schedule another).
 // The sentences themselves (every language) are in confirm-sentences.mjs.
 import { tagIdioma, defaultLanguage, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
-import { requestSentence, doneSentence, failedSentence, stderrLabel } from './confirm-sentences.mjs';
+import { requestSentence, doneSentence, frameText, cardAmount, cardDay } from './confirm-sentences.mjs';
 
 const pending = new Map(); // Legacy callers/tests only. threadId -> { id, name, label, run, args, at, language, messageRefs }
 
@@ -213,9 +213,7 @@ function confirmationCard(name, label, language, numbered = false) {
   if (name === 'jornada_configurar') return label;
   const reaction = isReactionConfirmable(name);
   const lang = tagIdioma(language || defaultLanguage());
-  if (lang === 'en') return `${label}\n\nTo confirm, reply “go ahead”${reaction ? ' or react with 👍' : ' in text'}.`;
-  if (lang === 'es') return `${label}\n\nPara confirmar, responde “adelante”${reaction ? ' o reacciona con 👍' : ' por texto'}.`;
-  return `${label}\n\nPara confirmar, responda “pode”${reaction ? ' ou reaja com 👍' : ' por texto'}.`;
+  return `${label}\n\n${frameText(reaction ? 'how_to_confirm_reaction' : 'how_to_confirm_text', {}, lang)}`;
 }
 
 // ── Email recipient: what the owner WROTE vs what is going to be sent ──
@@ -287,33 +285,27 @@ export function avisoEnderecoTrocado(destinos, texto, language = null) {
       if (d < dist) { dist = d; melhor = e; }
     }
     if (!melhor || dist > 2) continue;
-    if (lang === 'en') avisos.push(`he wrote "${melhor}" and this message is going to "${alvo}"`);
-    else if (lang === 'es') avisos.push(`él escribió "${melhor}" y este envío va a "${alvo}"`);
-    else avisos.push(`ele escreveu "${melhor}" e este envio vai para "${alvo}"`);
+    avisos.push(frameText('address_mismatch', { written: melhor, target: alvo }, lang));
   }
   if (!avisos.length) return '';
-  if (lang === 'en') return `CHECK THE ADDRESS: ${avisos.join('; ')}`;
-  if (lang === 'es') return `REVISA LA DIRECCIÓN: ${avisos.join('; ')}`;
   // FACTUAL sentence, never an instruction to the model: the label is printed raw
   // to the user in some paths (irreversible action, execution error), so it has
   // to read well both for the person and for the model. Being a mild alert,
   // a false positive (two similar addresses belonging to different people) costs
   // a double-check, not a scare.
-  return `CONFIRA O ENDEREÇO: ${avisos.join('; ')}`;
+  return frameText('address_check', { mismatches: avisos.join('; ') }, lang);
 }
 
 // Readable summary of the action, for the agent to show the user before confirming.
 //
-// `language` is optional: without it, or in pt-BR, the path is the usual one (the
-// switch in Portuguese below). In en/es it tries the translated table first and,
-// if that tool doesn't have a sentence in that language yet, falls back to
-// Portuguese instead of returning empty — on a card that authorizes spending
-// money, missing text is worse than text in the wrong language.
+// `language` is optional: without it the instance's default language is used.
+// A tool with no sentence of its own gets the generic one that names it, never
+// an empty card.
 export function describe(name, args = {}, language = null) {
   if (['calendar_create', 'outlook_calendar_create'].includes(name) && args.recorrencia !== undefined) {
     const { recorrencia, ...once } = args;
     const start=args.start || args.inicio, tz=args.timezone || args.fuso;
-    const label=/^en/.test(language || '')?'Next occurrences':/^es/.test(language || '')?'Próximas ocurrencias':'Próximas ocorrências';
+    const label=frameText('next_occurrences', {}, language ? tagIdioma(language) : defaultLanguage());
     return `${describe(name, once, language)} ${recurrenceLabel(recorrencia,start,tz,language)} ${label}: ${recurrenceOccurrences(recorrencia,start,tz).map(o=>o.local.replace('T',' ')).join('; ')}.`;
   }
   const lang = language ? tagIdioma(language) : defaultLanguage();
@@ -393,7 +385,8 @@ export function renderConfirmed(pend, r) {
       return traduzido || t;
     }
   }
-  const uncertain = lang === 'en' ? 'The action has no verifiable completion confirmation. I will not automatically repeat it.' : lang === 'es' ? 'La acción no tiene confirmación verificable de finalización. No la repetiré automáticamente.' : 'A ação não tem confirmação verificável de conclusão. Não vou repeti-la automaticamente.';
+  const text = (key, vars) => frameText(key, vars, lang);
+  const uncertain = text('uncertain');
   if (data?.action_evidence) return confirmedAction(pend.name, pend.args, r, lang) || uncertain;
   if (!data || (data.ok !== true && data.ok !== false)) return uncertain;
   if (data.ok !== false && data.skipped) return `${uncertain}${data.aviso ? '\n' + data.aviso : ''}`;
@@ -409,37 +402,13 @@ export function renderConfirmed(pend, r) {
         ? String(data.data_processamento_provedor) : null;
       const confirmedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(data.data_processamento_confirmada || ''))
         ? String(data.data_processamento_confirmada) : null;
-      const fmt = (iso) => {
-        const [year, month, day] = String(iso).split('-');
-        return lang === 'en' ? `${month}/${day}/${year}` : `${day}/${month}/${year}`;
-      };
       if (data.data_processamento_divergente && providerDate && confirmedDate) {
-        return lang === 'en'
-          ? `Asaas accepted the bill payment but set processing for ${fmt(providerDate)}, instead of the confirmed date ${fmt(confirmedDate)}. It has not been paid yet. Do not repeat the request; I will update you here when its status changes.`
-          : lang === 'es'
-            ? `Asaas aceptó el pago, pero indicó procesamiento para el ${fmt(providerDate)}, en lugar de la fecha confirmada ${fmt(confirmedDate)}. Todavía no se ha pagado. No repitas la solicitud; te avisaré aquí cuando cambie el estado.`
-            : `A Asaas aceitou o pagamento, mas informou processamento em ${fmt(providerDate)}, diferente de ${fmt(confirmedDate)} que você confirmou. Ele ainda não foi pago. Não repita o pedido; avisarei aqui quando o status mudar.`;
+        return text('pay_date_diverges', { provider: cardDay(providerDate, lang), confirmed: cardDay(confirmedDate, lang) });
       }
-      if (providerDate) {
-        return lang === 'en'
-          ? `Asaas accepted the bill payment for ${fmt(providerDate)}. It is still awaiting bank processing; I will update you here when it is complete.`
-          : lang === 'es'
-            ? `Asaas aceptó el pago para el ${fmt(providerDate)}. Todavía está pendiente de procesamiento bancario; te avisaré aquí cuando finalice.`
-            : `A Asaas aceitou o pagamento para ${fmt(providerDate)}. Ele ainda aguarda processamento bancário; avisarei aqui quando concluir.`;
-      }
-      return lang === 'en'
-        ? 'Asaas accepted the bill payment, but it is still awaiting bank processing. Do not repeat the request; I will update you here when it is complete.'
-        : lang === 'es'
-          ? 'Asaas aceptó el pago, pero todavía está pendiente de procesamiento bancario. No repitas la solicitud; te avisaré aquí cuando finalice.'
-          : 'A Asaas aceitou o pagamento, mas ele ainda aguarda processamento bancário. Não repita o pedido; avisarei aqui quando concluir.';
+      if (providerDate) return text('pay_accepted_for', { date: cardDay(providerDate, lang) });
+      return text('pay_pending');
     }
-    if (pend?.name === 'asaas_transferir_pix') {
-      return lang === 'en'
-        ? 'The Pix is being processed. I will let you know here when it is complete.'
-        : lang === 'es'
-          ? 'El Pix está en proceso. Te avisaré aquí cuando finalice.'
-          : 'O Pix está em processamento. Avisarei aqui quando concluir.';
-    }
+    if (pend?.name === 'asaas_transferir_pix') return text('pix_processing');
     return uncertain;
   }
   // Command output (e.g. rodar_no_servidor): shows stdout/stderr when present.
@@ -456,24 +425,18 @@ export function renderConfirmed(pend, r) {
     // instead of the failure reason. What they need is: what failed, in one
     // line, and what to do now.
     const resumo = String(pend.label || '').split('\n')[0].trim().replace(/[.:]\s*$/, '');
-    const cabeca = failedSentence(resumo, lang);
+    const cabeca = text('failed', { label: resumo });
     let m = `❌ ${cabeca}${data.error ? ' ' + data.error : ''}`;
     if (out) m += `\n\n${out}`;
-    if (err) m += `\n\n${stderrLabel(lang)}\n${err}`;
+    if (err) m += `\n\n${text('stderr')}\n${err}`;
     return m;
   }
   if (pend?.name === 'asaas_receber_pix') {
-    const valor = data.valor != null
-      ? lang === 'en' ? ` for BRL ${Number(data.valor).toFixed(2)}` : lang === 'es' ? ` por R$ ${Number(data.valor).toFixed(2).replace('.', ',')}` : ` de R$ ${Number(data.valor).toFixed(2).replace('.', ',')}`
-      : lang === 'en' ? ' with no fixed amount' : lang === 'es' ? ' sin importe fijo' : ' sem valor fixo';
-    const chave = data.chave_pix ? `\n${lang === 'en' ? 'PIX key' : lang === 'es' ? 'Clave PIX' : 'Chave Pix'}: ${data.chave_pix}` : '';
-    const copia = data.copia_e_cola ? `\n${lang === 'en' ? 'PIX copy-and-paste code' : lang === 'es' ? 'Código PIX copia y pega' : 'Copia-e-cola'}${valor}:\n${data.copia_e_cola}` : '';
-    const estado = lang === 'en'
-      ? (data.chave_criada_agora ? 'Random PIX key created after your confirmation.' : 'I used the PIX key that was already active in the account.')
-      : lang === 'es'
-        ? (data.chave_criada_agora ? 'Clave PIX aleatoria creada después de tu confirmación.' : 'Usé la clave PIX que ya estaba activa en la cuenta.')
-        : (data.chave_criada_agora ? 'Chave Pix aleatória criada após sua confirmação.' : 'Usei a chave Pix que já estava ativa na conta.');
-    const conta = data.conta_usada ? `\n${lang === 'en' ? 'Account used' : lang === 'es' ? 'Cuenta utilizada' : 'Conta usada'}: ${data.conta_usada}` : '';
+    const valor = data.valor != null ? text('pix_amount', { amount: cardAmount(data.valor, lang) }) : text('pix_no_amount');
+    const chave = data.chave_pix ? `\n${text('pix_key', { key: data.chave_pix })}` : '';
+    const copia = data.copia_e_cola ? `\n${text('pix_code', { amount: valor })}\n${data.copia_e_cola}` : '';
+    const estado = text(data.chave_criada_agora ? 'pix_key_created' : 'pix_key_reused');
+    const conta = data.conta_usada ? `\n${text('account_used', { account: data.conta_usada })}` : '';
     return `✅ ${estado}${conta}${chave}${copia}`;
   }
   const receiptText = confirmedAction(pend.name, pend.args, r, lang);
@@ -482,24 +445,22 @@ export function renderConfirmed(pend, r) {
       && ['created','updated','deleted'].includes(evidence?.state)) {
     const name = pend.args?.title || pend.args?.summary || pend.binding?.event?.summary;
     if (name) {
-      const verb = lang === 'en' ? {created:'Created',updated:'Updated',deleted:'Deleted'}
-        : lang === 'es' ? {created:'Creé',updated:'Actualicé',deleted:'Eliminé'} : {created:'Criei',updated:'Atualizei',deleted:'Excluí'};
       const when = pend.args?.start ? formatWhen(pend.args.start) : '';
       const agenda = data.agenda || pend.binding?.calendar?.nome;
-      const where = agenda === 'principal' ? (lang === 'en' ? 'primary calendar' : lang === 'es' ? 'calendario principal' : 'agenda principal') : agenda;
-      const line = `${verb[evidence.state]} “${name}”${when ? ` — ${when}` : ''}${where ? ` (${where})` : ''}.`;
+      const where = agenda === 'principal' ? text('primary_calendar') : agenda;
+      const line = text(`calendar_${evidence.state}`, {
+        name, when: when ? text('calendar_when', { date: when }) : '', calendar: where ? text('calendar_in', { calendar: where }) : '',
+      });
       return `${line}${pend.args?.recorrencia ? `\n${recurrenceLabel(pend.args.recorrencia,pend.args.start,pend.args.timezone,lang)}` : ''}${data.link ? `\n${data.link}` : ''}`;
     }
   }
   if (['enviar_para_drive','drive_upload_arquivo','docs_create','drive_upload'].includes(pend.name)
       && data?.atualizado === true && evidence?.state === 'saved_file') {
     const name = data.name || pend.args?.nome || pend.args?.name || '';
-    const text = lang === 'en' ? `Updated “${name}” in the same file, keeping its link.`
-      : lang === 'es' ? `Actualicé “${name}” en el mismo archivo, conservando su enlace.`
-        : `Atualizei “${name}” no mesmo arquivo, preservando o link.`;
+    const updated = text('file_updated', { name });
     const rawUpdated = data.link || data.url || data.webViewLink;
     const updatedLink = rawUpdated && (shareableLink(rawUpdated) || rawUpdated);
-    return `${text}${updatedLink ? `\n${updatedLink}` : ''}`;
+    return `${updated}${updatedLink ? `\n${updatedLink}` : ''}`;
   }
   // Connector confirmed by the service: the sentence states what was done with
   // the data the person approved (name, amount), instead of "Record created in
@@ -514,8 +475,8 @@ export function renderConfirmed(pend, r) {
   }
   let msg = receiptText || `✅ ${feito()}`;
   if (out) msg += `\n\n${out}`;
-  if (err) msg += `\n\n${stderrLabel(lang)}\n${err}`;
-  if (data?.conta_usada) msg += `\n${lang === 'en' ? 'Account used' : lang === 'es' ? 'Cuenta utilizada' : 'Conta usada'}: ${data.conta_usada}`;
+  if (err) msg += `\n\n${text('stderr')}\n${err}`;
+  if (data?.conta_usada) msg += `\n${text('account_used', { account: data.conta_usada })}`;
   const rawLink = data && (data.link || data.url || data.htmlLink || data.comprovante);
   const link = rawLink && (shareableLink(rawLink) || rawLink);
   if (link && !receiptText?.includes(link)) msg += `\n${link}`;
@@ -530,25 +491,12 @@ function appAccessLines(data, lang) {
   const c = data?.credenciais;
   const temLogin = !!(c && typeof c.usuario === 'string' && typeof c.senha === 'string' && c.usuario && c.senha);
   let out = '';
-  if (temLogin) {
-    out += lang === 'en'
-      ? `\n\nThe app is private; the browser will ask for this login:\nUser: ${c.usuario}\nPassword: ${c.senha}\nYou can share it with anyone you want to give access to.`
-      : lang === 'es'
-        ? `\n\nLa app es privada; el navegador pedirá este acceso:\nUsuario: ${c.usuario}\nContraseña: ${c.senha}\nPuedes compartirlo con quien quieras dar acceso.`
-        : `\n\nO app é privado; o navegador vai pedir este login:\nUsuário: ${c.usuario}\nSenha: ${c.senha}\nVocê pode passar pra quem quiser dar acesso.`;
-  }
+  const text = (key, vars) => frameText(key, vars, lang);
+  if (temLogin) out += `\n\n${text('app_login', { user: c.usuario, password: c.senha })}`;
   // Gate failed = no credential. With a credential, the warning is about
   // registration (replicar_sistema uses aviso_acesso for both cases).
-  if (data?.aviso_acesso && !temLogin) out += lang === 'en'
-    ? '\n\n⚠️ The app was published but the platform could not lock the link yet: for now anyone with it can open the app.'
-    : lang === 'es'
-      ? '\n\n⚠️ La app se publicó, pero la plataforma todavía no pudo proteger el enlace: por ahora cualquiera con él puede abrirla.'
-      : '\n\n⚠️ O app foi publicado, mas a plataforma ainda não conseguiu trancar o link: por enquanto qualquer pessoa com ele abre o app.';
-  if (temLogin && (data?.aviso_registro_acesso || data?.aviso_acesso)) out += lang === 'en'
-    ? '\nSave this login now: the platform could not record it and may not be able to show it again.'
-    : lang === 'es'
-      ? '\nGuarda este acceso ahora: la plataforma no pudo registrarlo y quizá no pueda mostrarlo de nuevo.'
-      : '\nGuarde este login agora: a plataforma não conseguiu registrá-lo e pode não conseguir mostrar de novo.';
+  if (data?.aviso_acesso && !temLogin) out += `\n\n${text('app_unlocked')}`;
+  if (temLogin && (data?.aviso_registro_acesso || data?.aviso_acesso)) out += `\n${text('app_save_login')}`;
   return out;
 }
 
@@ -871,15 +819,9 @@ export function confirmationTargetMatches(pend, target) {
 // was cancelled.
 export function confirmationTargetNotice(pend) {
   const lang = tagIdioma(pend?.language || defaultLanguage());
-  if (!pend) return lang === 'en'
-    ? 'There is no pending confirmation for that message. No action was executed. Please request the action again.'
-    : lang === 'es'
-      ? 'Ese mensaje no tiene una confirmación pendiente. No ejecuté ninguna acción. Pide la acción de nuevo.'
-      : 'Essa mensagem não tem uma confirmação pendente. Nenhuma ação foi executada. Peça a ação novamente.';
+  if (!pend) return frameText('target_none', {}, lang);
   const card = String(pend.confirmationText || pend.label || '').trim();
-  if (lang === 'en') return `I could not match your reply to the current confirmation request. The action is still pending.\n\n${card}\n\nTo confirm this action, reply “go ahead” to this message. To cancel it, reply “cancel” to this message.`;
-  if (lang === 'es') return `No pude vincular tu respuesta con la confirmación actual. La acción sigue pendiente.\n\n${card}\n\nPara confirmar esta acción, responde “adelante” a este mensaje. Para cancelarla, responde “cancela” a este mensaje.`;
-  return `Não consegui vincular sua resposta ao pedido de confirmação atual. A ação continua pendente.\n\n${card}\n\nPara confirmar essa ação, responda “pode” a esta mensagem. Para cancelar, responda “cancela” a esta mensagem.`;
+  return `${frameText('target_unmatched', {}, lang)}\n\n${card}\n\n${frameText('target_how', {}, lang)}`;
 }
 
 // Generic confirmation stays deliberately narrow for dangerous actions. A
