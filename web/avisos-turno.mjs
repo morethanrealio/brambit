@@ -1,4 +1,4 @@
-import { tagIdioma } from './locale.mjs';
+import { tagIdioma, defaultTimezone } from './locale.mjs';
 
 // Fixed texts the server delivers WITHOUT going through the model (credit
 // gate, image turned off, confirmation resolved with no model). Since no
@@ -45,7 +45,7 @@ function avisoCreditoEsgotadoEmpresa(credit, { l, link, appClient, adminNomes })
   const admin = credit.account?.role === 'admin';
   const nomes = listaAdmins(adminNomes, l);
   const renova = credit.periodEnd
-    ? new Date(credit.periodEnd).toLocaleDateString(LOCALE[l], { day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
+    ? new Date(credit.periodEnd).toLocaleDateString(LOCALE[l], { day: '2-digit', month: 'long', timeZone: defaultTimezone() })
     : null;
   if (l === 'en') {
     const quem = empresa ? `Your company *${empresa}*` : 'Your company';
@@ -109,7 +109,7 @@ export function avisoCreditoEsgotado(credit, { language, link, appClient = false
   const plano = credit.planName;
   // REAL renewal date: the cycle is by the person's anniversary, not the 1st.
   const renova = credit.periodEnd
-    ? new Date(credit.periodEnd).toLocaleDateString(LOCALE[l], { day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
+    ? new Date(credit.periodEnd).toLocaleDateString(LOCALE[l], { day: '2-digit', month: 'long', timeZone: defaultTimezone() })
     : null;
   if (l === 'en') {
     const quando = renova ? `renews on ${renova}` : 'renews at the start of the next cycle';

@@ -1,3 +1,4 @@
+import { defaultTimezone } from './locale.mjs';
 import { marca, uaApi } from './marca.mjs';
 import { normalizeEmailBody, limitEmailBody } from './email-body.mjs';
 import { microsoftToolAllowed } from './microsoft-scopes.mjs';
@@ -371,7 +372,6 @@ export async function uploadToOneDrive({ token, name, buffer, mimeType = 'applic
 }
 
 // ── Outlook Calendar (Microsoft Graph /me/events) ──
-const DEFAULT_TZ = 'America/Sao_Paulo';
 // Builds Graph's start/end object. Accepts ISO ("2026-08-12T15:00") and sends the
 // timezone along; Graph interprets the time in that timezone (avoids the bug of
 // falling back to UTC). Normalizes to full RFC3339 (same reason as Google's
@@ -384,7 +384,7 @@ const gRfc3339 = (v) => {
   const [, Y, Mo, D, h, mi, se, frac, off] = m;
   return `${Y}-${Mo}-${D}T${h.padStart(2, '0')}:${mi}:${se || '00'}${frac || ''}${off || ''}`;
 };
-const gWhen = (iso, tz) => ({ dateTime: gRfc3339(iso), timeZone: tz || DEFAULT_TZ });
+const gWhen = (iso, tz) => ({ dateTime: gRfc3339(iso), timeZone: tz || defaultTimezone() });
 const recipients = (s) => (s || '').split(',').map((x) => x.trim()).filter(Boolean)
   .map((address) => ({ emailAddress: { address } }));
 
@@ -545,9 +545,9 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     {
       name: 'outlook_calendar_list',
       description: 'Lists the events of the user\'s Outlook calendars in a period. Without dates, brings the next 7 days. By default it reads ALL the calendars in their mailbox (personal, work), not only the default one; each event comes with the `agenda` field saying which one it came from. Pass `agenda` to restrict to a single one. Returns id, title, start, end, location, organizer and attendees. Use to see the calendar, find a free slot or get an event id to edit/delete.',
-      parameters: { type: 'object', properties: { inicio: { type: 'string', description: 'Start of the window, ISO (e.g. 2026-08-12T00:00:00). Default: now.' }, fim: { type: 'string', description: 'End of the window, ISO. Default: 7 days ahead.' }, fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` }, max: { type: 'integer', description: 'Max number of events (default 25, cap 50).' }, agenda: { type: 'string', description: 'OPTIONAL. Name of ONE calendar, when the owner asked only for it. Omit to read all (the normal case).' } } },
+      parameters: { type: 'object', properties: { inicio: { type: 'string', description: 'Start of the window, ISO (e.g. 2026-08-12T00:00:00). Default: now.' }, fim: { type: 'string', description: 'End of the window, ISO. Default: 7 days ahead.' }, fuso: { type: 'string', description: `IANA timezone (default ${defaultTimezone()}).` }, max: { type: 'integer', description: 'Max number of events (default 25, cap 50).' }, agenda: { type: 'string', description: 'OPTIONAL. Name of ONE calendar, when the owner asked only for it. Omit to read all (the normal case).' } } },
       async run({ inicio, fim, fuso, max = 25, agenda } = {}) {
-        const tz = fuso || DEFAULT_TZ;
+        const tz = fuso || defaultTimezone();
         const {from:startISO,to:endISO}=calendarWindow({inicio,fim,fuso:tz,days:7});
         if (!Number.isSafeInteger(max) || max<1) throw Error('max deve ser um inteiro positivo.');
         const top = Math.min(max, 50);
@@ -614,7 +614,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         titulo: { type: 'string' },
         inicio: { type: 'string', description: 'Start ISO (e.g. 2026-08-12T15:00:00).' },
         fim: { type: 'string', description: 'End ISO. If omitted, 1 hour after the start.' },
-        fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` },
+        fuso: { type: 'string', description: `IANA timezone (default ${defaultTimezone()}).` },
         local: { type: 'string' },
         descricao: { type: 'string' },
         convidados: { type: 'string', description: 'Comma-separated emails (optional).' },
@@ -625,7 +625,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         let repeat;
         try { repeat = calendarRecurrence(recorrencia, inicio, fuso); }
         catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-        const tz = fuso || DEFAULT_TZ;
+        const tz = fuso || defaultTimezone();
         const endISO = fim || (repeat ? recurrenceDefaultEnd(inicio) : new Date(new Date(inicio).getTime() + 3600e3).toISOString().slice(0, 19));
         const ev = { subject: titulo, start: gWhen(inicio, tz), end: gWhen(endISO, tz) };
         if (repeat) ev.recurrence = repeat.outlook;
@@ -656,13 +656,13 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         titulo: { type: 'string' },
         inicio: { type: 'string', description: 'New start ISO.' },
         fim: { type: 'string', description: 'New end ISO.' },
-        fuso: { type: 'string', description: `IANA timezone (default ${DEFAULT_TZ}).` },
+        fuso: { type: 'string', description: `IANA timezone (default ${defaultTimezone()}).` },
         local: { type: 'string' },
         descricao: { type: 'string' },
         convidados: { type: 'string', description: 'Replaces the attendee list (comma-separated emails).' },
       }, required: ['id'] },
       async run({ id, titulo, inicio, fim, fuso, local, descricao, convidados }) {
-        const tz = fuso || DEFAULT_TZ;
+        const tz = fuso || defaultTimezone();
         const patch = {};
         if (titulo != null) patch.subject = titulo;
         if (inicio != null) patch.start = gWhen(inicio, tz);

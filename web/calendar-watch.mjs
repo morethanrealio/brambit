@@ -15,6 +15,7 @@
 // On by default for everyone with a connected calendar (27/09): only whoever
 // asks the assistant to turn it off opts out (calendar_watch.enabled = false).
 // No row in calendar_watch = on.
+import { defaultTimezone } from './locale.mjs';
 const S = 'mtr_harness';
 export const JANELA_DIAS = 7;
 const MAX_AGENDAS = 5;
@@ -103,7 +104,7 @@ function quando(f, tz) {
   return `${data.replace('.', '')} às ${hora}`;
 }
 
-export function linhaAviso({ antes, atual, lista }, tz = 'America/Sao_Paulo') {
+export function linhaAviso({ antes, atual, lista }, tz = defaultTimezone()) {
   const t = `"${antes.titulo}"`;
   if (lista.some((m) => m.tipo === 'cancelado')) {
     return `${t}, que era ${quando(antes, tz)}, foi cancelado ou saiu da sua agenda.`;
@@ -258,7 +259,7 @@ export function createCalendarWatch(deps) {
 
     if (dryRun) return { itens, erros };
     if (itens.length) {
-      const tz = (await deps.timezone(userId)) || 'America/Sao_Paulo';
+      const tz = (await deps.timezone(userId)) || defaultTimezone();
       await notify(userId, textoAviso(itens, tz));
     }
     for (const [key, data] of gravar) {

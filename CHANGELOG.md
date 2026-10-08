@@ -36,6 +36,11 @@ Changes merged since the last tag go under "Unreleased".
 - The instance default language is now English: it is used when nothing is
   known about the person (no saved setting, channel or browser language). To
   keep Portuguese, set `BRAMBIT_DEFAULT_LANGUAGE=pt-BR`.
+- Times follow the person's time zone in more places (conversation history
+  search, media list, Pix expiry, memory updates). When the person has none
+  saved, the instance time zone is used: `BRAMBIT_DEFAULT_TIMEZONE`, else the
+  machine's, instead of a fixed America/Sao_Paulo. To keep the old behavior on
+  a machine in another zone, set `BRAMBIT_DEFAULT_TIMEZONE=America/Sao_Paulo`.
 - Renamed, so the repository stays in English: `BRAMBIT_CADASTRO=fechado` is
   now `BRAMBIT_SIGNUP=closed`, `BRAMBIT_DADOS` is `BRAMBIT_DATA_DIR`, the
   `instalador/` folder is `installer/`, and the installer's data files are

@@ -293,8 +293,8 @@ test('owner view: only their own assistants, contacts and conversations', async 
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('publico.mjs only imports the tool loop, the vault, the health rule and the outputs', () => {
+test('publico.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {
   const src = fs.readFileSync(new URL('./web/publico.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './publico-saidas.mjs', './vault.mjs']);
+  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './locale.mjs', './publico-saidas.mjs', './vault.mjs']);
 });

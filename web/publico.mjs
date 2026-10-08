@@ -12,6 +12,7 @@
 //
 // Contact = (assistant, channel, address). The address (phone) is encrypted via the
 // vault and the lookup is by blind index; without the vault, public mode doesn't turn on.
+import { defaultTimezone } from './locale.mjs';
 import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
 import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
@@ -66,7 +67,7 @@ const chaveDoContato = (canal, endereco) => indiceCego(`${canal}:${endereco}`, '
 const COLUNAS_AGENTE = 'agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd::float AS teto_diario_usd';
 
 // timezone: the "day" of the spend cap starts at midnight of this timezone.
-export function createPublicoStore(pool, { S = 'mtr_harness', fuso = 'America/Sao_Paulo' } = {}) {
+export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTimezone() } = {}) {
   async function transacao(fn) {
     const c = await pool.connect();
     try { await c.query('BEGIN'); const r = await fn(c); await c.query('COMMIT'); return r; }

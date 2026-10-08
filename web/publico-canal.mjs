@@ -7,6 +7,7 @@
 // login message. The choice belongs to the installation, not to each user, because the
 // number is a single one: if any owner could turn it on, every stranger would go to
 // their assistant.
+import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './publico.mjs';
 import { registrarRotasDoDono } from './publico-dono.mjs';
@@ -23,7 +24,7 @@ export const agentePublicoDoNumero = (valor = process.env.ATENDIMENTO_PUBLICO_AG
 };
 
 const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
-  timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  timeZone: defaultTimezone(), weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
 // deps: database pool/S; makeProvider(ident) already tied to the owner's spend;

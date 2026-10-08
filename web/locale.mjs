@@ -18,6 +18,22 @@ export function defaultLanguage() {
   return normalizaIdioma(process.env.BRAMBIT_DEFAULT_LANGUAGE) || 'en';
 }
 
+// Time zone of the instance, for a person whose own is not known and for
+// instance-wide views: BRAMBIT_DEFAULT_TIMEZONE if it is a valid IANA name, else
+// the time zone of the machine (a local install runs where its owner lives),
+// else UTC. Read on each call, like defaultLanguage().
+export function defaultTimezone() {
+  for (const tz of [process.env.BRAMBIT_DEFAULT_TIMEZONE, Intl.DateTimeFormat().resolvedOptions().timeZone]) {
+    if (validTimezone(tz)) return tz;
+  }
+  return 'UTC';
+}
+
+export function validTimezone(tz) {
+  if (typeof tz !== 'string' || !tz.trim()) return false;
+  try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch { return false; }
+}
+
 // Normalizes whatever comes from the browser/header into our set: 'pt', 'pt-PT' and
 // 'pt-br' become 'pt-BR'; 'en-US' and 'en-GB' become 'en'; 'es-419' becomes 'es'.
 // Any other language returns null (the caller decides the fallback), because

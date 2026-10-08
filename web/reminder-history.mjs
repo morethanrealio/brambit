@@ -1,3 +1,4 @@
+import { defaultTimezone } from './locale.mjs';
 import { recurrenceLabel, recurrenceOccurrences } from './calendar-recurrence.mjs';
 // Provider acceptance is evidence of submission, never of delivery or reading.
 const parentLabels = {
@@ -20,7 +21,7 @@ const deliveryLabels = {
   failed: 'falha confirmada pelo canal; esta ocorrência não será repetida automaticamente',
 };
 
-export function reminderHistoryText(rows, { includeRecent = false, timeZone = 'America/Sao_Paulo' } = {}) {
+export function reminderHistoryText(rows, { includeRecent = false, timeZone = defaultTimezone() } = {}) {
   if (!rows.length) return includeRecent
     ? 'Você não tem lembretes agendados nem histórico nos últimos 30 dias.'
     : 'Você não tem nenhum lembrete pendente.';

@@ -1,7 +1,7 @@
 // Offline test of the language/country rule. Nothing goes out to the network, nothing touches the database.
 // Run with: node locale.test.mjs
 import {
-  IDIOMAS_OK, LEGACY_TEXT_LANGUAGE, defaultLanguage, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
+  IDIOMAS_OK, LEGACY_TEXT_LANGUAGE, defaultLanguage, defaultTimezone, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
   tagIdioma, instrucaoDeIdioma, comIdioma, derivaDeIdioma, lembreteDeIdioma,
   ideogramaAcidental, avisoSemIdioma, idiomaEscrito, idiomaDoTurno,
 } from './web/locale.mjs';
@@ -27,6 +27,17 @@ t('legacy texts are pt-BR', LEGACY_TEXT_LANGUAGE === 'pt-BR');
   process.env.BRAMBIT_DEFAULT_LANGUAGE = 'fr';
   t('unsupported BRAMBIT_DEFAULT_LANGUAGE falls back to en', defaultLanguage() === 'en');
   if (saved === undefined) delete process.env.BRAMBIT_DEFAULT_LANGUAGE; else process.env.BRAMBIT_DEFAULT_LANGUAGE = saved;
+}
+
+// Instance time zone: BRAMBIT_DEFAULT_TIMEZONE when it is a valid IANA name; a typo
+// falls back to the machine zone instead of making every Intl call throw.
+{
+  const saved = process.env.BRAMBIT_DEFAULT_TIMEZONE;
+  process.env.BRAMBIT_DEFAULT_TIMEZONE = 'Asia/Tokyo';
+  t('BRAMBIT_DEFAULT_TIMEZONE sets the time zone', defaultTimezone() === 'Asia/Tokyo');
+  process.env.BRAMBIT_DEFAULT_TIMEZONE = 'Mars/Base';
+  t('invalid BRAMBIT_DEFAULT_TIMEZONE falls back to a valid zone', defaultTimezone() !== 'Mars/Base' && !!new Intl.DateTimeFormat('en', { timeZone: defaultTimezone() }));
+  if (saved === undefined) delete process.env.BRAMBIT_DEFAULT_TIMEZONE; else process.env.BRAMBIT_DEFAULT_TIMEZONE = saved;
 }
 
 // 1) normalizaIdioma: regional variants collapse into the language.
