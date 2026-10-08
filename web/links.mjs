@@ -34,7 +34,7 @@
 // normalization here would cost more than importing it, because two copies
 // drift apart the first time one of them changes.
 import { uaBot } from './marca.mjs';
-import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
+import { tagIdioma, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
 
 // The text here is APPENDED to the final reply, so the person reads it
 // directly, with no model rewrite. That's why it needs THEIR language
@@ -66,7 +66,7 @@ const TEXTOS = {
       : `⚠️ Quité ${n} enlaces que no abrieron en dos intentos: las páginas ya no existen o los sitios están caídos. No encontré otras direcciones para poner en su lugar.`,
   },
 };
-const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[IDIOMA_PADRAO];
+const textosDe = language => TEXTOS[tagIdioma(language)] || TEXTOS[LEGACY_TEXT_LANGUAGE];
 
 const TIMEOUT_MS = 3000;       // per request (HEAD or GET), counting the redirect hops
 const MAX_REDIRECTS = 5;

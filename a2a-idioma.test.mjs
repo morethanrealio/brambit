@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Conversation between assistants: each side speaks in its OWN owner's language. In
 // pt-BR the body of the prompt doesn't change a single byte (the JSON still asks for "in pt-BR");
 // the language directive goes at the end, same as the other sub-agents.

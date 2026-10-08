@@ -7,7 +7,16 @@
 // speak French over a Portuguese interface. The list grows with the
 // translation, not before it. (07/09: en and es now, Japanese out for now.)
 export const IDIOMAS_OK = ['pt-BR', 'en', 'es'];
-export const IDIOMA_PADRAO = 'pt-BR';
+// Language the texts not yet in the catalogs (docs/i18n.md) are written in. It is
+// not a default: it only says which literals can be shown as they are.
+export const LEGACY_TEXT_LANGUAGE = 'pt-BR';
+
+// Language of the instance, used when nothing is known about the person:
+// BRAMBIT_DEFAULT_LANGUAGE if it is one of IDIOMAS_OK, else English. Read on each
+// call so a test or the installer can set it after this module loads.
+export function defaultLanguage() {
+  return normalizaIdioma(process.env.BRAMBIT_DEFAULT_LANGUAGE) || 'en';
+}
 
 // Normalizes whatever comes from the browser/header into our set: 'pt', 'pt-PT' and
 // 'pt-br' become 'pt-BR'; 'en-US' and 'en-GB' become 'en'; 'es-419' becomes 'es'.
@@ -63,7 +72,7 @@ export function localeDoAcceptLanguage(raw) {
 // ── Language in the prompt ───────────────────────────────────────────────────
 // Short tag for the prompt ('pt-BR' | 'en' | 'es'), always with a fallback to the default.
 export function tagIdioma(language) {
-  return normalizaIdioma(language) || IDIOMA_PADRAO;
+  return normalizaIdioma(language) || defaultLanguage();
 }
 
 // Language name spelled out in English, for sentences of the (English) prompt
@@ -244,7 +253,7 @@ const LIMIAR = 0.06;
 
 export function derivaDeIdioma(texto, language) {
   const l = normalizaIdioma(language);
-  if (!l || l === IDIOMA_PADRAO) return null;   // in pt-BR Portuguese is expected
+  if (!l || l === 'pt-BR') return null;   // in pt-BR Portuguese is expected
   const s = String(texto || '').trim();
   if (!s) return null;
   const palavras = (s.match(/\p{L}+/gu) || []).length;
@@ -292,7 +301,7 @@ export function ideogramaAcidental(texto, language, textoDoDono = '') {
   const latinas = (s.match(/\p{Script=Latin}/gu) || []).length;
   const parte = han / (han + latinas);
   if (parte < PARTE_HAN) return null;
-  return { idioma: normalizaIdioma(language) || IDIOMA_PADRAO, han, parte: Number(parte.toFixed(2)) };
+  return { idioma: normalizaIdioma(language) || defaultLanguage(), han, parte: Number(parte.toFixed(2)) };
 }
 
 // Rewrite request: a short call, WITHOUT tools and without the conversation, so
@@ -320,5 +329,5 @@ export function mesmasLinhas(original, reescrito) {
   return n(original) === n(reescrito);
 }
 export function avisoSemIdioma(language) {
-  return SEM_IDIOMA[normalizaIdioma(language) || IDIOMA_PADRAO];
+  return SEM_IDIOMA[normalizaIdioma(language) || defaultLanguage()];
 }

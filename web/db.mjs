@@ -25,7 +25,7 @@ import { createCurationStore } from './curation-store.mjs';
 import pg from 'pg';
 import { createHash } from 'node:crypto';
 import { encMaybe, decMaybe, encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
-import { IDIOMAS_OK, IDIOMA_PADRAO, normalizaIdioma, normalizaPais } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, normalizaIdioma, normalizaPais } from './locale.mjs';
 import { matchingWikiLineSnippet, wikiSearchTerms } from './wiki-disclosure.mjs';
 
 export const pgConfig = {
@@ -6978,7 +6978,7 @@ export async function setUserTimezone(userId, tz) {
 export async function getUserLocale(userId) {
   const { rows } = await pool.query(`SELECT language, country FROM ${S}.users WHERE id = $1`, [userId]);
   return {
-    language: normalizaIdioma(rows[0]?.language) || IDIOMA_PADRAO,
+    language: normalizaIdioma(rows[0]?.language) || defaultLanguage(),
     country: normalizaPais(rows[0]?.country),
     // `definido` separates "chose/was stamped" from "is at the default because we
     // don't know". Without this the frontend would have no way to know whether it needs

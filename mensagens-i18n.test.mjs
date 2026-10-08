@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // i18n tests for the server's MESSAGES. As with the site, what is proven here
 // is not translation quality: it's that the Portuguese response comes out exactly
 // the same as today's, and that nothing besides `error` and `message` is touched.

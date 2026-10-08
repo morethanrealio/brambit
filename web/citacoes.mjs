@@ -16,10 +16,10 @@
 // The other pure fixes to the final text also live here (orphan marker,
 // leaked tool-call, punctuation stuck to a link), which used to live in server.mjs.
 // Pure module: no I/O, no database.
-import { tagIdioma, IDIOMA_PADRAO } from './locale.mjs';
+import { tagIdioma, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
 
 const ROTULO = { 'pt-BR': 'Fontes:', en: 'Sources:', es: 'Fuentes:' };
-const rotuloDe = language => ROTULO[tagIdioma(language)] || ROTULO[IDIOMA_PADRAO] || 'Fontes:';
+const rotuloDe = language => ROTULO[tagIdioma(language)] || ROTULO[LEGACY_TEXT_LANGUAGE] || 'Fontes:';
 
 /**
  * Registry of the sources the model saw in this turn. The same URL always receives the

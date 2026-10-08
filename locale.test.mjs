@@ -1,7 +1,7 @@
 // Offline test of the language/country rule. Nothing goes out to the network, nothing touches the database.
 // Run with: node locale.test.mjs
 import {
-  IDIOMAS_OK, IDIOMA_PADRAO, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
+  IDIOMAS_OK, LEGACY_TEXT_LANGUAGE, defaultLanguage, normalizaIdioma, normalizaPais, localeDoAcceptLanguage,
   tagIdioma, instrucaoDeIdioma, comIdioma, derivaDeIdioma, lembreteDeIdioma,
   ideogramaAcidental, avisoSemIdioma, idiomaEscrito, idiomaDoTurno,
 } from './web/locale.mjs';
@@ -17,7 +17,17 @@ const header = (raw, lang, country) => {
 
 // 0) The supported set. If someone changes this without translating, the test warns.
 t('supported languages = pt-BR, en, es', JSON.stringify(IDIOMAS_OK) === JSON.stringify(['pt-BR', 'en', 'es']));
-t('default is pt-BR', IDIOMA_PADRAO === 'pt-BR');
+t('legacy texts are pt-BR', LEGACY_TEXT_LANGUAGE === 'pt-BR');
+{
+  const saved = process.env.BRAMBIT_DEFAULT_LANGUAGE;
+  delete process.env.BRAMBIT_DEFAULT_LANGUAGE;
+  t('instance default is en', defaultLanguage() === 'en');
+  process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-br';
+  t('BRAMBIT_DEFAULT_LANGUAGE sets the default', defaultLanguage() === 'pt-BR' && tagIdioma(null) === 'pt-BR');
+  process.env.BRAMBIT_DEFAULT_LANGUAGE = 'fr';
+  t('unsupported BRAMBIT_DEFAULT_LANGUAGE falls back to en', defaultLanguage() === 'en');
+  if (saved === undefined) delete process.env.BRAMBIT_DEFAULT_LANGUAGE; else process.env.BRAMBIT_DEFAULT_LANGUAGE = saved;
+}
 
 // 1) normalizaIdioma: regional variants collapse into the language.
 idioma('pt', 'pt-BR');
@@ -79,7 +89,7 @@ t('tag pt-PT falls into pt-BR', tagIdioma('pt-PT') === 'pt-BR');
 t('tag en-US -> en', tagIdioma('en-US') === 'en');
 t('tag es-MX -> es', tagIdioma('es-MX') === 'es');
 ['ja', 'fr', '', null, undefined, 'xx'].forEach((v) => {
-  t(`tag ${JSON.stringify(v)} falls back to default`, tagIdioma(v) === IDIOMA_PADRAO);
+  t(`tag ${JSON.stringify(v)} falls back to default`, tagIdioma(v) === defaultLanguage());
 });
 
 // 9) An UNRECOGNIZED language still gets no directive, and comIdioma returns the
@@ -137,9 +147,9 @@ t('en and es have different directives', instrucaoDeIdioma('en') !== instrucaoDe
 // much better than "answer in English" written in Portuguese.
 t('en directive is in English', instrucaoDeIdioma('en').startsWith('LANGUAGE'));
 t('es directive is in Spanish', instrucaoDeIdioma('es').startsWith('IDIOMA'));
-// Every supported language beyond the default needs a directive. If someone puts a
+// Every supported language needs a directive. If someone puts a
 // new language in IDIOMAS_OK and forgets the text, the test warns here.
-IDIOMAS_OK.filter((l) => l !== IDIOMA_PADRAO).forEach((l) => {
+IDIOMAS_OK.forEach((l) => {
   t(`${l} (from IDIOMAS_OK) has a written directive`, !!instrucaoDeIdioma(l));
 });
 

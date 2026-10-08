@@ -18,7 +18,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { tagIdioma, IDIOMA_PADRAO, IDIOMAS_OK } from './locale.mjs';
+import { tagIdioma, LEGACY_TEXT_LANGUAGE, IDIOMAS_OK } from './locale.mjs';
 
 // Attributes whose value the user READS. `value` is left out on purpose: in
 // <input type=hidden> and <option value=...> it is data, not text, and translating
@@ -436,7 +436,7 @@ export function carregaCatalogos(dir) {
   const fora = {};
   // Several folders (the core's and the brand's): the later ones complete the earlier ones.
   for (const tag of IDIOMAS_OK) for (const d of [].concat(dir)) {
-    if (tag === IDIOMA_PADRAO) continue;
+    if (tag === LEGACY_TEXT_LANGUAGE) continue;
     const arq = path.join(d, `${tag}.json`);
     try {
       const j = JSON.parse(fs.readFileSync(arq, 'utf8'));
@@ -456,7 +456,7 @@ export function carregaCatalogos(dir) {
 // through the walk: that's what guarantees today's page doesn't change a byte.
 export function traduzPagina(html, language, catalogos) {
   const tag = tagIdioma(language);
-  if (tag === IDIOMA_PADRAO) return html;
+  if (tag === LEGACY_TEXT_LANGUAGE) return html;
   const cat = catalogos?.[tag];
   if (!cat) return html;
   return trocaLangDoHtml(aplicaCatalogo(html, cat), tag);

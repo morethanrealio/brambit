@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 import { confirmedAction } from './web/action-evidence.mjs';
 // Offline test of the confirmation gate's texts in en/es.
 // Nothing goes out to the network, nothing touches the database. Run with: node confirm-i18n.test.mjs

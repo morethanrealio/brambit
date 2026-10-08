@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Two findings from the confirmation gate (2026-09-17 sweep):
 //  1. the gmail_send/hotmail_send card didn't show the cc, so the person
 //     authorized a send different from what would actually happen;

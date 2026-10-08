@@ -1044,7 +1044,7 @@ import {
   setRoutineOfferOptOut, clearRoutineOfferOptOut,
   closeUserAccount, listUsersPurgeDue, collectUserAssetKeys, hardDeleteUser,
 } from './db.mjs';
-import { IDIOMAS_OK, IDIOMA_PADRAO, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
+import { IDIOMAS_OK, defaultLanguage, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
 import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
 import { traduzPagina, carregaCatalogos } from './site-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao } from './mensagens-i18n.mjs';
@@ -7513,7 +7513,7 @@ function friendlyPrompt(agent) {
 // inbox, history summary) moved from here to the END of the user message (see
 // tailContext in runConversationInThread), so the system+tools prefix stays
 // byte-identical between turns and Together can reuse the implicit cache.
-function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, project = null, appsManual = false, language = IDIOMA_PADRAO } = {}) {
+function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, project = null, appsManual = false, language = defaultLanguage() } = {}) {
   // The prompt is written in English; the language the assistant writes in is set
   // by the directive appended at the end (web/locale.mjs), for every language.
   const role = (agent.instructions && agent.instructions.trim()) || DEFAULT_INSTRUCTIONS;
@@ -8590,7 +8590,7 @@ const CATALOGOS_SITE = carregaCatalogos([path.join(__dirname, 'site-textos'), ..
 // code literals. Same reading, core + plugins, and same fallback in Portuguese.
 const CATALOGOS_MSGS = carregaCatalogos([path.join(__dirname, 'textos-servidor'), ...textosDoServidor(plugins)]);
 
-function sendHtml(res, full, status = 200, language = IDIOMA_PADRAO) {
+function sendHtml(res, full, status = 200, language = defaultLanguage()) {
   const nonce = randomBytes(16).toString('base64');
   // `__IDIOMA__` is the footer selector's state (which of the three buttons
   // is active). Goes as an ATTRIBUTE, resolved here on the server, so there's
@@ -8676,7 +8676,7 @@ async function atenderRequest(req, res) {
       const u = await currentUser();
       if (u) return (await getUserLocale(u.id)).language;
     } catch { /* invalid session or database down: the header is still served */ }
-    return idiomaDoHeader(req).language || IDIOMA_PADRAO;
+    return idiomaDoHeader(req).language || defaultLanguage();
   }
 
   // Product image proxy/cache: serves from OUR domain the photo already downloaded into
@@ -9702,7 +9702,7 @@ async function atenderRequest(req, res) {
       let raw = '';
       // Debug view of the prompt: shows the version the owner actually receives,
       // language included. If reading the locale fails, falls back to the default.
-      let promptLang = IDIOMA_PADRAO;
+      let promptLang = defaultLanguage();
       try { promptLang = (await getUserLocale(user.id)).language; } catch { /* default */ }
       try { raw = systemFor(agent, { language: promptLang }); } catch { raw = ''; }
       return send(res, 200, { friendly: friendlyPrompt(agent), raw });

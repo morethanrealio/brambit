@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Offline guardrail for Asaas financial actions.
 // Proves three contracts:
 // 1. no financial mutation runs before textual confirmation;

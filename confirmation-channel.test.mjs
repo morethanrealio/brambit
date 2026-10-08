@@ -1,3 +1,5 @@
+// These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Real adapters; transport API, database and external execution are fake.
 // The server boundary below uses the real gate, without importing the entrypoint.
 import test from 'node:test';
