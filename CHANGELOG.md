@@ -45,8 +45,8 @@ Changes merged since the last tag go under "Unreleased".
   Store Connect, WhatsApp, Telegram, Runner), contacts, Spaces, Skills, the
   skill library, the home greeting and date, the assistant and app lists, the
   chat list, the Files screen, the memory and assistant prompt settings, the
-  webhook, identity photo and voice, the business account and the web address
-  are done; the rest still use the old
+  webhook, identity photo and voice, the business account, the web address
+  and the credits, plan, model and media cost screen are done; the rest still use the old
   Portuguese-keyed catalogs for now.
 
 ### Changed
