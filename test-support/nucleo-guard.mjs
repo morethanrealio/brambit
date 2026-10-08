@@ -144,7 +144,7 @@ export async function bootSemNuvem(files, nuvem) {
     const eu = await pedir(porta, '/api/me', { headers: { cookie } });
     conferir(eu.status === 200 && JSON.parse(eu.body).name === 'Conta do núcleo', `/api/me logado deu ${eu.status}`);
     conferir(await parar() === 0, 'o servidor não saiu limpo no SIGTERM');
-    conferir(!/ERR_MODULE_NOT_FOUND|Cannot find module|ReferenceError|SyntaxError|Falha ao inicializar o banco/.test(log), 'erro no log do servidor');
+    conferir(!/ERR_MODULE_NOT_FOUND|Cannot find module|ReferenceError|SyntaxError|Failed to initialize the database/.test(log), 'erro no log do servidor');
     console.log('core without the cloud: 2 boots, migrations, pages, signup and login ok');
   } catch (e) {
     await espera(500);

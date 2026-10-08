@@ -71,7 +71,7 @@ let confirmationRecoveryTimer;
 async function cleanupCreditCheckpoints(){
   const days=Math.max(7,Math.min(180,Number(process.env.CREDIT_CHECKPOINT_RETENTION_DAYS)||30));
   const total=await gasto.limparCheckpoints({dias:days});
-  if(total)console.log(`[credit-checkpoint-gc] ${total} chamadas terminais removidas após ${days} dias`);
+  if(total)console.log(`[credit-checkpoint-gc] ${total} terminal calls removed after ${days} days`);
 }
 import {throwIfCreditFailure,creditPauseReason,creditStopMessage,CREDIT_STOP_REASONS} from './execution-credit-errors.mjs';
 import { createRepeatPushGuard, CREDIT_REPLY_WINDOW_MS } from './push-repeat-guard.mjs';
@@ -392,7 +392,7 @@ function withFallback(primary, fallback, tag) {
         try { return await primary.complete(argsc); }
         catch (e) {
           throwIfCreditFailure(e);
-          console.error(`[${tag}] ${primary.name} caiu sem fallback disponível: ${e?.message ?? e}`);
+          console.error(`[${tag}] ${primary.name} went down with no fallback available: ${e?.message ?? e}`);
           return { stop: STOP.END, text: 'Não consegui completar essa ação agora. Pode pedir de novo?', unavailable: true };
         }
       },
@@ -407,7 +407,7 @@ function withFallback(primary, fallback, tag) {
     async recoverCreditStop(argsc) {
       if (usePrimary) {
         usePrimary = false;
-        console.error(`[${tag}] ${primary.name} ficou sem confirmação de uso; failover novo pro ${fallback.name}`);
+        console.error(`[${tag}] ${primary.name} had no usage confirmation; new failover to ${fallback.name}`);
         return {from:primary.name,to:fallback.name,result:await fallback.complete(argsc)};
       }
       // A backup may itself be a chain (Gemini -> OpenAI). Delegate instead of
@@ -423,7 +423,7 @@ function withFallback(primary, fallback, tag) {
         catch (e) {
           throwIfCreditFailure(e);
           usePrimary = false;
-          console.error(`[${tag}] ${primary.name} caiu, fallback pro ${fallback.name}: ${e?.message ?? e}`);
+          console.error(`[${tag}] ${primary.name} went down, falling back to ${fallback.name}: ${e?.message ?? e}`);
         }
       }
       return await fallback.complete(argsc);
@@ -620,7 +620,7 @@ function makeGeminiPrimary({ maxOut = 32768 } = {}) {
         catch (e) {
           throwIfCreditFailure(e);
           usePrimary = false;
-          console.error(`[primary-override] ${PRIMARY_TEXT_MODEL} caiu, fallback pro primário do produto: ${e?.message ?? e}`);
+          console.error(`[primary-override] ${PRIMARY_TEXT_MODEL} went down, falling back to the product's primary: ${e?.message ?? e}`);
         }
       }
       return await fallback.complete(argsc);
@@ -1097,7 +1097,7 @@ async function billWaMessages({ userId, messages, agentId = null, threadId = nul
         userId, agentId, threadId, kind: 'wa_msg', model: WA_MSG_MODEL,
         cost: gratis ? 0 : custoUnit, billCredits: porMsg,
       });
-    } catch (e) { console.error('[wa_msg] falha ao cobrar:', e?.message ?? e); }
+    } catch (e) { console.error('[wa_msg] failed to charge:', e?.message ?? e); }
   }
 }
 import { agentToAgentTool, confirmAgentDecisionTool, respondDecisionTool, respondExternalQuestionTool, listContactsTool, acceptContactTool, declineContactTool, inviteContactTool } from './agent2agent.mjs';
@@ -1265,7 +1265,7 @@ async function validGoogleToken(userId, googleEmail = null) {
         throw googleReconnectError(googleReconnectMsg(t.google_email));
       }
       // Transient failure (network/5xx): doesn't delete anything, just reports it so it can be retried.
-      console.error('[google] refresh falhou:', e?.message ?? e);
+      console.error('[google] refresh failed:', e?.message ?? e);
       throw new Error('Não consegui renovar sua conexão com o Google agora. Tente de novo em instantes.');
     }
     const expiry = new Date(Date.now() + (fresh.expires_in || 3600) * 1000);
@@ -1319,7 +1319,7 @@ async function validProviderToken(userId, provider) {
         return fresh.access_token;
       }
     } catch (e) {
-      console.error(`[${provider}] refresh falhou:`, e.message);
+      console.error(`[${provider}] refresh failed:`, e.message);
       throw new Error(`Sessão do ${provider} expirada; reconecte em Conexões.`);
     }
   }
@@ -1790,7 +1790,7 @@ async function mcpToolsForUser(userId, agentId) {
       ]);
       for (const t of conn.tools) all.push(t);
     } catch (e) {
-      console.error(`[mcp] servidor "${s.label}" indisponível:`, e?.message ?? e);
+      console.error(`[mcp] server "${s.label}" unavailable:`, e?.message ?? e);
     }
   }));
   return all;
@@ -1854,7 +1854,7 @@ async function recordUsages(usages, dims, { noBill = false, eventId = null, stri
         rememberSettledUsage(u,receipt);
       }else await insertUsageEvent({ ...dims, ...u, cost, billCredits });
     } catch (e) {
-      console.error('[usage] falha ao gravar:', e?.message ?? e);
+      console.error('[usage] failed to save:', e?.message ?? e);
       if(strict)throw e;
     }
   }
@@ -2665,14 +2665,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // Empty text: the scheduler only delivers when text comes along, so the routine
         // runs silently. It also doesn't log any turn to the thread ⏰ — the notice
         // the person received last week is already there in the history.
-        console.log(`[rotina] usuário ${userId} sem crédito, aviso já dado em ${marca?.at} — rodando em silêncio`);
+        console.log(`[rotina] user ${userId} out of credit, notice already given at ${marca?.at} — running silently`);
         return { text: '', attachments: [] };
       }
       // About to notify now: logs the date BEFORE responding, so a routine that
       // fires right after already falls into silence.
       const nova = { at: new Date().toISOString(), period: credit.periodStart || null };
       try { await setConfig(ROUTINE_CREDIT_WARN_KEY, { ...avisados, [userId]: nova }); }
-      catch (e) { console.error('[rotina] não consegui gravar a data do aviso de crédito:', e?.message ?? e); }
+      catch (e) { console.error('[rotina] could not save the credit notice date:', e?.message ?? e); }
     }
     // Same fail-safe as the with-credit path: a message that does NOT confirm
     // cancels the pending item. A later "go ahead" cannot revive an old action
@@ -2724,7 +2724,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           await saveThreadTurn(thread.id, agent.id, { baseHistory,
             history: historyFeito, summary: thread.summary || '', userMsg: message, assistantMsg: replyFeito, title: titleFeito,
           });
-          console.log(`[confirm] thread=${thread.id} ação "${pendSemCredito.name}" ${execErr ? 'FALHOU' : 'executada'} com créditos estourados (confirmação já dada, sem chamada de modelo).`);
+          console.log(`[confirm] thread=${thread.id} action "${pendSemCredito.name}" ${execErr ? 'FALHOU' : 'executada'} with credit exceeded (confirmation already given, no model call).`);
           return { text: replyFeito, attachments: [] };
         }
       }
@@ -2786,7 +2786,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           return { text: emergReply, attachments: [] };
         }
       } catch (e) {
-        console.error('[emergência sem créditos] falhou, caindo pro aviso padrão:', e?.message ?? e);
+        console.error('[emergência sem créditos] failed, falling back to the standard notice:', e?.message ?? e);
       }
     }
     // Persists the turn to the history (user's msg + this notice). Without this the
@@ -2874,7 +2874,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (pend) {
     // Webhook: whoever writes the "reply" is an external system, not the owner. A "yes"
     // coming from it never executes the gate's action (the pending item has already left the map here).
-    if (kind === 'webhook') console.warn(`[webhook] pendência "${pend.name}" descartada sem executar: confirmação só vale do dono.`);
+    if (kind === 'webhook') console.warn(`[webhook] pending action "${pend.name}" discarded without executing: confirmation only counts from the owner.`);
     else if (confirmsPending(pend, message, opts.confirmationTarget) || (pend.durableId && durableProposal?.id===pend.durableId && durableProposal.state==='approved')) {
       // Confirmation via REACTION (👍) doesn't count for an IRREVERSIBLE action: it returns the
       // pending item to the thread and asks for confirmation via TEXT. (A thumbs-up confirms the
@@ -2911,7 +2911,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // `usuario` is the sentence the tool itself wrote FOR THE OWNER (why it blocked).
         // Without carrying this to the end of the turn, the person just read "it was blocked".
         confirmedToolLog.push({ name:pend.name, hint:pend.name, falhou:true, usuario:typeof r.usuario==='string'?r.usuario:'' });
-        console.log(`[confirm] thread=${thread.id} ação "${pend.name}" CONFIRMADA mas FALHOU: ${String(r.error || '').slice(0, 200)}`);
+        console.log(`[confirm] thread=${thread.id} action "${pend.name}" CONFIRMED but FAILED: ${String(r.error || '').slice(0, 200)}`);
         // Does NOT return: falls through to the model's normal flow below.
       } else {
         const reply = execErr
@@ -2963,7 +2963,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         'parecia um "sim" em outro idioma ou de forma indireta, chame a tool de novo',
         'e peça a confirmação de novo, de forma curta. Não cole este bloco na resposta.',
       ].join('\n');
-      console.log(`[confirm] thread=${thread.id} ação "${pend.name}" CANCELADA (${comRessalva ? 'confirmada com ressalva: o pedido mudou' : 'sem confirmação explícita'}).`);
+      console.log(`[confirm] thread=${thread.id} action "${pend.name}" CANCELLED (${comRessalva ? 'confirmada com ressalva: o pedido mudou' : 'sem confirmação explícita'}).`);
     }
   }
   // The question enters the database NOW, not at the end of the turn. The turn takes 60-90s
@@ -4619,7 +4619,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     : { app: null, sticky: false };
   const suppressCodingSSH = !!targetedApp && !activeProject;
   if (targetedApp) {
-    console.log(`[route-guard] turno mira app básico "${targetedApp.system}"${appFocusSticky ? ' (foco herdado da conversa)' : ''} -> suprime sandbox${suppressCodingSSH ? ' + coding-SSH' : ''} (thread=${thread.id})`);
+    console.log(`[route-guard] turn targets basic app "${targetedApp.system}"${appFocusSticky ? ' (foco herdado da conversa)' : ''} -> suppresses sandbox${suppressCodingSSH ? ' + coding-SSH' : ''} (thread=${thread.id})`);
   }
   // The COMPLETE apps manual (the biggest block in the system, ~2.9k tokens) only comes in
   // when the turn has to do with apps: the user already has a published app, the turn targets
@@ -4896,7 +4896,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         onUsage: (e) => { const { kind, noBill, ...usage } = e; mediaUsages.push({ usage, kind: kind || 'subagent', noBill: kind === 'compact' && noBill === true }); },
       }));
       if (subLivre) for (const t of sshTools(userId)) if (t.name === 'gerar_chave_ssh') registry.add(t);
-      console.log(`[codar] sub montado (thread=${thread.id}, livre=${subLivre ? (sshLivre ? 'ssh' : 'runner') : 'nao'}, coding-ssh=${subCoding ? 'sim' : 'nao'})`);
+      console.log(`[codar] sub assembled (thread=${thread.id}, livre=${subLivre ? (sshLivre ? 'ssh' : 'runner') : 'nao'}, coding-ssh=${subCoding ? 'sim' : 'nao'})`);
     }
     // Coding-SSH gated in the main agent: when it didn't go to the sub (outside
     // aceitar_edicoes) and isn't suppressed (free via SSH, or a targeted app).
@@ -5013,7 +5013,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }));
       addGated(registry,[makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,
         authorize:async(app,dono)=>await hostAll.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})})],thread.id,{codingApprovals,codingApprovalContext:{identity:codingIdentity,policy:codingPolicySnapshot(agent),channel:kind}});
-      console.log(`[construir_app] sub montado (thread=${thread.id}, tools=${hostBuild.length})`);
+      console.log(`[construir_app] sub assembled (thread=${thread.id}, tools=${hostBuild.length})`);
     }
     // Hosting ADMIN in the main agent (everything except inline discovery and the build, which
     // went to the sub-agent): publish, delete, replicate, roll back version, remove file/
@@ -5164,10 +5164,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (avEnabled() && (source === 'upload' || source === 'link')) {
       const av = await scanBuffer(buffer);
       if (!av.clean) {
-        console.error(`[avscan] REJEITADO user=${userId} kind=${kind} mime=${mime} sig=${av.signature}`);
+        console.error(`[avscan] REJECTED user=${userId} kind=${kind} mime=${mime} sig=${av.signature}`);
         throw new Error(`arquivo rejeitado pelo antivírus (${av.signature})`);
       }
-      if (av.skipped && av.error) console.warn(`[avscan] scan pulado (${av.error}) user=${userId} kind=${kind}`);
+      if (av.skipped && av.error) console.warn(`[avscan] scan skipped (${av.error}) user=${userId} kind=${kind}`);
     }
     const { url, key } = await putMedia(userId, buffer, ext, mime);
     // Returns the row's id in media_assets so the caller can tie the
@@ -6381,7 +6381,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       emailSearchBlock = emailSearchFailureBlock(es, e);
       routineCheck.failed = true;
       searchCoverage.observe(true);
-      console.warn(`[rotina busca_email] rotina=${opts.routineId || '?'} FALHOU: ${String(e?.message || e).slice(0, 300)}`);
+      console.warn(`[rotina busca_email] rotina=${opts.routineId || '?'} FAILED: ${String(e?.message || e).slice(0, 300)}`);
     }
   }
   const routineFrame = routineExecutionFrame({ kind, title: routineTitle, channel: routineChannel })
@@ -6413,11 +6413,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     for (const name of [...registry.map.keys()]) {
       if (!permitido.has(name)) { registry.map.delete(name); podadas++; }
     }
-    console.log(`[onboard] registry podado pro turno (${refreshHome ? 'refresh' : 'wow'}): ${registry.map.size} tools mantidas, ${podadas} removidas.`);
+    console.log(`[onboard] registry pruned for the turn (${refreshHome ? 'refresh' : 'wow'}): ${registry.map.size} tools kept, ${podadas} removed.`);
   }
   if (!noTools && agentCategory === 'grupo') {
     const { removidas, mantidas, travadas, host } = podarRegistryGrupo(registry, toolConfig);
-    console.log(`[categoria] grupo agent=${agent?.id}: registry podado, ${mantidas} tools mantidas, ${removidas} removidas, ${travadas} tools de SSH travadas no host=${host || '(nenhum)'}`);
+    console.log(`[categoria] grupo agent=${agent?.id}: registry pruned, ${mantidas} tools kept, ${removidas} removed, ${travadas} SSH tools locked on host=${host || '(nenhum)'}`);
   }
   // Routine WITH a delivery channel: deliverRoutine is what delivers the result, with
   // the TEXT the model generates. If the model also calls enviar_mensagem (the prompt
@@ -6431,7 +6431,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // channel=none action routines and normal conversations keep these operations.
     for (const name of ['gmail_create_draft', 'gmail_send', 'hotmail_send']) registry.map.delete(name);
     if (registry.map.delete('enviar_mensagem')) {
-      console.log(`[rotina] enviar_mensagem removida do turno (canal=${routineChannel}) pra não duplicar a entrega.`);
+      console.log(`[rotina] enviar_mensagem removed from the turn (canal=${routineChannel}) to avoid duplicating delivery.`);
     }
   }
   // Second layer of the fix above, and the deterministic one: on a dispatch, the model has
@@ -6450,7 +6450,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
       if (registry.map.delete(n)) podadas.push(n);
     }
-    if (podadas.length) console.log(`[rotina] tools de configuração removidas do disparo: ${podadas.join(', ')}.`);
+    if (podadas.length) console.log(`[rotina] configuration tools removed from the dispatch: ${podadas.join(', ')}.`);
   }
   const activeRegistry = noTools ? new ToolRegistry() : registry;
   if(!noTools && kind==='routine' && opts.curationConfig)pruneCurationTools(registry,opts.curationConfig.source||'web');
@@ -6899,7 +6899,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       { noBill: true },
     );
   }
-  if (compacted) console.log(`[compact] thread=${thread.id} dropped=${droppedTurns} leaned=${leanedTok || 0}tok -> resumo`);
+  if (compacted) console.log(`[compact] thread=${thread.id} dropped=${droppedTurns} leaned=${leanedTok || 0}tok -> summary`);
   // Thread's first message with no title -> names it from the message.
   const title = (!thread.title || !thread.title.trim()) ? deriveTitle(savedUserMsg) : undefined;
   // Credit stop with the same text as the previous one in this conversation, in a burst
@@ -6910,7 +6910,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const creditStopRepetida = creditStopPush && !appClient && !creditReplyGuard.allow(thread.id, termination, text);
   await saveThreadTurn(thread.id, agent.id, { baseHistory, history, summary, userMsg: savedUserMsg, assistantMsg: text, title, attachments, userMsgId, interjecoes, skipAssistant: creditStopRepetida });
   if (creditStopRepetida) {
-    console.log(`[credit] resposta de saldo repetida suprimida thread=${thread.id} motivo=${termination}`);
+    console.log(`[credit] repeated balance reply suppressed thread=${thread.id} motivo=${termination}`);
     return { text: '', attachments: [], deviceAction, suppressed: true };
   }
   // Mobile push for the assistant's reply. Only on the app/web channel ('chat'): the
@@ -7189,7 +7189,7 @@ async function pollVideoJobs() {
     if (status === 'error') {
       try { await updateVideoJob(job.id, { status: 'error', error: String(r?.error || 'erro no worker').slice(0, 500) }); } catch {}
       try { await deliverVideoMessage(job, 'Não consegui gerar o vídeo que você pediu, deu um problema técnico na geração. Pode tentar de novo daqui a pouco.'); } catch {}
-      console.error(`[video-poll] job ${job.id} erro: ${r?.error}`);
+      console.error(`[video-poll] job ${job.id} error: ${r?.error}`);
       continue;
     }
     if (status !== 'done') continue; // unknown status: wait for the next tick
@@ -7205,7 +7205,7 @@ async function pollVideoJobs() {
       if (!settlement.settled) {
         const decisao = decidirCobrancaNaoConcluida(settlement.reason);
         if (decisao.acao === 'revisar') {
-          console.error(`[video-poll] job ${job.id}: ${settlement.reason}; cobrança suspensa para revisão, sem repetir débito`);
+          console.error(`[video-poll] job ${job.id}: ${settlement.reason}; charge suspended for review, no repeated debit`);
           // Leaves the active queue (finding #25): with the job stuck in 'queued' the
           // poller kept downgrading and re-uploading the mp4 every minute forever,
           // and the owner couldn't request another video. The file is already in the
@@ -7240,7 +7240,7 @@ async function pollVideoJobs() {
       if (!deliveredNative) {
         try { await deliverVideoMessage(job, 'Teu vídeo ficou pronto! Já está salvo aqui no app, é só abrir pra ver (ou me pedir pra reenviar).'); } catch {}
       }
-      console.log(`[video-poll] job ${job.id} salvo e contabilizado (${secs}s, ${credits} créditos); aviso nativo=${deliveredNative}`);
+      console.log(`[video-poll] job ${job.id} saved and accounted for (${secs}s, ${credits} credits); native notice=${deliveredNative}`);
     } catch (e) {
       console.error(`[video-poll] entrega ${job.id}:`, e?.message ?? e);
       // Before commit: rollback allows a new attempt without a new charge. After
@@ -8127,7 +8127,7 @@ setInterval(() => {
 // table only needs Meta's retry window — 7 days is ample slack. Once a day.
 {
   const seenTick = () => pruneWaSeen(7)
-    .then((n) => { if (n) console.log(`[wa-seen] podados ${n} ids`); })
+    .then((n) => { if (n) console.log(`[wa-seen] pruned ${n} ids`); })
     .catch((e) => console.error('[wa-seen]', e?.message ?? e));
   setTimeout(seenTick, 5 * 60_000).unref();
   setInterval(seenTick, 24 * 3600_000).unref();
@@ -8212,7 +8212,7 @@ setInterval(() => {
 // default; the person turns it off via aviso_mudanca_agenda; CALENDAR_WATCH=0 stops the loop.
 if (CALENDAR_WATCH_ON) {
   const calendarWatchTick = () => calendarWatch.tick()
-    .then((r) => { if (r?.avisos) console.log(`[calendar-watch] avisos: ${r.avisos}`); })
+    .then((r) => { if (r?.avisos) console.log(`[calendar-watch] notices: ${r.avisos}`); })
     .catch((e) => console.error('[calendar-watch]', e?.message ?? e));
   setTimeout(calendarWatchTick, 2 * 60_000).unref();
   setInterval(calendarWatchTick, 10 * 60_000).unref();
@@ -8243,7 +8243,7 @@ async function purgeUser(u) {
   await eventos.emitir('exclusao_final', { userId: u.id });
   await gasto.apagarConta(u.id);
   await hardDeleteUser(u.id);
-  console.log(`[purge] conta ${u.id} destruída (fechada em ${u.deleted_at?.toISOString?.() ?? u.deleted_at}, ${apagadas}/${total} arquivos apagados${pendentes ? `, ${pendentes} em lápide aberta pro varredor` : ''})`);
+  console.log(`[purge] account ${u.id} destroyed (closed at ${u.deleted_at?.toISOString?.() ?? u.deleted_at}, ${apagadas}/${total} files deleted${pendentes ? `, ${pendentes} em lápide aberta pro varredor` : ''})`);
 }
 
 // Daily job: takes whoever requested deletion more than 30 days ago and
@@ -8263,8 +8263,8 @@ const purgeTick = async () => {
   } catch (e) { console.error('[purge]', e?.message ?? e); }
   try {
     const n = await pruneWikiPageVersions(90);
-    if (n) console.log(`[purge] ${n} cópias de página da memória com mais de 90 dias apagadas`);
-  } catch (e) { console.error('[purge] cópias de página:', e?.message ?? e); }
+    if (n) console.log(`[purge] ${n} memory page copies older than 90 days deleted`);
+  } catch (e) { console.error('[purge] page copies:', e?.message ?? e); }
 };
 setTimeout(purgeTick, 5 * 60_000).unref();
 setInterval(purgeTick, 24 * 3600_000).unref();
@@ -8284,7 +8284,7 @@ const mediaGcTick = async () => {
       onErro: (e, key) => console.error(`[media-gc] key ${key}:`, e?.message ?? e),
       limite: 100,
     });
-    if (r.vistos) console.log(`[media-gc] lápides: ${r.apagados} apagadas, ${r.falhas} seguem pendentes`);
+    if (r.vistos) console.log(`[media-gc] tombstones: ${r.apagados} deleted, ${r.falhas} still pending`);
   } catch (e) { console.error('[media-gc]', e?.message ?? e); }
 };
 setTimeout(mediaGcTick, 9 * 60_000).unref();
@@ -8622,7 +8622,7 @@ const server = http.createServer((req, res) => {
   req.on('error', () => {});
   atenderRequest(req, res).catch((e) => {
     if (e?.code === 'REQUEST_BODY_INTERRUPTED' && req.destroyed) return;
-    console.error('[http] erro nao tratado:', e?.stack || e);
+    console.error('[http] unhandled error:', e?.stack || e);
     try {
       if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('erro interno');
@@ -8764,7 +8764,7 @@ async function atenderRequest(req, res) {
       // there's evidence (CEP/CPF). Failing here can't break a sign-up that
       // succeeded: worst case the person has no stored language and gets the default.
       try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
-      catch (e) { console.warn('[signup] idioma do navegador não gravado:', e?.message || e); }
+      catch (e) { console.warn('[signup] browser language not saved:', e?.message || e); }
       // Account created: we DON'T send e-mail here. The daily onboarding job
       // detects the new account and sends the first-access e-mail the next day.
       const token = newToken();
@@ -8861,17 +8861,17 @@ async function atenderRequest(req, res) {
       const appleToken = await getAppleRefreshToken(user.id).catch(() => null);
       if (appleToken) {
         if (!appleRevokeReady()) {
-          console.warn(`[account-delete] user ${user.id} tem ID Apple mas APPLE_PRIVATE_KEY não está configurada: revogação não feita`);
+          console.warn(`[account-delete] user ${user.id} has an Apple ID but APPLE_PRIVATE_KEY is not configured: revocation not performed`);
         } else {
           try { await appleRevoke(appleToken); }
-          catch (e) { console.error(`[account-delete] revogação Apple user ${user.id}:`, e?.message ?? e); }
+          catch (e) { console.error(`[account-delete] Apple revocation user ${user.id}:`, e?.message ?? e); }
         }
       }
       const fechada = await closeUserAccount(user.id);
       // null = was already closed (double tap/app retry). Same response,
       // without restarting the window: to the client the result is the same.
       const closedAt = fechada?.deleted_at ? new Date(fechada.deleted_at) : new Date();
-      console.log(`[account-delete] conta ${user.id} fechada`);
+      console.log(`[account-delete] account ${user.id} closed`);
       const base = `Conta excluída. O acesso foi encerrado agora e os dados são apagados em definitivo em ${PURGE_DIAS} dias.`;
       return send(res, 200, {
         ok: true,
@@ -8915,13 +8915,13 @@ async function atenderRequest(req, res) {
         try {
           await sendEmail({ to: user.email, subject: `Redefinir sua senha no ${marca().nome}`, text, fromName: marca().nome });
         } catch (e) {
-          console.error('[forgot] falha ao enviar e-mail:', e?.message ?? e);
+          console.error('[forgot] failed to send email:', e?.message ?? e);
         }
       }
       return send(res, 200, generic);
     } catch (e) {
       // Even on an internal error we answer generically so nothing leaks.
-      console.error('[forgot] erro:', e?.message ?? e);
+      console.error('[forgot] error:', e?.message ?? e);
       return send(res, 200, generic);
     }
   }
@@ -9005,7 +9005,7 @@ async function atenderRequest(req, res) {
         // company allows. Non-members pass straight through. The token received is NOT stored.
         const perm = await empresaStore.conexaoPermitida(already.id, email);
         if (!perm.ok) {
-          console.warn(`[empresa] conexão Google recusada: domínio fora da lista (usuário ${already.id})`);
+          console.warn(`[empresa] Google connection refused: domain not on the allow list (user ${already.id})`);
           res.writeHead(302, { Location: home + 'inicio?e=google&connection_outcome=empresa_dominio', 'set-cookie': clearAll });
           return res.end();
         }
@@ -9039,7 +9039,7 @@ async function atenderRequest(req, res) {
         // without a language and fell back to the default even for someone
         // reading the site in English. Never breaks the sign-up if it fails.
         try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
-        catch (e) { console.warn('[oauth] idioma inicial não gravado:', e?.message || e); }
+        catch (e) { console.warn('[oauth] initial language not saved:', e?.message || e); }
       }
       // Login with Google is just IDENTITY (online, base scope, no refresh).
       // It does NOT write a data account: it would overwrite the scope/token
@@ -9163,7 +9163,7 @@ async function atenderRequest(req, res) {
         const nome = nomeApple || id.email.split('@')[0];
         user = await criarConta(createUser, { name: nome, email: id.email, passwordHash: hashPassword(newToken()) }, 'apple');
         try { await setUserLocaleIfEmpty(user.id, { language: idiomaDoCookie(req) || idiomaDoHeader(req).language }); }
-        catch (e) { console.warn('[apple] idioma inicial não gravado:', e?.message || e); }
+        catch (e) { console.warn('[apple] initial language not saved:', e?.message || e); }
       }
 
       await linkAppleAccount(user.id, { sub: id.sub, refreshToken, privateEmail: id.isPrivateEmail });
@@ -9238,7 +9238,7 @@ async function atenderRequest(req, res) {
       }
 
       await linkAppleAccount(sess.id, { sub: id.sub, refreshToken, privateEmail: id.isPrivateEmail });
-      console.log(`[apple-link] ID Apple vinculado à conta ${sess.id}`);
+      console.log(`[apple-link] Apple ID linked to account ${sess.id}`);
       return send(res, 200, { ok: true, privateEmail: id.isPrivateEmail });
     } catch (e) {
       console.error('apple link:', e?.message ?? e);
@@ -9273,10 +9273,10 @@ async function atenderRequest(req, res) {
         // way (that's what the person asked for), and the leftover is a line
         // in iPhone Settings, which they can remove themselves.
         try { await appleRevoke(token); }
-        catch (e) { console.error(`[apple-unlink] revogação user ${user.id}:`, e?.message ?? e); }
+        catch (e) { console.error(`[apple-unlink] revocation user ${user.id}:`, e?.message ?? e); }
       }
       await unlinkAppleAccount(user.id);
-      console.log(`[apple-unlink] ID Apple desvinculado da conta ${user.id}`);
+      console.log(`[apple-unlink] Apple ID unlinked from account ${user.id}`);
       return send(res, 200, { ok: true });
     } catch (e) {
       return fail(res, 500, 'Não foi possível desvincular seu ID Apple.', e);
@@ -9310,7 +9310,7 @@ async function atenderRequest(req, res) {
       return send(res, 200, { ok: true, gravado: await setUserAttribution(user.id, attr) });
     } catch (e) {
       // Measurement never breaks sign-up: logs and returns 200.
-      console.warn('[atribuicao] falha ao gravar:', e?.message || e);
+      console.warn('[atribuicao] failed to save:', e?.message || e);
       return send(res, 200, { ok: true, gravado: false });
     }
   }
@@ -9383,7 +9383,7 @@ async function atenderRequest(req, res) {
         if (!await empresaStore.microsoftSemEmail(user.id)) return;
         const em = await microsoftAccountEmail(await validProviderToken(user.id, 'microsoft'));
         if (em) await empresaStore.gravarEmailMicrosoft(user.id, em);
-      } catch (e) { console.warn('[empresa] e-mail Microsoft não resolvido:', e?.message || e); }
+      } catch (e) { console.warn('[empresa] Microsoft email not resolved:', e?.message || e); }
     };
     try {
       if (req.method === 'GET' && url.pathname === '/api/empresa') return send(res, 200, await empresaStore.detalhe(user));
@@ -9781,7 +9781,7 @@ async function atenderRequest(req, res) {
     // deletion route. Timing-safe comparison so we don't leak the MAC byte by byte.
     const secret = process.env.NUVEMSHOP_CLIENT_SECRET;
     if (!secret) {
-      console.error('[nuvemshop] NUVEMSHOP_CLIENT_SECRET ausente: webhook recusado (fail-closed)');
+      console.error('[nuvemshop] NUVEMSHOP_CLIENT_SECRET missing: webhook refused (fail-closed)');
       res.writeHead(503, { 'content-type': 'application/json' });
       return res.end('{"error":"webhook nao configurado"}');
     }
@@ -9797,10 +9797,10 @@ async function atenderRequest(req, res) {
       const storeId = body.store_id != null ? String(body.store_id) : null;
       if (kind === 'store-redact' && storeId) {
         const n = await deleteOAuthTokenByStoreId('nuvemshop', storeId);
-        console.log(`[nuvemshop] store/redact loja ${storeId}: ${n} token(s) removido(s)`);
+        console.log(`[nuvemshop] store/redact store ${storeId}: ${n} token(s) removed`);
       } else {
         // customers/redact and customers/data_request: we don't store customer PII (on-demand reads).
-        console.log(`[nuvemshop] webhook ${kind} loja ${storeId ?? '?'}: nada a fazer (sem PII persistida)`);
+        console.log(`[nuvemshop] webhook ${kind} store ${storeId ?? '?'}: nothing to do (no PII persisted)`);
       }
     })().catch((e) => console.error('[nuvemshop] erro no webhook', kind, e?.message ?? e));
     return;
@@ -10917,11 +10917,11 @@ async function atenderRequest(req, res) {
               await clearHomeItems(user.id, 'note', agent.id);
               for (const suggestion of parsed.suggestions) await addHomeItem({ userId: user.id, agentId: agent.id, kind: 'suggestion', text: suggestion });
               for (const note of parsed.notes) await addHomeItem({ userId: user.id, agentId: agent.id, kind: 'note', text: note });
-            } catch { console.error('[onboard] resultado salvo; cartões da home não atualizados'); }
+            } catch { console.error('[onboard] result saved; home cards not updated'); }
           }
         } catch {
-          console.error('[onboard] análise falhou; tentativa recuperável registrada');
-          try { await onboardingStore.fail(user.id, agent.id, attempt); } catch { console.error('[onboard] falha ao registrar erro; recuperação por lease disponível'); }
+          console.error('[onboard] analysis failed; recoverable attempt logged');
+          try { await onboardingStore.fail(user.id, agent.id, attempt); } catch { console.error('[onboard] failed to log the error; lease-based recovery available'); }
         }
       })();
       return;
@@ -11419,7 +11419,7 @@ async function atenderRequest(req, res) {
     // this side the journal didn't have a single line to explain it.
     const limpaCookies = [clearStateCookie(), clearVerifierCookie()];
     const fail = (motivo, outcome = 'failed') => {
-      console.error(`[oauth] ${prov} callback recusado: ${motivo}`);
+      console.error(`[oauth] ${prov} callback refused: ${motivo}`);
       res.writeHead(302, { Location: home + `inicio?e=${prov}` + (prov === 'microsoft' ? '&connection_outcome=' + outcome : ''), 'set-cookie': limpaCookies });
       res.end();
     };
@@ -11448,13 +11448,13 @@ async function atenderRequest(req, res) {
         msEmail = await microsoftAccountEmail(tok.access_token);
         const perm = await empresaStore.conexaoPermitida(user.id, msEmail);
         if (!perm.ok) {
-          console.warn(`[empresa] conexão Microsoft recusada: ${msEmail ? 'domínio fora da lista' : 'e-mail não identificado'} (usuário ${user.id})`);
+          console.warn(`[empresa] Microsoft connection refused: ${msEmail ? 'domínio fora da lista' : 'e-mail não identificado'} (user ${user.id})`);
           res.writeHead(302, { Location: home + 'inicio?e=microsoft&connection_outcome=empresa_dominio', 'set-cookie': limpaCookies });
           return res.end();
         }
       }
       await saveOAuthToken(user.id, prov, tok);
-      if (msEmail) await empresaStore.gravarEmailMicrosoft(user.id, msEmail).catch((e) => console.warn('[empresa] e-mail Microsoft não gravado:', e?.message || e));
+      if (msEmail) await empresaStore.gravarEmailMicrosoft(user.id, msEmail).catch((e) => console.warn('[empresa] Microsoft email not saved:', e?.message || e));
       res.writeHead(302, { Location: home + `inicio?connected=${prov}`, 'set-cookie': limpaCookies });
       return res.end();
     } catch (e) {
@@ -12100,7 +12100,7 @@ const discoveryClosingRunner=createClosingRunner(discoveryStore.closing,{brief:p
 function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[shutdown] ${signal}: drenando requests ativos antes de sair...`);
+  console.log(`[shutdown] ${signal}: draining active requests before exiting...`);
   const codingDrained=codingJobs.stop();
   const whatsappDrained=waHandler.stop();
   routineExecutor.close();
@@ -12114,7 +12114,7 @@ function gracefulShutdown(signal) {
   const discoveryDrained=Promise.all([discoveryRunner.stop(),discoveryClosingRunner.stop()]);
   const httpDrained=new Promise(resolve=>server.close(resolve));
   Promise.all([httpDrained,routinesDrained,financialDrained,discoveryDrained,codingDrained,whatsappDrained]).then(()=>{
-    console.log('[shutdown] requests e rotinas drenados, saindo limpo');
+    console.log('[shutdown] requests and routines drained, exiting cleanly');
     process.exit(0);
   });
   // Closes idle keep-alives (otherwise they hold server.close open for nothing).
@@ -12123,7 +12123,7 @@ function gracefulShutdown(signal) {
   // systemd sends SIGKILL (TimeoutStopSec = 90s). 60s covers the vast majority
   // of turns without hitting that limit.
   const t = setTimeout(() => {
-    console.warn('[shutdown] teto de drain atingido, forçando saída');
+    console.warn('[shutdown] drain cap reached, forcing exit');
     const hard=setTimeout(()=>process.exit(0),5_000);
     routineExecutor.interrupt().finally(()=>{clearTimeout(hard);process.exit(0);});
   }, 60_000);
@@ -12145,15 +12145,15 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     if ((await initVaultNoBoot()).ok) {
       if (!/^(0|false|off)$/i.test(process.env.DEEPSEEK_FLASH_ENABLED || '')) {
         try { await chaveDeepSeek(); deepseekFlashReady = true; }
-        catch { console.warn('[deepseek-flash] credencial do serviço indisponível; opção oculta, sem fallback para seleções existentes'); }
+        catch { console.warn('[deepseek-flash] service credential unavailable; option hidden, no fallback for existing selections'); }
       }
-      console.log(`[vault] chave mestra ${vaultEnabled() ? 'pronta' : 'não configurada'}${process.env.VAULT_KEY_ENC ? ` (via ${nomeDaChaveExterna()})` : ''}`);
+      console.log(`[vault] master key ${vaultEnabled() ? 'pronta' : 'não configurada'}${process.env.VAULT_KEY_ENC ? ` (via ${nomeDaChaveExterna()})` : ''}`);
     }
     // A configured vault that didn't open = server up but unable to encrypt. Saving
     // a secret now fails closed (encMaybe throws), so the alarm
     // here is what explains the error the user will see when saving a credential.
     if (vaultConfigured() && !vaultEnabled()) {
-      console.error('[vault] ALERTA: cofre configurado mas chave NÃO carregada; nenhum segredo novo será gravado (falha fechada) até isso ser resolvido');
+      console.error('[vault] ALERT: vault configured but key NOT loaded; no new secret will be saved (fail closed) until this is resolved');
     }
     // Connector secrets left in plain text in the database (Telegram bot token,
     // MCP headers, OAuth) move to the encrypted columns; the installer's secrets
@@ -12162,8 +12162,8 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     // Failed = log and go on: reading a legacy row still works.
     try {
       const mig = await migrateConnectorSecrets();
-      if (mig.skipped) console.warn('[vault] backfill de segredos de conector adiado (cofre indisponível)');
-      else if (mig.telegram || mig.mcp || mig.oauth) console.log(`[vault] segredos cifrados no backfill: telegram=${mig.telegram} mcp=${mig.mcp} oauth=${mig.oauth}`);
+      if (mig.skipped) console.warn('[vault] connector secret backfill postponed (vault unavailable)');
+      else if (mig.telegram || mig.mcp || mig.oauth) console.log(`[vault] secrets encrypted in backfill: telegram=${mig.telegram} mcp=${mig.mcp} oauth=${mig.oauth}`);
     } catch (e) { console.error('[vault] falha no backfill de segredos de conector:', e?.message ?? e); }
     await eventos.emitir('cofre_pronto', {});
     if(vaultEnabled()){
@@ -12183,9 +12183,9 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     try {
       const bots = await listEnabledTelegramBots();
       for (const b of bots) telegramMgr.addBot(b);
-      if (bots.length) console.log(`[telegram] ${bots.length} bot(s) ativo(s)`);
-    } catch (e) { console.error('[telegram] falha ao subir pollers:', e?.message ?? e); }
-    console.log(`[whatsapp] webhook em /api/wa/webhook (${waEnabled() ? 'ativo' : 'aguardando creds'}${process.env.WA_VERIFY_TOKEN ? ', verify token ok' : ''})`);
+      if (bots.length) console.log(`[telegram] ${bots.length} bot(s) active`);
+    } catch (e) { console.error('[telegram] failed to start pollers:', e?.message ?? e); }
+    console.log(`[whatsapp] webhook at /api/wa/webhook (${waEnabled() ? 'ativo' : 'aguardando creds'}${process.env.WA_VERIFY_TOKEN ? ', verify token ok' : ''})`);
     // Routine scheduler (fires by time, delivered by email).
     schedulerHandle=startScheduler({
       executeRoutine:routineExecutor.execute, recoverRoutineExecutions:routineExecutor.recover,
@@ -12216,7 +12216,7 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
           await appendAssistantToThread({
             threadId: row.thread_id, userId: row.owner_user_id, text,
             deliveryKey: `asaas-schedule:${row.id}:${row.status || 'result'}`,
-          }).catch(e=>console.error('[asaas-schedule] persistência:',e?.message||e));
+          }).catch(e=>console.error('[asaas-schedule] persistence:',e?.message||e));
         }
         if (row.origin_channel && row.origin_channel !== 'web') {
           await notifyOwner(row.owner_user_id, text, { channel: row.origin_channel, strictChannel: true });
@@ -12228,10 +12228,10 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
       void discoveryRunner.tick().catch(()=>console.error('[discovery] tick failed'));
       void discoveryClosingRunner.tick().catch(()=>console.error('[discovery] closing tick failed'));
     },60_000);discoveryTimer.unref();
-    console.log(`[mailer] envio de e-mail ${mailEnabled() ? 'ativo' : 'em stub (faltam RESEND_API_KEY/MAIL_FROM)'}`);
+    console.log(`[mailer] email sending ${mailEnabled() ? 'ativo' : 'em stub (faltam RESEND_API_KEY/MAIL_FROM)'}`);
     // Email channel (ingest via IMAP + reply via SMTP as the assistant).
-    try { emailPoller.start(); } catch (e) { console.error('[email] falha ao subir poller:', e?.message ?? e); }
+    try { emailPoller.start(); } catch (e) { console.error('[email] failed to start poller:', e?.message ?? e); }
     startAwsCredentialRefresh(); // S3 via the instance role (S3_INSTANCE_ROLE=1): warms up and renews the credential.
-    server.listen(PORT, HOST, () => console.log(`Beta em http://${HOST}:${PORT}  (GEMINI_API_KEY ${process.env.GEMINI_API_KEY ? 'ok' : 'FALTANDO'}, Postgres ok)`));
+    server.listen(PORT, HOST, () => console.log(`Beta at http://${HOST}:${PORT}  (GEMINI_API_KEY ${process.env.GEMINI_API_KEY ? 'ok' : 'FALTANDO'}, Postgres ok)`));
   })
-  .catch((e) => { console.error('Falha ao inicializar o banco:', e?.message ?? e); process.exit(1); });
+  .catch((e) => { console.error('Failed to initialize the database:', e?.message ?? e); process.exit(1); });
