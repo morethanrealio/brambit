@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="Licença: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
-  <a href="https://github.com/morethanrealio/Brambit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/morethanrealio/Brambit/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/morethanrealio/Brambit/tags"><img alt="Versão" src="https://img.shields.io/github/v/tag/morethanrealio/Brambit?label=version"></a>
+  <a href="https://github.com/morethanrealio/brambit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/morethanrealio/brambit/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/morethanrealio/brambit/tags"><img alt="Versão" src="https://img.shields.io/github/v/tag/morethanrealio/brambit?label=version"></a>
   <img alt="Node.js 24" src="https://img.shields.io/badge/node-24-339933">
 </p>
 
@@ -62,13 +62,13 @@ nada antes: o instalador traz o próprio Node.js.
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/morethanrealio/brambit/main/install.ps1 | iex
 ```
 
 macOS e Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/morethanrealio/Brambit/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/morethanrealio/brambit/main/install.sh | bash
 ```
 
 Ele instala o Brambit para o seu usuário, cria o atalho do Brambit (menu Iniciar e
