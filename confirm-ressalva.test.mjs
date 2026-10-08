@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import {
   isConfirmation, confirmacaoComRessalva, GATED_TOOLS, IRREVERSIBLE_TOOLS,
 } from './web/confirm.mjs';
+import { hasSentence, requestSentence, doneSentence } from './web/confirm-sentences.mjs';
 
 test('#15 authorizing while changing the request does not confirm the pending action', () => {
   const casos = [
@@ -78,8 +79,11 @@ test('#16 creating a doc and exporting a PDF to Drive go through the confirmatio
 });
 
 test("#16 both have their own text in the proposal and the completion", () => {
-  const src = fs.readFileSync(new URL('./web/confirm.mjs', import.meta.url), 'utf8');
   for (const t of ['docs_create', 'drive_export_pdf']) {
-    assert.equal(src.split(`case '${t}':`).length - 1, 2, `${t}: missing describe or describeDone`);
+    assert.ok(hasSentence(t), `${t}: missing its own card sentences`);
+    for (const lang of ['en', 'pt-BR', 'es']) {
+      assert.ok(!requestSentence(t, {}, lang).includes(t), `${t} (${lang}): generic proposal`);
+      assert.ok(!doneSentence(t, {}, lang).includes(t), `${t} (${lang}): generic completion`);
+    }
   }
 });

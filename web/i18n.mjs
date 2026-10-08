@@ -131,3 +131,16 @@ export function resolveLanguage({saved, channel, acceptLanguage, instanceDefault
   }
   return matchLanguage(instanceDefault, supported) || SOURCE_LANGUAGE;
 }
+
+// Shared instance for text built away from a request handler (confirmation
+// cards, notices): core and overlay catalogs, plus the plugins' folders once
+// carregarPlugins() has registered them. Built on first use.
+let shared = null;
+let sharedPlugins = [];
+export function useLocalePlugins(plugins = []) {
+  sharedPlugins = plugins;
+  shared = null;
+}
+export function productI18n() {
+  return shared ||= createI18n({layers: localeLayers({plugins: sharedPlugins})});
+}

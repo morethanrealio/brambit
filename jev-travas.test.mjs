@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { jevEnabled, jevChoice } from './web/jev.mjs';
-import { GATED_TOOLS, IRREVERSIBLE_TOOLS, describe, describeDone } from './web/confirm.mjs';
-import { PORTAO_TEXTOS, PORTAO_IRREVERSIVEIS } from './web/confirm-textos-portao.mjs';
+import { GATED_TOOLS, GATE_TOOLS, describe, describeDone } from './web/confirm.mjs';
 
 test('Jev with no key stays off and returns null (the old rule still applies)', async () => {
   const key = process.env.TYPESAFE_API_KEY;
@@ -40,12 +39,11 @@ test('Jev on a network error returns null, never a made-up choice', async () => 
 });
 
 test('every tool from the 28/09 audit is in the gate, with its own phrase in all 3 languages', () => {
-  for (const name of Object.keys(PORTAO_TEXTOS)) {
+  for (const name of GATE_TOOLS) {
     assert.ok(GATED_TOOLS.has(name), name);
     for (const lang of ['pt-BR', 'en', 'es']) {
       assert.doesNotMatch(describe(name, {}, lang), /executar a ação|run the action|ejecutar la acción/, `${name} ${lang}`);
       assert.doesNotMatch(describeDone(name, {}, lang), /concluída\.$|completed\.$|completada\.$/, `${name} ${lang}`);
     }
   }
-  for (const name of PORTAO_IRREVERSIVEIS) assert.ok(IRREVERSIBLE_TOOLS.has(name), name);
 });
