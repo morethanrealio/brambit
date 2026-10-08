@@ -12,7 +12,7 @@ const {microsoftTools}=await import('./web/connectors-ext.mjs');
 const json=body=>({ok:true,json:async()=>body});
 const find=(tools,name)=>tools.find(t=>t.name===name);
 
-test('fontes de Gmail sobrevivem à síntese, à segunda página e à troca de conta', async () => {
+test('Gmail sources survive synthesis, the second page and the account switch', async () => {
   let account='pessoal@example.invalid';
   const calls=[];
   globalThis.fetch=async url=>{
@@ -44,7 +44,7 @@ test('fontes de Gmail sobrevivem à síntese, à segunda página e à troca de c
   const fresh=turnSearchCoverage();assert.equal(fresh.finish('Outra pessoa'),'Outra pessoa');
 });
 
-test('Outlook preserva link e declara corte do corpo; falha de acesso não é caixa vazia', async () => {
+test('Outlook preserves the link and declares the body cut-off; access failure is not an empty inbox', async () => {
   globalThis.fetch=async()=>json({id:'ms-one',subject:'Contrato sintético',webLink:'https://outlook.office.com/mail/id/synthetic',body:{contentType:'Text',content:'x'.repeat(7000)}});
   const tracked=trackEmailPagination(microsoftTools({token:async()=> 'fixture'}));
   const m=JSON.parse(await find(tracked.tools,'hotmail_read').run({id:'ms-one'}));
@@ -55,7 +55,7 @@ test('Outlook preserva link e declara corte do corpo; falha de acesso não é ca
   assert.equal(tracked.hasPartial(),true);
 });
 
-test('Google busca a janela histórica pedida e propaga páginas de agenda não lidas', async () => {
+test('Google fetches the requested historical window and propagates unread calendar pages', async () => {
   const calls=[];
   globalThis.fetch=async url=>{
     const u=new URL(url);calls.push(u);
@@ -73,7 +73,7 @@ test('Google busca a janela histórica pedida e propaga páginas de agenda não 
   assert.equal(r.eventos[0].serie_id,'series'); assert.equal(r.partial,true); assert.equal(tracked.hasPartial(),true);
 });
 
-test('conta explicitamente escolhida não cai na principal quando foi desconectada/removida', async () => {
+test('an explicitly chosen account does not fall back to the primary one when disconnected/removed', async () => {
   const source=readFileSync('web/server.mjs','utf8'), a=source.indexOf('async function googleAccountFor('), b=source.indexOf('\n}',a)+2;
   let primaryCalls=0;
   const fn=new Function('getGoogleAccount','getPrimaryGoogleAccount',source.slice(a,b)+';return googleAccountFor;')(async()=>null,async()=>{primaryCalls++;return {google_email:'wrong@example.invalid'};});
@@ -81,7 +81,7 @@ test('conta explicitamente escolhida não cai na principal quando foi desconecta
   assert.equal((await fn('synthetic')).google_email,'wrong@example.invalid');assert.equal(primaryCalls,1);
 });
 
-test('checklist consultada não vira conclusão a confirmar nem comprova outro item', () => {
+test('a checked checklist does not become a conclusion to confirm or prove another item', () => {
   const journal=createActionJournal();
   journal.toolResult({name:'consultar_listas',args:{}},JSON.stringify({ok:true,lista:{itens:[{nome:'Leite',quantidade:1,unidade:'litro',concluido:true},{nome:'Maçã',concluido:false}]}}));
   const out=journal.finish('- [x] Leite\n- [x] Maçã');

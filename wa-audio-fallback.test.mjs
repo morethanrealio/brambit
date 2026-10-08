@@ -54,17 +54,17 @@ const cobrado = () => cobrancas.reduce((s, c) => s + (c.messages || 0), 0);
 resposta = { text: 'Mandado em voz ✅', attachments: [{ type: 'audio', url: '/api/img?k=a', mime: 'audio/wav', key: 'a', fala }] };
 midia = { buffer: Buffer.from('RIFF'), contentType: 'audio/wav' };
 await turno();
-t('confirmacao sai', textos()[0] === 'Mandado em voz ✅');
-t('fala chega em texto quando o audio e recusado', textos().some((s) => s.includes(fala)));
-t('nenhum audio enviado', !enviadas.some((b) => b.type === 'audio'));
-t('cobra confirmacao + texto da fala', cobrado() === 2);
+t('confirmation goes out', textos()[0] === 'Mandado em voz ✅');
+t('speech arrives as text when audio is refused', textos().some((s) => s.includes(fala)));
+t('no audio sent', !enviadas.some((b) => b.type === 'audio'));
+t('bills confirmation + speech text', cobrado() === 2);
 
 // 2) Accepted audio (OGG): goes as audio, no duplicated text.
 midia = { buffer: Buffer.from('OggS'), contentType: 'audio/ogg' };
 resposta = { ...resposta, attachments: [{ ...resposta.attachments[0], mime: 'audio/ogg' }] };
 await turno();
-t('ogg vai como audio', enviadas.filter((b) => b.type === 'audio').length === 1);
-t('ogg nao manda a fala em texto', !textos().some((s) => s.includes(fala)));
+t('ogg goes as audio', enviadas.filter((b) => b.type === 'audio').length === 1);
+t('ogg does not send the speech as text', !textos().some((s) => s.includes(fala)));
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

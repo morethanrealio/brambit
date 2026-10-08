@@ -182,7 +182,7 @@ function fixture(t, durable = null) {
   return { thread, bot, sent, turns, reactions, receipts, executions, refs, state, propose, envelope, waText, waReaction, sendWa, sendTg, reactTg };
 }
 
-test('WhatsApp vincula recibo real e usa ID da citação, mesmo com corpo citado forjado', async (t) => {
+test('WhatsApp binds the real receipt and uses the quote ID, even with a forged quoted body', async (t) => {
   const c = fixture(t);
   await c.sendWa(c.waText('propor:routine-A'));
   await until(() => c.receipts.length === 1);
@@ -196,7 +196,7 @@ test('WhatsApp vincula recibo real e usa ID da citação, mesmo com corpo citado
   assert.deepEqual(c.executions, ['routine-A']);
 });
 
-test('WhatsApp: citação antiga e reação negativa no alvo errado preservam a proposta nova', async (t) => {
+test('WhatsApp: old quote and negative reaction on the wrong target preserve the new proposal', async (t) => {
   const c = fixture(t);
   await c.sendWa(c.waText('propor:routine-A'));
   await until(() => c.receipts.length === 1);
@@ -213,13 +213,13 @@ test('WhatsApp: citação antiga e reação negativa no alvo errado preservam a 
   assert.equal(peekPending(c.thread), current);
   assert.deepEqual(c.reactions.at(-1), { positive: false, target: { channel: 'whatsapp', messageId: oldCard.messageId } });
   const notice = c.sent.at(-1);
-  assert.equal(confirmationTargetMatches(current, notice), true, 'aviso reenviado recebe seu próprio vínculo');
+  assert.equal(confirmationTargetMatches(current, notice), true, 'resent notice gets its own binding');
   await c.sendWa(c.waReaction(notice.messageId));
   assert.deepEqual(c.executions, ['routine-B']);
   assert.equal(peekPending(c.thread), undefined);
 });
 
-test('WhatsApp: reação sem ID não executa nem cancela por ausência de referência', async (t) => {
+test('WhatsApp: reaction without an ID neither executes nor cancels, for lack of a reference', async (t) => {
   const c = fixture(t);
   await c.sendWa(c.waText('propor:routine-A'));
   await until(() => c.receipts.length === 1);
@@ -233,7 +233,7 @@ test('WhatsApp: reação sem ID não executa nem cancela por ausência de refer�
   assert.deepEqual(c.executions, []);
 });
 
-test('WhatsApp: citação sem ID não cai na confirmação textual sem referência', async (t) => {
+test('WhatsApp: quote without an ID does not fall back to text confirmation without a reference', async (t) => {
   const c = fixture(t);
   await c.sendWa(c.waText('propor:routine-A'));
   await until(() => c.receipts.length === 1);
@@ -245,7 +245,7 @@ test('WhatsApp: citação sem ID não cai na confirmação textual sem referênc
   assert.deepEqual(c.executions, []);
 });
 
-test('WhatsApp: lote com duas citações distintas ou citação mais texto simples não escolhe alvo', async (t) => {
+test('WhatsApp: batch with two distinct quotes, or a quote plus plain text, does not pick a target', async (t) => {
   const c = fixture(t);
   await c.sendWa(c.waText('propor:routine-A'));
   await until(() => c.receipts.length === 1);
@@ -260,7 +260,7 @@ test('WhatsApp: lote com duas citações distintas ou citação mais texto simpl
   assert.ok(peekPending(c.thread));
 });
 
-test('WhatsApp: citação durante turno não vira interjeição e mantém alvo no próximo turno', async (t) => {
+test('WhatsApp: quote during a turn does not become an interjection and keeps the target for the next turn', async (t) => {
   const c = fixture(t);
   const entered = deferred(), release = deferred();
   let polled = 'not-polled';
@@ -281,7 +281,7 @@ test('WhatsApp: citação durante turno não vira interjeição e mantém alvo n
   assert.equal(c.turns[1].text, 'pode');
 });
 
-test('WhatsApp: recibo que chega atrasado não vincula o cartão antigo à nova proposta', async (t) => {
+test('WhatsApp: a receipt that arrives late does not bind the old card to the new proposal', async (t) => {
   const c = fixture(t);
   const entered = deferred(), release = deferred();
   c.state.beforeSend = async () => { entered.resolve(); await release.promise; };
@@ -295,7 +295,7 @@ test('WhatsApp: recibo que chega atrasado não vincula o cartão antigo à nova 
   assert.deepEqual(current.messageRefs, []);
 });
 
-test('Telegram: citação usa ID de transporte e recibos de todas as partes do cartão', async (t) => {
+test('Telegram: quote uses the transport ID and receipts for every part of the card', async (t) => {
   const c = fixture(t);
   const pend = await c.propose('routine-A', 'Descrição da ação. '.repeat(260) + 'Posso confirmar?');
   c.state.intercept = async (text) => text === 'cartão' ? c.envelope(pend.confirmationText) : null;
@@ -309,7 +309,7 @@ test('Telegram: citação usa ID de transporte e recibos de todas as partes do c
   assert.deepEqual(c.executions, ['routine-A']);
 });
 
-test('Telegram: reação no alvo errado não cancela; reação no aviso atual executa uma vez', async (t) => {
+test('Telegram: reaction on the wrong target does not cancel; reaction on the current notice executes once', async (t) => {
   const c = fixture(t);
   await c.sendTg('propor:routine-A');
   const pend = peekPending(c.thread);
@@ -325,7 +325,7 @@ test('Telegram: reação no alvo errado não cancela; reação no aviso atual ex
   assert.deepEqual(c.executions, ['routine-A']);
 });
 
-test('Telegram: ID igual em chat reconectado não autoriza confirmação do chat anterior', async (t) => {
+test('Telegram: same ID in a reconnected chat does not authorize confirmation from the previous chat', async (t) => {
   const c = fixture(t);
   await c.sendTg('propor:routine-A');
   const oldCard = c.sent[0], pend = peekPending(c.thread);
@@ -336,7 +336,7 @@ test('Telegram: ID igual em chat reconectado não autoriza confirmação do chat
   assert.deepEqual(c.turns.at(-1).target, { channel: 'telegram', messageId: `chat-reconnected:${oldCard.rawId}` });
 });
 
-test('Telegram: citação e reação sem ID são referências explícitas inválidas', async (t) => {
+test('Telegram: quote and reaction without an ID are invalid explicit references', async (t) => {
   const c = fixture(t);
   await c.sendTg('propor:routine-A');
   const pend = peekPending(c.thread);
@@ -348,7 +348,7 @@ test('Telegram: citação e reação sem ID são referências explícitas invál
   assert.deepEqual(c.executions, []);
 });
 
-test('resposta comum não recebe autorização só porque existe uma proposta pendente', async (t) => {
+test('a plain reply is not authorized just because a proposal is pending', async (t) => {
   const c = fixture(t);
   const pend = await c.propose();
   const unrelated = withConfirmationReceipt(c.thread, { text: 'Ainda estou trabalhando.' });
@@ -356,7 +356,7 @@ test('resposta comum não recebe autorização só porque existe uma proposta pe
   assert.deepEqual(pend.messageRefs, []);
 });
 
-test('recibo sem ID não cria referência literal undefined ou null', async (t) => {
+test('a receipt without an ID does not create a literal undefined or null reference', async (t) => {
   const c = fixture(t);
   const pend = await c.propose();
   const result = withConfirmationReceipt(c.thread, { text: pend.confirmationText });
@@ -364,7 +364,7 @@ test('recibo sem ID não cria referência literal undefined ou null', async (t) 
   assert.deepEqual(pend.messageRefs, []);
 });
 
-test('reação negativa espera a trava e não cancela a proposta que substituiu o alvo', async (t) => {
+test('negative reaction waits for the lock and does not cancel the proposal that replaced the target', async (t) => {
   const c = fixture(t);
   const original = await c.propose('routine-A');
   const target = { channel: 'whatsapp', messageId: 'original-card' };
@@ -383,7 +383,7 @@ test('reação negativa espera a trava e não cancela a proposta que substituiu 
   });
   const reaction = handler({}, 'offline-user', false, target);
   await entered.promise;
-  assert.equal(peekPending(c.thread), original, 'não consome a proposta antes de entrar na trava');
+  assert.equal(peekPending(c.thread), original, 'does not consume the proposal before entering the lock');
   takePending(c.thread);
   const replacement = await c.propose('routine-B');
   release.resolve();
@@ -396,7 +396,7 @@ test('reação negativa espera a trava e não cancela a proposta que substituiu 
   assert.equal(confirmationTargetMatches(replacement, { channel: 'whatsapp', messageId: 'replacement-notice' }), true);
 });
 
-test('reação negativa que espera a trava fica inerte se o alvo já foi consumido', async (t) => {
+test('negative reaction waiting for the lock stays inert if the target was already consumed', async (t) => {
   const c = fixture(t);
   const pending = await c.propose();
   const target = { channel: 'telegram', messageId: '123:42' };
@@ -405,8 +405,8 @@ test('reação negativa que espera a trava fica inerte se o alvo já foi consumi
   const handler = createReactionConfirmationHandler({
     channel: 'telegram', getThread: async () => ({ id: c.thread }),
     withThreadLock: async (_key, operation) => { entered.resolve(); await release.promise; return operation(); },
-    cancelDurable: async () => assert.fail('não deve cancelar outra aprovação'),
-    runConversation: async () => assert.fail('reação negativa não chama o modelo'),
+    cancelDurable: async () => assert.fail('must not cancel another approval'),
+    runConversation: async () => assert.fail('negative reaction does not call the model'),
   });
   const reaction = handler({}, 'offline-user', false, target);
   await entered.promise;
@@ -434,7 +434,7 @@ async function durableReactionFixture(t) {
     },
   });
   const durable = await approvals.propose({ name: 'gerenciar_tarefa_de_app', label: 'Alterar app de teste', args: { action: 'test' }, binding: { version: 1 } });
-  restorePending(thread.id, { ...durable, durableId: durable.id, run: async () => assert.fail('cancelamento não executa a proposta') });
+  restorePending(thread.id, { ...durable, durableId: durable.id, run: async () => assert.fail('cancellation does not execute the proposal') });
   const pending = peekPending(thread.id);
   const target = { channel: 'telegram', messageId: '123:42' };
   bindPendingMessage(thread.id, pending.id, target);
@@ -449,28 +449,28 @@ async function durableReactionFixture(t) {
       assert.equal(insideLock, true);
       assert.equal(actualThread, thread);
       assert.equal(durableId, durable.id);
-      assert.equal(peekPending(thread.id), pending, 'a proposta em memória aguarda o cancelamento persistido');
+      assert.equal(peekPending(thread.id), pending, 'the in-memory proposal waits for the persisted cancellation');
       cancellations++;
       await approvals.cancel();
     },
-    runConversation: async () => assert.fail('cancelamento não precisa de LLM'),
+    runConversation: async () => assert.fail('cancellation does not need an LLM'),
   });
   t.after(() => takePending(thread.id));
   return { thread, pending, target, handler, approvals, failSaving: () => { failSave = true; }, cancelled: () => cancellations };
 }
 
-test('reação negativa cancela aprovação durável antes de consumir e não ressuscita no próximo turno', async (t) => {
+test('negative reaction cancels a durable approval before consuming it, and does not resurrect it next turn', async (t) => {
   const c = await durableReactionFixture(t);
   const reply = await c.handler({}, 'offline-user', false, c.target);
   assert.match(reply.text, /[Cc]ancelei/);
   assert.equal(c.cancelled(), 1);
   assert.equal(peekPending(c.thread.id), undefined);
-  assert.equal(await c.approvals.peek(), null, 'restauração não encontra a proposta cancelada');
+  assert.equal(await c.approvals.peek(), null, 'restoration does not find the canceled proposal');
   assert.equal(await c.handler({}, 'offline-user', false, c.target), null, 'replay permanece inerte');
   assert.equal(c.cancelled(), 1);
 });
 
-test('falha ao cancelar aprovação durável preserva a proposta e não confirma cancelamento', async (t) => {
+test('failing to cancel a durable approval preserves the proposal and does not confirm the cancellation', async (t) => {
   const c = await durableReactionFixture(t);
   c.failSaving();
   await assert.rejects(c.handler({}, 'offline-user', false, c.target), /persistência indisponível/);
@@ -479,7 +479,7 @@ test('falha ao cancelar aprovação durável preserva a proposta e não confirma
   assert.equal(confirmationTargetMatches(c.pending, c.target), true);
 });
 
-test('reação negativa em alvo durável errado não cancela nenhuma das duas representações', async (t) => {
+test('negative reaction on the wrong durable target cancels neither representation', async (t) => {
   const c = await durableReactionFixture(t);
   const reply = await c.handler({}, 'offline-user', false, { channel: 'telegram', messageId: '123:41' });
   assert.ok(reply.text.includes(c.pending.confirmationText));
@@ -491,14 +491,14 @@ test('reação negativa em alvo durável errado não cancela nenhuma das duas re
 // Runs real blocks of the HTTP boundary without importing the entrypoint, opening pools,
 // starting workers, or reproducing the server implementation in the test.
 const serverSource = await readFile(new URL('./web/server.mjs', import.meta.url), 'utf8');
-test('pipeline real do servidor mantém cartão de app após journals e vincula seu recibo', async (t) => {
+test('real server pipeline keeps the app card after journals and binds its receipt', async (t) => {
   const thread = `app-card-pipeline-${++caseId}`;
   t.after(() => takePending(thread));
   const journal = createAppBuildJournal({});
-  const proposal = await gateTool({ name: 'gerenciar_tarefa_de_app', run: async () => assert.fail('a proposta não executa') }, thread).run({ acao: 'revisar', nome_do_sistema: 'app-teste' });
+  const proposal = await gateTool({ name: 'gerenciar_tarefa_de_app', run: async () => assert.fail('the proposal does not execute') }, thread).run({ acao: 'revisar', nome_do_sistema: 'app-teste' });
   journal.toolResult({ name: 'gerenciar_tarefa_de_app' }, proposal);
   const card = peekPending(thread).confirmationText;
-  assert.notEqual(journal.finish(card), card, 'o journal realmente produziria outra redação');
+  assert.notEqual(journal.finish(card), card, 'the journal would really produce different wording');
   const start = serverSource.indexOf('  const deterministicConfirmation = confirmationSession');
   const end = serverSource.indexOf('  if (selo)', start);
   assert.ok(start >= 0 && end > start);

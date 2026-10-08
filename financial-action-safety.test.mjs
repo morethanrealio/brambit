@@ -45,24 +45,24 @@ const withFetch = async (answers, fn) => {
 const tools = () => asaasTools({ secret: async () => '$aact_hmlg_fixture' });
 const named = (list, name) => {
   const tool = list.find((x) => x.name === name);
-  assert.ok(tool, `tool ${name} ausente`);
+  assert.ok(tool, `tool ${name} missing`);
   return tool;
 };
 
 // The wiring and the gate need to agree. If someone adds an Asaas action and
 // forgets one of the two places, this incident comes back.
 for (const name of ['asaas_receber_pix', 'asaas_pagar_conta', 'asaas_cancelar_pagamento_conta', 'asaas_transferir_pix', 'asaas_enviar_comprovante_email']) {
-  ok(GATED_TOOLS.has(name), `${name} precisa estar no gate`);
-  ok(IRREVERSIBLE_TOOLS.has(name), `${name} exige texto, reação não basta`);
+  ok(GATED_TOOLS.has(name), `${name} needs to be in the gate`);
+  ok(IRREVERSIBLE_TOOLS.has(name), `${name} requires text, a reaction is not enough`);
 }
 const server = readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
-ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_receber_pix/.test(server), 'receber Pix precisa ser registrado pelo caminho gated');
-ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_cancelar_pagamento_conta/.test(server), 'cancelamento precisa ser registrado pelo caminho gated');
+ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_receber_pix/.test(server), 'receiving Pix must be registered through the gated path');
+ok(/VAULT_WRITE_TOOLS[\s\S]*asaas_cancelar_pagamento_conta/.test(server), 'cancellation must be registered through the gated path');
 // The deterministic card always goes in full at the end of the response; the model's text
 // stays above it, but it's the card that ties down the approval (2026-09-29).
-ok(/peekPending\(thread\.id\)\?\.confirmationText[\s\S]*if \(deterministicConfirmation\) text = \[[^\n]*, deterministicConfirmation\]/.test(server), 'confirmação financeira determinística fecha a resposta');
-ok(/EVERY financial action[\s\S]*asaas_receber_pix[\s\S]*confirmation in TEXT/.test(server), 'prompt exige confirmação de toda ação financeira');
-ok(!/asaas_receber_pix:[^\n]*não precisa de confirmação/.test(server), 'prompt não contém exceção antiga para receber Pix');
+ok(/peekPending\(thread\.id\)\?\.confirmationText[\s\S]*if \(deterministicConfirmation\) text = \[[^\n]*, deterministicConfirmation\]/.test(server), 'deterministic financial confirmation closes the response');
+ok(/EVERY financial action[\s\S]*asaas_receber_pix[\s\S]*confirmation in TEXT/.test(server), 'prompt requires confirmation for every financial action');
+ok(!/asaas_receber_pix:[^\n]*não precisa de confirmação/.test(server), 'prompt does not contain the old exception for receiving Pix');
 
 // Defense in depth: even if someone registers the raw tool by mistake,
 // run() cannot do a POST. Only the prepared and confirmed closure can mutate.
@@ -71,10 +71,10 @@ await withFetch([], async (calls) => {
     const out = JSON.parse(await named(tools(), name).run({
       valor: 10, chave_pix: 'fixture', tipo_chave: 'EVP', linha_digitavel: '123', id: 'bill-fixture',
     }));
-    eq(out.ok, false, `${name} direto deve recusar`);
-    ok(/confirmação explícita/i.test(out.error), `${name} explica a confirmação`);
+    eq(out.ok, false, `${name} called directly must refuse`);
+    ok(/confirmação explícita/i.test(out.error), `${name} explains the confirmation`);
   }
-  eq(calls.length, 0, 'nenhuma rede na chamada direta');
+  eq(calls.length, 0, 'no network call on the direct call');
 });
 
 // The receipt sent by email is assembled with data re-read from Asaas and only
@@ -92,16 +92,16 @@ await withFetch([
   const gated = gateTool(named(receiptTools, 'asaas_enviar_comprovante_email'), 'receipt-email-confirm');
   setOwnerText('receipt-email-confirm', 'Manda o comprovante para pessoa@example.com');
   const proposal = await gated.run({ tipo: 'pix', id: 'pix-receipt-1', para: 'pessoa@example.com' });
-  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'e-mail do comprovante vira proposta');
+  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'the receipt email becomes a proposal');
   const pending = takePending('receipt-email-confirm');
-  ok(pending.label.includes('pessoa@example.com') && pending.label.includes('R$ 73,40'), 'cartão mostra destinatário e valor verificados');
-  eq(sent.length, 0, 'nenhum e-mail antes da confirmação');
+  ok(pending.label.includes('pessoa@example.com') && pending.label.includes('R$ 73,40'), 'card shows verified recipient and amount');
+  eq(sent.length, 0, 'no email before confirmation');
   const result = JSON.parse(await pending.run());
-  eq(result.ok, true, 'provedor confirmou o envio');
-  eq(sent.length, 1, 'um único e-mail enviado');
-  ok(sent[0].subject.includes('R$ 73,40'), 'assunto usa valor da Asaas');
-  ok(sent[0].body.includes('https://www.asaas.com/comprovantes/fixture-1'), 'corpo usa link oficial relido');
-  eq(calls.map((x) => x.method), ['GET', 'GET'], 'proposta e execução só fazem consultas');
+  eq(result.ok, true, 'provider confirmed the send');
+  eq(sent.length, 1, 'a single email sent');
+  ok(sent[0].subject.includes('R$ 73,40'), 'subject uses the Asaas amount');
+  ok(sent[0].body.includes('https://www.asaas.com/comprovantes/fixture-1'), 'body uses the re-read official link');
+  eq(calls.map((x) => x.method), ['GET', 'GET'], 'proposal and execution only make queries');
 });
 
 // If the model swaps a letter in the address, the card flags the divergence.
@@ -117,7 +117,7 @@ await withFetch([
   const gated = gateTool(named(receiptTools, 'asaas_enviar_comprovante_email'), 'receipt-email-typo');
   await gated.run({ tipo: 'pix', id: 'pix-receipt-typo', para: 'pessoa@exampel.com' });
   const pending = takePending('receipt-email-typo');
-  ok(/CONFIRA O ENDEREÇO|CHECK THE ADDRESS|REVISA LA DIRECCIÓN/i.test(pending.label), 'cartão avisa endereço divergente');
+  ok(/CONFIRA O ENDEREÇO|CHECK THE ADDRESS|REVISA LA DIRECCIÓN/i.test(pending.label), 'card warns about the diverging address');
 });
 
 // Pending status cannot produce an email proposal, let alone a send.
@@ -132,9 +132,9 @@ await withFetch([
   });
   const gated = gateTool(named(receiptTools, 'asaas_enviar_comprovante_email'), 'receipt-email-pending');
   const out = await gated.run({ tipo: 'pix', id: 'pix-pending-1', para: 'pessoa@example.com' });
-  ok(out.startsWith('NÃO registrei o pedido:'), 'operação pendente não registra envio');
-  eq(takePending('receipt-email-pending'), undefined, 'não deixa confirmação enganosa pendente');
-  eq(sent, 0, 'não envia e-mail de operação pendente');
+  ok(out.startsWith('NÃO registrei o pedido:'), 'pending operation does not register a send');
+  eq(takePending('receipt-email-pending'), undefined, 'does not leave a misleading confirmation pending');
+  eq(sent, 0, 'does not send email for a pending operation');
 });
 
 // A question wrongly interpreted as an action: the model may call the tool,
@@ -147,16 +147,16 @@ await withFetch([
 ], async (calls) => {
   const gated = gateTool(named(tools(), 'asaas_receber_pix'), 'financial-key-fixture', { mode: 'livre' });
   const proposal = await gated.run({});
-  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'chamada vira proposta');
-  eq(calls.map((x) => x.method), ['GET'], 'antes da confirmação só consulta');
+  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'call becomes a proposal');
+  eq(calls.map((x) => x.method), ['GET'], 'only queries before confirmation');
   const pending = takePending('financial-key-fixture');
-  ok(pending.label.includes('criar uma chave Pix aleatória'), 'mostra o efeito real');
-  ok(pending.label.includes('nome completo') && pending.label.includes('CPF mascarado'), 'mostra a exposição obrigatória');
+  ok(pending.label.includes('criar uma chave Pix aleatória'), 'shows the real effect');
+  ok(pending.label.includes('nome completo') && pending.label.includes('CPF mascarado'), 'shows the mandatory exposure');
   const result = await pending.run();
-  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'POST só depois da confirmação');
+  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'POST only after confirmation');
   const rendered = renderConfirmed(pending, result);
-  ok(rendered.includes('Chave Pix aleatória criada'), 'resultado diz exatamente o que ocorreu');
-  ok(rendered.includes('pix-payload'), 'resultado entrega o copia-e-cola');
+  ok(rendered.includes('Chave Pix aleatória criada'), 'result says exactly what happened');
+  ok(rendered.includes('pix-payload'), 'result delivers the copy-paste code');
 });
 
 // If the state changes between proposal and confirmation, nothing is executed based on
@@ -169,9 +169,9 @@ await withFetch([
   await gated.run({});
   const pending = takePending('financial-state-change');
   const result = JSON.parse(await pending.run());
-  eq(result.ok, false, 'mudança de estado falha fechado');
-  ok(/mudou depois da proposta/i.test(result.error), 'explica que a proposta ficou velha');
-  eq(calls.map((x) => x.method), ['GET', 'GET'], 'não cria chave depois da mudança');
+  eq(result.ok, false, 'state change fails closed');
+  ok(/mudou depois da proposta/i.test(result.error), 'explains that the proposal went stale');
+  eq(calls.map((x) => x.method), ['GET', 'GET'], 'does not create a key after the change');
 });
 
 // If there are two accounts, the credential and the name of the chosen account stay pinned to the
@@ -191,11 +191,11 @@ await withFetch([
   const gated = gateTool(named(boundTools, 'asaas_receber_pix'), 'financial-account-binding');
   await gated.run({});
   const pending = takePending('financial-account-binding');
-  ok(pending.label.includes('Conta que será usada: Conta Brambs'), 'confirmação identifica a conta selecionada');
+  ok(pending.label.includes('Conta que será usada: Conta Brambs'), 'confirmation identifies the selected account');
   const result = JSON.parse(await pending.run());
-  eq(result.conta_usada, 'Conta Brambs', 'resultado preserva a conta confirmada');
-  eq(accountReads, 1, 'conta é resolvida uma vez na proposta');
-  ok(calls.every((x) => x.headers?.access_token === '$aact_hmlg_bound'), 'todas as chamadas usam a credencial vinculada');
+  eq(result.conta_usada, 'Conta Brambs', 'result preserves the confirmed account');
+  eq(accountReads, 1, 'the account is resolved once at the proposal');
+  ok(calls.every((x) => x.headers?.access_token === '$aact_hmlg_bound'), 'all calls use the bound credential');
 });
 
 // The payment stays bound to the amount, payee, and due date read from
@@ -207,12 +207,12 @@ await withFetch([
   const gated = gateTool(named(tools(), 'asaas_pagar_conta'), 'financial-bill-change');
   await gated.run({ linha_digitavel: '123.456' });
   const pending = takePending('financial-bill-change');
-  ok(/R\$ 89,90/.test(pending.label) && /Empresa A/.test(pending.label), 'confirmação mostra valor e beneficiário reais');
+  ok(/R\$ 89,90/.test(pending.label) && /Empresa A/.test(pending.label), 'confirmation shows real amount and payee');
   const result = JSON.parse(await pending.run());
-  eq(result.ok, false, 'boleto alterado falha fechado');
-  ok(/mudou depois da confirmação/i.test(result.error), 'boleto alterado exige nova conferência');
-  eq(calls.map((x) => x.method), ['POST', 'POST'], 'mudança impede o POST de pagamento');
-  ok(calls.every((x) => x.url.includes('/v3/bill/simulate')), 'só a simulação read-only foi chamada');
+  eq(result.ok, false, 'changed bill fails closed');
+  ok(/mudou depois da confirmação/i.test(result.error), 'changed bill requires a new check');
+  eq(calls.map((x) => x.method), ['POST', 'POST'], 'change blocks the payment POST');
+  ok(calls.every((x) => x.url.includes('/v3/bill/simulate')), 'only the read-only simulation was called');
 });
 
 // A simple payment request is immediate. Even if the model copies the due date
@@ -228,14 +228,14 @@ await withFetch([
   const gated = gateTool(named(tools(), 'asaas_pagar_conta'), thread);
   await gated.run({ linha_digitavel: '123456', agendar_para: '2026-09-20' });
   const pending = takePending(thread);
-  eq(pending.args.agendar_para, undefined, 'data inferida pelo modelo é removida');
-  ok(/primeira data aceita pela Asaas/i.test(pending.confirmationText), 'confirmação mostra a primeira data aceita pelo provedor');
-  ok(!/Agendada para/.test(pending.confirmationText), 'confirmação imediata não contém agendamento');
+  eq(pending.args.agendar_para, undefined, 'date inferred by the model is removed');
+  ok(/primeira data aceita pela Asaas/i.test(pending.confirmationText), 'confirmation shows the first date accepted by the provider');
+  ok(!/Agendada para/.test(pending.confirmationText), 'immediate confirmation does not contain scheduling');
   const result = JSON.parse(await pending.run());
   const create = calls.find((x) => x.url.endsWith('/v3/bill') && x.method === 'POST');
   const body = JSON.parse(create.body);
-  eq(body.scheduleDate, '2026-09-18', 'POST imediato fixa a primeira data aceita na simulação');
-  eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento para 18/09/2026. Ele ainda aguarda processamento bancário; avisarei aqui quando concluir.', 'PENDING na data confirmada informa quando será processado');
+  eq(body.scheduleDate, '2026-09-18', 'immediate POST fixes the first date accepted in the simulation');
+  eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento para 18/09/2026. Ele ainda aguarda processamento bancário; avisarei aqui quando concluir.', 'PENDING on the confirmed date says when it will be processed');
 });
 
 // Without the official minimum date, the platform fails closed: it doesn't let
@@ -247,10 +247,10 @@ await withFetch([
   setOwnerText(thread, 'Pague este boleto agora.', 'Pague este boleto agora.');
   const gated = gateTool(named(tools(), 'asaas_pagar_conta'), thread);
   const result = await gated.run({ linha_digitavel: '123456' });
-  ok(result.startsWith('NÃO registrei o pedido:'), 'ausência da data mínima falha antes da confirmação');
-  ok(/primeira data.*não propus o pagamento/i.test(result), 'erro explica que nenhum pagamento foi proposto');
-  eq(takePending(thread), undefined, 'não deixa uma confirmação impossível pendente');
-  eq(calls.filter((x) => x.url.endsWith('/v3/bill') && x.method === 'POST').length, 0, 'não envia o pagamento sem a data oficial');
+  ok(result.startsWith('NÃO registrei o pedido:'), 'missing minimum date fails before confirmation');
+  ok(/primeira data.*não propus o pagamento/i.test(result), 'error explains that no payment was proposed');
+  eq(takePending(thread), undefined, 'does not leave an impossible confirmation pending');
+  eq(calls.filter((x) => x.url.endsWith('/v3/bill') && x.method === 'POST').length, 0, 'does not send the payment without the official date');
 });
 
 // Scheduling only survives when the current request states it literally. If it falls
@@ -272,14 +272,14 @@ await withFetch([
   const gated = gateTool(named(scheduleTools, 'asaas_pagar_conta'), thread);
   await gated.run({ linha_digitavel: '123456', agendar_para: '2026-09-20' });
   const pending = takePending(thread);
-  eq(pending.args.agendar_para, '2026-09-20', 'data explícita fica vinculada');
-  ok(/Agendada para 20\/09\/2026/.test(pending.confirmationText), 'confirmação mostra a data pedida');
-  ok(/próximo dia útil, 21\/09\/2026/.test(pending.confirmationText), 'fim de semana mostra o processamento bancário');
+  eq(pending.args.agendar_para, '2026-09-20', 'explicit date stays bound');
+  ok(/Agendada para 20\/09\/2026/.test(pending.confirmationText), 'confirmation shows the requested date');
+  ok(/próximo dia útil, 21\/09\/2026/.test(pending.confirmationText), 'weekend shows the bank processing');
   const result = JSON.parse(await pending.run());
-  eq(result.agendado, true, 'agendamento é confirmado como agenda local');
-  eq(schedules[0].executeOn, '2026-09-20', 'agenda local preserva a data explícita');
-  eq(calls.filter((x) => x.url.endsWith('/v3/bill') && x.method === 'POST').length, 0, 'agendamento futuro não cria pagamento na Asaas');
-  eq(calls.filter((x) => x.url.includes('/v3/bill/simulate')).length, 2, 'boleto é conferido na proposta e na confirmação');
+  eq(result.agendado, true, 'scheduling is confirmed as a local schedule');
+  eq(schedules[0].executeOn, '2026-09-20', 'local schedule preserves the explicit date');
+  eq(calls.filter((x) => x.url.endsWith('/v3/bill') && x.method === 'POST').length, 0, 'future schedule does not create a payment at Asaas');
+  eq(calls.filter((x) => x.url.includes('/v3/bill/simulate')).length, 2, 'bill is checked at proposal and at confirmation');
 });
 
 // "On the due date" uses the date verified in the simulation, without asking the user to
@@ -291,12 +291,12 @@ await withFetch([
   setOwnerText(thread, 'Paga no vencimento.', 'Paga no vencimento.');
   const gated = gateTool(named(tools(), 'asaas_pagar_conta'), thread);
   const out = await gated.run({ linha_digitavel: '123456' });
-  ok(out.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'vencimento verificado gera proposta');
+  ok(out.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'verified due date generates a proposal');
   const pending = takePending(thread);
-  eq(pending.args.agendar_para, '2026-09-20', 'data vem do vencimento devolvido pela Asaas');
-  eq(pending.args.__agendar_no_vencimento, undefined, 'marcador interno não chega à pendência');
-  ok(/próximo dia útil, 21\/09\/2026/.test(pending.confirmationText), 'regra de dia útil também vale no vencimento');
-  eq(calls.length, 1, 'uma única simulação oficial resolve o vencimento');
+  eq(pending.args.agendar_para, '2026-09-20', 'date comes from the due date returned by Asaas');
+  eq(pending.args.__agendar_no_vencimento, undefined, 'internal marker does not reach the pending item');
+  ok(/próximo dia útil, 21\/09\/2026/.test(pending.confirmationText), 'the business-day rule also applies on the due date');
+  eq(calls.length, 1, 'a single official simulation resolves the due date');
 });
 
 // A generic scheduling request without a date or reference to the due date requires
@@ -306,9 +306,9 @@ await withFetch([], async (calls) => {
   setOwnerText(thread, 'Agende esse pagamento.', 'Agende esse pagamento.');
   const gated = gateTool(named(tools(), 'asaas_pagar_conta'), thread);
   const out = await gated.run({ linha_digitavel: '123456' });
-  ok(out.startsWith('NÃO registrei o pedido:'), 'agendamento genérico sem data pede esclarecimento');
-  eq(takePending(thread), undefined, 'não cria confirmação com data inventada');
-  eq(calls.length, 0, 'não consulta o boleto antes de resolver a data');
+  ok(out.startsWith('NÃO registrei o pedido:'), 'generic scheduling without a date asks for clarification');
+  eq(takePending(thread), undefined, 'does not create a confirmation with an invented date');
+  eq(calls.length, 0, 'does not query the bill before resolving the date');
 });
 
 // A schedule that is still local only is cancelled without calling Asaas.
@@ -328,11 +328,11 @@ await withFetch([], async (calls) => {
   const gated = gateTool(named(localTools, 'asaas_cancelar_pagamento_conta'), 'financial-local-cancel');
   await gated.run({ id: 'schedule-local-1' });
   const pending = takePending('financial-local-cancel');
-  ok(/não exige aprovação externa/.test(pending.label), 'cancelamento local explica a jornada sem Asaas');
+  ok(/não exige aprovação externa/.test(pending.label), 'local cancellation explains the flow without Asaas');
   const result = JSON.parse(await pending.run());
-  eq(result.cancelado, true, 'cancelamento local conclui na conversa');
-  eq(cancelled, 1, 'cancelamento local acontece uma vez');
-  eq(calls.length, 0, 'cancelamento local não chama a Asaas');
+  eq(result.cancelado, true, 'local cancellation completes in the conversation');
+  eq(cancelled, 1, 'local cancellation happens once');
+  eq(calls.length, 0, 'local cancellation does not call Asaas');
 });
 
 // Cancellation is another confirmed action: two reads bind the state, and the
@@ -350,14 +350,14 @@ await withFetch([
   const gated = gateTool(named(cancelTools, 'asaas_cancelar_pagamento_conta'), 'financial-bill-cancel');
   await gated.run({ id: 'bill-cancel-1' });
   const pending = takePending('financial-bill-cancel');
-  ok(/R\$ 108,45/.test(pending.confirmationText) && /21\/09\/2026/.test(pending.confirmationText), 'cancelamento mostra valor e data reais');
+  ok(/R\$ 108,45/.test(pending.confirmationText) && /21\/09\/2026/.test(pending.confirmationText), 'cancellation shows real amount and date');
   const result = JSON.parse(await pending.run());
-  eq(result.cancelado, true, 'só CANCELLED é apresentado como cancelado');
-  eq(saved.at(-1).comprovanteEntregue, true, 'conclusão inline deduplica o webhook');
-  eq(calls.filter((x) => x.method === 'POST' && x.url.endsWith('/v3/bill/bill-cancel-1/cancel')).length, 1, 'cancelamento faz um único POST');
+  eq(result.cancelado, true, 'only CANCELLED is shown as cancelled');
+  eq(saved.at(-1).comprovanteEntregue, true, 'inline conclusion deduplicates the webhook');
+  eq(calls.filter((x) => x.method === 'POST' && x.url.endsWith('/v3/bill/bill-cancel-1/cancel')).length, 1, 'cancellation makes a single POST');
   const again = JSON.parse(await pending.run());
-  eq(again.ok, false, 'confirmação consumida não repete cancelamento');
-  eq(calls.length, 3, 'reuso não chama a Asaas novamente');
+  eq(again.ok, false, 'a consumed confirmation does not repeat the cancellation');
+  eq(calls.length, 3, 'reuse does not call Asaas again');
 });
 
 // A state/canBeCancelled change between proposal and confirmation fails closed.
@@ -368,8 +368,8 @@ await withFetch([
   const gated = gateTool(named(tools(), 'asaas_cancelar_pagamento_conta'), 'financial-bill-cancel-stale');
   await gated.run({ id: 'bill-cancel-stale' });
   const result = JSON.parse(await takePending('financial-bill-cancel-stale').run());
-  eq(result.ok, false, 'estado alterado invalida a confirmação');
-  eq(calls.filter((x) => x.method === 'POST').length, 0, 'estado alterado não envia cancelamento');
+  eq(result.ok, false, 'changed state invalidates the confirmation');
+  eq(calls.filter((x) => x.method === 'POST').length, 0, 'changed state does not send a cancellation');
 });
 
 // If the API accepts the cancellation but still returns PENDING, the response is
@@ -384,7 +384,7 @@ await withFetch([
   const timers = [];
   const originalSetTimeout = globalThis.setTimeout;
   globalThis.setTimeout = (fn, ms) => {
-    eq(ms, 60_000, 'reconciliação do cancelamento roda uma vez aos 60 segundos');
+    eq(ms, 60_000, 'cancellation reconciliation runs once at 60 seconds');
     timers.push(Promise.resolve().then(fn));
     return { unref() {} };
   };
@@ -399,16 +399,16 @@ await withFetch([
     await gated.run({ id: 'bill-cancel-pending' });
     const pending = takePending('financial-bill-cancel-pending');
     const result = JSON.parse(await pending.run());
-    eq(result.pending, true, 'cancelamento ainda não confirmado fica pendente');
-    ok(/cancelamento foi solicitado/.test(result.aviso), 'resposta não afirma cancelamento antes de CANCELLED');
+    eq(result.pending, true, 'cancellation not yet confirmed stays pending');
+    ok(/cancelamento foi solicitado/.test(result.aviso), 'response does not claim cancellation before CANCELLED');
     await Promise.all(timers);
   } finally {
     globalThis.setTimeout = originalSetTimeout;
   }
-  eq(calls.filter((x) => x.method === 'POST' && x.url.endsWith('/cancel')).length, 1, 'cancelamento pendente não repete o POST');
-  eq(calls.filter((x) => x.method === 'GET' && x.url.endsWith('/v3/bill/bill-cancel-pending')).length, 3, 'duas validações e uma única reconciliação consultam o id');
-  eq(saved.at(-1).status, 'CANCELLED', 'reconciliação persiste a confirmação tardia');
-  eq(saved.at(-1).comprovanteEntregue, false, 'confirmação tardia fica para a outbox avisar');
+  eq(calls.filter((x) => x.method === 'POST' && x.url.endsWith('/cancel')).length, 1, 'pending cancellation does not repeat the POST');
+  eq(calls.filter((x) => x.method === 'GET' && x.url.endsWith('/v3/bill/bill-cancel-pending')).length, 3, 'two validations and a single reconciliation query the id');
+  eq(saved.at(-1).status, 'CANCELLED', 'reconciliation persists the late confirmation');
+  eq(saved.at(-1).comprovanteEntregue, false, 'late confirmation is left for the outbox to notify');
 });
 
 // A payment accepted as PENDING follows the same asynchronous contract as Pix. If
@@ -426,8 +426,8 @@ await withFetch([
     registrarOperacao: async (op) => { saved.push(op); },
     aguardarOperacao: async (id, timeoutMs) => {
       waits++;
-      eq(id, 'bill-async-paid', 'espera do pagamento usa o id retornado pelo POST');
-      eq(timeoutMs, 10_000, 'pagamento também aguarda no máximo dez segundos');
+      eq(id, 'bill-async-paid', 'payment wait uses the id returned by the POST');
+      eq(timeoutMs, 10_000, 'payment also waits at most ten seconds');
       return {
         provider_operation_id: id,
         status: 'PAID',
@@ -440,15 +440,15 @@ await withFetch([
   await gated.run({ linha_digitavel: '123456', valor: 120 });
   const pending = takePending('financial-bill-async-paid');
   const result = JSON.parse(await pending.run());
-  eq(waits, 1, 'pagamento aguarda uma única vez');
-  eq(result.status, 'PAID', 'webhook observado fecha o pagamento no turno');
-  eq(result.pago, true, 'PAID é apresentado como pagamento concluído');
-  eq(result.comprovante, 'https://www.asaas.com/comprovantes/bill-async-paid', 'turno inclui comprovante do pagamento');
-  eq(saved.length, 2, 'registra PENDING e PAID sem criar outro pagamento');
-  eq(saved.at(-1).comprovanteEntregue, true, 'comprovante inline deduplica aviso posterior');
-  eq(calls.filter((x) => x.url.includes('/v3/bill') && !x.url.includes('/simulate')).length, 1, 'pagamento faz um único POST de criação');
+  eq(waits, 1, 'payment waits a single time');
+  eq(result.status, 'PAID', 'observed webhook closes the payment within the turn');
+  eq(result.pago, true, 'PAID is presented as a completed payment');
+  eq(result.comprovante, 'https://www.asaas.com/comprovantes/bill-async-paid', 'turn includes the payment receipt');
+  eq(saved.length, 2, 'records PENDING and PAID without creating another payment');
+  eq(saved.at(-1).comprovanteEntregue, true, 'inline receipt deduplicates the later notification');
+  eq(calls.filter((x) => x.url.includes('/v3/bill') && !x.url.includes('/simulate')).length, 1, 'payment makes a single creation POST');
   const rendered = renderConfirmed(pending, JSON.stringify(result));
-  ok(rendered.includes('Pagamento') && rendered.includes('/bill-async-paid'), 'turno entrega conclusão e comprovante do pagamento');
+  ok(rendered.includes('Pagamento') && rendered.includes('/bill-async-paid'), 'turn delivers conclusion and payment receipt');
 });
 
 // If the window ends still in PENDING, the conversation reports processing instead
@@ -467,9 +467,9 @@ await withFetch([
   await gated.run({ linha_digitavel: '654321', valor: 55 });
   const pending = takePending('financial-bill-async-pending');
   const result = JSON.parse(await pending.run());
-  eq(result.pending, true, 'pagamento preserva o PENDING real');
-  eq(result.data_processamento_divergente, true, 'resultado registra o desvio da data devolvida pelo provedor');
-  eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento, mas informou processamento em 21/09/2026, diferente de 18/09/2026 que você confirmou. Ele ainda não foi pago. Não repita o pedido; avisarei aqui quando o status mudar.', 'PENDING explica a data real sem afirmar pagamento');
+  eq(result.pending, true, 'payment preserves the real PENDING');
+  eq(result.data_processamento_divergente, true, 'result records the deviation of the date returned by the provider');
+  eq(renderConfirmed(pending, JSON.stringify(result)), 'A Asaas aceitou o pagamento, mas informou processamento em 21/09/2026, diferente de 18/09/2026 que você confirmou. Ele ainda não foi pago. Não repita o pedido; avisarei aqui quando o status mudar.', 'PENDING explains the real date without claiming payment');
 });
 
 // Without a webhook inside the window, there is exactly one GET reconciliation at 60s.
@@ -484,7 +484,7 @@ await withFetch([
   const timers = [];
   const originalSetTimeout = globalThis.setTimeout;
   globalThis.setTimeout = (fn, ms) => {
-    eq(ms, 60_000, 'reconciliação do pagamento roda uma vez aos 60 segundos');
+    eq(ms, 60_000, 'payment reconciliation runs once at 60 seconds');
     timers.push(Promise.resolve().then(fn));
     return { unref() {} };
   };
@@ -499,15 +499,15 @@ await withFetch([
     await gated.run({ linha_digitavel: '777777', valor: 70 });
     const pending = takePending('financial-bill-reconcile-once');
     const result = JSON.parse(await pending.run());
-    eq(result.pending, true, 'turno termina em processamento antes da reconciliação');
+    eq(result.pending, true, 'turn ends in processing before the reconciliation');
     await Promise.all(timers);
   } finally {
     globalThis.setTimeout = originalSetTimeout;
   }
-  eq(calls.filter((x) => x.url.includes('/v3/bill') && !x.url.includes('/simulate') && x.method === 'POST').length, 1, 'reconciliação não repete o POST');
-  eq(calls.filter((x) => x.url.includes('/v3/bill/bill-reconcile-once') && x.method === 'GET').length, 1, 'reconciliação faz um único GET por id');
-  eq(saved.at(-1).status, 'PAID', 'reconciliação persiste o estado final');
-  eq(saved.at(-1).comprovanteEntregue, false, 'estado reconciliado fica para a outbox avisar na conversa');
+  eq(calls.filter((x) => x.url.includes('/v3/bill') && !x.url.includes('/simulate') && x.method === 'POST').length, 1, 'reconciliation does not repeat the POST');
+  eq(calls.filter((x) => x.url.includes('/v3/bill/bill-reconcile-once') && x.method === 'GET').length, 1, 'reconciliation makes a single GET by id');
+  eq(saved.at(-1).status, 'PAID', 'reconciliation persists the final state');
+  eq(saved.at(-1).comprovanteEntregue, false, 'reconciled state is left for the outbox to notify in the conversation');
 });
 
 // The transfer stays bound to the actual account holder queried, not just to the key
@@ -527,17 +527,17 @@ await withFetch([
 ], async (calls) => {
   const gated = gateTool(named(tools(), 'asaas_transferir_pix'), 'financial-pix-current-owner-shape');
   const proposal = await gated.run({ valor: 10, chave_pix: 'fixture-current-shape', tipo_chave: 'EVP' });
-  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'shape atual da Asaas gera proposta');
+  ok(proposal.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO'), 'current Asaas shape generates a proposal');
   const pending = takePending('financial-pix-current-owner-shape');
-  ok(pending.label.includes('Pessoa no contrato atual'), 'proposta lê owner.name do contrato atual');
-  ok(pending.label.includes('***.555.666-**'), 'proposta lê owner.cpfCnpj do contrato atual');
-  ok(pending.label.includes('Banco Atual'), 'proposta lê financialInstitution.name do contrato atual');
-  eq(calls.map((x) => x.method), ['GET'], 'shape atual só consulta antes da confirmação');
+  ok(pending.label.includes('Pessoa no contrato atual'), 'proposal reads owner.name from the current contract');
+  ok(pending.label.includes('***.555.666-**'), 'proposal reads owner.cpfCnpj from the current contract');
+  ok(pending.label.includes('Banco Atual'), 'proposal reads financialInstitution.name from the current contract');
+  eq(calls.map((x) => x.method), ['GET'], 'current shape only queries before confirmation');
   const result = JSON.parse(await pending.run());
-  eq(result.pending, true, 'shape atual preserva o estado real do Pix criado');
-  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'shape atual revalida titular antes do único POST');
+  eq(result.pending, true, 'current shape preserves the real state of the created Pix');
+  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'current shape revalidates the holder before the single POST');
   const rendered = renderConfirmed(pending, JSON.stringify(result));
-  eq(rendered, 'O Pix está em processamento. Avisarei aqui quando concluir.', 'PENDING conhecido não vira falha incerta');
+  eq(rendered, 'O Pix está em processamento. Avisarei aqui quando concluir.', 'known PENDING does not turn into uncertain failure');
 });
 
 // If the webhook closes the operation within the short wait, the turn itself
@@ -555,8 +555,8 @@ await withFetch([
     registrarOperacao: async (op) => { saved.push(op); },
     aguardarOperacao: async (id, timeoutMs) => {
       waits++;
-      eq(id, 'pix-async-done', 'espera usa o id real retornado pelo POST');
-      eq(timeoutMs, 10_000, 'espera inline tem teto de dez segundos');
+      eq(id, 'pix-async-done', 'wait uses the real id returned by the POST');
+      eq(timeoutMs, 10_000, 'inline wait has a ten-second ceiling');
       return {
         provider_operation_id: id,
         status: 'DONE',
@@ -569,15 +569,15 @@ await withFetch([
   await gated.run({ valor: 20, chave_pix: 'async-key', tipo_chave: 'EVP' });
   const pending = takePending('financial-pix-async-done');
   const result = JSON.parse(await pending.run());
-  eq(waits, 1, 'aguarda uma única vez');
-  eq(result.status, 'DONE', 'webhook observado fecha o estado do turno');
-  eq(result.saiu, true, 'DONE é apresentado como Pix efetivado');
-  eq(result.comprovante, 'https://www.asaas.com/comprovantes/pix-async-done', 'resposta inclui comprovante persistido pelo webhook');
-  eq(saved.length, 2, 'registra estado inicial e estado final sem nova transferência');
-  eq(saved.at(-1).comprovanteEntregue, true, 'resposta inline deduplica o aviso posterior');
-  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'espera não faz outro POST nem polling externo');
+  eq(waits, 1, 'waits a single time');
+  eq(result.status, 'DONE', 'observed webhook closes the turn state');
+  eq(result.saiu, true, 'DONE is presented as the Pix having gone through');
+  eq(result.comprovante, 'https://www.asaas.com/comprovantes/pix-async-done', 'response includes the receipt persisted by the webhook');
+  eq(saved.length, 2, 'records initial and final state without a new transfer');
+  eq(saved.at(-1).comprovanteEntregue, true, 'inline response deduplicates the later notification');
+  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'wait does not make another POST nor external polling');
   const rendered = renderConfirmed(pending, JSON.stringify(result));
-  ok(rendered.includes('PIX de R$ 20 enviado') && rendered.includes('/pix-async-done'), 'turno entrega sucesso e comprovante');
+  ok(rendered.includes('PIX de R$ 20 enviado') && rendered.includes('/pix-async-done'), 'turn delivers success and receipt');
 });
 
 // Transport uncertainty remains different from an accepted PENDING: the renderer
@@ -588,7 +588,7 @@ await withFetch([
     ok: true, pending: true, incerto: true, saiu: false,
     aviso: 'O resultado é incerto. Não repita.',
   }));
-  ok(out.includes('não tem confirmação verificável') && out.includes('Não repita'), 'incerteza real não é suavizada como processamento normal');
+  ok(out.includes('não tem confirmação verificável') && out.includes('Não repita'), 'real uncertainty is not softened into normal processing');
 }
 
 await withFetch([
@@ -596,9 +596,9 @@ await withFetch([
 ], async () => {
   const gated = gateTool(named(tools(), 'asaas_transferir_pix'), 'financial-pix-unknown-owner-shape');
   const out = await gated.run({ valor: 10, chave_pix: 'fixture-unknown-shape', tipo_chave: 'EVP' });
-  ok(out.startsWith('NÃO registrei o pedido:'), 'shape sem titular não gera proposta');
-  ok(/não prova que a chave esteja inválida ou não cadastrada/i.test(out), 'shape desconhecido não inventa chave inválida');
-  eq(takePending('financial-pix-unknown-owner-shape'), undefined, 'shape sem titular não deixa confirmação pendente');
+  ok(out.startsWith('NÃO registrei o pedido:'), 'shape without a holder does not generate a proposal');
+  ok(/não prova que a chave esteja inválida ou não cadastrada/i.test(out), 'unknown shape does not invent an invalid key');
+  eq(takePending('financial-pix-unknown-owner-shape'), undefined, 'shape without a holder does not leave a pending confirmation');
 });
 
 await withFetch([
@@ -608,12 +608,12 @@ await withFetch([
   const gated = gateTool(named(tools(), 'asaas_transferir_pix'), 'financial-pix-owner-change');
   await gated.run({ valor: 15, chave_pix: 'fixture-key', tipo_chave: 'EVP' });
   const pending = takePending('financial-pix-owner-change');
-  ok(/R\$ 15,00/.test(pending.label) && /Pessoa A/.test(pending.label), 'confirmação mostra valor e titular reais');
+  ok(/R\$ 15,00/.test(pending.label) && /Pessoa A/.test(pending.label), 'confirmation shows real amount and holder');
   const result = JSON.parse(await pending.run());
-  eq(result.ok, false, 'titular alterado falha fechado');
-  ok(/titularidade[\s\S]*mudou/i.test(result.error), 'titular alterado exige nova conferência');
-  eq(calls.map((x) => x.method), ['GET', 'GET'], 'mudança impede o POST de transferência');
-  ok(calls.every((x) => x.url.includes('/v3/pix/addressKeys/external')), 'só a consulta de titularidade foi chamada');
+  eq(result.ok, false, 'changed holder fails closed');
+  ok(/titularidade[\s\S]*mudou/i.test(result.error), 'changed holder requires a new check');
+  eq(calls.map((x) => x.method), ['GET', 'GET'], 'change blocks the transfer POST');
+  ok(calls.every((x) => x.url.includes('/v3/pix/addressKeys/external')), 'only the holder lookup was called');
 });
 
 // With the same real data on revalidation, the POST occurs exactly once and the
@@ -627,12 +627,12 @@ await withFetch([
   await gated.run({ linha_digitavel: '999' });
   const pending = takePending('financial-bill-stable');
   const result = JSON.parse(await pending.run());
-  eq(result.pending, true, 'pagamento pendente continua pendente');
-  eq(result.pago, false, 'pagamento pendente não vira pago');
-  eq(calls.map((x) => x.url.split('/v3')[1].split('?')[0]), ['/bill/simulate', '/bill/simulate', '/bill'], 'pagamento só é criado após revalidação');
+  eq(result.pending, true, 'pending payment stays pending');
+  eq(result.pago, false, 'pending payment does not turn into paid');
+  eq(calls.map((x) => x.url.split('/v3')[1].split('?')[0]), ['/bill/simulate', '/bill/simulate', '/bill'], 'payment is only created after revalidation');
   const again = JSON.parse(await pending.run());
-  eq(again.ok, false, 'mesma confirmação não executa pagamento duas vezes');
-  eq(calls.length, 3, 'reuso da confirmação não faz nova chamada');
+  eq(again.ok, false, 'the same confirmation does not execute the payment twice');
+  eq(calls.length, 3, 'reusing the confirmation makes no new call');
 });
 
 await withFetch([
@@ -644,9 +644,9 @@ await withFetch([
   await gated.run({ valor: 12.5, chave_pix: 'stable-key', tipo_chave: 'EVP' });
   const pending = takePending('financial-pix-stable');
   const result = JSON.parse(await pending.run());
-  eq(result.ok, true, 'Pix concluído mantém sucesso comprovado');
-  eq(result.saiu, true, 'somente status DONE indica que o Pix saiu');
-  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'transferência só é criada após revalidar o titular');
+  eq(result.ok, true, 'completed Pix keeps proven success');
+  eq(result.saiu, true, 'only DONE status indicates the Pix went through');
+  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'transfer is only created after revalidating the holder');
 });
 
 // Before the financial POST, the managed payment account sets up the webhook that
@@ -675,12 +675,12 @@ await withFetch([
   await gated.run({ valor: 19, chave_pix: 'receipt-key', tipo_chave: 'EVP' });
   const pending = takePending('financial-pix-receipt-ready');
   const result = JSON.parse(await pending.run());
-  eq(result.pending, true, 'Pix pendente continua sem falso sucesso');
-  eq(preparedAfterCalls, 2, 'webhook é preparado depois da revalidação e antes do POST');
-  eq(prepared.accountId, 'acc-webhook-1', 'webhook usa a conta vinculada à confirmação');
-  eq(saved.accountId, 'acc-webhook-1', 'registro da operação preserva a conta real');
-  eq(saved.id, 'pix-webhook-1', 'registro usa o id devolvido pela Asaas');
-  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'nenhuma mutação extra antes do POST financeiro');
+  eq(result.pending, true, 'pending Pix stays without a false success');
+  eq(preparedAfterCalls, 2, 'webhook is prepared after revalidation and before the POST');
+  eq(prepared.accountId, 'acc-webhook-1', 'webhook uses the account bound to the confirmation');
+  eq(saved.accountId, 'acc-webhook-1', 'operation record preserves the real account');
+  eq(saved.id, 'pix-webhook-1', 'record uses the id returned by Asaas');
+  eq(calls.map((x) => x.method), ['GET', 'GET', 'POST'], 'no extra mutation before the financial POST');
 });
 
 // Current balance is only a snapshot, never proof of a deposit.
@@ -688,7 +688,7 @@ await withFetch([{ balance: 365 }], async () => {
   const data = JSON.parse(await named(tools(), 'asaas_saldo').run());
   eq(data.saldo, 365);
   eq(data.confirma_deposito_especifico, false);
-  ok(/saldo atual isolado não prova/i.test(data.aviso), 'saldo traz limite probatório explícito');
+  ok(/saldo atual isolado não prova/i.test(data.aviso), 'balance carries an explicit evidentiary limit');
 });
 
 const extrato = (rows) => ({ data: rows });

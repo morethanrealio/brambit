@@ -18,11 +18,11 @@ const test = async (name, fn) => { await fn(); passed++; console.log('ok -', nam
 const throwsPt = (fn, re) => assert.throws(fn, (e) => { assert.match(e.message, re); return true; });
 
 // ---- normalization ----
-await test('normalize aplica defaults e limpa aspas/parênteses', () => {
+await test('normalize applies defaults and strips quotes/parentheses', () => {
   const c = normalizeEmailSearchConfig({ terms: ['quinto andar', '"docusign"', ' (x) '], senders: ['QuintoAndar.com.br'] });
   assert.deepEqual(c, { version: 1, provider: 'gmail', account: null, terms: ['quinto andar', 'docusign', 'x'], senders: ['quintoandar.com.br'], days: 2, unreadOnly: false, withAttachment: false });
 });
-await test('normalize recusa chave desconhecida, sender inválido, days fora, provider errado', () => {
+await test('normalize rejects unknown key, invalid sender, days out of range, wrong provider', () => {
   throwsPt(() => normalizeEmailSearchConfig({ foo: 1 }), /campo desconhecido/);
   throwsPt(() => normalizeEmailSearchConfig({ senders: ['quinto andar'] }), /senders.*inválido/);
   throwsPt(() => normalizeEmailSearchConfig({ days: 0 }), /days/);
@@ -33,7 +33,7 @@ await test('normalize recusa chave desconhecida, sender inválido, days fora, pr
   throwsPt(() => normalizeEmailSearchConfig({ unreadOnly: 'sim' }), /unreadOnly/);
   throwsPt(() => normalizeEmailSearchConfig({ terms: Array.from({ length: 11 }, (_, i) => 't' + i) }), /no máximo 10/);
 });
-await test('normalize aceita lista como string separada por vírgula e account', () => {
+await test('normalize accepts a comma-separated string list and account', () => {
   const c = normalizeEmailSearchConfig({ terms: 'a, b;c', account: 'X@Y.com', provider: 'outlook', days: 7, unreadOnly: true });
   assert.deepEqual(c.terms, ['a', 'b', 'c']); assert.equal(c.account, 'x@y.com'); assert.equal(c.provider, 'outlook'); assert.equal(c.days, 7); assert.equal(c.unreadOnly, true);
 });
@@ -47,11 +47,11 @@ await test('looksLikeEmailSearch', () => {
 });
 
 // ---- prepare ----
-await test('prepare: criação tipada grava email_search normalizado', () => {
+await test('prepare: typed creation stores normalized email_search', () => {
   const cfg = prepareEmailSearchChange(null, { tipo: 'busca_email', busca_email: { terms: ['quintoandar'], days: 1 }, prompt: 'resuma', channel: 'telegram' });
   assert.equal(cfg.email_search.version, 1); assert.deepEqual(cfg.email_search.terms, ['quintoandar']); assert.equal(cfg.email_search.days, 1);
 });
-await test('prepare: tipo busca_email sem parâmetros / geral que parece busca / canal inválido', () => {
+await test('prepare: busca_email type without parameters / geral that looks like a search / invalid channel', () => {
   throwsPt(() => prepareEmailSearchChange(null, { tipo: 'busca_email', prompt: 'x', channel: 'telegram' }), /Faltam os parâmetros/);
   throwsPt(() => prepareEmailSearchChange(null, { tipo: 'geral', prompt: 'verifique meus e-mails do quinto andar e resuma', channel: 'telegram' }), /use tipo "busca_email"/);
   throwsPt(() => prepareEmailSearchChange(null, { tipo: 'busca_email', busca_email: { terms: ['a'] }, prompt: 'x', channel: 'sms' }), /Canal inválido/);
@@ -59,7 +59,7 @@ await test('prepare: tipo busca_email sem parâmetros / geral que parece busca /
   assert.equal(prepareEmailSearchChange(null, { tipo: 'geral', prompt: 'me lembre de beber água', channel: 'telegram' }), undefined);
   assert.equal(prepareEmailSearchChange(null, { prompt: 'qualquer', channel: 'telegram' }), undefined);
 });
-await test('prepare: edição de rotina tipada preserva resto do config e não vira geral/curadoria', () => {
+await test('prepare: editing a typed routine preserves the rest of the config and does not turn into geral/curadoria', () => {
   const row = { channel: 'telegram', config: { email_search: normalizeEmailSearchConfig({ terms: ['a'] }), execution: { x: 1 } } };
   const cfg = prepareEmailSearchChange(row, { busca_email: { terms: ['b'], days: 3 } });
   assert.deepEqual(cfg.email_search.terms, ['b']); assert.equal(cfg.email_search.days, 3); assert.deepEqual(cfg.execution, { x: 1 });
@@ -68,7 +68,7 @@ await test('prepare: edição de rotina tipada preserva resto do config e não v
   assert.equal(prepareEmailSearchChange(row, { prompt: 'novo texto' }), undefined); // prompt only: nothing changes in the config
   throwsPt(() => prepareEmailSearchChange(row, { channel: 'sms' }), /Canal inválido/);
 });
-await test('prepare: curadoria/monitor não vira busca de e-mail; e curation-config recusa o inverso', () => {
+await test('prepare: curadoria/monitor does not turn into an email search; and curation-config rejects the reverse', () => {
   const cur = { channel: 'email', config: { curation: { source: 'web' } } };
   throwsPt(() => prepareEmailSearchChange(cur, { busca_email: { terms: ['a'] } }), /não vira busca de e-mail/);
   throwsPt(() => prepareCurationChange(cur, { tipo: 'busca_email' }), /curadoria; não vira busca de e-mail/);
@@ -132,7 +132,7 @@ const gmailFake = ({ perPage = 3, total = 7, failIds = [] } = {}) => {
   return { fetchImpl, calls };
 };
 
-await test('executeEmailSearch Gmail: pagina até o fim, corpo só nos primeiros, ordena por data, completo', async () => {
+await test('executeEmailSearch Gmail: paginates to the end, body only on the first ones, sorts by date, complete', async () => {
   const { fetchImpl, calls } = gmailFake({ perPage: 3, total: 7 });
   const c = normalizeEmailSearchConfig({ terms: ['quintoandar'], days: 2 });
   const r = await executeEmailSearch(c, { fetchImpl, token: async () => 'TOK', page: 3, bodyLimit: 2 });
@@ -148,24 +148,24 @@ await test('executeEmailSearch Gmail: pagina até o fim, corpo só nos primeiros
   assert.equal(full.body, 'Corpo do e-mail 1'); assert.equal(full.link, 'https://mail.google.com/mail/#all/m1'); assert.deepEqual(full.attachments, ['contrato1.pdf']); assert.equal(full.unread, true); assert.equal(full.subject, 'Assunto 1');
   const meta = r.items.find((m) => m.id === 'm7'); assert.equal(meta.body, ''); assert.equal(meta.snippet, 'trecho 7');
 });
-await test('executeEmailSearch Gmail: teto corta e marca truncado/parcial', async () => {
+await test('executeEmailSearch Gmail: cap cuts it off and marks truncated/partial', async () => {
   const { fetchImpl } = gmailFake({ total: 12 });
   const r = await executeEmailSearch(normalizeEmailSearchConfig({ days: 1 }), { fetchImpl, token: async () => 't', page: 5, cap: 8, bodyLimit: 0 });
   assert.equal(r.truncated, true); assert.equal(r.partial, true); assert.equal(r.total, 8); assert.equal(r.pages, 2);
 });
-await test('executeEmailSearch Gmail: mensagem que não abre vira erro + parcial, sem derrubar a busca', async () => {
+await test('executeEmailSearch Gmail: a message that fails to open becomes an error + partial, without taking down the search', async () => {
   const { fetchImpl } = gmailFake({ total: 4, failIds: ['m2'] });
   const r = await executeEmailSearch(normalizeEmailSearchConfig({ days: 1 }), { fetchImpl, token: async () => 't', page: 10, bodyLimit: 0 });
   assert.equal(r.total, 3); assert.equal(r.errors.length, 1); assert.match(r.errors[0], /^m2: 500/); assert.equal(r.partial, true); assert.equal(r.truncated, false);
 });
-await test('executeEmailSearch: listagem 401 lança (token/conta) e exige token função', async () => {
+await test('executeEmailSearch: listing 401 throws (token/account) and requires token to be a function', async () => {
   const fetchImpl = async () => ({ ok: false, status: 401, text: async () => 'invalid credentials' });
   await assert.rejects(executeEmailSearch(normalizeEmailSearchConfig({}), { fetchImpl, token: async () => 't' }), /401: invalid credentials/);
   await assert.rejects(executeEmailSearch(normalizeEmailSearchConfig({}), { fetchImpl, token: 'abc' }), /token deve ser função/);
 });
 
 // ---- Graph execution ----
-await test('executeEmailSearch Outlook: $search sem $orderby, $top<=25, nextLink, filtro de data, corpo html→texto', async () => {
+await test('executeEmailSearch Outlook: $search without $orderby, $top<=25, nextLink, date filter, html-to-text body', async () => {
   const calls = [];
   const now = new Date('2026-09-13T12:00:00Z');
   const fetchImpl = async (url, opts) => {
@@ -189,7 +189,7 @@ await test('executeEmailSearch Outlook: $search sem $orderby, $top<=25, nextLink
   assert.equal(r.items[1].body, ''); assert.equal(r.items[1].unread, true); assert.equal(r.items[1].from, 'Ana <ana@x.com>');
   assert.equal(calls.find((x) => x.url.includes('/me/messages/'))?.headers.Prefer, 'outlook.body-content-type="text"');
 });
-await test('executeEmailSearch Outlook: sem termos usa $filter + $orderby', async () => {
+await test('executeEmailSearch Outlook: without terms uses $filter + $orderby', async () => {
   const calls = [];
   const fetchImpl = async (url) => { calls.push(url); return { ok: true, status: 200, json: async () => ({ value: [] }), text: async () => '' }; };
   const r = await executeEmailSearch(normalizeEmailSearchConfig({ provider: 'outlook', unreadOnly: true }), { fetchImpl, token: async () => 'MS', bodyLimit: 0 });
@@ -198,7 +198,7 @@ await test('executeEmailSearch Outlook: sem termos usa $filter + $orderby', asyn
 });
 
 // ---- prompt blocks ----
-await test('emailSearchPromptBlock: lista completa vs cortada, vazio manda avisar em uma frase (nunca silêncio)', async () => {
+await test('emailSearchPromptBlock: full list vs cut, empty sends a one-sentence warning (never silence)', async () => {
   const { fetchImpl } = gmailFake({ total: 2 });
   const c = normalizeEmailSearchConfig({ terms: ['quintoandar'], days: 2, account: 'me@g.com' });
   const r = await executeEmailSearch(c, { fetchImpl, token: async () => 't', bodyLimit: 1 });

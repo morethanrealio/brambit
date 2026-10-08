@@ -9,7 +9,7 @@ import { pedidoLocal, prepararResposta } from './web/cookie-local.mjs';
 const LOCAL = { BRAMBS_LOCAL: '1' };
 const fake = (headers, remoteAddress = '127.0.0.1') => ({ headers, socket: { remoteAddress } });
 
-test('só é local com BRAMBS_LOCAL, endereço de loopback, Host de loopback e sem proxy', () => {
+test('only local with BRAMBS_LOCAL, a loopback address, a loopback Host and no proxy', () => {
   assert.equal(pedidoLocal(fake({ host: 'localhost:8080' }), LOCAL), true);
   assert.equal(pedidoLocal(fake({ host: '[::1]:8080' }, '::1'), LOCAL), true);
   assert.equal(pedidoLocal(fake({ host: 'localhost:8080' }), {}), false);
@@ -18,7 +18,7 @@ test('só é local com BRAMBS_LOCAL, endereço de loopback, Host de loopback e s
   assert.equal(pedidoLocal(fake({ host: 'localhost:8080', 'x-forwarded-proto': 'https' }), LOCAL), false);
 });
 
-test('set-cookie perde o Secure no pedido local e mantém nos outros, por setHeader e por writeHead', async (t) => {
+test('set-cookie drops Secure on a local request and keeps it on others, via setHeader and via writeHead', async (t) => {
   let env = LOCAL;
   const server = http.createServer((req, res) => {
     prepararResposta(req, res, { 'X-Frame-Options': 'DENY' }, env);

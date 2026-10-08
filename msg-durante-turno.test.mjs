@@ -32,11 +32,11 @@ const semTools = { system: 's', tools: registry };
     pollNewUserMsg: () => (poll-- > 0 ? { text: 'na verdade faz B' } : null),
   });
   const injetada = r.messages.find((m) => m.meta === 'interject');
-  t('injeta no passo 0 e o modelo vê', vistos[0] === 'user|user:interject');
-  t('texto do usuário chega inteiro', injetada?.content.includes('na verdade faz B'));
+  t('injects at step 0 and the model sees it', vistos[0] === 'user|user:interject');
+  t('user text arrives whole', injetada?.content.includes('na verdade faz B'));
   // raw = what the server writes to the history (without the instruction wrapper).
-  t('raw guarda só a fala do usuário', injetada?.raw === 'na verdade faz B');
-  t('turno entrega a resposta nova', r.text === 'ok, fiz B');
+  t('raw keeps only the user words', injetada?.raw === 'na verdade faz B');
+  t('turn delivers the new response', r.text === 'ok, fiz B');
 }
 
 // ── B) delivery time arrived: the draft is NOT sent ──
@@ -53,14 +53,14 @@ const semTools = { system: 's', tools: registry };
     pollNewUserMsg: () => (poll === 1 ? { text: 'esquece, quero outra coisa' } : null),
     onEvent: (e) => eventos.push(e.type),
   });
-  t('não entrega a resposta obsoleta', r.text === 'resposta contemplando tudo');
-  t('rascunho não vai pro history como assistant', !r.messages.some((m) => m.role === 'assistant' && m.content.includes('RASCUNHO')));
-  t('rascunho vai pro contexto do modelo', r.messages.some((m) => m.meta === 'interject' && m.content.includes('RASCUNHO')));
+  t('does not deliver the stale response', r.text === 'resposta contemplando tudo');
+  t('draft does not go into history as assistant', !r.messages.some((m) => m.role === 'assistant' && m.content.includes('RASCUNHO')));
+  t('draft goes into the model context', r.messages.some((m) => m.meta === 'interject' && m.content.includes('RASCUNHO')));
   // The discarded draft does NOT enter the raw -> it doesn't persist in the history nor is it
   // resent in subsequent turns (input-token cost).
   const inj = r.messages.find((m) => m.meta === 'interject');
-  t('raw da pré-entrega não carrega o rascunho', inj?.raw === 'esquece, quero outra coisa');
-  t('evento interject_predraft emitido', eventos.includes('interject_predraft'));
+  t('pre-delivery raw does not carry the draft', inj?.raw === 'esquece, quero outra coisa');
+  t('interject_predraft event emitted', eventos.includes('interject_predraft'));
 }
 
 // ── C) interjection cap: a user firing off messages doesn't lock up the turn ──
@@ -72,8 +72,8 @@ const semTools = { system: 's', tools: registry };
     pollNewUserMsg: () => ({ text: 'mais uma' }), // never stops
     onEvent: (e) => { if (e.type === 'interject' || e.type === 'interject_predraft') injetadas++; },
   });
-  t('teto de 3 interjeições respeitado', injetadas === 3);
-  t('turno termina mesmo com fila infinita', !!r.text);
+  t('cap of 3 interjections respected', injetadas === 3);
+  t('turn ends even with an infinite queue', !!r.text);
 }
 
 // ── D) a broken channel does not bring down the turn ──
@@ -85,8 +85,8 @@ const semTools = { system: 's', tools: registry };
     pollNewUserMsg: () => { throw new Error('canal morreu'); },
     onEvent: (e) => eventos.push(e.type),
   });
-  t('erro no canal não quebra o turno', r.text === 'pronto');
-  t('erro do canal fica visível em onEvent', eventos.includes('interject_error'));
+  t('channel error does not break the turn', r.text === 'pronto');
+  t('channel error is visible in onEvent', eventos.includes('interject_error'));
 }
 
 // ── E) without the channel, behavior identical to before ──
@@ -95,7 +95,7 @@ const semTools = { system: 's', tools: registry };
     ...semTools, userInput: 'vai',
     provider: { name: 'fake', complete: async () => ({ stop: 'end', text: 'pronto' }) },
   });
-  t('sem pollNewUserMsg nada é injetado', !r.messages.some((m) => m.meta));
+  t('without pollNewUserMsg nothing is injected', !r.messages.some((m) => m.meta));
 }
 
 // ── F) WhatsApp: 2nd message during the turn becomes ONE single response ──
@@ -137,9 +137,9 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await h.process(payload('wamid.2', 'segunda'));
   solta();
   await espera(40);
-  t('2ª msg chega DENTRO do turno em voo', vistoNoMeio?.text === 'segunda');
-  t('sai UMA resposta só (não a obsoleta + a nova)', enviados.length === 1);
-  t('a resposta contempla as duas mensagens', enviados[0] === 'respondi: primeira + segunda');
+  t('2nd message arrives INSIDE the turn in flight', vistoNoMeio?.text === 'segunda');
+  t('ONE single response goes out (not the stale one + the new one)', enviados.length === 1);
+  t('the response covers both messages', enviados[0] === 'respondi: primeira + segunda');
 }
 
 // ── G) what the turn doesn't consume is not lost: it becomes the next turn ──
@@ -162,8 +162,8 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await h.process(payload('wamid.4', 'segunda'));
   solta();
   await espera(120); // end of the 1st turn + rebound debounce
-  t('mensagem não consumida vira o turno seguinte', rodadas.length === 2 && rodadas[1] === 'segunda');
-  t('duas respostas nesse caso (nada sumiu)', enviados.length === 2);
+  t('unconsumed message becomes the next turn', rodadas.length === 2 && rodadas[1] === 'segunda');
+  t('two responses in this case (nothing was lost)', enviados.length === 2);
 }
 
 // ── H) dedup: a Meta retry with the same wamid does not run twice ──
@@ -179,7 +179,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await h.process(payload('wamid.9', 'oi'));
   await h.process(payload('wamid.9', 'oi')); // Meta retry
   await espera(60);
-  t('retry do mesmo wamid roda 1x', rodou === 1);
+  t('retry of the same wamid runs once', rodou === 1);
 }
 
 // ── I) WA_INTERJECT=0 falls back to the old path (kill switch) ──
@@ -206,9 +206,9 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await h.process(payload('wamid.11', 'segunda'));
   solta();
   await espera(120);
-  t('chave off: canal não é passado ao turno', vistoNoMeio === null);
-  t('chave off: 2ª msg vira turno próprio (comportamento antigo)', rodadas.length === 2 && rodadas[1] === 'segunda');
-  t('chave off: duas respostas', enviados.length === 2);
+  t('flag off: channel is not passed to the turn', vistoNoMeio === null);
+  t('flag off: 2nd message becomes its own turn (old behavior)', rodadas.length === 2 && rodadas[1] === 'segunda');
+  t('flag off: two responses', enviados.length === 2);
   process.env.WA_INTERJECT = '1';
 }
 
@@ -244,7 +244,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
         signalStarted();
         await waitForSecond;
         const safePoll = deferIncomingWhileConfirmationPending(threadId, extra.pollNewUserMsg);
-        t('confirmação pendente não entra no turno ainda aberto', await safePoll() === null);
+        t('pending confirmation does not enter the still-open turn', await safePoll() === null);
         return { text: 'Posso publicar?' };
       }
       const pending = takePending(threadId);
@@ -257,8 +257,8 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   await h.process(payload('wamid.13', 'Pode'));
   releaseFirst();
   await espera(120);
-  t('o Pode preservado vira o turno seguinte', rodadas.length === 2 && rodadas[1] === 'Pode');
-  t('a publicação confirmada executa exatamente uma vez', executions === 1);
+  t('the preserved "Pode" becomes the next turn', rodadas.length === 2 && rodadas[1] === 'Pode');
+  t('the confirmed publish runs exactly once', executions === 1);
   takePending(threadId);
 }
 
@@ -277,12 +277,12 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   await h.process(payload('wamid.14', 'trabalho demorado'));
   await espera(40); // 10ms debounce + 15ms heartbeat
-  t('turno longo envia recibo de andamento', enviados[0]?.includes('Ainda estou trabalhando nisso'));
+  t('long turn sends a progress receipt', enviados[0]?.includes('Ainda estou trabalhando nisso'));
   await espera(35);
-  t('recibo de andamento é enviado uma única vez', enviados.length === 1);
+  t('progress receipt is sent only once', enviados.length === 1);
   solta();
   await espera(30);
-  t('resposta final chega depois do recibo', enviados.length === 2 && enviados[1] === 'resposta final');
+  t('final response arrives after the receipt', enviados.length === 2 && enviados[1] === 'resposta final');
 
   // A quick turn should not gain an extra operational message.
   enviados.length = 0;
@@ -293,7 +293,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   await quick.process(payload('wamid.15', 'pergunta rápida'));
   await espera(45);
-  t('turno rápido envia só a resposta', enviados.length === 1 && enviados[0] === 'rápido');
+  t('quick turn sends only the response', enviados.length === 1 && enviados[0] === 'rápido');
   delete process.env.WA_TURN_HEARTBEAT_MS;
 }
 

@@ -19,7 +19,7 @@ function worker(provider) {
   return new Function(...Object.keys(deps),source.slice(start,end)+';return runGoogleSubagent;')(...Object.values(deps));
 }
 
-test('duas caixas reais do conector em simulação: origem correta, vazio e preferência preservada',async()=>{
+test('two real connector mailboxes simulated: correct origin, empty result and preserved preference',async()=>{
   const previous=globalThis.fetch;const requests=[];const coverage=turnSearchCoverage();
   const agent={google_email:work};
   globalThis.fetch=async(url,opts)=>{
@@ -52,7 +52,7 @@ test('duas caixas reais do conector em simulação: origem correta, vazio e pref
   } finally {globalThis.fetch=previous;}
 });
 
-test('conta inválida não consulta principal; conta explícita e padrão têm seleção independente',async()=>{
+test('invalid account does not query the primary one; explicit and default accounts have independent selection',async()=>{
   assert.deepEqual(selectGoogleReadAccounts({accounts,currentAccount:work}),[work]);
   assert.deepEqual(selectGoogleReadAccounts({accounts,currentAccount:work,requested:[personal]}),[personal]);
   for(const requested of [[],null,['other@example.invalid'],[work,'other@example.invalid'],[42]]) {
@@ -63,7 +63,7 @@ test('conta inválida não consulta principal; conta explícita e padrão têm s
   assert.throws(()=>selectGoogleReadAccounts({accounts,currentAccount:'removed@example.invalid'}));
 });
 
-test('falha numa caixa não impede a outra e não vira resultado vazio',async()=>{
+test('failure in one mailbox does not block the other and does not become an empty result',async()=>{
   const seen=[],states=[];
   const result=await runGoogleReadAccounts({accounts,currentAccount:work,requested:[personal,work],
     createReadTools:async account=>[{name:'gmail_search',run:async()=>{seen.push(account);if(account===personal)throw Error('401 secret-provider-detail');return '{"messages":[],"has_more":false}';}}],
@@ -72,7 +72,7 @@ test('falha numa caixa não impede a outra e não vira resultado vazio',async()=
   assert.ok(!result.includes('secret-provider-detail'));assert.ok(result.includes('Não significa ausência'));
 });
 
-test('resposta sem ferramenta e falta de permissões não são consulta concluída',async()=>{
+test('a response without tool use and missing permissions are not a completed query',async()=>{
   const states=[];
   await runGoogleReadAccounts({accounts,currentAccount:personal,requested:[personal,work],
     createReadTools:async account=>account===work ? [] : [{name:'gmail_search',run:async()=>{throw Error('should not run');}}],
@@ -80,7 +80,7 @@ test('resposta sem ferramenta e falta de permissões não são consulta concluí
   assert.deepEqual(states.map(r=>r.status),['not_consulted','failed']);
 });
 
-test('paginação preserva conta, total observado e limitação por consulta',async()=>{
+test('pagination preserves account, observed total and per-query limitation',async()=>{
   let response;
   const p=trackEmailPagination([{name:'gmail_search',run:async()=>JSON.stringify(response)}],{account:work});
   response={search_id:'a',has_more:true,messages:[{id:'one'}]};await p.tools[0].run({query:'Loja'});
@@ -91,7 +91,7 @@ test('paginação preserva conta, total observado e limitação por consulta',as
   assert.deepEqual(p.coverage().map(r=>[r.account,r.status,r.returned]),[[work,'complete',2],[work,'complete',0]]);
 });
 
-test('erro, corpo cortado e vazio completo permanecem estados distintos',async()=>{
+test('error, truncated body and full-empty remain distinct states',async()=>{
   const p=trackEmailPagination([
     {name:'gmail_search',run:async()=>{throw Error('401');}},
     {name:'gmail_read',run:async()=>JSON.stringify({id:'one',body:'prévia',truncated:true})},
@@ -105,7 +105,7 @@ test('erro, corpo cortado e vazio completo permanecem estados distintos',async()
   assert.equal(c.finish(final),final);assert.equal(c.finishEmail(final),final);
 });
 
-test('regressão de prosa: preserva achado positivo e remove ausência absoluta com cobertura parcial',()=>{
+test('prose regression: preserves a positive finding and removes an absolute absence claim under partial coverage',()=>{
   const text='Encontrei o pedido.\n11/09 — pedido despachado.\n\nA busca foi feita na conta do Gmail por inteiro e não há nada de rastreio lá.\nNenhum aviso de entrega chegou.';
   const out=guardEmailCoverageClaims(text,{partial:true,active:true});
   assert.ok(out.includes('pedido despachado'));assert.ok(!out.includes('por inteiro'));assert.ok(!out.includes('Nenhum aviso'));
@@ -119,7 +119,7 @@ test('regressão de prosa: preserva achado positivo e remove ausência absoluta 
   assert.ok(!guardEmailCoverageClaims('No hay correos de entrega.',{partial:true,active:true,language:'es'}).includes('No hay'));
 });
 
-test('conexão morta vira pedido de reconexão, não falha genérica',async()=>{
+test('a dead connection becomes a reconnect request, not a generic failure',async()=>{
   const coverage=[];const msg=a=>`Reconecte ${a}`;
   const dead=[{google_email:personal,access_token:null,refresh_token:null},{google_email:work,access_token:'x',refresh_token:'y'}];
   const result=await runGoogleReadAccounts({accounts:dead,currentAccount:work,requested:[personal,work],objetivo:'agenda',reconnectMessage:msg,

@@ -40,14 +40,14 @@ const tool = webSearchTool({ onUsage: (u) => usos.push(u) });
 
 // 1) happy path: Tavily responds → text + numbered Sources, no binding error.
 const out = await tool.run({ consulta: 'frequência de chuva com vento oeste em Florianópolis' });
-check(typeof out === 'string' && !/renderFontes|not defined|ERRO/.test(out), `saída sem ReferenceError: ${out.slice(0, 120)}`);
-check(out.includes('Fontes:'), 'tem bloco Fontes:');
-check(out.includes('[1] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento'), 'fonte 1 numerada com URL');
-check(out.includes('[2] INMET — https://bdmep.inmet.gov.br/'), 'fonte 2 numerada com URL');
-check(out.includes('resumo mock'), 'traz o answer da Tavily');
-check(usos.some(u => u.kind === 'search' && u.usage.model === 'tavily-search'), 'contabiliza a busca');
-check(!usos.some(u => u.kind === 'search_degraded'), 'NÃO marca busca degradada quando deu certo');
-check(fetchCalls.length === 1, 'uma chamada só (sem relaxar nem fallback)');
+check(typeof out === 'string' && !/renderFontes|not defined|ERRO/.test(out), `output without ReferenceError: ${out.slice(0, 120)}`);
+check(out.includes('Fontes:'), 'has the Fontes: block');
+check(out.includes('[1] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento'), 'source 1 numbered with URL');
+check(out.includes('[2] INMET — https://bdmep.inmet.gov.br/'), 'source 2 numbered with URL');
+check(out.includes('resumo mock'), 'brings the Tavily answer');
+check(usos.some(u => u.kind === 'search' && u.usage.model === 'tavily-search'), 'counts the search');
+check(!usos.some(u => u.kind === 'search_degraded'), 'does NOT mark degraded search when it succeeded');
+check(fetchCalls.length === 1, 'a single call (no relaxing or fallback)');
 
 // 1b) with the turn's registry, the numbering is for the whole turn: the 2nd search
 // reuses the number of whoever already appeared (that's the one that goes to the final list).
@@ -55,15 +55,15 @@ const { registroDeFontes } = await import('./web/citacoes.mjs');
 const reg = registroDeFontes();
 reg.add({ title: 'Outra', uri: 'https://outra.example.invalid/' });
 const comReg = await webSearchTool({ onUsage: () => {}, fontes: reg }).run({ consulta: 'vento sul em Florianópolis' });
-check(comReg.includes('[2] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento') && comReg.includes('[3] INMET'), 'numera pelo registro do turno');
-check(reg.size === 3, 'fontes da busca entram no registro');
+check(comReg.includes('[2] Epagri/Ciram — https://ciram.epagri.sc.gov.br/vento') && comReg.includes('[3] INMET'), 'numbers using the turn registry');
+check(reg.size === 3, 'search sources enter the registry');
 
 // 2) REAL network drop in a DeepSeek turn: honest error, labeled as Tavily, no Gemini.
 fetchMode = 'rede'; usos.length = 0;
 const err = await withDeepSeek(() => ({}), () => tool.run({ consulta: 'x' }));
-check(/^ERRO: a busca Tavily falhou/.test(err), `erro honesto no DeepSeek: ${err.slice(0, 80)}`);
-check(/não responda como se tivesse pesquisado/.test(err), 'instrui a não fingir pesquisa');
-check(usos.some(u => u.kind === 'search_degraded' && u.usage.model === 'tavily-erro'), 'queda de rede conta como tavily-erro');
-check(!usos.some(u => u.usage.model === 'websearch-bug'), 'queda de rede NÃO é rotulada como bug interno');
+check(/^ERRO: a busca Tavily falhou/.test(err), `honest error in DeepSeek: ${err.slice(0, 80)}`);
+check(/não responda como se tivesse pesquisado/.test(err), 'instructs not to fake a search');
+check(usos.some(u => u.kind === 'search_degraded' && u.usage.model === 'tavily-erro'), 'network drop counts as tavily-erro');
+check(!usos.some(u => u.usage.model === 'websearch-bug'), 'network drop is NOT labeled as an internal bug');
 
 console.log(`websearch-fontes: ${checks} checagens ok`);

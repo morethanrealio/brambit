@@ -15,15 +15,15 @@ for (const format of ['docx', 'pdf', 'html', 'txt', 'md']) {
     const out = await generateDocument({ format, content });
     // The house's minimal PDF writes the content-stream text without compression.
     const text = format === 'pdf' ? out.buffer.toString('latin1') : extractDocumentText({ ...out });
-    assert.ok(text.includes(content), `${format}: literal alterado: ${content}`);
+    assert.ok(text.includes(content), `${format}: literal changed: ${content}`);
     passed++;
   }
 }
 for (const format of ['docx', 'html']) {
   const out = await generateDocument({ format, content: '# Titulo\n**Negrito**\n* Item\n- Outro item\n1. Item numerado' });
   const text = extractDocumentText({ ...out });
-  assert.ok(text.includes('Negrito') && !text.includes('**Negrito**'), `${format}: negrito`);
-  assert.ok(text.includes('Item') && text.includes('Outro item') && text.includes('Item numerado'), `${format}: listas`);
+  assert.ok(text.includes('Negrito') && !text.includes('**Negrito**'), `${format}: bold`);
+  assert.ok(text.includes('Item') && text.includes('Outro item') && text.includes('Item numerado'), `${format}: lists`);
   if (format === 'html') assert.ok(out.buffer.toString().includes('<strong>Negrito</strong>'));
   passed++;
 }
@@ -35,15 +35,15 @@ for (const format of ['docx', 'html']) {
   const out = await generateDocument({ format: 'pdf', content: '- Item com “aspas” e travessão — aqui\n- Reticências…' });
   const pdf = out.buffer.toString('latin1');
   for (const [byte, nome] of [['\x95', 'bullet'], ['\x93', 'aspa de abertura'], ['\x94', 'aspa de fechamento'], ['\x97', 'travessão'], ['\x85', 'reticências']]) {
-    assert.ok(pdf.includes(byte), `pdf: ${nome} fora do WinAnsi`);
+    assert.ok(pdf.includes(byte), `pdf: ${nome} outside WinAnsi`);
   }
-  assert.ok(!pdf.includes('(" Item com'), 'pdf: bullet não pode virar aspas');
+  assert.ok(!pdf.includes('(" Item com'), 'pdf: bullet must not turn into quotes');
   passed++;
 }
 // What doesn't exist in the 8-bit table turns into '?', never the byte of another glyph.
 {
   const out = await generateDocument({ format: 'pdf', content: 'Kanji 夢 fora da tabela' });
-  assert.ok(out.buffer.toString('latin1').includes('Kanji ? fora da tabela'), 'pdf: caractere fora do WinAnsi');
+  assert.ok(out.buffer.toString('latin1').includes('Kanji ? fora da tabela'), 'pdf: character outside WinAnsi');
   passed++;
 }
 console.log(`${passed} verificacoes aprovadas (offline)`);

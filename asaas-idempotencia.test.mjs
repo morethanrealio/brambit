@@ -87,28 +87,28 @@ const prepararPix = async (thread) => {
 await withFetch([boleto, boleto, { id: 'bill-1', status: 'PENDING', authorized: true, value: 42 }], async (calls) => {
   const pending = await prepararBoleto('marca-bill-feliz');
   const r = JSON.parse(await pending.run());
-  eq(r.pending, true, 'pagamento pendente segue pendente');
-  ok(/^brambs-bill-/.test(marcaDoPost(calls, '/v3/bill')), 'o POST do boleto leva marca própria');
-  eq(calls.length, 3, 'caminho feliz do boleto não faz consulta extra');
+  eq(r.pending, true, 'pending payment stays pending');
+  ok(/^brambs-bill-/.test(marcaDoPost(calls, '/v3/bill')), 'the bill POST carries its own mark');
+  eq(calls.length, 3, 'the bill happy path makes no extra query');
 });
 
 await withFetch([titular, titular, { id: 'pix-1', status: 'DONE', authorized: true, value: 12.5 }], async (calls) => {
   const pending = await prepararPix('marca-pix-feliz');
   const r = JSON.parse(await pending.run());
-  eq(r.saiu, true, 'Pix concluído segue concluído');
-  ok(/^brambs-pix-/.test(marcaDoPost(calls, '/v3/transfers')), 'o POST do Pix leva marca própria');
-  eq(calls.length, 3, 'caminho feliz do Pix não faz consulta extra');
+  eq(r.saiu, true, 'completed Pix stays completed');
+  ok(/^brambs-pix-/.test(marcaDoPost(calls, '/v3/transfers')), 'the Pix POST carries its own mark');
+  eq(calls.length, 3, 'the Pix happy path makes no extra query');
 });
 
 // ── 2. The mark is born with the confirmation, not with the send ──
 // This is what makes a retry RECOGNIZABLE: the same confirmed request always carries
 // the same identifier, so the operation can be found instead of repeated.
 const fonte = readFileSync(new URL('./web/connectors-vault.mjs', import.meta.url), 'utf8');
-eq((fonte.match(/const marca = novaMarca\(/g) || []).length, 2, 'as duas ações financeiras mintam a marca na confirmação');
+eq((fonte.match(/const marca = novaMarca\(/g) || []).length, 2, 'both financial actions mint the mark at confirmation');
 ok(/executarPagamento\(args, sim, vinculada\.request, vinculada\.rotulo, vinculada\.boundAccount, marca\)/.test(fonte),
-  'a confirmação do boleto repassa a marca pra execução');
+  'the bill confirmation passes the mark through to execution');
 ok(/executarTransferencia\(args, titular, vinculada\.request, vinculada\.rotulo, vinculada\.boundAccount, marca\)/.test(fonte),
-  'a confirmação do Pix repassa a marca pra execução');
+  'the Pix confirmation passes the mark through to execution');
 
 // ── 3. Lost response: looks up by the mark and uses the REAL state, without resending ──
 await withFetch([
@@ -118,10 +118,10 @@ await withFetch([
 ], async (calls) => {
   const pending = await prepararBoleto('marca-bill-recupera');
   const r = JSON.parse(await pending.run());
-  eq(posts(calls, '/v3/bill').length, 1, 'conexão caída NÃO gera um segundo pagamento');
-  eq(r.id, 'bill-recuperado', 'o pagamento encontrado pela marca é o que vale');
-  eq(r.incerto, undefined, 'operação encontrada não é incerteza');
-  eq(r.pending, true, 'estado real preservado');
+  eq(posts(calls, '/v3/bill').length, 1, 'dropped connection does NOT create a second payment');
+  eq(r.id, 'bill-recuperado', 'the payment found by the mark is the one that counts');
+  eq(r.incerto, undefined, 'a found operation is not uncertainty');
+  eq(r.pending, true, 'real state preserved');
 });
 
 await withFetch([
@@ -131,13 +131,13 @@ await withFetch([
 ], async (calls) => {
   const pending = await prepararPix('marca-pix-recupera');
   const r = JSON.parse(await pending.run());
-  eq(posts(calls, '/v3/transfers').length, 1, 'conexão caída NÃO gera um segundo Pix');
-  eq(r.id, 'pix-recuperado', 'a transferência encontrada pela marca é a que vale');
-  eq(r.saiu, true, 'estado real preservado');
+  eq(posts(calls, '/v3/transfers').length, 1, 'dropped connection does NOT create a second Pix');
+  eq(r.id, 'pix-recuperado', 'the transfer found by the mark is the one that counts');
+  eq(r.saiu, true, 'real state preserved');
   const listagem = calls[calls.length - 1];
-  eq(listagem.method, 'GET', 'a reconciliação só consulta');
+  eq(listagem.method, 'GET', 'reconciliation only queries');
   ok(decodeURIComponent(listagem.url).includes('dateCreated[ge]'),
-    'a listagem de transferências usa a janela de data (a Asaas não filtra por marca)');
+    'the transfer listing uses the date window (Asaas does not filter by mark)');
 });
 
 // ── 4. Not finding it becomes explicit uncertainty, never "nothing happened" ──
@@ -150,15 +150,15 @@ for (const caso of [
     const pending = await prepararBoleto(`marca-bill-incerto-${caso.rotulo}`);
     const bruto = await pending.run();
     const r = JSON.parse(bruto);
-    eq(posts(calls, '/v3/bill').length, 1, `${caso.rotulo}: um único POST`);
-    eq(r.incerto, true, `${caso.rotulo}: desfecho marcado como incerto`);
-    eq(r.pago, false, `${caso.rotulo}: nunca afirma que pagou`);
-    ok(/^brambs-bill-/.test(r.referencia), `${caso.rotulo}: devolve a marca pra conferência posterior`);
+    eq(posts(calls, '/v3/bill').length, 1, `${caso.rotulo}: a single POST`);
+    eq(r.incerto, true, `${caso.rotulo}: outcome marked as uncertain`);
+    eq(r.pago, false, `${caso.rotulo}: never claims it paid`);
+    ok(/^brambs-bill-/.test(r.referencia), `${caso.rotulo}: returns the mark for later verification`);
     const cartao = renderConfirmed(pending, bruto);
-    ok(cartao.includes('não tem confirmação verificável'), `${caso.rotulo}: o cartão não afirma sucesso`);
-    ok(cartao.includes('pode ter sido feito'), `${caso.rotulo}: o cartão avisa que o pagamento pode ter saído`);
-    ok(!/recusou/i.test(cartao), `${caso.rotulo}: falha de transporte não vira "a Asaas recusou"`);
-    ok(!/externalReference|HTTP|__/.test(cartao), `${caso.rotulo}: o aviso não despeja jargão`);
+    ok(cartao.includes('não tem confirmação verificável'), `${caso.rotulo}: the card does not claim success`);
+    ok(cartao.includes('pode ter sido feito'), `${caso.rotulo}: the card warns the payment may have gone out`);
+    ok(!/recusou/i.test(cartao), `${caso.rotulo}: transport failure does not become "a Asaas recusou"`);
+    ok(!/externalReference|HTTP|__/.test(cartao), `${caso.rotulo}: the warning does not dump jargon`);
   });
 }
 
@@ -166,10 +166,10 @@ await withFetch([titular, titular, { __erro: 502, corpo: {} }, { data: [], hasMo
   const pending = await prepararPix('marca-pix-incerto');
   const bruto = await pending.run();
   const r = JSON.parse(bruto);
-  eq(posts(calls, '/v3/transfers').length, 1, 'Pix incerto não é reenviado');
-  eq(r.incerto, true, 'Pix incerto é marcado como incerto');
-  eq(r.saiu, false, 'Pix incerto nunca afirma que saiu');
-  ok(renderConfirmed(pending, bruto).includes('pode ter saído'), 'o cartão do Pix avisa que ele pode ter saído');
+  eq(posts(calls, '/v3/transfers').length, 1, 'uncertain Pix is not resent');
+  eq(r.incerto, true, 'uncertain Pix is marked as uncertain');
+  eq(r.saiu, false, 'uncertain Pix never claims it went out');
+  ok(renderConfirmed(pending, bruto).includes('pode ter saído'), 'the Pix card warns it may have gone out');
 });
 
 // An operation from ANOTHER request in the same window can't be mistaken for ours.
@@ -180,8 +180,8 @@ await withFetch([
 ], async () => {
   const pending = await prepararBoleto('marca-bill-nao-confunde');
   const r = JSON.parse(await pending.run());
-  eq(r.incerto, true, 'marca diferente não conta como a nossa operação');
-  eq(r.id, undefined, 'não adota o id de outro pagamento');
+  eq(r.incerto, true, 'a different mark does not count as our operation');
+  eq(r.id, undefined, 'does not adopt the id of another payment');
 });
 
 // ── 5. A refusal stays a refusal: in that case the money did NOT go out ──
@@ -192,9 +192,9 @@ for (const caso of [
   await withFetch([boleto, boleto, { __erro: caso.status, corpo: caso.corpo }], async (calls) => {
     const pending = await prepararBoleto(`marca-bill-recusa-${caso.status}`);
     const r = JSON.parse(await pending.run());
-    eq(r.ok, false, `${caso.rotulo}: recusa é recusa`);
-    ok(/A Asaas recusou/.test(r.error), `${caso.rotulo}: explica que quem recusou foi a Asaas`);
-    eq(calls.length, 3, `${caso.rotulo}: recusa não dispara reconciliação`);
+    eq(r.ok, false, `${caso.rotulo}: a refusal is a refusal`);
+    ok(/A Asaas recusou/.test(r.error), `${caso.rotulo}: explains that Asaas was the one who refused`);
+    eq(calls.length, 3, `${caso.rotulo}: a refusal does not trigger reconciliation`);
   });
 }
 
@@ -203,19 +203,19 @@ await withFetch([titular, titular, { id: 'pix-nao-autorizado', status: 'PENDING'
   const pending = await prepararPix('pix-sem-autorizacao');
   const bruto = await pending.run();
   const r = JSON.parse(bruto);
-  eq(r.saiu, false, 'Pix esperando autorização não saiu');
-  eq(r.pending, true, 'Pix esperando autorização fica pendente');
-  ok(/ainda NÃO saiu/.test(r.aviso), 'o resultado diz que o Pix ainda não saiu');
+  eq(r.saiu, false, 'Pix awaiting authorization did not go out');
+  eq(r.pending, true, 'Pix awaiting authorization stays pending');
+  ok(/ainda NÃO saiu/.test(r.aviso), 'the result says the Pix has not gone out yet');
   const cartao = renderConfirmed(pending, bruto);
-  ok(!/enviado/i.test(cartao), 'o cartão não anuncia Pix enviado');
-  ok(cartao.includes('autorização'), 'o cartão diz o que falta: autorizar');
+  ok(!/enviado/i.test(cartao), 'the card does not announce Pix sent');
+  ok(cartao.includes('autorização'), 'the card says what is missing: authorize');
 });
 
 await withFetch([boleto, boleto, { id: 'bill-nao-autorizado', status: 'PENDING', authorized: false, value: 42 }], async () => {
   const pending = await prepararBoleto('bill-sem-autorizacao');
   const cartao = renderConfirmed(pending, await pending.run());
-  ok(!/confirmado pela Asaas/.test(cartao), 'o cartão não anuncia pagamento confirmado');
-  ok(cartao.includes('autorização'), 'o cartão diz que falta autorizar');
+  ok(!/confirmado pela Asaas/.test(cartao), 'the card does not announce confirmed payment');
+  ok(cartao.includes('autorização'), 'the card says authorization is still needed');
 });
 
 // ── #12 and #13 — completed action delivers proof, and the card stops saying "no confirmation" ──
@@ -226,11 +226,11 @@ await withFetch([boleto, boleto, {
   const pending = await prepararBoleto('bill-com-comprovante');
   const bruto = await pending.run();
   const r = JSON.parse(bruto);
-  eq(r.pago, true, 'boleto pago é pago');
-  eq(r.comprovante, 'https://www.asaas.com/comprovantes/bill-pago', 'o resultado devolve o comprovante');
+  eq(r.pago, true, 'a paid bill is paid');
+  eq(r.comprovante, 'https://www.asaas.com/comprovantes/bill-pago', 'the result returns the receipt');
   const cartao = renderConfirmed(pending, bruto);
-  ok(!cartao.includes('confirmação verificável'), 'pagamento concluído não aparece como sem confirmação');
-  ok(cartao.includes('https://www.asaas.com/comprovantes/bill-pago'), 'o cartão entrega o link do comprovante');
+  ok(!cartao.includes('confirmação verificável'), 'completed payment does not show as unconfirmed');
+  ok(cartao.includes('https://www.asaas.com/comprovantes/bill-pago'), 'the card delivers the receipt link');
 });
 
 await withFetch([titular, titular, {
@@ -240,10 +240,10 @@ await withFetch([titular, titular, {
   const pending = await prepararPix('pix-com-comprovante');
   const bruto = await pending.run();
   const r = JSON.parse(bruto);
-  eq(r.comprovante, 'https://www.asaas.com/comprovantes/pix-feito', 'o Pix concluído devolve o comprovante');
+  eq(r.comprovante, 'https://www.asaas.com/comprovantes/pix-feito', 'the completed Pix returns the receipt');
   const cartao = renderConfirmed(pending, bruto);
-  ok(!cartao.includes('confirmação verificável'), 'Pix concluído não aparece como sem confirmação');
-  ok(cartao.includes('https://www.asaas.com/comprovantes/pix-feito'), 'o cartão entrega o link do comprovante');
+  ok(!cartao.includes('confirmação verificável'), 'completed Pix does not show as unconfirmed');
+  ok(cartao.includes('https://www.asaas.com/comprovantes/pix-feito'), 'the card delivers the receipt link');
 });
 
 console.log(`PASS ${checks}: marca de idempotência, reconciliação por marca e cartão honesto; offline only.`);

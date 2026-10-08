@@ -22,7 +22,7 @@ function state() { const s=createEmailAnswerReviewState(); s.observe(evidence())
 const completion = answer => ({stop:'end',text:JSON.stringify({issues:[],answer}),usage:{in:20,out:10}});
 const review = (s, result, extra={}) => s.review({provider:{complete:async()=>result},text:draft,request:'A Paula respondeu?',...extra});
 
-test('elegibilidade: canais humanos explícitos com leitura de e-mail, sem rotina, ações ou interjeição', () => {
+test('eligibility: explicit human channels with email reading, no routine, actions or interjection', () => {
   assert.equal(createEmailAnswerReviewState().eligible(context), false);
   const s=state(); assert.equal(s.eligible(context),true);
   assert.equal(s.eligible({...context,messages:[{role:'user',meta:'interject',content:'Mensagem de um turno anterior'},...context.messages]}),true);
@@ -45,7 +45,7 @@ test('elegibilidade: canais humanos explícitos com leitura de e-mail, sem rotin
   }
 });
 
-test('uso misto do worker desabilita revisão mesmo com bundles antes ou depois', () => {
+test('mixed worker usage disables review even with bundles before or after', () => {
   for (const reverse of [false,true]) {
     const s=createEmailAnswerReviewState();
     for (const bundle of reverse?[{unsupported:true},evidence()]:[evidence(),{unsupported:true}]) s.observe(bundle);
@@ -55,7 +55,7 @@ test('uso misto do worker desabilita revisão mesmo com bundles antes ou depois'
   assert.equal(a.eligible(context),true); assert.equal(b.eligible(context),false);
 });
 
-test('dados preservados, estados das contas, idioma e contrato chegam ao revisor sem tools', async () => {
+test('preserved data, account statuses, language and contract reach the reviewer with no tools', async () => {
   const s=state();
   const row={account:'personal@example.invalid',status:'failed'};
   const coverage=turnSearchCoverage();coverage.observeAccountCoverage(row);
@@ -79,7 +79,7 @@ test('dados preservados, estados das contas, idioma e contrato chegam ao revisor
   assert.deepEqual(out.usage,{in:20,out:10}); assert.deepEqual(out.issues,['Repetição removida']);
 });
 
-test('aviso fornecido ao revisor aparece uma vez; omissão ou falha preserva proteção determinística', async () => {
+test('a warning given to the reviewer appears once; omission or failure keeps the deterministic safeguard', async () => {
   const coverage=turnSearchCoverage();
   coverage.observeEmailCoverage([{account:'work@example.invalid',tool:'gmail_search',status:'complete',returned:1}]);
   coverage.observeAccountCoverage({account:'personal@example.invalid',status:'failed'});
@@ -103,7 +103,7 @@ test('aviso fornecido ao revisor aparece uma vez; omissão ou falha preserva pro
   }
 });
 
-test('fontes e links existentes são aceitos, inclusive duas contas distintas', async () => {
+test('existing sources and links are accepted, including two distinct accounts', async () => {
   const s=state(),personalUrl='https://mail.google.com/mail/?authuser=personal%40example.invalid#all/message-3';
   s.observe({...evidence(),conta:'personal@example.invalid',sources:[{id:'message-3',url:personalUrl}]});
   const answer=`Duas compras possíveis: [trabalho](${sourceUrl}), [pessoal](${personalUrl}). [Acompanhamento informado](${trackingUrl}).`;
@@ -111,7 +111,7 @@ test('fontes e links existentes são aceitos, inclusive duas contas distintas', 
   assert.equal((await review(s,completion(draft))).status,'reviewed');
 });
 
-test('falha, crédito interrompido, protocolo truncado e tools inesperadas preservam rascunho', async () => {
+test('failure, interrupted credit, truncated protocol and unexpected tools preserve the draft', async () => {
   const s=state();
   const thrown=await s.review({provider:{complete:async()=>{throw Error('PRIVATE_PROVIDER_ERROR');}},text:draft,request:'Pergunta'});
   assert.deepEqual(thrown,{text:draft,status:'unavailable'});
@@ -126,7 +126,7 @@ test('falha, crédito interrompido, protocolo truncado e tools inesperadas prese
   assert.equal((await review(s,null)).status,'unavailable');
 });
 
-test('JSON inválido, campos inesperados ou resposta vazia nunca substituem rascunho', async () => {
+test('invalid JSON, unexpected fields or an empty response never replace the draft', async () => {
   for (const text of [
     'Resposta sem JSON', '{"answer":', 'null', '[]', '{}',
     '{"issues":[],"answer":""}', '{"issues":[],"answer":"  "}',
@@ -138,7 +138,7 @@ test('JSON inválido, campos inesperados ou resposta vazia nunca substituem rasc
   }
 });
 
-test('links não observados são rejeitados mesmo junto de fonte válida ou sem prefixo HTTP', async () => {
+test('unobserved links are rejected even alongside a valid source or without an HTTP prefix', async () => {
   for (const unknown of [
     'https://invented.example.invalid/path', '[link](https://invented.example.invalid/path)',
     '[link](javascript:alert(1))', '[link](mailto:invented@example.invalid)', '[link](/invented)',
@@ -150,14 +150,14 @@ test('links não observados são rejeitados mesmo junto de fonte válida ou sem 
   }
 });
 
-test('formato JSON em bloco de código é aceito e não expõe issues na resposta', async () => {
+test('JSON format in a code block is accepted and does not expose issues in the response', async () => {
   const answer=`Ainda não aprovou. [Resposta de Paula](${sourceUrl})`;
   const out=await review(state(),{stop:'end',text:'```json\n'+JSON.stringify({issues:['corrigido'],answer})+'\n```'});
   assert.equal(out.status,'reviewed'); assert.equal(out.text,answer); assert.ok(!out.text.includes('corrigido'));
 });
 
 
-test('perda no handoff propaga limitação sem apagar fontes, erros de citação sem perda não criam parcial',()=>{
+test('loss in the handoff propagates a limitation without erasing sources; citation errors with no loss do not create a partial',()=>{
  const rows=[];const s=createEmailAnswerReviewState({onIncomplete:r=>rows.push(r)});
  const preserved=evidence();s.observe(preserved);assert.equal(rows.length,0);
  s.observe({...preserved,extraction:{...preserved.extraction,output_truncated:true}});

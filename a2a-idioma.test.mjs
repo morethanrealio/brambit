@@ -9,7 +9,7 @@ import { comIdioma } from './web/locale.mjs';
 const baseA = { ownerAName: 'Ana', agentA: { name: 'Mara' }, ownerBName: 'Bruno', objetivo: 'marcar um café', ownerAProfileText: '' };
 const baseB = { ownerBName: 'Bruno', agentB: { name: 'Kim' }, ownerAName: 'Ana', ownerBPublicText: '' };
 
-test('pt-BR: corpo dos prompts de A e B igual com e sem idioma', () => {
+test('pt-BR: A and B prompt bodies identical with and without language', () => {
   for (const language of [undefined, null, 'pt-BR']) {
     const a = systemA({ ...baseA, language });
     const b = systemB({ ...baseB, language });
@@ -20,7 +20,7 @@ test('pt-BR: corpo dos prompts de A e B igual com e sem idioma', () => {
   }
 });
 
-test('en/es: o JSON pede o idioma do dono e a diretriz entra no fim', () => {
+test("en/es: the JSON asks for the owner's language and the directive goes at the end", () => {
   for (const language of ['en', 'es']) {
     const a = comIdioma(systemA({ ...baseA, language }), language);
     const b = comIdioma(systemB({ ...baseB, language }), language);

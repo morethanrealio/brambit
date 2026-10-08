@@ -6,7 +6,7 @@ import { selectReminder, reminderManagementTools } from './web/reminder-manageme
 import { createReminderStoreFixture } from './test-support/reminders/store-fixture.mjs';
 import { createActionJournal } from './web/action-evidence.mjs';
 
-test('mensal e dia sim/dia não atravessam meses sem virar 30 dias ou dias ímpares', () => {
+test('monthly and every-other-day cross months without turning into 30 days or odd days', () => {
   const month=recurrenceOccurrences({frequencia:'mensal'},'2026-09-14T08:30:00');
   assert.deepEqual(month.map(x=>x.local),['2026-09-14T08:30:00','2026-10-14T08:30:00','2026-11-14T08:30:00']);
   assert.deepEqual(recurrenceOccurrences({frequencia:'diaria',intervalo:2,quantidade:3},'2026-09-29T07:00:00').map(x=>x.local.slice(0,10)),['2026-09-29','2026-10-01','2026-10-03']);
@@ -20,7 +20,7 @@ test('mensal e dia sim/dia não atravessam meses sem virar 30 dias ou dias ímpa
   assert.equal(recurrenceOccurrences({frequencia:'diaria'},'2026-09-14T08:30:00','America/Sao_Paulo',{after:'2056-09-14T11:30:00Z',limit:1})[0].local,'2056-09-15T08:30:00');
 });
 
-test('data não autoriza cancelar dois lembretes no mesmo dia', async () => {
+test('a date alone does not authorize canceling two reminders on the same day', async () => {
   const rows=[{id:'a',message:'Pagar conta',run_at:'2027-09-14T10:00:00Z',channel:'email'},{id:'b',message:'Pagar conta',run_at:'2027-09-14T15:00:00Z',channel:'whatsapp'}];
   assert.equal(selectReminder(rows,{descricao:'conta',data:'2027-09-14'},'America/Sao_Paulo').code,'AMBIGUOUS');
   assert.equal(selectReminder(rows,{descricao:'conta',data:'2027-99-99'},'America/Sao_Paulo').ok,false);
@@ -35,7 +35,7 @@ test('data não autoriza cancelar dois lembretes no mesmo dia', async () => {
   assert.equal(journal.finish('Lembrete cancelado.'),'Lembrete cancelado.');
 });
 
-test('recorrência e remarcação duráveis: dedup, rollback, fence do worker e retomada da série', async t => {
+test('durable recurrence and rescheduling: dedup, rollback, worker fence and series resumption', async t => {
   const f=await createReminderStoreFixture(); t.after(()=>f.db.close());
   const c={regra:{frequencia:'mensal',quantidade:3},inicio:'2027-09-14T08:30:00',fuso:'America/Sao_Paulo'};
   const a={calendarRecurrence:c,runAt:'2027-09-14T11:30:00.000Z',message:'Mensal'};

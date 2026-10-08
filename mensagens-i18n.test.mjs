@@ -37,7 +37,7 @@ for (const idioma of ['en', 'es']) {
 // This is THE test. It runs over the 362 real messages, not over a made-up
 // example: if one of them started coming out different, today's 99 users
 // would see the change.
-t('pt-BR devolve a MESMA string em toda mensagem real', () => {
+t('pt-BR returns the SAME string in every real message', () => {
   for (const m of mensagens) {
     for (const idioma of ['pt-BR', 'pt', 'pt-PT', undefined, null, '']) {
       const saida = traduzMensagem(m, idioma, catalogos);
@@ -46,54 +46,54 @@ t('pt-BR devolve a MESMA string em toda mensagem real', () => {
   }
 });
 
-t('pt-BR devolve o MESMO objeto, pela mesma referência', () => {
+t('pt-BR returns the SAME object, by the same reference', () => {
   const obj = { ok: false, error: 'Faça login.', message: 'Faça login.', saldo: 12 };
   for (const idioma of ['pt-BR', undefined, null]) {
     if (traduzResposta(obj, idioma, catalogos) !== obj) throw new Error(`copiou o objeto em ${JSON.stringify(idioma)}`);
   }
 });
 
-t('idioma desconhecido não traduz e não copia', () => {
+t('unknown language does not translate and does not copy', () => {
   const obj = { error: 'Faça login.' };
-  eq(traduzResposta(obj, 'de', catalogos), obj, 'alemão não tem catálogo, tinha que sair o mesmo objeto');
-  eq(traduzMensagem('Faça login.', 'de', catalogos), 'Faça login.', 'alemão não tem catálogo');
+  eq(traduzResposta(obj, 'de', catalogos), obj, 'German has no catalog, the same object should come out');
+  eq(traduzMensagem('Faça login.', 'de', catalogos), 'Faça login.', 'German has no catalog');
 });
 
 // ── 2. only `error` and `message`, nothing else ────────────────────────────────────
-t('traduz error e message e não encosta no resto', () => {
+t('translates error and message and does not touch the rest', () => {
   const pt = mensagens.find((m) => catalogos.en[m]);
   if (!pt) throw new Error('catálogo en vazio: o resto do teste não valeria nada');
   const obj = { ok: false, error: pt, id: 'abc', queued: true, credits: 10 };
   const saida = traduzResposta(obj, 'en', catalogos);
-  eq(saida.error, catalogos.en[pt], 'error tinha que estar traduzido');
-  for (const campo of ['ok', 'id', 'queued', 'credits']) eq(saida[campo], obj[campo], `${campo} foi alterado`);
-  eq(Object.keys(saida).join(','), Object.keys(obj).join(','), 'mudou o conjunto ou a ordem das chaves');
-  eq(obj.error, pt, 'o objeto ORIGINAL foi mutado');
+  eq(saida.error, catalogos.en[pt], 'error should have been translated');
+  for (const campo of ['ok', 'id', 'queued', 'credits']) eq(saida[campo], obj[campo], `${campo} was changed`);
+  eq(Object.keys(saida).join(','), Object.keys(obj).join(','), 'the set or order of keys changed');
+  eq(obj.error, pt, 'the ORIGINAL object was mutated');
 });
 
-t('campo que não é string passa intacto', () => {
+t('a field that is not a string passes through untouched', () => {
   const obj = { error: { code: 42 }, message: 7 };
-  eq(traduzResposta(obj, 'en', catalogos), obj, 'objeto sem string traduzível tinha que sair pela mesma referência');
+  eq(traduzResposta(obj, 'en', catalogos), obj, 'an object with no translatable string should come out as the same reference');
 });
 
-t('não é objeto: devolve como veio', () => {
-  for (const v of [null, undefined, 'texto', 42, true]) eq(traduzResposta(v, 'en', catalogos), v, `mexeu em ${JSON.stringify(v)}`);
+t('not an object: returns as it came', () => {
+  for (const v of [null, undefined, 'texto', 42, true]) eq(traduzResposta(v, 'en', catalogos), v, `changed ${JSON.stringify(v)}`);
 });
 
 // ── 3. machine code never turns into a translated sentence ─────────────────────────
 // Translating `locked` or `bad_request` wouldn't make the screen ugly: it would leave the
 // client comparing against a value that changed language.
-t('código de máquina fica fora da extração', () => {
+t('machine code stays out of the extraction', () => {
   const CODIGO = /^[a-z][a-z0-9_]*$/;
   const vazados = mensagens.filter((m) => CODIGO.test(m));
   if (vazados.length) throw new Error(`extraiu código de máquina: ${JSON.stringify(vazados)}`);
 });
 
-t('código de máquina não está no catálogo, nem por engano', () => {
+t('machine code is not in the catalog, not even by mistake', () => {
   for (const idioma of ['en', 'es']) {
     for (const codigo of ['locked', 'no_agent', 'bad_request', 'unauthorized', 'rate_limited']) {
       if (catalogos[idioma][codigo] !== undefined) throw new Error(`${idioma} traduz ${codigo}`);
-      eq(traduzMensagem(codigo, idioma, catalogos), codigo, `${idioma} mexeu em ${codigo}`);
+      eq(traduzMensagem(codigo, idioma, catalogos), codigo, `${idioma} changed ${codigo}`);
     }
   }
 });
@@ -101,7 +101,7 @@ t('código de máquina não está no catálogo, nem por engano', () => {
 // ── 4. the catalog matches today's code ─────────────────────────────────────
 // A key that no longer exists in server.mjs is dead weight and hides a typo;
 // this test is what warns when someone rewrites a message.
-t('toda chave do catálogo existe na extração do server.mjs', () => {
+t('every catalog key exists in the server.mjs extraction', () => {
   const validas = new Set(mensagens);
   for (const idioma of ['en', 'es']) {
     const orfas = Object.keys(catalogos[idioma]).filter((k) => !validas.has(k));
@@ -109,7 +109,7 @@ t('toda chave do catálogo existe na extração do server.mjs', () => {
   }
 });
 
-t('nenhuma tradução traz barra invertida ou interpolação', () => {
+t('no translation carries a backslash or interpolation', () => {
   for (const idioma of ['en', 'es']) {
     for (const [pt, tr] of Object.entries(catalogos[idioma])) {
       if (typeof tr !== 'string' || !tr.trim()) throw new Error(`${idioma}: tradução vazia em ${JSON.stringify(pt)}`);
@@ -119,7 +119,7 @@ t('nenhuma tradução traz barra invertida ou interpolação', () => {
   }
 });
 
-t('extração não pega template nem literal com escape', () => {
+t('extraction does not pick up a template nor a literal with escape', () => {
   for (const m of mensagens) {
     if (m.includes('${')) throw new Error(`template virou chave: ${JSON.stringify(m)}`);
     if (m.includes('\\')) throw new Error(`literal com escape virou chave: ${JSON.stringify(m)}`);
@@ -130,7 +130,7 @@ t('extração não pega template nem literal com escape', () => {
 // What decides whether a literal goes to the screen is where it exits through. `return { error }`
 // is a tool result, it goes to the model, and translating it there would mess with the text that guides
 // its decision.
-t('só literal emitido por fail()/send() entra', () => {
+t('only a literal emitted by fail()/send() gets in', () => {
   const amostra = `
     fail(res, 401, 'Entra na conta primeiro.');
     send(res, 400, { error: 'Escolhe um arquivo.' });
@@ -149,28 +149,28 @@ t('só literal emitido por fail()/send() entra', () => {
 // the error arrives in the same language as the screen that triggered it.
 const doHeader = (req) => ({ language: req.headers['accept-language'] === 'es-AR' ? 'es' : 'pt-BR' });
 
-t('X-Idioma válido ganha do Accept-Language', () => {
+t('valid X-Idioma wins over Accept-Language', () => {
   eq(idiomaDaRequisicao({ headers: { 'x-idioma': 'en', 'accept-language': 'es-AR' } }, doHeader), 'en');
 });
 
-t('X-Idioma inválido cai no Accept-Language', () => {
+t('invalid X-Idioma falls back to Accept-Language', () => {
   eq(idiomaDaRequisicao({ headers: { 'x-idioma': 'klingon', 'accept-language': 'es-AR' } }, doHeader), 'es');
-  eq(idiomaDaRequisicao({ headers: { 'x-idioma': 'EN', 'accept-language': 'es-AR' } }, doHeader), 'es', 'a checagem é sensível a caixa, de propósito');
+  eq(idiomaDaRequisicao({ headers: { 'x-idioma': 'EN', 'accept-language': 'es-AR' } }, doHeader), 'es', 'the check is case-sensitive, on purpose');
 });
 
-t('sem header nenhum, português', () => {
+t('no header at all, Portuguese', () => {
   eq(idiomaDaRequisicao({ headers: {} }, doHeader), 'pt-BR');
   eq(idiomaDaRequisicao({}, doHeader), 'pt-BR');
 });
 
-t('doHeader que explode não derruba a requisição', () => {
+t('a doHeader that throws does not bring down the request', () => {
   eq(idiomaDaRequisicao({ headers: {} }, () => { throw new Error('boom'); }), 'pt-BR');
 });
 
 // ── 7. the SPA actually returns the page's language ─────────────────────────
 // Without this the rest turns into theory: if `api()` stops sending the header, every
 // app error falls back to Portuguese and no other test complains.
-t('index.html manda X-Idioma com o lang do <html>', () => {
+t('index.html sends X-Idioma with the <html> lang', () => {
   const spa = fs.readFileSync(path.join(WEB, 'public', 'index.html'), 'utf8');
   if (!/X-Idioma/.test(spa)) throw new Error('o api() da SPA não manda mais X-Idioma');
   if (!/document\.documentElement\.lang/.test(spa)) throw new Error('X-Idioma não vem mais do lang do <html>');

@@ -10,7 +10,7 @@ import {
 } from './web/confirm.mjs';
 import { isPauseOnlyRoutineChange } from './web/scheduler.mjs';
 
-test('confirmação que chega durante o turno fica para a fronteira segura e executa uma vez', async (t) => {
+test('a confirmation that arrives mid-turn waits for the safe boundary and executes once', async (t) => {
   const threadId = 'confirmation-mid-turn';
   t.after(() => takePending(threadId));
   let executions = 0;
@@ -29,8 +29,8 @@ test('confirmação que chega durante o turno fica para a fronteira segura e exe
   const safePoll = deferIncomingWhileConfirmationPending(threadId, destructivePoll);
 
   assert.equal(await safePoll(), null);
-  assert.equal(polls, 0, 'a mensagem não pode ser consumida pelo turno em andamento');
-  assert.ok(queued, 'o adaptador ainda deve possuir a mensagem para o próximo turno');
+  assert.equal(polls, 0, 'the message must not be consumed by the turn in progress');
+  assert.ok(queued, 'the adapter must still hold the message for the next turn');
   assert.equal(executions, 0);
 
   const nextTurn = await destructivePoll();
@@ -40,10 +40,10 @@ test('confirmação que chega durante o turno fica para a fronteira segura e exe
   await pending.run(pending.args);
   assert.equal(executions, 1);
   assert.equal(await destructivePoll(), null);
-  assert.equal(executions, 1, 'não pode haver publicação duplicada');
+  assert.equal(executions, 1, 'there must be no duplicate publishing');
 });
 
-test('mensagem comum continua entrando no turno quando não há confirmação pendente', async () => {
+test('a plain message still enters the turn when there is no pending confirmation', async () => {
   let polls = 0;
   const safePoll = deferIncomingWhileConfirmationPending('ordinary-interjection', async () => {
     polls++;
@@ -53,7 +53,7 @@ test('mensagem comum continua entrando no turno quando não há confirmação pe
   assert.equal(polls, 1);
 });
 
-test('recusa também permanece para o próximo turno sem executar a ação', async (t) => {
+test('a refusal also stays for the next turn without executing the action', async (t) => {
   const threadId = 'cancellation-mid-turn';
   t.after(() => takePending(threadId));
   let executions = 0;
@@ -71,7 +71,7 @@ test('recusa também permanece para o próximo turno sem executar a ação', asy
   assert.equal(executions, 0);
 });
 
-test('pausa simples de rotina executa direto, mas retomada ou edição continuam gated', async (t) => {
+test('a simple routine pause executes directly, but resuming or editing stays gated', async (t) => {
   const ids = ['pause-inline', 'resume-gated', 'pause-plus-edit'];
   t.after(() => ids.forEach((id) => takePending(id)));
   const calls = [];

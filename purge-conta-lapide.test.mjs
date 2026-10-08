@@ -28,7 +28,7 @@ function criarLapidario() {
   };
 }
 
-test('bucket fora do ar: a key da conta destruída fica registrada, não some', async () => {
+test('bucket is down: the key for the destroyed account stays recorded, it does not disappear', async () => {
   const lap = criarLapidario();
   const r = await purgarMidiaDaConta({
     keys: ['u1/foto.jpg', 'u1/rosto.png'],
@@ -42,7 +42,7 @@ test('bucket fora do ar: a key da conta destruída fica registrada, não some', 
   assert.deepEqual(lap.abertas().map((l) => l.s3_key).sort(), ['u1/foto.jpg', 'u1/rosto.png']);
 });
 
-test('a lápide é gravada ANTES do primeiro delete', async () => {
+test('the tombstone is written BEFORE the first delete', async () => {
   const lap = criarLapidario();
   const ordem = [];
   await purgarMidiaDaConta({
@@ -54,7 +54,7 @@ test('a lápide é gravada ANTES do primeiro delete', async () => {
   assert.deepEqual(ordem, ['lapide', 'delete', 'delete']);
 });
 
-test('o varredor limpa depois o que o bucket recusou na destruição', async () => {
+test('the sweeper later cleans up what the bucket refused during destruction', async () => {
   const lap = criarLapidario();
   await purgarMidiaDaConta({
     keys: ['u1/foto.jpg'],
@@ -62,13 +62,13 @@ test('o varredor limpa depois o que o bucket recusou na destruição', async () 
     deleteMedia: async () => { throw new Error('s3 500'); },
     settle: lap.settle,
   });
-  assert.equal(lap.abertas().length, 1, 'pré-condição: ficou pendente');
+  assert.equal(lap.abertas().length, 1, 'precondition: stayed pending');
   const r = await varrerLapides({ claim: lap.claim, deleteMedia: async () => {}, settle: lap.settle });
   assert.equal(r.apagados, 1);
-  assert.equal(lap.abertas().length, 0, 'depois do varredor o objeto não pode mais estar aberto');
+  assert.equal(lap.abertas().length, 0, 'after the sweeper the object can no longer be open');
 });
 
-test('tudo apagado: nada fica pendente', async () => {
+test('everything deleted: nothing stays pending', async () => {
   const lap = criarLapidario();
   const apagadas = [];
   const r = await purgarMidiaDaConta({
@@ -77,14 +77,14 @@ test('tudo apagado: nada fica pendente', async () => {
     deleteMedia: async (k) => { apagadas.push(k); },
     settle: lap.settle,
   });
-  assert.equal(r.total, 2, 'key repetida não vira duas lápides');
+  assert.equal(r.total, 2, 'repeated key does not become two tombstones');
   assert.equal(r.apagados, 2);
   assert.equal(r.pendentes, 0);
   assert.equal(lap.abertas().length, 0);
   assert.deepEqual(apagadas.sort(), ['u1/a.jpg', 'u1/b.jpg']);
 });
 
-test('conta sem mídia não grava lápide nenhuma', async () => {
+test('account without media does not write any tombstone', async () => {
   let chamou = false;
   const r = await purgarMidiaDaConta({
     keys: [],

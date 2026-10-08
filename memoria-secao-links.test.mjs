@@ -23,29 +23,29 @@ const comRabo = [
   '- nunca marcar reunião antes das 10h',
 ].join('\n');
 
-test('linha escrita abaixo da seção de links sobrevive à sincronização', () => {
+test('a line written below the links section survives synchronization', () => {
   const body = montarPerfilComLinks(comRabo, PAGS);
-  assert.ok(body !== null, 'não podia abortar: a perda seria só do bloco gerado');
+  assert.ok(body !== null, 'it should not abort: the loss would only be in the generated block');
   assert.ok(body.includes('## Combinados'));
   assert.ok(body.includes('- nunca marcar reunião antes das 10h'));
   assert.ok(body.includes('- mora em São Paulo'));
 });
 
-test('os links são regenerados, não duplicados', () => {
+test('links are regenerated, not duplicated', () => {
   const body = montarPerfilComLinks(comRabo, PAGS);
   assert.equal(body.split('- pessoa-joao — Pessoa João').length - 1, 1);
   assert.ok(body.includes('- projeto-x — Projeto X'));
   assert.equal(body.split(MARCA).length - 1, 1);
 });
 
-test('o rabo do dono fica DEPOIS do bloco de links, não no meio', () => {
+test('the owner\'s tail stays AFTER the links block, not in the middle', () => {
   const body = montarPerfilComLinks(comRabo, PAGS);
   const l = body.split('\n');
   assert.ok(l.indexOf('- projeto-x — Projeto X') < l.indexOf('## Combinados'));
   assert.ok(l.indexOf(l.find((x) => x.startsWith(MARCA))) < l.indexOf('## Combinados'));
 });
 
-test('sem outras páginas, a seção some mas o rabo continua lá', () => {
+test('with no other pages, the section disappears but the tail stays', () => {
   const body = montarPerfilComLinks(comRabo, []);
   assert.ok(!body.includes(MARCA));
   assert.ok(!body.includes('- pessoa-joao — Pessoa João'));
@@ -53,7 +53,7 @@ test('sem outras páginas, a seção some mas o rabo continua lá', () => {
   assert.ok(body.includes('- nunca marcar reunião antes das 10h'));
 });
 
-test('perfil sem marcador ganha a seção no fim e não perde nada', () => {
+test('a profile without a marker gets the section at the end and loses nothing', () => {
   const antes = '# Perfil\n- gosta de café';
   const body = montarPerfilComLinks(antes, PAGS);
   assert.ok(body.includes('- gosta de café'));
@@ -61,12 +61,12 @@ test('perfil sem marcador ganha a seção no fim e não perde nada', () => {
   assert.ok(body.includes('- pessoa-joao — Pessoa João'));
 });
 
-test('nada muda quando já está sincronizado (evita escrita à toa)', () => {
+test('nothing changes when already in sync (avoids a pointless write)', () => {
   const body = montarPerfilComLinks(comRabo, [PAGS[0]]);
   assert.equal(body.trim(), comRabo.trim());
 });
 
-test('linha parecida com link mas escrita pelo dono não é comida', () => {
+test('a line that looks like a link but was written by the owner is not eaten', () => {
   const antes = [
     '# Perfil',
     '',
@@ -78,7 +78,7 @@ test('linha parecida com link mas escrita pelo dono não é comida', () => {
   assert.ok(body.includes('- comprar pão — na padaria da esquina'));
 });
 
-test('trava de segurança: se fosse perder linha do dono, devolve null (não grava)', () => {
+test('safety guard: if it were to lose an owner line, it returns null (doesn\'t save)', () => {
   // Simulates a future regression by calling with a profile whose tail disappears: here I ensure
   // that the guard exists in the source and that the caller respects the null.
   const src = fs.readFileSync(new URL('./web/wiki.mjs', import.meta.url), 'utf8');
@@ -87,9 +87,9 @@ test('trava de segurança: se fosse perder linha do dono, devolve null (não gra
   assert.match(src, /\[memoria links\][^\n]*abortado/);
 });
 
-test('o corte não é mais "tudo abaixo do marcador"', () => {
+test('the cut is no longer "everything below the marker"', () => {
   const src = fs.readFileSync(new URL('./web/wiki.mjs', import.meta.url), 'utf8');
   const f = src.slice(src.indexOf('export function montarPerfilComLinks'), src.indexOf('export async function sincronizarLinks'));
-  assert.ok(/EH_LINK_GERADO/.test(f), 'o corte tem que reconhecer o formato da linha gerada');
-  assert.ok(/rabo/.test(f), 'o que vem depois do bloco gerado tem que ser preservado');
+  assert.ok(/EH_LINK_GERADO/.test(f), 'the cut has to recognize the format of the generated line');
+  assert.ok(/rabo/.test(f), 'what comes after the generated block has to be preserved');
 });

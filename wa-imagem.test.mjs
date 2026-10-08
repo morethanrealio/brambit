@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createCanvas } from '@napi-rs/canvas';
 import { paraJpegOuPng, tipoDaImagem } from './web/wa-imagem.mjs';
 
-test('WebP vira JPEG; JPEG passa como está', async () => {
+test('WebP becomes JPEG; JPEG passes through as is', async () => {
   const c = createCanvas(40, 20); c.getContext('2d').fillRect(0, 0, 10, 10);
   const webp = await c.encode('webp');
   assert.equal(tipoDaImagem(webp), null);

@@ -40,14 +40,14 @@ async function rodar({ runConversation, falhasDaResposta = 0 }) {
   return { sent, registrados, turnos };
 }
 
-test('falha de rede no envio: reenvia a resposta pronta, sem aviso e sem novo turno', async () => {
+test('network failure on send: resends the ready reply, with no notice and no new turn', async () => {
   const r = await rodar({ runConversation: async () => ({ text: 'Anotado.' }), falhasDaResposta: 1 });
   assert.deepEqual(r.sent, ['Anotado.']);
   assert.equal(r.turnos, 1);
   assert.deepEqual(r.registrados, []);
 });
 
-test('envio que não se recupera: aviso de entrega no histórico, sem pedir pra refazer', async () => {
+test('a send that never recovers: delivery notice in the history, without asking to redo it', async () => {
   const r = await rodar({ runConversation: async () => ({ text: 'Anotado.' }), falhasDaResposta: 9 });
   assert.equal(r.turnos, 1);
   assert.equal(r.sent.length, 1);
@@ -55,7 +55,7 @@ test('envio que não se recupera: aviso de entrega no histórico, sem pedir pra 
   assert.deepEqual(r.registrados.map((x) => [x.text, x.pergunta]), [[r.sent[0], null]]);
 });
 
-test('turno que quebra: aviso e pergunta entram no histórico', async () => {
+test('a turn that breaks: notice and question enter the history', async () => {
   const r = await rodar({ runConversation: async () => { throw new Error('provider caiu'); } });
   assert.equal(r.sent.length, 1);
   assert.match(r.sent[0], /não consegui terminar de responder/);
@@ -91,7 +91,7 @@ async function rodarWa({ falhasDaResposta }) {
   return { sent, registrados, turnos };
 }
 
-test('WhatsApp: reenvia a resposta pronta e, se não sair, avisa no histórico', async () => {
+test('WhatsApp: resends the ready reply and, if it still fails, notifies in the history', async () => {
   const ok = await rodarWa({ falhasDaResposta: 1 });
   assert.deepEqual([ok.sent, ok.turnos, ok.registrados], [['Anotado.'], 1, []]);
   const falhou = await rodarWa({ falhasDaResposta: 9 });

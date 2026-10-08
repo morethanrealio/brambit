@@ -22,7 +22,7 @@ function criarLapidario() {
   };
 }
 
-test('S3 fora do ar: a lápide continua aberta em vez de o arquivo virar órfão', async () => {
+test('S3 down: the tombstone stays open instead of the file becoming orphaned', async () => {
   const lap = criarLapidario();
   const id = lap.enfileira('u1/foto.jpg');
   const r = await apagarObjetoComLapide({
@@ -32,11 +32,11 @@ test('S3 fora do ar: a lápide continua aberta em vez de o arquivo virar órfão
   });
   assert.equal(r.ok, false);
   assert.equal(r.pendente, true);
-  assert.equal(lap.linhas.get(id).status, 'pending', 'lápide não pode ser fechada sem o bucket confirmar');
+  assert.equal(lap.linhas.get(id).status, 'pending', 'a tombstone cannot close without the bucket confirming');
   assert.equal(lap.abertas().length, 1);
 });
 
-test('bucket confirma: a lápide fecha', async () => {
+test('bucket confirms: the tombstone closes', async () => {
   const lap = criarLapidario();
   const id = lap.enfileira('u1/foto.jpg');
   const apagadas = [];
@@ -51,7 +51,7 @@ test('bucket confirma: a lápide fecha', async () => {
   assert.equal(lap.abertas().length, 0);
 });
 
-test('o varredor apaga de verdade quando o S3 volta', async () => {
+test('the sweeper actually deletes once S3 comes back', async () => {
   const lap = criarLapidario();
   const id = lap.enfileira('u1/rosto.jpg');
   let noAr = false;
@@ -65,12 +65,12 @@ test('o varredor apaga de verdade quando o S3 volta', async () => {
   noAr = true;
   r = await varrerLapides({ claim: lap.claim, deleteMedia, settle: lap.settle });
   assert.deepEqual([r.vistos, r.apagados, r.falhas], [1, 1, 0]);
-  assert.equal(lap.abertas().length, 0, 'nenhum objeto pode ficar sem dono no bucket');
+  assert.equal(lap.abertas().length, 0, 'no object can be left ownerless in the bucket');
   // nada mais a varrer
   assert.equal((await varrerLapides({ claim: lap.claim, deleteMedia, settle: lap.settle })).vistos, 0);
 });
 
-test('mídia sem key (modo disco) não deixa lápide aberta', async () => {
+test('media with no key (disk mode) doesn\'t leave a tombstone open', async () => {
   const lap = criarLapidario();
   const id = lap.enfileira(null);
   const r = await apagarObjetoComLapide({
@@ -82,7 +82,7 @@ test('mídia sem key (modo disco) não deixa lápide aberta', async () => {
   assert.equal(lap.linhas.get(id).status, 'done');
 });
 
-test('falha ao fechar a lápide deixa o caso pro varredor (delete é idempotente)', async () => {
+test('failing to close the tombstone leaves the case for the sweeper (delete is idempotent)', async () => {
   const lap = criarLapidario();
   const id = lap.enfileira('u1/doc.pdf');
   const r = await apagarObjetoComLapide({
@@ -95,7 +95,7 @@ test('falha ao fechar a lápide deixa o caso pro varredor (delete é idempotente
   assert.equal(lap.linhas.get(id).status, 'pending');
 });
 
-test('uma falha não impede as outras lápides de serem apagadas', async () => {
+test('one failure doesn\'t stop the other tombstones from being deleted', async () => {
   const lap = criarLapidario();
   lap.enfileira('u1/a.jpg'); lap.enfileira('u1/ruim.jpg'); lap.enfileira('u1/c.jpg');
   const r = await varrerLapides({

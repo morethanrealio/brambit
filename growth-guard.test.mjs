@@ -6,13 +6,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compareGrowth, countLines, run } from './test-support/growth-guard.mjs';
 
-test('countLines conta a última linha sem \\n final', () => {
+test('countLines counts the last line even with no trailing \\n', () => {
   assert.equal(countLines(''), 0);
   assert.equal(countLines('a\nb\n'), 2);
   assert.equal(countLines('a\nb'), 2);
 });
 
-test('compareGrowth: só cresce quando os dois lados existem e o depois é maior', () => {
+test('compareGrowth: only grows when both sides exist and after is greater', () => {
   const r = compareGrowth({ a: 10, b: 10, c: null }, { a: 11, b: 9, c: 50 }, ['a', 'b', 'c']);
   assert.deepEqual(r.map((x) => [x.file, x.grew, x.delta]), [['a', true, 1], ['b', false, -1], ['c', false, null]]);
 });
@@ -29,7 +29,7 @@ function repo() {
   return { dir, base: git('rev-parse', 'HEAD'), done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-test('run: reprova quando server.mjs cresce e aprova com o rótulo', () => {
+test('run: fails when server.mjs grows and passes with the allow flag', () => {
   const r = repo();
   try {
     writeFileSync(path.join(r.dir, 'web/server.mjs'), 'a\nb\nc\nd\n');
@@ -40,7 +40,7 @@ test('run: reprova quando server.mjs cresce e aprova com o rótulo', () => {
   } finally { r.done(); }
 });
 
-test('run: aprova quando encolhe ou fica igual', () => {
+test('run: passes when it shrinks or stays the same', () => {
   const r = repo();
   try {
     writeFileSync(path.join(r.dir, 'web/server.mjs'), 'a\n');

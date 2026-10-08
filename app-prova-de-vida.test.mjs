@@ -42,7 +42,7 @@ function fixture({prova,semProva=false}={}) {
 const edicaoBoa=f=>f.provider(batch(call('escrever_arquivo_do_app',{caminho:'public/index.html',conteudo:HTML.replace('/api/ping','/api/pong')},'w'),
  call('validar_rascunho_do_app',{},'v')),end);
 
-test('edição validada dispara a prova de vida uma vez e anexa o veredito ao recibo',async()=>{
+test('a validated edit fires the proof of life once and attaches the verdict to the receipt',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'passou',efemero:true,app:'tst-deadbeef',health:'healthy'}});
  const out=await f.run(edicaoBoa(f));
  assert.equal(out.app_build.estado,'consistencia_validada');
@@ -53,13 +53,13 @@ test('edição validada dispara a prova de vida uma vez e anexa o veredito ao re
  assert.deepEqual(saved.journal.filter(x=>x.event==='prova_de_vida').map(x=>[x.ok,x.prova,x.veredito]),[[true,'rodou','passou']]);
 });
 
-test('a prova é do HOST: nunca aparece no schema que vai pro modelo',async()=>{
+test('the proof belongs to the HOST: it never appears in the schema sent to the model',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'passou'}});
  await f.run(edicaoBoa(f));
  assert.equal(f.vistaPeloModelo,false);
 });
 
-test('app que sobe quebrado INFORMA, não bloqueia: tarefa segue concluída e validada',async()=>{
+test('an app that comes up broken INFORMS, it does not block: the task still ends completed and validated',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'quebrado',rotas_quebradas:'/api/pong (404)',
   agente:'Status 404 numa rota de API costuma ser erro de DIGITAÇÃO no caminho.'}});
  const out=await f.run(edicaoBoa(f));
@@ -71,7 +71,7 @@ test('app que sobe quebrado INFORMA, não bloqueia: tarefa segue concluída e va
  assert.match(out.app_build.prova_de_vida.rotas_quebradas,/pong/);
 });
 
-test('crash no boot vira veredito com log, sem mexer em ok nem em status',async()=>{
+test('a crash on boot becomes a verdict with a log, without touching ok or status',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'crashou',exit_code:1,log_do_crash:'ReferenceError: pign is not defined'}});
  const out=await f.run(edicaoBoa(f));
  assert.equal(out.ok,true);
@@ -79,7 +79,7 @@ test('crash no boot vira veredito com log, sem mexer em ok nem em status',async(
  assert.match(out.app_build.prova_de_vida.log_do_crash,/ReferenceError/);
 });
 
-test('prova que não roda registra exatamente isso, nunca aprovado nem reprovado',async()=>{
+test('a proof that does not run records exactly that, never passed nor failed',async()=>{
  const f=fixture({prova:{ok:false,prova:'nao_rodou',error:'Já existe uma prova de vida rodando pra este usuário (restam ~120s).',
   agente:'A prova de vida NÃO chegou a rodar, então ela não diz NADA sobre o app.'}});
  const out=await f.run(edicaoBoa(f));
@@ -89,7 +89,7 @@ test('prova que não roda registra exatamente isso, nunca aprovado nem reprovado
  assert.equal((await f.leitura()).journal.findLast(x=>x.event==='prova_de_vida').ok,false);
 });
 
-test('prova que estoura é normalizada pro mesmo contrato e a tarefa não quebra',async()=>{
+test('a proof that throws is normalized to the same contract and the task does not break',async()=>{
  const f=fixture({prova:()=>{throw Error('docker indisponível');}});
  const out=await f.run(edicaoBoa(f));
  assert.equal(out.ok,true);
@@ -97,7 +97,7 @@ test('prova que estoura é normalizada pro mesmo contrato e a tarefa não quebra
  assert.match(out.app_build.prova_de_vida.error,/docker indispon/);
 });
 
-test('sem validação estática aprovada a prova NÃO roda (nada a provar ainda)',async()=>{
+test('without an approved static validation the proof does NOT run (nothing to prove yet)',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'passou'}});
  const out=await f.run(f.provider(batch(call('escrever_arquivo_do_app',{caminho:'public/index.html',conteudo:HTML+'\n<!-- x -->'},'w')),end));
  assert.equal(out.app_build.motivo,'edit_validation_pending');
@@ -105,7 +105,7 @@ test('sem validação estática aprovada a prova NÃO roda (nada a provar ainda)
  assert.equal(out.app_build.prova_de_vida,undefined);
 });
 
-test('host sem a tool (registry antigo) segue funcionando sem prova nenhuma',async()=>{
+test('a host without the tool (old registry) keeps working with no proof at all',async()=>{
  const f=fixture({semProva:true});
  const out=await f.run(edicaoBoa(f));
  assert.equal(out.ok,true);
@@ -114,7 +114,7 @@ test('host sem a tool (registry antigo) segue funcionando sem prova nenhuma',asy
  assert.equal((await f.leitura()).journal.filter(x=>x.event==='prova_de_vida').length,0);
 });
 
-test('o recibo determinístico segue sem prometer o que o modelo disse',async()=>{
+test('the deterministic receipt still does not promise what the model said',async()=>{
  const f=fixture({prova:{ok:true,prova:'rodou',veredito:'quebrado',rotas_quebradas:'/api/pong (404)'}});
  const out=await f.run(edicaoBoa(f));
  for(const lang of ['pt-BR','en','es']){
@@ -125,7 +125,7 @@ test('o recibo determinístico segue sem prometer o que o modelo disse',async()=
 
 // Routing in the real server: the tool has to LEAVE the main assistant and ENTER
 // the app sub-agent, otherwise it becomes one more schema in the floor cost of every turn.
-test('roteamento: provar_app está em APP_BUILD_TOOLS e fora do inline do principal',()=>{
+test('routing: provar_app is in APP_BUILD_TOOLS and outside the main inline set',()=>{
  const server=fs.readFileSync('web/server.mjs','utf8');
  const build=server.match(/const APP_BUILD_TOOLS = new Set\(\[([\s\S]*?)\]\)/)[1];
  const inline=server.match(/const APPS_INLINE = new Set\(\[([\s\S]*?)\]\)/)[1];
@@ -139,7 +139,7 @@ test('roteamento: provar_app está em APP_BUILD_TOOLS e fora do inline do princi
 
 // The runner only sees READS ∪ EDITS to build the model's registry; provar_app is
 // deliberately left out of both, and that's exactly what keeps it un-callable in a loop.
-test('runner: provar_app não está nem em READS nem em EDITS',()=>{
+test('runner: provar_app is in neither READS nor EDITS',()=>{
  const src=fs.readFileSync('web/app-task-runner.mjs','utf8');
  const reads=src.match(/const READS=new Set\(\[([\s\S]*?)\]\)/)[1];
  const edits=src.match(/const EDITS=new Set\(\[([\s\S]*?)\]\)/)[1];

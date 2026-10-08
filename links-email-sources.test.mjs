@@ -22,7 +22,7 @@ globalThis.fetch=async(url,options)=>{
 };
 const gmail=id=>`https://mail.google.com/mail/?authuser=work%40example.invalid#all/${id}`;
 
-test('links exatos de mensagens observadas dispensam HTTP público sem serem marcados validados',async()=>{
+test('exact links from observed messages skip public HTTP without being marked validated',async()=>{
   const coverage=turnSearchCoverage();
   const messages=[
     emailSource('gmail',{id:'observed-403',account:'work@example.invalid'}),
@@ -47,7 +47,7 @@ test('links exatos de mensagens observadas dispensam HTTP público sem serem mar
   assert.deepEqual(checked.authenticatedSources,messages.map(m=>m.link));
 });
 
-test('exceção requer formato conhecido e igualdade exata, sem liberar domínio ou link do corpo',async()=>{
+test('the exception requires a known format and exact equality, without freeing the domain or body link',async()=>{
   const known=gmail('known-only');
   const invented=gmail('invented-404');
   const otherAccount=known.replace('work%40','other%40');
@@ -66,7 +66,7 @@ test('exceção requer formato conhecido e igualdade exata, sem liberar domínio
   for (const url of candidates)assert.deepEqual(requests.filter(([u])=>u===url).map(([,method])=>method),url===otherAccount ? ['HEAD'] : ['HEAD','GET']);
 });
 
-test('formatos de leitura Outlook e Gmail conhecidos aceitos somente se observados',async()=>{
+test('known Outlook and Gmail read formats accepted only if observed',async()=>{
   const urls=[
     'https://mail.google.com/mail/u/0/#all/observed-browser',
     'https://outlook.office.com/mail/deeplink/read/AAMk%2Bmessage%3D',
@@ -77,7 +77,7 @@ test('formatos de leitura Outlook e Gmail conhecidos aceitos somente se observad
   assert.deepEqual(result.authenticatedSources,urls);assert.equal(result.checados,0);assert.equal(requests.length,before);
 });
 
-test('estado autenticado fica no turno; links privados não observados continuam indefinidos',async()=>{
+test('authenticated state stays in the turn; unobserved private links remain undefined',async()=>{
   for (const [id,status] of [['new-turn-403',403],['new-turn-redirect','redirect']]) {
     const url=gmail(id);plans.set(url,status);
     const result=await fontesEConferencia(`[Mensagem](${url})`,[],{authenticatedEmailSources:turnSearchCoverage().emailSourceLinks()});
@@ -86,7 +86,7 @@ test('estado autenticado fica no turno; links privados não observados continuam
   }
 });
 
-test('rotinas estritas conservam exigência de conferência pública, mesmo com fonte autenticada',async()=>{
+test('strict routines keep the public verification requirement, even with an authenticated source',async()=>{
   // Since 2026-09-29 a link without proof of failure stays in the text, with the notice.
   const url=gmail('strict-observed');plans.set(url,403);
   const result=await fontesEConferencia(`• [Mensagem](${url})`,[],{strictLinks:true,authenticatedEmailSources:[url]});
@@ -95,7 +95,7 @@ test('rotinas estritas conservam exigência de conferência pública, mesmo com 
   assert.equal(requests.filter(([u])=>u===url).length,1);
 });
 
-test('fontes autenticadas não consomem o limite dos oito links públicos',async()=>{
+test('authenticated sources do not consume the eight-public-link budget',async()=>{
   const mail=Array.from({length:10},(_,i)=>gmail('budget-'+i));
   const publicUrl='https://tracking.example.invalid/budget-check';plans.set(publicUrl,200);
   const result=await conferirLinks([...mail,publicUrl].join('\n'),{authenticatedEmailSources:mail});

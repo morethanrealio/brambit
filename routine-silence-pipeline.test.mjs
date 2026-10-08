@@ -58,12 +58,12 @@ async function pipeline(text, {kind = 'routine', completed = true, failed = fals
   };
   const finish = new AsyncFunction(...Object.keys(deps), `const diag={removidas:[],corte(){}};\n${source.slice(start, end)}\nreturn {text,messages};`);
   const result = await finish(...Object.values(deps));
-  assert.deepEqual(journal.entries, before, 'suprimir apresentação não apaga evidência nem métricas');
-  assert.equal(result.messages.at(-1).content, result.text, 'retorno e histórico devem ser iguais');
+  assert.deepEqual(journal.entries, before, 'suppressing presentation does not erase evidence or metrics');
+  assert.equal(result.messages.at(-1).content, result.text, 'return value and history must match');
   return {...result,entries:journal.entries,coverageWarnings:searchCoverage.emailWarnings(language)};
 }
 
-test('identificador financeiro e pergunta de confirmação passam intactos no chat', async () => {
+test('financial identifier and confirmation question pass through chat untouched', async () => {
   // No focus filter (2026-09-29): nothing in the pipeline cuts the offer or the requested data.
   for (const text of ['Resultado da consulta.', 'Chave PIX: synthetic-private-id',
     'Rascunhei o e-mail pro João.\n\nQuer que eu envie agora?']) {
@@ -71,7 +71,7 @@ test('identificador financeiro e pergunta de confirmação passam intactos no ch
   }
 });
 
-test('sinal exato validado preserva silêncio com memória salva/duplicada nos três idiomas', async () => {
+test('exact validated signal preserves silence with saved/duplicate memory in all three languages', async () => {
   for (const language of ['pt-BR','en','es']) {
     for (const receipts of [[], [savedMemory], [duplicateMemory], [writtenMemory], [savedMemory,duplicateMemory]]) {
       const result = await pipeline(ROUTINE_NO_NEWS, {language,receipts});
@@ -81,7 +81,7 @@ test('sinal exato validado preserva silêncio com memória salva/duplicada nos t
   }
 });
 
-test('core real conclui consulta e memória com termination completed e pipeline preserva silêncio', async () => {
+test('real core completes check and memory with termination completed and pipeline preserves silence', async () => {
   const journal = createActionJournal(), routineCheck = {completed:false,failed:false}, toolCounts = {};
   const eventStart = source.indexOf("      if (ev?.type === 'tool_result') {", source.indexOf('  const interjecoes = [];'));
   const eventEnd = source.indexOf('      // Message the user sent mid-turn', eventStart);
@@ -107,7 +107,7 @@ test('core real conclui consulta e memória com termination completed e pipeline
   assert.equal(final.entries.length, 1);
 });
 
-test('silêncio validado chega ao executor como no_output e entrega not_attempted', async () => {
+test('validated silence reaches the executor as no_output and delivery not_attempted', async () => {
   let persisted, deliveries = 0;
   const executor = createRoutineExecutor({
     claim:async () => true,phase:async () => true,
@@ -122,7 +122,7 @@ test('silêncio validado chega ao executor como no_output e entrega not_attempte
   assert.deepEqual(persisted, {status:'no_output',content:{status:'no_output'},delivery:{status:'not_attempted'}});
 });
 
-test('fontes de consulta completa não revivem silêncio validado, mas permanecem em chat e achados', async () => {
+test('complete check sources do not revive validated silence, but remain in chat and findings', async () => {
   for (const language of ['pt-BR','en','es']) {
     assert.equal((await pipeline(ROUTINE_NO_NEWS, {emailStatus:'complete',language})).text, '');
   }
@@ -133,7 +133,7 @@ test('fontes de consulta completa não revivem silêncio validado, mas permanece
   }
 });
 
-test('fontes de consulta parcial ou falha mantêm aviso e recibos com protocolo exato', async () => {
+test('partial or failed check sources keep warning and receipts with the exact protocol', async () => {
   for (const emailStatus of ['partial','failed']) {
     const result = await pipeline(ROUTINE_NO_NEWS, {emailStatus});
     assert.ok(result.coverageWarnings.length > 0);
@@ -143,7 +143,7 @@ test('fontes de consulta parcial ou falha mantêm aviso e recibos com protocolo 
   }
 });
 
-test('chat, texto vazio sem protocolo e sinais misturados continuam mostrando recibos', async () => {
+test('chat, empty text without protocol and mixed signals keep showing receipts', async () => {
   for (const [text, kind] of [[ROUTINE_NO_NEWS,'chat'], ['', 'routine'], ['Sem novidades.', 'routine'],
     [`Resultado: ${ROUTINE_NO_NEWS}`, 'routine'], [`${ROUTINE_NO_NEWS}\nAnotado.`, 'routine']]) {
     const result = await pipeline(text, {kind});
@@ -152,7 +152,7 @@ test('chat, texto vazio sem protocolo e sinais misturados continuam mostrando re
   }
 });
 
-test('consulta ausente ou falha não vira silêncio apesar do protocolo e da memória salva', async () => {
+test('missing or failed check does not become silence despite the protocol and saved memory', async () => {
   for (const state of [{completed:false,failed:false}, {completed:true,failed:true}, {completed:false,failed:true}]) {
     const result = await pipeline(ROUTINE_NO_NEWS, state);
     assert.match(result.text, /Não pude confirmar que não há novidades/);
@@ -161,7 +161,7 @@ test('consulta ausente ou falha não vira silêncio apesar do protocolo e da mem
   }
 });
 
-test('falha da consulta chega ao executor como aviso e tenta a entrega', async () => {
+test('check failure reaches the executor as a warning and attempts delivery', async () => {
   let deliveries = 0;
   const executor = createRoutineExecutor({claim:async () => true,phase:async () => true,finish:async () => true});
   await executor.execute({id:'failed-check-routine'}, {
@@ -175,7 +175,7 @@ test('falha da consulta chega ao executor como aviso e tenta a entrega', async (
   assert.equal(deliveries, 1);
 });
 
-test('busca parcial permanece visível no pipeline e é entregue pelo executor', async () => {
+test('partial search stays visible in the pipeline and is delivered by the executor', async () => {
   let deliveries = 0;
   const coverage = turnSearchCoverage();coverage.observe(true);
   const warning = coverage.finish('', 'pt-BR');
@@ -191,7 +191,7 @@ test('busca parcial permanece visível no pipeline e é entregue pelo executor',
   assert.equal(deliveries, 1);
 });
 
-test('outros recibos, erros e pendências impedem supressão', async () => {
+test('other receipts, errors and pending items prevent suppression', async () => {
   const cases = [
     [{name:'memoria_anotar',out:{ok:false}}, /não foi concluída/],
     [{name:'memoria_anotar',out:'Resultado desconhecido'}, /Não consegui confirmar/],
@@ -207,20 +207,20 @@ test('outros recibos, erros e pendências impedem supressão', async () => {
   }
 });
 
-test('cartão de confirmação real continua presente após a supressão dos recibos de memória', async () => {
+test('real confirmation card stays present after memory receipts are suppressed', async () => {
   const pending = {confirmationText:'Criar o evento sintético às 13h.\n\nPosso seguir?'};
   const result = await pipeline(ROUTINE_NO_NEWS, {pending});
   assert.ok(result.text.endsWith(pending.confirmationText));
   assert.match(result.text, /Informação salva na memória permanente/);
 });
 
-test('falha do journal de app permanece visível depois do silêncio validado', async () => {
+test('app journal failure stays visible after validated silence', async () => {
   const appJournal = createAppBuildJournal({failedPublication:true,publicationError:'Falha sintética de publicação.'});
   const result = await pipeline(ROUTINE_NO_NEWS, {appJournal});
   assert.equal(result.text, 'Falha sintética de publicação.');
 });
 
-test('opção de supressão não oculta texto útil, aviso explícito nem terminação', () => {
+test('suppression option does not hide useful text, explicit warning or termination', () => {
   const journal = createActionJournal();
   journal.toolResult(savedMemory, savedMemory.out);
   for (const text of ['Preço caiu para R$ 100.', 'Falha: acesso negado.', '⚠️ Busca parcial: erro na consulta.']) {
@@ -237,7 +237,7 @@ const LOCALE_EXPECTATIONS = [
   ['es', /No pude confirmar que no haya novedades/, /Información guardada en la memoria permanente/, /Correos consultados/, /La respuesta puede estar incompleta\./],
 ];
 for (const [language, checkWarning, memoryReceipt, sourceTitle, partialWarning] of LOCALE_EXPECTATIONS) {
-  test(`avisos de consulta respeitam ${language} no pipeline e identificador financeiro passa intacto`, async () => {
+  test(`check warnings respect ${language} in the pipeline and financial identifier passes through intact`, async () => {
     const identifier = 'PIX: 00000000-0000-4000-8000-000000000000';
     assert.equal((await pipeline(identifier, {language, receipts:[]})).text, identifier);
     for (const state of [{completed:false}, {failed:true}]) {
@@ -261,7 +261,7 @@ for (const [language, checkWarning, memoryReceipt, sourceTitle, partialWarning] 
 }
 
 for (const [language, checkWarning, memoryReceipt, sourceTitle, partialWarning] of LOCALE_EXPECTATIONS) {
-  test(`memória v2 salva/inalterada preserva silêncio e evidência em ${language}`, async () => {
+  test(`memory v2 saved/unchanged preserves silence and evidence in ${language}`, async () => {
     for (const [receipt,state] of [[updatedFact,'saved'],[unchangedFact,'already_saved']]) {
       const result = await pipeline(ROUTINE_NO_NEWS,{language,emailStatus:'complete',receipts:[savedMemory,receipt]});
       assert.equal(result.text,'');
@@ -277,7 +277,7 @@ for (const [language, checkWarning, memoryReceipt, sourceTitle, partialWarning] 
       assert.deepEqual(persisted,{status:'no_output',content:{status:'no_output'},delivery:{status:'not_attempted'}});
     }
   });
-  test(`memória v2 não esconde chat, falhas, cobertura parcial nem outros efeitos em ${language}`, async () => {
+  test(`memory v2 does not hide chat, failures, partial coverage or other effects in ${language}`, async () => {
     for (const receipts of [[updatedFact],[unchangedFact]]) {
       assert.ok((await pipeline(ROUTINE_NO_NEWS,{language,receipts,kind:'chat'})).text.trim());
       assert.ok((await pipeline('',{language,receipts})).text.trim());

@@ -9,7 +9,7 @@ import {inboxFixture} from './test-support/wa-inbox-fixture.mjs';
 import {postgresSkipReason} from './test-support/local-postgres.mjs';
 import {createAppTaskStore,pgTaskLock} from './web/app-task-store.mjs';
 
-test('trava pelo Postgres: exclusiva por tarefa e solta quando a conexão morre',{timeout:40000,skip:postgresSkipReason()},async t=>{
+test('Postgres-based lock: exclusive per task and releases when the connection dies',{timeout:40000,skip:postgresSkipReason()},async t=>{
  const f=await inboxFixture();t.after(()=>f.close());
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'pg-lock-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
  const {host,port,user,database}=f.pool.options;

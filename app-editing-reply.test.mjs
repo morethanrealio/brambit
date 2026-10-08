@@ -47,7 +47,7 @@ test('server supplies the literal current user message to presentation selection
  const code=fs.readFileSync(new URL('./web/server.mjs',import.meta.url),'utf8');const statement=code.match(/const appBuildJournal = createAppBuildJournal\(([^;]+)\);/)[1];assert.match(statement,/userRequest:message/);const current='Mostre os detalhes técnicos';let got;new Function('createAppBuildJournal','userLang','idiomaResposta','message','confirmedToolLog',`createAppBuildJournal(${statement});`)(x=>{got=x;},'pt-BR','pt-BR',current,[]);assert.equal(got.userRequest,current);assert.equal(got.failedPublication,false);
 });
 
-test('edição validada conta ao dono o que mudou e oferece publicar pra testar (caso de 25/09)', () => {
+test('a validated edit tells the owner what changed and offers to publish for testing (case from 25/09)', () => {
   const b = { estado:'consistencia_validada', motivo:'completed', validacao:'aprovado', revisao:'a'.repeat(64), arquivos:['public/style.css'],
     objetivo:'Corrigir a tela escura que cobre o painel e impede tocar nos botões. Detalhe técnico que não vai pra mensagem.' };
   const pt = appEditingReply(b);

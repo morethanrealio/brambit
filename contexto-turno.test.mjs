@@ -34,14 +34,14 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
     },
   });
   const noPasso2 = vistos[1] || [];
-  t('passo 1: modelo vê os 6 resultados da rodada, nenhum stub', noPasso2.length === 6 && !noPasso2.some((c) => c.includes(STUB)));
+  t('step 1: model sees the 6 results of the round, no stub', noPasso2.length === 6 && !noPasso2.some((c) => c.includes(STUB)));
   const noPasso3 = vistos[2] || [];
   const stubs = noPasso3.filter((c) => c.includes(STUB)).length;
   // Recent window = the last 4 MESSAGES (here 2 old results + the
   // assistant message from the 2nd round + the new result), so 3 whole results.
-  t('passo 2: o que já foi lido vira stub (poda continua funcionando)', stubs === 4);
-  t('passo 2: a janela recente segue inteira', noPasso3.length - stubs === 3);
-  t('passo 2: o resultado ainda não lido está inteiro', noPasso3.at(-1) === BLOB);
+  t('step 2: what has already been read becomes a stub (pruning still works)', stubs === 4);
+  t('step 2: the recent window stays whole', noPasso3.length - stubs === 3);
+  t('step 2: the result not yet read is whole', noPasso3.at(-1) === BLOB);
 }
 
 // ── B) freio anti-loop identifica a chamada culpada ──
@@ -57,9 +57,9 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
     },
   });
   const lb = eventos.find((e) => e.type === 'loop_break');
-  t('loop_break emitido', !!lb);
-  t('loop_break nomeia a tool', lb?.tool === 'buscar');
-  t('loop_break carrega os args pra diagnóstico', String(lb?.args || '').includes('sempre igual') && lb?.argsLen > 0);
+  t('loop_break emitted', !!lb);
+  t('loop_break names the tool', lb?.tool === 'buscar');
+  t('loop_break carries the args for diagnosis', String(lb?.args || '').includes('sempre igual') && lb?.argsLen > 0);
 }
 
 // ── C) coding sub-agent: the cut by message count does not lose the goal ──
@@ -92,8 +92,8 @@ const STUB = 'Você já viu esse conteúdo antes neste turno';
     },
   });
   const texto = (sessionVista || []).map((m) => String(m.content || '')).join('\n');
-  t('objetivo original sobrevive ao corte por nº de mensagens', texto.includes('MIGRAR O ENDPOINT DE PAGAMENTO PRO NOVO SDK'));
-  t('a âncora é marcada como contexto, não como pedido novo', texto.includes('[OBJETIVO ORIGINAL DESTA SESSÃO DE CÓDIGO]'));
+  t('original goal survives the cut by number of messages', texto.includes('MIGRAR O ENDPOINT DE PAGAMENTO PRO NOVO SDK'));
+  t('the anchor is marked as context, not as a new request', texto.includes('[OBJETIVO ORIGINAL DESTA SESSÃO DE CÓDIGO]'));
 }
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);

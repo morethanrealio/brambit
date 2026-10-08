@@ -11,12 +11,12 @@ const fake = (conta) => ['calendar_create', 'calendar_update', 'calendar_delete'
   } : {}),
 }));
 
-test('sem outra conta, tools ficam iguais', () => {
+test('with no other account, tools stay the same', () => {
   const tools = fake('a@x');
   assert.equal(calendarWritesPorConta(tools, { contas: ['a@x'], padrao: 'a@x', construir: fake }), tools);
 });
 
-test('conta escolhida vai para a proposta, a confirmação e a execução', async () => {
+test('the chosen account flows to the proposal, the confirmation and the execution', async () => {
   const tools = calendarWritesPorConta(fake('a@x'), { contas: ['a@x', 'b@x'], padrao: 'a@x', construir: fake });
   const upd = tools.find((t) => t.name === 'calendar_update');
   assert.ok(upd.parameters.properties.conta);

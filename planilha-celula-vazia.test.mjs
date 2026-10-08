@@ -57,20 +57,20 @@ function planilha(sheetData, shared = '<si><t>alfa</t></si>') {
   });
 }
 
-test('célula vazia autofechada não engole a célula seguinte', () => {
+test('an empty self-closing cell doesn\'t swallow the next cell', () => {
   const buf = planilha('<row r="1"><c r="A1"/><c r="B1"><v>5</v></c><c r="C1"><v>7</v></c></row>');
   const { text } = xlsxToText(buf);
   assert.equal(text, '# Dados\n,5,7');
 });
 
-test('linha inteira autofechada não engole a linha seguinte', () => {
+test('an entire self-closing row doesn\'t swallow the next row', () => {
   const buf = planilha('<row r="1"/><row r="2"><c r="A2" t="s"><v>0</v></c></row>');
   const { text, rows } = xlsxToText(buf);
   assert.equal(rows, 2);
   assert.equal(text, '# Dados\n\nalfa');
 });
 
-test('conferidor de células: a vazia volta vazia e a seguinte volta com o valor certo', () => {
+test('cell checker: the empty one comes back empty and the next one comes back with the right value', () => {
   const buf = planilha('<row r="1"><c r="A1"/><c r="B1"><v>5</v></c></row>');
   const [a1, b1] = xlsxCells(buf, ['Dados!A1', 'Dados!B1']);
   assert.equal(a1.exists, true);
@@ -78,7 +78,7 @@ test('conferidor de células: a vazia volta vazia e a seguinte volta com o valor
   assert.equal(b1.value, '5');
 });
 
-test('conferidor de células: fórmula da célula seguinte não é atribuída à vazia', () => {
+test('cell checker: the next cell\'s formula isn\'t assigned to the empty one', () => {
   const buf = planilha('<row r="1"><c r="A1" s="2"/><c r="B1"><f>SOMA(C1:D1)</f><v>9</v></c></row>');
   const [a1, b1] = xlsxCells(buf, ['A1', 'B1']);
   assert.equal(a1.formula, '');
@@ -87,26 +87,26 @@ test('conferidor de células: fórmula da célula seguinte não é atribuída à
   assert.equal(b1.value, '9');
 });
 
-test('texto compartilhado vazio não desalinha a tabela de textos', () => {
+test('an empty shared string doesn\'t misalign the string table', () => {
   // empty <si/> at position 0: if it swallowed the next one, index 1 would come out wrong.
   const buf = planilha('<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>',
     '<si/><si><t>beta</t></si>');
   assert.equal(xlsxToText(buf).text, '# Dados\n,beta');
 });
 
-test('<t/> vazio dentro de inlineStr não engole o texto seguinte', () => {
+test('an empty <t/> inside inlineStr doesn\'t swallow the next text', () => {
   const buf = planilha('<row r="1"><c r="A1" t="inlineStr"><is><t/></is></c>'
     + '<c r="B1" t="inlineStr"><is><t>gama</t></is></c></row>');
   assert.equal(xlsxToText(buf).text, '# Dados\n,gama');
 });
 
-test('planilha normal (sem célula vazia) segue lendo igual', () => {
+test('a normal spreadsheet (no empty cell) keeps reading the same way', () => {
   const buf = planilha('<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><v>2</v></c></row>'
     + '<row r="2"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>');
   assert.equal(xlsxToText(buf).text, '# Dados\nalfa,2\n3,4');
 });
 
-test('fonte: toda busca de corpo tem a forma autofechada como primeira alternativa', () => {
+test('source: every body search has the self-closing form as the first alternative', () => {
   // Guards against regression: if someone rewrites one of these regexes without the
   // '/>' alternative in front, the defect comes back silently.
   const src = fs.readFileSync(new URL('./web/xlsxread.mjs', import.meta.url), 'utf8');
@@ -118,7 +118,7 @@ test('fonte: toda busca de corpo tem a forma autofechada como primeira alternati
       if (corpo < 0) continue;
       const antes = linha.slice(0, corpo);
       assert.ok(/\/>\|/.test(antes) || /\\\/>\|/.test(antes),
-        `<${tag}> casa o corpo sem tentar a forma autofechada antes: ${linha.trim()}`);
+        `<${tag}> matches the body without trying the self-closing form first: ${linha.trim()}`);
     }
   }
 });

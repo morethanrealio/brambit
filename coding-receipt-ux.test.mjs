@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { codingJobReceipt } from './web/coding-jobs.mjs';
 
-test('recibo inicial de programação é curto, humano e não expõe fila interna', () => {
+test('initial coding receipt is short, human and does not expose the internal queue', () => {
   const receipt = codingJobReceipt({
     id: 'job', state: 'queued', kind: 'basic', stage: null,
     updatedAt: 1, notification: null,

@@ -189,9 +189,9 @@ function pdfFixture(overrides = {}) {
 const REPORT = 'PRIVATE_SYNTHETIC_REPORT'.repeat(150);
 const participant = (channel, extra = {}) => ({ channel, user_id: 'owner', agent_id: 'agent', report_id: 'report-id', body_markdown: '# Sua jornada\n\nSíntese.', ...extra });
 
-test('com PDF disponível, todo canal recebe texto curto e o arquivo, e a conversa guarda o anexo', async () => {
+test('with a PDF available, every channel receives short text and the file, and the conversation keeps the attachment', async () => {
   for (const channel of ['telegram', 'whatsapp', 'app']) {
-    const f = pdfFixture({ deliverToChannel: async () => assert.fail('o aviso de texto só existe quando o PDF falha') });
+    const f = pdfFixture({ deliverToChannel: async () => assert.fail('the text notice only exists when the PDF fails') });
     const receipt = await createDiscoveryReportDelivery(f.deps)(participant(channel), REPORT);
     assert.equal(receipt.ok, true);
     // The conversation receives the short text with the PDF attached, never the raw report.
@@ -209,11 +209,11 @@ test('com PDF disponível, todo canal recebe texto curto e o arquivo, e a conver
   }
 });
 
-test('WhatsApp fora da janela: PDF por e-mail e aviso por mensagem de utilidade', async () => {
+test('WhatsApp outside the window: PDF by email and notice via utility message', async () => {
   const f = fixture(), p = pdfFixture({ deliverToChannel: f.deliverToChannel, whatsappWindowOpen: async () => false });
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('whatsapp'), REPORT);
   assert.equal(receipt.ok, true);
-  assert.equal(p.docs.length, 0, 'template aprovado não carrega arquivo');
+  assert.equal(p.docs.length, 0, 'approved template does not carry a file');
   assert.equal(p.mails.length, 1);
   assert.equal(p.mails[0][1].filename, 'Jornada de descoberta.pdf');
   assert.ok(p.mails[0][1].buffer.length);
@@ -226,27 +226,27 @@ test('WhatsApp fora da janela: PDF por e-mail e aviso por mensagem de utilidade'
   assert.equal(options.retryUnknown, false);
 });
 
-test('sem e-mail entregue, o aviso fora da janela não promete e-mail nenhum', async () => {
+test('without a delivered email, the outside-the-window notice promises no email at all', async () => {
   const sent = [], p = pdfFixture({ emailDocument: async () => false, whatsappWindowOpen: async () => false,
     deliverToChannel: async (...args) => { sent.push(args); return { ok: true, id: 'receipt' }; } });
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('whatsapp'), REPORT);
   assert.equal(receipt.ok, true);
   assert.doesNotMatch(sent[0][1], /e-mail/);
   assert.match(sent[0][1], /\/inicio\?c=owner-thread/);
-  assert.deepEqual(p.published[0][3], [p.doc.attachment], 'o PDF continua na conversa');
+  assert.deepEqual(p.published[0][3], [p.doc.attachment], 'the PDF stays in the conversation');
 });
 
-test('falha ao gerar o PDF preserva a entrega em texto', async () => {
+test('failure to generate the PDF preserves the text delivery', async () => {
   const sent = [], p = pdfFixture({ buildDocument: async () => { throw Error('synthetic'); },
     deliverToChannel: async (...args) => { sent.push(args); return { ok: true, id: 'receipt' }; } });
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('telegram'), REPORT);
   assert.equal(receipt.ok, true);
-  assert.equal(p.published[0][1], REPORT, 'o relatório volta a ser gravado inteiro na conversa');
+  assert.equal(p.published[0][1], REPORT, 'the full report is written back to the conversation');
   assert.equal(p.published[0][3], null);
   assert.match(sent[0][1], /\/inicio\?c=owner-thread/);
 });
 
-test('falha ao enviar o PDF no canal vira aviso com link, sem perder o anexo da conversa', async () => {
+test('failure to send the PDF on the channel becomes a notice with a link, without losing the conversation attachment', async () => {
   const sent = [], p = pdfFixture({ sendDocument: async () => { throw Error('synthetic'); },
     deliverToChannel: async (...args) => { sent.push(args); return { ok: true, id: 'receipt' }; } });
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('telegram'), REPORT);
@@ -256,8 +256,8 @@ test('falha ao enviar o PDF no canal vira aviso com link, sem perder o anexo da 
   assert.doesNotMatch(sent[0][1], /PRIVATE_SYNTHETIC_REPORT/);
 });
 
-test('aviso de falha de preparo não tenta gerar PDF', async () => {
-  const sent = [], p = pdfFixture({ buildDocument: async () => assert.fail('não há relatório para virar PDF'),
+test('preparation-failure notice does not try to generate a PDF', async () => {
+  const sent = [], p = pdfFixture({ buildDocument: async () => assert.fail('there is no report to turn into a PDF'),
     deliverToChannel: async (...args) => { sent.push(args); return { ok: true, id: 'receipt' }; } });
   await createDiscoveryReportDelivery(p.deps)(participant('telegram', { report_state: 'failed' }), 'Não consegui preparar sua devolutiva desta vez.');
   assert.match(sent[0][1], /Não consegui preparar/);

@@ -44,7 +44,7 @@ const resposta = (corpo) => ({ status: 200, text: async () => JSON.stringify(cor
 function editarArquivo() {
   const tools = codingTools('u1', { project: { ownerUserId: 'u1', nome: 'proj' } });
   const t = tools.find((x) => x.name === 'editar_arquivo');
-  assert.ok(t, 'editar_arquivo precisa existir no modo projeto');
+  assert.ok(t, 'editar_arquivo must exist in project mode');
   return t;
 }
 
@@ -56,34 +56,34 @@ async function editar({ antes, busca, troca }) {
 
 // ── comportamento ───────────────────────────────────────────────────────────
 
-test('$$ de Makefile/shell chega inteiro no arquivo', async () => {
+test('$$ from Makefile/shell arrives intact in the file', async () => {
   const troca = 'echo $$PID && make FOO=$$(BAR)';
   const { out, gravado } = await editar({ antes: 'linha 1\nALVO\nlinha 3\n', busca: 'ALVO', troca });
   assert.equal(out.ok, true);
   assert.equal(gravado, `linha 1\n${troca}\nlinha 3\n`);
-  assert.ok(gravado.includes('$$PID'), 'o $$ não pode virar $');
+  assert.ok(gravado.includes('$$PID'), 'the $$ must not turn into $');
 });
 
-test('$& não repete o trecho buscado', async () => {
+test('$& does not repeat the searched snippet', async () => {
   const { gravado } = await editar({ antes: 'a SENHA b\n', busca: 'SENHA', troca: 'preco: R$& taxa' });
   assert.equal(gravado, 'a preco: R$& taxa b\n');
-  assert.ok(!gravado.includes('R$SENHA'), '$& não pode ser expandido para a busca');
+  assert.ok(!gravado.includes('R$SENHA'), '$& must not expand to the search term');
 });
 
-test("$` e $' não trazem o resto do arquivo pra dentro da troca", async () => {
+test("$` and $' do not bring the rest of the file into the replacement", async () => {
   const antes = 'antes\nALVO\ndepois\n';
   const { gravado } = await editar({ antes, busca: 'ALVO', troca: "x=$` y=$' z=$1" });
   assert.equal(gravado, "antes\nx=$` y=$' z=$1\ndepois\n");
-  assert.ok(!gravado.includes('antes\nx=antes'), '$` não pode virar o prefixo do arquivo');
+  assert.ok(!gravado.includes('antes\nx=antes'), '$` must not turn into the file prefix');
 });
 
-test('a busca também é literal: caracteres de regex não viram metacaractere', async () => {
+test('the search is also literal: regex characters do not become metacharacters', async () => {
   const { out, gravado } = await editar({ antes: 'const re = a.b(c)+d;\n', busca: 'a.b(c)+d', troca: 'ok' });
   assert.equal(out.ok, true);
   assert.equal(gravado, 'const re = ok;\n');
 });
 
-test('trecho ausente ou repetido continua recusado, sem gravar nada', async () => {
+test('missing or repeated snippet keeps being refused, without writing anything', async () => {
   const ausente = await editar({ antes: 'nada aqui\n', busca: 'ALVO', troca: 'x' });
   assert.equal(ausente.out.ok, false);
   assert.match(ausente.out.error, /Não achei o trecho/);
@@ -95,7 +95,7 @@ test('trecho ausente ou repetido continua recusado, sem gravar nada', async () =
   assert.equal(repetido.gravado, undefined);
 });
 
-test('a contagem de linhas do retorno bate com o que foi gravado', async () => {
+test('the line count in the return matches what was written', async () => {
   const { out, gravado } = await editar({ antes: 'a\nALVO\nb\n', busca: 'ALVO', troca: 'x\ny\nz' });
   assert.match(out.saida, /\+2 linhas/);
   assert.equal(gravado.split('\n').length, 6);
@@ -103,7 +103,7 @@ test('a contagem de linhas do retorno bate com o que foi gravado', async () => {
 
 // ── fonte ───────────────────────────────────────────────────────────────────
 
-test('o fonte não volta a usar replace com string de substituição', () => {
-  assert.ok(!/\.replace\(busca, troca\)/.test(fonte), 'replace(busca, troca) reintroduzido');
+test('the source does not go back to using replace with a substitution string', () => {
+  assert.ok(!/\.replace\(busca, troca\)/.test(fonte), 'replace(busca, troca) reintroduced');
   assert.match(fonte, /content\.split\(busca\)\.join\(troca\)/);
 });

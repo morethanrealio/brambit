@@ -53,7 +53,7 @@ const duasAbas = () => workbookFixture(`<row r="1">${cell('A1', 'Banco')}${cell(
   extra: { 'xl/worksheets/sheet2.xml': `<worksheet xmlns="${NS}"><sheetData><row r="1">${cell('A1', 'Fornecedor')}${cell('B1', 'Status')}</row><row r="2">${cell('A2', 'Energia')}${cell('B2', 'aguardando')}</row><row r="3">${cell('A3', 'Água')}${cell('B3', 'pago')}</row></sheetData></worksheet>` },
 });
 const CELULAS = ['Itaú', '1500', 'Energia', 'aguardando', 'pago'];
-const semCelulas = (txt) => { for (const c of CELULAS) assert.ok(!String(txt).includes(c), `célula "${c}" vazou: ${txt}`); };
+const semCelulas = (txt) => { for (const c of CELULAS) assert.ok(!String(txt).includes(c), `cell "${c}" leaked: ${txt}`); };
 
 // Fake sandbox that answers the probe with a ready-made structure.
 const sondaOk = (abas) => ({ enabled: true, gravados: [], comandos: [],
@@ -61,11 +61,11 @@ const sondaOk = (abas) => ({ enabled: true, gravados: [], comandos: [],
   async shell(userId, cmd) { this.comandos.push(cmd); return { exitCode: 0, stdout: JSON.stringify({ ok: true, abas }) + '\n', stderr: '' }; } });
 const ABAS = [{ nome: 'Resumo', linhas: 1, colunas: 2, nomes: ['Banco', 'Total'] }, { nome: 'Semana 39', linhas: 2, colunas: 2, nomes: ['Fornecedor', 'Status'] }];
 
-test('tipoPlanilha: a extensão manda, o mime decide quando não há extensão', () => {
+test('tipoPlanilha: the extension decides, mime decides when there is no extension', () => {
   assert.equal(tipoPlanilha('a.xlsx'), 'excel');
   assert.equal(tipoPlanilha('a.XLSM'), 'excel');
   assert.equal(tipoPlanilha('a.xls'), 'excel');
-  assert.equal(tipoPlanilha('contas.csv', 'application/vnd.ms-excel'), 'csv', 'CSV do Windows com mime de Excel continua CSV');
+  assert.equal(tipoPlanilha('contas.csv', 'application/vnd.ms-excel'), 'csv', 'Windows CSV with Excel mime stays CSV');
   assert.equal(tipoPlanilha('a.tsv'), 'tsv');
   assert.equal(tipoPlanilha('export', 'text/csv; charset=utf-8'), 'csv');
   assert.equal(tipoPlanilha('', 'text/tab-separated-values'), 'tsv');
@@ -74,12 +74,12 @@ test('tipoPlanilha: a extensão manda, o mime decide quando não há extensão',
   for (const [n, m] of [['a.pdf', 'application/pdf'], ['a.txt', 'text/plain'], ['a.docx', ''], ['', ''], ['pagina', 'text/html']]) assert.equal(tipoPlanilha(n, m), null, `${n} ${m}`);
 });
 
-test('carregar planilha: grava no sandbox, registra e a nota traz só a estrutura', async () => {
+test('load spreadsheet: writes to the sandbox, registers it, and the note carries only the structure', async () => {
   const sb = globalThis.__sb = sondaOk(ABAS);
   const lr = await loadSpreadsheetIntoSandbox('u-estrutura', duasAbas(), 'Contas a Pagar.xlsx');
   assert.equal(lr.ok, true);
   assert.equal(sb.gravados[0].path, '/workspace/planilhas/Contas_a_Pagar.xlsx');
-  assert.ok(sb.gravados[0].buf.equals(duasAbas()), 'bytes originais, inteiros');
+  assert.ok(sb.gravados[0].buf.equals(duasAbas()), 'original bytes, intact');
   assert.match(sb.comandos[0], /^python3 - '\/workspace\/planilhas\/Contas_a_Pagar\.xlsx' excel <<'SONDA_PY'/);
   assert.equal(lr.sheets, 2); assert.equal(lr.rows, 3);
   assert.match(lr.note, /aba "Resumo": 1 linha\(s\) de dados, 2 coluna\(s\): "Banco", "Total"/);
@@ -89,14 +89,14 @@ test('carregar planilha: grava no sandbox, registra e a nota traz só a estrutur
   assert.deepEqual(getLoadedSheets('u-estrutura').map((e) => [e.filename, e.sheets, e.rows]), [['Contas_a_Pagar.xlsx', 2, 3]]);
 });
 
-test('CSV sem extensão ganha .csv no nome e a sonda abre como CSV', async () => {
+test('CSV without extension gets .csv in the name and the probe opens it as CSV', async () => {
   const sb = globalThis.__sb = sondaOk([{ nome: '(csv)', linhas: 1, colunas: 2, nomes: ['a', 'b'] }]);
   const lr = await loadSpreadsheetIntoSandbox('u-csv', Buffer.from('a;b\n1;2'), 'export', { mime: 'text/csv' });
   assert.equal(lr.filename, 'export.csv');
   assert.match(sb.comandos[0], /export\.csv' csv <</);
 });
 
-test('qualquer falha do ambiente vira nota de "não consegui ler", nunca texto da planilha', async () => {
+test('any environment failure turns into a "could not read it" note, never spreadsheet text', async () => {
   const casos = {
     'desligado': { enabled: false },
     'gravação falha': { enabled: true, write: async () => ({ ok: false, error: 'disco cheio' }) },
@@ -114,10 +114,10 @@ test('qualquer falha do ambiente vira nota de "não consegui ler", nunca texto d
     assert.match(lr.note, /NÃO está disponível por nenhum outro caminho/, caso);
     semCelulas(lr.note);
   }
-  assert.equal(getLoadedSheets('u-falha').filter((e) => e.sheets != null).length, 0, 'falha não registra planilha como lida');
+  assert.equal(getLoadedSheets('u-falha').filter((e) => e.sheets != null).length, 0, 'failure does not register the spreadsheet as read');
 });
 
-test('conector sem ambiente de análise, ou com ele quebrando, devolve a nota de falha', async () => {
+test('connector without analysis environment, or with it breaking, returns the failure note', async () => {
   assert.match(await analisePlanilhaConector(null, duasAbas(), 'a.xlsx'), /ambiente de análise indisponível/);
   assert.match(await analisePlanilhaConector(async () => { throw Error('boom'); }, duasAbas(), 'a.xlsx'), /não pôde ser aberta.*boom/);
   assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /não pôde ser aberta no ambiente de análise \(x\)/);
@@ -133,13 +133,13 @@ function sandboxLocal() {
     async write(_u, path, buf) { fs.mkdirSync(nodePath.dirname(local(path)), { recursive: true }); fs.writeFileSync(local(path), buf); return { ok: true }; },
     async shell(_u, cmd) {
       const m = /^python3 - '([^']+)' (\w+) <<'SONDA_PY'\n([\s\S]*)\nSONDA_PY$/.exec(cmd);
-      assert.ok(m, 'comando da sonda no formato esperado');
+      assert.ok(m, 'probe command in the expected format');
       const r = spawnSync(PY, ['-', local(m[1]), m[2]], { input: m[3], encoding: 'utf8', timeout: 60_000 });
       return { exitCode: r.status, stdout: r.stdout, stderr: r.stderr };
     } };
 }
 
-test('sonda real: Excel de duas abas abre todas as abas e nenhuma célula sai', { skip: !temPandas && 'sem pandas local' }, async () => {
+test('real probe: two-sheet Excel opens all sheets and no cell leaks out', { skip: !temPandas && 'sem pandas local' }, async () => {
   globalThis.__sb = sandboxLocal();
   const lr = await loadSpreadsheetIntoSandbox('u-real', duasAbas(), 'contas.xlsx');
   assert.equal(lr.ok, true, lr.error);
@@ -147,7 +147,7 @@ test('sonda real: Excel de duas abas abre todas as abas e nenhuma célula sai', 
   semCelulas(lr.note);
 });
 
-test('sonda real: CSV com ponto e vírgula em latin-1 (export do Excel BR) abre certo', { skip: !temPandas && 'sem pandas local' }, async () => {
+test('real probe: semicolon-delimited CSV in latin-1 (BR Excel export) opens correctly', { skip: !temPandas && 'sem pandas local' }, async () => {
   globalThis.__sb = sandboxLocal();
   const csv = Buffer.from('Fornecedor;Situação;Valor\nEnergia;aguardando;150,00\nÁgua;pago;80,00\n', 'latin1');
   const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'contas.csv');
@@ -156,7 +156,7 @@ test('sonda real: CSV com ponto e vírgula em latin-1 (export do Excel BR) abre 
   semCelulas(lr.note);
 });
 
-test('sonda real: arquivo que não é planilha falha com nota, sem texto', { skip: !temPandas && 'sem pandas local' }, async () => {
+test('real probe: file that is not a spreadsheet fails with a note, no text', { skip: !temPandas && 'sem pandas local' }, async () => {
   globalThis.__sb = sandboxLocal();
   const lr = await loadSpreadsheetIntoSandbox('u-real', Buffer.from('<html>login</html>'), 'falsa.xlsx');
   assert.equal(lr.ok, false);
@@ -173,7 +173,7 @@ async function comFetch(rotas, fn) {
 }
 const registra = (lista) => async (buf, nome, mime) => { lista.push({ buf: Buffer.from(buf), nome, mime }); return { ok: true, note: 'ESTRUTURA' }; };
 
-test('Gmail: anexo .xlsx e .csv vão pro pandas; o resultado não tem texto', async () => {
+test('Gmail: .xlsx and .csv attachments go to pandas; the result has no text', async () => {
   for (const [filename, mimeType] of [['contas.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], ['contas.csv', 'text/csv']]) {
     const carregadas = [];
     const tool = googleTools({ token: async () => 't', caps: { gmail: { read: true } }, onSheetLoad: registra(carregadas) }).find((t) => t.name === 'gmail_read_attachment');
@@ -189,7 +189,7 @@ test('Gmail: anexo .xlsx e .csv vão pro pandas; o resultado não tem texto', as
   }
 });
 
-test('OneDrive: Excel e CSV vão pro pandas; sem ambiente, a nota diz que não leu', async () => {
+test('OneDrive: Excel and CSV go to pandas; without an environment, the note says it did not read it', async () => {
   for (const [name, mimeType] of [['contas.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], ['contas.csv', 'text/csv']]) {
     for (const comAmbiente of [true, false]) {
       const carregadas = [];
@@ -220,14 +220,14 @@ function comRede(rotas, fn) {
   return fn(chamadas).finally(() => { globalThis.fetch = denied; delete globalThis.__net; });
 }
 
-test('exportGoogleSheets reconhece o link de edição e o publicado na web', () => {
+test('exportGoogleSheets recognizes the edit link and the one published to the web', () => {
   assert.deepEqual(exportGoogleSheets(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=0#gid=0`), { id: SHEET_ID, publicado: false, url: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx` });
   assert.deepEqual(exportGoogleSheets('https://docs.google.com/spreadsheets/d/e/2PACX-abc_123/pubhtml'), { id: '2PACX-abc_123', publicado: true, url: 'https://docs.google.com/spreadsheets/d/e/2PACX-abc_123/pub?output=xlsx' });
   assert.equal(exportGoogleSheets('https://docs.google.com/document/d/abc/edit'), null);
   assert.equal(exportGoogleSheets('https://evil.example/spreadsheets/d/abc'), null);
 });
 
-test('abrir_link com Google Sheets público baixa o xlsx inteiro pro pandas', async () => {
+test('abrir_link with public Google Sheets downloads the whole xlsx to pandas', async () => {
   const carregadas = [];
   await comRede((url) => url.includes('/export?format=xlsx')
     ? { body: duasAbas(), headers: { 'content-type': XLSX_CT, 'content-disposition': `attachment; filename="Contas.xlsx"; filename*=UTF-8''Contas%20Set.xlsx` } }
@@ -241,19 +241,19 @@ test('abrir_link com Google Sheets público baixa o xlsx inteiro pro pandas', as
   });
 });
 
-test('abrir_link com Google Sheets privado avisa que não leu e não cai no texto da página', async () => {
+test('abrir_link with private Google Sheets warns it did not read it and does not fall back to page text', async () => {
   await comRede((url) => url.includes('/export?format=xlsx')
     ? { status: 302, headers: { location: 'https://accounts.google.com/ServiceLogin?continue=x' } }
     : { body: '<html>Fazer login</html>', headers: { 'content-type': 'text/html; charset=utf-8' } }, async (chamadas) => {
     const out = await openLinkTool({ onSheetLoad: registra([]) }).run({ url: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit` });
     assert.match(out, /não está aberta ao público.*NÃO li nada/);
-    assert.ok(out.includes(SHEET_ID), 'aponta o id pra abrir pelo Drive conectado');
+    assert.ok(out.includes(SHEET_ID), 'points to the id to open via connected Drive');
     assert.ok(!out.includes('Fazer login'));
-    assert.equal(chamadas.length, 2, 'só o export e o redirect de login');
+    assert.equal(chamadas.length, 2, 'only the export and the login redirect');
   });
 });
 
-test('abrir_link com Google Sheets quando a rede falha: erro, sem texto da página', async () => {
+test('abrir_link with Google Sheets when the network fails: error, no page text', async () => {
   globalThis.__net = async () => { throw Error('ETIMEDOUT'); };
   globalThis.fetch = async (url) => { throw Error(`fetch inesperado: ${url}`); };
   try {
@@ -262,7 +262,7 @@ test('abrir_link com Google Sheets quando a rede falha: erro, sem texto da pági
   } finally { globalThis.fetch = denied; delete globalThis.__net; }
 });
 
-test('abrir_link com link direto pra .csv/.xlsx vai pro pandas pelo nome do arquivo', async () => {
+test('abrir_link with a direct link to .csv/.xlsx goes to pandas by file name', async () => {
   for (const [path, ct, esperado] of [['/dados/contas.csv', 'text/plain', 'contas.csv'], ['/baixar?id=9', XLSX_CT, 'baixar'], ['/relatorio.xlsx', 'application/octet-stream', 'relatorio.xlsx']]) {
     const carregadas = [];
     await comRede(() => ({ body: duasAbas(), headers: { 'content-type': ct } }), async () => {
@@ -273,7 +273,7 @@ test('abrir_link com link direto pra .csv/.xlsx vai pro pandas pelo nome do arqu
   }
 });
 
-test('abrir_link com planilha que dá 404, ou sem ambiente de análise, não lê nada', async () => {
+test('abrir_link with a spreadsheet that returns 404, or without an analysis environment, reads nothing', async () => {
   await comRede(() => ({ status: 404, body: 'not found', headers: { 'content-type': 'text/plain' } }), async () => {
     const out = await openLinkTool({ onSheetLoad: registra([]) }).run({ url: 'https://exemplo.com.br/contas.csv' });
     assert.match(out, /^ERRO: não consegui baixar a planilha desse link \(HTTP 404\)/);
@@ -286,7 +286,7 @@ test('abrir_link com planilha que dá 404, ou sem ambiente de análise, não lê
   });
 });
 
-test('sandbox_read_file não entrega planilha como texto; outros arquivos seguem normais', async () => {
+test('sandbox_read_file does not deliver a spreadsheet as text; other files behave normally', async () => {
   const tool = sandboxTools('u1').find((t) => t.name === 'sandbox_read_file');
   for (const p of ['/workspace/planilhas/contas.csv', '/workspace/a.XLSX', '/workspace/b.tsv', '/workspace/c.xls']) {
     assert.match(await tool.run({ path: p }), /é uma planilha e não é lido como texto/, p);
@@ -297,7 +297,7 @@ test('sandbox_read_file não entrega planilha como texto; outros arquivos seguem
   assert.deepEqual(lidos, ['/workspace/notas.txt']);
 });
 
-test('anexo do chat: docKind manda xlsx, xls, csv e tsv pro caminho da planilha', () => {
+test('chat attachment: docKind routes xlsx, xls, csv and tsv to the spreadsheet path', () => {
   const src = fs.readFileSync(new URL('./web/server.mjs', import.meta.url), 'utf8');
   const pega = (ini, fim) => src.slice(src.indexOf(ini), src.indexOf(fim, src.indexOf(ini)));
   const code = [pega('const TEXT_DOC_RE', '\n'), pega('const TEXT_MIME_RE', '\n'), pega('function docKind', 'function normalizeFiles')].join('\n');

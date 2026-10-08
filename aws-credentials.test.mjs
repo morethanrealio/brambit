@@ -26,7 +26,7 @@ function fakeImds({ validMs = 6 * 3600_000, code = 'Success', n = 1 } = {}) {
   return { calls, fetchImpl };
 }
 
-test('sem a flag: usa a chave fixa do .env, sem session token', async () => {
+test('without the flag: uses the fixed key from .env, no session token', async () => {
   _resetAwsCredentialsForTest();
   assert.equal(awsCredentialsConfigured(STATIC), true);
   assert.equal(awsCredentialsConfigured({}), false);
@@ -35,11 +35,11 @@ test('sem a flag: usa a chave fixa do .env, sem session token', async () => {
   assert.equal(await getAwsCredentials({ env: {} }), null);
 });
 
-test('com a flag: lê a role pelo IMDSv2 (token primeiro) e ignora a chave fixa', async () => {
+test('with the flag: reads the role via IMDSv2 (token first) and ignores the fixed key', async () => {
   _resetAwsCredentialsForTest();
   const env = { ...ROLE, ...STATIC };
   assert.equal(awsCredentialsConfigured(ROLE), true);
-  assert.equal(currentAwsCredentials(env), null, 'antes da role responder não há credencial síncrona');
+  assert.equal(currentAwsCredentials(env), null, 'before the role responds there is no synchronous credential');
   const imds = fakeImds();
   const c = await getAwsCredentials({ env, fetchImpl: imds.fetchImpl });
   assert.equal(c.accessKeyId, 'ASIA1');
@@ -48,12 +48,12 @@ test('com a flag: lê a role pelo IMDSv2 (token primeiro) e ignora a chave fixa'
   assert.equal(imds.calls[0].headers['X-aws-ec2-metadata-token-ttl-seconds'], '21600');
   assert.ok(imds.calls[2].url.endsWith('/security-credentials/brambs-harness-kms-role'));
   for (const call of imds.calls.slice(1)) assert.equal(call.headers['X-aws-ec2-metadata-token'], 'tok-imds');
-  assert.equal(currentAwsCredentials(env).accessKeyId, 'ASIA1', 'fica em cache pro presign síncrono');
+  assert.equal(currentAwsCredentials(env).accessKeyId, 'ASIA1', 'stays cached for the synchronous presign');
   await getAwsCredentials({ env, fetchImpl: imds.fetchImpl });
-  assert.equal(imds.calls.length, 3, 'cache válido não relê o IMDS');
+  assert.equal(imds.calls.length, 3, 'a valid cache does not re-read IMDS');
 });
 
-test('credencial perto de vencer: o síncrono recusa e o assíncrono relê', async () => {
+test('credential near expiry: the sync path refuses and the async path re-reads', async () => {
   _resetAwsCredentialsForTest();
   await refreshInstanceCredentials(fakeImds({ validMs: 60_000 }).fetchImpl);
   assert.equal(currentAwsCredentials(ROLE), null);
@@ -61,20 +61,20 @@ test('credencial perto de vencer: o síncrono recusa e o assíncrono relê', asy
   assert.equal(c.accessKeyId, 'ASIA2');
 });
 
-test('leituras simultâneas viram uma só ida ao IMDS', async () => {
+test('concurrent reads collapse into a single IMDS call', async () => {
   _resetAwsCredentialsForTest();
   const imds = fakeImds();
   await Promise.all([1, 2, 3].map(() => getAwsCredentials({ env: ROLE, fetchImpl: imds.fetchImpl })));
   assert.equal(imds.calls.length, 3);
 });
 
-test('IMDS com credencial inválida falha alto em vez de assinar com lixo', async () => {
+test('IMDS with an invalid credential fails loudly instead of signing with garbage', async () => {
   _resetAwsCredentialsForTest();
   await assert.rejects(getAwsCredentials({ env: ROLE, fetchImpl: fakeImds({ code: 'Failure' }).fetchImpl }), /Code=Failure/);
   assert.equal(currentAwsCredentials(ROLE), null);
 });
 
-test('presign com a role leva o X-Amz-Security-Token; com a chave fixa não', async () => {
+test('presign with the role carries X-Amz-Security-Token; with the fixed key it doesn\'t', async () => {
   _resetAwsCredentialsForTest();
   const saved = { ...process.env };
   try {
@@ -90,7 +90,7 @@ test('presign com a role leva o X-Amz-Security-Token; com a chave fixa não', as
     delete process.env.AWS_ACCESS_KEY_ID; delete process.env.AWS_SECRET_ACCESS_KEY;
     process.env.S3_INSTANCE_ROLE = '1';
     assert.equal(s3Enabled(), true);
-    assert.equal(presignGet('u1/a.jpg', 900, { now }), null, 'sem cache da role, presign devolve null');
+    assert.equal(presignGet('u1/a.jpg', 900, { now }), null, 'without a cached role, presign returns null');
     await refreshInstanceCredentials(fakeImds().fetchImpl);
     const role = new URL(presignGet('u1/a.jpg', 900, { now }));
     assert.equal(role.searchParams.get('X-Amz-Security-Token'), 'sess1');
@@ -104,7 +104,7 @@ test('presign com a role leva o X-Amz-Security-Token; com a chave fixa não', as
   }
 });
 
-test('cliente http do IMDS (sem fetch global): fala IMDSv2 com um servidor de verdade', async () => {
+test('the IMDS http client (no global fetch): speaks IMDSv2 with a real server', async () => {
   const seen = [];
   const srv = http.createServer((req, res) => {
     seen.push(`${req.method} ${req.url} ${req.headers['x-aws-ec2-metadata-token'] || req.headers['x-aws-ec2-metadata-token-ttl-seconds'] || ''}`);

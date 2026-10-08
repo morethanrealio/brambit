@@ -38,27 +38,27 @@ const FONTES = [
 ];
 
 // ── 1. pt-BR doesn't change a byte ───────────────────────────────────────────────
-await t('bloco de fontes em pt-BR é o texto de sempre', async () => {
+await t('pt-BR sources block is the usual text', async () => {
   const esperado = 'Fontes:\n[1] Banco Central — https://www.bcb.gov.br/\n[2] IBGE — https://www.ibge.gov.br/';
-  eq(await blocoDeFontes(FONTES, 'pt-BR'), esperado, 'pt-BR explícito');
-  eq(await blocoDeFontes(FONTES, undefined), esperado, 'sem idioma (chamada antiga)');
-  eq(await blocoDeFontes(FONTES, 'fr'), esperado, 'idioma que não atendemos cai em pt-BR');
+  eq(await blocoDeFontes(FONTES, 'pt-BR'), esperado, 'explicit pt-BR');
+  eq(await blocoDeFontes(FONTES, undefined), esperado, 'no language (old call)');
+  eq(await blocoDeFontes(FONTES, 'fr'), esperado, 'an unsupported language falls back to pt-BR');
 });
 
-await t('texto sem fonte e sem link sai intocado em pt-BR', async () => {
+await t('text with no source and no link comes out untouched in pt-BR', async () => {
   const r = await fontesEConferencia('Bom dia.', [], { mostrarFontes: false, language: 'pt-BR' });
   eq(r.texto, 'Bom dia.');
   eq(r.fontes, 0);
 });
 
 // ── 2. en/es translate label and notice, and don't touch the URL ─────────────────
-await t('rótulo do bloco traduz em en e es', async () => {
+await t('block label is translated in en and es', async () => {
   eq((await blocoDeFontes(FONTES, 'en')).split('\n')[0], 'Sources:');
   eq((await blocoDeFontes(FONTES, 'es')).split('\n')[0], 'Fuentes:');
-  eq((await blocoDeFontes(FONTES, 'en-US')).split('\n')[0], 'Sources:', 'en-US normaliza pra en');
+  eq((await blocoDeFontes(FONTES, 'en-US')).split('\n')[0], 'Sources:', 'en-US normalizes to en');
 });
 
-await t('URL e título sobrevivem à tradução', async () => {
+await t('URL and title survive translation', async () => {
   for (const idioma of ['pt-BR', 'en', 'es']) {
     const b = await blocoDeFontes(FONTES, idioma);
     if (!b.includes('[1] Banco Central — https://www.bcb.gov.br/')) throw new Error(`${idioma} mexeu na linha da fonte: ${b}`);
@@ -66,7 +66,7 @@ await t('URL e título sobrevivem à tradução', async () => {
 });
 
 // Exercises the real checker with simulated HTTP (includes GET confirmation).
-await t('link removido e aviso traduzido nos três idiomas', async () => {
+await t('removed link and notice translated in all three languages', async () => {
   for (const [language, fragment] of [['pt-BR', 'Removi 2 links'], ['en', 'I removed 2 links'], ['es', 'Quité 2 enlaces']]) {
     const text = '• https://broken.example.invalid/' + language + '/a\n• https://broken.example.invalid/' + language + '/b';
     const r = await fontesEConferencia(text, [], {language});
@@ -77,7 +77,7 @@ await t('link removido e aviso traduzido nos três idiomas', async () => {
 });
 
 // ── 3. a list the model already wrote doesn't turn into a doubled list ────────────────
-await t('não anexa fontes quando o texto já traz a lista, nos três idiomas', async () => {
+await t('does not append sources when the text already has the list, in all three languages', async () => {
   const casos = [
     ['pt-BR', 'Resposta.\n\nFontes:\n[1] x — https://www.bcb.gov.br/'],
     ['en', 'Answer.\n\nSources:\n[1] x — https://www.bcb.gov.br/'],

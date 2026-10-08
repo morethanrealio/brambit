@@ -31,7 +31,7 @@ const driveRead = (onSheetLoad) => googleTools({ token: async () => 't', caps: {
 const metaSheets = { json: { id: 'abc', name: 'Contas_a_Pagar', mimeType: 'application/vnd.google-apps.spreadsheet' } };
 const registra = (carregadas) => async (buf, nome, mime) => { carregadas.push({ nome, mime, buf: Buffer.from(buf) }); return { ok: true, note: 'carregada' }; };
 
-test('Google Sheets é exportado como .xlsx e o arquivo inteiro vai pro ambiente de análise, sem células no resultado', async () => {
+test('Google Sheets is exported as .xlsx and the whole file goes to the analysis environment, no cells in the result', async () => {
   const carregadas = [];
   await comFetch((url) => url.includes('/export?') ? { bytes: duasAbas() } : metaSheets, async (chamadas) => {
     const out = JSON.parse(await driveRead(registra(carregadas)).run({ id: 'abc' }));
@@ -40,14 +40,14 @@ test('Google Sheets é exportado como .xlsx e o arquivo inteiro vai pro ambiente
     assert.ok(!chamadas.some((u) => u.includes('text%2Fcsv') || u.includes('text/csv')));
     assert.equal(out.analise, 'carregada');
     assert.equal(out.text, undefined);
-    assert.ok(!JSON.stringify(out).includes('Energia'), 'célula não chega ao modelo');
+    assert.ok(!JSON.stringify(out).includes('Energia'), 'the cell does not reach the model');
     assert.equal(carregadas.length, 1);
     assert.equal(carregadas[0].nome, 'Contas_a_Pagar.xlsx');
-    assert.ok(carregadas[0].buf.equals(duasAbas()), 'pandas recebe os bytes do export, com as duas abas');
+    assert.ok(carregadas[0].buf.equals(duasAbas()), 'pandas gets the export bytes, with both tabs');
   });
 });
 
-test('planilha grande demais pro export cai no CSV, vai pro pandas e avisa que só veio a primeira aba', async () => {
+test('a spreadsheet too large for export falls back to CSV, goes to pandas and warns only the first tab came through', async () => {
   const carregadas = [];
   await comFetch((url) => {
     if (url.includes('text%2Fcsv') || url.includes('text/csv')) return { text: 'Banco,Total\nBB,10' };
@@ -63,7 +63,7 @@ test('planilha grande demais pro export cai no CSV, vai pro pandas e avisa que s
   });
 });
 
-test('sem ambiente de análise a planilha não é lida como texto: o resultado diz que não conseguiu', async () => {
+test('with no analysis environment the spreadsheet isn\'t read as text: the result says it couldn\'t', async () => {
   await comFetch((url) => url.includes('/export?') ? { bytes: duasAbas() } : metaSheets, async () => {
     const out = JSON.parse(await driveRead(null).run({ id: 'abc' }));
     assert.equal(out.text, undefined);
@@ -72,14 +72,14 @@ test('sem ambiente de análise a planilha não é lida como texto: o resultado d
   });
 });
 
-test('outro erro do export não vira leitura parcial silenciosa', async () => {
+test('a different export error doesn\'t turn into a silent partial read', async () => {
   await comFetch((url) => url.includes('/export?') ? { status: 404, text: 'not found' } : metaSheets, async (chamadas) => {
     await assert.rejects(driveRead(null).run({ id: 'abc' }), /404/);
     assert.ok(!chamadas.some((u) => u.includes('text%2Fcsv') || u.includes('text/csv')));
   });
 });
 
-test('Excel e CSV no Drive baixam os bytes originais e vão pro pandas', async () => {
+test('Excel and CSV in Drive download the original bytes and go to pandas', async () => {
   for (const [nome, mimeType] of [['a.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], ['contas.csv', 'text/csv']]) {
     const carregadas = [];
     await comFetch((url) => url.includes('alt=media') ? { bytes: duasAbas() } : { json: { id: 'x', name: nome, mimeType } }, async (chamadas) => {

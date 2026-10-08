@@ -40,13 +40,13 @@ function pecaComMargemBranca() {
   return c.toBuffer('image/png');
 }
 
-test('as fontes embutidas registram (sem elas o texto sairia invisível no servidor)', () => {
+test('embedded fonts register (without them the text would come out invisible on the server)', () => {
   // The production box has no font installed: fillText would draw
   // NOTHING, with no error at all. That's why the fonts travel inside the repository.
   assert.equal(registrarFontes(), true);
 });
 
-test('entrega PNG no tamanho pedido', async () => {
+test('delivers PNG at the requested size', async () => {
   const r = await composeImage({ largura: 300, altura: 500, fundo: { cor: 'branco' }, camadas: [] });
   assert.equal(r.width, 300);
   assert.equal(r.height, 500);
@@ -56,14 +56,14 @@ test('entrega PNG no tamanho pedido', async () => {
   assert.equal(img.height, 500);
 });
 
-test('cor aceita nome em português e hex, e não vira preto silencioso quando não entende', () => {
+test('cor accepts a Portuguese name and hex, and does not silently turn black when it does not understand', () => {
   assert.equal(cor('azul-escuro'), '#0b2a4a');
   assert.equal(cor('#abc'), '#abc');
   assert.equal(cor('roxo-neon-inexistente', '#123456'), '#123456');
   assert.equal(cor('', '#123456'), '#123456');
 });
 
-test('remover_fundo_branco tira a folha branca e apara a margem vazia', async () => {
+test('remover_fundo_branco removes the white sheet and trims the empty margin', async () => {
   const peca = pecaComMargemBranca();
   const r = await composeImage({
     largura: 200, altura: 200,
@@ -85,7 +85,7 @@ test('remover_fundo_branco tira a folha branca e apara a margem vazia', async ()
   assert.deepEqual(await pixel(semTratar.png, 60, 60), [255, 255, 255, 255]);
 });
 
-test('cor numa camada de imagem repinta a peça mantendo o recorte', async () => {
+test('cor on an image layer repaints the piece while keeping the cutout', async () => {
   const r = await composeImage({
     largura: 200, altura: 200,
     fundo: { cor: 'preto' },
@@ -94,7 +94,7 @@ test('cor numa camada de imagem repinta a peça mantendo o recorte', async () =>
   assert.deepEqual(await pixel(r.png, 100, 100), [255, 255, 255, 255]);
 });
 
-test('âncora posiciona a peça pelo ponto pedido', async () => {
+test('ancora positions the piece by the requested point', async () => {
   const r = await composeImage({
     largura: 200, altura: 200,
     fundo: { cor: 'preto' },
@@ -104,7 +104,7 @@ test('âncora posiciona a peça pelo ponto pedido', async () => {
   assert.deepEqual(await pixel(r.png, 100, 100), [0, 0, 0, 255]);   // meio segue fundo
 });
 
-test('proporção da peça é preservada quando só a largura é dada (logo não estica)', async () => {
+test('the piece proportion is preserved when only the width is given (logo does not stretch)', async () => {
   // 40x20 piece (landscape rectangle): asking for 50% width on a 200 square,
   // the height has to come out 50px, not 100.
   const c = createCanvas(40, 20);
@@ -121,7 +121,7 @@ test('proporção da peça é preservada quando só a largura é dada (logo não
   assert.deepEqual(await pixel(r.png, 50, 60), [0, 0, 0, 255]);    // below, it's already background
 });
 
-test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', async () => {
+test('texto is drawn, wraps and shrinks to fit the requested width', async () => {
   const curto = await composeImage({
     largura: 400, altura: 200, fundo: { cor: 'branco' },
     camadas: [{ tipo: 'texto', texto: 'oi', x: 50, y: 50, tamanho: 20, cor: 'preto' }],
@@ -135,7 +135,7 @@ test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', a
   const dados = cx.getImageData(0, 0, img.width, img.height).data;
   let escuros = 0;
   for (let i = 0; i < dados.length; i += 4) if (dados[i] < 100) escuros++;
-  assert.ok(escuros > 50, `esperava texto desenhado, achei ${escuros} pixels escuros`);
+  assert.ok(escuros > 50, `expected drawn text, found ${escuros} dark pixels`);
 
   // Long text with an accent: can't leak outside the requested band. With
   // largura_max 50% on a 400 canvas, columns 0 to ~99 and ~301 to 399
@@ -158,11 +158,11 @@ test('texto é desenhado, quebra linha e encolhe pra caber na largura pedida', a
     }
     return false;
   };
-  assert.equal(sujo(0, 95), false, 'texto vazou pela esquerda');
-  assert.equal(sujo(305, 400), false, 'texto vazou pela direita');
+  assert.equal(sujo(0, 95), false, 'text leaked past the left edge');
+  assert.equal(sujo(305, 400), false, 'text leaked past the right edge');
 });
 
-test('peça que falta nunca some em silêncio: vira aviso, não imagem entregue como certa', async () => {
+test('a missing piece never silently disappears: it becomes a warning, not an image delivered as correct', async () => {
   const r = await composeImage({
     largura: 100, altura: 100,
     camadas: [{ tipo: 'imagem', imagem: 'nao-existe' }, { tipo: 'circulo-mágico' }],
@@ -172,7 +172,7 @@ test('peça que falta nunca some em silêncio: vira aviso, não imagem entregue 
   assert.match(r.avisos[1], /tipo desconhecido/);
 });
 
-test('PDF de logo (sem camada de texto) vira imagem e entra na composição', async () => {
+test('logo PDF (no text layer) becomes an image and enters the composition', async () => {
   // The original dead end: extractPdfText returns empty on this PDF, so the
   // file had no way to be used. Now it becomes a PNG and is pasted pixel-for-pixel.
   const { imagens, total } = await renderPdfPagesToPng(pdfSoDesenho(), { pages: 1, width: 400 });
@@ -193,13 +193,13 @@ test('PDF de logo (sem camada de texto) vira imagem e entra na composição', as
   assert.deepEqual(await pixel(r.png, 300, 580), [11, 42, 74, 255]);
 });
 
-test('PDF com texto continua sendo texto (rasterizar não atropela o caminho normal)', async () => {
+test('PDF with text stays text (rasterizing does not override the normal path)', async () => {
   const { imagens } = await renderPdfPagesToPng(pdfComTexto('CONTRATO DE TESTE'), { pages: 1, width: 300 });
   assert.equal(imagens.length, 1);
   assert.ok(imagens[0].width === 300);
 });
 
-test('a tool recusa em vez de entregar cartão sem o logo que o usuário pediu', async () => {
+test('the tool refuses instead of delivering a card without the logo the user asked for', async () => {
   let salvou = 0;
   const [tool] = comporTools('u1', {
     carregarAsset: async () => null,
@@ -208,10 +208,10 @@ test('a tool recusa em vez de entregar cartão sem o logo que o usuário pediu',
   const saida = await tool.run({ camadas: [{ tipo: 'imagem', imagem: 'id-que-nao-existe' }] });
   assert.match(saida, /^ERRO/);
   assert.match(saida, /id-que-nao-existe/);
-  assert.equal(salvou, 0, 'não pode guardar nem entregar imagem faltando a peça pedida');
+  assert.equal(salvou, 0, 'cannot save nor deliver an image missing the requested piece');
 });
 
-test('a tool monta, guarda e anuncia a imagem quando as peças existem', async () => {
+test('the tool builds, saves and announces the image when the pieces exist', async () => {
   const anexos = [];
   const [tool] = comporTools('u1', {
     carregarAsset: async () => pecaComMargemBranca(),
@@ -233,11 +233,11 @@ test('a tool monta, guarda e anuncia a imagem quando as peças existem', async (
   assert.equal(anexos[0].type, 'image');
 });
 
-test('a tool sem nada pra desenhar não inventa uma imagem vazia', async () => {
+test('the tool with nothing to draw does not invent an empty image', async () => {
   const [tool] = comporTools('u1', { carregarAsset: async () => null, saveBlob: async () => ({ url: 'x' }) });
   assert.match(await tool.run({ camadas: [] }), /^ERRO/);
 });
 
-test('sem as dependências injetadas a tool nem é registrada', () => {
+test('without injected dependencies the tool is not even registered', () => {
   assert.deepEqual(comporTools('u1', {}), []);
 });

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { createChecklistStore, checklistTools } from './web/checklists.mjs';
 
-test('listas de mercado e peças: isolamento, continuidade, compra parcial, repetição e recuperação em SQL', async t => {
+test('grocery and parts lists: isolation, continuity, partial purchase, repetition and recovery in SQL', async t => {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec('CREATE SCHEMA mtr_harness; CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY);');
   const user = randomUUID(), other = randomUUID();
@@ -69,7 +69,7 @@ test('listas de mercado e peças: isolamento, continuidade, compra parcial, repe
   assert.equal((await store.list(user,pecas.id)).lista.total,1);
 });
 
-test('finalizar encerra a lista e a próxima compra com o mesmo nome é lista nova', async t => {
+test('finalizing closes the list and the next purchase with the same name is a new list', async t => {
   // Prod 2026-09-25: "Finalize the list" changed nothing in the database; two days later the
   // items from the new purchase entered the old list and the two got mixed up.
   const db = new PGlite(); t.after(() => db.close());

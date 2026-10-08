@@ -18,27 +18,27 @@ const deps = buildGraph(Object.keys(repo), (f) => repo[f]);
 const tests = Object.keys(repo).filter((f) => f.endsWith('.test.mjs'));
 const pick = (...changed) => selectAffected({ changed, tests, deps }).tests.sort();
 
-test('import é transitivo: mudar b alcança quem importa a, e quem sobe o server', () => {
+test('import is transitive: changing b reaches whoever imports a, and whoever boots the server', () => {
   assert.deepEqual(pick('web/b.mjs'), ['a.test.mjs', 'boot.test.mjs']);
 });
 
-test('quem só lê o texto do server não depende do que o server importa', () => {
+test("whoever only reads the server's text does not depend on what the server imports", () => {
   assert.deepEqual(pick('web/server.mjs'), ['boot.test.mjs', 'texto.test.mjs']);
   assert.ok(!closure('texto.test.mjs', deps).has('web/a.mjs'));
 });
 
-test('import dinâmico conta, o próprio teste roda, e package.json roda tudo', () => {
+test('dynamic import counts, the test itself runs, and package.json runs everything', () => {
   assert.deepEqual(pick('web/c.mjs'), ['c.test.mjs']);
   assert.deepEqual(pick('a.test.mjs'), ['a.test.mjs']);
   assert.equal(selectAffected({ changed: ['package.json'], tests, deps }).all, true);
 });
 
-test('arquivo que nenhum teste alcança aparece como descoberto', () => {
+test('a file no test reaches shows up as uncovered', () => {
   const r = selectAffected({ changed: ['web/nada.mjs'], tests, deps });
   assert.deepEqual(r.tests, []);
 });
 
-test('trava de frágeis: novo reprova, reescrito tem que sair da lista', () => {
+test('fragile-guard: new fails, rewritten one must leave the list', () => {
   const set = new Set(tests);
   assert.deepEqual(check({ tests: set, deps, listed: new Set() }).news, ['texto.test.mjs']);
   assert.deepEqual(check({ tests: set, deps, listed: new Set(['texto.test.mjs', 'a.test.mjs']) }).gone, ['a.test.mjs']);

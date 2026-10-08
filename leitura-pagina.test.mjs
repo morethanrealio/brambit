@@ -7,24 +7,24 @@ import { MAX_PAGE_CHARS, recortarPagina } from './web/websearch.mjs';
 // of the litany, with no notice at all that it had been cut. The cap is now the
 // same as the PDF's (20,000), and the cut, when it happens, is declared.
 
-test('teto de página é o mesmo do PDF', () => {
+test('the page cap is the same as the PDF\'s', () => {
   assert.equal(MAX_PAGE_CHARS, 20000);
 });
 
-test('página comum passa inteira e sem aviso de corte', () => {
+test('a normal page passes through whole, with no cut notice', () => {
   const texto = 'a'.repeat(15000);
   const { corpo, corte } = recortarPagina(texto);
   assert.equal(corpo.length, 15000);
   assert.equal(corte, '');
 });
 
-test('página maior que o teto é cortada e o corte é declarado', () => {
+test('a page bigger than the cap is cut and the cut is declared', () => {
   const { corpo, corte } = recortarPagina('b'.repeat(25000));
   assert.equal(corpo.length, MAX_PAGE_CHARS);
   assert.match(corte, /mostrando o começo/);
 });
 
-test('entrada vazia ou ausente não quebra', () => {
+test('empty or missing input does not break', () => {
   assert.deepEqual(recortarPagina(''), { corpo: '', corte: '' });
   assert.deepEqual(recortarPagina(undefined), { corpo: '', corte: '' });
 });

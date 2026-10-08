@@ -4,17 +4,17 @@ import assert from 'node:assert/strict';
 import { markdownParaWa } from './web/wa-format.mjs';
 import { prepararTextoWa } from './web/whatsapp.mjs';
 
-test('negrito, título e tachado viram a marcação do WhatsApp', () => {
+test('bold, heading and strikethrough become WhatsApp markup', () => {
   const md = '## Vocabulário de hoje\n\n**to build** = construir\n***atenção*** e ~~errado~~';
   assert.equal(markdownParaWa(md), '*Vocabulário de hoje*\n\n*to build* = construir\n*atenção* e ~errado~');
 });
 
-test('o que já está no formato do WhatsApp não muda', () => {
+test('what is already in WhatsApp format does not change', () => {
   const wa = '*negrito* _itálico_ ~tachado~\n- item\n1. item';
   assert.equal(markdownParaWa(wa), wa);
 });
 
-test('link vira texto + url, e url crua não é mexida', () => {
+test('link becomes text + url, and a raw url is left untouched', () => {
   assert.equal(markdownParaWa('Leia [o artigo](https://ex.com/a_b)'), 'Leia o artigo (https://ex.com/a_b)');
   assert.equal(markdownParaWa('[https://ex.com](https://ex.com/)'), 'https://ex.com/');
   assert.equal(markdownParaWa('veja https://ex.com/__init__**x**'), 'veja https://ex.com/__init__**x**');
@@ -23,20 +23,20 @@ test('link vira texto + url, e url crua não é mexida', () => {
   assert.equal(markdownParaWa('**[brambs.com.br](https://brambs.com.br)** › **Conexões**'), 'https://brambs.com.br › *Conexões*');
 });
 
-test('CPF mascarado não vira negrito', () => {
+test('masked CPF does not become bold', () => {
   assert.equal(markdownParaWa('Pix para Ana (CPF ***.365.199-**), **confirma?**'), 'Pix para Ana (CPF ***.365.199-**), *confirma?*');
 });
 
-test('código passa intacto', () => {
+test('code passes through untouched', () => {
   const md = 'rode `a**b**c` e\n```\n# não é título\n**x**\n```';
   assert.equal(markdownParaWa(md), md);
 });
 
-test('__ no meio da palavra não vira negrito', () => {
+test('__ in the middle of a word does not become bold', () => {
   assert.equal(markdownParaWa('meu__nome__x e __sim__'), 'meu__nome__x e *sim*');
 });
 
-test('o envio do WhatsApp aplica a conversão', () => {
+test('sending via WhatsApp applies the conversion', () => {
   assert.deepEqual(prepararTextoWa('**Bom dia!**'), ['*Bom dia!*']);
   assert.deepEqual(prepararTextoWa('   '), ['(sem resposta)']);
 });

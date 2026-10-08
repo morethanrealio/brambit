@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGastoSimples} from './web/gasto-simples.mjs';
 
-test('sem teto nunca bloqueia; com teto bloqueia ao atingir o valor do mês', async()=>{
+test('no cap never blocks; with a cap it blocks once the monthly value is reached', async()=>{
  const livre=createGastoSimples({gravarUso:async()=>{}});
  assert.equal((await livre.status('u')).over,false);
  let gasto=4.99;
@@ -12,7 +12,7 @@ test('sem teto nunca bloqueia; com teto bloqueia ao atingir o valor do mês', as
  assert.equal((await teto.status('u')).over,true);
 });
 
-test('registrar grava uma vez por callId e devolve recibo liquidado', async()=>{
+test('registrar writes once per callId and returns a settled receipt', async()=>{
  const linhas=[];
  const g=createGastoSimples({gravarUso:async r=>linhas.push(r)});
  const args={userId:'u',callId:'c1',usage:{model:'m',in:10,out:2},charge:{cost:0.01,billCredits:7},dimensions:{agentId:'a'}};

@@ -21,7 +21,7 @@ async function loadVault(env) {
 
 const KEY32 = Buffer.alloc(32, 7).toString('base64');
 
-test('sem chave nenhuma: initVault acusa e gravação recusa texto puro', async () => {
+test('no key at all: initVault flags it and writing refuses plain text', async () => {
   const { mod, restore } = await loadVault({});
   try {
     assert.equal(mod.vaultConfigured(), false);
@@ -35,14 +35,14 @@ test('sem chave nenhuma: initVault acusa e gravação recusa texto puro', async 
 // The plan's bug (phase B item 4): a malformed VAULT_KEY counted as "no vault"
 // and the secret went to the DB in the clear, with the server up and running.
 for (const [nome, valor] of [['curta demais', 'abc'], ['hex no lugar de base64', 'a'.repeat(64)], ['lixo', 'não é base64 nenhum!!']]) {
-  test(`VAULT_KEY malformada (${nome}): initVault acusa e nada vai em texto puro`, async () => {
+  test(`malformed VAULT_KEY (${nome}): initVault flags it and nothing goes out in plain text`, async () => {
     const { mod, restore } = await loadVault({ VAULT_KEY: valor });
     try {
-      assert.equal(mod.vaultConfigured(), true, 'malformada = cofre configurado e quebrado');
+      assert.equal(mod.vaultConfigured(), true, 'malformed = vault configured and broken');
       assert.equal(mod.vaultEnabled(), false);
       assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
       await assert.rejects(mod.initVault(), (e) => e.code === 'VAULT_BOOT' && /32/.test(e.message));
-      assert.ok(!(await mod.initVault().catch((e) => e.message)).includes(valor), 'mensagem não ecoa a chave');
+      assert.ok(!(await mod.initVault().catch((e) => e.message)).includes(valor), 'message does not echo the key');
     } finally { restore(); }
   });
 }
@@ -50,7 +50,7 @@ for (const [nome, valor] of [['curta demais', 'abc'], ['hex no lugar de base64',
 // A bad key doesn't bring down the server: boot (initVaultNoBoot) continues in
 // degraded mode, only with the alarm in the log, and saving a secret keeps refusing.
 for (const [nome, env] of [['sem chave', {}], ['VAULT_KEY malformada', { VAULT_KEY: 'abc' }]]) {
-  test(`boot com ${nome}: servidor segue de pé, alarme no log, segredo recusado`, async () => {
+  test(`boot with ${nome}: server stays up, alarm in the log, secret refused`, async () => {
     const { mod, restore } = await loadVault(env);
     const logs = [];
     try {
@@ -62,15 +62,15 @@ for (const [nome, env] of [['sem chave', {}], ['VAULT_KEY malformada', { VAULT_K
   });
 }
 
-test('boot com chave boa: initVaultNoBoot ok e cifra normalmente', async () => {
+test('boot with a good key: initVaultNoBoot ok and encrypts normally', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
   try {
-    assert.deepEqual(await mod.initVaultNoBoot({ error: () => assert.fail('não devia logar erro') }), { ok: true });
+    assert.deepEqual(await mod.initVaultNoBoot({ error: () => assert.fail('should not log an error') }), { ok: true });
     assert.match(mod.encMaybe('segredo'), /^v1:/);
   } finally { restore(); }
 });
 
-test('VAULT_KEY sem o "=" do fim (43 caracteres) segue valendo', async () => {
+test('VAULT_KEY without the trailing "=" (43 characters) still works', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY: KEY32.replace(/=+$/, '') });
   try {
     await mod.initVault();
@@ -78,7 +78,7 @@ test('VAULT_KEY sem o "=" do fim (43 caracteres) segue valendo', async () => {
   } finally { restore(); }
 });
 
-test('modo local: gera a chave sozinho, 0600, e reaproveita no boot seguinte', async () => {
+test('local mode: generates its own key, 0600, and reuses it on the next boot', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
   const file = path.join(dir, 'sub', 'vault.key');
   const env = { BRAMBS_LOCAL: '1', VAULT_KEY_FILE: file };
@@ -95,12 +95,12 @@ test('modo local: gera a chave sozinho, 0600, e reaproveita no boot seguinte', a
     const b = await loadVault(env);
     try {
       await b.mod.initVault();
-      assert.equal(b.mod.decMaybe(blob), 'segredo', 'segundo boot abre o que o primeiro cifrou');
+      assert.equal(b.mod.decMaybe(blob), 'segredo', 'second boot decrypts what the first one encrypted');
     } finally { b.restore(); }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('modo local com arquivo de chave estragado: para, sem sobrescrever', async () => {
+test('local mode with a corrupted key file: stops, without overwriting', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
   const file = path.join(dir, 'vault.key');
   fs.writeFileSync(file, 'curta\n');
@@ -111,7 +111,7 @@ test('modo local com arquivo de chave estragado: para, sem sobrescrever', async 
   } finally { restore(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('chave do env vence o modo local (não gera arquivo)', async () => {
+test('env key wins over local mode (does not generate a file)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cofre-local-'));
   const file = path.join(dir, 'vault.key');
   const { mod, restore } = await loadVault({ BRAMBS_LOCAL: '1', VAULT_KEY_FILE: file, VAULT_KEY: KEY32 });
@@ -121,7 +121,7 @@ test('chave do env vence o modo local (não gera arquivo)', async () => {
   } finally { restore(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('VAULT_KEY legado: cifra e decifra', async () => {
+test('legacy VAULT_KEY: encrypts and decrypts', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
   try {
     assert.equal(mod.vaultConfigured(), true);
@@ -132,16 +132,16 @@ test('VAULT_KEY legado: cifra e decifra', async () => {
   } finally { restore(); }
 });
 
-test('modo KMS sem initVault: recusa gravar em vez de vazar texto puro', async () => {
+test('KMS mode without initVault: refuses to write instead of leaking plain text', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY_ENC: 'blob-kms-qualquer' });
   try {
-    assert.equal(mod.vaultConfigured(), true, 'instalação TEM cofre');
-    assert.equal(mod.vaultEnabled(), false, 'mas a chave não carregou');
+    assert.equal(mod.vaultConfigured(), true, 'installation DOES have a vault');
+    assert.equal(mod.vaultEnabled(), false, 'but the key did not load');
     assert.throws(() => mod.encMaybe('segredo'), /texto puro/);
   } finally { restore(); }
 });
 
-test('KMS falhou com VAULT_KEY velha no env: não cifra com a chave errada', async () => {
+test('KMS failed with an old VAULT_KEY in the env: does not encrypt with the wrong key', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY_ENC: 'blob-kms-qualquer', VAULT_KEY: KEY32 });
   try {
     assert.equal(mod.vaultEnabled(), false);
@@ -150,7 +150,7 @@ test('KMS falhou com VAULT_KEY velha no env: não cifra com a chave errada', asy
   } finally { restore(); }
 });
 
-test('leitura continua tolerante com linha legada em texto puro', async () => {
+test('reading stays tolerant of a legacy plain-text line', async () => {
   const { mod, restore } = await loadVault({ VAULT_KEY: KEY32 });
   try {
     assert.equal(mod.decMaybe('token-legado-em-claro'), 'token-legado-em-claro');

@@ -27,7 +27,7 @@ test('parse and labels: minute is optional, hora alone means the full hour',()=>
   for(const bad of [{hora:24},{hora:-1},{hora:7.5},{minuto:60},{minuto:'meia'},{hora:22,minuto:-5}]) assert.ok(parseRoutineTime(bad).error,JSON.stringify(bad));
   assert.equal(routineTimeLabel(22,30),'22h30');assert.equal(routineTimeLabel(7,0),'07h');assert.equal(routineTimeLabel(7,5,':'),'07:05');
   assert.equal(routineArgsTimeLabel({hora:22,minuto:30}),'22h30');assert.equal(routineArgsTimeLabel({}),null);assert.equal(routineArgsTimeLabel({minuto:30}),':30');
-  assert.equal(routineMinuteOfDay({hour:22,minute:30}),1350);assert.equal(routineMinuteOfDay({hour:22}),1320,'rotina antiga sem minuto = hora cheia');
+  assert.equal(routineMinuteOfDay({hour:22,minute:30}),1350);assert.equal(routineMinuteOfDay({hour:22}),1320,'legacy routine with no minute = full hour');
 });
 
 test('a 22h30 routine fires at 22:30 local, not at 22:00, and a legacy routine keeps firing on the hour',()=>{
@@ -35,7 +35,7 @@ test('a 22h30 routine fires at 22:30 local, not at 22:00, and a legacy routine k
   assert.equal(isDue(r,new Date('2026-10-02T01:00:00Z')),false,'22:00 BRT');
   assert.equal(isDue(r,new Date('2026-10-02T01:29:00Z')),false,'22:29 BRT');
   assert.equal(isDue(r,new Date('2026-10-02T01:30:00Z')),true,'22:30 BRT');
-  assert.equal(isDue({...r,minute:undefined},new Date('2026-10-02T01:00:00Z')),true,'legado sem minuto = 22:00');
+  assert.equal(isDue({...r,minute:undefined},new Date('2026-10-02T01:00:00Z')),true,'legacy with no minute = 22:00');
 });
 
 test('the confirmation card shows 22h30 in every language',()=>{
@@ -53,12 +53,12 @@ test('re-proposing the same routine closes the older card instead of stacking tw
   const propose=async a=>{const s=await createConfirmationSession(f.store,f.scope);await withConfirmationSession(s,()=>gateTool(tool,f.scope.threadId).run(a));return (await createConfirmationSession(f.store,f.scope)).pending();};
   const a=await propose({titulo:'Aquece diário de inglês',hora:22});
   const b=await propose({titulo:'  aquece DIÁRIO de inglês ',hora:22,minuto:30});
-  assert.equal(b.length,1,'o cartão das 22h saiu da fila');assert.equal(b[0].args.minuto,30);
+  assert.equal(b.length,1,'the 22h card left the queue');assert.equal(b[0].args.minuto,30);
   const c=await propose({titulo:'Resumo do dia',hora:8});
-  assert.equal(c.length,2,'rotina de outro título não substitui');
+  assert.equal(c.length,2,'a routine with a different title doesn\'t replace it');
   await f.store.present(f.scope,[a[0].id]);
   const s=await createConfirmationSession(f.store,f.scope);
   const velho=await withConfirmationSession(s,()=>handleConfirmation(s,{message:`confirmo pedido ${a[0].number}`,resolveTool:async()=>({confirmationTool:tool})}));
   assert.match(velho.text,/substituída por uma nova proposta/,velho.text);
-  assert.deepEqual(effects,[],'propor e aprovar o cartão velho nunca criam rotina');
+  assert.deepEqual(effects,[],'proposing and approving the old card never creates a routine');
 });

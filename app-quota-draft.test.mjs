@@ -16,18 +16,18 @@ function guard({ draft = {}, apps = 0, teto = 0 } = {}) {
     async () => null, async () => Array.from({ length: apps }), perm, async () => draft);
 }
 
-test('primeiro arquivo de app novo no plano sem app é barrado com a mensagem do teto', async () => {
+test('the first file of a new app on a plan with no app slot is blocked with the cap message', async () => {
   const r = await guard()('u1', 'fichas-de-contatos', null, {});
   assert.equal(r.ok, false); assert.match(r.error, /Criar app é um recurso dos planos Pro/);
 });
 
-test('rascunho já começado, app publicado ou plano com vaga seguem editáveis', async () => {
+test('a draft already started, a published app, or a plan with a free slot stay editable', async () => {
   assert.equal(await guard({ draft: { 'server.js': 'x' } })('u1', 'fichas', null, {}), null);
   assert.equal(await guard()('u1', 'fichas', { system: 'fichas' }, {}), null);
   assert.equal(await guard({ teto: 2, apps: 1 })('u1', 'fichas', null, {}), null);
 });
 
-test('as duas portas de criação de rascunho checam o teto antes de gravar', () => {
+test('both draft-creation entry points check the cap before writing', () => {
   const tool = name => { const i = src.indexOf(`name: '${name}'`); return src.slice(i, src.indexOf("\n    {\n      name: '", i + 10)); };
   const ini = tool('iniciar_estrutura_do_app');
   assert.ok(ini.indexOf('appQuotaBlock(') > 0 && ini.indexOf('appQuotaBlock(') < ini.indexOf('putAppDraftFile('));

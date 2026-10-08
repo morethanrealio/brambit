@@ -8,35 +8,35 @@ import { prepararTextoWa } from './web/whatsapp.mjs';
 
 const BALAO = 1024;
 
-test('resposta curta vai num balão só, sem aviso', () => {
+test('short reply goes in a single bubble, no notice', () => {
   const partes = prepararTextoWa('oi, tudo certo por aqui');
   assert.deepEqual(partes, ['oi, tudo certo por aqui']);
 });
 
-test('texto vazio vira o placeholder, nunca silêncio', () => {
+test('empty text becomes the placeholder, never silence', () => {
   assert.deepEqual(prepararTextoWa('   '), ['(sem resposta)']);
   assert.deepEqual(prepararTextoWa(undefined), ['(sem resposta)']);
 });
 
-test('resposta gigante vai inteira, sem aviso de corte', () => {
+test('huge reply goes out in full, no cut-off notice', () => {
   const texto = 'palavra '.repeat(20000).trim();
   const partes = prepararTextoWa(texto);
-  assert.ok(partes.length > 8, `gerou só ${partes.length} balões`);
-  for (const p of partes) assert.ok(p.length <= BALAO, `balão de ${p.length}`);
+  assert.ok(partes.length > 8, `generated only ${partes.length} bubbles`);
+  for (const p of partes) assert.ok(p.length <= BALAO, `bubble of ${p.length}`);
   assert.ok(!partes.join('').includes('cortei o resto'));
-  assert.equal(partes.join(' '), texto, 'nenhuma palavra sumiu nem mudou de ordem');
+  assert.equal(partes.join(' '), texto, 'no word disappeared or changed order');
 });
 
-test('emoji na fronteira do corte não vira caractere quebrado', () => {
+test('emoji at the cut boundary does not become a broken character', () => {
   const partes = prepararTextoWa('🙂'.repeat(9000));
   const inteiro = partes.join('');
   assert.equal(inteiro, '🙂'.repeat(9000));
-  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(inteiro), 'sobrou meio emoji');
-  assert.ok(!/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(inteiro), 'sobrou meio emoji');
-  for (const p of partes) assert.ok(!/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/.test(p), 'balão começa ou termina em meio emoji');
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(inteiro), 'half an emoji was left over');
+  assert.ok(!/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(inteiro), 'half an emoji was left over');
+  for (const p of partes) assert.ok(!/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/.test(p), 'bubble starts or ends in half an emoji');
 });
 
-test('resposta de 8 balões cheios segue igual e sem aviso', () => {
+test('reply with 8 full bubbles stays the same, no notice', () => {
   const partes = prepararTextoWa('a'.repeat(BALAO * 8));
   assert.equal(partes.length, 8);
   assert.ok(!partes.join('').includes('cortei o resto'));

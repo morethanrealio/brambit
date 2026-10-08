@@ -6,26 +6,26 @@ import { check, envReads, isProductionSource, parseExample } from './test-suppor
 const reads = new Set(['HOST', 'PGPASSWORD', 'SANDBOX_URL']);
 const ok = 'HOST=127.0.0.1\nPGPASSWORD=\n# SANDBOX_URL=\n';
 
-test('exemplo completo, sem segredo e sem IP interno passa', () => {
+test('a complete example, with no secret and no internal IP, passes', () => {
   assert.deepEqual(check({ example: ok, reads }), []);
 });
 
-test('variável lida pelo código e ausente do exemplo reprova; a da lista de exceções não', () => {
+test('a variable read by the code and missing from the example fails; one on the exceptions list doesn\'t', () => {
   assert.match(check({ example: ok, reads: new Set([...reads, 'NOVA_CHAVE']) }).join('\n'), /NOVA_CHAVE é lida pelo código/);
   assert.deepEqual(check({ example: ok, reads: new Set([...reads, 'TSC_PATH']) }), []);
 });
 
-test('variável que ninguém lê mais reprova', () => {
+test('a variable nobody reads anymore fails', () => {
   assert.match(check({ example: ok + '# CODING_MODEL=\n', reads }).join('\n'), /CODING_MODEL está no .env.example mas nenhum/);
 });
 
-test('segredo com valor reprova, ativo ou comentado', () => {
+test('a secret with a value fails, whether active or commented out', () => {
   assert.match(check({ example: ok.replace('PGPASSWORD=', 'PGPASSWORD=hunter2'), reads }).join('\n'), /PGPASSWORD .* tem valor/);
   const r = new Set([...reads, 'WA_TOKEN']);
   assert.match(check({ example: ok + '# WA_TOKEN=abc\n', reads: r }).join('\n'), /WA_TOKEN .* tem valor/);
 });
 
-test('IP de rede interna e host da nossa infra reprovam; loopback passa', () => {
+test('an internal network IP and a host from our infra fail; loopback passes', () => {
   const ip = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=http://172.31.2.152:9000'), reads }).join('\n');
   assert.match(ip, /IP 172\.31\.2\.152/);
   const host = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=https://dev.mara.mtr.center'), reads }).join('\n');
@@ -33,11 +33,11 @@ test('IP de rede interna e host da nossa infra reprovam; loopback passa', () => 
   assert.match(check({ example: ok + '# DONO=x # oi@brambs.com.br\n', reads: new Set([...reads, 'DONO']) }).join('\n'), /nossa infra/);
 });
 
-test('variável repetida reprova', () => {
+test('a repeated variable fails', () => {
   assert.match(check({ example: ok + '# HOST=0.0.0.0\n', reads }).join('\n'), /HOST aparece duas vezes/);
 });
 
-test('leitura e recorte: process.env.X e process.env["X"]; fora teste, ops e navegador', () => {
+test('reading and trimming: process.env.X and process.env["X"]; outside test, ops and browser', () => {
   assert.deepEqual([...envReads('a=process.env.FOO||1; b=process.env["BAR"]; c=process.env.lower')].sort(), ['BAR', 'FOO']);
   assert.deepEqual(parseExample('# A=1\nB=\n#  comentário\nC').map((e) => [e.name, e.active]), [['A', false], ['B', true]]);
   assert.ok(isProductionSource('web/modulo-sintetico.mjs'));

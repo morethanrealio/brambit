@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 
 const { lerCorpo } = await import('./web/kms.mjs');
 
-test('corpo inteiro é lido normalmente', async () => {
+test('the whole body is read normally', async () => {
   const fake = new EventEmitter();
   const p = lerCorpo(fake);
   fake.emit('data', 'ab');
@@ -18,7 +18,7 @@ test('corpo inteiro é lido normalmente', async () => {
   assert.equal(await p, 'abcd');
 });
 
-test('erro no meio do corpo vira rejeição, não exceção solta', async () => {
+test('an error mid-body turns into a rejection, not a loose exception', async () => {
   const fake = new EventEmitter();
   const p = lerCorpo(fake);
   fake.emit('data', 'parcial');
@@ -27,7 +27,7 @@ test('erro no meio do corpo vira rejeição, não exceção solta', async () => 
   await assert.rejects(p, /ECONNRESET/);
 });
 
-test('sem listener de error o emit JOGA a exceção (é o mecanismo do bug)', () => {
+test('with no error listener, emit THROWS the exception (this is the bug\'s mechanism)', () => {
   const nu = new EventEmitter();
   // Proof of the mechanism: an EventEmitter without an 'error' listener turns the event
   // into a throw. In the HTTP client this happens inside the socket's callback, outside of
@@ -35,10 +35,10 @@ test('sem listener de error o emit JOGA a exceção (é o mecanismo do bug)', ()
   assert.throws(() => nu.emit('error', new Error('boom')), /boom/);
 });
 
-test('imds e kmsCall passam pelo lerCorpo (ninguém lê corpo no braço)', () => {
+test('imds and kmsCall both go through lerCorpo (nobody reads the body inline)', () => {
   const src = fs.readFileSync(new URL('./web/kms.mjs', import.meta.url), 'utf8');
   const leituras = src.match(/res\.on\('data'/g) || [];
-  assert.equal(leituras.length, 1, 'só o lerCorpo pode acumular corpo');
-  assert.equal((src.match(/lerCorpo\(res\)\.then\(/g) || []).length, 2, 'imds e kmsCall');
+  assert.equal(leituras.length, 1, 'only lerCorpo may accumulate the body');
+  assert.equal((src.match(/lerCorpo\(res\)\.then\(/g) || []).length, 2, 'imds and kmsCall');
   assert.match(src, /res\.on\('error', reject\)/);
 });

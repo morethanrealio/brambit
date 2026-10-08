@@ -5,13 +5,13 @@ import { fotoGoogle, fotoOutlook, mudancas, textoAviso, createCalendarWatch } fr
 const ev = (o = {}) => ({ id: 'e1', summary: 'Reunião X', status: 'confirmed', organizer: { email: 'outra@x.invalid' },
   start: { dateTime: '2026-09-30T15:00:00-03:00' }, end: { dateTime: '2026-09-30T16:00:00-03:00' }, ...o });
 
-test('horário que muda pra mesmo instante em outro offset não é mudança', () => {
+test('time that shifts to the same instant in another offset is not a change', () => {
   const a = fotoGoogle(ev());
   const b = fotoGoogle(ev({ start: { dateTime: '2026-09-30T18:00:00Z' }, end: { dateTime: '2026-09-30T19:00:00Z' } }));
   assert.deepEqual(mudancas(a, b), []);
 });
 
-test('mudança de horário, local e cancelamento', () => {
+test('change in time, location and cancellation', () => {
   const a = fotoGoogle(ev());
   assert.deepEqual(mudancas(a, fotoGoogle(ev({ start: { dateTime: '2026-09-30T16:00:00-03:00' }, end: { dateTime: '2026-09-30T17:00:00-03:00' } }))), [{ tipo: 'horario' }]);
   assert.deepEqual(mudancas(a, fotoGoogle(ev({ location: 'Sala 2' }))), [{ tipo: 'local' }]);
@@ -19,7 +19,7 @@ test('mudança de horário, local e cancelamento', () => {
   assert.deepEqual(mudancas(a, null), [{ tipo: 'cancelado' }]);
 });
 
-test('evento organizado pela própria pessoa, ou recusado, não avisa', () => {
+test('event organized by the person themselves, or declined, does not notify', () => {
   const meu = fotoGoogle(ev({ organizer: { email: 'eu@x.invalid', self: true } }));
   assert.deepEqual(mudancas(meu, null), []);
   const recusado = fotoGoogle(ev({ attendees: [{ email: 'eu@x.invalid', self: true, responseStatus: 'declined' }] }));
@@ -32,7 +32,7 @@ test('Outlook: organizador e UTC', () => {
   assert.equal(Date.parse(f.inicio), Date.parse('2026-09-30T18:00:00Z'));
 });
 
-test('texto do aviso no fuso da pessoa', () => {
+test("notice text in the person's timezone", () => {
   const antes = fotoGoogle(ev());
   const atual = fotoGoogle(ev({ start: { dateTime: '2026-09-30T16:00:00-03:00' }, end: { dateTime: '2026-09-30T17:00:00-03:00' } }));
   const t = textoAviso([{ antes, atual, lista: [{ tipo: 'horario' }] }], 'America/Sao_Paulo');
@@ -59,7 +59,7 @@ function fakePool(conectados = ['u1']) {
   } };
 }
 
-test('ciclo completo: base calada, depois avisa remarcação e remoção', async () => {
+test('full cycle: quiet baseline, then notifies reschedule and removal', async () => {
   const pool = fakePool();
   let eventos = [ev(), ev({ id: 'e2', summary: 'Almoço' })];
   const gone = new Set();
@@ -84,7 +84,7 @@ test('ciclo completo: base calada, depois avisa remarcação e remoção', async
   assert.match(avisos[0], /"Reunião X": mudou de/);
   assert.match(avisos[0], /"Almoço", que era .* cancelado/);
   await w.tick();
-  assert.equal(avisos.length, 1, 'não repete o mesmo aviso');
+  assert.equal(avisos.length, 1, 'does not repeat the same notice');
   await w.setEnabled('u1', null, false);
   assert.equal(pool.snap.size, 0);
   assert.equal((await w.status('u1')).enabled, false);
@@ -94,7 +94,7 @@ test('ciclo completo: base calada, depois avisa remarcação e remoção', async
   assert.equal(avisos.length, 1);
 });
 
-test('sem linha em calendar_watch = ligado; sem agenda legível não grava nada', async () => {
+test('no row in calendar_watch = enabled; unreadable calendar writes nothing', async () => {
   const pool = fakePool(['u1']);
   const w = createCalendarWatch({ pool, fetchImpl: async () => { throw Error('não devia ler'); }, notify: async () => {},
     googleAccounts: async () => [], microsoftToken: async () => null, timezone: async () => null });
@@ -103,7 +103,7 @@ test('sem linha em calendar_watch = ligado; sem agenda legível não grava nada'
   assert.equal(pool.watch.size, 0);
 });
 
-test('agenda que falhou na leitura não gera aviso de sumiço', async () => {
+test('a calendar that failed to read does not generate a disappearance notice', async () => {
   const pool = fakePool();
   let falha = false;
   const fetchImpl = async (url) => {
