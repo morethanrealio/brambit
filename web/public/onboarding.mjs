@@ -131,6 +131,9 @@ export function mountWizard(options) {
             el('wizDoneList').append(li);
         }
     }
+    // No Google or Microsoft sign-in to connect: naming the assistant leads straight to a chat it opens itself.
+    const signIn = () => { const c = options.config(); return !!(c.google || c.microsoft); };
+    async function toChat() { await ensureAgent(); await progress('connections_skipped'); await touch('connection_skipped'); const r = await request('api/onboard/intro', { agentId: saved.agentId }); await progress('wow_skipped'); await exit(true, r.threadId); }
     async function ensureAgent() { if (!saved.agentId) {
         const r = await request('api/agent', { name: saved.agentName, instructions: options.generic.instructions, goal: options.generic.goal });
         saved.agentId = r.id;
@@ -333,14 +336,17 @@ export function mountWizard(options) {
         a.removeAttribute('href');
         show('wizWaOpen', false);
     } }
-    async function exit(complete) { ++generation; me = await request('api/me'); if (complete)
+    async function exit(complete, threadId) { ++generation; me = await request('api/me'); if (complete)
         await progress('completed'); el('wiz').classList.remove('show'); if (complete)
-        clear(); options.enterHome(me, pendingTask); }
+        clear(); options.enterHome(me, pendingTask, threadId); }
     btn('wizTypeNext').onclick = () => { const name = input('wizAgentName').value.trim(); if (!name) {
         error('wizErr1', new Error(t('name_required')));
         input('wizAgentName').focus();
         return;
-    } saved.agentName = name; save(); setupConnect(); goto('connect'); };
+    } saved.agentName = name; save(); if (!signIn()) {
+        void guarded(toChat, 'wizErr1');
+        return;
+    } setupConnect(); goto('connect'); };
     input('wizAgentName').onkeydown = e => { if (e.key === 'Enter') {
         e.preventDefault();
         btn('wizTypeNext').click();
@@ -418,6 +424,11 @@ export function mountWizard(options) {
             try {
                 if (!remote.registered)
                     await progress('started');
+                if (!signIn()) {
+                    recoverBoot = toChat;
+                    await toChat();
+                    return true;
+                }
                 if (remote.skipped || remote.step === 'done' && remote.viewed) {
                     goto('done');
                     return true;

@@ -802,7 +802,12 @@
     "hint_plan": "List what you need to do, your deadlines and the time available.",
     "hint_decision": "Describe the options and what matters most in your choice.",
     "hint_draft": "Say who the message is for, its purpose and the tone you want.",
-    "welcome_name": "Welcome, {name} 👋"
+    "welcome_name": "Welcome, {name} 👋",
+    "intro": {
+      "title": "Getting to know you",
+      "message": "Hi! I'm {name}, your assistant. I can answer questions, write and review texts, remind you of things and set up routines that run on their own.\n\nTo help you well, I'd like to get to know you a little:\n\n1. What do you do, and what does a normal week look like for you?\n2. What takes up more of your time than you'd like?\n3. Is there something I can help you with right now?{voice_hint}",
+      "voice_hint": "\n\nYou can type, or tap 🎤 and just talk."
+    }
   },
   "routines": {
     "title": "Your routines",
