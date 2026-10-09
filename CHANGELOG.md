@@ -10,6 +10,8 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-09
+
 ### Added
 - The setup page offers DeepInfra and DeepSeek as AI providers, and shows
   each provider's steps to get a key (account, credit or free tier, key page)
@@ -48,6 +50,11 @@ Changes merged since the last tag go under "Unreleased".
   the assistant, a chat opens where the assistant introduces itself, says what
   it helps with and asks three questions to get to know them, with the
   microphone pointed out when voice is set up.
+
+### Fixed
+- The `.env.example` guard, run from an app that installs Brambit as a
+  package, no longer reports a line that configures the core (such as
+  `BRAMBIT_DEFAULT_LANGUAGE`) as read by no code.
 
 ## [0.2.8] - 2026-10-08
 
@@ -301,7 +308,8 @@ service built on it.
 - Guards and the test suite run from the directory they are called from, so
   an app that installs Brambit can run them on its own repo.
 
-[Unreleased]: https://github.com/morethanrealio/brambit/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/morethanrealio/brambit/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/morethanrealio/brambit/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/morethanrealio/brambit/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/morethanrealio/brambit/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/morethanrealio/brambit/compare/v0.2.5...v0.2.6
