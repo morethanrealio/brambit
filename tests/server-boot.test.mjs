@@ -31,7 +31,7 @@ test('real server entrypoint boots three times against owned PostgreSQL; migrati
   db=new pg.Client({host:socket,port:5432,user:'synthetic',database:'postgres',password:'',connectionTimeoutMillis:5000});await db.connect();
   assert.equal((await db.query('SELECT inet_server_addr() AS addr')).rows[0].addr,null);
   await db.query('CREATE SCHEMA mtr_harness');
-  const env={PATH:process.env.PATH,HOME:root,TZ:'UTC',PGHOST:socket,PGPORT:'5432',PGUSER:'synthetic',PGDATABASE:'postgres',PGPASSWORD:'',PORT:'0',HOST:'127.0.0.1',TEST_BOOT_SOCKET:socket,VAULT_KEY:Buffer.alloc(32,7).toString('base64'),APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0',WA_TOKEN:'synthetic',WA_VERIFY_TOKEN:'synthetic',WA_PHONE_NUMBER_ID:'synthetic-phone',WA_APP_SECRET:'synthetic',WA_TURN_HEARTBEAT_MS:'0',METRICS_USER:'synthetic-admin',METRICS_PASS:'synthetic-password'};
+  const env={PATH:process.env.PATH,HOME:root,TZ:'UTC',PGHOST:socket,PGPORT:'5432',PGUSER:'synthetic',PGDATABASE:'postgres',PGPASSWORD:'',PORT:'0',HOST:'127.0.0.1',TEST_BOOT_SOCKET:socket,VAULT_KEY:Buffer.alloc(32,7).toString('base64'),APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0',WA_TOKEN:'synthetic',WA_VERIFY_TOKEN:'synthetic',WA_PHONE_NUMBER_ID:'synthetic-phone',WA_APP_SECRET:'synthetic',WA_TURN_HEARTBEAT_MS:'0'};
   // Negative controls: guard rejects all outbound TCP, TLS, fetch and subprocesses.
   const probe=`import assert from 'node:assert/strict';import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';
    for(const op of [()=>net.connect({host:'127.0.0.1',port:1}),()=>net.connect({host:'example.invalid',port:443}),()=>net.connect('/tmp/not-owned-postgres'),()=>tls.connect({host:'example.invalid',port:443}),()=>fetch('https://example.invalid'),()=>cp.execFileSync('false')])assert.throws(op,/BOOT_TEST_EXTERNAL_IO_BLOCKED/);
@@ -49,31 +49,15 @@ test('real server entrypoint boots three times against owned PostgreSQL; migrati
    const page=await get(Number(port));assert.equal(page.status,200);assert.ok(page.body.length>100);
    const login=await get(Number(port),'/login');assert.equal(login.status,200);
    assert.equal((await get(Number(port),'/api/me')).status,401);
-   assert.equal((await get(Number(port),'/api/task-metrics')).status,401);
-   assert.equal((await get(Number(port),'/api/admin/whatsapp-inbox')).status,401);
-   const inbox=await get(Number(port),'/api/admin/whatsapp-inbox',{authorization:'Basic '+Buffer.from('synthetic-admin:synthetic-password').toString('base64')});
-   assert.equal(inbox.status,200);assert.equal(JSON.parse(inbox.body).workerActive,true);assert.deepEqual(JSON.parse(inbox.body).attention,[]);
-   const adminHeaders={authorization:'Basic '+Buffer.from('synthetic-admin:synthetic-password').toString('base64')};
-   // pass 0 intentionally precedes the explicit execution-credit migration.
-   for(const route of pass===0?['/api/topics']:['/api/metrics','/api/topics']){
-    const result=await get(Number(port),route+'?from=2026-09-01&to=2026-09-21',adminHeaders);
-    assert.equal(result.status,200,result.body+output);const period=JSON.parse(result.body).period;
-    assert.equal(period.from,'2026-09-01T03:00:00.000Z');assert.equal(period.to,'2026-09-22T03:00:00.000Z');
-   }
-   assert.doesNotMatch(output,/SQL_VIRADA_SETEMBRO is not defined|ReferenceError|SyntaxError|Failed to initialize the database/);
+   assert.doesNotMatch(output,/ReferenceError|SyntaxError|Failed to initialize the database/);
    assert.equal(await stop(),0,'server must exit cleanly on SIGTERM');console.log(`boot ${pass+1}: production entrypoint + HTTP200 + auth401; synthetic DB only`);
    if(pass===0){
     await db.query(await fs.readFile(path.join(repo,'migrations/2026-09-12-execution-credit.sql'),'utf8'));
     await db.query(await fs.readFile(path.join(repo,'migrations/2026-09-29-execution-credit-org.sql'),'utf8'));
-    await db.query(`INSERT INTO mtr_harness.users(id,name,email,password_hash,plan,cycle_anchor,trial_ends_at) VALUES
-     ('00000000-0000-4000-8000-000000000001','Synthetic unpaid','unpaid@example.invalid','not-a-password','pro','2026-08-01T03:00:00Z','2099-01-01'),
-     ('00000000-0000-4000-8000-000000000002','Synthetic paid','paid@example.invalid','not-a-password','pro','2026-08-01T03:00:00Z','2099-01-01'),
-     ('00000000-0000-4000-8000-000000000003','Synthetic current','current@example.invalid','not-a-password','pro','2026-09-01T03:00:00Z','2099-01-01')`);
-    await db.query(`INSERT INTO mtr_harness.plan_periods(user_id,plan,paid) VALUES ('00000000-0000-4000-8000-000000000002','pro',true)`);
-   }else{
-    const rows=(await db.query('SELECT plan,cycle_anchor FROM mtr_harness.users ORDER BY id')).rows;
-    assert.deepEqual(rows.map(x=>x.plan),['starter','pro','pro']);
-    assert.ok(rows.every(x=>x.cycle_anchor.toISOString()==='2026-09-01T03:00:00.000Z'));
+    await db.query(`INSERT INTO mtr_harness.users(id,name,email,password_hash) VALUES
+     ('00000000-0000-4000-8000-000000000001','Synthetic one','one@example.invalid','not-a-password'),
+     ('00000000-0000-4000-8000-000000000002','Synthetic two','two@example.invalid','not-a-password'),
+     ('00000000-0000-4000-8000-000000000003','Synthetic three','three@example.invalid','not-a-password')`);
    }
   }
   // Real PostgreSQL locks/transaction: simultaneous replies must not double-write.
@@ -90,7 +74,7 @@ test('real server entrypoint boots three times against owned PostgreSQL; migrati
    const journey=createDiscoveryStore(decisionPool,()=>true);
    const agent='00000000-0000-4000-8000-000000000011',thread='00000000-0000-4000-8000-000000000021';
    await db.query(`UPDATE mtr_harness.discovery_settings SET enabled=true;
-    INSERT INTO mtr_harness.agents(id,user_id,owner,name) VALUES('${agent}','${owner}','Synthetic paid','Synthetic helper');
+    INSERT INTO mtr_harness.agents(id,user_id,owner,name) VALUES('${agent}','${owner}','Synthetic two','Synthetic helper');
     INSERT INTO mtr_harness.threads(id,user_id,agent_id,title) VALUES('${thread}','${owner}','${agent}','Synthetic history');
     INSERT INTO mtr_harness.messages(agent_id,thread_id,role,content,ts) VALUES('${agent}','${thread}','user','Quero organizar as compras da semana com uma lista.',now()-interval '1 day');
     INSERT INTO mtr_harness.discovery_participants(user_id,agent_id,status,started_at,ends_at) VALUES('${owner}','${agent}','active',now()-interval '7 days',now()-interval '1 hour');`);

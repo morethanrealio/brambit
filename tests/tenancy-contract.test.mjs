@@ -28,7 +28,9 @@ const PULOS={
  'ops/tenancy-write-test.mjs':[],
  'ops/tenancy-runner-test.mjs':[],
 };
-const MINIMO={'ops/tenancy-test.mjs':30,'ops/tenancy-write-test.mjs':29,'ops/tenancy-runner-test.mjs':15};
+// The write probe also targets the cockpit and feed uploads when the instance serves them.
+// The bare core serves neither, so here it only creates the core resources.
+const MINIMO={'ops/tenancy-test.mjs':30,'ops/tenancy-write-test.mjs':19,'ops/tenancy-runner-test.mjs':15};
 
 // Runs the probe and returns the JSON report it prints at the end (JSON=1).
 function sonda(arquivo,base){
