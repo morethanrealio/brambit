@@ -297,5 +297,29 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   delete process.env.WA_TURN_HEARTBEAT_MS;
 }
 
+// ── L) a voice note still being transcribed joins the text sent just before it ──
+// Real case: "translate it" + an audio 1.3s later; the transcription outlasted the
+// debounce, the text was answered alone and the audio became a separate turn.
+{
+  enviados.length = 0;
+  const textFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!opts?.body) return { ok: true, json: async () => ({ url: 'https://media.test/a', mime_type: 'audio/ogg' }), arrayBuffer: async () => new ArrayBuffer(1) };
+    return textFetch(url, opts);
+  };
+  const turns = [];
+  const h = wa.createWhatsAppHandler({
+    db: dbStub,
+    loadAgent: async () => ({ id: 'a1', name: 'Bot' }),
+    transcribe: async () => { await espera(60); return 'audio in spanish'; }, // 6x the debounce
+    runConversation: async (_agent, _uid, message) => { turns.push(message); return { text: 'ok' }; },
+  });
+  await h.process(payload('wamid.16', 'translate it'));
+  await h.process({ entry: [{ changes: [{ value: { messages: [{ id: 'wamid.17', from: '5511999999999', type: 'audio', audio: { id: 'm1' } }] } }] }] });
+  await espera(60);
+  t('text and the audio being transcribed become ONE turn', turns.length === 1 && turns[0].includes('translate it') && turns[0].includes('audio in spanish'));
+  globalThis.fetch = textFetch;
+}
+
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

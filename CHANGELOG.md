@@ -10,6 +10,13 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Fixed
+- WhatsApp waits for a voice note, image or document that is still being
+  downloaded or transcribed before answering, so a text sent right before it
+  and the media become one turn. The text used to be answered alone and the
+  media came as a separate turn. The wait is capped at 30 seconds
+  (`WA_MEDIA_HOLD_MS`).
+
 ## [0.2.9] - 2026-10-09
 
 ### Added
