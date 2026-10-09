@@ -2373,9 +2373,9 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
     }
     const finalize = async result => {
       const wrapped = withConfirmationReceipt(thread.id, result);
-      if (session && !['whatsapp','telegram'].includes(opts.kind) && wrapped?.proposalIds?.length) {
-        await confirmationStore.present(scope, wrapped.proposalIds);
-      }
+      // Present it now, like every other channel; WhatsApp/Telegram used to wait
+      // for the post-send bind(), leaving a just-created card briefly "unseen".
+      if (session && wrapped?.proposalIds?.length) await confirmationStore.present(scope, wrapped.proposalIds);
       return wrapped;
     };
     const proceed = async () => {

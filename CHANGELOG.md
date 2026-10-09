@@ -22,6 +22,23 @@ Changes merged since the last tag go under "Unreleased".
   draft) used to fail with "system not found," because the deletion only
   checked published apps. It now also finds and discards drafts, scoped to
   that person's own app.
+- A card that needs approval (for example, deleting a calendar event) is now
+  marked as shown the moment it goes out on WhatsApp or Telegram, like it
+  already was on other channels. It used to wait for a delivery confirmation
+  that a failed or skipped send could leave unset, so the same card could
+  resurface later, attached to an unrelated message.
+- A 👍 reaction (or a reply) whose card is no longer there to match (for
+  example, after the pair of cards it was sent with has moved on) now falls
+  back to the pending list instead of showing the generic "which one"
+  listing. When every pending card came from that same request, that
+  reaction or a plain "yes" approves them together; cards from
+  different requests still ask which one.
+- A task big enough to hit the per-turn step limit twice in a row (after the
+  person replied "continue" to resume it) no longer gets the exact same
+  "say continue" message forever. The second time, the turn gets a one-time,
+  bounded increase in its step budget; if the task is still too big after
+  that, the assistant proposes splitting the remaining work into smaller
+  parts instead of asking to "continue" again.
 
 ## [0.2.10] - 2026-10-09
 
@@ -47,12 +64,6 @@ Changes merged since the last tag go under "Unreleased".
   reaction on the notice only releases it, with no extra reply. Held content
   expires after 7 days. Long routines with an e-mail on file keep the
   e-mail path.
-- A task big enough to hit the per-turn step limit twice in a row (after the
-  person replied "continue" to resume it) no longer gets the exact same
-  "say continue" message forever. The second time, the turn gets a one-time,
-  bounded increase in its step budget; if the task is still too big after
-  that, the assistant proposes splitting the remaining work into smaller
-  parts instead of asking to "continue" again.
 
 ## [0.2.9] - 2026-10-09
 
