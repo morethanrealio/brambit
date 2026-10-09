@@ -158,6 +158,47 @@ export function createConfirmationStore(pool, { seal, open, ttlMs = 24 * 3600_00
         return rows.length > 0;
       });
     },
+    // Moves pending requests to another conversation of the same owner and
+    // assistant: a routine proposes in its own conversation, but the person
+    // answers in the chat it was delivered to. Numbers are per conversation, so
+    // a moved request gets the next one there. When the same action already
+    // waits there, the card is kept once and the moved copy is superseded.
+    // Returns the ids now pending in the target for those requests.
+    async adopt(from, to, ids, references = []) {
+      if (!ids.length || from.userId !== to.userId || from.agentId !== to.agentId || from.threadId === to.threadId) return [];
+      const refs = references.filter(validConfirmationReference);
+      return tx(async c => {
+        // Fixed lock order, so two moves between the same conversations can't deadlock.
+        for (const s of [from, to].sort((a, b) => a.threadId < b.threadId ? -1 : 1)) if (!await owner(c, s, true)) return [];
+        await expire(c, from);
+        await expire(c, to);
+        const { rows: moving } = await c.query(`SELECT * FROM mtr_harness.confirmation_requests
+          WHERE user_id=$1 AND agent_id=$2 AND thread_id=$3 AND id=ANY($4::uuid[]) AND state='pending' ORDER BY request_no`, [...scopeArgs(from), ids]);
+        const { rows: waiting } = await c.query(`SELECT id,fingerprint FROM mtr_harness.confirmation_requests
+          WHERE user_id=$1 AND agent_id=$2 AND thread_id=$3 AND state='pending'`, scopeArgs(to));
+        const adopted = [];
+        for (const row of moving) {
+          let id = row.id;
+          const twin = waiting.find(w => w.fingerprint === row.fingerprint);
+          if (twin) {
+            await c.query(`UPDATE mtr_harness.confirmation_requests SET state='superseded',finished_at=now() WHERE id=$1`, [row.id]);
+            id = twin.id;
+          } else {
+            if (waiting.length >= maxPending) break;
+            const { rows: numbers } = await c.query(`SELECT COALESCE(MAX(request_no),0)+1 AS n FROM mtr_harness.confirmation_requests WHERE thread_id=$1`, [to.threadId]);
+            if (waiting.length) await c.query(`UPDATE mtr_harness.confirmation_requests SET selection_required=true
+              WHERE thread_id=$1 AND state='pending'`, [to.threadId]);
+            await c.query(`UPDATE mtr_harness.confirmation_requests SET thread_id=$2,request_no=$3,selection_required=$4,presented_at=COALESCE(presented_at,now())
+              WHERE id=$1`, [row.id, to.threadId, numbers[0].n, waiting.length > 0]);
+            waiting.push({ id: row.id, fingerprint: row.fingerprint });
+          }
+          for (const ref of refs) await c.query(`INSERT INTO mtr_harness.confirmation_messages(request_id,channel,message_id)
+            VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [id, ref.channel, ref.messageId]);
+          adopted.push(id);
+        }
+        return adopted;
+      });
+    },
     async close(s, id, state = 'canceled', decisionKey = null) {
       if (!['canceled', 'superseded', 'invalidated'].includes(state)) throw Error('Invalid confirmation transition');
       return tx(async c => {
