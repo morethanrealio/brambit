@@ -1,6 +1,7 @@
 import {recoverOrderPix} from '../web/checkout-recovery.mjs';
 import { paymentRequest, checkoutFailure, pixCodeDiagnostic, pixCrc16 } from '../web/checkout-payment.mjs';
 import { confirmedAction, actionEvidenceFor } from '../web/action-evidence.mjs';
+import { frameText } from '../web/confirm-sentences.mjs';
 import { connectorActionReceipt, shareableLink } from '../web/connector-action-evidence.mjs';
 // Offline: real tool/parser/renderer bodies in VM, synthetic carts/HTTP only.
 // Never imports compras.mjs (DB/vault dependencies), starts server or calls a shop.
@@ -18,7 +19,7 @@ const eq = (a, b) => { assert.deepEqual(a, b); checks++; };
 function harness(responses, { exists = true, overrides = {} } = {}) {
   const calls = [], logs = [], saves = [];
   const cart = { origin: 'https://shop.invalid', orderFormId: 'FORM', jar: {}, valor: 1000, pix: { id: 125 }, produto: { nome: 'SYNTHETIC', qtd: 1 }, comprador: { cidade: 'TEST', estado: 'XX', cep: '00000000' }, frete: { nome: 'TEST', prazo: 'TEST' }, ...overrides };
-  const ctx = vm.createContext({ recoverOrderPix, checkoutRecoveryStore:{reserve:async()=>({id:'synthetic'}),save:async(...args)=>{saves.push(args);},load:async()=>null}, paymentRequest, checkoutFailure, pixCodeDiagnostic, pixCrc16, confirmedAction, actionEvidenceFor, connectorActionReceipt, shareableLink, URL, console: { log(...args) { logs.push(args.join(' ')); } }, getCarrinho: (uid, id) => exists && uid === 'user-test' && id === 'C' ? cart : null, carrinhoVivoDoThread: () => null, brl: v => String(v / 100), LEGACY_TEXT_LANGUAGE: 'pt-BR', defaultLanguage: () => 'pt-BR', getUserTimezone: async () => 'America/Sao_Paulo', defaultTimezone: () => 'America/Sao_Paulo', describeDone: () => 'Pedido solicitado', req: async (url, opts = {}) => {
+  const ctx = vm.createContext({ recoverOrderPix, checkoutRecoveryStore:{reserve:async()=>({id:'synthetic'}),save:async(...args)=>{saves.push(args);},load:async()=>null}, paymentRequest, checkoutFailure, pixCodeDiagnostic, pixCrc16, confirmedAction, actionEvidenceFor, connectorActionReceipt, shareableLink, frameText, URL, console: { log(...args) { logs.push(args.join(' ')); } }, getCarrinho: (uid, id) => exists && uid === 'user-test' && id === 'C' ? cart : null, carrinhoVivoDoThread: () => null, brl: v => String(v / 100), LEGACY_TEXT_LANGUAGE: 'pt-BR', defaultLanguage: () => 'pt-BR', getUserTimezone: async () => 'America/Sao_Paulo', defaultTimezone: () => 'America/Sao_Paulo', describeDone: () => 'Pedido solicitado', req: async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body });
     assert(responses.length, 'Unexpected mock request');
     const r = responses.shift(); if (r instanceof Error) throw r; return r;
