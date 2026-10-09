@@ -14,7 +14,7 @@
 # BRAMBIT_NO_OPEN=1 (do not start it at the end).
 set -euo pipefail
 
-BRAMBIT_VERSION="0.2.9"
+BRAMBIT_VERSION="0.2.10"
 NODE_VERSION="24.21.0"
 
 say() { printf '[brambit] %s\n' "$*"; }

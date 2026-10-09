@@ -10,6 +10,8 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-10-09
+
 ### Fixed
 - WhatsApp waits for a voice note, image or document that is still being
   downloaded or transcribed before answering, so a text sent right before it
@@ -328,7 +330,8 @@ service built on it.
 - Guards and the test suite run from the directory they are called from, so
   an app that installs Brambit can run them on its own repo.
 
-[Unreleased]: https://github.com/morethanrealio/brambit/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/morethanrealio/brambit/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/morethanrealio/brambit/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/morethanrealio/brambit/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/morethanrealio/brambit/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/morethanrealio/brambit/compare/v0.2.6...v0.2.7
