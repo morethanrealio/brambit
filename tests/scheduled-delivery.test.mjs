@@ -1,3 +1,5 @@
+// These cases expect the Portuguese texts on an instance whose default language is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Pure delivery factory and real curation orchestration, with synthetic senders.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

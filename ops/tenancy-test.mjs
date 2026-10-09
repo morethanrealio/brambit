@@ -7,7 +7,7 @@
 // How it works, in two steps:
 //   1. DISCOVERY  — with each account's session, lists its REAL ids via the
 //      listing endpoints (threads, files/media, agents, memory pages,
-//      spaces, routines, cockpit, devices, connections, MCP, home).
+//      spaces, routines, devices, connections, MCP, home).
 //   2. PROBE       — repeats each endpoint that accepts an id, now with the
 //      OTHER account's session (and also with no session at all), and requires a refusal (401/403/404).
 //      A 200 response with the owner's content = isolation FAILURE.
@@ -81,7 +81,7 @@ async function discover(who) {
     email: null,
     userId: null,
     threads: [], mediaKeys: [], fileIds: [], agents: [], pages: [],
-    spaces: [], routines: [], tasks: [], groups: [], devices: [],
+    spaces: [], routines: [], devices: [],
     connections: [], mcp: [], homeItems: [], apps: [], subdomain: null,
     admin: false,
   };
@@ -122,19 +122,14 @@ async function discover(who) {
   if (!inv.agents.length) inv.agents = await grab('/api/memory/overview', (d) => (d.agents || []).map((a) => a.id));
   inv.spaces = await grab('/api/spaces', (d) => (d.spaces || d || []).map((s) => s.id));
   inv.routines = await grab('/api/routines', (d) => (d.routines || []).map((r) => r.id));
-  const ck = await call(who, 'GET', '/api/cockpit');
-  if (ck.status === 200) {
-    inv.tasks = (ck.data?.tasks || []).map((t) => t.id);
-    inv.groups = (ck.data?.groups || []).map((g) => g.id);
-  }
   inv.devices = await grab('/api/device/tokens', (d) => (d.devices || []).map((x) => x.id));
   inv.connections = await grab('/api/connections', (d) => (d.connections || []).map((c) => c.id));
   inv.mcp = await grab('/api/mcp', (d) => (d.servers || []).map((s) => s.id));
   inv.homeItems = await grab('/api/home-items', (d) => [...(d.notes || []), ...(d.suggestions || [])].map((i) => i.id));
   // Admin isn't a role in the database, it's the e-mail in ADMIN_EMAIL. Detected from the
-  // outside: the whitelist route responds 200 only for them and 403 for everyone else. It matters because
+  // outside: /api/usage reports whether the session is the admin. It matters because
   // some endpoints (e.g.: /api/usage?user=) change behavior for admin.
-  inv.admin = (await call(who, 'GET', '/api/admin/whitelist')).status === 200;
+  inv.admin = (await call(who, 'GET', '/api/usage?by=day')).data?.admin === true;
   const uuid = /^([0-9a-f-]{36})\//i.exec(inv.mediaKeys[0] || '');
   // An account with no media at all doesn't reveal its own id via the API; accepts the id coming
   // from the environment (UID_A / UID_B) so as not to leave the /api/usage probe without a target.
@@ -177,10 +172,6 @@ const WRITE_SURFACE = [
   'POST /api/apps/visibility', 'POST /api/apps/delete', 'POST /api/apps/copy',
   'POST /api/spaces/mode', 'POST /api/memory/page', 'POST /api/memory/page/delete',
   'POST /api/routine/update', 'POST /api/routine/delete', 'POST /api/routine/run',
-  'POST /api/cockpit/task/update', 'DELETE /api/cockpit/task', 'POST /api/cockpit/task/run',
-  'POST /api/cockpit/task/chat', 'POST /api/cockpit/task/approve',
-  'POST /api/cockpit/edge', 'DELETE /api/cockpit/edge',
-  'POST /api/cockpit/group/update', 'DELETE /api/cockpit/group', 'POST /api/cockpit/group/run',
   'POST /api/device/tokens/enabled', 'POST /api/device/tokens/revoke',
   'POST /api/connections/delete', 'POST /api/disconnect/provider',
   'POST /api/google/accounts/remove', 'POST /api/contacts/accept', 'POST /api/contacts/decline',
@@ -198,7 +189,7 @@ async function run() {
     console.log(`Account ${inv.who} = ${inv.nome} / ${inv.subdomain} (userId ${inv.userId || 'not found'})`);
     console.log(`  threads=${inv.threads.length} media=${inv.mediaKeys.length} agents=${inv.agents.length} ` +
       `pages=${inv.pages.length} spaces=${inv.spaces.length} routines=${inv.routines.length} ` +
-      `tasks=${inv.tasks.length} devices=${inv.devices.length} connections=${inv.connections.length} ` +
+      `devices=${inv.devices.length} connections=${inv.connections.length} ` +
       `mcp=${inv.mcp.length} home=${inv.homeItems.length} apps=${inv.apps.length}`);
   }
   console.log('');
@@ -271,7 +262,7 @@ async function run() {
   // Privilege escalation: a regular session cannot open the admin route.
   for (const who of ['A', 'B']) {
     if (inv[who].admin) continue;
-    for (const rota of ['/api/admin/whitelist', '/api/admin/waitlist', '/api/admin/mobile-errors', '/api/signups']) {
+    for (const rota of ['/api/admin/discovery', '/api/admin/discovery/candidates']) {
       const r = await call(who, 'GET', rota);
       record(`GET ${rota}`, 'admin', who, r, recusou(r) || r.status === 405);
     }
