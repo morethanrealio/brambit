@@ -294,7 +294,9 @@ function sheetFileByName(entries, dec) {
  * where it said it would, without bringing the spreadsheet's content into context.
  * @param {Buffer} buf
  * @param {string[]} refs
- * @returns {Array<{ref:string, sheet:string, cell:string, exists:boolean, value:string, formula:string}>}
+ * `value` is the raw stored value (a date stays an Excel serial); `date` is set only
+ * when the cell's number format is a date, holding the ISO date the user sees.
+ * @returns {Array<{ref:string, sheet:string, cell:string, exists:boolean, value:string, formula:string, date?:string}>}
  */
 export function xlsxCells(buf, refs = []) {
   const entries = readZipEntries(buf);
@@ -304,6 +306,8 @@ export function xlsxCells(buf, refs = []) {
     return raw ? raw.toString('utf8') : '';
   };
   const shared = parseSharedStrings(dec('xl/sharedStrings.xml'));
+  const formats = dateStyles(dec('xl/styles.xml'));
+  const date1904 = /^(1|true)$/i.test(attr((dec('xl/workbook.xml').match(/<workbookPr\b[^>]*>/) || [])[0] || '', 'date1904') || '');
   const byName = sheetFileByName(entries, dec);
   const first = byName.values().next().value;
   const cache = new Map();
@@ -343,7 +347,9 @@ export function xlsxCells(buf, refs = []) {
       const vi = (inner.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
       value = vi != null ? decodeXml(vi) : '';
     }
-    out.push({ ref, sheet: tab, cell, exists: true, value, formula: formula ? decodeXml(formula) : '' });
+    const shown = type === 'n' ? formattedNumber(value, formats[Number(attr(attrs, 's') || 0)], date1904) : '';
+    const date = /^\d{4}-\d{2}-\d{2}/.test(shown) ? shown.slice(0, 10) : undefined;
+    out.push({ ref, sheet: tab, cell, exists: true, value, formula: formula ? decodeXml(formula) : '', ...(date ? { date } : {}) });
   }
   return out;
 }

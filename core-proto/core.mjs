@@ -8,6 +8,7 @@ import { retainedFilePage } from './file-page.mjs';
 import { STOP } from './provider.mjs';
 import { protocolCode, CODING_TOOLS, codingAvailable, CODING_EXECUTION_POLICY, protocolRepairFor, PROMISE_REPAIR,
   codingPromise, codingTurnContext, codingFallback, protocolFallback, executionSignature } from './turn-recovery.mjs';
+import { toolNameLines, stripToolNameLines, toolTextRepair } from './providers/ferramenta-em-texto.mjs';
 
 // Sanitizes text entering history/messages: removes LOOSE UTF-16
 // surrogates (an emoji pair cut in half by a .slice()) and the NUL character.
@@ -277,7 +278,7 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   let emptyEnd = false; // end WITHOUT text (dry or truncated at the output cap) -> goes to salvage, never returns blank
   let loopBreak = false; // cut by the anti-loop guard -> correct reason in the state note
   const turnLog = initialToolLog.map(c => ({ name:c.name, hint:c.hint || c.name, falhou:!!c.falhou })); // toda tool executada neste turno (nome + args-chave) -> nota de estado se o turno for cortado
-  let protocolRepairs = 0, promiseRepairs = 0, repairInstruction = '';
+  let protocolRepairs = 0, promiseRepairs = 0, toolTextRepairs = 0, repairInstruction = '';
   let answerRepairTools = null, answerRepairFallback = '', answerRepairs = 0;
   const executedSignatures = new Set();
   const executedReadStates = new Set();
@@ -468,6 +469,20 @@ export async function runAgent({ provider, tools, system, userInput, images, his
           promiseRepairs++;
           repairInstruction = PROMISE_REPAIR;
           continue;
+        }
+        // Tool name written as a plain text line instead of a call: one repair,
+        // then the lines are dropped so the user never sees a raw command.
+        const toolNames = defs.map(d => d.name);
+        const leaked = toolNameLines(res.text, toolNames);
+        if (leaked.length) {
+          const retry = toolTextRepairs === 0 && step + 1 < maxSteps;
+          onEvent({ type: 'tool_text_blocked', step, retry, tools: leaked });
+          if (retry) {
+            toolTextRepairs++;
+            repairInstruction = toolTextRepair(leaked);
+            continue;
+          }
+          res = { ...res, text: stripToolNameLines(res.text, toolNames) || res.text };
         }
         // A trusted caller may require a structured, audited answer. Its single
         // repair can expose only explicitly read-only tools; neither a model

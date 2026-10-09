@@ -402,6 +402,12 @@ for (const [nome, over] of [
     naoVer.erros.length === 0 && naoVer.naoVerificaveis.length === 1);
   const data = conferirEvidencia([{ ref: 'E1', esperado: '01/03/2026' }], [c('E1', { value: '46082' })]);
   t('date vs Excel serial is not an error', data.erros.length === 0 && data.naoVerificaveis.length === 1);
+  // Date-formatted cell (reader sends `date`): pt and en spellings are checked, a wrong date is an error.
+  const fmt = conferirEvidencia(
+    [{ ref: 'E2', esperado: '09/10/2026' }, { ref: 'E3', esperado: '10/09/2026' }, { ref: 'E4', esperado: '08/10/2026' }],
+    [c('E2', { value: '46304', date: '2026-10-09' }), c('E3', { value: '46304', date: '2026-10-09' }), c('E4', { value: '46304', date: '2026-10-09' })],
+  );
+  t('date-formatted cell is verified by date', fmt.conferidas === 2 && fmt.erros.length === 1 && fmt.naoVerificaveis.length === 0);
 }
 
 // ── 13) End-to-end evidence: cell error redoes; lack of evidence
