@@ -31,9 +31,9 @@ test('a secret with a value fails, whether active or commented out', () => {
 });
 
 test('an internal network IP and a host from our infra fail; loopback passes', () => {
-  const ip = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=http://172.31.2.152:9000'), reads }).join('\n');
-  assert.match(ip, /IP 172\.31\.2\.152/);
-  const host = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=https://dev.mara.mtr.center'), reads }).join('\n');
+  const ip = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=http://10.20.30.40:9000'), reads }).join('\n');
+  assert.match(ip, /IP 10\.20\.30\.40/);
+  const host = check({ example: ok.replace('# SANDBOX_URL=', '# SANDBOX_URL=https://box.mtr.center'), reads }).join('\n');
   assert.match(host, /nossa infra/);
   assert.match(check({ example: ok + '# DONO=x # oi@brambs.com.br\n', reads: new Set([...reads, 'DONO']) }).join('\n'), /nossa infra/);
 });
