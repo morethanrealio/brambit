@@ -1,6 +1,6 @@
 import { bindPendingMessage, peekPending, takePending, confirmationTargetMatches, confirmationTargetNotice } from './confirm.mjs';
 import { currentConfirmationSession } from './confirmation-session.mjs';
-import { proposalCard, proposalPresentation, textosConfirmacao } from './confirmation-flow.mjs';
+import { proposalCard, proposalPresentation, textosConfirmacao, confirmationTargetsInMessage } from './confirmation-flow.mjs';
 
 export { batchedConfirmationTarget } from './confirmation-target.mjs';
 
@@ -89,5 +89,32 @@ export function createReactionConfirmationHandler({ channel, getThread, withThre
     return withConfirmationReceipt(thread.id, await runConversation(agent, thread, userId, '👍', {
       kind: channel, viaReaction: true, confirmationTarget,
     }));
+  };
+}
+
+// A routine runs in its own conversation, but the person answers its card in
+// the chat the routine was delivered to. Without this the card stayed behind:
+// a reply, a 👍 on the delivered message or a plain "yes" in the chat could not
+// reach it, and it expired unapproved. Moves the cards the delivered text shows
+// into that chat and binds them to the delivered message ids. Best-effort:
+// never breaks the delivery that already happened.
+export function createRoutineConfirmationHandoff({ store, getOrCreateThreadByTitle, log = console.error }) {
+  return async (routine, text, messageIds = []) => {
+    const chat = routine.channel === 'telegram' ? 'Telegram' : routine.channel === 'whatsapp' ? 'WhatsApp' : null;
+    if (!chat || !routine.agent_id || !routine.user_id) return [];
+    const scope = thread => ({ userId: routine.user_id, agentId: routine.agent_id, threadId: thread.id });
+    const thread = title => getOrCreateThreadByTitle({ agentId: routine.agent_id, userId: routine.user_id, title });
+    try {
+      // Same title runRoutine uses for the routine's conversation.
+      const from = scope(await thread(`⏰ ${routine.title}`));
+      const pending = (await store.list(from)).filter(row => row.state === 'pending');
+      const ids = confirmationTargetsInMessage(pending, text);
+      if (!ids.length) return [];
+      const refs = messageIds.filter(id => id != null).map(id => ({ channel: routine.channel, messageId: String(id) }));
+      return await store.adopt(from, scope(await thread(chat)), ids, refs);
+    } catch (e) {
+      log('[confirmation] routine handoff:', e?.message ?? e);
+      return [];
+    }
   };
 }
