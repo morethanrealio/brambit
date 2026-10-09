@@ -6,7 +6,7 @@
 //
 // Usage: node test-support/env-example-guard.mjs
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,7 +55,10 @@ const IPV4 = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 const LOOPBACK = new Set(['127.0.0.1', '0.0.0.0']);
 const OUR_HOSTS = /mtr\.center|morethanreal|brambs\.com\.br|\.internal\b|\bec2-\d|\bip-\d+-\d+-\d+-\d+/i;
 
-export function check({ example, reads }) {
+// packageReads: what the installed Brambit package reads. It never demands a line
+// (the core's own example covers those), but a line in the installer's example that
+// configures the package is not dead.
+export function check({ example, reads, packageReads = new Set() }) {
   const entries = parseExample(example);
   const problems = [];
   const seen = new Map();
@@ -70,16 +73,32 @@ export function check({ example, reads }) {
   });
   const missing = [...reads].filter((v) => !seen.has(v) && !IGNORE.has(v)).sort();
   for (const v of missing) problems.push(`${v} é lida pelo código e falta no ${EXAMPLE}`);
-  const dead = [...seen.keys()].filter((v) => !reads.has(v)).sort();
+  const dead = [...seen.keys()].filter((v) => !reads.has(v) && !packageReads.has(v)).sort();
   for (const v of dead) problems.push(`${v} está no ${EXAMPLE} mas nenhum código de produção lê`);
   return problems;
+}
+
+// Whoever installs Brambit as a package (node_modules/brambit): production files of
+// the package, with the path inside it, so the same production filter applies.
+const PACKAGE = path.join(root, 'node_modules/brambit');
+function packageFiles(dir = '', out = []) {
+  for (const name of readdirSync(path.join(PACKAGE, dir))) {
+    if (name === 'node_modules' || name === '.git') continue;
+    const rel = dir ? `${dir}/${name}` : name;
+    if (statSync(path.join(PACKAGE, rel)).isDirectory()) packageFiles(rel, out); else out.push(rel);
+  }
+  return out;
 }
 
 function main() {
   const files = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && isProductionSource(f));
   const reads = new Set();
   for (const f of files) for (const v of envReads(readFileSync(path.join(root, f), 'utf8'))) reads.add(v);
-  const problems = check({ example: readFileSync(path.join(root, EXAMPLE), 'utf8'), reads });
+  const packageReads = new Set();
+  if (existsSync(path.join(PACKAGE, 'package.json'))) {
+    for (const f of packageFiles().filter(isProductionSource)) for (const v of envReads(readFileSync(path.join(PACKAGE, f), 'utf8'))) packageReads.add(v);
+  }
+  const problems = check({ example: readFileSync(path.join(root, EXAMPLE), 'utf8'), reads, packageReads });
   console.log(`[env-example] ${reads.size} variables read across ${files.length} production files`);
   for (const p of problems) console.log(`[env-example] ${p}`);
   return problems.length ? 1 : 0;
