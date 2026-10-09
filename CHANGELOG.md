@@ -34,6 +34,12 @@ Changes merged since the last tag go under "Unreleased".
   reaction on the notice only releases it, with no extra reply. Held content
   expires after 7 days. Long routines with an e-mail on file keep the
   e-mail path.
+- A task big enough to hit the per-turn step limit twice in a row (after the
+  person replied "continue" to resume it) no longer gets the exact same
+  "say continue" message forever. The second time, the turn gets a one-time,
+  bounded increase in its step budget; if the task is still too big after
+  that, the assistant proposes splitting the remaining work into smaller
+  parts instead of asking to "continue" again.
 
 ## [0.2.9] - 2026-10-09
 

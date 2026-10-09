@@ -240,9 +240,9 @@ export class ToolRegistry {
  *           maxSteps?:number, onEvent?:(e:object)=>void,
  *           transformToolResult?:((call:object,out:unknown)=>unknown)|null,
  *           pollNewUserMsg?:(()=>Promise<{text:string}|null>)|null,
- *           allowCreditFailover?:boolean }} opts
+ *           allowCreditFailover?:boolean, ceilingRetry?:boolean }} opts
  */
-export async function runAgent({ provider, tools, system, userInput, images, history = [], maxSteps = 12, onEvent = () => {}, pollNewUserMsg = null, transformToolResult = null, initialToolLog = [], control = null, salvage = true, allowCreditFailover = false, retainedToolResult = null, promiseClassifier = null }) {
+export async function runAgent({ provider, tools, system, userInput, images, history = [], maxSteps = 12, onEvent = () => {}, pollNewUserMsg = null, transformToolResult = null, initialToolLog = [], control = null, salvage = true, allowCreditFailover = false, retainedToolResult = null, promiseClassifier = null, ceilingRetry = false }) {
   const userMsg = { role: 'user', content: sanitizeText(userInput) };
   if (images?.length) userMsg.images = images;
   const messages = [...history, userMsg];
@@ -618,9 +618,16 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   // Short on purpose (26/08): the reader already waited the whole turn and
   // doesn't want an apology paragraph. One line on what happened + the way out.
   const CEILING_MSG = 'Essa tarefa é grande e não coube numa resposta só. Me diz "continua" que eu sigo de onde parei.';
+  // `ceilingRetry` (web/step-ceiling.mjs) means the CALLER already granted this
+  // conversation's one bounded step-budget bump for this "continue" streak and
+  // it STILL hit the ceiling: repeating "say continue" again would be the exact
+  // loop from Naomi item 11 (Gabriel got it 4 times in 2 days). Propose
+  // splitting the work instead, once per streak.
+  const SPLIT_MSG = 'Essa tarefa continua grande demais mesmo com mais passos liberados. Vamos dividir em partes menores: me diga qual é a primeira parte pra eu fechar agora.';
+  const proposeSplit = ceilingRetry && termination === 'step_limit';
   // When we land here due to END WITHOUT TEXT (truncation at the output cap), the message
   // above doesn't describe what happened; use an honest one about the cut.
-  const FALLBACK_MSG = emptyEnd ? 'Minha resposta ficou longa e foi cortada no meio. Me diz "continua" que eu retomo daqui.' : CEILING_MSG;
+  const FALLBACK_MSG = emptyEnd ? 'Minha resposta ficou longa e foi cortada no meio. Me diz "continua" que eu retomo daqui.' : proposeSplit ? SPLIT_MSG : CEILING_MSG;
   // State note BEFORE the salvage: goes into messages (and therefore into the
   // persisted history), so both the salvage and the "continua" turn can see
   // what was already executed — even if compaction/pruning has eaten the details.
@@ -634,7 +641,10 @@ export async function runAgent({ provider, tools, system, userInput, images, his
     messages.push({ role: 'user', meta: 'estado', content: sanitizeText(buildStateNote(turnLog, motivo)) });
   }
   try {
-    const wrapSystem = `${system}\n\nATENÇÃO: você já usou todas as suas ferramentas neste turno. NÃO chame mais nenhuma ferramenta. Responda AGORA, de forma completa e útil, com base em tudo que você já levantou até aqui. Se ficou faltando confirmar algum item, entregue o que tem e diga com honestidade o que não deu pra confirmar. NÃO fale de bastidor com o usuário: nada de "limite de passos", "teto do turno", "ferramentas esgotadas", nem de negar que travou/sumiu. Se a tarefa ficou pela metade, feche em UMA frase curta: que ela é grande e não coube numa resposta só, e que é só pedir "continua".`;
+    const closingInstruction = proposeSplit
+      ? 'If the task is unfinished, close with ONE short sentence, in the language of the conversation, proposing to split what is left into smaller parts and asking which smaller part the person wants finished first; do NOT just ask them to say "continue" again, that was already tried and it did not fit.'
+      : 'Se a tarefa ficou pela metade, feche em UMA frase curta: que ela é grande e não coube numa resposta só, e que é só pedir "continua".';
+    const wrapSystem = `${system}\n\nATENÇÃO: você já usou todas as suas ferramentas neste turno. NÃO chame mais nenhuma ferramenta. Responda AGORA, de forma completa e útil, com base em tudo que você já levantou até aqui. Se ficou faltando confirmar algum item, entregue o que tem e diga com honestidade o que não deu pra confirmar. NÃO fale de bastidor com o usuário: nada de "limite de passos", "teto do turno", "ferramentas esgotadas", nem de negar que travou/sumiu. ${closingInstruction}`;
     const res = await completeProvider({ system: wrapSystem, messages, tools: [] }, maxSteps);
     if (res.usage) usages.push(res.usage);
     coletarFontes(res);
