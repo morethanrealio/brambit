@@ -246,34 +246,44 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
   if (explicit.length !== selected.length) return {kind:'unknown',rows:pending};
   if (explicit.length && decision === 'confirm' && !plainConsent(explicit.length > 1 ? body.replace(/\b(?:e|and|y)\b/g,'').replace(/\s+/g,' ').trim() : body)
       && !/^(?:confirma|confirme)[.! ]*$/.test(folded(body))) return {kind:'ambiguous',rows:pending};
+  let matches = [];
   if (target !== undefined) {
-    const matches = rows.filter(r => r.messageRefs?.some(ref => ref.channel === target?.channel && ref.messageId === target?.messageId));
+    matches = rows.filter(r => r.messageRefs?.some(ref => ref.channel === target?.channel && ref.messageId === target?.messageId));
     if (viaReaction && !pending.length && !matches.length) return {kind:'ignore'};
     if (!validConfirmationReference(target)) return {kind:decision || explicit.length ? 'unknown' : 'continue',rows:pending};
     if (!matches.length && !decision && !explicit.length) return {kind:'continue'};
-    if (!matches.length || (explicit.length && selected.some(r => !matches.some(m => m.id === r.id)))) return {kind:'unknown',rows:pending};
-    selected = explicit.length ? selected : matches;
-    if (!explicit.length && !viaReaction && decision === 'confirm') {
-      const named = naturalTargets(rows,said,false);
-      if (named.some(r => !matches.some(m => m.id === r.id))) return {kind:'unknown',rows:pending};
-      if (matches.length === 1 && !plainConsent(body) && !approvalOfTargets(said,matches)
-          && !(phraseSelection(matches,said)?.consent)
-          && !(matches[0].name === 'jornada_configurar' && confirmsPending(matches[0],said))) return {kind:'ambiguous',rows:matches};
-    }
-    if (!explicit.length && !viaReaction && matches.length > 1) {
-      const phrased = !plainCancel && decision === 'confirm' ? phraseSelection(matches,said) : null;
-      const narrowed = plainCancel ? [] : phrased?.consent ? phrased.rows : naturalTargets(matches,said);
-      if (narrowed.length) {
-        if (narrowed.length > 1) return {kind:'ambiguous',rows:narrowed};
-        if (decision === 'confirm' && !phrased?.consent && !approvalOfTargets(said,narrowed)) return {kind:'ambiguous',rows:matches};
-        selected = narrowed;
+    if (explicit.length && selected.some(r => !matches.some(m => m.id === r.id))) return {kind:'unknown',rows:pending};
+    // A quote/reply naming no row and no number still gets the generic "unknown"
+    // unless it's a reaction with something pending to fall back to (below).
+    if (!matches.length && !explicit.length && !(viaReaction && pending.length)) return {kind:'unknown',rows:pending};
+    if (matches.length || explicit.length) {
+      selected = explicit.length ? selected : matches;
+      if (!explicit.length && !viaReaction && decision === 'confirm') {
+        const named = naturalTargets(rows,said,false);
+        if (named.some(r => !matches.some(m => m.id === r.id))) return {kind:'unknown',rows:pending};
+        if (matches.length === 1 && !plainConsent(body) && !approvalOfTargets(said,matches)
+            && !(phraseSelection(matches,said)?.consent)
+            && !(matches[0].name === 'jornada_configurar' && confirmsPending(matches[0],said))) return {kind:'ambiguous',rows:matches};
       }
-      else if (decision === 'confirm' && !plainConsent(body)
-        && !allConsent(body)) {
-        return {kind:'ambiguous',rows:matches};
+      if (!explicit.length && !viaReaction && matches.length > 1) {
+        const phrased = !plainCancel && decision === 'confirm' ? phraseSelection(matches,said) : null;
+        const narrowed = plainCancel ? [] : phrased?.consent ? phrased.rows : naturalTargets(matches,said);
+        if (narrowed.length) {
+          if (narrowed.length > 1) return {kind:'ambiguous',rows:narrowed};
+          if (decision === 'confirm' && !phrased?.consent && !approvalOfTargets(said,narrowed)) return {kind:'ambiguous',rows:matches};
+          selected = narrowed;
+        }
+        else if (decision === 'confirm' && !plainConsent(body)
+          && !allConsent(body)) {
+          return {kind:'ambiguous',rows:matches};
+        }
       }
     }
-  } else if (!selected.length) {
+    // A reaction/reply pointing at something we no longer track (expired, or
+    // simply not ours) carries no usable target: fall through and resolve it
+    // like a plain, targetless decision instead of the generic "which one".
+  }
+  if (!selected.length) {
     // A full refusal ("não precisa fazer nada") doesn't name by name an event
     // called "Nada". Only visible context or an explicit reference links it.
     const candidates = visible.length ? visible : pending;
@@ -294,17 +304,27 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       if (!visible.length || (/\b(?:os dois|as duas|both|los dos|las dos)\b/.test(folded(body)) && visible.length !== 2)) return {kind:'ambiguous',rows:pending};
       selected = visible;
     } else if (decision) {
-      if (decision === 'confirm' && !plainConsent(body) && !discoveryConsent) return {kind:'ambiguous',rows:pending};
+      // A reaction's decision already came from the tap itself (positive/negative),
+      // not from matching free text, so the plain-consent phrase check below does
+      // not apply to it; it still needs a usable row to land on, same as any other.
+      if (decision === 'confirm' && !viaReaction && !plainConsent(body) && !discoveryConsent) return {kind:'ambiguous',rows:pending};
       // Simple consent goes to the single card the person just saw, even with
       // older requests still pending; those stay open. A targetless refusal
       // still requires a single pending one.
       if (visible.length === 1 && visible[0].state === 'pending' && (pending.length === 1 || decision === 'confirm')) selected = visible;
       else if (visible.length > 1 && sameRequest(visible) && decision === 'confirm') selected = visible;
+      // Everything still open came from the one same request (e.g. a reaction
+      // that lost its specific target): one "yes" covers all of it, same as
+      // it already does when the grouped card is the thing being replied to.
+      else if (pending.length > 1 && sameRequest(pending) && decision === 'confirm') selected = pending;
       else if (pending.length) return {kind:'ambiguous',rows:pending};
     }
   }
   if (!selected.length) return {kind:'continue'};
-  if (selected.length > 1 && (!decision || decision === 'edit' || (!explicit.length && target === undefined
+  // Same test a genuinely targetless message gets: an untracked target (the
+  // reaction/reply above fell through to here) carries no more weight than none.
+  const noUsableTarget = target === undefined || (!matches.length && !explicit.length);
+  if (selected.length > 1 && (!decision || decision === 'edit' || (!explicit.length && noUsableTarget
       && !/\b(?:os dois|as duas|ambos|ambas|todos|todas|both|all|los dos|las dos)\b/.test(folded(body)) && !sameRequest(selected)))) return {kind:'ambiguous',rows:selected};
   if (selected.some(r => r.state !== 'pending')) return selected.every(r => r.state !== 'pending')
     ? {kind:'replay',row:selected[0],rows:selected} : {kind:'ambiguous',rows:selected};

@@ -151,6 +151,26 @@ test('selection ignores channel context and rejects conflicting number/reference
   assert.equal(selectConfirmation(rows,'confirmo pedido 1 e cancela pedido 2').kind,'ambiguous');
   assert.equal(selectConfirmation(rows,'[quoted: confirmo pedido 1]⁣Como funciona?').kind,'continue');
 });
+// Marina 2026-10: her reaction's target no longer matched any card (the pair came
+// from a single request and one had already moved on), so it fell into the generic
+// "unknown" listing instead of being treated like a plain, targetless "yes".
+test('a reaction whose target matches nothing falls back to the pending list and approves same-request proposals together',async t=>{
+  const f=await fixture(t);await f.propose(args(1));await f.propose(args(2));
+  const rows=(await f.session()).pending();
+  rows.forEach(r=>r.source={...r.source,ownerText:'remove my two dentist appointments'});
+  const stale={channel:'telegram',messageId:'no-longer-tracked'};
+  const result=selectConfirmation(rows,'👍',stale,true);
+  assert.equal(result.kind,'confirm');
+  assert.deepEqual(result.rows.map(r=>r.id).sort(),rows.map(r=>r.id).sort());
+});
+test('a reaction whose target matches nothing still asks which one when the pending proposals came from different requests',async t=>{
+  const f=await fixture(t);await f.propose(args(1));await f.propose(args(2));
+  const rows=(await f.session()).pending();
+  rows[0].source={...rows[0].source,ownerText:'remove the dentist appointment'};
+  rows[1].source={...rows[1].source,ownerText:'send the report to finance'};
+  const stale={channel:'telegram',messageId:'no-longer-tracked'};
+  assert.equal(selectConfirmation(rows,'👍',stale,true).kind,'ambiguous');
+});
 // Routine case 2026-10-07: the card stayed in the routine's own conversation,
 // so a 👍 on the delivered Telegram message matched nothing and it expired.
 test('a routine card moves to the chat it was delivered to and a reply there approves only it',async t=>{

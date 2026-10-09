@@ -76,6 +76,20 @@ test('real server wrapper persists separate cards, resolves exact request withou
   assert.equal(f.state.cancelled,0);assert.equal(f.state.modelTurns,1);
 });
 
+// Bug 2026-10 (Nate/Jorge reports): WhatsApp and Telegram used to skip the eager
+// present() here and rely entirely on a post-send callback, so any dropped/failed
+// send left presented_at unset forever and the already-sent card could resurface
+// later as if it had never been shown.
+test('a WhatsApp or Telegram card is presented as soon as it is in the reply, not only after a later send callback',async t=>{
+  const f=await fixture(t);
+  const wa=await f.turn('propor:rotina-A',{kind:'whatsapp'});
+  assert.equal(wa.confirmationCards.length,1);
+  const tg=await f.turn('propor:rotina-B',{kind:'telegram'});
+  assert.equal(tg.confirmationCards.length,1);
+  const rows=await f.store.list(f.scope);
+  assert.ok(rows.every(r=>r.presented),'WhatsApp/Telegram proposals must be presented the moment their card is sent');
+});
+
 test('real server wrapper accepts a natural approval of the presented set and replays the complete receipt',async t=>{
   const f=await fixture(t);await f.turn('propor:rotina-A,rotina-B');
   await f.turn('confirmo os dois',{confirmationInputId:'set-approval'});
