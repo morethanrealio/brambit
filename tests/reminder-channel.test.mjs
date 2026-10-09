@@ -118,3 +118,17 @@ test('uncertainty after the write is not hidden by a later success', async () =>
   const out = j.finish('Pronto.');
   assert.equal(s.writes.length, 2); assert.match(out, /Lembrete agendado/); assert.match(out, new RegExp(unknownPt));
 });
+
+// Paulo, 2026-10-04: editing a reminder that had already fired found nothing
+// (NOT_FOUND); the model recreated it and the reply still said "não foi concluída".
+test('editing a fired reminder then recreating it does not show the edit failure', async () => {
+  const s = fixture(); const j = createActionJournal();
+  const notFound = JSON.stringify({ ok: false, code: 'NOT_FOUND', message: 'Não encontrei esse lembrete pendente.' });
+  j.toolResult({ id: 'e', name: 'editar_lembrete', args: { id: 'x' } }, notFound);
+  const a = { ...ruffy, canal: 'email' };
+  j.toolResult({ id: 'c', name: 'criar_lembrete', args: a }, await s.tool.run(a));
+  const out = j.finish('Pronto.');
+  assert.match(out, /Lembrete agendado/); assert.ok(!out.includes(failedPt), out);
+  const alone = createActionJournal(); alone.toolResult({ id: 'e', name: 'editar_lembrete', args: { id: 'x' } }, notFound);
+  assert.match(alone.finish('Pronto. Lembrete agendado para as 23h17.'), new RegExp(failedPt));
+});

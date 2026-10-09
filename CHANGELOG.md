@@ -11,6 +11,9 @@ Changes merged since the last tag go under "Unreleased".
 ## [Unreleased]
 
 ### Fixed
+- Changing a reminder that had already gone out, and then creating it again in
+  the same turn, no longer ends the reply with "the action was not
+  completed" next to the new reminder.
 - WhatsApp waits for a voice note, image or document that is still being
   downloaded or transcribed before answering, so a text sent right before it
   and the media become one turn. The text used to be answered alone and the
