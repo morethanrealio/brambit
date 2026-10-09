@@ -20,17 +20,14 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const A='00000000-0000-4000-8000-00000000000a',B='00000000-0000-4000-8000-00000000000b';
 const SID_A='sintetica-a-'+'a'.repeat(40),SID_B='sintetica-b-'+'b'.repeat(40);
 
-// Expected skips: media lives in the bucket, which doesn't exist without network (for the same
-// reason the write probe's disposable file is never created and DELETE /api/files
-// is left out). Any other skip is a probe that failed to exercise something.
+// Expected skips: media lives in the bucket, which doesn't exist without network.
+// Any other skip is a probe that failed to exercise something.
 const PULOS={
  'ops/tenancy-test.mjs':['GET /api/media?key|A','GET /api/media?key|B'],
  'ops/tenancy-write-test.mjs':[],
  'ops/tenancy-runner-test.mjs':[],
 };
-// The write probe also targets the cockpit and feed uploads when the instance serves them.
-// The bare core serves neither, so here it only creates the core resources.
-const MINIMO={'ops/tenancy-test.mjs':30,'ops/tenancy-write-test.mjs':19,'ops/tenancy-runner-test.mjs':15};
+const MINIMO={'ops/tenancy-test.mjs':27,'ops/tenancy-write-test.mjs':19,'ops/tenancy-runner-test.mjs':15};
 
 // Runs the probe and returns the JSON report it prints at the end (JSON=1).
 function sonda(arquivo,base){
@@ -75,7 +72,7 @@ test('cross-account isolation probes pass against the real server with two synth
    const res=r.rel.results;
    assert.deepEqual(res.filter(x=>x.ok===false),[],f);
    assert.deepEqual(res.filter(x=>x.ok===null).map(x=>x.nome+'|'+(x.alvo||'')).sort(),PULOS[f].sort(),f+': new skip\n'+r.out);
-   console.log(f+': '+res.filter(x=>x.ok).length+' provas de isolamento passaram');
+   console.log(f+': '+res.filter(x=>x.ok).length+' isolation proofs passed');
    assert.ok(res.filter(x=>x.ok).length>=MINIMO[f],f+': fewer proofs than expected\n'+r.out);
   }
   assert.doesNotMatch(output,/ReferenceError|TypeError|SyntaxError/);

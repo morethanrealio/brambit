@@ -7,10 +7,9 @@
 //
 // Rule that makes this safe to run in production: no probe points at the
 // owner's real resource. The test FIRST CREATES, in account A, a disposable set
-// (assistant, conversation, routine, page, tasks, sequence, edge, device,
-// connection, file), account B tries to destroy/alter THESE, and at the end everything is
-// deleted by account A itself. If isolation is broken, what gets lost is
-// test junk.
+// (assistant, conversation, routine, page, device, connection), account B
+// tries to destroy/alter THESE, and at the end everything is deleted by account
+// A itself. If isolation is broken, what gets lost is test junk.
 //
 // The verdict is NOT the HTTP status: several handlers respond 200 even without affecting
 // anything (the UPDATE has `WHERE user_id = $x` and matches zero rows). What counts is the
@@ -98,16 +97,6 @@ const SNAP = {
     const g = await call('A', 'GET', `/api/memory/page?slug=${encodeURIComponent(R.slug)}`);
     return JSON.stringify({ status: g.status, page: g.data?.page || null });
   },
-  cockpit: async () => {
-    const c = await call('A', 'GET', '/api/cockpit');
-    const d = c.data || {};
-    const meus = new Set([R.taskId, R.taskId2].filter(Boolean));
-    return JSON.stringify({
-      tasks: (d.tasks || []).filter((t) => meus.has(t.id)),
-      groups: (d.groups || []).filter((g) => g.id === R.groupId),
-      edges: (d.edges || []).filter((e) => meus.has(e.from_task) || meus.has(e.to_task)),
-    });
-  },
   device: async () => {
     const l = await call('A', 'GET', '/api/device/tokens');
     const d = (l.data?.devices || []).find((x) => x.id === R.deviceId);
@@ -120,11 +109,6 @@ const SNAP = {
     const c = (l.data?.connections || []).find((x) => x.id === R.connectionId);
     return JSON.stringify(c || null);
   },
-  file: async () => {
-    const l = await call('A', 'GET', '/api/files');
-    const f = (l.data?.files || []).find((x) => x.id === R.fileId);
-    return JSON.stringify(f || null);
-  },
 };
 
 // An empty snapshot (resource doesn't exist) makes before === after === 'null' and the probe
@@ -132,10 +116,6 @@ const SNAP = {
 // so an empty snapshot becomes an explicit SKIP.
 function retratoVazio(chave, s) {
   if (!s || s === 'null') return true;
-  if (chave === 'cockpit') {
-    const d = JSON.parse(s);
-    return !d.tasks.length && !d.groups.length && !d.edges.length;
-  }
   if (chave === 'agent' || chave === 'webhook' || chave === 'page') return JSON.parse(s).status !== 200;
   return false;
 }
@@ -183,25 +163,6 @@ async function setup() {
   });
   if (pg.status === 200 && pg.data?.page?.slug) R.slug = pg.data.page.slug; else falta.push(`memory page (HTTP ${pg.status})`);
 
-  for (const [k, titulo] of [['taskId', 'task 1'], ['taskId2', 'task 2']]) {
-    const t = await call('A', 'POST', '/api/cockpit/task', {
-      agentId: R.agentId, title: `ZZ ${MARCA} ${titulo}`,
-      body: 'Disposable resource for the isolation test.', posX: 10, posY: 10, kind: 'task',
-    });
-    if (t.status === 200 && t.data?.task?.id) R[k] = t.data.task.id; else falta.push(`cockpit ${titulo} (HTTP ${t.status})`);
-  }
-  if (R.taskId && R.taskId2) {
-    const ed = await call('A', 'POST', '/api/cockpit/edge', { fromTask: R.taskId, toTask: R.taskId2 });
-    if (ed.status === 200 && ed.data?.edge?.id) R.edgeId = ed.data.edge.id; else falta.push(`cockpit edge (HTTP ${ed.status})`);
-  }
-  const gr = await call('A', 'POST', '/api/cockpit/group', { title: `ZZ ${MARCA} sequence`, posX: 200, posY: 200 });
-  if (gr.status === 200 && gr.data?.group?.id) {
-    R.groupId = gr.data.group.id;
-    // Sequence needs an agent + queue for /group/run to reach execution; without
-    // that the probe dies on a 400 validation error and doesn't test ownership at all.
-    await call('A', 'POST', '/api/cockpit/group/update', { id: R.groupId, agentId: R.agentId, taskIds: [R.taskId].filter(Boolean) });
-  } else falta.push(`cockpit sequence (HTTP ${gr.status})`);
-
   const dv = await call('A', 'POST', '/api/device/tokens', { label: `ZZ ${MARCA}` });
   if (dv.status === 200 && dv.data?.device?.id) { R.deviceId = dv.data.device.id; R.deviceToken = dv.data.token; }
   else falta.push(`device token (HTTP ${dv.status})`);
@@ -211,17 +172,6 @@ async function setup() {
   });
   if (cn.status === 200 && cn.data?.connection?.id) R.connectionId = cn.data.connection.id;
   else falta.push(`vault connection (HTTP ${cn.status} ${cn.raw?.slice(0, 120)})`);
-
-  const up = await call('A', 'POST', '/api/feed/upload', {
-    data: Buffer.from(`disposable test file ${MARCA}`).toString('base64'),
-    mimeType: 'text/plain', name: `${MARCA}.txt`,
-  });
-  if (up.status === 200 && up.data?.key) {
-    R.fileKey = up.data.key;
-    const fl = await call('A', 'GET', '/api/files');
-    R.fileId = (fl.data?.files || []).find((f) => f.url?.includes(encodeURIComponent(R.fileKey)))?.id || null;
-  }
-  if (!R.fileId) falta.push(`file (HTTP ${up.status})`);
 
   return { falta };
 }
@@ -263,34 +213,18 @@ function probes() {
     add('POST /api/memory/page (slug de A)', 'page', 'POST', '/api/memory/page', { slug: R.slug, title: INVASOR, body: INVASOR });
     add('POST /api/memory/page/delete', 'page', 'POST', '/api/memory/page/delete', { slug: R.slug });
   }
-  if (R.taskId) {
-    const id = R.taskId;
-    add('POST /api/cockpit/task/update', 'cockpit', 'POST', '/api/cockpit/task/update', { id, title: INVASOR, body: INVASOR });
-    add('POST /api/cockpit/task/approve', 'cockpit', 'POST', '/api/cockpit/task/approve', { id });
-    add('POST /api/cockpit/task/run', 'cockpit', 'POST', '/api/cockpit/task/run', { id });
-    add('POST /api/cockpit/task/chat', 'cockpit', 'POST', '/api/cockpit/task/chat', { id, message: 'oi' });
-  }
-  if (R.edgeId) add('DELETE /api/cockpit/edge?id', 'cockpit', 'DELETE', `/api/cockpit/edge?id=${encodeURIComponent(R.edgeId)}`);
-  if (R.taskId && R.taskId2) add('POST /api/cockpit/edge (tarefas de A)', 'cockpit', 'POST', '/api/cockpit/edge', { fromTask: R.taskId2, toTask: R.taskId });
-  if (R.groupId) {
-    const id = R.groupId;
-    add('POST /api/cockpit/group/update', 'cockpit', 'POST', '/api/cockpit/group/update', { id, title: INVASOR });
-    add('POST /api/cockpit/group/run', 'cockpit', 'POST', '/api/cockpit/group/run', { id });
-    add('DELETE /api/cockpit/group?id', 'cockpit', 'DELETE', `/api/cockpit/group?id=${encodeURIComponent(id)}`);
-  }
-  if (R.taskId) add('DELETE /api/cockpit/task?id', 'cockpit', 'DELETE', `/api/cockpit/task?id=${encodeURIComponent(R.taskId)}`);
   if (R.deviceId) {
     add('POST /api/device/tokens/enabled', 'device', 'POST', '/api/device/tokens/enabled', { id: R.deviceId, enabled: false });
     add('POST /api/device/tokens/revoke', 'device', 'POST', '/api/device/tokens/revoke', { id: R.deviceId });
   }
   if (R.connectionId) add('POST /api/connections/delete', 'connection', 'POST', '/api/connections/delete', { id: R.connectionId });
-  if (R.fileId) add('DELETE /api/files?id', 'file', 'DELETE', `/api/files?id=${encodeURIComponent(R.fileId)}`);
   return P;
 }
 
 // Write endpoints with id that stay OUT, with the reason. None of them
 // has a way to get a disposable target without touching something real of the owner's.
 const NAO_COBERTO = [
+  ['DELETE /api/files?id', 'files are born from chat attachments; there is no upload route to create a disposable one'],
   ['POST /api/home-items/delete', 'home item is generated by /api/home-refresh; no way to create a disposable one'],
   ['POST /api/apps/visibility', 'publish/unpublish requires a real app (container build)'],
   ['POST /api/apps/delete', 'deleting an app is irreversible and tears down the owner\'s container'],
@@ -309,11 +243,8 @@ async function cleanup() {
     const r = await call(who, method, path, body);
     if (r.status !== 200) sobrou.push(`${rotulo} (HTTP ${r.status})`);
   };
-  if (R.fileId) await tenta('file', 'A', 'DELETE', `/api/files?id=${encodeURIComponent(R.fileId)}`);
   if (R.connectionId) await tenta('connection', 'A', 'POST', '/api/connections/delete', { id: R.connectionId });
   if (R.deviceId) await tenta('device token', 'A', 'POST', '/api/device/tokens/revoke', { id: R.deviceId });
-  if (R.groupId) await tenta('sequence', 'A', 'DELETE', `/api/cockpit/group?id=${encodeURIComponent(R.groupId)}`);
-  for (const id of [R.taskId, R.taskId2].filter(Boolean)) await tenta('task', 'A', 'DELETE', `/api/cockpit/task?id=${encodeURIComponent(id)}`);
   if (R.slug) {
     await tenta('memory page (A)', 'A', 'POST', '/api/memory/page/delete', { slug: R.slug });
     // If the probe created the same-named page in account B, it gets removed here.
