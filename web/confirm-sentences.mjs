@@ -368,13 +368,18 @@ const SENTENCES = {
     request: (a, c) => {
       const app = c.or(a.app, 'gerenciar_tarefa_de_app.default_app');
       if (a.acao === 'cancelar') return c.t('gerenciar_tarefa_de_app.request_cancel', { app });
+      if (a.acao === 'resolver_pendencia') return c.t(a.resultado === 'concluida'
+        ? 'gerenciar_tarefa_de_app.request_resolve_done'
+        : 'gerenciar_tarefa_de_app.request_resolve_not_done', { app });
       return c.t('gerenciar_tarefa_de_app.request', {
         app,
         mode: c.t(a.modo === 'edicao' ? 'gerenciar_tarefa_de_app.mode_edit' : 'gerenciar_tarefa_de_app.mode_review'),
         goal: String(a.objetivo || '').replace(/[<>\r\n]/g, ' ').slice(0, 2000),
       });
     },
-    done: (a, c) => c.t(a.acao === 'cancelar' ? 'gerenciar_tarefa_de_app.done_cancel' : 'gerenciar_tarefa_de_app.done'),
+    done: (a, c) => c.t(a.acao === 'cancelar' ? 'gerenciar_tarefa_de_app.done_cancel'
+      : a.acao === 'resolver_pendencia' ? (a.resultado === 'concluida' ? 'gerenciar_tarefa_de_app.done_resolve_done' : 'gerenciar_tarefa_de_app.done_resolve_not_done')
+      : 'gerenciar_tarefa_de_app.done'),
   },
   publicar_sistema: {
     request: (a, c) => (a.dono

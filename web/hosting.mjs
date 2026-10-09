@@ -22,6 +22,7 @@ import { anonymizeSnapshotBlob } from './anonymize.mjs';
 import { lintAppB64, countLines } from './applint.mjs';
 import { resolverAncora } from './app-anchor.mjs';
 import { pioraSintaxe } from './app-syntax.mjs';
+import { draftOnlyNotice, deleteDraftOnly } from './app-draft-delete.mjs';
 import { avaliarReducao } from './app-shrink-guard.mjs';
 import { conferirPermissoes } from './permissoes.mjs';
 import { ensureUserSubdomain, registerApp, setAppStatus, deleteAppRow, getAppRow, listAppsForUser,
@@ -2250,9 +2251,13 @@ export function hostingTools(userId, agentId, opts = {}) {
       // Runs BEFORE the confirmation: enriches the text the user is going
       // to read with what actually exists inside the app (number of
       // records), so they don't confirm in the dark. Never writes anything.
-      async preflight({ nome_do_sistema }) {
+      async preflight({ nome_do_sistema }, { language } = {}) {
         const system = (nome_do_sistema || '').toLowerCase();
         if (!sysOk(system)) return null;
+        const app = await getAppRow(userId, system);
+        // Never published: the base sentence claims container/history/data
+        // will be lost, so say it is only a draft before the user confirms.
+        if (!app) return draftOnlyNotice({ userId, system, getAppDraft, language });
         const inv = await appContentsSummary(userId, system);
         if (!inv) return null;
         const perdas = [];
@@ -2265,7 +2270,8 @@ export function hostingTools(userId, agentId, opts = {}) {
       async run({ nome_do_sistema }) {
         const system = (nome_do_sistema || '').toLowerCase();
         const app = await getAppRow(userId, system);
-        if (!app) return { ok: false, error: `Não achei o sistema "${system}".` };
+        // Draft-only apps have no `apps` row and no container to delete.
+        if (!app) return deleteDraftOnly({ userId, system, getAppDraft, clearAppDraft });
         const inv = await appContentsSummary(userId, system);
         const res = await ctl({ verb: 'delete', label: app.label, system });
         if (!res.ok) return { ok: false, error: `Falha ao apagar: ${res.error || 'erro'}` };
