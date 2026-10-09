@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { SEGUE } from '../../web/rotas.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const BRANDS = { together: 'Together', openai: 'OpenAI', gemini: 'Google Gemini' };
+const BRANDS = { together: 'Together', openai: 'OpenAI', gemini: 'Google Gemini', deepinfra: 'DeepInfra', deepseek: 'DeepSeek' };
 // Where the button is, in the words of the app's screen in each language.
 const CHANGE_PATH = {
   pt: 'Configurações › Este computador › Trocar a IA ou o modelo',

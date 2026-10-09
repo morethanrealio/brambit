@@ -129,3 +129,16 @@ people write: they parse user text, so they stay.
 - Tool and parameter names are in Portuguese. Stored history and pending
   confirmations reference them by name, so a rename needs aliases or a
   migration.
+
+## 6. Installer
+
+### 6.1 Help pages for getting an API key, inside the installation (needs design)
+
+The setup page (`installer/setup.html`, `KEY_HELP`) shows three short steps
+per provider (account, credit, key) with links to the provider's own pages.
+Someone who has never used an AI API may need more: what each screen looks
+like, how much credit to buy, what a month of use costs. The provider pages
+also move and change without notice. Brambit could ship its own help pages,
+one per provider and in every language of the setup page, served by the
+setup server (`installer/brambit.mjs`) so they match the installed version
+and work without the provider's site.
