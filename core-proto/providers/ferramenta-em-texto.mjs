@@ -105,3 +105,43 @@ export function stripDsml(content) {
   return i < 0 ? s : s.slice(0, i).trim();
 }
 export const hasDsmlResidue = (s) => String(s ?? '').includes(DSML_TAG);
+
+// ── Tool NAME written as a plain line ──
+// Seen on 2026-10-09 (DeepSeek V4.1 Flash): instead of calling the tool, the model
+// ended its reply with a line like `enviar_para_drive "Report.xlsx"` and asked
+// "shall I go on?". No markup at all, so neither reader above sees it: the tool
+// never runs and the user gets a command line. A line counts only when it STARTS
+// with a known tool name (optionally in backticks) followed by `(`, `{` or a quoted
+// argument, so prose that merely mentions a tool, or a bulleted list of tools, is
+// left alone. Code fences are skipped.
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function toolLineRe(toolNames) {
+  const names = [...new Set(toolNames)].filter(Boolean).map(escapeRe);
+  if (!names.length) return null;
+  return new RegExp(`^\\s*\`?(${names.join('|')})\`?(?:\\s*[({]|\\s+["'“])`);
+}
+export function toolNameLines(text, toolNames = []) {
+  const re = toolLineRe(toolNames);
+  if (!re) return [];
+  const hits = [];
+  let fenced = false;
+  for (const line of String(text ?? '').split('\n')) {
+    if (/^\s*```/.test(line)) { fenced = !fenced; continue; }
+    const m = !fenced && line.match(re);
+    if (m) hits.push(m[1]);
+  }
+  return hits;
+}
+// Removes those lines (last resort when the repair is not available).
+export function stripToolNameLines(text, toolNames = []) {
+  const re = toolLineRe(toolNames);
+  if (!re) return String(text ?? '');
+  let fenced = false;
+  return String(text ?? '').split('\n').filter(line => {
+    if (/^\s*```/.test(line)) { fenced = !fenced; return true; }
+    return fenced || !re.test(line);
+  }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+export const toolTextRepair = (names) => `
+[answer NOT sent yet: one attempt]
+Your reply contains ${[...new Set(names)].join(', ')} written as text instead of a tool call, so nothing ran and the user would see a raw command. If that action is what the user asked for, CALL the tool now (tools that change something show the user their own confirmation card, so do not ask for a separate "go" in text). If it is not needed, answer without writing tool names or commands.`;

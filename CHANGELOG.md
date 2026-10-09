@@ -10,6 +10,16 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Fixed
+- Spreadsheet edits no longer end with "could not verify" on every date. The
+  check compared the date the editor declared with the raw number Excel stores;
+  it now compares it with the date the person sees in the cell (day/month and
+  month/day both accepted), and a wrong date is still reported.
+- The assistant sometimes wrote a tool name as a plain line (for example a
+  command with the file name) instead of running it, so nothing happened and
+  the person saw a raw command. It now gets one chance to really call the tool
+  (with the usual confirmation card); if it still does not, the line is removed.
+
 ## [0.2.11] - 2026-10-09
 
 ### Fixed

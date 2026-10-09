@@ -299,6 +299,23 @@ function pareceData(s) {
     || /\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i.test(String(s || ''));
 }
 
+// ISO dates a declared value can mean: "2026-10-09", or "09/10/2026" read as
+// day/month AND month/day (pt and en users write it differently). Two-digit years
+// follow Excel (00-29 = 20xx). Anything else returns [] and stays unverifiable.
+function declaredDates(v) {
+  const s = String(v ?? '').trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]|$)/);
+  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4}|\d{2})(?:\s|$)/);
+  const ymd = (y, m, d) => {
+    const t = new Date(Date.UTC(y, m - 1, d));
+    return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : null;
+  };
+  if (iso) return [ymd(+iso[1], +iso[2], +iso[3])].filter(Boolean);
+  if (!dmy) return [];
+  const y = dmy[3].length === 2 ? (+dmy[3] < 30 ? 2000 : 1900) + +dmy[3] : +dmy[3];
+  return [...new Set([ymd(y, +dmy[2], +dmy[1]), ymd(y, +dmy[1], +dmy[2])].filter(Boolean))];
+}
+
 // Compares what the sub-agent declared with what's recorded. Deliberately
 // conservative: only flags an error when the cell is clearly different, doesn't exist,
 // or is on a nonexistent sheet. A doubtful case (date became a serial number, cell
@@ -325,6 +342,14 @@ export function conferirEvidencia(evidencias, lidas) {
     }
     if (cel.formula && !String(cel.value || '')) {
       naoVerificaveis.push(`${ev.ref} (é fórmula: o valor só existe depois de o Excel recalcular)`);
+      continue;
+    }
+
+    // Date-formatted cell: compare the date the user sees, not the serial.
+    const declared = cel.date ? declaredDates(ev.esperado) : [];
+    if (declared.length) {
+      if (declared.includes(cel.date)) conferidas++;
+      else erros.push(`${ev.ref}: saved date is ${cel.date}, you declared "${ev.esperado}"`);
       continue;
     }
 

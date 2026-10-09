@@ -17,6 +17,8 @@ test('dates use cell styles while ordinary amounts and string serials stay uncha
  assert.equal(content(buf),'2024-01-01,45292,45292,2024-01-01 12:00:00');
  // Targeted edit verification keeps its original raw-value contract.
  assert.equal(xlsxCells(buf,['Dados!A1'])[0].value,'45292');
+ // ...plus the date the user sees, only when the format is a date.
+ assert.deepEqual(xlsxCells(buf,['A1','B1','C1','D1']).map(c=>c.date),['2024-01-01',undefined,undefined,'2024-01-01']);
 });
 test('1904 date epoch and both sides of Excel fictitious leap day',()=>{
  assert.equal(content(book(row(1,cell('A1',0,'s="1"')+cell('B1',43830,'s="1"')),{date1904:true,styles:styles()})),'1904-01-01,2024-01-01');
