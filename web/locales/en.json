@@ -1917,5 +1917,11 @@
       "load_failed": "I could not open the initial step. Your setup has not been marked complete.",
       "reload": "Reload to resume"
     }
+  },
+  "delivery": {
+    "whatsapp_held": {
+      "reminder": "⏰ Your reminder \"{summary}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Reply with anything (an \"ok\" is enough) and I'll send it here, properly formatted.",
+      "routine": "Today's \"{title}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Reply with anything (an \"ok\" is enough) and I'll send it here, properly formatted."
+    }
   }
 }

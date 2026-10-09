@@ -185,3 +185,24 @@ test('reminder and routine wrappers follow the owner language; pt-BR stays byte-
     assert.ok(aviso.includes(longo), `${user_language}: ${aviso}`);
   }
 });
+
+test('a list reminder outside the WhatsApp window is held behind a notice', async () => {
+  const held = [];
+  const heldWhatsApp = {
+    hold: async (args) => { held.push(args); return 7; },
+    attachNotice: async (...args) => held.push(['notice', ...args]),
+    cancel: async () => assert.fail('a delivered notice must keep the hold'),
+  };
+  const list = 'Shopping:\n• bread\n• milk\n• eggs';
+  for (const open of [false, true]) {
+    const h = harness({ heldWhatsApp, whatsappWindowOpen: async () => open });
+    const res = await h.deliverReminder({ ...row, message: list, channel: 'whatsapp', user_language: 'en' });
+    assert.equal(res.status, 'accepted');
+    const sent = h.calls.find(c => c[0] === 'whatsapp')[2];
+    if (open) { assert.ok(sent.includes('• milk')); continue; }
+    assert.ok(held[0].body.includes('• bread\n• milk'));
+    assert.ok(!sent.includes('• milk') && sent.includes('Shopping:'), sent);
+    assert.deepEqual(held[1], ['notice', 7, 'wa-receipt']);
+  }
+  assert.equal(held.length, 2);
+});

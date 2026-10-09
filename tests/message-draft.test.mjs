@@ -13,6 +13,7 @@ syncBuiltinESMExports(); globalThis.fetch = denied;
 const { turnSearchCoverage, preserveSearchCoverageWarning } = await import('../web/turn-search-coverage.mjs');
 const {throwIfCreditFailure}=await import('../web/execution-credit-errors.mjs');
 const { generateMessageDraft, DraftUnavailableError } = await import('../web/message-draft.mjs');
+const { isListishText } = await import('../web/whatsapp-held-delivery.mjs');
 const { deferIncomingWhileConfirmationPending, peekPending } = await import('../web/confirm.mjs');
 const { createEmailAnswerReviewState } = await import('../web/email-answer-review.mjs');
 const { HEALTH_GUARDRAIL } = await import('../web/health-guardrail.mjs');
@@ -54,14 +55,14 @@ function fnText(name) {
  const start=source.search(new RegExp('(?:async )?function '+name+'\\('));const end=source.indexOf('\n}\n',start)+2;
  assert.ok(start>=0 && end>start);return source.slice(start,end);
 }
-const wrappers=['isolatedAgentDraft','runAgentMessageDraft','isListishText','whatsappProse','runConversationTurn','withFallback'];
+const wrappers=['isolatedAgentDraft','runAgentMessageDraft','whatsappProse','runConversationTurn','withFallback'];
 let credit={over:false}, response={stop:'end',text:'Parágrafo reformulado',usage:{model:'mock'}}, failure=false, missingAgent=false;
 let providerCalls=0, ledger=[], input, reads=[], geminiOpts=null, forced=null;
 // Only the names referenced by the isolated path are provided. Access to
 // tool assembly, chat credits, confirmation, memory, or delivery fails.
 const deps={
  DEEPSEEK_AGENT_MODEL: 'deepseek41flash', selectedDeepSeek:()=>null, configurado:()=>null, modelosCfg:null, hasProviderExecution:()=>true,isDeepSeekTurn:()=>false,gasto:{vincular:({provider})=>provider},
- turnSearchCoverage, preserveSearchCoverageWarning, throwIfCreditFailure,
+ turnSearchCoverage, preserveSearchCoverageWarning, throwIfCreditFailure, isListishText,
  generateMessageDraft, getAgentOwned:async(a,u)=>{reads.push(['agent',a,u]);return missingAgent?null:{id:a,name:'BetoMock',owner:'PessoaMock',system_prompt:'voz pessoal'};},
  getCreditStatus:async u=>{reads.push(['credit',u]);return credit;},
  getUserLocale:async()=>({language:'pt-BR'}),getWikiPage:async(u,slug)=>{reads.push(['wiki',u,slug]);return {body:'Preferência sintética'};},
