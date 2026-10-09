@@ -1,3 +1,5 @@
+// These cases expect the Portuguese texts on an instance whose default language is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 import { createAppBuildJournal } from '../web/app-build-state.mjs';
 import { createActionJournal } from '../web/action-evidence.mjs';
 import { createInventoryCalculationSession } from '../web/inventory-calculation.mjs';

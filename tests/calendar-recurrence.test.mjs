@@ -1,5 +1,7 @@
 // These cases check the Portuguese texts not yet in the catalogs, on an instance whose default is pt-BR.
 process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
+// Dates without an explicit zone resolve in the instance default zone, here São Paulo.
+process.env.BRAMBIT_DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 // Offline. APIs are mocks; sockets are blocked before importing connectors.
 import assert from 'node:assert/strict';
 import net from 'node:net';

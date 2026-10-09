@@ -1,3 +1,5 @@
+// These cases expect the Portuguese texts on an instance whose default language is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Long routine with the WhatsApp 24h window CLOSED: the template cuts at 900
 // characters and the questions at the end disappeared (real case 2026-10-02, a 1556-character
 // routine arrived with 901). Now the entire content goes by e-mail and
