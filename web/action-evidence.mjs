@@ -164,7 +164,8 @@ function receipt(name, args, out) {
   const d = resultData(out);
   if (['editar_lembrete','cancelar_lembrete'].includes(name)) return {family:'reminder',tool:name,
     state:d?.ok===true && validId(d.id) && typeof d.canal==='string' ? (name==='editar_lembrete'?'updated':'deleted') : d?.ok===false ? 'failed' : 'unknown',
-    id:d?.id,target:d?.canal,at:d?.quando_legivel || d?.quando,inFlight:d?.inFlight===true};
+    id:d?.id,target:d?.canal,at:d?.quando_legivel || d?.quando,inFlight:d?.inFlight===true,
+    ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
   if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
     state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',id:d?.lista?.id};
   const connector = connectorActionReceipt(name, args, d);
@@ -330,9 +331,13 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // and object) also does not show up as "não foi concluída" next to the
       // success (msg 20508, 2026-09-28).
       const subjectKey = e => itemKey(e.subject);
+      // Editing a reminder that already fired finds nothing; recreating it
+      // later in the turn is the redo, so that failure does not show either.
+      const recreated = (e, i) => e.tool === 'editar_lembrete' && e.code === 'NOT_FOUND'
+        && entries.slice(i + 1).some(l => l.tool === 'criar_lembrete' && l.state === 'scheduled');
       const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
-        && !(e.state === 'failed' && subjectKey(e) && entries.slice(i + 1).some(l => l.family === e.family
-          && subjectKey(l) === subjectKey(e) && !['unknown','failed','pending'].includes(l.state))));
+        && !(e.state === 'failed' && (recreated(e, i) || subjectKey(e) && entries.slice(i + 1).some(l => l.family === e.family
+          && subjectKey(l) === subjectKey(e) && !['unknown','failed','pending'].includes(l.state)))));
       // Only the server enables this after validating the routine's exact
       // protocol. A coverage/error notice appended after validation prevents
       // silence. The evidence stays in entries for persistence and metrics.
