@@ -96,6 +96,7 @@ import { GEMINI_COMPARISON_ID, GEMINI_COMPARISON_MODEL, withGeminiComparison, is
 import { actionResult, routineActionFailure, renderCompletedActions, createActionJournal, ACTION_EVIDENCE_POLICY } from './action-evidence.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
 import { createInventoryCalculationSession } from './inventory-calculation.mjs';
+import { ceilingBudgetForTurn } from './step-ceiling.mjs';
 import { explicitPermanentMemoryIntent } from './explicit-user-intent.mjs';
 import { jevEnabled, jevCodingControl, jevAppEmergency, jevAppFocus, jevPermanentMemory, jevFreshCheckClaim, jevCodingPromise } from './jev.mjs';
 import { routineExecutionInfo, routineExecutionText, routineChannelText } from './routine-execution.mjs';
@@ -6458,14 +6459,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Counter of this turn's tool calls (one line per tool → number of times).
   // Persisted after the turn for visibility in /metrics; never affects the loop.
   const toolCounts = Object.create(null);
-  // Free mode (perm=livre) runs long skills and multi-step shell work
-  // (create a client, build an APK) that blows the default cap of 22, so it
-  // goes up to 40. Safe because of the core's anti-loop brake (an identical
-  // repeated call = cut). Otherwise, the normal cap stays.
-  // (App builds had the same 40 cap here, hung on a text heuristic that
-  // misfired; now they run in the `construir_app` sub-agent, which always
-  // starts with 40 steps, continuations included.)
-  const effectiveMaxSteps = livreActive ? Math.max(maxSteps, 40) : maxSteps;
+  // Free mode (perm=livre) goes up to 40 instead of the default 22 (safe
+  // because of the core's anti-loop brake). step-ceiling.mjs then grants, on
+  // top of that, ONE bounded bump across a "say continue" streak so a big
+  // task doesn't repeat the identical ceiling message turn after turn.
+  const stepCeiling = ceilingBudgetForTurn(baseHistory, livreActive ? Math.max(maxSteps, 40) : maxSteps);
+  const effectiveMaxSteps = stepCeiling.maxSteps;
   const interjecoes = [];
   const appBuildJournal = createAppBuildJournal({ language:idiomaResposta, userRequest:message, failedPublication:confirmedToolLog.some(c => c.name === 'publicar_sistema'), publicationError:confirmedToolLog.find(c => c.name === 'publicar_sistema')?.usuario || '' });
   const previousAssistantText = [...baseHistory].reverse().find((m) => m?.role === 'assistant')?.content || '';
@@ -6543,7 +6542,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       coletarGrounding(out); if (r !== out) coletarGrounding(r);
       return r;
     },
-    userInput: userInputForModel, images, history: histParaModelo, maxSteps: effectiveMaxSteps,
+    userInput: userInputForModel, images, history: histParaModelo, maxSteps: effectiveMaxSteps, ceilingRetry: stepCeiling.ceilingRetry,
     // Message that arrives mid-turn (today only WhatsApp provides this channel).
     pollNewUserMsg: async () => appPendingInputs.shift() || await pollNewUserMsgAtSafeBoundary?.(),
     onEvent: (ev) => {
@@ -6809,6 +6808,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const inventorySnapshot = inventoryCalculation.snapshot();
       if (inventorySnapshot) messages[i].inventoryCalculation = inventorySnapshot;
       if (selo) messages[i].meta = selo.meta;
+      stepCeiling.annotate(messages[i], termination);
       break;
     }
   }

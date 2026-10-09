@@ -54,7 +54,7 @@ async function pipeline(text, {kind = 'routine', completed = true, failed = fals
     enforceRoutineEmailContract,enforceFreshCheckClaims,renderCompletedActions,
     proposalPresentation:denied,selo:false,
     toolCounts:Object.fromEntries(receipts.map(row => [row.name,1])),savedUserMsg:'Avise apenas se houver queda',
-    fontesEConferencia:denied,
+    fontesEConferencia:denied,stepCeiling:{annotate(){}},
   };
   const finish = new AsyncFunction(...Object.keys(deps), `const diag={removidas:[],corte(){}};\n${source.slice(start, end)}\nreturn {text,messages};`);
   const result = await finish(...Object.values(deps));

@@ -188,7 +188,7 @@ for(const fn of ['runGoogleSubagent','runConnectorSubagent'])for(const toolName 
   const final=await runAgent({provider:{name:'offline',complete:async()=>++n===1?{stop:'tool',toolCalls:[{id:'main',name:'consultar',args:{}}]}:{stop:'end',text:'Lista completa.'}},tools:reg,system:'mock',history:[],userInput:'mock'});
   const statement=source.match(/text = curationResult \? text : searchCoverage\.finish\(text, idiomaResposta, \{suppressEmptyEmailSources: routineNoNews\}\);/)[0];
   const sync=source.slice(source.indexOf('  for (let i = messages.length - 1; i >= 0; i--) {',source.indexOf(statement)),source.indexOf("  // The turn's images do NOT stay in the history:"));
-  const finished=new Function('inventoryCalculation','text','messages','searchCoverage','idiomaResposta','curationResult','selo','const routineNoNews=false;'+statement+sync+'return {text,messages};')(createInventoryCalculationSession({enabled:false}),final.text,final.messages,coverage,'pt-BR',false,false);
+  const finished=new Function('inventoryCalculation','text','messages','searchCoverage','idiomaResposta','curationResult','selo','stepCeiling','termination','const routineNoNews=false;'+statement+sync+'return {text,messages};')(createInventoryCalculationSession({enabled:false}),final.text,final.messages,coverage,'pt-BR',false,false,{annotate(){}},final.termination);
   eq(findConnectorSearchLimitations(finished.text).length,more && !emailOnly ? 1 : 0);
   ok(!finished.text.includes('⚠️ Busca parcial:'));
   if(more && !emailOnly)ok(!finished.text.includes('Lista completa.'));
