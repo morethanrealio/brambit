@@ -1,3 +1,5 @@
+// Dates without an explicit zone resolve in the instance default zone, here São Paulo.
+process.env.BRAMBIT_DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recurrenceOccurrences, localDateTimeInstant, calendarWindow } from '../web/calendar-recurrence.mjs';
