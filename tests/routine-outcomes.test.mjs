@@ -1,3 +1,5 @@
+// These cases expect the Portuguese texts on an instance whose default language is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 import { createScheduledDelivery } from '../web/scheduled-delivery.mjs';
 import { actionResult } from '../web/action-evidence.mjs';
 // No real accounts, database, delivery or subprocesses. Extract real orchestration.

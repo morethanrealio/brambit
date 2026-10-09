@@ -84,7 +84,7 @@ test('safety guard: if it were to lose an owner line, it returns null (doesn\'t 
   const src = fs.readFileSync(new URL('../web/wiki.mjs', import.meta.url), 'utf8');
   assert.match(src, /return perdidas\.length \? null : body;/);
   assert.match(src, /if \(body === null\) \{/);
-  assert.match(src, /\[memoria links\][^\n]*abortado/);
+  assert.match(src, /\[memoria links\][^\n]*aborted/);
 });
 
 test('the cut is no longer "everything below the marker"', () => {
