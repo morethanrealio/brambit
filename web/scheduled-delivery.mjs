@@ -1,5 +1,7 @@
 import { tagIdioma } from './locale.mjs';
 import { hostDaMarca } from './marca.mjs';
+import { productI18n } from './i18n.mjs';
+import { needsHolding } from './whatsapp-held-delivery.mjs';
 
 // Texts the platform writes on its own around what the routine or
 // the reminder produced. No model in the middle, so they need to exist in the three
@@ -44,6 +46,16 @@ const TEXTOS_ENTREGA = {
 };
 export const textosEntrega = l => TEXTOS_ENTREGA[tagIdioma(l)] || TEXTOS_ENTREGA['pt-BR'];
 const primeiroNome = n => (n || '').split(' ')[0] || '';
+
+// Notice sent in place of held WhatsApp content (`delivery.whatsapp_held.*`).
+export function heldNotice(kind, language, vars) {
+  return productI18n().t(`delivery.whatsapp_held.${kind}`, tagIdioma(language), vars);
+}
+// First line of a reminder, short enough to name it inside the notice.
+export function reminderSummary(text) {
+  const line = String(text || '').split('\n').map(l => l.replace(/[*_~]/g, '').trim()).find(Boolean) || '';
+  return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line;
+}
 
 // A long routine goes whole by email and the chat only notifies. The notice is: a fixed sentence
 // with today's TOPIC (otherwise it would be the same every night) + a fixed explanation of the email.
@@ -120,8 +132,30 @@ export function createScheduledDelivery({
   sendEmail, getTelegramBotForDelivery, sendTelegramMessage,
   waEnabled, getWhatsAppLinkForUser, sendWhatsAppProactive, whatsappProse,
   persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore,
-  whatsappWindowOpen = null, whatsappTemplateMax = 900, runAgentMessageDraft = null, handOffConfirmations = null,
+  whatsappWindowOpen = null, whatsappTemplateMax = 900, runAgentMessageDraft = null, heldWhatsApp = null, handOffConfirmations = null,
 }) {
+  // Outside the 24h window a template squeezes a list into one line and cuts a
+  // long text. Keep the content, send a short notice through the template and
+  // let the person's reply release it formatted (web/whatsapp-held-delivery.mjs).
+  // Null when it can go out as it is, or when the window is open or unknown.
+  async function holdOnWhatsApp(target, phone, content, notice, tracking) {
+    if (!heldWhatsApp || !whatsappWindowOpen || !phone || !needsHolding(content, whatsappTemplateMax)) return null;
+    try { if (await whatsappWindowOpen(phone) !== false) return null; } catch { return null; }
+    const id = await heldWhatsApp.hold({ userId: target.user_id, agentId: target.agent_id, phone, body: content });
+    let receipt;
+    try {
+      receipt = await sendWhatsAppProactive(phone, notice, { templateText: notice, retryUnknown: false, tracking });
+    } catch (error) {
+      // Only a refused notice drops the content; after an uncertain one the
+      // person may still reply and should then get it.
+      if (error?.definitive === true) await heldWhatsApp.cancel(id).catch(() => {});
+      throw error;
+    }
+    if (receipt?.wamid) await heldWhatsApp.attachNotice(id, receipt.wamid).catch(() => {});
+    await persistProactiveToThread({ channel: 'whatsapp', agent_id: target.agent_id, user_id: target.user_id }, notice);
+    return { ...requireDeliveryReceipt({ ok: true, id: receipt?.wamid || null }, 'whatsapp'), fullContent: 'held' };
+  }
+
   async function avisoLongo(r, body, janelaFechada) {
     const tx = textosEntrega(r.user_language);
     let frase = null;
@@ -232,6 +266,15 @@ export function createScheduledDelivery({
     if (!body) return;
     const templateText = typed ? text.templateText : null;
     const isChat = ['whatsapp', 'telegram'].includes(r.channel);
+    // Above 3500 characters the email stays the better place for the full text.
+    if (r.channel === 'whatsapp' && !typed && !(body.length > 3500 && r.email) && heldWhatsApp && waEnabled()) {
+      const link = await getWhatsAppLinkForUser(r.user_id);
+      const held = link?.enabled === false ? null
+        : await holdOnWhatsApp(r, link?.wa_phone, `*${r.title}*\n\n${body}`, heldNotice('routine', r.user_language, { title: r.title }));
+      // Held content reaches the chat only on release; a "yes" in the chat
+      // must still find the routine's card meanwhile.
+      if (held) { await handOffConfirmations?.(r, body); return held; }
+    }
     const janelaFechada = !typed && await whatsappWouldTruncate(r, `*${r.title}*\n\n${body}`);
     const longo = body.length > 3500 || janelaFechada;
     if (isChat && longo && r.email) {
@@ -286,6 +329,8 @@ export function createScheduledDelivery({
       if (!waEnabled()) throw deliveryFailure('WHATSAPP_NOT_CONFIGURED', 'WhatsApp não configurado.');
       const link = await getWhatsAppLinkForUser(rem.user_id);
       if (!link?.wa_phone || link.enabled === false) throw deliveryFailure('WHATSAPP_NOT_CONNECTED', 'WhatsApp não conectado.');
+      const held = await holdOnWhatsApp(rem, link.wa_phone, `${prefix}: ${text}`, heldNotice('reminder', rem.user_language, { summary: reminderSummary(text) }), tracking);
+      if (held) return held;
       const receipt = await sendWhatsAppProactive(link.wa_phone, `${prefix}: ${text}`, {
         retryUnknown: false, tracking,
         proseFallback: (body) => whatsappProse({ agent_id: rem.agent_id, user_id: rem.user_id }, body),

@@ -21,6 +21,7 @@ import { markdownParaWa } from './wa-format.mjs';
 import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
 import { imagemParaWa } from './wa-imagem.mjs';
 import { avisarEntrega, esperarEntrega } from './wa-entrega.mjs';
+import { isAckOnly } from './whatsapp-held-delivery.mjs';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const PHONE_ID = () => process.env.WA_PHONE_NUMBER_ID;
@@ -609,7 +610,7 @@ export function verifySignature(rawBody, signature) {
 //   db = { getWhatsAppLink, listAgents, setWhatsAppActiveAgent }
 // avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
 // its registration in the WhatsApp thread history.
-export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {}, publico = null }) {
+export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {}, publico = null, heldDelivery = null }) {
   const seen = new Set(); // ids already processed (dedup of Meta retries)
   const avisar = criarAvisoCanal({ rotulo: 'whatsapp', ...avisoCanal });
 
@@ -858,6 +859,12 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       await sendReply( `Você ainda não tem nenhum assistente. Crie um em ${hostDaMarca()} e volte aqui.`);
       return;
     }
+
+    // Any message reopens the window: content held by a scheduled delivery goes
+    // out now, formatted. A bare "ok" (or a reaction on the notice) was only
+    // asking for it, so it gets no turn of its own.
+    const released = heldDelivery ? await heldDelivery.release({ phone: from, userId: link.user_id, send: (t) => sendText(from, t, { requireReceipt: true }) }) : [];
+    if (released.length && isAckOnly(msg, released)) return;
 
     // Reaction (👍/👎) on a message: confirms/cancels a pending action without
     // text. Thumbs up confirms a regular action; for irreversible ones the server asks for text.

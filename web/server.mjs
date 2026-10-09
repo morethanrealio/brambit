@@ -11,6 +11,7 @@ import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
+import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
 import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff } from './channel-confirmation.mjs';
@@ -6972,8 +6973,9 @@ const telegramMgr = createTelegramManager({
 // WhatsApp channel: single shared number (WABA Cloud API). Passive webhook,
 // routes by phone -> user, active agent switchable via @name/menu. Each
 // agent uses one fixed "WhatsApp" thread (isolated history; shared user memory).
+const heldWhatsApp = createWhatsAppHeldDelivery(pool, { persist: (row, text) => persistProactiveToThread({ channel: 'whatsapp', ...row }, text) });
 const waHandler = createWhatsAppHandler({
-  inbox:waInbox, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
+  inbox:waInbox, heldDelivery: heldWhatsApp, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
     // pollNewUserMsg = channel for the message that arrives mid-turn (see whatsapp.mjs).
@@ -7115,7 +7117,7 @@ async function persistProactiveToThread(r, body) {
 const { deliverRoutine, deliverReminder, deliverToChannel } = createScheduledDelivery({
   sendEmail, getTelegramBotForDelivery, sendTelegramMessage,
   waEnabled, getWhatsAppLinkForUser, sendWhatsAppProactive, whatsappProse,
-  persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft, handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }),
+  persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft, heldWhatsApp, handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }),
 });
 const reminderExecutor = createReminderExecutor({
   claim: claimReminder, begin: beginReminderDelivery, finish: finishReminder,
@@ -7297,17 +7299,6 @@ async function runAgentMessageDraft(target, task, opts = {}) {
   const agent = await getAgentOwned(target.agent_id, target.user_id);
   if (!agent) throw new Error('assistente sumiu');
   return isolatedAgentDraft(agent, target.user_id, task, opts);
-}
-
-// Detects "list-like" content (bullets, numbering or several line breaks). Outside the
-// 24h window WhatsApp only allows TEMPLATE, whose parameter flattens line breaks into
-// one zone; so a list turns into garbage. This flags what needs to become flowing text.
-function isListishText(t) {
-  const s = String(t || '');
-  if (!/\n/.test(s)) return false;
-  const bullety = /(^|\n)\s*(?:[•\-*]|\d+[.)])\s+/.test(s);
-  const manyLines = (s.match(/\n/g) || []).length >= 2;
-  return bullety || manyLines;
 }
 
 // Rewrites listed content into DESCRIPTIVE TEXT (a single flowing paragraph,
@@ -12135,6 +12126,7 @@ initDb(esquemaDoAtendimento, ...plugins.map((p) => p.esquema).filter(Boolean))
     await discoveryStore.init();
     await onboardingStore.init();
     await taskMetrics.init();
+    await heldWhatsApp.init();
     // No wait: e.g. a plugin retrying what a company left pending.
     eventos.emitir('banco_pronto', {});
     // Unwraps the vault's master key BEFORE anything that uses

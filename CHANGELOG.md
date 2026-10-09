@@ -21,6 +21,14 @@ Changes merged since the last tag go under "Unreleased".
   delivered to. The card used to stay in the routine's own conversation, so a
   reply, a 👍 on the delivered message or a plain "yes" in the chat did not
   reach it, and it expired without running.
+- WhatsApp reminders and routines with a list, several lines or more text
+  than a template holds no longer arrive squeezed into one line when the
+  24h window is closed. The person gets a short notice (through the
+  template) saying the content is ready, and any reply brings it formatted,
+  as a normal message that enters the conversation history. A bare "ok" or a
+  reaction on the notice only releases it, with no extra reply. Held content
+  expires after 7 days. Long routines with an e-mail on file keep the
+  e-mail path.
 
 ## [0.2.9] - 2026-10-09
 
