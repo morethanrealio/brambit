@@ -10,6 +10,8 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-10-09
+
 ### Fixed
 - Spreadsheet edits no longer end with "could not verify" on every date. The
   check compared the date the editor declared with the raw number Excel stores;
