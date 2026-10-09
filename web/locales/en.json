@@ -1920,8 +1920,8 @@
   },
   "delivery": {
     "whatsapp_held": {
-      "reminder": "⏰ Your reminder \"{summary}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Reply with anything (an \"ok\" is enough) and I'll send it here, properly formatted.",
-      "routine": "Today's \"{title}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Reply with anything (an \"ok\" is enough) and I'll send it here, properly formatted."
+      "reminder": "⏰ Your reminder \"{summary}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Send me an OK and I'll send it formatted.",
+      "routine": "Today's \"{title}\" is ready. I didn't send it straight away because, after 24h without a conversation, WhatsApp squeezes everything into a single line. Send me an OK and I'll send it formatted."
     }
   }
 }

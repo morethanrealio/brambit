@@ -1920,8 +1920,8 @@
   },
   "delivery": {
     "whatsapp_held": {
-      "reminder": "⏰ Tu recordatorio \"{summary}\" está listo. No te lo mandé directo porque, después de 24h sin conversación, WhatsApp junta todo en una sola línea. Respóndeme cualquier cosa (con un \"ok\" basta) y te lo mando aquí, con su formato.",
-      "routine": "Tu \"{title}\" de hoy está listo. No te lo mandé directo porque, después de 24h sin conversación, WhatsApp junta todo en una sola línea. Respóndeme cualquier cosa (con un \"ok\" basta) y te lo mando aquí, con su formato."
+      "reminder": "⏰ Tu recordatorio \"{summary}\" está listo. No te lo mandé directo porque, después de 24h sin conversación, WhatsApp junta todo en una sola línea. Mándame un OK y te lo mando con su formato.",
+      "routine": "Tu \"{title}\" de hoy está listo. No te lo mandé directo porque, después de 24h sin conversación, WhatsApp junta todo en una sola línea. Mándame un OK y te lo mando con su formato."
     }
   }
 }
