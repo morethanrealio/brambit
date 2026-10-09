@@ -19,6 +19,11 @@ test('a variable nobody reads anymore fails', () => {
   assert.match(check({ example: ok + '# CODING_MODEL=\n', reads }).join('\n'), /CODING_MODEL está no .env.example mas nenhum/);
 });
 
+test('a line that configures the installed Brambit package is not dead, and the package demands no line', () => {
+  const example = ok + 'BRAMBIT_DEFAULT_LANGUAGE=pt-BR\n';
+  assert.deepEqual(check({ example, reads, packageReads: new Set(['BRAMBIT_DEFAULT_LANGUAGE', 'OTHER_CORE_VAR']) }), []);
+});
+
 test('a secret with a value fails, whether active or commented out', () => {
   assert.match(check({ example: ok.replace('PGPASSWORD=', 'PGPASSWORD=hunter2'), reads }).join('\n'), /PGPASSWORD .* tem valor/);
   const r = new Set([...reads, 'WA_TOKEN']);
