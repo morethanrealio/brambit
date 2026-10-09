@@ -13,7 +13,7 @@ import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
-import { withConfirmationReceipt, createReactionConfirmationHandler } from './channel-confirmation.mjs';
+import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff } from './channel-confirmation.mjs';
 import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
 import { avisosTurno, imagensDesligadas } from './avisos-turno.mjs';
@@ -7116,7 +7116,7 @@ const { deliverRoutine, deliverReminder, deliverToChannel } = createScheduledDel
   sendEmail, getTelegramBotForDelivery, sendTelegramMessage,
   waEnabled, getWhatsAppLinkForUser, sendWhatsAppProactive, whatsappProse,
   persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft,
-});
+  handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }) });
 const reminderExecutor = createReminderExecutor({
   claim: claimReminder, begin: beginReminderDelivery, finish: finishReminder,
   deliveryTracking: reminderDeliveryTracking,

@@ -16,7 +16,7 @@ const {confirmationFixture}=await import('../test-support/confirmation-fixture.m
 const {createConfirmationSession,withConfirmationSession}=await import('../web/confirmation-session.mjs');
 const {gateTool,listPending,hasPending}=await import('../web/confirm.mjs');
 const {handleConfirmation,proposalCard,selectConfirmation}=await import('../web/confirmation-flow.mjs');
-const {withConfirmationReceipt}=await import('../web/channel-confirmation.mjs');
+const {withConfirmationReceipt,createRoutineConfirmationHandoff}=await import('../web/channel-confirmation.mjs');
 
 const context={policy:'synthetic-policy',googleEmail:'owner@example.invalid'};
 async function fixture(t) {
@@ -150,4 +150,24 @@ test('selection ignores channel context and rejects conflicting number/reference
   assert.equal(selectConfirmation(rows,'confirmo pedido 1',{channel:'telegram',messageId:'123:8'}).kind,'unknown');
   assert.equal(selectConfirmation(rows,'confirmo pedido 1 e cancela pedido 2').kind,'ambiguous');
   assert.equal(selectConfirmation(rows,'[quoted: confirmo pedido 1]⁣Como funciona?').kind,'continue');
+});
+// Routine case 2026-10-07: the card stayed in the routine's own conversation,
+// so a 👍 on the delivered Telegram message matched nothing and it expired.
+test('a routine card moves to the chat it was delivered to and a reply there approves only it',async t=>{
+  const f=await fixture(t);const chat={...f.scope,threadId:randomUUID()};
+  await f.db.query('INSERT INTO mtr_harness.threads(id,user_id,agent_id) VALUES ($1,$2,$3)',[chat.threadId,chat.userId,chat.agentId]);
+  const waiting=await f.store.propose(chat,{name:'gmail_send',args:args(9),label:'synthetic',confirmationText:'Synthetic chat card',context,source:{channel:'telegram'}});
+  const card=await f.propose(args(1));
+  const titles={'⏰ Weekly list':f.scope.threadId,Telegram:chat.threadId};
+  const handOff=createRoutineConfirmationHandoff({store:f.store,getOrCreateThreadByTitle:async({title})=>({id:titles[title]}),log:()=>{}});
+  const routine={channel:'telegram',title:'Weekly list',agent_id:f.scope.agentId,user_id:f.scope.userId};
+  assert.deepEqual(await handOff(routine,'Nothing to approve',['123:7']),[]);
+  assert.deepEqual(await handOff(routine,`Weekly summary\n\n${proposalCard(card)}`,['123:8']),[card.id]);
+  assert.equal((await f.session()).pending().length,0);
+  const moved=(await f.store.list(chat)).find(r=>r.id===card.id);
+  assert.equal(moved.number,2);assert.deepEqual(moved.messageRefs,[{channel:'telegram',messageId:'123:8'}]);
+  const s=await createConfirmationSession(f.store,chat,context);
+  await withConfirmationSession(s,()=>handleConfirmation(s,{message:'pode',target:{channel:'telegram',messageId:'123:8'},resolveTool:async()=>({confirmationTool:f.tool})}));
+  assert.deepEqual(f.effects,[args(1)]);
+  assert.deepEqual((await f.store.list(chat)).filter(r=>r.state==='pending').map(r=>r.id),[waiting.id]);
 });

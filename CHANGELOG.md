@@ -10,6 +10,13 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Fixed
+- A routine that asks for approval before acting (for example, editing a note
+  every week) can now be approved from the Telegram or WhatsApp chat it was
+  delivered to. The card used to stay in the routine's own conversation, so a
+  reply, a 👍 on the delivered message or a plain "yes" in the chat did not
+  reach it, and it expired without running.
+
 ## [0.2.9] - 2026-10-09
 
 ### Added
