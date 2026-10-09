@@ -7116,7 +7116,8 @@ const { deliverRoutine, deliverReminder, deliverToChannel } = createScheduledDel
   sendEmail, getTelegramBotForDelivery, sendTelegramMessage,
   waEnabled, getWhatsAppLinkForUser, sendWhatsAppProactive, whatsappProse,
   persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft,
-  handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }) });
+  handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }),
+});
 const reminderExecutor = createReminderExecutor({
   claim: claimReminder, begin: beginReminderDelivery, finish: finishReminder,
   deliveryTracking: reminderDeliveryTracking,
