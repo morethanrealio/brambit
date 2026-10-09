@@ -10,6 +10,19 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Fixed
+- When an app-building or coding task could not confirm whether its last
+  change actually happened (for example, the host did not answer in time),
+  it used to stay stuck forever: the task, and everything else asked about
+  that app, kept being blocked, with no way out. Now the person can be asked
+  whether that change actually happened or not, and that answer (always
+  typed and confirmed, never guessed or assumed) unblocks the task so work
+  can continue or be cancelled.
+- Deleting an app that was built but never published (only saved as a
+  draft) used to fail with "system not found," because the deletion only
+  checked published apps. It now also finds and discards drafts, scoped to
+  that person's own app.
+
 ## [0.2.10] - 2026-10-09
 
 ### Fixed

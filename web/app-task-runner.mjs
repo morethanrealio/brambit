@@ -423,22 +423,31 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
 export function makeAppTaskControlTool({store,sessionKey,authorize}) {
   const scopeFor=({app,dono})=>JSON.stringify([sessionKey,app,dono||'']);
   const sameScope=record=>digest({id:record.id,target:record.targetIdentity,mode:record.mode,objective:record.objective,reviewFiles:record.reviewFiles||null,scopeChanges:record.scopeHistory||[]});
-  const valid=args=>/^[a-z0-9][a-z0-9_-]{0,62}$/.test(args?.app||'')&&['cancelar','atualizar_escopo'].includes(args?.acao)&&(args.acao!=='atualizar_escopo'||validScopeChange(args));
+  const valid=args=>/^[a-z0-9][a-z0-9_-]{0,62}$/.test(args?.app||'')&&['cancelar','atualizar_escopo','resolver_pendencia'].includes(args?.acao)&&(args.acao!=='atualizar_escopo'||validScopeChange(args))&&(args.acao!=='resolver_pendencia'||['concluida','nao_executada'].includes(args?.resultado));
   const accessOK=a=>a===true||a?.ok===true;
-  const unavailable=(record,access)=>{
+  // `resolver_pendencia` is the ONLY lever that can unstick a task whose last
+  // mutating call came back with an uncertain effect (afterTool in
+  // runAppTask deliberately leaves `pending.mutating` set in that case, and
+  // cancelTask deliberately preserves it too). It must work even on an
+  // already-cancelled record (the exact state cancelTask leaves behind) and
+  // must NOT require the usual completed/cancelled check, or the pending
+  // mutation would never become resolvable by a human.
+  const unavailable=(record,access,acao)=>{
     if(record&&access?.alvo_validacao&&record.targetIdentity!==access.alvo_validacao)return 'O dono do app mudou; a tarefa anterior não foi alterada.';
-    if(!record||['completed','cancelled'].includes(record.status))return 'Não há tarefa pausada para essa ação.';
+    if(!record)return 'Não há tarefa pausada para essa ação.';
+    if(acao==='resolver_pendencia')return record.pending?.mutating?undefined:'This task has no pending action awaiting a decision.';
+    if(['completed','cancelled'].includes(record.status))return 'Não há tarefa pausada para essa ação.';
     if(record.pending?.mutating)return 'Uma ação ficou sem resultado confirmado. Reconcilie o efeito antes de alterar a tarefa; não a repeti.';
   };
   async function execute(args,binding){
-    const {app,dono,acao,modo,objetivo,arquivos_revisao}=args||{};
+    const {app,dono,acao,modo,objetivo,arquivos_revisao,resultado}=args||{};
     if(acao==='renovar_orcamento')return {ok:false,background:false,error:'Não é necessário renovar orçamento de tarefa. Use construir_app para retomar o mesmo trabalho; a execução respeita os créditos reais disponíveis.'};
     if(!valid(args))return {ok:false,error:'Informe app, ação, modo e objetivo completo (até2000caracteres) válidos.'};
     if(acao==='atualizar_escopo'&&!binding)return {ok:false,error:'A mudança de escopo precisa de confirmação vinculada pelo servidor; nenhum identificador informado pelo modelo autoriza a mudança.'};
     const access=await authorize(app,dono);if(!accessOK(access))return {ok:false,error:'Acesso atual ao app não confirmado.'};
     return store.withTask(scopeFor(args),async({record,save})=>{
       if(binding?.operationId&&record?.controlReceipts?.[binding.operationId])return copy(record.controlReceipts[binding.operationId]);
-      const error=unavailable(record,access);if(error)return {ok:false,error};
+      const error=unavailable(record,access,acao);if(error)return {ok:false,error};
       if(binding&&(scopeFor(args)!==binding.scope||sameScope(record)!==binding.generation))return {ok:false,error:'A tarefa ou seu escopo mudou depois da proposta; solicite nova confirmação.'};
       if(acao==='atualizar_escopo'){
         if(record.modelCall||record.compactionResume||record.pending)return {ok:false,error:'Há chamada ou ação pendente de reconciliação; o escopo não foi alterado.'};
@@ -452,14 +461,31 @@ export function makeAppTaskControlTool({store,sessionKey,authorize}) {
         if(binding?.operationId)record.controlReceipts={...(record.controlReceipts||{}),[binding.operationId]:copy(result)};
         await save(record);return result;
       }
+      if(acao==='resolver_pendencia'){
+        // The human is the one deciding whether the uncertain action actually
+        // happened; the platform never infers this on its own. "concluida"
+        // (done) keeps the dedupe signature so the same call is not retried.
+        // "nao_executada" (not done) removes it, same as the automatic
+        // not_applied reconciliation, so the identical call is allowed again.
+        const sig=record.pending?.sig||null;
+        record.pending=null;
+        if(resultado==='nao_executada'&&sig)record.signatures=(record.signatures||[]).filter(x=>x!==sig);
+        record.journal.push({event:'user_resolved_pending',result:resultado,signature:sig,at:Date.now()});
+        const result={ok:true,estado:record.status,acao,resultado,background:false,
+          obs:resultado==='concluida'
+            ?'Marked as done; that specific action will not be repeated. To continue the task, ask to resume the edit/review.'
+            :'Marked as not done; the same action may be tried again in the next continuation.'};
+        if(binding?.operationId)record.controlReceipts={...(record.controlReceipts||{}),[binding.operationId]:copy(result)};
+        await save(record);return result;
+      }
       record.status='cancelled';record.journal.push({event:'user_confirmed_control',action:acao,at:Date.now()});
       const result={ok:true,estado:record.status,acao,background:false,obs:'Tarefa cancelada; rascunho preservado.'};
       if(binding?.operationId)record.controlReceipts={...(record.controlReceipts||{}),[binding.operationId]:result};
       await save(record);return result;
     });
   }
-  return {name:'gerenciar_tarefa_de_app',description:'Cancels or updates the mode/scope of this app\'s current task in this conversation upon human confirmation. The server resolves and binds the task BEFORE asking for confirmation; there is no need to look up/copy identifiers. Preserves progress and usage. Does not publish nor change files. Confirming the new scope authorizes starting the corresponding continuation, with no other request to continue; publishing remains separate.',
-    parameters:{type:'object',properties:{app:{type:'string'},dono:{type:'string'},acao:{type:'string',enum:['cancelar','atualizar_escopo']},tarefa_id:{type:'string',description:'Optional, compatibility with old history. Does not authorize the operation; the server resolves the current task by app/dono/conversation.'},modo:{type:'string',enum:['revisao','edicao']},objetivo:{type:'string',maxLength:2000,description:'Complete scope to confirm, without hidden instructions; at most 2000 characters.'},arquivos_revisao:{type:'array',items:{type:'string'}}},required:['app','acao']},
+  return {name:'gerenciar_tarefa_de_app',description:'Cancels, updates the mode/scope, or resolves a pending uncertain-effect action of this app\'s current task in this conversation, upon human confirmation. The server resolves and binds the task BEFORE asking for confirmation; there is no need to look up/copy identifiers. Preserves progress and usage. Does not publish nor change files. Confirming the new scope authorizes starting the corresponding continuation, with no other request to continue; publishing remains separate. Use "resolver_pendencia" when the task is stuck because a previous mutating action came back with an uncertain outcome: ask the human whether it actually happened before calling this, never guess.',
+    parameters:{type:'object',properties:{app:{type:'string'},dono:{type:'string'},acao:{type:'string',enum:['cancelar','atualizar_escopo','resolver_pendencia']},tarefa_id:{type:'string',description:'Optional, compatibility with old history. Does not authorize the operation; the server resolves the current task by app/dono/conversation.'},modo:{type:'string',enum:['revisao','edicao']},objetivo:{type:'string',maxLength:2000,description:'Complete scope to confirm, without hidden instructions; at most 2000 characters.'},arquivos_revisao:{type:'array',items:{type:'string'}},resultado:{type:'string',enum:['concluida','nao_executada'],description:'Required for acao=resolver_pendencia. The human\'s explicit answer about the pending action: "concluida" if it did happen (it will not be repeated), "nao_executada" if it did not (it may be tried again).'}},required:['app','acao']},
     async preflight(args){
       if(!valid(args))return {erro:'Informe app, ação, modo e objetivo completo (até2000caracteres) válidos.'};
       return args.acao==='atualizar_escopo'?{aviso:args.arquivos_revisao?`Arquivos da revisão: ${args.arquivos_revisao.join(', ')}`:'Revisão sem restrição a arquivos específicos. Publicação não autorizada.'}:undefined;
@@ -471,7 +497,7 @@ export function makeAppTaskControlTool({store,sessionKey,authorize}) {
       const access=await authorize(args.app,args.dono);if(!accessOK(access))throw Error('Acesso atual ao app não confirmado.');
       const scope=scopeFor(args);
       const binding=await store.withTask(scope,async({record,id})=>{
-        const error=unavailable(record,access);if(error)throw Error(error);
+        const error=unavailable(record,access,args.acao);if(error)throw Error(error);
         if(args.tarefa_id!==undefined&&args.tarefa_id!==record.id&&args.tarefa_id!==id)throw Error('O identificador informado não corresponde à tarefa atual deste app/conversa.');
         if(args.acao==='atualizar_escopo'&&(record.modelCall||record.compactionResume||record.pending))throw Error('Há chamada ou ação pendente de reconciliação; não propus mudança de escopo.');
         return {version:1,scope,generation:sameScope(record),operationId:randomUUID()};

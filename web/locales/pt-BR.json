@@ -518,6 +518,10 @@
       "done": "Escopo atualizado; progresso e consumo preservados. Nada foi editado, testado ou publicado nesta confirmação. Peça para continuar quando quiser iniciar.",
       "request_cancel": "cancelar a tarefa de {app}, preservando o rascunho",
       "done_cancel": "Tarefa cancelada; rascunho preservado.",
+      "request_resolve_done": "marcar a ação pendente da tarefa de {app} como feita; ela não será repetida",
+      "done_resolve_done": "Marcado como feito. Essa ação específica não será repetida. Peça para continuar quando quiser.",
+      "request_resolve_not_done": "marcar a ação pendente da tarefa de {app} como não executada; ela pode ser tentada de novo",
+      "done_resolve_not_done": "Marcado como não executado. A mesma ação pode ser tentada de novo numa próxima continuação.",
       "default_app": "app",
       "mode_edit": "edição do rascunho",
       "mode_review": "revisão sem edição"
@@ -690,7 +694,8 @@
     },
     "apagar_sistema": {
       "request": "apagar DE VEZ o sistema \"{name}\": container, código, histórico de versões E os dados que o app guardou, incluindo segredos do cofre e acessos de colaboradores. Não tem backup nem como voltar",
-      "done": "Sistema \"{name}\" apagado de vez (código, histórico, dados, segredos do cofre e acessos de colaboradores). Não dá pra recuperar."
+      "done": "Sistema \"{name}\" apagado de vez (código, histórico, dados, segredos do cofre e acessos de colaboradores). Não dá pra recuperar.",
+      "draft_only_notice": "Esse sistema nunca foi publicado; só existe como rascunho. Não há container, histórico nem dados de app pra perder, só o rascunho"
     },
     "replicar_sistema": {
       "request": "replicar o app público \"{source}\" no seu subdomínio{new_name}",

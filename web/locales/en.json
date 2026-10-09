@@ -518,6 +518,10 @@
       "done": "Scope updated; progress and usage preserved. Nothing was edited, tested or published. Ask to continue when ready.",
       "request_cancel": "cancel the task for {app}, preserving the draft",
       "done_cancel": "Task canceled; draft preserved.",
+      "request_resolve_done": "mark the pending action on {app}'s task as done; it will not be repeated",
+      "done_resolve_done": "Marked as done. That specific action will not be repeated. Ask to continue when ready.",
+      "request_resolve_not_done": "mark the pending action on {app}'s task as not done; it may be tried again",
+      "done_resolve_not_done": "Marked as not done. The same action may be tried again in a future continuation.",
       "default_app": "the app",
       "mode_edit": "draft editing",
       "mode_review": "read-only review"
@@ -690,7 +694,8 @@
     },
     "apagar_sistema": {
       "request": "PERMANENTLY delete the system \"{name}\": container, code, version history AND the data the app stored, including vault secrets and collaborator access. There is no backup and no way back",
-      "done": "System \"{name}\" permanently deleted (code, history, app data, vault secrets and collaborator access). It cannot be recovered."
+      "done": "System \"{name}\" permanently deleted (code, history, app data, vault secrets and collaborator access). It cannot be recovered.",
+      "draft_only_notice": "This system was never published; it only exists as a draft. There is no container, history or app data to lose, only the draft"
     },
     "replicar_sistema": {
       "request": "replicate the public app \"{source}\" on your subdomain{new_name}",

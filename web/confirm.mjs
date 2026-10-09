@@ -641,7 +641,7 @@ export function gateTool(tool, threadId, opts = {}) {
       // existed. Going back now, the model corrects it in the same turn.
       let recusa = null;
       try {
-        const extra = await (restored?.preflight || tool.preflight)?.(args);
+        const extra = await (restored?.preflight || tool.preflight)?.(args, { language: lang });
         if (extra && extra.erro) recusa = String(extra.erro);
         else if (extra && extra.aviso) label = `${label}. ${extra.aviso}`;
       } catch (e) {

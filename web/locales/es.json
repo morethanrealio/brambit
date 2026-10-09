@@ -518,6 +518,10 @@
       "done": "Alcance actualizado; progreso y consumo conservados. Nada fue editado, probado o publicado. Pide continuar cuando quieras.",
       "request_cancel": "cancelar la tarea de {app}, conservando el borrador",
       "done_cancel": "Tarea cancelada; borrador conservado.",
+      "request_resolve_done": "marcar la acción pendiente de la tarea de {app} como hecha; no se repetirá",
+      "done_resolve_done": "Marcada como hecha. Esa acción específica no se repetirá. Pide continuar cuando quieras.",
+      "request_resolve_not_done": "marcar la acción pendiente de la tarea de {app} como no hecha; se puede intentar de nuevo",
+      "done_resolve_not_done": "Marcada como no hecha. La misma acción se puede intentar de nuevo en una próxima continuación.",
       "default_app": "la app",
       "mode_edit": "edición del borrador",
       "mode_review": "revisión sin edición"
@@ -690,7 +694,8 @@
     },
     "apagar_sistema": {
       "request": "borrar PARA SIEMPRE el sistema \"{name}\": contenedor, código, historial de versiones Y los datos que guardó la app, incluidos los secretos y accesos de colaboradores. No hay copia de seguridad ni forma de volver",
-      "done": "Sistema \"{name}\" borrado para siempre (código, historial, datos, secretos y accesos de colaboradores). No se puede recuperar."
+      "done": "Sistema \"{name}\" borrado para siempre (código, historial, datos, secretos y accesos de colaboradores). No se puede recuperar.",
+      "draft_only_notice": "Este sistema nunca se publicó; solo existe como borrador. No hay contenedor, historial ni datos de la app que perder, solo el borrador"
     },
     "replicar_sistema": {
       "request": "replicar la app pública \"{source}\" en tu subdominio{new_name}",
