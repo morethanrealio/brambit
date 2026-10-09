@@ -82,9 +82,15 @@ try {
     body: JSON.stringify({ code, name: 'Install Check', email: 'owner@example.com', provider: 'other', url: `http://127.0.0.1:${ai.address().port}/v1`, model: 'test-model', key: KEY }),
   });
   if (install.status !== 200) fail(`setup: ${install.status} ${await install.text()}`);
+  // Up = the launcher itself saw the server answer (phase "running"), not just the
+  // server: the launcher polls every 500ms, so `status` right after the server's
+  // first answer could still say "starting".
   let up = false;
   for (let i = 0; i < 240 && !up; i++) {
-    try { up = (await fetch(`${base}/api/config`)).ok; } catch {}
+    try {
+      const st = await (await fetch(`http://127.0.0.1:${running.port}/state`, { headers: { authorization: `Bearer ${running.token}` } })).json();
+      up = st.phase === 'running' && (await fetch(`${base}/api/config`)).ok;
+    } catch {}
     if (!up) await sleep(500);
   }
   if (!up) fail('the server did not start after the setup');
