@@ -7115,8 +7115,7 @@ async function persistProactiveToThread(r, body) {
 const { deliverRoutine, deliverReminder, deliverToChannel } = createScheduledDelivery({
   sendEmail, getTelegramBotForDelivery, sendTelegramMessage,
   waEnabled, getWhatsAppLinkForUser, sendWhatsAppProactive, whatsappProse,
-  persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft,
-  handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }),
+  persistProactiveToThread, deliverCurationEdition, sendCurationChannel, curationStore, whatsappWindowOpen: waWindowOpen, whatsappTemplateMax: WA_TEMPLATE_MAX, runAgentMessageDraft, handOffConfirmations: createRoutineConfirmationHandoff({ store: confirmationStore, getOrCreateThreadByTitle }),
 });
 const reminderExecutor = createReminderExecutor({
   claim: claimReminder, begin: beginReminderDelivery, finish: finishReminder,
