@@ -28,7 +28,8 @@ test('actual server composition exposes the receipt-checked transport used by di
   const f = fixture();
   const wiring = source.match(/const \{ deliverRoutine, deliverReminder, deliverToChannel \} = createScheduledDelivery\([\s\S]*?\n\}\);/)?.[0];
   assert.ok(wiring, 'the server must bind the transport, not merely export it');
-  const scope = { ...f.deps, createScheduledDelivery, waWindowOpen: async () => null, WA_TEMPLATE_MAX: 900, runAgentMessageDraft: null, heldWhatsApp: null };
+  const scope = { ...f.deps, createScheduledDelivery, waWindowOpen: async () => null, WA_TEMPLATE_MAX: 900, runAgentMessageDraft: null,
+    createRoutineConfirmationHandoff: () => null, confirmationStore: null, getOrCreateThreadByTitle: null, heldWhatsApp: null };
   vm.runInNewContext(wiring + '\nthis.probe = deliverToChannel;', scope);
   for (const channel of ['telegram', 'whatsapp']) {
     const r = await scope.probe({ user_id: 'owner', agent_id: 'agent', title: 'Jornada', channel }, 'Como foi sua manhã?', 'Como foi sua manhã?');

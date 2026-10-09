@@ -615,6 +615,15 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   const avisar = criarAvisoCanal({ rotulo: 'whatsapp', ...avisoCanal });
 
   const DEBOUNCE_MS = Number(process.env.WA_DEBOUNCE_MS || 3000);
+  // Media is downloaded (and audio transcribed) BEFORE it enters the buffer, which
+  // can take longer than the debounce. Without holding the flush, a text sent just
+  // before a voice note was answered alone and the audio became a separate turn
+  // (2026-10-05: "translate it" ran on the wrong content). The hold has a ceiling so
+  // a stuck download never silences the person.
+  const MEDIA_HOLD_MS = Number(process.env.WA_MEDIA_HOLD_MS || 30000);
+  const preparing=new Map(); // phone -> media messages still being prepared
+  const holdBurst=from=>preparing.set(from,(preparing.get(from)||0)+1);
+  const releaseBurst=from=>{const n=(preparing.get(from)||1)-1;if(n>0)preparing.set(from,n);else preparing.delete(from);};
   const MAX_BATCH=20,MAX_IMAGES=10,MAX_FILES=3;
   // Every queue/token belongs to the original phone, account AND assistant.
   const buffers=new Map(),running=new Map(),loaded=new Set(),turns=new Set();
@@ -650,7 +659,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   async function flush(key){
     if(closing)return;
     const b=buffers.get(key);if(!b)return;
-    if(running.has(key)){scheduleFlush(key);return;}
+    if(running.has(key)||(preparing.has(b.from)&&Date.now()-b.since<MEDIA_HOLD_MS)){scheduleFlush(key);return;}
     clearTimeout(b.timer);buffers.delete(key);
     let count=0,imageCount=0,fileCount=0;
     for(const p of b.parts){if(count&&(count>=MAX_BATCH||imageCount+(p.images?.length||0)>MAX_IMAGES||fileCount+(p.files?.length||0)>MAX_FILES))break;count++;imageCount+=p.images?.length||0;fileCount+=p.files?.length||0;}
@@ -721,7 +730,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     if(b&&!tok&&(b.parts.length>=MAX_BATCH||b.parts.reduce((n,p)=>n+(p.images?.length||0),0)+(part.images?.length||0)>MAX_IMAGES||b.parts.reduce((n,p)=>n+(p.files?.length||0),0)+(part.files?.length||0)>MAX_FILES)){
       launchFlush(key);return enqueue(from,part,{interject});
     }
-    if(!b){b={from,userId:part.userId,agentId:part.agentId,agent:part.agent,parts:[],timer:null};buffers.set(key,b);}
+    if(!b){b={from,userId:part.userId,agentId:part.agentId,agent:part.agent,parts:[],timer:null,since:Date.now()};buffers.set(key,b);}
     b.parts.push(part);scheduleFlush(key);
   }
   async function restoreBuffered(){
@@ -797,7 +806,13 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   // At the end of a turn: whatever arrived during it goes out right away if the wait has already expired.
   function soltarSeVencido(from){const b=esperaPublico.get(from);if(b&&b.vencido)soltarPublico(from);}
 
+  const MEDIA_TYPES=new Set(['audio','voice','image','document']);
   async function handleMessage(msg) {
+    const media=!!msg.from&&MEDIA_TYPES.has(msg.type);
+    if(media)holdBurst(msg.from);
+    try{return await prepareMessage(msg);}finally{if(media)releaseBurst(msg.from);}
+  }
+  async function prepareMessage(msg) {
     const from = msg.from; // sender phone number in E.164 without '+', e.g. "5511999998888"
     if (!from) return;
     const sendReply=text=>sendText(from,text,{requireReceipt:!!msg._inboxId}).catch(e=>{if(msg._inboxId)throw e;});

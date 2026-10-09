@@ -1,3 +1,5 @@
+// These cases expect the Portuguese texts on an instance whose default language is pt-BR.
+process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // Pure delivery factory and real curation orchestration, with synthetic senders.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -205,4 +207,18 @@ test('a list reminder outside the WhatsApp window is held behind a notice', asyn
     assert.deepEqual(held[1], ['notice', 7, 'wa-receipt']);
   }
   assert.equal(held.length, 2);
+});
+
+test('a held WhatsApp routine still hands its approval cards to the chat', async () => {
+  const handed = [];
+  const h = harness({
+    heldWhatsApp: { hold: async () => 9, attachNotice: async () => {}, cancel: async () => {} },
+    whatsappWindowOpen: async () => false,
+    handOffConfirmations: async (...args) => handed.push(args),
+  });
+  const body = 'Weekly list:\n• bread\n• milk\n• eggs';
+  const res = await h.deliverRoutine({ ...row, channel: 'whatsapp', user_language: 'en' }, body);
+  assert.equal(res.status, 'accepted');
+  assert.equal(handed.length, 1);
+  assert.equal(handed[0][1], body);
 });
