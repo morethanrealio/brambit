@@ -11,6 +11,10 @@ Changes merged since the last tag go under "Unreleased".
 ## [Unreleased]
 
 ### Added
+- The setup page offers DeepInfra and DeepSeek as AI providers, and shows
+  each provider's steps to get a key (account, credit or free tier, key page)
+  with links, in the page's language. DeepSeek's own API runs with thinking
+  off, as the core's DeepSeek route does.
 - The web chat has a microphone button when voice is set up: the person
   speaks, the browser converts the recording to WAV (no ffmpeg needed) and the
   transcript goes to the assistant marked as a voice message, as it does from

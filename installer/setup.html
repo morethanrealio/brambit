@@ -23,6 +23,8 @@
   .status { margin-top: 16px; }
   [hidden] { display: none !important; }
   a { color: var(--accent); }
+  .steps { margin: 12px 0 0; padding: 10px 12px 10px 32px; border: 1px solid var(--border); border-radius: 8px; font-size: .9em; }
+  .steps li + li { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -50,15 +52,18 @@
       <label><input type="radio" name="provider" value="together" checked> Together</label>
       <label><input type="radio" name="provider" value="openai"> OpenAI</label>
       <label><input type="radio" name="provider" value="gemini"> Google Gemini</label>
+      <label><input type="radio" name="provider" value="deepinfra"> DeepInfra</label>
+      <label><input type="radio" name="provider" value="deepseek"> DeepSeek</label>
       <label><input type="radio" name="provider" value="other"> <span data-t="other"></span></label>
     </div>
     <div id="other-fields" hidden>
       <label for="url" data-t="url"></label>
       <input id="url" type="url" placeholder="http://localhost:11434/v1">
     </div>
+    <ol id="key-steps" class="steps" hidden></ol>
     <label for="key" data-t="key"></label>
     <input id="key" type="password" autocomplete="off">
-    <small><a id="where-key" target="_blank" rel="noopener noreferrer" data-t="where_key"></a><span id="key-optional" hidden data-t="key_optional"></span><span id="key-keep" hidden data-t="key_keep"></span></small>
+    <small><span id="key-optional" hidden data-t="key_optional"></span><span id="key-keep" hidden data-t="key_keep"></span></small>
 
     <label for="model-select" id="model-label" data-t="model"></label>
     <select id="model-select" hidden></select>
@@ -97,6 +102,8 @@ const TEXTS = {
     models_need_key: 'Cole a chave pra ver os modelos da sua conta.', models_loading: 'Buscando os modelos da sua conta...', recommended: 'recomendado',
     models_help: 'O recomendado já vem marcado. Dá pra trocar depois em Configurações › Este computador.', models_other: 'Escolha da lista ou escreva o nome do modelo.',
     key_keep: 'Deixe vazia pra continuar com a chave salva.', invalid_model: 'Confira o nome do modelo.',
+    step_account: 'Crie uma conta em {name} (ou entre, se já tiver).', step_credit: 'Coloque crédito ou um cartão na conta: o uso da IA é cobrado lá.',
+    step_free: 'O Google tem um uso gratuito: não precisa de cartão pra começar.', step_key: 'Crie uma chave de API, copie e cole no campo abaixo.', open: 'Abrir',
     where_key: 'Onde pegar a chave', key_optional: 'Pode ficar vazia se o serviço não pede chave (ex.: Ollama no seu computador).',
     audio: '3. Mensagens de voz', audio_change: 'Mensagens de voz', audio_none: 'Agora não',
     audio_hint: 'Pra você mandar áudio pro assistente e ele responder em voz. Hoje só o Google Gemini e a OpenAI fazem isso.',
@@ -122,6 +129,8 @@ const TEXTS = {
     models_need_key: 'Paste the key to see the models on your account.', models_loading: 'Looking up the models on your account...', recommended: 'recommended',
     models_help: 'The recommended one comes selected. You can change it later in Settings › This computer.', models_other: 'Pick from the list or type the model name.',
     key_keep: 'Leave it empty to keep the saved key.', invalid_model: 'Check the model name.',
+    step_account: 'Create an account at {name} (or sign in if you have one).', step_credit: 'Add credit or a card to the account: the AI usage is billed there.',
+    step_free: 'Google has a free usage tier: no card needed to start.', step_key: 'Create an API key, copy it and paste it in the field below.', open: 'Open',
     where_key: 'Where to get the key', key_optional: 'Can be empty if the service needs no key (e.g. Ollama on your computer).',
     audio: '3. Voice messages', audio_change: 'Voice messages', audio_none: 'Not now',
     audio_hint: 'So you can send the assistant audio and it can reply in voice. Today only Google Gemini and OpenAI do this.',
@@ -147,6 +156,8 @@ const TEXTS = {
     models_need_key: 'Pega la clave para ver los modelos de tu cuenta.', models_loading: 'Buscando los modelos de tu cuenta...', recommended: 'recomendado',
     models_help: 'El recomendado ya viene marcado. Puedes cambiarlo después en Configuración › Esta computadora.', models_other: 'Elige de la lista o escribe el nombre del modelo.',
     key_keep: 'Déjala vacía para seguir con la clave guardada.', invalid_model: 'Revisa el nombre del modelo.',
+    step_account: 'Crea una cuenta en {name} (o entra, si ya tienes una).', step_credit: 'Agrega crédito o una tarjeta a la cuenta: el uso de la IA se cobra ahí.',
+    step_free: 'Google tiene un uso gratuito: no hace falta tarjeta para empezar.', step_key: 'Crea una clave de API, cópiala y pégala en el campo de abajo.', open: 'Abrir',
     where_key: 'Dónde conseguir la clave', key_optional: 'Puede quedar vacía si el servicio no pide clave (ej.: Ollama en tu computadora).',
     audio: '3. Mensajes de voz', audio_change: 'Mensajes de voz', audio_none: 'Ahora no',
     audio_hint: 'Para que le mandes audios al asistente y te responda con voz. Hoy solo Google Gemini y OpenAI lo hacen.',
@@ -164,11 +175,27 @@ const TEXTS = {
     timed_out: 'Brambit no encendió. Mira el mensaje en su ventana.', account: 'La configuración se guardó, pero la cuenta no se creó: ', generic: 'Algo salió mal. Intenta de nuevo.',
   },
 };
-const WHERE_KEY = {
-  together: 'https://api.together.ai/settings/api-keys',
-  openai: 'https://platform.openai.com/api-keys',
-  gemini: 'https://aistudio.google.com/apikey',
+// How a layperson gets a key from each provider: the account, the credit (or the
+// free tier) and the key page.
+const KEY_HELP = {
+  together: { name: 'Together', site: 'https://api.together.ai', billing: 'https://api.together.ai/settings/billing', keys: 'https://api.together.ai/settings/api-keys' },
+  openai: { name: 'OpenAI', site: 'https://platform.openai.com', billing: 'https://platform.openai.com/account/billing/overview', keys: 'https://platform.openai.com/api-keys' },
+  gemini: { name: 'Google AI Studio', site: 'https://aistudio.google.com', free: true, keys: 'https://aistudio.google.com/apikey' },
+  deepinfra: { name: 'DeepInfra', site: 'https://deepinfra.com', billing: 'https://deepinfra.com/dash/billing', keys: 'https://deepinfra.com/dash/api_keys' },
+  deepseek: { name: 'DeepSeek', site: 'https://platform.deepseek.com', billing: 'https://platform.deepseek.com/top_up', keys: 'https://platform.deepseek.com/api_keys' },
 };
+const link = (href, text) => Object.assign(document.createElement('a'), { href, textContent: text, target: '_blank', rel: 'noopener noreferrer' });
+function keySteps(p) {
+  const h = KEY_HELP[p], steps = $('key-steps');
+  steps.hidden = !h || keepsKey();
+  if (!h) return steps.replaceChildren();
+  const step = (text, href) => { const li = document.createElement('li'); li.append(text); if (href) li.append(' ', link(href, t('open'))); return li; };
+  steps.replaceChildren(
+    step(t('step_account').replace('{name}', h.name), h.site),
+    h.free ? step(t('step_free')) : step(t('step_credit'), h.billing),
+    step(t('step_key'), h.keys),
+  );
+}
 const lang = (navigator.languages || [navigator.language || 'pt']).map((l) => l.slice(0, 2)).find((l) => TEXTS[l]) || 'pt';
 const t = (k) => TEXTS[lang][k] || TEXTS.pt[k] || k;
 document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[lang];
@@ -203,10 +230,9 @@ function switchProvider() {
   if (!audioTouched) $('audio').value = AUDIO.includes(p) ? p : 'none';
   switchAudio();
   $('other-fields').hidden = p !== 'other';
-  $('where-key').hidden = p === 'other';
+  keySteps(p);
   $('key-optional').hidden = p !== 'other';
   $('key-keep').hidden = !keepsKey();
-  if (WHERE_KEY[p]) $('where-key').href = WHERE_KEY[p];
   $('model-select').hidden = p === 'other';
   $('model').hidden = p !== 'other';
   $('model-label').htmlFor = p === 'other' ? 'model' : 'model-select';
@@ -250,7 +276,7 @@ function switchAudio() {
   const a = $('audio').value;
   $('audio-same').hidden = a !== provider();
   $('audio-key-fields').hidden = a === 'none' || a === provider();
-  if (WHERE_KEY[a]) $('audio-where-key').href = WHERE_KEY[a];
+  if (KEY_HELP[a]) $('audio-where-key').href = KEY_HELP[a].keys;
   $('audio-key-keep').hidden = !(currentAi?.hasAudioKey && currentAi.audio === a);
 }
 $('audio').addEventListener('change', () => { audioTouched = true; switchAudio(); });
