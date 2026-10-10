@@ -10,6 +10,16 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-10-09
+
+### Fixed
+- The email channel no longer answers mail that was not written to the
+  assistant. A forwarding rule set up elsewhere could drop a registered
+  person's message (for example a reply-all to a client) into the assistant
+  mailbox, and the assistant replied to it. Now some address of the mailbox
+  domain has to be among the recipients (To/Cc, or the original-recipient
+  stamp the catch-all leaves); otherwise the message is ignored.
+
 ## [0.2.12] - 2026-10-09
 
 ### Fixed
