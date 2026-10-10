@@ -101,6 +101,36 @@ export function isAutoOrLoop(parsed, fromAddr) {
   return false;
 }
 
+// True when the email was written TO the assistant's domain. Assistants have
+// no fixed address: the domain's catch-all delivers any @<domain> address to
+// the single mailbox. But mail can also land there by a forwarding rule set up
+// elsewhere (e.g. another domain routing unknown recipients to this mailbox),
+// and then the registered sender never meant to talk to the assistant. So
+// some address of the mailbox domain has to be in To/Cc, or in the original
+// recipient Gmail/Postfix stamp (X-Gm-Original-To / X-Original-To) before the
+// catch-all rewrote the envelope. Delivered-To is NOT read: after a forward
+// it is always the mailbox itself.
+export function addressedToAssistantDomain(parsed) {
+  const domain = SELF().split('@')[1];
+  if (!domain) return true; // no configured mailbox: nothing to compare against
+  const addrs = [];
+  for (const field of [parsed.to, parsed.cc]) {
+    for (const group of [].concat(field || [])) {
+      for (const v of group?.value || []) {
+        if (v?.address) addrs.push(v.address);
+        for (const g of v?.group || []) if (g?.address) addrs.push(g.address);
+      }
+    }
+  }
+  const h = parsed.headers;
+  for (const k of ['x-gm-original-to', 'x-original-to']) {
+    const v = h?.get ? h.get(k) : undefined;
+    const raw = typeof v === 'string' ? v : (v?.text ?? (Array.isArray(v) ? v.join(' ') : ''));
+    addrs.push(...(String(raw).match(/[^\s<>,;"]+@[^\s<>,;"]+/g) || []));
+  }
+  return addrs.some((a) => a.toLowerCase().trim().endsWith('@' + domain));
+}
+
 // Reads the authentication verdicts (dkim/spf/dmarc) from Authentication-Results.
 // ONLY trusts the line stamped by OUR MX: the authserv-id (the token BEFORE the
 // first ';') has to be EXACTLY mx.google.com. Just checking whether the string
@@ -271,6 +301,11 @@ async function handleEmail(parsed, deps) {
 
   if (isAutoOrLoop(parsed, fromAddr)) { console.log('[email] ignored (auto/loop):', fromAddr); return 'skipped'; }
   if (messageId && await deps.emailSeen(messageId)) return 'skipped'; // dedup
+  if (!addressedToAssistantDomain(parsed)) {
+    console.log('[email] not addressed to the assistant domain (forwarded copy?), ignored:', fromAddr);
+    if (messageId) await deps.markEmailSeen(messageId, null);
+    return 'skipped';
+  }
 
   const user = await deps.getUserByEmail(fromAddr);
   if (!user) {
