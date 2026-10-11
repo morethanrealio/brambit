@@ -10,6 +10,16 @@ Changes merged since the last tag go under "Unreleased".
 
 ## [Unreleased]
 
+### Fixed
+- The assistant no longer claims abilities it does not have in the turn. A new
+  prompt rule ties "I can do it" to the tools actually available: without a
+  tool for it, it says up front that it cannot (video, calls, SMS, bookings,
+  social posting, messaging other people, Slack delivery) and offers only
+  what exists. It also stops describing app screens or steps it never saw,
+  offers email to third parties only when sending is on, and the credential
+  vault label and the Slack option of reminders no longer suggest something
+  that is not connected or not available.
+
 ## [0.2.13] - 2026-10-09
 
 ### Fixed
