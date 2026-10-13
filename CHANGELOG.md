@@ -13,6 +13,18 @@ versions stay below for reference, but their tags are no longer published.
 
 ## [Unreleased]
 
+### Added
+- Mail stops going to addresses that can no longer receive it. A hard bounce
+  (the mailbox does not exist) reported by Gmail, or Apple's notice that a "Hide
+  My Email" relay was turned off or that the person removed the app from their
+  Apple Account, puts the address on a suppression list, and every email to it
+  is skipped (`sendEmail` returns `{ skipped: true, suppressed: true }`). Apple
+  turning forwarding back on lifts it. To use it: run
+  `migrations/2026-10-13-email-suppressions.sql` (until then nothing is
+  suppressed) and, for Apple, set the Server-to-Server Notification Endpoint to
+  `https://<host>/api/webhook/apple/signin`. `BRAMBIT_BOUNCE_REPORTERS` lists
+  who may report bounces (default `mailer-daemon@googlemail.com`).
+
 ## [0.2.23] - 2026-10-16
 
 ### Removed

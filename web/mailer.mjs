@@ -86,14 +86,24 @@ function mailAttachments(attachments) {
 // attachments }. fromAddr overrides the address (institutional). headers =
 // extra headers (e.g. List-Unsubscribe). `attachments` = [{ filename,
 // content: Buffer, contentType }].
-// Returns { ok:true, id } | { skipped:true } | throws.
-export async function sendEmail({ to, subject, text, html, fromName, fromAddr, headers, attachments }) {
+// Returns { ok:true, id } | { skipped:true } | throws. A recipient on the
+// suppression list (email-suppression.mjs: hard bounce, Apple relay turned off)
+// gets { skipped:true, suppressed:true, reason } and nothing goes out; every
+// caller already treats `skipped` as not delivered. `deps.suppressions`
+// replaces the shared store.
+export async function sendEmail({ to, subject, text, html, fromName, fromAddr, headers, attachments }, deps = {}) {
   const files = mailAttachments(attachments);
-  if (smtpEnabled()) return sendViaSmtp({ to, subject, text, html, fromName, fromAddr, headers, attachments: files });
-  if (!resendEnabled()) {
+  if (!mailEnabled()) {
     console.log(`[mailer] (stub, no email credential) -> ${to}: ${subject}`);
     return { skipped: true };
   }
+  const suppressions = deps.suppressions || await (await import('./email-suppression.mjs')).emailSuppressions();
+  const blocked = await suppressions.lookup(to);
+  if (blocked) {
+    console.log(`[mailer] recipient suppressed (${blocked.source}: ${blocked.reason}), not sent: ${subject}`);
+    return { skipped: true, suppressed: true, reason: blocked.reason };
+  }
+  if (smtpEnabled()) return sendViaSmtp({ to, subject, text, html, fromName, fromAddr, headers, attachments: files });
   const payload = {
     from: fromHeader(fromName, fromAddr),
     to: [to],

@@ -80,16 +80,12 @@ export function sha256Hex(s) {
   return createHash('sha256').update(String(s), 'utf8').digest('hex');
 }
 
-// Verifies the identity token and returns the identity. Throws on any
-// deviation — the caller treats it as "did not log in". Never returns data
-// from an invalid token.
-//
-// `expectedNonce` is the RAW nonce the app received from us; the token
-// carries its SHA-256 (it's the app that hashes it before sending to Apple).
-// Without this binding, an identity token captured elsewhere would turn into
-// a session here.
-export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) {
-  const parts = String(idToken || '').split('.');
+// Verifies a JWT signed by Apple for this app (signature, issuer, audience, not
+// issued in the future) and returns its claims. Throws on any deviation. Shared
+// by the identity token below and the server-to-server notifications
+// (apple-notifications.mjs), which carry no `exp`.
+export async function verifyAppleJws(token) {
+  const parts = String(token || '').split('.');
   if (parts.length !== 3) throw new Error('identity token malformado');
   const [h, p, s] = parts;
 
@@ -106,9 +102,21 @@ export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) 
   const auds = allowedAudiences();
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!aud.some((a) => auds.includes(a))) throw new Error('audience inesperada');
-  const agora = Math.floor(Date.now() / 1000);
-  if (!claims.exp || claims.exp <= agora) throw new Error('identity token expirado');
-  if (claims.iat && claims.iat > agora + 300) throw new Error('identity token do futuro');
+  if (claims.iat && claims.iat > Math.floor(Date.now() / 1000) + 300) throw new Error('identity token do futuro');
+  return claims;
+}
+
+// Verifies the identity token and returns the identity. Throws on any
+// deviation — the caller treats it as "did not log in". Never returns data
+// from an invalid token.
+//
+// `expectedNonce` is the RAW nonce the app received from us; the token
+// carries its SHA-256 (it's the app that hashes it before sending to Apple).
+// Without this binding, an identity token captured elsewhere would turn into
+// a session here.
+export async function verifyAppleIdentityToken(idToken, { expectedNonce } = {}) {
+  const claims = await verifyAppleJws(idToken);
+  if (!claims.exp || claims.exp <= Math.floor(Date.now() / 1000)) throw new Error('identity token expirado');
   if (!claims.sub) throw new Error('identity token sem sub');
 
   if (expectedNonce) {
