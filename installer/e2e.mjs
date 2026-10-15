@@ -4,9 +4,10 @@
 // sign-up closed to everyone else, the key never in plain text on disk; starting
 // again, the owner signs in; a second copy only points at the one already
 // running; the owner sees "This computer" in Settings and changes the AI there
-// while the assistant keeps running (keeping the saved key);
-// `brambit stop` turns it off. The "AI" is a fake server on 127.0.0.1: nothing
-// leaves the machine.
+// while the assistant keeps running (keeping the saved key); `brambit share`
+// opens it to the household (someone else signs up with the owner's invite code
+// through the requests Tailscale Serve would pass on); `brambit stop` turns it
+// off. The "AI" is a fake server on 127.0.0.1: nothing leaves the machine.
 //
 // Usage: node installer/e2e.mjs
 import { spawn, execFileSync } from 'node:child_process';
@@ -15,12 +16,15 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 import { freePort, postgresBin, stopPostgres } from '../dev/local.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = mkdtempSync(path.join(os.tmpdir(), 'brambit-e2e-'));
 const KEY = 'test-key-that-must-not-reach-the-disk';
 const OWNER = { name: 'Brambit Owner', email: 'owner@example.com', password: 'a-long-enough-password-1' };
+// The address Tailscale Serve would answer for this computer (step 7).
+const SHARED = 'https://home.tailnet-example.ts.net';
 const log = (m) => console.log(`[e2e] ${m}`);
 const fail = (m) => { throw new Error(m); };
 
@@ -74,6 +78,41 @@ function run(command) {
   let out = '';
   child.stdout.on('data', (b) => { out += b; });
   return new Promise((r) => child.on('exit', (code) => r({ code, out })));
+}
+// A request the way Tailscale Serve passes it on (ipn/ipnlocal/serve.go): to
+// 127.0.0.1, keeping the browser's Host, with X-Forwarded-Proto https and the
+// person's tailnet address in X-Forwarded-For. fetch cannot set the Host.
+function viaTailscale(pathname, body, { origin = SHARED, cookie = '', ip = '100.64.0.2' } = {}) {
+  const host = new URL(SHARED).host;
+  const payload = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${base}${pathname}`, {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        host, 'x-forwarded-host': host, 'x-forwarded-proto': 'https', 'x-forwarded-for': ip, cookie,
+        ...(body && { origin, 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) }),
+      },
+    }, (res) => {
+      let text = '';
+      res.on('data', (b) => { text += b; });
+      res.on('end', () => resolve({ status: res.statusCode, cookies: [].concat(res.headers['set-cookie'] || []), text }));
+    });
+    req.on('error', reject);
+    req.end(body ? payload : undefined);
+  });
+}
+// The owner's invite code: the assistant hands it out (tool meu_convite); here it
+// goes straight into this test's own database.
+async function setInviteCode(email, code) {
+  const db = path.join(dataDir, 'db');
+  const port = Number(readFileSync(path.join(db, 'pgdata', 'brambit.conf'), 'utf8').match(/^port = (\d+)/m)[1]);
+  const client = new pg.Client({ host: '127.0.0.1', port, user: 'brambs', password: readFileSync(path.join(db, 'pg-password'), 'utf8').trim(), database: 'postgres' });
+  await client.connect();
+  try {
+    const { rows } = await client.query("SELECT table_schema FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'referral_code'");
+    const r = await client.query(`UPDATE "${rows[0].table_schema}".users SET referral_code = $2 WHERE email = $1`, [email, code]);
+    if (r.rowCount !== 1) fail(`the owner's invite code was not set (${r.rowCount} rows)`);
+  } finally { await client.end(); }
 }
 async function waitForServer() {
   for (let i = 0; i < 240; i++) {
@@ -166,7 +205,36 @@ try {
   if ((current.all.out.match(/ready: http/g) || []).length !== 1) fail('the server restarted to change the AI');
   log('changed the AI with the server running and the owner signed in');
 
-  // 7) brambit stop turns everything off.
+  // 7) Shared with the household: `brambit share` saves the address Tailscale
+  // Serve answers for this computer; after a restart the links use it and the
+  // others sign up through it with the owner's invite code.
+  const refused = await run(['share', 'http://home.tailnet-example.ts.net']);
+  if (refused.code !== 2 || /saved/.test(refused.out)) fail(`share accepted a plain http address: ${refused.out}`);
+  const shareOut = await run(['share', 'home.tailnet-example.ts.net']);
+  if (shareOut.code !== 0 || !shareOut.out.includes(`tailscale serve --bg ${port}`) || !/restart Brambit/.test(shareOut.out)) fail(`share: code ${shareOut.code}, ${shareOut.out}`);
+  if (!readFileSync(configFile, 'utf8').includes(`BRAMBIT_SHARED_URL=${SHARED}\n`)) fail('the shared address was not saved in brambit.env');
+  await run(['stop']);
+  if (current.child.exitCode === null) await new Promise((r) => current.child.once('exit', r));
+  stopPostgres(postgresBin(), path.join(dataDir, 'db'));
+  current = launch(/shared with other devices at: (\S+)/);
+  const [, announced] = await current.found;
+  if (announced !== SHARED) fail(`started shared at ${announced}`);
+  await setInviteCode(OWNER.email, '4321');
+  const ownerVia = await viaTailscale('/api/login', { email: OWNER.email, password: OWNER.password }, { ip: '100.64.0.1' });
+  if (ownerVia.status !== 200 || !ownerVia.cookies.length || ownerVia.cookies.some((c) => !/^__Host-/.test(c) || !/;\s*Secure/i.test(c))) fail(`owner login through the shared address: ${ownerVia.status} ${ownerVia.cookies}`);
+  const ownerSession = ownerVia.cookies.map((c) => c.split(';')[0]).join('; ');
+  const sharedInfo = JSON.parse((await viaTailscale('/api/installation', null, { cookie: ownerSession, ip: '100.64.0.1' })).text);
+  if (sharedInfo.shared !== SHARED || sharedInfo.url !== base) fail(`/api/installation shared: ${JSON.stringify(sharedInfo)}`);
+  const PARTNER = { name: 'Partner', email: 'partner@example.com', password: OWNER.password };
+  if ((await viaTailscale('/api/signup', PARTNER)).status !== 403) fail('a sign-up without the invite code got through');
+  if ((await viaTailscale('/api/signup', { ...PARTNER, referralCode: '4321' }, { origin: 'https://evil.example' })).status !== 403) fail('a sign-up from another site got through');
+  const partner = await viaTailscale('/api/signup', { ...PARTNER, referralCode: '4321' });
+  if (partner.status !== 200 || !partner.cookies.some((c) => /^__Host-/.test(c) && /;\s*Secure/i.test(c))) fail(`sign-up with the owner's code: ${partner.status} ${partner.text}`);
+  log('shared: the owner and someone with the invite code signed in through the shared address');
+  const unshare = await run(['share', 'off']);
+  if (!unshare.out.includes('tailscale serve --https=443 off') || readFileSync(configFile, 'utf8').includes('BRAMBIT_SHARED_URL=')) fail(`share off: ${unshare.out}`);
+
+  // 8) brambit stop turns everything off.
   const stopped = await run(['stop']);
   if (!/\] stopped$/m.test(stopped.out)) fail(`stop: ${stopped.out}`);
   if (current.child.exitCode === null) await Promise.race([new Promise((r) => current.child.once('exit', r)), new Promise((_, rej) => setTimeout(() => rej(new Error('Brambit did not stop')), 10_000))]);

@@ -9,6 +9,9 @@ async function installationLoad() {
   const info = await r.json().catch(() => null);
   if (!info) return;
   E('instAddress').textContent = info.url || '';
+  // Shared with others at home (brambit share): the address they open.
+  E('instShared').textContent = info.shared || '';
+  E('instSharedRow').classList.toggle('hidden', !info.shared);
   const ai = info.ai || {};
   const brand = { together: 'Together', openai: 'OpenAI', gemini: 'Google Gemini', deepinfra: 'DeepInfra', deepseek: 'DeepSeek' }[ai.provider];
   E('instAi').textContent = [brand, ai.model].filter(Boolean).join(' · ');
