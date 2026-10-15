@@ -17,12 +17,18 @@
 // For everyone else (another signed-in person, nobody signed in) the routes do
 // not exist either: SEGUE lets the server answer 404 as for any unknown path.
 // The POSTs go through the server's Origin check (CSRF).
+//
+// Shared with others at home (info.shared, BRAMBIT_SHARED_URL in
+// installer/shared.mjs), that address becomes the site's: the texts that send
+// someone to the app (the invite, "connect it in the app") name the address the
+// others open, not the neutral brand's localhost.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { arquivoModelos, carregarModelos } from '../../core-proto/modelos.mjs';
 import { audioProvider } from '../../web/audio-provider.mjs';
 import { ConfigValueError, configFilePath } from '../../web/config-file.mjs';
 import { readBody } from '../../web/http-body.mjs';
+import { definirMarca, marca } from '../../web/marca.mjs';
 import { reloadModels } from '../../web/modelos-live.mjs';
 import { SEGUE } from '../../web/rotas.mjs';
 import { checkAi, writeAi } from '../ai-setup.mjs';
@@ -81,6 +87,7 @@ export function createInstallationPlugin({ info = readInfo(), sendToLauncher = p
     portas: () => (info ? { systemNote: ({ language }) => systemNoteOf({ ...info, ...current() }, language) } : {}),
     ligar({ rotas, send, sendHtml }) {
       if (!info) return;
+      if (info.shared) definirMarca({ ...marca(), site: info.shared });
       const noCache = { 'cache-control': 'no-store' };
       const isOwner = async (ctx) => {
         const admin = String(process.env.ADMIN_EMAIL || '').toLowerCase();

@@ -13,6 +13,15 @@ versions stay below for reference, but their tags are no longer published.
 
 ## [Unreleased]
 
+### Added
+- Brambit on your own computer can be shared with your household:
+  `brambit share <https address>` saves the address Tailscale Serve gives this
+  computer (`BRAMBIT_SHARED_URL`, also in System settings), and the others at home
+  open it on their own devices and create their account with your invite code.
+  Links and invites use that address, and Settings > This computer shows it.
+  `brambit share off` goes back to this computer only. See "Share it with your
+  household" in the README.
+
 ## [0.2.23] - 2026-10-16
 
 ### Removed

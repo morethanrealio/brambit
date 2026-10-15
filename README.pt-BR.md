@@ -70,8 +70,8 @@ Para usar o Brambit, não para desenvolver. Não precisa ser administrador nem i
 nada antes: o instalador traz o próprio Node.js.
 
 É o jeito mais rápido de testar o Brambit sozinho. Ele roda num computador e escuta
-só em `127.0.0.1`, então outras pessoas não alcançam ele pelos próprios aparelhos, e
-não configura o sandbox de código, os apps hospedados, o WhatsApp nem o Slack.
+só em `127.0.0.1`, então outras pessoas não alcançam ele pelos próprios aparelhos, a
+não ser que você compartilhe com quem mora com você (abaixo), e não configura o sandbox de código, os apps hospedados, o WhatsApp nem o Slack.
 
 Windows (PowerShell):
 
@@ -108,6 +108,35 @@ O comando `brambit`, num terminal novo:
 
 Num clone deste repositório, `npm ci` e depois `npm run brambit` fazem o mesmo na
 janela do terminal (`npm run brambit -- stop`, `npm run brambit -- status`).
+
+### Compartilhar com quem mora com você
+
+Só se outras pessoas da casa quiserem o próprio assistente, cada uma com a sua conta
+e as suas conversas. Para usar sozinho, pule esta parte: nada muda. O Brambit
+continua escutando só em `127.0.0.1`; o [Tailscale](https://tailscale.com), uma rede
+privada entre os seus aparelhos, dá a este computador um endereço https que só quem
+está na sua tailnet abre, e repassa para o Brambit.
+
+1. Instale o Tailscale neste computador e no celular ou computador da outra pessoa,
+   e convide ela para a sua tailnet pelo painel de administração do Tailscale.
+2. Neste computador, `brambit status` mostra a porta (`running: http://127.0.0.1:8080`);
+   rode `tailscale serve --bg 8080` com essa porta. Na primeira vez ele pode pedir
+   para ligar o HTTPS da sua tailnet. Ele mostra o endereço em "Available within
+   your tailnet", algo como `https://<computador>.<tailnet>.ts.net`. Use `serve`,
+   nunca `funnel`, que põe na internet aberta. O Tailscale publica esse endereço em
+   logs públicos de certificados: se o nome do computador tem o seu nome ou algo
+   privado, renomeie a máquina no Tailscale antes.
+3. Rode `brambit share https://<computador>.<tailnet>.ts.net` (ou preencha
+   `BRAMBIT_SHARED_URL` nas Configurações do sistema), depois `brambit stop` e
+   `brambit open`.
+4. Peça ao seu assistente o seu código de convite ("qual meu código de convite?"). A
+   outra pessoa abre o endereço no aparelho dela, cria a conta e digita o código. Um
+   código deixa entrar 10 pessoas.
+
+Este computador precisa estar ligado, acordado e com o Brambit aberto para as outras
+pessoas usarem. As conversas delas usam a chave de IA que você configurou e ficam
+guardadas neste computador, na sua pasta de dados. Para desfazer: `brambit share
+off`, `tailscale serve --https=443 off` e reinicie o Brambit.
 
 ## Quick start
 
