@@ -31,6 +31,7 @@ const MAX_VALUE = 16384;
 export const RESTART_KEYS = new Set([
   'HOST', 'PORT', 'PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE',
   'BRAMBIT_PLUGINS', 'BRAMBIT_PROFILE', 'APP_TASK_STORE_DIR', 'CODING_JOB_STORE_DIR', 'BRAMBIT_LOCALES_DIR',
+  'BRAMBIT_SHARED_URL',
 ]);
 // Which vault key is in use. Changing it makes every stored secret unreadable,
 // so the screen shows them and does not edit them.

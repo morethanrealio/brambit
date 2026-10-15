@@ -7,7 +7,10 @@
 //
 // Data lives outside the program folder (updating deletes nothing), in
 // BRAMBIT_DATA_DIR or, without it, in the user's .brambit folder. Everything
-// listens on 127.0.0.1 only: nothing is open to the network.
+// listens on 127.0.0.1 only: nothing is open to the network. To let other people
+// at home have their own accounts, `brambit share <https address>` saves the
+// address Tailscale Serve gives this computer (installer/shared.mjs) and the
+// server uses it in its links; Brambit itself still listens on 127.0.0.1 only.
 //
 // The settings live in brambit.env in that folder (keys encrypted with the
 // vault key next to it) and the AI in modelos.yaml: the server reads both and
@@ -28,7 +31,7 @@
 // computer run) starts it in the background if needed, with the log in
 // brambit.log in the data folder, and opens the browser once it answers.
 //
-// Usage: node installer/brambit.mjs [start | open | stop | status | uninstall] [--no-browser]
+// Usage: node installer/brambit.mjs [start | open | stop | status | share <address> | share off | uninstall] [--no-browser]
 // status exits with 0 when running and 3 when not (like systemctl).
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -43,6 +46,7 @@ import { lerModelos } from '../core-proto/modelos.mjs';
 import { configValues, ENCRYPTED_PREFIX, writeConfig } from '../web/config-file.mjs';
 import { checkAi, writeAi } from './ai-setup.mjs';
 import { aiOf, audioOf, endpoint, listModels, modelsYaml, PROVIDERS } from './providers.mjs';
+import { SHARED_KEY, sharedUrlOf, tailscaleOff, tailscaleOn } from './shared.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.resolve(process.env.BRAMBIT_DATA_DIR || path.join(os.homedir(), '.brambit'));
@@ -87,6 +91,17 @@ function migrate() {
   writeFileSync(installFile, JSON.stringify(slim, null, 2) + '\n', { mode: 0o600 });
   log('settings moved to brambit.env');
   return slim;
+}
+
+// The address the others at home open (BRAMBIT_SHARED_URL): brambit.env, or the
+// environment when the file does not have it. null: this computer only. An
+// invalid one is ignored with a note in the log, so Brambit still starts.
+function sharedOf() {
+  let value;
+  try { value = configValues(readFileSync(configFile, 'utf8'))[SHARED_KEY]; } catch {}
+  const shared = sharedUrlOf(value ?? process.env.BRAMBIT_SHARED_URL);
+  if (shared.error) log(`${SHARED_KEY} ignored (${shared.error}): Brambit stays on this computer only`);
+  return shared.url || null;
 }
 
 // 8080 if free; otherwise any. It is saved: the address does not change.
@@ -191,7 +206,38 @@ async function status() {
     try { audio = configValues(readFileSync(configFile, 'utf8')).BRAMBIT_AUDIO_PROVIDER || 'none'; } catch { audio = 'none'; }
   }
   log(ai ? `AI: ${ai.provider} · ${ai.model} · audio: ${audio}` : `AI: not readable from ${modelsFile}`);
+  const shared = sharedOf();
+  if (shared) log(`shared with other devices at: ${shared}`);
   process.exitCode = live ? 0 : 3;
+}
+
+// `brambit share <address>` saves the https address the others at home open
+// (what Tailscale Serve answers for this computer); `brambit share off` goes back
+// to this computer only. It applies on the next start.
+async function share(value) {
+  const setup = readInstallation();
+  if (!setup || !existsSync(configFile)) {
+    log('set Brambit up first: open it once and finish the setup page');
+    process.exitCode = 1;
+    return;
+  }
+  const off = /^(off|none|no)$/i.test(String(value || ''));
+  const shared = off ? {} : sharedUrlOf(value);
+  if (!off && !shared.url) {
+    log(shared.error ? `that address does not work: ${shared.error}` : 'usage: brambit share https://<this computer>.<tailnet>.ts.net | off');
+    process.exitCode = 2;
+    return;
+  }
+  writeConfig({ [SHARED_KEY]: shared.url || null }, { file: configFile });
+  if (off) {
+    log('Brambit is for this computer only again');
+    log(`to stop Tailscale from answering for it, run: ${tailscaleOff}`);
+  } else {
+    log(`shared address saved: ${shared.url}`);
+    log(`if you have not yet, make Tailscale answer it on this computer: ${tailscaleOn(setup.port)}`);
+    log('the others create their account there with your invite code (ask your assistant for it)');
+  }
+  if (await instance()) log('restart Brambit for this to apply: run "brambit stop" and open it again');
 }
 
 async function stop() {
@@ -264,6 +310,10 @@ async function start(noBrowser) {
   let setup = migrate();
   const port = setup?.port || Number(process.env.BRAMBIT_PORT) || await availablePort(8080);
   const base = `http://127.0.0.1:${port}`;
+  // Shared at home: links (emails, invites, images) use the address the others
+  // open; this computer still reaches it at base.
+  const shared = sharedOf();
+  const publicUrl = shared || base;
   const since = new Date().toISOString();
   let phase = 'starting', url = base, server = null, shuttingDown = false;
 
@@ -292,14 +342,15 @@ async function start(noBrowser) {
   // rest (owner, keys, channels) the server reads from brambit.env itself.
   const own = {
     ...dbEnvOf(conn),
-    HOST: '127.0.0.1', PORT: String(port), PUBLIC_BASE_URL: base,
+    HOST: '127.0.0.1', PORT: String(port), PUBLIC_BASE_URL: publicUrl,
+    ...(shared && { APP_BASE_URL: `${shared}/` }),
     APP_TASK_STORE_DIR: path.join(dataDir, 'app-tasks'),
     CODING_JOB_STORE_DIR: path.join(dataDir, 'coding-jobs'),
     CREDIT_CALL_STORE_DIR: path.join(dataDir, 'credit-calls'),
     BRAMBIT_LOCALES_DIR: path.join(dataDir, 'locales'),
     MODELOS_ARQUIVO: modelsFile,
     BRAMBIT_PLUGINS: path.join(root, 'installer', 'plugin', 'enabled.mjs'),
-    BRAMBIT_INSTALLATION: JSON.stringify({ version, url: base, dataDir, since }),
+    BRAMBIT_INSTALLATION: JSON.stringify({ version, url: base, ...(shared && { shared }), dataDir, since }),
     BRAMBS_LOCAL: '1', VAULT_KEY_FILE: process.env.VAULT_KEY_FILE,
   };
   const env = {
@@ -363,6 +414,7 @@ async function start(noBrowser) {
   await db;
   await startServer();
   log(`ready: ${base}  (to turn it off, close this window, press Ctrl+C or run "brambit stop")`);
+  if (shared) log(`shared with other devices at: ${shared}`);
   // On the first run the setup page is already open and creates the owner's account.
   if (!firstRun && !noBrowser) openBrowser(base);
 }
@@ -374,8 +426,9 @@ async function main() {
   if (command === 'stop') return stop();
   if (command === 'start') return start(args.includes('--no-browser'));
   if (command === 'open') return open(args.includes('--no-browser'));
+  if (command === 'share') return share(args.filter((a) => !a.startsWith('--'))[1]);
   if (command === 'uninstall') return uninstall();
-  console.error('usage: brambit [start | open | stop | status | uninstall] [--no-browser]');
+  console.error('usage: brambit [start | open | stop | status | share <address> | share off | uninstall] [--no-browser]');
   process.exitCode = 2;
 }
 
