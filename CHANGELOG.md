@@ -227,8 +227,7 @@ versions stay below for reference, but their tags are no longer published.
   with `EnvironmentFile=`); edits to it reach the server within a couple of
   seconds, and secrets can be stored in it encrypted with the vault key
   (`KEY=vault:v1:...`). `npm run local` turns this on for the root `.env`.
-  Most settings are still read once at start; making them follow the file is
-  the next step of issue #99.
+  Most settings are still read once at start.
 - System settings screen at `/admin/settings`, for the admin only (the
   `ADMIN_EMAIL` account). It edits the config file, section by section as in
   `.env.example`: shows where each value comes from, saves and clears it,
@@ -623,35 +622,35 @@ versions stay below for reference, but their tags are no longer published.
 - Text the model writes in the same step as a tool that records something
   or proposes an action is delivered before the final text instead of being
   dropped. Tools opt in with `keepsStepText` (or on their `confirmationTool`);
-  `criar_rotina`, `oferecer_rotina` and `memoria_anotar` do (#23).
+  `criar_rotina`, `oferecer_rotina` and `memoria_anotar` do.
 
 ## [0.2.4] - 2026-10-06
 
 ### Changed
 - The model-facing prompt (system prompt, fixed rules and per-turn
   instructions) is in English. Replies still follow the person's language;
-  tool names, parsed markers and user-facing text are unchanged (#16).
+  tool names, parsed markers and user-facing text are unchanged.
 - The reply language is decided once per turn, and every text the platform
   adds to the reply (receipts, source lists, search notices, credit stops)
-  uses it. Short English and Spanish requests are now recognized (#17, #18).
+  uses it. Short English and Spanish requests are now recognized.
 
 ### Added
 - WhatsApp public-facing outputs: images are uploaded to Meta as JPEG/PNG
   (other formats are converted) through the SSRF-guarded fetch; an output with
   an image waits for its delivery status before the next one is sent
   (`WA_ESPERA_ENTREGA_MS`, default 15 s); image, button and template outputs
-  accept a `reserva` text sent when Meta rejects them (#19).
+  accept a `reserva` text sent when Meta rejects them.
 
 ## [0.2.3] - 2026-10-06
 
 ### Removed
 - The notice about links the checker could not confirm (403, 429, timeouts).
-  Links proven dead are still removed, with their notice (#14).
+  Links proven dead are still removed, with their notice.
 
 ## [0.2.2] - 2026-10-06
 
 ### Changed
-- The unchecked-link notice names the site it refers to (#12). Superseded by
+- The unchecked-link notice names the site it refers to. Superseded by
   0.2.3, which drops that notice.
 
 ## [0.2.1] - 2026-10-06
@@ -659,7 +658,7 @@ versions stay below for reference, but their tags are no longer published.
 ### Added
 - Reply in the language the person wrote in: `idiomaEscrito` detects the
   language of the person's message (conservatively) and the per-turn reminder
-  names it when it differs from the account's language (#10).
+  names it when it differs from the account's language.
 
 ## [0.2.0] - 2026-10-06
 
@@ -667,25 +666,25 @@ versions stay below for reference, but their tags are no longer published.
 - Public-facing service: an owner's assistant can answer people who have no
   account, for example a business's customers on WhatsApp.
   - Its own turn, isolated from the owner's data; encrypted contact phone
-    numbers with a blind index (#1).
+    numbers with a blind index.
   - WhatsApp wiring, enabled per installation with `ATENDIMENTO_PUBLICO_AGENTE`
-    and switched on by that assistant's owner; without it nothing changes (#2).
+    and switched on by that assistant's owner; without it nothing changes.
   - Brakes and data protection: stop/resume/erase commands from the contact,
     per-contact hourly limit, optional daily cost cap, export, erase and
-    retention (#3).
+    retention.
   - Owner view at `/atendimento`: settings, contacts, conversations, block,
-    export and erase (#4).
+    export and erase.
   - `atendimentoPublico` plugin port with `antesDoModelo` / `depoisDoModelo`
     hooks, rich outputs (text, image, link button, approved template) and
-    split messages joined into one turn (#5).
-  - Optional image header on the link button output (#6).
-  - Plugin tools in the public turn can read and store the contact's state (#7).
+    split messages joined into one turn.
+  - Optional image header on the link button output.
+  - Plugin tools in the public turn can read and store the contact's state.
 - Sources by reference: the platform numbers the sources a turn used and
-  builds the "Sources" list from what the model cited (#8).
+  builds the "Sources" list from what the model cited.
 
 ### Changed
 - The grounding brake is calibrated against real firings (links, coupons,
-  derived prices) (#8).
+  derived prices).
 
 ## [0.1.0] - 2026-10-05
 
