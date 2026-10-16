@@ -33,9 +33,12 @@ versions stay below for reference, but their tags are no longer published.
   the new paths when convenient.
 
 ### Fixed
-- The first-run setup page no longer stops at "Something went wrong" when a
-  browser extension rewrites the Origin header: it trusts the browser's own
-  Sec-Fetch-Site, and the Brambit window says why a request was refused.
+- A browser extension that rewrites the Origin header no longer blocks the
+  first-run setup ("Something went wrong") or the account it creates
+  ("Unauthorized origin"). Both servers also accept a request when the browser
+  itself says it came from the same site (Sec-Fetch-Site: same-origin, which no
+  page can set), and the app server still accepts every request it accepted
+  before. The Brambit window now says why the setup page refused a request.
 
 ## [0.2.23] - 2026-10-16
 
