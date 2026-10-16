@@ -69,7 +69,7 @@ function kill(child) {
 }
 
 const base = `http://127.0.0.1:${port}`;
-const post = (url, body, origin = base, cookie = '') => fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'application/json', origin, cookie }, body: JSON.stringify(body) });
+const post = (url, body, origin = base, cookie = '', headers = {}) => fetch(`${base}${url}`, { method: 'POST', headers: { 'content-type': 'application/json', origin, cookie, ...headers }, body: JSON.stringify(body) });
 const cookieOf = (res) => res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 // Runs a launcher command to the end: {code, out}.
 function run(command) {
@@ -134,7 +134,9 @@ try {
   const request = { code, name: OWNER.name, email: OWNER.email, provider: 'other', url: aiUrl, model: 'test-model', key: KEY };
   if ((await post('/install', { ...request, code: 'wrong' })).status !== 403) fail('a wrong code got through');
   if ((await post('/install', request, 'http://evil.example')).status !== 403) fail('another origin got through');
-  const listed = await (await post('/models', { code, provider: 'other', url: aiUrl, key: KEY })).json();
+  if ((await post('/install', request, base, '', { 'sec-fetch-site': 'same-site' })).status !== 403) fail('a page on another port got through');
+  // A browser extension that rewrites the Origin: the browser still says it is the page.
+  const listed = await (await post('/models', { code, provider: 'other', url: aiUrl, key: KEY }, 'chrome-extension://example', '', { 'sec-fetch-site': 'same-origin' })).json();
   if (!listed.models?.includes('test-model')) fail(`the model list did not come: ${JSON.stringify(listed)}`);
   // A provider without audio, and audio left to its default: voice messages off.
   if ((await (await post('/install', { ...request, audio: 'openai' })).json()).error !== 'audio_missing_key') fail('another audio provider got through without its key');
