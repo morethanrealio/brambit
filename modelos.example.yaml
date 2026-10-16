@@ -1,0 +1,92 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Brambit models: which provider and which model each function uses.
+#
+# How to use:
+#   1. cp modelos.example.yaml modelos.yaml
+#   2. in "provedores", keep only the ones you will use and paste the keys into .env
+#   3. in "funcoes", choose the model for each function (at least "padrao")
+#   4. npm run modelos      → shows the function → model table and warns about a missing key
+#
+# Without modelos.yaml, the built-in routing applies.
+# With it, this file takes over: whatever is here applies to every function.
+# A typo here makes the server refuse to start and it reports the line of the problem.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Providers ────────────────────────────────────────────────────────────────
+# A provider is just data: your own alias, the API's address and the NAME of the
+# .env variable that holds the key (never the key itself: this file can go into git).
+#
+# Any service that speaks the OpenAI protocol (/chat/completions) plugs in
+# this way, with no code: Together, OpenAI, OpenRouter, DeepSeek, Groq, Fireworks,
+# DeepInfra, Mistral, local vLLM and Ollama, etc. In "endereco", put the base URL
+# (the server appends /chat/completions).
+# Gemini has its own protocol: use "tipo: gemini" and no endereco is needed.
+provedores:
+  together:
+    endereco: https://api.together.xyz/v1
+    chave: TOGETHER_API_KEY
+  gemini:
+    tipo: gemini
+    chave: GEMINI_API_KEY
+  openai:
+    endereco: https://api.openai.com/v1
+    chave: OPENAI_API_KEY
+  # openrouter:
+  #   endereco: https://openrouter.ai/api/v1
+  #   chave: OPENROUTER_API_KEY
+  # Model running on your own machine (no key: just don't add the "chave" line).
+  # ollama:
+  #   endereco: http://localhost:11434/v1
+
+# ── Functions ─────────────────────────────────────────────────────────────────
+# Each line picks the model for a function, in the format provedor/modelo (the
+# model is the exact id the provider uses in its API).
+#
+# A function with no line inherits from another, so you can start with just "padrao":
+#   padrao ............ everything that has no line of its own
+#   conversa .......... the assistant talking to the user; needs to know how to
+#                       call tools (calendar, email, search...)        ← padrao
+#   imagem ............ turn where the user sent a photo; needs to see
+#                       the image                                     ← conversa
+#   leitura_imagem .... describe or read the text of a stored image    ← imagem
+#   pesquisa .......... reading sub-agents: web, Google, connectors    ← padrao
+#   programacao ....... writing code, building an app, spreadsheets    ← padrao
+#   memoria ........... keeping the profile and conversation summary   ← padrao
+#   classificacao ..... short labeling tasks: topics, moderation,
+#                       app risk, routine offers                       ← padrao
+#
+# "reserva" (optional): model that kicks in if the primary one goes down (outage,
+# provider error). Can be from another provider; it's how you avoid being left without a reply.
+#
+# "opcoes" (optional): extra fields sent as-is in the call's body,
+# for adjustments specific to each provider (e.g. reasoning_effort, temperature).
+# On Gemini, the only option read is thinkingBudget.
+funcoes:
+  padrao:
+    modelo: together/deepseek-ai/DeepSeek-V4.1-Flash
+    opcoes:
+      reasoning_effort: high
+    reserva: gemini/gemini-3.7-flash
+
+  # Examples (uncomment to use):
+  # programacao:
+  #   modelo: openai/gpt-5.4-mini
+  #   reserva: together/deepseek-ai/DeepSeek-V4.1-Flash
+  # classificacao: together/deepseek-ai/DeepSeek-V4.1-Flash   ← short form, no reserva
+  # memoria:
+  #   modelo: gemini/gemini-3.7-flash
+  #   opcoes:
+  #     thinkingBudget: 0
+
+# ── Prices (optional) ─────────────────────────────────────────────────────────
+# The cost of each call is calculated from the model's price. The models above
+# already have a registered price. For a new model, add a line here; without it,
+# the server uses the fallback table (US$ 1.50 entrada / 9.00 saida), which
+# tends to be pricier than the real cost. Values in US$ per 1 million tokens:
+#   entrada = text sent to the model; cache = entrada the provider reused
+#   (cheaper); saida = text that comes back (includes the "reasoning").
+precos:
+  # new-model-id:             ← the same id used in "funcoes", without the provider
+  #   entrada: 0.50            ← illustrative values: check the provider's pricing page
+  #   cache: 0.05
+  #   saida: 2.00

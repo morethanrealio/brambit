@@ -1,0 +1,17 @@
+# Default owner of everything. Once there are maintainers besides Marcos, they are
+# added to the areas below (open source plan, section 9). The explicit lines mark
+# what is sensitive and will require review from whoever owns the area.
+*                           @marcostrinca
+
+# Governance and dependency chain
+/.github/                   @marcostrinca
+/package.json               @marcostrinca
+/package-lock.json          @marcostrinca
+
+# Database
+/web/db.mjs                 @marcostrinca
+
+# Auth, secrets and billing
+/web/auth.mjs               @marcostrinca
+/web/vault*.mjs             @marcostrinca
+/web/pricing.mjs            @marcostrinca

@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"noEmitOnError":true,"lib":["ES2022","DOM"],"types":[],"rootDir":".","outDir":"../.billing-build","skipLibCheck":true},"include":["ui.mts"]}

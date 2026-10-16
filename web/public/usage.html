@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title data-i18n="usage_page.page_title">Usage &amp; cost · __MARCA__</title>
+<style nonce="__CSP_NONCE__">
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0e0f13; color: #e6e7ea; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid #23252c; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .sub { color: #8a8d96; font-size: 12px; margin-top: 2px; }
+  main { padding: 20px 24px; max-width: 1100px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 20px; }
+  label { display: block; font-size: 11px; color: #8a8d96; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  select, input { background: #181a20; color: #e6e7ea; border: 1px solid #2b2e37; border-radius: 8px; padding: 7px 10px; font-size: 14px; }
+  button { background: #3b6cf6; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2f5be0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: #15171d; border: 1px solid #23252c; border-radius: 12px; padding: 14px 16px; }
+  .card .k { font-size: 11px; color: #8a8d96; text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .card .v small { font-size: 12px; color: #8a8d96; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid #1d1f26; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: #8a8d96; font-weight: 500; font-size: 12px; position: sticky; top: 0; background: #0e0f13; }
+  tbody tr:hover { background: #15171d; }
+  .cost { color: #6ee7a8; }
+  .muted { color: #8a8d96; }
+  .err { color: #f87171; padding: 12px 0; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #23252c; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="usage_page.title">Usage &amp; cost</h1>
+  <div class="sub" id="scope" data-i18n="usage_page.loading">Loading…</div>
+</header>
+<main>
+  <div class="controls">
+    <div>
+      <label data-i18n="usage_page.group_by">Group by</label>
+      <select id="by">
+        <option value="hour" data-i18n="usage_page.by_hour">Hour</option>
+        <option value="day" selected data-i18n="usage_page.by_day">Day</option>
+        <option value="month" data-i18n="usage_page.by_month">Month</option>
+        <option value="kind" data-i18n="usage_page.by_kind_long">Type (chat/onboard/routine…)</option>
+        <option value="model" data-i18n="usage_page.by_model">Model</option>
+        <option value="agent" data-i18n="usage_page.by_agent">Assistant</option>
+        <option value="thread" data-i18n="usage_page.by_thread">Conversation</option>
+        <option value="turn" data-i18n="usage_page.by_turn">Turn</option>
+        <option value="user" data-i18n="usage_page.by_user">User</option>
+      </select>
+    </div>
+    <div><label data-i18n="usage_page.from">From</label><input type="date" id="from" /></div>
+    <div><label data-i18n="usage_page.to">To</label><input type="date" id="to" /></div>
+    <div id="userBox" style="display:none"><label data-i18n="usage_page.user_filter">User (id, admin)</label><input type="text" id="user" placeholder="all" data-i18n-placeholder="usage_page.user_all" size="14" /></div>
+    <button id="go" data-i18n="usage_page.refresh">Refresh</button>
+  </div>
+
+  <div class="cards" id="cards"></div>
+  <div id="out"></div>
+</main>
+
+<script type="application/json" data-i18n-texts="usage_page"></script>
+<script src="/page-texts.js"></script>
+<script nonce="__CSP_NONCE__">
+const t = window.pageText;
+const locale = document.documentElement.lang;
+const fmt = (n) => Number(n || 0).toLocaleString(locale);
+const usd = (n) => '$' + Number(n || 0).toLocaleString(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+async function load() {
+  const by = $('by').value;
+  const qs = new URLSearchParams({ by });
+  if ($('from').value) qs.set('from', $('from').value);
+  if ($('to').value)   qs.set('to', $('to').value + 'T23:59:59');
+  if ($('user').value) qs.set('user', $('user').value.trim());
+  const out = $('out');
+  out.innerHTML = '<p class="muted">' + esc(t('loading')) + '</p>';
+  let data;
+  try {
+    const r = await fetch('api/usage?' + qs.toString());
+    data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+  } catch (e) {
+    out.innerHTML = '<p class="err">' + esc(t('error', { message: e.message })) + '</p>';
+    return;
+  }
+  $('scope').innerHTML = data.admin
+    ? esc(t('scope_admin')).replace('{admin}', '<span class="pill">admin</span>')
+    : esc(t('scope_own'));
+  $('userBox').style.display = data.admin ? '' : 'none';
+
+  const tot = data.totals || {};
+  $('cards').innerHTML = [
+    [esc(t('total_cost')), '<span class="cost">' + usd(tot.cost_usd) + '</span>'],
+    [esc(t('total_tokens')), fmt(tot.tok_total)],
+    [esc(t('input')) + ' <small>' + esc(t('cache_share', { percent: tot.tok_in > 0 ? Math.round((tot.tok_cached / tot.tok_in) * 100) : 0 })) + '</small>', fmt(tot.tok_in)],
+    [esc(t('output')), fmt(tot.tok_out)],
+    [esc(t('thinking')), fmt(tot.tok_think)],
+    [esc(t('turns')), fmt(tot.turns)],
+    [esc(t('calls')), fmt(tot.calls)],
+    data.admin ? [esc(t('users')), fmt(tot.users)] : null,
+  ].filter(Boolean).map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  const rows = data.rows || [];
+  if (!rows.length) { out.innerHTML = '<p class="muted">' + esc(t('no_data')) + '</p>'; return; }
+  const label = esc(t('by_' + by));
+  out.innerHTML = `<table><thead><tr>
+    <th>${label}</th>${['cost', 'tokens', 'input', 'cache', 'output', 'thinking', 'turns', 'calls'].map((k) => '<th>' + esc(t(k)) + '</th>').join('')}
+  </tr></thead><tbody>` + rows.map((r) => `<tr>
+    <td>${r.bucket ?? '—'}</td>
+    <td class="cost">${usd(r.cost_usd)}</td>
+    <td>${fmt(r.tok_total)}</td>
+    <td>${fmt(r.tok_in)}</td>
+    <td>${fmt(r.tok_cached)}</td>
+    <td>${fmt(r.tok_out)}</td>
+    <td>${fmt(r.tok_think)}</td>
+    <td>${fmt(r.turns)}</td>
+    <td>${fmt(r.calls)}</td>
+  </tr>`).join('') + '</tbody></table>';
+}
+
+$('go').addEventListener('click', load);
+$('by').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title data-i18n="system_settings.page_title">System settings · __MARCA__</title>
+<style nonce="__CSP_NONCE__">
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0e0f13; color: #e6e7ea; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid #23252c; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  h2 { font-size: 15px; font-weight: 600; margin: 28px 0 10px; }
+  .sub { color: #8a8d96; font-size: 12px; margin-top: 2px; }
+  main { padding: 8px 24px 40px; max-width: 900px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  nav a { color: #8a8d96; font-size: 12px; text-decoration: none; padding: 2px 8px; border: 1px solid #23252c; border-radius: 999px; }
+  nav a:hover { color: #e6e7ea; }
+  .group { background: #15171d; border: 1px solid #23252c; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .note { color: #8a8d96; font-size: 12px; margin: 6px 0 2px; white-space: pre-wrap; }
+  .row { margin: 10px 0; }
+  .row label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; margin-bottom: 4px; }
+  .line { display: flex; gap: 6px; }
+  input, textarea { flex: 1; min-width: 0; background: #0e0f13; color: #e6e7ea; border: 1px solid #2b2e37; border-radius: 8px; padding: 7px 10px; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  input:disabled, textarea:disabled { color: #8a8d96; }
+  button { background: #3b6cf6; color: #fff; border: 0; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  button:hover { background: #2f5be0; }
+  button.ghost { background: #23252c; color: #e6e7ea; }
+  button.ghost:hover { background: #2b2e37; }
+  button:disabled { opacity: .5; cursor: default; }
+  .pill, .pill-warn { display: inline-block; padding: 0 7px; border-radius: 999px; background: #23252c; color: #8a8d96; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .pill-warn { background: #3a2e12; color: #f5c66b; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  .result { font-size: 12px; }
+  .ok { color: #6ee7a8; }
+  .err { color: #f87171; }
+  .banner { background: #2a1d1d; border: 1px solid #5b2a2a; border-radius: 10px; padding: 10px 14px; margin: 16px 0 0; font-size: 13px; }
+  .banner.info { background: #1b2233; border-color: #2c3b5e; }
+  .toast { position: fixed; right: 20px; bottom: 20px; background: #15371f; border: 1px solid #2a6b3d; color: #6ee7a8; border-radius: 10px; padding: 8px 14px; font-size: 13px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="system_settings.title">System settings</h1>
+  <div class="sub" data-i18n="system_settings.subtitle">Edits this installation's config file. A change applies right away, except where it says it applies on the next start.</div>
+  <nav id="nav"></nav>
+</header>
+<main>
+  <div id="noFile" class="banner hidden" data-i18n="system_settings.no_file">This installation has no config file (BRAMBIT_CONFIG_FILE), so settings can only be read here.</div>
+  <div id="vault" class="banner hidden" data-i18n="system_settings.vault_not_ready">The vault key is not loaded: secrets cannot be saved until it is.</div>
+  <div id="waiting" class="banner info hidden"></div>
+  <div id="fileErrors" class="banner hidden"></div>
+  <div id="out" class="sub" data-i18n="system_settings.loading">Loading…</div>
+  <div id="toast" class="toast hidden" data-i18n="system_settings.saved">Saved.</div>
+</main>
+
+<script type="application/json" data-i18n-texts="system_settings"></script>
+<script src="/page-texts.js"></script>
+<script nonce="__CSP_NONCE__">
+const t = window.pageText;
+const $ = (id) => document.getElementById(id);
+const has = (key) => t(key) !== key;
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) if (c != null) e.append(c);
+  return e;
+}
+
+function sectionTitle(s) {
+  if (s.id === 'other') return t('section_other');
+  return has('section_' + s.id) ? t('section_' + s.id) : s.title;
+}
+
+function sourceText(item) {
+  if (item.source === 'unset') return t('source_unset');
+  const where = t('source_' + item.source);
+  return item.secret ? t('secret_set', { where }) : where;
+}
+
+function reasonText(r) {
+  if (r.ok) return t('test_ok');
+  let reason = r.reason || '';
+  let stage = '';
+  const m = reason.match(/^(imap|smtp)_(.+)$/);
+  if (m) { stage = m[1]; reason = m[2]; }
+  let text;
+  if (reason === 'missing') text = t('reason_missing', { keys: (r.missing || []).join(', ') });
+  else if (/^status_\d+$/.test(reason)) text = t('reason_status', { code: reason.slice(7) });
+  else text = has('reason_' + reason) ? t('reason_' + reason) : t('reason_unreachable');
+  return stage ? t('stage_' + stage, { reason: text }) : text;
+}
+
+function field(item, group) {
+  const multi = /PRIVATE_KEY$/.test(item.key);
+  const input = el(multi ? 'textarea' : 'input', {
+    type: multi ? null : item.secret ? 'password' : 'text',
+    rows: multi ? 3 : null,
+    autocomplete: 'off', spellcheck: 'false',
+    disabled: item.readOnly,
+    placeholder: item.secret
+      ? (item.isSet ? t('secret_placeholder_set') : t('secret_placeholder'))
+      : (item.sample ? t('default_placeholder', { sample: item.sample }) : ''),
+  });
+  if (!item.secret) input.value = item.value || '';
+  input.dataset.key = item.key;
+  input.dataset.original = item.secret ? '' : (item.value || '');
+  input.dataset.secret = item.secret ? '1' : '';
+  group.inputs.push(input);
+
+  const tags = [el('span', { class: 'pill' }, sourceText(item))];
+  if (item.encrypted) tags.push(el('span', { class: 'pill' }, t('encrypted')));
+  if (item.waitingForVault) tags.push(el('span', { class: 'pill-warn' }, t('waiting_vault_one')));
+  if (item.pendingRestart) tags.push(el('span', { class: 'pill-warn' }, t('pending_restart')));
+  else if (item.restart) tags.push(el('span', { class: 'pill' }, t('applies_on_start')));
+  if (item.readOnly && item.source === 'launcher') tags.push(el('span', { class: 'pill' }, t('read_only_launcher')));
+  else if (item.vault) tags.push(el('span', { class: 'pill' }, t('read_only_vault')));
+
+  const clear = item.source === 'file' && !item.readOnly
+    ? el('button', { class: 'ghost', type: 'button', onclick: () => {
+        if (confirm(t('clear_confirm', { key: item.key }))) save(group, { [item.key]: null });
+      } }, t('clear'))
+    : null;
+  return el('div', { class: 'row' }, el('label', {}, item.key, tags), el('div', { class: 'line' }, input, clear));
+}
+
+function renderGroup(g, editable) {
+  const group = { inputs: [] };
+  const box = el('div', { class: 'group' });
+  for (const item of g.items) box.append(item.note != null ? el('p', { class: 'note' }, item.note) : field(item, group));
+  const result = el('span', { class: 'result' });
+  group.result = result;
+  const anyEditable = editable && g.items.some((i) => i.key && !i.readOnly);
+  const buttons = [];
+  if (anyEditable) buttons.push(el('button', { type: 'button', onclick: () => save(group) }, t('save')));
+  for (const name of g.checks) {
+    buttons.push(el('button', { class: 'ghost', type: 'button', onclick: (ev) => test(group, name, ev.target) }, t('check_' + name)));
+  }
+  if (buttons.length) box.append(el('div', { class: 'actions' }, buttons, result));
+  return box;
+}
+
+function show(state) {
+  $('noFile').classList.toggle('hidden', state.file.active);
+  $('vault').classList.toggle('hidden', state.vaultReady || !state.file.active);
+  $('waiting').classList.toggle('hidden', !state.file.waitingForVault.length);
+  $('waiting').textContent = t('waiting_vault', { keys: state.file.waitingForVault.join(', ') });
+  $('fileErrors').classList.toggle('hidden', !state.file.errors.length);
+  $('fileErrors').replaceChildren(
+    el('div', {}, t('file_errors')),
+    ...state.file.errors.map((e) => el('div', {}, (e.key || t('line', { n: e.line })) + ': ' + e.reason)),
+  );
+  const out = $('out');
+  out.className = '';
+  out.replaceChildren();
+  $('nav').replaceChildren();
+  for (const s of state.sections) {
+    const id = 'section-' + s.id;
+    $('nav').append(el('a', { href: '#' + id }, sectionTitle(s)));
+    out.append(el('h2', { id }, sectionTitle(s)), ...s.groups.map((g) => renderGroup(g, state.file.active)));
+  }
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/admin/settings', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error(String(r.status));
+    show(await r.json());
+  } catch {
+    $('out').className = 'err';
+    $('out').textContent = t('load_failed');
+  }
+}
+
+function changes(group) {
+  const updates = {};
+  for (const input of group.inputs) {
+    if (input.disabled) continue;
+    const v = input.value.trim();
+    if (input.dataset.secret) { if (v) updates[input.dataset.key] = v; }
+    else if (v !== input.dataset.original) updates[input.dataset.key] = v || null;
+  }
+  return updates;
+}
+
+function errorText(body) {
+  const key = body.key || '';
+  return has('error_' + body.error) ? t('error_' + body.error, { key }) : t('error_generic');
+}
+
+async function save(group, updates = changes(group), confirmed = false) {
+  const result = group.result;
+  result.className = 'result';
+  if (!Object.keys(updates).length) { result.textContent = t('nothing_to_save'); return; }
+  result.textContent = t('saving');
+  try {
+    const r = await fetch('/api/admin/settings', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ updates, confirm: confirmed }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 409 && body.error === 'confirm') {
+      const lines = body.confirm.map((c) => c.kind === 'deepseek_flash' ? t('confirm_deepseek_flash', { count: c.count }) : t('confirm_' + c.kind));
+      if (confirm(lines.join('\n\n'))) return save(group, updates, true);
+      result.textContent = '';
+      return;
+    }
+    if (!r.ok) { result.className = 'result err'; result.textContent = errorText(body); return; }
+    show(body);
+    $('toast').classList.remove('hidden');
+    setTimeout(() => $('toast').classList.add('hidden'), 3000);
+  } catch {
+    result.className = 'result err';
+    result.textContent = t('error_generic');
+  }
+}
+
+async function test(group, name, button) {
+  const result = group.result;
+  const values = {};
+  for (const input of group.inputs) if (input.value.trim()) values[input.dataset.key] = input.value.trim();
+  button.disabled = true;
+  result.className = 'result';
+  result.textContent = t('testing');
+  try {
+    const r = await fetch('/api/admin/settings/test', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ check: name, values }),
+    });
+    const body = await r.json();
+    result.className = 'result ' + (body.ok ? 'ok' : 'err');
+    result.textContent = t('check_' + name) + ': ' + reasonText(body);
+  } catch {
+    result.className = 'result err';
+    result.textContent = t('error_generic');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

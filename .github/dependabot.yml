@@ -1,0 +1,27 @@
+# Dependabot opens pull requests that update the npm packages and the GitHub
+# Actions used by CI. Each one runs CI and needs a maintainer's review, like any
+# other pull request. Security updates are a separate repository setting and
+# are not delayed by the cooldown below.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # A release has to be a week old before it is proposed, which gives time
+    # for a compromised version to be found and pulled.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,13 @@
+# Secret scan (gitleaks), runs in the CI quick check.
+# Default gitleaks rules + exceptions checked by hand on 2026-10-01:
+#   - test-support/apple-iap/*: TEST certificate chain (CN "Test Leaf"),
+#     generated only for the Apple IAP tests; not valid anywhere else.
+# New exception only with the reason written here.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "falsos positivos conferidos"
+paths = [
+  '''^test-support/apple-iap/''',
+]

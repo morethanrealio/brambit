@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title data-i18n="public_service_page.page_title">Public service · __MARCA__</title>
+<style nonce="__CSP_NONCE__">
+  :root{--bg:#f4eee4;--card:#fffdf8;--line:#e5ddcd;--line2:#efe7d8;--accent:#c97a52;--accent2:#dd9568;--txt:#2b2723;--mut:#736c5f;--mut2:#a39b89;--ok:#3d7a4e;--err:#b25438;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .top{border-bottom:1px solid var(--line);padding:18px 20px;}
+  .top .in{max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .top .brandlogo{height:26px;width:auto;display:block;}
+  .top a.back,.top nav a{color:var(--mut);text-decoration:none;font-size:14px;}
+  .top nav{display:flex;gap:16px;}
+  .inline{display:flex;gap:8px;}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 20px 60px;}
+  h1{font-size:28px;line-height:1.2;margin:0 0 6px;}
+  .lead{color:var(--mut);margin:0 0 22px;max-width:680px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:0 0 18px;}
+  .card h2{font-size:16px;margin:0 0 12px;}
+  label{display:block;font-size:13.5px;color:var(--mut);margin:12px 0 4px;}
+  input[type=number],input[type=text],select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:14.5px;background:#fff;color:var(--txt);}
+  textarea{min-height:140px;resize:vertical;}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .row>div{flex:1;min-width:160px;}
+  .check{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:15px;color:var(--txt);}
+  .btn{border:0;border-radius:9px;padding:9px 15px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.primary:hover{background:var(--accent2);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);}
+  .btn.ghost:hover{border-color:var(--accent2);color:var(--accent);}
+  .btn.danger{background:transparent;border:1px solid #e3c1b5;color:var(--err);}
+  .btn:disabled{opacity:.55;cursor:default;}
+  .acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .msg{font-size:13.5px;margin-top:8px;color:var(--mut);}
+  .msg.ok{color:var(--ok);}
+  .msg.err{color:var(--err);}
+  .warn{background:#fbf2e9;border:1px solid #e7d3bf;border-radius:10px;padding:11px 13px;color:#7a5230;font-size:13.5px;margin:0 0 6px;}
+  .grid{display:grid;grid-template-columns:minmax(240px,1fr) 2fr;gap:18px;}
+  @media (max-width:760px){.grid{grid-template-columns:1fr;}}
+  .contatos{max-height:560px;overflow:auto;}
+  .ct{padding:9px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent;}
+  .ct:hover{background:var(--line2);}
+  .ct.sel{border-color:var(--accent2);background:#fbf2e9;}
+  .ct .end{font-weight:600;font-size:14.5px;}
+  .ct .meta{font-size:12.5px;color:var(--mut);}
+  .tag{display:inline-block;font-size:11.5px;border-radius:6px;padding:0 6px;margin-left:6px;background:var(--line2);color:var(--mut);}
+  .tag.blq{background:#f6dcd2;color:var(--err);}
+  .conversa{max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
+  .bolha{max-width:82%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;font-size:14.5px;}
+  .bolha.user{align-self:flex-start;background:#fff;border:1px solid var(--line);}
+  .bolha.assistant{align-self:flex-end;background:#f3e4d8;}
+  .bolha .hora{display:block;font-size:11.5px;color:var(--mut2);margin-top:3px;}
+  .vazio{color:var(--mut);font-size:14px;}
+  .espaco{margin-top:8px;}
+  .acoes.topo{margin-top:0;margin-bottom:10px;}
+  .card h3{font-size:15px;margin:22px 0 4px;}
+  .nota{font-size:13.5px;color:var(--mut);margin:0;}
+  code{display:block;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;word-break:break-all;}
+  #webOrigens,#linkSites{min-height:70px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
+  <a class="back" id="backLink" href="/inicio" data-i18n="public_service_page.back">back to the app</a>
+  <nav id="ownerLinks" class="hidden">
+    <a href="/usage" data-i18n="public_service_page.usage_link">Usage</a>
+    <a href="/admin/settings" id="settingsLink" class="hidden" data-i18n="public_service_page.settings_link">Installation settings</a>
+    <a href="/login" id="signOut" data-i18n="public_service_page.sign_out">Sign out</a>
+  </nav>
+</div></div>
+
+<div class="wrap">
+  <h1 data-i18n="public_service_page.title">Public service</h1>
+  <p class="lead" data-i18n="public_service_page.lead">One of your assistants answers whoever writes to this installation's WhatsApp number without having an account. In this mode it only uses its instructions and the conversation with each contact: it does not see your memory, your e-mails, your calendar or your files.</p>
+
+  <div class="card">
+    <label for="agente" data-i18n="public_service_page.assistant">Assistant</label>
+    <select id="agente"></select>
+    <div id="semAgente" class="vazio espaco hidden" data-i18n="public_service_page.no_assistants">You do not have any assistants yet.</div>
+    <div id="newAssistant" class="hidden">
+      <label for="newName" data-i18n="public_service_page.new_assistant">New assistant (its name)</label>
+      <div class="inline"><input type="text" id="newName" maxlength="60"/><button class="btn primary" id="createAssistant" data-i18n="public_service_page.create">Create</button></div>
+      <div id="newMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="cfgCard">
+    <h2 data-i18n="public_service_page.settings">Settings</h2>
+    <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
+    <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
+    <label class="check" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
+    <label for="instrucoes" data-i18n="public_service_page.instructions">Extra instructions (what it does, tone, what it must not do). They add to the instructions that already come with this assistant, if any.</label>
+    <textarea id="instrucoes" maxlength="20000"></textarea>
+    <div class="row">
+      <div><label for="retencao" data-i18n="public_service_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
+      <div><label for="limite" data-i18n="public_service_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
+      <div><label for="limiteAgente" data-i18n="public_service_page.agent_rate_limit">Messages per hour, all contacts together</label><input type="number" id="limiteAgente" min="1" max="100000"/></div>
+      <div><label for="teto" data-i18n="public_service_page.daily_cap">Daily spending cap (US$, empty = US$10)</label><input type="number" id="teto" min="0" step="0.01"/></div>
+    </div>
+    <label for="linkSites" data-i18n="public_service_page.link_sites">Sites the assistant may send people to (one per line, only the domain, e.g. shop.example.com; its subdomains count too; empty = any site)</label>
+    <textarea id="linkSites" spellcheck="false"></textarea>
+    <h3 data-i18n="public_service_page.web_title">Website and API</h3>
+    <p class="nota" data-i18n="public_service_page.web_lead">A chat on your website, or your own server, can talk to this assistant in the same public mode. Those conversations show up in the contacts list below.</p>
+    <label class="check" data-i18n="public_service_page.web_enabled"><input type="checkbox" id="webAtivo"/> Answer from websites and the API</label>
+    <label for="webOrigens" data-i18n="public_service_page.web_origins">Websites allowed to open the chat (one per line, only the domain, e.g. https://shop.example.com)</label>
+    <textarea id="webOrigens" spellcheck="false"></textarea>
+    <label for="webChaveIps" data-i18n="public_service_page.web_key_ips">Servers allowed to use the key (one IP or range per line, e.g. 203.0.113.7 or 203.0.113.0/24; empty = any)</label>
+    <textarea id="webChaveIps" spellcheck="false"></textarea>
+    <label data-i18n="public_service_page.web_endpoint">Address for calls</label>
+    <code id="webEndereco" translate="no"></code>
+    <div class="acoes"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
+    <div id="cfgMsg" class="msg"></div>
+    <label data-i18n="public_service_page.web_key">Server key</label>
+    <p class="nota" id="webChaveEstado"></p>
+    <code id="webChaveNova" class="hidden" translate="no"></code>
+    <div class="acoes"><button class="btn ghost" id="webChave" data-i18n="public_service_page.web_key_new">Generate key</button></div>
+    <div id="webChaveMsg" class="msg"></div>
+  </div>
+
+  <div class="grid hidden" id="atendGrid">
+    <div class="card">
+      <h2 data-i18n="public_service_page.contacts">Contacts</h2>
+      <div id="contatos" class="contatos"></div>
+      <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="public_service_page.load_more">Load more</button></div>
+    </div>
+    <div class="card">
+      <h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2>
+      <div id="convVazia" class="vazio" data-i18n="public_service_page.pick_contact">Pick a contact to see the conversation.</div>
+      <div id="convBox" class="hidden">
+        <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
+        <div id="conversa" class="conversa"></div>
+        <div class="acoes">
+          <button class="btn ghost" id="bloquear"></button>
+          <a class="btn ghost" id="exportar" href="#" download data-i18n="public_service_page.export">Export data</a>
+          <button class="btn danger" id="apagar" data-i18n="public_service_page.delete">Delete contact</button>
+        </div>
+        <div id="convMsg" class="msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" data-i18n-texts="public_service_page"></script>
+<script src="/page-texts.js"></script>
+<script nonce="__CSP_NONCE__">
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var t = window.pageText, NO_SESSION = 'no-session';
+  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null;
+  function msg(el, t, cls){ el.textContent = t || ''; el.className = 'msg' + (cls ? ' ' + cls : ''); }
+  function quando(d){ try { return new Date(d).toLocaleString(document.documentElement.lang, { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
+  function pedir(caminho, corpo){
+    var op = { credentials:'include' };
+    if (corpo) { op.method = 'POST'; op.headers = { 'content-type':'application/json' }; op.body = JSON.stringify(corpo); }
+    return fetch(caminho, op).then(function(r){
+      if (r.status === 401) { location.href = '/login?modo=entrar'; throw new Error(NO_SESSION); }
+      return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.error || t('error_generic')); return j; });
+    });
+  }
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function carregarAgentes(manter){
+    return pedir('/api/publico/agentes').then(function(j){
+      agentes = j.agentes || [];
+      $('avisoCadastro').classList.toggle('hidden', !j.signupOpen);
+      var sel = $('agente'); sel.textContent = '';
+      $('semAgente').classList.toggle('hidden', agentes.length > 0);
+      if (!agentes.length) return;
+      agentes.forEach(function(a){ var o = el('option', null, a.doNumero ? t('serves_number', { name: a.nome }) : a.nome); o.value = a.agentId; sel.appendChild(o); });
+      var inicial = manter || (agentes.filter(function(a){ return a.doNumero; })[0] || agentes[0]).agentId;
+      sel.value = inicial; escolherAgente(inicial);
+    });
+  }
+  function escolherAgente(id){
+    agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
+    if (!agenteAtual) return;
+    $('cfgCard').classList.remove('hidden'); $('atendGrid').classList.remove('hidden');
+    var aviso = $('avisoNumero');
+    aviso.classList.toggle('hidden', agenteAtual.doNumero);
+    $('ativo').checked = !!agenteAtual.ativo;
+    $('instrucoes').value = agenteAtual.instrucoes || '';
+    $('retencao').value = agenteAtual.retencaoDias;
+    $('limite').value = agenteAtual.limitePorHora;
+    $('limiteAgente').value = agenteAtual.agentHourlyLimit;
+    $('teto').value = agenteAtual.tetoDiarioUsd == null ? '' : agenteAtual.tetoDiarioUsd;
+    $('webAtivo').checked = !!agenteAtual.webEnabled;
+    $('linkSites').value = (agenteAtual.linkSites || []).join('\n');
+    $('webOrigens').value = (agenteAtual.webOrigins || []).join('\n');
+    $('webChaveIps').value = (agenteAtual.webKeyIps || []).join('\n');
+    $('webEndereco').textContent = location.origin + '/api/public/messages?agent=' + agenteAtual.agentId;
+    $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
+    $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
+    msg($('cfgMsg'), ''); msg($('webChaveMsg'), '');
+    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos();
+  }
+  $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
+
+  $('salvar').addEventListener('click', function(){
+    var b = this, teto = $('teto').value.trim();
+    var corpo = { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
+      retencaoDias: parseInt($('retencao').value, 10), limitePorHora: parseInt($('limite').value, 10),
+      agentHourlyLimit: parseInt($('limiteAgente').value, 10), tetoDiarioUsd: teto === '' ? null : Number(teto),
+      linkSites: $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
+      webEnabled: $('webAtivo').checked, webOrigins: $('webOrigens').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
+      webKeyIps: $('webChaveIps').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean) };
+    b.disabled = true; msg($('cfgMsg'), t('saving'));
+    pedir('/api/publico/configurar', corpo).then(function(){
+      msg($('cfgMsg'), t('saved'), 'ok'); return carregarAgentes(agenteAtual.agentId);
+    }).catch(function(e){ msg($('cfgMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  $('webChave').addEventListener('click', function(){
+    var b = this, a = agenteAtual;
+    if (!a.configurado) return msg($('webChaveMsg'), t('web_save_first'), 'err');
+    if (a.webHasKey && !confirm(t('web_key_confirm'))) return;
+    b.disabled = true; msg($('webChaveMsg'), '');
+    pedir('/api/publico/web-key', { agentId: a.agentId }).then(function(j){
+      a.webHasKey = true;
+      $('webChaveEstado').textContent = t('web_key_exists');
+      $('webChaveNova').textContent = j.key; $('webChaveNova').classList.remove('hidden');
+      msg($('webChaveMsg'), t('web_key_shown'), 'ok');
+    }).catch(function(e){ msg($('webChaveMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  function carregarContatos(){
+    var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;
+    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + (antes ? '&antes=' + encodeURIComponent(antes) : '');
+    return pedir(q).then(function(j){
+      var novos = j.contatos || []; contatos = contatos.concat(novos);
+      novos.forEach(desenharContato);
+      $('maisContatos').classList.toggle('hidden', novos.length < 100);
+      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', t('no_contacts')));
+    }).catch(function(e){ $('contatos').appendChild(el('div', 'msg err', e.message)); });
+  }
+  $('maisContatos').addEventListener('click', carregarContatos);
+  function desenharContato(c){
+    var d = el('div', 'ct'); d.dataset.id = c.id;
+    var who = el('div', 'end', c.endereco);
+    if (c.bloqueadoEm) who.appendChild(el('span', 'tag blq', t('blocked_tag')));
+    else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
+    d.appendChild(who);
+    d.appendChild(el('div', 'meta', t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens })));
+    d.addEventListener('click', function(){ abrirConversa(c); });
+    $('contatos').appendChild(d);
+  }
+
+  function fecharConversa(){ contatoAtual = null; $('convBox').classList.add('hidden'); $('convVazia').classList.remove('hidden'); $('convTitulo').textContent = t('conversation'); }
+  function abrirConversa(c){
+    contatoAtual = c; maisAntiga = null;
+    Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
+    $('convTitulo').textContent = c.endereco;
+    $('convVazia').classList.add('hidden'); $('convBox').classList.remove('hidden');
+    $('conversa').textContent = ''; msg($('convMsg'), '');
+    $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');
+    $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
+    carregarMensagens(true);
+  }
+  function carregarMensagens(primeira){
+    var c = contatoAtual;
+    var q = '/api/publico/conversa?contato=' + encodeURIComponent(c.id) + (maisAntiga ? '&antes=' + maisAntiga : '');
+    return pedir(q).then(function(j){
+      if (contatoAtual !== c) return;
+      var ms = j.mensagens || [], box = $('conversa'), topo = box.firstChild;
+      if (ms.length) maisAntiga = ms[0].id;
+      ms.forEach(function(m){
+        var b = el('div', 'bolha ' + (m.role === 'user' ? 'user' : 'assistant'), m.content);
+        b.appendChild(el('span', 'hora', quando(m.criadoEm)));
+        box.insertBefore(b, topo);
+      });
+      if (primeira && !ms.length) box.appendChild(el('div', 'vazio', t('no_messages')));
+      $('anteriores').classList.toggle('hidden', ms.length < 100);
+      if (primeira) box.scrollTop = box.scrollHeight;
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); });
+  }
+  $('anteriores').addEventListener('click', function(){ carregarMensagens(false); });
+
+  $('bloquear').addEventListener('click', function(){
+    var c = contatoAtual, b = this, bloquear = !c.bloqueadoEm;
+    b.disabled = true;
+    pedir('/api/publico/bloquear', { contatoId: c.id, bloqueado: bloquear }).then(function(){
+      c.bloqueadoEm = bloquear ? new Date().toISOString() : null;
+      b.textContent = bloquear ? t('unblock') : t('block');
+      msg($('convMsg'), bloquear ? t('blocked') : t('unblocked'), 'ok');
+      $('contatos').textContent = ''; contatos.forEach(desenharContato);
+      Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  $('apagar').addEventListener('click', function(){
+    var c = contatoAtual, b = this;
+    if (!confirm(t('delete_confirm'))) return;
+    b.disabled = true;
+    pedir('/api/publico/apagar', { contatoId: c.id }).then(function(){
+      contatos = contatos.filter(function(x){ return x.id !== c.id; });
+      $('contatos').textContent = ''; contatos.forEach(desenharContato);
+      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', t('no_contacts')));
+      fecharConversa();
+    }).catch(function(e){ msg($('convMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  // Public-support usage profile (profiles.mjs): this page is the owner's whole
+  // app, so it creates the assistant and links usage, settings and sign-out.
+  fetch('/api/config', { credentials:'include' }).then(function(r){ return r.json(); }).then(function(cfg){
+    if (cfg.profile !== 'public-support') return;
+    $('backLink').classList.add('hidden'); $('ownerLinks').classList.remove('hidden'); $('newAssistant').classList.remove('hidden');
+    fetch('/api/admin/settings', { credentials:'include' }).then(function(r){ if (r.ok) $('settingsLink').classList.remove('hidden'); }).catch(function(){});
+  }).catch(function(){});
+  $('createAssistant').addEventListener('click', function(){
+    var b = this, name = $('newName').value.trim();
+    if (!name) return msg($('newMsg'), t('enter_name'), 'err');
+    b.disabled = true; msg($('newMsg'), '');
+    pedir('/api/agent', { name: name }).then(function(j){
+      $('newName').value = ''; msg($('newMsg'), t('created', { name: j.name || name }), 'ok'); return carregarAgentes(j.id);
+    }).catch(function(e){ if (e.message !== NO_SESSION) msg($('newMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+  $('signOut').addEventListener('click', function(ev){
+    ev.preventDefault();
+    fetch('/api/logout', { method:'POST', credentials:'include' }).catch(function(){}).then(function(){ location.href = '/login?modo=entrar'; });
+  });
+
+  carregarAgentes().catch(function(e){ if (e.message !== NO_SESSION) msg($('cfgMsg'), e.message, 'err'); });
+})();
+</script>
+</body>
+</html>
