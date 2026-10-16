@@ -32,6 +32,11 @@ versions stay below for reference, but their tags are no longer published.
   already sent keep working; a plugin page that links to the app can move to
   the new paths when convenient.
 
+### Fixed
+- The first-run setup page no longer stops at "Something went wrong" when a
+  browser extension rewrites the Origin header: it trusts the browser's own
+  Sec-Fetch-Site, and the Brambit window says why a request was refused.
+
 ## [0.2.23] - 2026-10-16
 
 ### Removed
