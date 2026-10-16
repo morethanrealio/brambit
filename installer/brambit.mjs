@@ -123,10 +123,23 @@ const processAlive = (pid) => { try { process.kill(pid, 0); return true; } catch
 // First-run page: who the owner is and which AI to use (the rest is set later,
 // in the app). It only opens with the one-time code carried in the address
 // (after the #, so it never shows in a log or in a server's history); it checks
-// the Host (another site pointing a domain at 127.0.0.1 gets nothing) and the
-// Origin. Resolves once the AI key was tested and the choice saved; onListen runs
+// the Host (another site pointing a domain at 127.0.0.1 gets nothing) and that
+// the request came from the page itself (fromSetupPage). Resolves once the AI key was tested and the choice saved; onListen runs
 // when the port already answers (before that the browser would land on an error
 // page). Changing the AI later is a page of the app itself (installer/plugin).
+// Whether a POST came from the setup page itself. The browser sets
+// Sec-Fetch-Site (no page can), and it only says "same-origin" for this page;
+// some browser extensions rewrite the Origin header, which left the person with
+// "Something went wrong" and no way out. Without Sec-Fetch-Site (an old
+// browser), the Origin has to match.
+function fromSetupPage(req) {
+  const site = req.headers['sec-fetch-site'];
+  return site ? site === 'same-origin' : req.headers.origin === `http://${req.headers.host}`;
+}
+// What a refused request carried, for the launcher window: the person only sees
+// the page's message, and these headers are not secret.
+const shown = (v) => JSON.stringify(String(v || 'none').slice(0, 100));
+
 function serveSetup(port, code, onListen) {
   const page = readFileSync(path.join(root, 'installer', 'setup.html'), 'utf8').replace('__MODE__', 'first');
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
@@ -140,14 +153,20 @@ function serveSetup(port, code, onListen) {
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
       const json = (status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); };
-      if (!hosts.has(String(req.headers.host || ''))) return json(403, { error: 'host' });
+      if (!hosts.has(String(req.headers.host || ''))) {
+        log(`setup page: refused a request for host ${shown(req.headers.host)}`);
+        return json(403, { error: 'host' });
+      }
       const pathname = String(req.url || '').split('?')[0];
       if (req.method === 'GET' && pathname === '/') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         return res.end(page.split('__CSP_NONCE__').join(nonce));
       }
       if (req.method !== 'POST' || !['/install', '/models'].includes(pathname)) return json(404, { error: 'not_found' });
-      if (req.headers.origin !== `http://${req.headers.host}`) return json(403, { error: 'origin' });
+      if (!fromSetupPage(req)) {
+        log(`setup page: refused a request from another page (Origin ${shown(req.headers.origin)}, Sec-Fetch-Site ${shown(req.headers['sec-fetch-site'])})`);
+        return json(403, { error: 'origin' });
+      }
       let raw = '';
       for await (const chunk of req) { raw += chunk; if (raw.length > 16384) return json(413, { error: 'too_large' }); }
       let p;
