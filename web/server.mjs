@@ -169,6 +169,7 @@ import { extractPdfText, renderPdfPagesToPng } from './pdf.mjs';
 import { comporTools } from './compor.mjs';
 import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
 import { xlsxToText, xlsxParts, xlsxCells } from './xlsxread.mjs';
+import { allowedOrigins, fromOwnSite } from './csrf.mjs';
 
 // Checks whether a product image URL is DEAD (used by mostrar_produtos before
 // it becomes card.image). The model sometimes invents a plausible-looking CDN URL that returns
@@ -8345,27 +8346,12 @@ function isWebhookPath(pathname) {
     // errors, authenticated by an app Bearer (env), no cookie -> no CSRF.
     || pathname === '/api/mobile/telemetry';
 }
-function allowedOrigins(req) {
-  const set = new Set();
-  const base = process.env.PUBLIC_BASE_URL;
-  if (base) { try { set.add(new URL(base).origin); } catch { /* noop */ } }
-  const host = req.headers.host;
-  if (host) { set.add(`https://${host}`); set.add(`http://${host}`); }
-  return set;
-}
 // true = pode seguir; false = bloquear (chamador responde 403).
 function csrfOk(req, pathname) {
   const m = req.method;
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return true;
   if (isWebhookPath(pathname)) return true;
-  const allowed = allowedOrigins(req);
-  const origin = req.headers.origin;
-  if (origin) return allowed.has(origin);
-  // No Origin (some older browsers): falls back to Referer.
-  const ref = req.headers.referer;
-  if (ref) { try { return allowed.has(new URL(ref).origin); } catch { return false; } }
-  // Neither Origin nor Referer on a state-changing request: reject.
-  return false;
+  return fromOwnSite(req);
 }
 
 // ── Metrics dashboard auth (HTTP Basic, independent of the app's session) ──
