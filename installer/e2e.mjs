@@ -148,7 +148,8 @@ try {
 
   // 2) The real server starts on the same address; the owner creates the account.
   await waitForServer();
-  const signup = await post('/api/signup', { name: OWNER.name, email: OWNER.email, password: OWNER.password });
+  // The same rewritten Origin as on the setup page: the app server lets it in too.
+  const signup = await post('/api/signup', { name: OWNER.name, email: OWNER.email, password: OWNER.password }, 'chrome-extension://example', '', { 'sec-fetch-site': 'same-origin' });
   if (signup.status !== 200) fail(`owner sign-up: ${signup.status} ${await signup.text()}`);
   const cookies = signup.headers.getSetCookie();
   if (!cookies.length || cookies.some((c) => /;\s*Secure/i.test(c))) fail(`the same-computer cookie should come without Secure: ${cookies}`);
