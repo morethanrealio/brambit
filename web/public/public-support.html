@@ -157,7 +157,7 @@
     var op = { credentials:'include' };
     if (corpo) { op.method = 'POST'; op.headers = { 'content-type':'application/json' }; op.body = JSON.stringify(corpo); }
     return fetch(caminho, op).then(function(r){
-      if (r.status === 401) { location.href = '/login?modo=entrar'; throw new Error(NO_SESSION); }
+      if (r.status === 401) { location.href = '/login?mode=sign-in'; throw new Error(NO_SESSION); }
       return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.error || t('error_generic')); return j; });
     });
   }
@@ -319,7 +319,7 @@
   });
   $('signOut').addEventListener('click', function(ev){
     ev.preventDefault();
-    fetch('/api/logout', { method:'POST', credentials:'include' }).catch(function(){}).then(function(){ location.href = '/login?modo=entrar'; });
+    fetch('/api/logout', { method:'POST', credentials:'include' }).catch(function(){}).then(function(){ location.href = '/login?mode=sign-in'; });
   });
 
   carregarAgentes().catch(function(e){ if (e.message !== NO_SESSION) msg($('cfgMsg'), e.message, 'err'); });

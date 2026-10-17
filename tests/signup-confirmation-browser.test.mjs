@@ -49,7 +49,7 @@ try{
  assert.deepEqual(posts.find(p=>p[0]==='/api/signup/confirm')[1],{token:'tok-1'});
  assert.equal(await page.inputValue('#auEmail'),'new@example.invalid');
  assert.equal(await visible('authOk'),true);assert.equal(await visible('nameRow'),false);
- assert.equal(new URL(page.url()).pathname+new URL(page.url()).search,'/login?modo=entrar');
+ assert.equal(new URL(page.url()).pathname+new URL(page.url()).search,'/login?mode=sign-in');
  // The first login after confirming is when the account starts (sign-up mark, once).
  confirmed=true;
  await page.evaluate(()=>{E('auPass').value='a-long-password-1';E('authBtn').click();});

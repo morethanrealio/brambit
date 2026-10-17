@@ -11763,19 +11763,19 @@ async function atenderRequest(req, res) {
   // /runner: page to connect the Runner (generate token + install the daemon +
   // view status). Requires a session; without login goes to /login.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/runner') {
-    if (!(await currentUser())) { res.writeHead(302, { location: '/login?modo=entrar' }); return res.end(); }
+    if (!(await currentUser())) { res.writeHead(302, { location: '/login?mode=sign-in' }); return res.end(); }
     return sendHtml(res, path.join(PUBLIC, 'runner.html'), 200, await idiomaDaPagina());
   }
   // Logged-in area: /chats + menu subroutes (page-paths.mjs). Own URL for deep-linking and to separate
   // the public HOME (/) from the app area. All require a session; without a session goes to /login.
   if ((req.method === 'GET' || req.method === 'HEAD') && APP_PAGES.has(url.pathname)) {
     // Preserves the query (e.g. ?e=google) so the public home still shows the notice, and
-    // adds modo=entrar: whoever lands here already HAS an account and just lost their
+    // adds mode=sign-in: whoever lands here already HAS an account and just lost their
     // session, so the screen has to open on login, not signup. Without this, plain /login
     // opens the create-account form.
     if (!(await currentUser())) {
       const q = new URLSearchParams(url.search || '');
-      q.set('modo', 'entrar');
+      q.set('mode', 'sign-in');
       res.writeHead(302, { location: `/login?${q}` });
       return res.end();
     }
