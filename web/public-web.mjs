@@ -4,7 +4,7 @@
 //
 // The agent goes in the query string (?agent=<id>), so one installation serves
 // as many public assistants as there are owners who turned the web channel on.
-// The owner turns it on in /atendimento (publico-dono.mjs) and chooses how it
+// The owner turns it on in /public-support (publico-dono.mjs) and chooses how it
 // is called:
 //  - From a browser: only from the origins the owner listed (CORS). The contact
 //    is a token this module issues on the first message and signs with the

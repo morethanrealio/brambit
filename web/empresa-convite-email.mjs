@@ -18,7 +18,7 @@ export function textoConviteEmpresa({ quem, empresa, email, base, regra }) {
   const r = limpa(regra);
   const q = limpa(quem) || 'Alguém da sua empresa';
   const e = limpa(empresa) || 'sua empresa';
-  const link = `${String(base || siteDaMarca()).replace(/\/+$/, '')}/config`;
+  const link = `${String(base || siteDaMarca()).replace(/\/+$/, '')}/settings`;
   const subject = `${q} convidou você para a ${e} no ${nome}`;
   const text = [
     'Oi!',

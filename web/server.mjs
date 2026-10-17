@@ -39,7 +39,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './eventos.mjs';
-import {createRotas} from './rotas.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';
+import {createRotas} from './rotas.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';
 import {createMidiaPublica} from './midia-publica.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -6930,7 +6930,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   const { text, usage } = await transcribeAudio(buffer, mime);
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-// Public service (publico-canal.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /atendimento.
+// Public service (publico-canal.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
 const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
   signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('conversa', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
@@ -8606,6 +8606,7 @@ async function atenderRequest(req, res) {
   // Requests already in progress run through to completion (see gracefulShutdown).
   if (shuttingDown) { res.writeHead(503, { 'Retry-After': '5' }); res.end('reiniciando, tente em instantes'); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  const moved = movedPagePath(req.method, url.pathname); if (moved) { res.writeHead(301, { location: moved + url.search }); return res.end(); } // pages moved to English paths (page-paths.mjs)
   if (!routeAllowed(req.method, url.pathname, { registered: rotas.registrada(req.method, url.pathname) })) { const to = redirectFor(req.method, url.pathname); res.writeHead(to ? 302 : 404, to ? { location: to } : {}); return res.end(to ? undefined : 'not found'); } // off in this usage profile (profiles.mjs)
   // Language for this response's messages, resolved ONCE and hung off `res` because `send()`
   // only sees `res`. Placed before csrfOk on purpose: even the origin rejection goes out in
@@ -11765,10 +11766,9 @@ async function atenderRequest(req, res) {
     if (!(await currentUser())) { res.writeHead(302, { location: '/login?modo=entrar' }); return res.end(); }
     return sendHtml(res, path.join(PUBLIC, 'runner.html'), 200, await idiomaDaPagina());
   }
-  // Logged-in area: /inicio + menu subroutes. Own URL for deep-linking and to separate the
-  // public HOME (/) from the app area. All require a session; without a session goes to /login.
-  const APP_ROUTES = new Set(['/conversas', '/inicio', '/nova', '/assistentes', '/memoria', '/habilidades-apps', '/conexoes', '/contatos', '/arquivos', '/creditos', '/config']);
-  if ((req.method === 'GET' || req.method === 'HEAD') && APP_ROUTES.has(url.pathname)) {
+  // Logged-in area: /chats + menu subroutes (page-paths.mjs). Own URL for deep-linking and to separate
+  // the public HOME (/) from the app area. All require a session; without a session goes to /login.
+  if ((req.method === 'GET' || req.method === 'HEAD') && APP_PAGES.has(url.pathname)) {
     // Preserves the query (e.g. ?e=google) so the public home still shows the notice, and
     // adds modo=entrar: whoever lands here already HAS an account and just lost their
     // session, so the screen has to open on login, not signup. Without this, plain /login
@@ -11786,7 +11786,7 @@ async function atenderRequest(req, res) {
   // up by login: first-time visitors would read a third of the page and already get
   // a password prompt. Now / sells and /login authenticates. The home stays public for
   // whoever already has a session (its script just swaps the button label to "Entrar no
-  // app"); the logged-in area stays at /inicio. An install without a home (it comes from a
+  // app"); the logged-in area stays at /chats. An install without a home (it comes from a
   // plugin) opens the app directly, as it was before the home existed.
   if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/') {
     return sendHtml(res, arquivoDoSite('/home.html', PASTAS_DO_SITE) || path.join(PUBLIC, 'index.html'), 200, await idiomaDaPagina());
