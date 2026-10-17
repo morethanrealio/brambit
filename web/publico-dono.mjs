@@ -1,6 +1,6 @@
 // Owner's view of public support (publico.mjs): configuring an assistant's
 // public mode, viewing contacts and conversations (read-only), blocking,
-// exporting and deleting a contact. The screen is web/public/atendimento.html (/atendimento).
+// exporting and deleting a contact. The screen is web/public/public-support.html (/public-support).
 //
 // Every route requires a session. The owner is checked in the store's SQL (agents.user_id), and
 // a contact or assistant from another account responds with 404, same as an id that doesn't exist.

@@ -31,7 +31,7 @@ export function createDiscoveryReportDelivery({ publish, deliverToChannel, push,
       if (!threadId) throw Error('missing_thread');
     } catch { return { ok: false, definitive: true, reason: 'report_not_saved' }; }
 
-    const link = `${baseUrl()}/inicio?c=${encodeURIComponent(threadId)}`;
+    const link = `${baseUrl()}/chats?c=${encodeURIComponent(threadId)}`;
     const notice = (failed ? 'Não consegui preparar sua devolutiva. Sua jornada e anotações estão preservadas. Abra a conversa para tentar novamente: ' : 'Preparei sua devolutiva da jornada, com ideias de como posso ajudar no seu dia a dia. Abra para ler e escolher por onde começamos: ') + link;
     const caption = `${withPdf} Se preferir, abra a conversa: ${link}`;
     try {

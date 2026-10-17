@@ -50,7 +50,7 @@ test('full artifact is persisted once by key; notifications contain only a short
     assert.match(saves[0][2], /^discovery-report:report-id:[a-f0-9]{64}$/);
     const notice = JSON.stringify([...f.calls, ...pushes]);
     assert.doesNotMatch(notice, /PRIVATE_SYNTHETIC_REPORT/);
-    if (channel !== 'app') assert.match(notice, /\/inicio\?c=synthetic-thread/);
+    if (channel !== 'app') assert.match(notice, /\/chats\?c=synthetic-thread/);
     if (channel === 'whatsapp') {
       assert.ok(f.calls[0][3].templateText.length < 900);
       assert.equal(f.calls[0][3].retryUnknown, false);
@@ -105,7 +105,7 @@ test('explicit conversational completion delivers the full report to its chosen 
     }
     if (channel === 'whatsapp') {
       await send(p, 'FULL_PRIVATE_REPORT'.repeat(300));
-      assert.doesNotMatch(sent[1][1], /FULL_PRIVATE_REPORT/); assert.match(sent[1][1], /\/inicio\?c=requested-thread/);
+      assert.doesNotMatch(sent[1][1], /FULL_PRIVATE_REPORT/); assert.match(sent[1][1], /\/chats\?c=requested-thread/);
       assert.match(published[1][1], /FULL_PRIVATE_REPORT/);
     }
   }
@@ -128,7 +128,7 @@ test('long v2 reports remain complete in the conversation while WhatsApp receive
   assert.ok(body.length > 5500 && body.length < 18000);
   const receipt = await send({ channel: 'whatsapp', delivery_channel: 'whatsapp', delivery_thread_id: 'owner-thread', report_id: 'report' }, body);
   assert.equal(receipt.ok, true); assert.equal(published[0], body);
-  assert.match(sent[0], /inicio\?c=owner-thread/); assert.doesNotMatch(sent[0], /Uma entrega específica/);
+  assert.match(sent[0], /chats\?c=owner-thread/); assert.doesNotMatch(sent[0], /Uma entrega específica/);
 });
 test('Telegram receives a private link instead of truncating the final sections above its transport limit', async () => {
   const published = [], sent = [];
@@ -140,7 +140,7 @@ test('Telegram receives a private link instead of truncating the final sections 
     await send({ channel: 'telegram', delivery_channel: 'telegram', delivery_thread_id: 'owner-thread', report_id: 'report' }, body);
     assert.equal(published.at(-1), body);
     if (body.length <= 12000) assert.equal(sent.at(-1), body);
-    else { assert.match(sent.at(-1), /inicio\?c=owner-thread/); assert.ok(sent.at(-1).length<1000); }
+    else { assert.match(sent.at(-1), /chats\?c=owner-thread/); assert.ok(sent.at(-1).length<1000); }
   }
 });
 
@@ -205,7 +205,7 @@ test('with a PDF available, every channel receives short text and the file, and 
     assert.equal(f.docs[0][0].channel, channel);
     assert.equal(f.docs[0][1].filename, 'Jornada de descoberta.pdf');
     assert.doesNotMatch(f.docs[0][1].caption, /PRIVATE_SYNTHETIC_REPORT/);
-    assert.match(f.docs[0][1].caption, /\/inicio\?c=owner-thread/);
+    assert.match(f.docs[0][1].caption, /\/chats\?c=owner-thread/);
     assert.equal(receipt.id, 'doc-receipt');
   }
 });
@@ -233,7 +233,7 @@ test('without a delivered email, the outside-the-window notice promises no email
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('whatsapp'), REPORT);
   assert.equal(receipt.ok, true);
   assert.doesNotMatch(sent[0][1], /e-mail/);
-  assert.match(sent[0][1], /\/inicio\?c=owner-thread/);
+  assert.match(sent[0][1], /\/chats\?c=owner-thread/);
   assert.deepEqual(p.published[0][3], [p.doc.attachment], 'the PDF stays in the conversation');
 });
 
@@ -244,7 +244,7 @@ test('failure to generate the PDF preserves the text delivery', async () => {
   assert.equal(receipt.ok, true);
   assert.equal(p.published[0][1], REPORT, 'the full report is written back to the conversation');
   assert.equal(p.published[0][3], null);
-  assert.match(sent[0][1], /\/inicio\?c=owner-thread/);
+  assert.match(sent[0][1], /\/chats\?c=owner-thread/);
 });
 
 test('failure to send the PDF on the channel becomes a notice with a link, without losing the conversation attachment', async () => {
@@ -253,7 +253,7 @@ test('failure to send the PDF on the channel becomes a notice with a link, witho
   const receipt = await createDiscoveryReportDelivery(p.deps)(participant('telegram'), REPORT);
   assert.equal(receipt.ok, true); assert.equal(receipt.id, 'receipt');
   assert.deepEqual(p.published[0][3], [p.doc.attachment]);
-  assert.match(sent[0][1], /\/inicio\?c=owner-thread/);
+  assert.match(sent[0][1], /\/chats\?c=owner-thread/);
   assert.doesNotMatch(sent[0][1], /PRIVATE_SYNTHETIC_REPORT/);
 });
 

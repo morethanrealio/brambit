@@ -356,7 +356,7 @@ export function ferramentasDoContato(store, contatoId) {
 const CHANNEL_LABEL = { whatsapp: 'WhatsApp', web: 'site' };
 
 // base: the plugin's instructions for this turn (antesDoModelo); the owner's
-// (the /atendimento box) come after them and add to them.
+// (the /public-support box) come after them and add to them.
 export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [] }) {
   return [
     `Você é ${nome || 'um assistente'}, e está atendendo uma pessoa do público pelo ${CHANNEL_LABEL[canal] || canal}.`,
