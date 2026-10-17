@@ -31,6 +31,7 @@ __pycache__/
 
 # Encrypted runtime task checkpoints (never publish)
 .brambs-coding-tasks/
+.brambs-programming-jobs/
 
 # Encrypted provider observations and billing recovery (never publish)
 .brambs-credit-calls/
