@@ -26,8 +26,10 @@ try{
  // Inside the app a 401 means the session is gone: go to the login form.
  await page.evaluate(()=>{showApp(true);api('api/thread?id=A');});
  await page.waitForURL(u=>u.pathname==='/login');
- assert.equal(new URL(page.url()).search,'?modo=entrar');
+ assert.equal(new URL(page.url()).search,'?mode=sign-in');
+ // Links already sent with the old ?modo=entrar (e-mails, plugin pages) still open login.
+ for(const q of ['?mode=sign-in','?modo=entrar','']){await page.goto('https://fixture.invalid/fixture'+q);await page.waitForFunction(()=>window.fixtureReady);assert.equal(await page.evaluate(()=>signupMode),q==='',q);}
  assert.deepEqual(errors,[]);
- console.log('Session lost: 401 in the app goes to /login?modo=entrar; 401 on the auth screen stays an error.');
+ console.log('Session lost: 401 in the app goes to /login?mode=sign-in; 401 on the auth screen stays an error; ?modo=entrar still opens login.');
 }finally{await browser.close();}
 }

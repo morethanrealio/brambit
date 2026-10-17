@@ -1476,13 +1476,14 @@ function txHtml(key, vars) {
   vars = vars || {};
   return esc(tx(key, 'count' in vars ? { count: vars.count } : {})).replace(/\{(\w+)\}/g, (m, name) => (name in vars ? vars[name] : m));
 }
-// The card mode comes from the URL: /login?modo=entrar opens login, anything
+// The card mode comes from the URL: /login?mode=sign-in opens login, anything
 // else opens sign-up (the home's historical default, invite-only beta).
-// Before this the mode was fixed to sign-up, so whoever clicked "Entrar" on the
+// Before this the mode was fixed to sign-up, so whoever clicked "Log in" on the
 // home landed on the create-account form and made a second account unknowingly
-// (reported 07/09/2026). The "Entrar" links on public pages point to
-// /login?modo=entrar.
-let signupMode = new URLSearchParams(location.search).get('modo') !== 'entrar';
+// (reported 07/09/2026). The "Log in" links on public pages point to
+// /login?mode=sign-in; links already sent with the old ?modo=entrar still open login.
+const loginQuery = new URLSearchParams(location.search);
+let signupMode = loginQuery.get('mode') !== 'sign-in' && loginQuery.get('modo') !== 'entrar';
 let userName = '';
 let APP_CFG = {};
 let billingFlash = '';
@@ -1514,7 +1515,7 @@ async function api(path, body, method) {
   // showing "log in first" errors on every click. The auth screens never have
   // the app visible, so a wrong password at login still comes back as an error.
   if (r.status === 401 && !E('app').classList.contains('hidden')) {
-    location.replace('/login?modo=entrar');
+    location.replace('/login?mode=sign-in');
     return new Promise(() => {});
   }
   const data = await r.json().catch(() => null);
@@ -1683,7 +1684,7 @@ E('toggleLink').onclick = () => {
   // the person back to sign-up after they chose to log in.
   try {
     const u = new URL(location.href);
-    if (signupMode) u.searchParams.delete('modo'); else u.searchParams.set('modo', 'entrar');
+    u.searchParams.delete('modo'); if (signupMode) u.searchParams.delete('mode'); else u.searchParams.set('mode', 'sign-in');
     history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
   } catch { /* exotic URL: just doesn't sync, the mode already changed */ }
   renderAuthMode();
@@ -1776,7 +1777,7 @@ function showConfirmEmail(email, password, sent) {
   showAuthCard('confirmEmail');
 }
 function backToLogin(email, message) {
-  history.replaceState(null, '', '/login?modo=entrar');
+  history.replaceState(null, '', '/login?mode=sign-in');
   if (signupMode) E('toggleLink').click(); // the toggle also syncs the URL and the card's texts
   if (email) E('auEmail').value = email;
   E('auPass').value = '';
@@ -5302,11 +5303,11 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
 
   // ── Logged-in area (/chats and menu subroutes) ──
   // Without a session, the server already redirects to /login; this guard covers the client side.
-  // modo=entrar: whoever lands here already has an account, so the screen opens on login and not on the
+  // mode=sign-in: whoever lands here already has an account, so the screen opens on login and not on the
   // signup form (same rule as the server's redirects).
   if (!(me && me.name)) {
     const q = new URLSearchParams(location.search || '');
-    q.set('modo', 'entrar');
+    q.set('mode', 'sign-in');
     location.replace('/login?' + q);
     return;
   }
