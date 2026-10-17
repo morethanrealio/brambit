@@ -37,10 +37,10 @@ async function fixture({me=structuredClone(meBase),state=structuredClone(ready),
    if(url.pathname==='/api/connect/whatsapp'){me.whatsapp.linked=true;return answer({number:me.whatsapp.number})}
    return answer({});
   }
-  const p=resolve(root,'.'+url.pathname);if(p.startsWith(root+'/')&&existsSync(p)&&url.pathname!='/inicio'){const type={'.mjs':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'}[extname(p)]||'application/octet-stream';return route.fulfill({status:200,contentType:type,body:readFileSync(p)})}
+  const p=resolve(root,'.'+url.pathname);if(p.startsWith(root+'/')&&existsSync(p)&&url.pathname!='/chats'){const type={'.mjs':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'}[extname(p)]||'application/octet-stream';return route.fulfill({status:200,contentType:type,body:readFileSync(p)})}
   return route.fulfill({status:200,contentType:'text/html',body:marcaNaPagina(translatePage(html,language,catalogos,{vars:{brand:'__MARCA__'}}))});
  });
- await page.goto('http://onboarding.test/inicio');await page.evaluate(({local})=>{document.body.classList.remove('booting');if(local)localStorage.setItem('mtr_wiz',JSON.stringify(local))}, {local});
+ await page.goto('http://onboarding.test/chats');await page.evaluate(({local})=>{document.body.classList.remove('booting');if(local)localStorage.setItem('mtr_wiz',JSON.stringify(local))}, {local});
  const mount=()=>page.evaluate(async(config)=>{document.body.classList.remove('booting');const {mountWizard}=await import('/onboarding.mjs');window.wizard=mountWizard({generic:{id:'geral',name:'Brambs',goal:'Assistente completo',instructions:'Ajude a pessoa',connect:['gmail','calendar','docs','drive'],tasks:[]},config:()=>config,showApp:on=>document.getElementById('app').classList.toggle('hidden',!on),enterHome:(me,task,threadId)=>{window.entered={me,task,threadId};document.getElementById('app').classList.remove('hidden')}})},config);
  await mount();
  const boot=(just=false,oauth=null)=>page.evaluate(({me,just,oauth})=>window.wizard.boot(me,just,oauth),{me,just,oauth});
