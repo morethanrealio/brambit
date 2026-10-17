@@ -1173,7 +1173,7 @@
             <div class="section hidden" id="publicoBox">
               <div class="title" data-i18n="index_page.connections.public_service">Public service</div>
               <p class="sub" data-i18n="index_page.connections.public_service_lead">One of your assistants replies to anyone who writes to this installation's WhatsApp number without an account. Set it up, see the chats, and block or delete contacts.</p>
-              <a class="btn-sm" href="/atendimento" data-i18n="index_page.connections.open_public_service">Open public service</a>
+              <a class="btn-sm" href="/public-support" data-i18n="index_page.connections.open_public_service">Open public service</a>
             </div>
 
             <div class="section hidden" id="waBox">
@@ -1549,7 +1549,7 @@ function render(text) {
     // closing >).
     .replace(/(?<!["'>=])(https?:\/\/[^\s<]+)/g, function (_m, u) {
       // The final punctuation usually belongs to the SENTENCE, not the URL
-      // ("...em .../creditos."). Swallowing it into the href gave a 404. It comes
+      // ("...at .../credits."). Swallowing it into the href gave a 404. It comes
       // out of the link and goes back to being plain text.
       var cauda = '';
       while (u.length > 1 && /[.,;:!?)\]}'"]$/.test(u)) {
@@ -1874,7 +1874,7 @@ E('authBtn').onclick = async () => {
   let comecou = signupMode;
   try { if (!signupMode && localStorage.getItem(SIGNUP_MARK) === email.toLowerCase()) { comecou = true; localStorage.removeItem(SIGNUP_MARK); } } catch (e) {}
   if (comecou) marcarCadastro('email');
-  if (APP_CFG.profile === 'public-support') { location.replace('/atendimento'); return; }
+  if (APP_CFG.profile === 'public-support') { location.replace('/public-support'); return; }
   if (comecou && !(res.agents || []).length) { wizClear(); openWizard((res.name || '').split(' ')[0]); return; }
   enterHome(res.name, res.agents || [], res.connected, res.telegramBots || [], res.whatsapp, res.emailSend, res.providers, res.apps, res.ext, res.runner);
   renderTrainingOptOut(res.paying, res.trainingOptOut);
@@ -2003,7 +2003,7 @@ function updateContactNotif(contacts) {
   E('contactNotifTxt').innerHTML = '📨 ' + txHtml('contacts.wants_to_connect', { count: names.length, who: '<b>' + esc(who) + '</b>' });
   banner.classList.remove('hidden');
 }
-E('contactNotifOpen').onclick = () => navigate('/contatos');
+E('contactNotifOpen').onclick = () => navigate('/contacts');
 E('contactNotifDismiss').onclick = () => {
   sessionStorage.setItem('contactNotifDismissed', '1');
   E('contactNotif').classList.add('hidden');
@@ -2433,7 +2433,7 @@ async function loadHomeItems() {
   suggestions.forEach(it => {
     const row = document.createElement('div'); row.className = 'sug-row';
     const d = document.createElement('div'); d.className = 'sug'; d.textContent = '💡 ' + it.text;
-    d.onclick = () => { navigate('/conversas'); E('taskInput').value = it.text; const sel = E('taskAgent'); if (it.agent_id) sel.value = it.agent_id; E('taskInput').focus(); };
+    d.onclick = () => { navigate('/chats'); E('taskInput').value = it.text; const sel = E('taskAgent'); if (it.agent_id) sel.value = it.agent_id; E('taskInput').focus(); };
     const x = document.createElement('button'); x.className = 'ni-x'; x.title = tx('common.remove'); x.textContent = '✕';
     x.onclick = async () => { row.remove(); await api('api/home-items/delete', { id: it.id }); if (!sugBox.children.length) sugCard.classList.add('hidden'); };
     row.appendChild(d); row.appendChild(x); sugBox.appendChild(row);
@@ -2463,7 +2463,7 @@ async function loadRoutinesUI() {
       openDraft: async (agentId, text) => {
         const input = E('taskInput');
         if (input.value.trim() && input.value !== text && !await confirmModal({title:tx('routines.replace_draft_title'), body:tx('routines.replace_draft_text'), okLabel:tx('routines.replace')})) return false;
-        navigate('/conversas');
+        navigate('/chats');
         setActiveHomeAgent(agentId);
         input.value = text;
         input.dispatchEvent(new Event('input', {bubbles:true}));
@@ -2912,8 +2912,8 @@ function enterHome(name, agents, connected, telegramBots, whatsapp, emailSend, p
   // Removing it avoids the "save/choose password" prompt that showed up in the corner after the redirect.
   const _auth = E('auth'); if (_auth) _auth.remove();
   // If it landed on a URL that isn't an app route (e.g. /login right after signing
-  // in), normalize to /conversas; otherwise respect the current route (deep link to /conexoes, /arquivos, etc.).
-  if (ROUTES[location.pathname] === undefined) history.replaceState(null, '', '/conversas');
+  // in), normalize to /chats; otherwise respect the current route (deep link to /connections, /files, etc.).
+  if (ROUTES[location.pathname] === undefined) history.replaceState(null, '', '/chats');
   applyRoute();
   loadThreads();
   loadCredits();
@@ -3745,7 +3745,7 @@ function renderEmpresaNotif(me) {
   E('empresaNotifTxt').innerHTML = '🏢 ' + (conv.length === 1 ? txHtml('company.invited_you', { company: '<b>' + esc(conv[0].empresa) + '</b>' }) : txHtml('company.invited_you_many', { count: conv.length }));
   banner.classList.remove('hidden');
 }
-E('empresaNotifOpen').addEventListener('click', () => navigate('/config'));
+E('empresaNotifOpen').addEventListener('click', () => navigate('/settings'));
 E('empresaNotifDismiss').addEventListener('click', () => { try { sessionStorage.setItem('empresaNotifDismissed', '1'); } catch {} E('empresaNotif').classList.add('hidden'); });
 async function empresaAcao(btn, path, body, okAviso) {
   btn.disabled = true; empresaMsg('', '');
@@ -3882,26 +3882,23 @@ E('voiceDel').onclick = async () => {
 };
 
 // ── Routing (SPA with real URLs, claude.ai style) ──
-// Each menu section has its own URL. /nova is the home screen with the task field
-// focused. Deep links and the browser's back/forward buttons work via the History API.
-// The main area became /conversas. /inicio still maps to the same tab
-// (alias) so it doesn't break old links (emails, billing redirects); the URL is
-// canonicalized to /conversas in applyRoute.
-const ROUTES = { '/conversas': 'inicio', '/inicio': 'inicio', '/nova': 'inicio', '/assistentes': 'assistentes', '/memoria': 'assistentes', '/habilidades-apps': 'habilidades', '/conexoes': 'conexoes', '/contatos': 'contatos', '/arquivos': 'arquivos', '/creditos': 'creditos', '/config': 'config' };
+// Each menu section has its own URL, in English whatever the language (web/page-paths.mjs).
+// /new is the home screen with the task field focused. Deep links and the browser's
+// back/forward buttons work via the History API. The server redirects the old
+// Portuguese paths (/inicio, /conversas...) before this page loads.
+const ROUTES = { '/chats': 'inicio', '/new': 'inicio', '/assistants': 'assistentes', '/memory': 'assistentes', '/skills-and-apps': 'habilidades', '/connections': 'conexoes', '/contacts': 'contatos', '/files': 'arquivos', '/credits': 'creditos', '/settings': 'config' };
 Object.assign(ROUTES, ganchosDoApp.rotas);
-// The internal tab is called 'habilidades' but lives at /habilidades-apps: /habilidades
-// is the public community showcase (its own page, outside the SPA).
-function pathForTab(tab) { return tab === 'inicio' ? '/conversas' : (tab === 'habilidades' ? '/habilidades-apps' : '/' + tab); }
+// The internal tab ids are older than the paths; a plugin tab lives at /<its id>.
+const TAB_PATHS = { inicio: '/chats', assistentes: '/assistants', habilidades: '/skills-and-apps', conexoes: '/connections', contatos: '/contacts', arquivos: '/files', creditos: '/credits', config: '/settings' };
+function pathForTab(tab) { return TAB_PATHS[tab] || '/' + tab; }
 function navigate(path) {
   if (location.pathname !== path) history.pushState(null, '', path);
   applyRoute();
 }
 function applyRoute() {
-  // Canonicalizes the old /inicio -> /conversas alias without reloading.
-  if (location.pathname === '/inicio') history.replaceState(null, '', '/conversas');
   const tab = ROUTES[location.pathname] || 'inicio';
   switchTab(tab);
-  if (location.pathname === '/nova' && E('taskInput')) E('taskInput').focus();
+  if (location.pathname === '/new' && E('taskInput')) E('taskInput').focus();
 }
 window.addEventListener('popstate', applyRoute);
 
@@ -4625,9 +4622,9 @@ async function loadCredits() {
     if (c && !c.error) { CREDITS = c; renderCreditsBar(c); renderCreditsPanel(c); }
   } catch {}
 }
-E('sideUso').onclick = () => navigate('/creditos');
+E('sideUso').onclick = () => navigate('/credits');
 document.querySelectorAll('.navitem').forEach(t => { if (!t.dataset.tab) return; t.onclick = () => navigate(pathForTab(t.dataset.tab)); });
-E('newConv').onclick = () => navigate('/nova');
+E('newConv').onclick = () => navigate('/new');
 
 // mobile drawer
 function openDrawer() { E('sidebar').classList.add('open'); E('overlay').classList.add('show'); }
@@ -4694,7 +4691,7 @@ E('create').onclick = async () => {
   renderWhatsApp(me.whatsapp, homeAgents); renderApps(me.apps || []); loadHomeItems();
   E('aname').value = ''; E('instructions').value = ''; pendingType = null;
   E('createBox').classList.add('hidden');
-  navigate('/conversas');
+  navigate('/chats');
 };
 // The "New assistant" box stays hidden; it only shows up when clicking "Create assistant"
 // in the header. "Cancel" collapses it back.
@@ -4871,7 +4868,7 @@ async function startTask() {
 }
 E('taskStart').onclick = startTask;
 E('taskInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startTask(); } });
-E('backHome').onclick = async () => { navigate('/conversas'); loadThreads(); };
+E('backHome').onclick = async () => { navigate('/chats'); loadThreads(); };
 
 // ── Telegram ──
 E('tgConnectBtn').onclick = async () => {
@@ -5290,20 +5287,20 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
   }
   const me = await api('api/me');
   const path = location.pathname;
-  // Public-support usage profile (profiles.mjs): the owner's screen is /atendimento.
-  if (APP_CFG.profile === 'public-support' && me && me.name) { location.replace('/atendimento'); return; }
+  // Public-support usage profile (profiles.mjs): the owner's screen is /public-support.
+  if (APP_CFG.profile === 'public-support' && me && me.name) { location.replace('/public-support'); return; }
   // /login is the authentication screen and does NOT enter the app: the logged-in area lives at
-  // /inicio (its own URL). The public home (/) is another page (home.html) and doesn't even
+  // /chats (its own URL). The public home (/) is another page (home.html) and doesn't even
   // reach here. Whoever opens /login while already logged in goes straight to conversations.
   if (path === '/login') {
-    if (me && me.name) { location.replace('/conversas'); return; }
+    if (me && me.name) { location.replace('/chats'); return; }
     showApp(false); showAuthCard('login');
     if (APP_CFG && APP_CFG.google) E('googleBtn').classList.remove('hidden');
     reveal();
     return;
   }
 
-  // ── Logged-in area (/inicio and menu subroutes) ──
+  // ── Logged-in area (/chats and menu subroutes) ──
   // Without a session, the server already redirects to /login; this guard covers the client side.
   // modo=entrar: whoever lands here already has an account, so the screen opens on login and not on the
   // signup form (same rule as the server's redirects).
@@ -5344,10 +5341,10 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
   renderEmpresaNotif(me);
   // Returning from connecting a provider: takes to the Connections tab, which is where the notice
   // (succeeded / failed) makes sense and where the retry button lives.
-  if (goConnTab) { history.replaceState(null, '', '/conexoes'); switchTab('conexoes'); }
-  // Deep-link to a conversation (e.g. "open conversation" from the cockpit): /inicio?c=<threadId>
+  if (goConnTab) { history.replaceState(null, '', '/connections'); switchTab('conexoes'); }
+  // Deep-link to a conversation (e.g. "open conversation" from the cockpit): /chats?c=<threadId>
   const _openConv = new URLSearchParams(location.search).get('c');
-  if (_openConv) { history.replaceState(null, '', '/conversas'); openThreadById(_openConv); }
+  if (_openConv) { history.replaceState(null, '', '/chats'); openThreadById(_openConv); }
 })();
 </script>
 </body>
