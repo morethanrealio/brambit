@@ -59,7 +59,7 @@ limit described.
 
 ## Public support safeguards
 
-The owner sets up each assistant that answers the public in `/atendimento`.
+The owner sets up each assistant that answers the public in `/public-support`.
 
 - *Spending:* a daily cap per assistant, US$10 unless the owner sets another.
 - *Volume:* 30 messages per hour per contact (the owner sets 1 to 600) and
@@ -101,7 +101,7 @@ web channel), in the installation's own database:
   characters each), not encrypted.
 
 Retention: 90 days after the last message by default; the owner sets 1 to 3650
-days per assistant in `/atendimento`. A cleanup runs every 6 hours. A blocked
+days per assistant in `/public-support`. A cleanup runs every 6 hours. A blocked
 contact keeps the contact row, so the block holds, but the conversation is
 deleted on the same schedule.
 
@@ -124,7 +124,7 @@ Who receives what:
   messages of that contact. The phone number is not sent.
 - *Meta* (WhatsApp Cloud API): the messages, as with any WhatsApp business
   number.
-- *The owner:* in `/atendimento`, the contact's number, the conversation and
+- *The owner:* in `/public-support`, the contact's number, the conversation and
   the settings.
 
 On WhatsApp the public assistant reads text only; audio, images and documents
