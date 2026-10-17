@@ -7,7 +7,7 @@ import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
 
 import { makeMemoriaModel } from './memoria-modelo.mjs';
 
-export const COMPACT_HIGH = () => Number(process.env.COMPACT_HIGH || 24000); // gatilho
+export const COMPACT_HIGH = () => Number(process.env.COMPACT_HIGH || 24000); // trigger
 export const COMPACT_LOW = () => Number(process.env.COMPACT_LOW || 12000);   // post-trim target
 export const SUMMARY_CAP = () => Number(process.env.SUMMARY_CAP || 3000);    // cap on the summary prose
 export const LEDGER_CAP = () => Number(process.env.LEDGER_CAP || 6000);      // cap on the concrete-data ledger (chars)
@@ -16,7 +16,9 @@ export const LEDGER_CAP = () => Number(process.env.LEDGER_CAP || 6000);      // 
 // The summary's prose (via Flash) tends to swallow hard data the user PASTES
 // (dates, times, addresses, prices, links, choices). The ledger keeps these
 // lines VERBATIM outside the model's compression and accumulates across compactions.
-const LEDGER_MARK = '━━ DADOS DO USUÁRIO (verbatim, não alterar) ━━';
+const LEDGER_MARK = '━━ USER DATA (verbatim, do not change) ━━';
+// Header of the summaries written before it was in English; still read so they keep their ledger.
+const LEGACY_LEDGER_MARKS = ['━━ DADOS DO USUÁRIO (verbatim, não alterar) ━━'];
 
 // Signals of "concrete data" in a line pasted by the user, in Portuguese,
 // English and Spanish. Kept narrow on purpose: the ledger is capped and keeps the
@@ -81,13 +83,14 @@ export function extractFacts(messages) {
 }
 
 // Splits a summary string into { prose, ledger:[lines] }.
-function splitSummary(s) {
+export function splitSummary(s) {
   const text = s || '';
-  const i = text.indexOf(LEDGER_MARK);
-  if (i < 0) return { prose: text.trim(), ledger: [] };
+  const mark = [LEDGER_MARK, ...LEGACY_LEDGER_MARKS].find((m) => text.includes(m));
+  if (!mark) return { prose: text.trim(), ledger: [] };
+  const i = text.indexOf(mark);
   const prose = text.slice(0, i).trim();
   const ledger = text
-    .slice(i + LEDGER_MARK.length)
+    .slice(i + mark.length)
     .split('\n')
     .map((l) => l.replace(/^[-•]\s*/, '').trim())
     .filter(Boolean);

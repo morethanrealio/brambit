@@ -4,7 +4,7 @@
 // into the summary without any error, so a narrowed pattern would go unnoticed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractFacts } from '../web/memory.mjs';
+import { extractFacts, splitSummary } from '../web/memory.mjs';
 
 const kept = (line) => extractFacts([{ role: 'user', content: line }]).length === 1;
 
@@ -29,4 +29,11 @@ test('leaves ordinary sentences to the summary', () => {
 
 test('only reads what the person wrote', () => {
   assert.deepEqual(extractFacts([{ role: 'assistant', content: 'Booked for Friday at 3pm, $45' }]), []);
+});
+
+// Summaries stored before the header was in English still carry the Portuguese
+// one. A sweep that drops that Portuguese string would silently empty their ledger.
+test('still reads the ledger of summaries stored with the old Portuguese header', () => {
+  const stored = 'They planned the trip.\n\n━━ DADOS DO USUÁRIO (verbatim, não alterar) ━━\n- Rua Augusta 1500\n- voo às 9h40';
+  assert.deepEqual(splitSummary(stored), { prose: 'They planned the trip.', ledger: ['Rua Augusta 1500', 'voo às 9h40'] });
 });
