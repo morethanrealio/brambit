@@ -13,6 +13,16 @@ versions stay below for reference, but their tags are no longer published.
 
 ## [Unreleased]
 
+### Changed
+- The app's pages are on English paths, whatever the person's language:
+  `/chats` (was `/inicio` and `/conversas`), `/new`, `/assistants`, `/memory`,
+  `/skills-and-apps`, `/connections`, `/contacts`, `/files`, `/credits`,
+  `/settings` and `/public-support` (was `/atendimento`). The login form opens
+  with `/login?mode=sign-in` (was `?modo=entrar`). The old paths answer with a
+  permanent redirect and the old query still opens the login form, so links
+  already sent keep working; a plugin page that links to the app can move to
+  the new paths when convenient.
+
 ## [0.2.23] - 2026-10-16
 
 ### Removed

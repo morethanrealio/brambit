@@ -1,7 +1,7 @@
 # Public web channel
 
 An assistant in public mode can answer a chat on a website or another server
-over HTTP. The owner turns it on in `/atendimento` ("Website and API").
+over HTTP. The owner turns it on in `/public-support` ("Website and API").
 
 Endpoint: `/api/public/messages?agent=<agent id>` (shown on the same screen).
 
@@ -82,7 +82,7 @@ in proxy logs, and the browser token is enough to read the conversation.
 
 - 60 calls per minute per address (messages and history together).
 - Body up to 64 KB.
-- The public-support limits the owner sets in `/atendimento` apply as on
+- The public-support limits the owner sets in `/public-support` apply as on
   WhatsApp: messages per hour from each contact (default 30), messages per
   hour from all contacts together (default 1000) and the daily spending cap
   (default US$10). Past a limit the call still returns `200` with a short
