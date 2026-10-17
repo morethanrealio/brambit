@@ -18,23 +18,56 @@ export const LEDGER_CAP = () => Number(process.env.LEDGER_CAP || 6000);      // 
 // lines VERBATIM outside the model's compression and accumulates across compactions.
 const LEDGER_MARK = '━━ DADOS DO USUÁRIO (verbatim, não alterar) ━━';
 
-// Signals of "concrete data" in a line pasted by the user.
+// Signals of "concrete data" in a line pasted by the user, in Portuguese,
+// English and Spanish. Kept narrow on purpose: the ledger is capped and keeps the
+// newest lines, so an ordinary sentence caught here pushes real data out.
+const MONTH = '(?:janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro'
+  + '|january|february|march|april|may|june|july|august|september|october|november|december'
+  + '|enero|febrero|marzo|mayo|junio|julio|septiembre|setiembre|octubre|noviembre|diciembre'
+  + '|jan|feb|apr|jun|jul|aug|sept?|oct|nov|dec)';
+const STREET_SUFFIX = '(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|place|pl|way|highway|hwy|parkway|pkwy|terrace)';
 const FACT_PATTERNS = [
-  /\b\d{1,2}[\/.\-]\d{1,2}(?:[\/.\-]\d{2,4})?\b/,                         // datas 22/07, 22-07-2026
+  /\b\d{1,2}[\/.\-]\d{1,2}(?:[\/.\-]\d{2,4})?\b/,                         // dates 22/07, 10/22/2026, 22-07-2026
+  /\b\d{4}-\d{2}-\d{2}\b/,                                                // dates 2026-10-22
+  new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th|º|°)?\\s+(?:de\\s+|of\\s+)?${MONTH}\\b`, 'i'), // dates 22 de outubro, 22nd of October
+  new RegExp(`\\b${MONTH}\\.?\\s+(?:de\\s+)?\\d{1,4}\\b`, 'i'),             // dates Oct 22, October 2026
   /\b\d{1,2}\s?[:hH]\s?\d{2}\b/,                                          // times 21:26, 9h30
-  /R\$\s?\d/,                                                             // prices R$ 180
+  /\b\d{1,2}(?::\d{2})?\s?[ap]\.?m\b\.?/i,                                // times 3pm, 3:30 PM, 10 a.m.
+  /\b\d{1,2}\s?(?:h|hs|hrs)\b/i,                                          // times 15h, 15hs
+  /\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i,       // weekdays (pt)
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i,  // weekdays (en)
+  /\b(?:lunes|martes|mi[ée]rcoles|jueves|viernes)\b/i,                    // weekdays (es; sábado/domingo above)
+  /(?:R\$|US\$|[$€£¥])\s?\d/,                                             // prices R$ 180, $45, €30
+  /\d\s?[€£]/,                                                            // prices 25 €, 25€
+  /\b(?:BRL|USD|EUR|GBP|MXN|ARS|CLP|COP|PEN|UYU|CAD|AUD)\s?\d/i,          // prices USD 100
+  /\b\d[\d.,]*\s?(?:reais|real|brl|usd|eur|gbp|mxn|ars|clp|cop|d[óo]lar(?:es)?|dollars?|euros?|pounds?|libras?|pesos?)\b/i, // prices 1500 reais, 20 dollars
   /\bhttps?:\/\/\S+/i,                                                    // links
-  /\b(rua|av\.?|avenida|alameda|travessa|estrada|rodovia|pça|praça)\b/i,  // address
+  /\bwww\.[\w-]+\.\S+/i,                                                  // links without the scheme
+  /[\w.+-]+@[\w-]+\.[\w.-]+/,                                             // e-mail addresses
+  /\+\d{1,3}[\s.\-]?\(?\d{1,4}\)?(?:[\s.\-]?\d{2,5}){2,4}/,               // phones +55 11 98765-4321, +1 (415) 555-0123
+  /\(\d{2,3}\)\s?\d{3,5}[\s.\-]?\d{4}\b/,                                 // phones (11) 98765-4321, (415) 555-0123
+  /\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b/,                                    // phones 415-555-0123
+  /\b\d{4,5}-\d{4}\b/,                                                    // phones 98765-4321
+  /\b(?:rua|av\.?|avenida|alameda|travessa|estrada|rodovia|pça|praça)\b/i, // address (pt)
+  /\b(?:calle|calzada|jir[óo]n|pasaje|plaza)\b/i,                         // address (es; avenida above)
+  /\b(?:carrera|diagonal|transversal)\s+\d/i,                             // address (es) Carrera 15 #93-60
+  /\b(?:street|avenue|boulevard|blvd)\b/i,                                // address (en)
+  new RegExp(`\\b\\d{1,6}\\s+(?:[\\w.'-]+\\s+){1,3}${STREET_SUFFIX}\\b`, 'i'), // address (en) 123 Main St
+  /\b(?:apt|apto|apartamento|apartment|suite|depto|departamento)\.?\s?#?\d/i, // apartment numbers
   /\b\d{5}-?\d{3}\b/,                                                     // CEP
-  /\b(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i,        // days of the week
-  /\b\d{1,3}\s?(reais|real|brl|usd|d[óo]lares?)\b/i,                      // valores por extenso
-  /\b(voo|check[- ]?in|check[- ]?out|reserva|localizador|confirma[çc][ãa]o|cpf|cnpj|oab)\b/i,
+  /\b[A-Z]{2}\s\d{5}(?:-\d{4})?\b/,                                       // US state + ZIP: CA 94103
+  /\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/,                                // UK postcode: SW1A 1AA
+  /\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/,                                         // Canadian postal code: K1A 0B1
+  /\b(?:c\.?\s?p\.?|zip(?:\s?code)?|postal\s?code|postcode|c[óo]digo\s+postal)\s*:?\s*\d/i, // C.P. 06600, ZIP: 94103
+  /\b(?:voo|check[- ]?in|check[- ]?out|reserva|localizador|confirma[çc][ãa]o|cpf|cnpj|oab)\b/i, // booking and ids (pt)
+  /\b(?:flight|booking|reservation|confirmation|itinerary|boarding|pnr|passport)\b/i,           // booking and ids (en)
+  /\b(?:vuelo|reservaci[óo]n|confirmaci[óo]n|itinerario|pasaporte|dni|rut|rfc|curp|nie|nif)\b/i, // booking and ids (es)
 ];
 
 const normFact = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 // Extracts the concrete-data lines from the USER's messages (what they "paste").
-function extractFacts(messages) {
+export function extractFacts(messages) {
   const out = [];
   for (const m of messages || []) {
     if (m.role !== 'user' || !m.content) continue;

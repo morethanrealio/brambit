@@ -13,6 +13,13 @@ versions stay below for reference, but their tags are no longer published.
 
 ## [Unreleased]
 
+### Fixed
+- When a long conversation is summarized, phone numbers, addresses, prices,
+  dates, times, e-mail addresses and booking details written in English or
+  Spanish are kept word for word, as they already were in Portuguese. Before,
+  most of them went into the summary and could be lost. Phones, e-mails, month
+  names and times like `15h` are now kept in Portuguese too (#36).
+
 ## [0.2.24] - 2026-10-17
 
 ### Added
