@@ -13,6 +13,8 @@ versions stay below for reference, but their tags are no longer published.
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-10-17
+
 ### Added
 - Brambit on your own computer can be shared with your household:
   `brambit share <https address>` saves the address Tailscale Serve gives this
