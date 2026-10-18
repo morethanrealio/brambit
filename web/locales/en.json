@@ -2086,5 +2086,10 @@
       "greeting": "Hi,",
       "body": "{greeting}\n\nWe received a request to reset the password of your {brand} account. To create a new password, just open the link below (valid for 10 minutes):\n\n{link}\n\nIf you didn't ask for this, you can ignore this email; your password stays the same.\n\n{brand}"
     }
+  },
+  "coding": {
+    "stop": {
+      "interrupted": "The run was interrupted; its progress was saved."
+    }
   }
 }

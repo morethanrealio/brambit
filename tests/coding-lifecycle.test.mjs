@@ -275,3 +275,9 @@ test('advanced preserves reserved-credit explanation instead of claiming exhaust
  const result=await runCodingTask({store:memory(),scope:'credit',target:'p',objetivo:'task',tools:new ToolRegistry(),authorize:async()=>true,provider:{complete:async()=>{throw new ExecutionCreditError('account_credit_reserved')}}});
  assert.equal(result.coding_task.reason,'account_credit_reserved');assert.match(result.text,/não significa que seu saldo acabou/);
 });
+
+test('advanced stop message without a language keeps the legacy Portuguese; credit stop follows the language',async()=>{
+ const run=(language,error)=>runCodingTask({store:memory(),scope:'lang',target:'p',objetivo:'task',language,tools:new ToolRegistry(),authorize:async()=>true,provider:{complete:async()=>{throw error}}});
+ assert.equal((await run(undefined,Error('network'))).text,'A execução foi interrompida; o estado foi preservado.');
+ assert.match((await run('en',new ExecutionCreditError('account_credit_reserved'))).text,/does not mean your/);
+});
