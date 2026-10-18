@@ -1065,6 +1065,7 @@ import { freioDeIdioma, logDerivaIdioma } from './language-guard.mjs';
 import { translatePage, carregaCatalogos } from './page-i18n.mjs';
 import { traduzResposta, idiomaDaRequisicao, serverMessages } from './messages-i18n.mjs';
 import { registerSignupRoutes } from './signup-routes.mjs';
+import { registerGithubRepoPicker } from './github-repo-picker.mjs';
 import { costOf } from './pricing.mjs';
 import { MODELS, DEFAULT_MODEL, isValidModel, modelById, modelCatalog, pickAutoModel, isTestProvider } from './models.mjs';
 import { currentPeriod } from './period.mjs';
@@ -8446,6 +8447,7 @@ const cadastro = registerSignupRoutes(rotas, { pool, send, fail, readBody, tooMa
 // Saving a data connection (site and app callbacks) and the app's connect flow.
 const connectSave = createConnectSave({ empresaStore, saveGoogleAccount, saveOAuthToken, microsoftAccountEmail });
 const mobileConnect = registerMobileConnect(rotas, { send, fail, readBody, save: connectSave });
+registerGithubRepoPicker(rotas, { send, fail, tokenFor: (userId) => validProviderToken(userId, 'github') }); // repos a team assistant may use (settings screen)
 
 function sendHtml(res, full, status = 200, language = defaultLanguage(), vars = {}) {
   const nonce = randomBytes(16).toString('base64');
@@ -9706,7 +9708,8 @@ async function atenderRequest(req, res) {
         if (tcGroups.includes('shell') && !tcHost) {
           return send(res, 400, { error: 'server.enable_shell_on_group_assistant' });
         }
-        fields.tool_config = tool_config;
+        // A client that doesn't send repos (the phone app) keeps the saved ones.
+        fields.tool_config = Array.isArray(tool_config?.repos) ? tool_config : { ...tool_config, repos: ag.tool_config?.repos };
       }
       // Google account of this assistant. '' = falls back to the user's main
       // one. updateAgentFields refuses an e-mail that isn't in THEIR google_accounts.

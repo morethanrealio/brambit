@@ -1060,6 +1060,11 @@
                 <div class="m-field" id="pToolGroupsField" style="display:none;">
                   <label data-i18n="index_page.prompt.tools_allowed_this_group">Tools allowed for this group agent</label>
                   <div id="pToolGroups" style="display:flex; flex-direction:column; gap:6px; margin-top:4px"></div>
+                  <div class="m-field" id="pToolReposField" style="display:none; margin-top:10px">
+                    <label data-i18n="index_page.prompt.github_repositories">GitHub repositories this assistant may use</label>
+                    <div id="pToolRepos" style="display:flex; flex-direction:column; gap:4px; margin-top:4px; max-height:220px; overflow:auto"></div>
+                    <div class="m-muted" id="pToolReposHint" style="margin-top:6px; font-size:12px"></div>
+                  </div>
                   <div class="m-muted" style="margin-top:8px; font-size:12px" data-i18n="index_page.prompt.group_agent_never_accesses">A group agent never accesses the owner’s personal account, does not reconfigure itself and does not create access to new servers, even with the shell on.</div>
                   <div class="m-field" style="margin-top:10px">
                     <label for="pToolHost" data-i18n="index_page.prompt.dedicated_server_work_box">Dedicated server (work box host)</label>
@@ -3451,6 +3456,7 @@ function initMemoria() {
     web: tx('prompt.tools_web'),
     apps: tx('prompt.tools_apps'),
     drive: tx('prompt.tools_drive'),
+    github: tx('prompt.tools_github'),
   };
   var _superAvailable = false;
 
@@ -3465,7 +3471,7 @@ function initMemoria() {
     if (cat === 'super' && !_superAvailable) cat = 'pessoal';
     sel.value = cat;
     // Tool group checkboxes (only relevant in the 'group' category).
-    var groups = (a.toolGroups && a.toolGroups.length) ? a.toolGroups : ['shell', 'produtos', 'projeto', 'web', 'apps', 'drive'];
+    var groups = (a.toolGroups && a.toolGroups.length) ? a.toolGroups : ['shell', 'produtos', 'projeto', 'web', 'apps', 'drive', 'github'];
     var enabled = (a.tool_config && Array.isArray(a.tool_config.groups)) ? a.tool_config.groups : [];
     var box = $('pToolGroups'); box.innerHTML = '';
     groups.forEach(function (g) {
@@ -3475,6 +3481,7 @@ function initMemoria() {
       cb.type = 'checkbox'; cb.value = g; cb.className = 'pToolGroupCb';
       cb.checked = enabled.indexOf(g) !== -1;
       cb.style.width = 'auto';
+      cb.addEventListener('change', updateRepoField);
       lbl.appendChild(cb);
       var span = document.createElement('span');
       span.textContent = TOOL_GROUP_LABELS[g] || g;
@@ -3482,13 +3489,74 @@ function initMemoria() {
       box.appendChild(lbl);
     });
     $('pToolHost').value = (a.tool_config && a.tool_config.host) || '';
+    _savedRepos = (a.tool_config && Array.isArray(a.tool_config.repos)) ? a.tool_config.repos : [];
+    _repoList = null;
+    $('pToolRepos').innerHTML = '';
     updateCategoryUI();
+  }
+
+  // GitHub repositories a group agent may reach, for the GitHub group and code
+  // projects. The owner's list is fetched when the field first shows; until then
+  // (or if it fails) saving keeps the repositories already saved.
+  var _savedRepos = [];
+  var _repoList = null;
+
+  function checkedToolGroups() {
+    var out = [];
+    var cbs = document.getElementsByClassName('pToolGroupCb');
+    for (var i = 0; i < cbs.length; i++) if (cbs[i].checked) out.push(cbs[i].value);
+    return out;
+  }
+
+  function selectedRepos() {
+    var cbs = document.getElementsByClassName('pToolRepoCb');
+    if (!cbs.length) return _savedRepos.slice();
+    var out = [];
+    for (var i = 0; i < cbs.length; i++) if (cbs[i].checked) out.push(cbs[i].value);
+    return out;
+  }
+
+  function updateRepoField() {
+    var field = $('pToolReposField'); if (!field) return;
+    var groups = checkedToolGroups();
+    var show = $('pCategory').value === 'grupo' && (groups.indexOf('github') !== -1 || groups.indexOf('projeto') !== -1);
+    field.style.display = show ? '' : 'none';
+    if (!show || _repoList) return;
+    var hint = $('pToolReposHint');
+    hint.textContent = tx('prompt.repos_loading');
+    var mine = _repoList = api('/api/github/repos');
+    mine.then(function (data) {
+      if (_repoList !== mine) return;
+      var keep = selectedRepos();
+      var names = keep.slice();
+      ((data && data.repos) || []).forEach(function (r) { if (names.indexOf(r.full_name) === -1) names.push(r.full_name); });
+      var box = $('pToolRepos'); box.innerHTML = '';
+      names.forEach(function (n) {
+        var lbl = document.createElement('label');
+        lbl.style.cssText = 'display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = n; cb.className = 'pToolRepoCb';
+        cb.checked = keep.indexOf(n) !== -1;
+        cb.style.width = 'auto';
+        lbl.appendChild(cb);
+        var span = document.createElement('span');
+        span.textContent = n;
+        lbl.appendChild(span);
+        box.appendChild(lbl);
+      });
+      hint.textContent = (data && data.connected) ? tx('prompt.repos_hint') : tx('prompt.repos_not_connected');
+    }).catch(function (e) {
+      if (_repoList !== mine) return;
+      _repoList = null;
+      hint.textContent = e.message;
+    });
   }
 
   function updateCategoryUI() {
     var sel = $('pCategory'); if (!sel) return;
     var cat = sel.value;
     $('pToolGroupsField').style.display = (cat === 'grupo') ? '' : 'none';
+    updateRepoField();
     var hints = {
       pessoal: tx('prompt.category_personal'),
       grupo: tx('prompt.category_group'),
@@ -3511,10 +3579,7 @@ function initMemoria() {
       if ($('pGoogleField') && $('pGoogleField').style.display !== 'none' && $('pGoogle')) body.google_email = $('pGoogle').value;
       if ($('pCategory')) {
         body.category = $('pCategory').value;
-        var grupos = [];
-        var cbs = document.getElementsByClassName('pToolGroupCb');
-        for (var i = 0; i < cbs.length; i++) if (cbs[i].checked) grupos.push(cbs[i].value);
-        body.tool_config = { groups: grupos, host: ($('pToolHost') ? $('pToolHost').value.trim() : '') };
+        body.tool_config = { groups: checkedToolGroups(), host: ($('pToolHost') ? $('pToolHost').value.trim() : ''), repos: selectedRepos() };
       }
       await api('/api/agent/update', {
         method: 'POST',
