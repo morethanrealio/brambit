@@ -71,5 +71,12 @@ export function createGoogleAccountRemoval(pool, { revoke = googleRevoke } = {})
     return rows.length > 0;
   }
 
-  return { backfillLegacy, removeGoogleAccount };
+  // Account deletion: revokes every Google account of the user before closing the
+  // account deletes their tokens. Same rule for a Google account another user shares.
+  async function revokeGoogleAccounts(userId) {
+    const { rows } = await pool.query(`SELECT google_email FROM ${S}.google_accounts WHERE user_id=$1`, [userId]);
+    for (const r of rows) await revokeAtGoogle(userId, r.google_email);
+  }
+
+  return { backfillLegacy, removeGoogleAccount, revokeGoogleAccounts };
 }
