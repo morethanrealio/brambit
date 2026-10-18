@@ -7,25 +7,32 @@ import {codingPolicySnapshot} from './coding-jobs.mjs';
 import {codingExecutionId} from './coding-recovery-policy.mjs';
 import {enderecosDe,materialDoDono,semLinksInventados} from './links.mjs';
 import {marca} from './brand.mjs';
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 // Server-bound adapter composition. Dependency injection lets the complete
 // lifecycle run against isolated accounts/transports, never production fixtures.
 export function createProgrammingRuntime(deps){
 const {confirmationStore,getAgentOwned,getThreadOwned,getUserLocale,hasProviderExecution,withProviderExecution,gasto,DEEPSEEK_AGENT_MODEL,isDeepSeekTurn,withDeepSeek,makeOfficialDeepSeek,GEMINI_COMPARISON_ID,isGeminiComparison,withGeminiComparison,recordUsages,makeHeavyProvider,primaryIsGeminiOverride,makeGeminiPrimary,makePrimaryProvider,hostingTools,APP_SUB_TOOLS,appTaskStore,getProject,userHasSshKey,runnerOnline,runnerBoundAgentId,livreTools,sshTools,codingTools,validProviderToken,hostsDeLinksDoUsuario}=deps;
 async function runProgrammingJob(job,control,achados=[]){
   const {userId,agentId,threadId}=job;
+  // Stop texts reach the person as is, so they come in the account language. A failed
+  // lookup before the access checks falls back instead of hiding the stop itself.
+  const {t}=productI18n();
+  const stopText=async key=>{let language=LEGACY_TEXT_LANGUAGE;try{language=(await getUserLocale(userId))?.language||language;}catch{}return t(`coding.run.${key}`,language);};
   const agent=await getAgentOwned(agentId,userId),thread=await getThreadOwned(threadId,userId);
-  if(!agent||!thread||thread.agent_id!==agentId||codingPolicySnapshot(agent)!==job.policy)return {ok:false,text:'O acesso à conversa ou ao assistente mudou; a tarefa não foi executada.'};
+  if(!agent||!thread||thread.agent_id!==agentId||codingPolicySnapshot(agent)!==job.policy)return {ok:false,text:await stopText('conversation_changed')};
   const approvalValid=async()=>!job.confirmationId || !!(await confirmationStore?.isContinuationAllowed({userId,agentId,threadId},job.confirmationId));
-  if(!await approvalValid())return {ok:false,text:'Esta continuação foi cancelada ou perdeu a autorização; não iniciei outra execução.'};
-  const identity=JSON.stringify([userId,agentId,threadId]),language=(await getUserLocale(userId))?.language||'pt-BR';
+  if(!await approvalValid())return {ok:false,text:await stopText('continuation_revoked')};
+  const identity=JSON.stringify([userId,agentId,threadId]),language=(await getUserLocale(userId))?.language||LEGACY_TEXT_LANGUAGE;
   if(!hasProviderExecution(identity))return withProviderExecution((provider,input,options,policy={})=>{
     const bound=gasto.vincular({provider,userId,agentId,threadId,kind:'coding',language,...policy});
     return options===null?bound.complete(input):bound.completeDurable(input,options);
   },()=>runProgrammingJob(job,control,achados),identity);
   if(agent.model===DEEPSEEK_AGENT_MODEL&&!isDeepSeekTurn())return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId,threadId,kind:'coding',language}),()=>runProgrammingJob(job,control,achados));
   if(agent.model===GEMINI_COMPARISON_ID&&!isGeminiComparison())return withGeminiComparison(()=>runProgrammingJob(job,control,achados));
-  let stage='Preparando o ambiente';
-  const onEvent=e=>{if(e?.type==='tool_result')achados.push(...enderecosDe(e.out));if(e?.type==='tool_call')stage=/^(ler|listar|buscar)/.test(e.name)?'Lendo o código':/^(editar|escrever|iniciar)/.test(e.name)?'Aplicando alterações':/^validar/.test(e.name)?'Verificando alterações':'Executando uma etapa no ambiente autorizado';};
+  // Stage keys; the receipt shows them in the account language (coding.stage.*).
+  let stage='preparing';
+  const onEvent=e=>{if(e?.type==='tool_result')achados.push(...enderecosDe(e.out));if(e?.type==='tool_call')stage=/^(ler|listar|buscar)/.test(e.name)?'reading':/^(editar|escrever|iniciar)/.test(e.name)?'editing':/^validar/.test(e.name)?'verifying':'running';};
   const shouldPause=async()=>{await control.progress(stage);return await control.shouldStop() || !await approvalValid();};
   const onUsage=async e=>recordUsages([e],{userId,agentId,threadId,turnId:job.id,kind:e.kind||'subagent'},{noBill:e.kind==='compact'&&e.noBill===true,eventId:e.executionCallId,strict:true});
   const makeProvider=()=>makeHeavyProvider(job.kind==='basic'?'app':'codar',{maxOut:32768});
@@ -37,7 +44,7 @@ async function runProgrammingJob(job,control,achados=[]){
     return {...(typeof result==='object'?result:{ok:false}),text:journal.finish(typeof result==='string'?result:'')};
   }
   const expected=job.environment;
-  if(!expected)return {ok:false,text:'Faltou a identidade autorizada do ambiente; nenhuma operação executada.'};
+  if(!expected)return {ok:false,text:t('coding.run.missing_environment',language)};
   const authorize=async()=>{
     const a=await getAgentOwned(agentId,userId);
     if(!await approvalValid()||!a||codingPolicySnapshot(a)!==job.policy||(a.perm_mode||'padrao')!==expected.mode||(a.category||'pessoal')!==expected.category||(a.active_project_id||null)!==expected.projectId)return false;
@@ -46,7 +53,7 @@ async function runProgrammingJob(job,control,achados=[]){
     if(expected.runner&&(!runnerOnline(userId)||(runnerBoundAgentId(userId)&&runnerBoundAgentId(userId)!==agentId)))return false;
     return a.category!=='grupo';
   };
-  if(!await authorize())return {ok:false,text:'O ambiente ou suas permissões mudaram; não executei a tarefa.'};
+  if(!await authorize())return {ok:false,text:t('coding.run.environment_changed',language)};
   const project=expected.projectId?await getProject(expected.projectId,userId):null;
   const buildCodingContext=async()=>{
     const registry=new ToolRegistry();
@@ -59,7 +66,7 @@ async function runProgrammingJob(job,control,achados=[]){
   };
   return appTaskStore.withTask(JSON.stringify(['coding-workspace','advanced',userId,expected.projectId||'personal']),()=>
     makeCodarTool({buildCodingContext,executionId:codingExecutionId(job),sessionKey:`${userId}:${agentId}:${threadId}`,taskStore:appTaskStore,targetIdentity:JSON.stringify(expected),authorize,onUsage,onEvent,shouldPause,language}).run({objetivo:job.args.objetivo})
-  ).catch(error=>{if(error?.code==='TASK_LOCK_BUSY')return {ok:false,coding_task:{state:'paused',reason:'workspace_busy'},text:'Aguardando outra execução liberar este ambiente.'};throw error;});
+  ).catch(error=>{if(error?.code==='TASK_LOCK_BUSY')return {ok:false,coding_task:{state:'paused',reason:'workspace_busy'},text:t('coding.run.workspace_busy',language)};throw error;});
 }
 // The job's text goes straight to the person (chat, Telegram, WhatsApp) with no
 // model turn to redo it, so a link its tools never returned leaves here (#57).

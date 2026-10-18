@@ -2,11 +2,16 @@
 // with a paid model. The job outbox prevents retrying an unknown send.
 import {codingJobReceipt} from './coding-jobs.mjs';
 import { marca } from './brand.mjs';
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 export function createCodingNotifier({getAgent,getTelegramBot,getWhatsAppLink,waEnabled,sendTelegram,sendWhatsApp}){
  return async job=>{
   const agent=await getAgent(job.agentId,job.userId);if(!agent)return {state:'unavailable'};
-  const full=String((job.state==='paused'?codingJobReceipt(job).text:job.result?.text)||'A tarefa foi interrompida; confira o andamento na conversa do app.');
-  const text=`${agent.name||'Assistente'} — programação: ${full.length>2800?full.slice(0,2800)+`… O resultado completo está na conversa do app ${marca().nome}.`:full}`;
+  // job.language is the account language, set by the worker before delivery.
+  const language=job.language||LEGACY_TEXT_LANGUAGE,{t}=productI18n();
+  const full=String((job.state==='paused'?codingJobReceipt(job,language).text:job.result?.text)||t('coding.notify.fallback',language));
+  const text=t('coding.notify.prefix',language,{name:agent.name||t('coding.notify.default_name',language),
+    text:full.length>2800?full.slice(0,2800)+t('coding.notify.truncated',language,{brand:marca().nome}):full});
   if(job.channel==='telegram'){
     const bot=await getTelegramBot(job.userId,job.agentId);
     if(!bot?.enabled||!bot.token||!bot.chat_id)return {state:'unavailable'};
