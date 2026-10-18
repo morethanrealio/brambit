@@ -31,10 +31,10 @@
   "description": "",
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80",
-    "html-to-text": "10.0.0",
+    "html-to-text": "10.0.1",
     "i18next": "^26.4.2",
     "imapflow": "^1.4.3",
-    "mailparser": "^3.9.12",
+    "mailparser": "^3.9.46",
     "nodemailer": "^9.0.3",
     "pdf-parse": "^2.4.5",
     "pg": "^8.22.0",
