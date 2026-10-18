@@ -15,10 +15,9 @@
 
 O Brambit é um software que roda no seu próprio servidor e dá a cada pessoa de uma
 família, de um time ou de uma empresa os próprios assistentes de IA. Agentes pessoais
-open source como OpenClaw, NanoClaw e Hermes Agent são feitos para um desenvolvedor:
-você configura pelo terminal e por arquivos de configuração, e em geral é a única
-pessoa que usa. O Brambit é feito para ser compartilhado: uma pessoa instala, e todo
-mundo usa pelo navegador.
+open source como OpenClaw, NanoClaw e Hermes Agent são feitos em volta de um dono, que
+configura e controla tudo. O Brambit é feito para ser compartilhado: uma pessoa instala,
+e cada uma das outras ganha a própria conta e usa pelo navegador.
 
 As pessoas conversam com os seus assistentes num app web e pelo Telegram, WhatsApp,
 e-mail e Slack. Os assistentes lembram do que importa, usam conectores (Google,
