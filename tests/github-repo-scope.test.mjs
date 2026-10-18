@@ -2,7 +2,11 @@
 // thing between a channel participant and every repository the owner can reach.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scopeGithubTools } from '../web/github-repo-scope.mjs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { scopeGithubTools, pushTargetCheck, repoInScope } from '../web/github-repo-scope.mjs';
 
 const fake = (name, run) => ({ name, description: name, parameters: { type: 'object' }, run });
 const scoped = (repos, overrides = {}) => {
@@ -56,4 +60,27 @@ test('an empty list enables nothing, and non-team assistants are not scoped', as
 
   const tools = [fake('github_read_path', async () => 'file')];
   assert.equal(scopeGithubTools(tools, undefined), tools);
+});
+
+// git pushes to every push URL of a remote, so one unlisted URL next to a listed one
+// is enough to reach a repository outside the list.
+test('a push goes only to remotes whose every push URL is enabled', { skip: process.platform === 'win32' }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'push-scope-'));
+  const git = (...a) => execFileSync('git', ['-C', dir, ...a]);
+  git('init', '-q');
+  git('remote', 'add', 'origin', 'https://github.com/Acme/Web.git/');
+  const pushes = (repos) => spawnSync('sh', ['-c', `${pushTargetCheck(repos, `'${dir}'`, "'origin'")} echo PUSHED`], { encoding: 'utf8' }).stdout;
+  try {
+    assert.match(pushes(['acme/web']), /PUSHED/);
+    assert.doesNotMatch(pushes(['acme/docs']), /PUSHED/);
+    assert.doesNotMatch(pushes([]), /PUSHED/);
+    git('remote', 'set-url', '--add', '--push', 'origin', 'git@github.com:acme/web.git');
+    assert.match(pushes(['acme/web']), /PUSHED/);
+    git('remote', 'set-url', '--add', '--push', 'origin', 'https://github.com/acme/secret');
+    assert.doesNotMatch(pushes(['acme/web']), /PUSHED/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+
+  assert.equal(repoInScope('https://github.com/ACME/web.git', ['acme/web']), true);
+  assert.equal(repoInScope('https://github.com/acme/web/../secret', ['acme/web']), false);
+  assert.equal(repoInScope('https://gitlab.com/acme/web', ['acme/web']), false);
 });

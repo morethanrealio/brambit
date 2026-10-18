@@ -20,6 +20,7 @@ import { sshExec, maskSecrets } from './ssh.mjs';
 import { sandboxEnabled } from './sandbox.mjs';
 import { vaultEnabled } from './vault.mjs';
 import { devexecEnabled, devExec } from './devexec.mjs';
+import { pushTargetCheck } from './github-repo-scope.mjs';
 
 function shq(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
 // A path from the model goes to find/sed/grep/ls/mv as an argument. Starting with "-" it
@@ -41,7 +42,8 @@ const result=(body,state,operation)=>JSON.stringify({...body,effect:effect(state
 //    paths can be relative. host/usuario are ignored in this mode.
 // `transport(cmd, {host,usuario,timeout,token})` hides the difference: both
 // backends return the SAME format { ok, exit, saida, stderr, error }.
-export function codingTools(userId, { project = null, getGithubToken = null } = {}) {
+// `githubRepos` (team assistants only): git_push reaches only these GitHub repositories.
+export function codingTools(userId, { project = null, getGithubToken = null, githubRepos } = {}) {
   if (project) { if (!devexecEnabled()) return []; }
   else if (!sandboxEnabled() || !vaultEnabled()) return [];
 
@@ -318,13 +320,15 @@ export function codingTools(userId, { project = null, getGithubToken = null } = 
         //    https://github.com/..., a URL or another host stops before the push;
         //  • hooks off: a pre-push hook would run with GH_TOKEN in its env.
         const token = await githubToken();
-        let cmd = `git -C ${D} push ${u}-- ${rem} ${br} 2>&1`;
+        const nome = String(remote || 'origin');
+        if ((token || githubRepos !== undefined) && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(nome)) return result({ ok: false, error: 'remote inválido: use o nome do remote do repositório (ex.: origin).' },'not_applied','git_push');
+        // A team assistant pushes only to the GitHub repositories its owner enabled.
+        const scope = githubRepos !== undefined ? `${pushTargetCheck(githubRepos, D, rem)} ` : '';
+        let cmd = `${scope}git -C ${D} push ${u}-- ${rem} ${br} 2>&1`;
         if (token) {
-          const nome = String(remote || 'origin');
-          if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(nome)) return result({ ok: false, error: 'remote inválido: use o nome do remote do repositório (ex.: origin).' },'not_applied','git_push');
           const cred = `-c credential.helper= -c credential.https://github.com.helper='!f(){ echo username=x-access-token; echo password=${'$'}{GH_TOKEN}; };f' -c core.hooksPath=/dev/null -c push.gpgSign=false`;
           const check = `U="$(git -C ${D} remote get-url --push ${rem})" || exit 2; case "$U" in https://github.com/*) ;; *) echo 'Push com o token do GitHub só vai para https://github.com/: esse remote aponta para outro endereço.'; exit 2;; esac;`;
-          cmd = `${check} git -C ${D} ${cred} push ${u}-- ${rem} ${br} 2>&1`;
+          cmd = `${scope}${check} git -C ${D} ${cred} push ${u}-- ${rem} ${br} 2>&1`;
         }
         const r = await transport(cmd, { host, usuario, timeout: 120_000, token });
         return result({ ok: r.ok, host: r.host, exit: r.exit, saida: maskSecrets((r.saida || '').slice(0, 4000)), stderr: maskSecrets((r.stderr || '').slice(0, 2000)), error: r.error },commandEffect(r),'git_push');
