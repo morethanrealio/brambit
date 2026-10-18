@@ -6313,7 +6313,7 @@ export async function setPrimaryGoogleAccount(userId, googleEmail) {
     [userId, email]);
 }
 
-export const { removeGoogleAccount } = googleAccountRemoval;
+export const { removeGoogleAccount, revokeGoogleAccounts } = googleAccountRemoval;
 
 // ── Users / sessions ──
 // A new account is born with only name, email and password. What the installer

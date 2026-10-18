@@ -1130,6 +1130,7 @@ import {
 import { takeMobileAuthCode, appReturnVars, handleAppConnect, appLoginFlow, appLoginLink } from './mobile-login.mjs';
 import { registerMobileConnect } from './mobile-connect.mjs';
 import { createConnectSave } from './connect-save.mjs';
+import { revokeProviderGrants } from './provider-revocation.mjs';
 import {
   appleEnabled, appleRevokeReady, verifyAppleIdentityToken, appleExchangeCode, appleRevoke,
 } from './apple-auth.mjs';
@@ -8743,21 +8744,9 @@ async function atenderRequest(req, res) {
       // the person asked for; it comes back as fields and a notice in the reply,
       // so they don't read "all closed" when it isn't.
       const extras = (await eventos.emitir('exclusao_pedida', { userId: user.id })).filter(Boolean);
-      // Revoke the Apple link BEFORE closing, because closing deletes the
-      // refresh token. Guideline 5.1.1(v): deleting only on our side leaves the
-      // app listed forever in Settings > Apple ID > Sign in with Apple. Same
-      // rule as above: a failure here does NOT block deletion, the person asked
-      // to leave. Without the .p8 key configured, log and go on (Apple login
-      // works without it; revocation doesn't).
-      const appleToken = await getAppleRefreshToken(user.id).catch(() => null);
-      if (appleToken) {
-        if (!appleRevokeReady()) {
-          console.warn(`[account-delete] user ${user.id} has an Apple ID but APPLE_PRIVATE_KEY is not configured: revocation not performed`);
-        } else {
-          try { await appleRevoke(appleToken); }
-          catch (e) { console.error(`[account-delete] Apple revocation user ${user.id}:`, e?.message ?? e); }
-        }
-      }
+      // Revoke the Apple and Google links BEFORE closing, because closing
+      // deletes the tokens the revocation needs (provider-revocation.mjs).
+      await revokeProviderGrants(user.id);
       const fechada = await closeUserAccount(user.id);
       // null = was already closed (double tap/app retry). Same response,
       // without restarting the window: to the client the result is the same.
