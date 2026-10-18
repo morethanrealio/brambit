@@ -38,7 +38,7 @@ const SYSTEM = [
   '- nudez: full or partial nudity, scant clothing with sexual intent.',
   'Be strict but not paranoid: common, harmless requests (dancing, talking, walking, scenery, normal clothing) are ALLOWED.',
   'Reply ONLY with a JSON, no markdown, in the exact format:',
-  '{"allowed": true|false, "categories": ["key", ...], "reason": "short, in Brazilian Portuguese (pt-BR)"}',
+  '{"allowed": true|false, "categories": ["key", ...], "reason": "short, in English"}',
   'categories: list of the forbidden keys that fired (empty if allowed=true). reason: one short sentence.',
 ].join('\n');
 
@@ -52,21 +52,24 @@ function parseJson(t) {
 
 // Moderates the request. Returns { allowed, categories:[keys], labels:[labels],
 // reason, usage, model, failClosed }. NEVER throws: on error, it blocks.
+// `reason` is read by the model (the tool result that blocks the video), not by
+// the person: the model explains the block in the person's language. So it is
+// in English, like the rest of what the model reads.
 export async function moderateVideoPrompt({ prompt = '', audioText = '' } = {}) {
   const text = [String(prompt || '').trim(), String(audioText || '').trim()].filter(Boolean).join('\n\n');
   if (!text) {
-    return { allowed: false, categories: [], labels: [], reason: 'Pedido vazio.', usage: null, model: MODEL, failClosed: true };
+    return { allowed: false, categories: [], labels: [], reason: 'Empty request.', usage: null, model: MODEL, failClosed: true };
   }
   let r;
   try {
     r = await (modelFor('classification', { maxTokens: 512 }) || makeGemini({ model: MODEL, thinkingBudget: 0, maxOutputTokens: 512 }))
       .complete({ system: SYSTEM, messages: [{ role: 'user', content: text.slice(0, 8000) }], tools: [] });
   } catch (e) {
-    return { allowed: false, categories: [], labels: [], reason: 'Moderação indisponível no momento. Tente de novo.', usage: null, model: MODEL, failClosed: true, error: String(e?.message ?? e) };
+    return { allowed: false, categories: [], labels: [], reason: 'Moderation is unavailable right now. Try again.', usage: null, model: MODEL, failClosed: true, error: String(e?.message ?? e) };
   }
   const parsed = parseJson(r?.text);
   if (!parsed || typeof parsed.allowed !== 'boolean') {
-    return { allowed: false, categories: [], labels: [], reason: 'Não consegui avaliar o pedido com segurança.', usage: r?.usage || null, model: MODEL, failClosed: true };
+    return { allowed: false, categories: [], labels: [], reason: 'Could not evaluate the request safely.', usage: r?.usage || null, model: MODEL, failClosed: true };
   }
   const cats = Array.isArray(parsed.categories)
     ? parsed.categories.map((c) => String(c || '').trim()).filter((c) => BANNED_CATEGORIES[c])
@@ -77,7 +80,7 @@ export async function moderateVideoPrompt({ prompt = '', audioText = '' } = {}) 
     allowed,
     categories: cats,
     labels: cats.map((c) => BANNED_CATEGORIES[c]),
-    reason: String(parsed.reason || (allowed ? 'ok' : 'conteúdo não permitido')).slice(0, 300),
+    reason: String(parsed.reason || (allowed ? 'ok' : 'content not allowed')).slice(0, 300),
     usage: r?.usage || null,
     model: MODEL,
     failClosed: false,
