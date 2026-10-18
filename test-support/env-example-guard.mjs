@@ -20,7 +20,6 @@ export const IGNORE = new Map([
   ['TSC_PATH', 'build of the .mts files (*/build.mts)'],
   ['PGLITE_MODULE', 'local panel preview with an in-memory database (engagement/preview.mts)'],
   ['DATA_DIR', 'generated code template for users\' apps (web/hosting.mjs)'],
-  ['NOME', 'instruction text for the model ("use process.env.NOME")'],
   ['NAME', 'instruction text for the model ("use process.env.NAME")'],
   ['X', 'comment text ("process.env.X")'],
   ['BRAMBIT_HOME', 'program folder of an installed copy, read by the installer check (installer/install-check.mjs)'],
