@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';
 import {createAppTaskStore} from '../web/app-task-store.mjs';
 import {createProgrammingRuntime} from '../web/coding-runtime.mjs';
-import {createCodingJobs,codingJobScope,codingPolicySnapshot} from '../web/coding-jobs.mjs';
+import {createCodingJobs,codingJobScope,codingPolicySnapshot,codingJobReceipt} from '../web/coding-jobs.mjs';
 import {codingDeliveryKey} from '../web/coding-recovery-policy.mjs';
 import {ExecutionCreditError} from '../web/execution-error.mjs';
 import {createCodingApprovals} from '../web/coding-approvals.mjs';
@@ -181,8 +181,11 @@ test('a job result keeps links its tools returned (even before a pause) and drop
 test('advanced job stop message reaches the person in the account language',async t=>{
  const f=await fixture(t);f.deps.getUserLocale=async()=>({language:'en'});f.deps.codingTools=()=>[];f.deps.sshTools=()=>[];
  f.deps.makeHeavyProvider=()=>({name:'synthetic',completeDurable:async()=>{throw Error('network')}});
- const runtime=createProgrammingRuntime(f.deps),jobs=createCodingJobs({store:f.jobStore,execute:runtime.execute,deliver:f.deliver});
+ // Same delivery as the server: the receipt adds the next step to the job's own text.
+ const deliver=job=>f.deliver({...job,result:{...job.result,text:codingJobReceipt(job).text}});
+ const runtime=createProgrammingRuntime(f.deps),jobs=createCodingJobs({store:f.jobStore,execute:runtime.execute,deliver,languageOf:async()=>'en'});
  const environment={projectId:null,runner:false,ssh:false,sshLivre:false,livre:false,mode:'aceitar_edicoes',category:'pessoal'};
  await jobs.submit(identity,{kind:'advanced',args:{objetivo:'Inspect'},environment,policy:codingPolicySnapshot(f.agent)},'stop-language');await jobs.drive(codingJobScope(identity));
- assert.deepEqual((await f.db.query('SELECT content FROM fixture.messages')).rows.map(r=>r.content),['The run was interrupted; its progress was saved.']);
+ assert.deepEqual((await f.db.query('SELECT content FROM fixture.messages')).rows.map(r=>r.content),
+  ['The run was interrupted; its progress was saved.\n\nYour progress is saved. Say “resume programming” to continue the same task.']);
 });

@@ -1,21 +1,32 @@
 import {randomUUID} from 'node:crypto';
 import { codingRecovery, codingConsumption } from './coding-recovery-policy.mjs';
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 const ACTIVE=new Set(['queued','running']);
 const REQUEUE=new Set(['execution_window','execution_quantum','workspace_busy']);
 const copy=x=>JSON.parse(JSON.stringify(x));
 export const codingJobScope=({userId,agentId,threadId})=>JSON.stringify(['coding-job',userId,agentId,threadId]);
 function waiting(job){return Array.isArray(job?.queuedInputs)?job.queuedInputs.length:0;}
-export function codingJobReceipt(job){
-  if(!job)return {ok:false,error:'Nenhuma tarefa de programação registrada nesta conversa.'};
+// Stages are stored as keys and shown in the account language; a stage saved as
+// plain text by an older version is shown as it was.
+const STAGES=new Set(['preparing','reading','editing','verifying','running','resuming']);
+const stageText=(stage,language)=>stage&&STAGES.has(stage)?productI18n().t(`coding.stage.${stage}`,language):stage||null;
+// Every text here reaches the person as is (chat, Telegram, WhatsApp), with no
+// model turn to translate it. job.language is set by the worker before delivery.
+export function codingJobReceipt(job,language=job?.language||LEGACY_TEXT_LANGUAGE){
+  const {t}=productI18n();
+  if(!job)return {ok:false,error:t('coding.job.none',language)};
   const queued=waiting(job);
-  const recovery=job.state==='paused'?codingRecovery(job.result):null;
-  return {ok:true,programming_job:{id:job.id,state:job.state,kind:job.kind,stage:job.stage||null,updatedAt:job.updatedAt,notification:job.notification?.state||null,background:ACTIVE.has(job.state),queued,
+  const recovery=job.state==='paused'?codingRecovery(job.result,language):null;
+  const stage=stageText(job.stage,language);
+  const next=queued?' '+t('coding.job.queued_next',language,{count:queued}):'';
+  return {ok:true,programming_job:{id:job.id,state:job.state,kind:job.kind,stage,updatedAt:job.updatedAt,notification:job.notification?.state||null,background:ACTIVE.has(job.state),queued,
       resumeCount:job.resumeCount||0,recovery,consumption:codingConsumption(job.result)},
-    text:job.state==='completed'?(job.result?.text||'A execução terminou; consulte as verificações e pendências no resultado.')
-      :job.state==='cancelled'?'A tarefa foi interrompida. Alterações já realizadas foram preservadas.'
-      :job.state==='paused'?`${job.result?.text||'A tarefa precisa de atenção antes de continuar.'}\n\n${recovery.nextStep}${queued?` As ${queued} solicitações seguintes continuam aguardando.`:''}`
-      :job.stage?`O trabalho está em andamento. Última etapa registrada: ${job.stage}.${queued?` Há ${queued} solicitação(ões) na sequência.`:''}`
-      :`Vou começar agora e te aviso assim que concluir.${queued?` Há ${queued} solicitação(ões) na sequência.`:''}`};
+    text:job.state==='completed'?(job.result?.text||t('coding.job.completed',language))
+      :job.state==='cancelled'?t('coding.job.cancelled',language)
+      :job.state==='paused'?`${job.result?.text||t('coding.job.needs_attention',language)}\n\n${recovery.nextStep}${queued?' '+t('coding.job.waiting_after_pause',language,{count:queued}):''}`
+      :stage?t('coding.job.in_progress',language,{stage})+next
+      :t('coding.job.starting',language)+next};
 }
 function newJob(identity,input,requestId,at,queuedInputs=[]){
   return {...copy(input),...copy(identity),id:randomUUID(),requestId,state:'queued',stage:null,createdAt:at,updatedAt:at,nextRunAt:at,lastStartedAt:null,runCount:0,delivered:false,queuedInputs};
@@ -29,8 +40,11 @@ function confirmedSubmissions(job,at){
   for(const next of job?.queuedInputs||[])if(next.requestId?.startsWith('confirmation:'))entries.push({id:next.requestId,at:next.enqueuedAt});
   return [...new Map(entries.filter(x=>Number(x.at)>at-14*86400_000).map(x=>[x.id,x])).values()];
 }
-export function createCodingJobs({store,execute,deliver,notify,cancelTask=async()=>{},creditStatus,onSnapshot,now=()=>Date.now(),concurrency=2,onError=()=>{}}){
+export function createCodingJobs({store,execute,deliver,notify,cancelTask=async()=>{},creditStatus,onSnapshot,languageOf=async()=>LEGACY_TEXT_LANGUAGE,now=()=>Date.now(),concurrency=2,onError=()=>{}}){
   const active=new Set(),activeUsers=new Set();let timer=null,scanning=false,closing=false;const drainWaiters=[];
+  // Account language of the texts below; a failed lookup never blocks the job.
+  const languageFor=async userId=>{try{return await languageOf(userId)||LEGACY_TEXT_LANGUAGE;}catch(e){onError(e);return LEGACY_TEXT_LANGUAGE;}};
+  const {t}=productI18n();
   async function flushMeasurement(record,save){
     if(!onSnapshot||!record?.measurementPending)return;
     await onSnapshot(copy(record));record.measurementPending=false;await save(record);
@@ -54,25 +68,26 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
     if(ownsUserSlot)activeUsers.add(snapshot.userId);
     try{await withJob(scope,async({record:job,save,archive})=>{
       if(!job)return;
+      const language=await languageFor(job.userId);
       if(job.state==='paused'&&(await store.read('control:'+job.id))?.cancel){
-        job.state='cancelled';job.queuedInputs=[];job.result={...job.result,ok:false,text:'Tarefa interrompida; alterações já feitas foram preservadas.'};job.updatedAt=now();await save(job);
+        job.state='cancelled';job.queuedInputs=[];job.result={...job.result,ok:false,text:t('coding.job.interrupted',language)};job.updatedAt=now();await save(job);
       }
       if(ACTIVE.has(job.state)){
         // A queued/resumed job may replace the terminal snapshot while we wait
         // for its lock. Claim the user slot before executing that new state.
         if(!ownsUserSlot){if(activeUsers.has(job.userId))return;activeUsers.add(job.userId);ownsUserSlot=true;}
         const command=await store.read('control:'+job.id);
-        if(command?.cancel){job.state='cancelled';job.queuedInputs=[];job.result={...job.result,ok:false,text:'Tarefa interrompida; alterações já feitas foram preservadas.'};}
+        if(command?.cancel){job.state='cancelled';job.queuedInputs=[];job.result={...job.result,ok:false,text:t('coding.job.interrupted',language)};}
         else{
           job.state='running';job.lastStartedAt=now();job.runCount=(job.runCount||0)+1;job.updatedAt=now();await save(job);
           let result;
           try{result=await execute(copy(job),{
             shouldStop:async()=>closing||!!(await store.read('control:'+job.id))?.cancel,
             progress:async stage=>{job.stage=String(stage).slice(0,120);job.updatedAt=now();await save(job);},
-          });}catch(e){onError(e);result={ok:false,coding_task:{state:'paused',reason:'execution_error'},text:'A execução foi interrompida; o estado está salvo e nenhuma operação incerta será repetida automaticamente.'};}
+          });}catch(e){onError(e);result={ok:false,coding_task:{state:'paused',reason:'execution_error'},text:t('coding.job.execution_error',language)};}
           const cancelled=!!(await store.read('control:'+job.id))?.cancel;
           const reason=result?.coding_task?.reason||result?.app_build?.motivo;
-          job.result=cancelled?{...copy(result||{}),ok:false,text:'A tarefa foi interrompida. Alterações já realizadas foram preservadas.'}:copy(result||{});
+          job.result=cancelled?{...copy(result||{}),ok:false,text:t('coding.job.cancelled',language)}:copy(result||{});
           if(cancelled){job.state='cancelled';job.queuedInputs=[];}
           else if(REQUEUE.has(reason)||closing&&reason==='new_user_input'){job.state='queued';job.nextRunAt=now()+2000;}
           else job.state=result?.coding_task?.state==='completed'||result?.app_build?.motivo==='completed'?'completed':'paused';
@@ -83,6 +98,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       if(!ACTIVE.has(job.state)&&!job.delivered){
         // The delivery adapter MUST deduplicate by job ID + resume generation in the same transaction
         // as the history append. Retrying an unknown HTTP send is not allowed.
+        job.language=language;
         await deliver(copy(job));
         if(notify&&['telegram','whatsapp'].includes(job.channel)){
           if(job.notification?.state==='dispatching')job.notification={state:'unknown',at:now()};
@@ -146,15 +162,17 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
         await archive();
         const next=newJob(identity,input,requestId,now(),approvedContinuation?record.queuedInputs||[]:[]);next.confirmedSubmissions=confirmedSubmissions({...next,confirmedSubmissions:submissions},now());await save(next);return next;
       });
-      if(alreadySubmitted)return {...codingJobReceipt(job),ok:true,already_submitted:true,text:'Essa continuação já foi recebida. Não iniciei outra execução.'};
-      if(job.requestId!==requestId&&!job.queuedInputs?.some(x=>x.requestId===requestId))return {...codingJobReceipt(job),ok:false,text:'A fila desta conversa já tem cinco solicitações. Aguarde uma concluir ou peça para parar.'};
-      if(job.requestId!==requestId)return {...codingJobReceipt(job),ok:true,queued_request:true,text:job.state==='paused'
-        ? `Registrei a solicitação na fila. A tarefa anterior está pausada: ${codingRecovery(job.result).nextStep}`
-        :acceptedFollow?'Recebi a nova solicitação e a coloquei na sequência da tarefa atual. Não interrompi nem misturei os dois escopos.':'Essa solicitação já está na sequência da tarefa atual.'};
-      return codingJobReceipt(job);
+      const language=await languageFor(identity.userId);
+      if(alreadySubmitted)return {...codingJobReceipt(job,language),ok:true,already_submitted:true,text:t('coding.job.already_submitted',language)};
+      if(job.requestId!==requestId&&!job.queuedInputs?.some(x=>x.requestId===requestId))return {...codingJobReceipt(job,language),ok:false,text:t('coding.job.queue_full',language)};
+      if(job.requestId!==requestId)return {...codingJobReceipt(job,language),ok:true,queued_request:true,text:job.state==='paused'
+        ? t('coding.job.queued_behind_pause',language,{next_step:codingRecovery(job.result,language).nextStep})
+        :t(acceptedFollow?'coding.job.queued_follow':'coding.job.already_queued',language)};
+      return codingJobReceipt(job,language);
     },
     async status(identity){
-      const receipt=codingJobReceipt(await store.read(codingJobScope(identity)));
+      const language=await languageFor(identity.userId);
+      const receipt=codingJobReceipt(await store.read(codingJobScope(identity)),language);
       if(receipt.programming_job&&creditStatus){
         try{
           const value=await creditStatus(identity.userId);
@@ -162,32 +180,33 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
           if(value===null){receipt.accountCredits=null;return receipt;}
           if(!value||!['remaining','held','available'].every(k=>Number.isFinite(value[k])&&value[k]>=0))throw Error('Credit snapshot unavailable');
           receipt.accountCredits={...value,at:now()};
-          receipt.text+=`\n\nSaldo livre da conta: ${value.available.toLocaleString('pt-BR')} créditos; reservados: ${value.held.toLocaleString('pt-BR')}. A reserva da próxima etapa será conferida antes da chamada.`;
-        }catch{receipt.accountCredits=null;receipt.text+='\n\nNão consegui consultar o saldo agora; isso não indica saldo esgotado.';}
+          receipt.text+='\n\n'+t('coding.job.credit_balance',language,{available:value.available.toLocaleString(language),held:value.held.toLocaleString(language)});
+        }catch{receipt.accountCredits=null;receipt.text+='\n\n'+t('coding.job.credit_unknown',language);}
       }
       return receipt;
     },
     async resume(identity,{policy,requestId=null}={}){
       const scope=codingJobScope(identity),snapshot=await store.read(scope);
-      if(!snapshot||snapshot.state!=='paused')return codingJobReceipt(snapshot);
+      const language=await languageFor(identity.userId);
+      if(!snapshot||snapshot.state!=='paused')return codingJobReceipt(snapshot,language);
       return withJob(scope,async({record,save,archive})=>{
-        if(!record||record.id!==snapshot.id||record.state!=='paused')return codingJobReceipt(record);
-        if(record.policy!==policy)return {ok:false,text:'As permissões ou o ambiente mudaram. Confira o escopo antes de retomar.'};
-        if((await store.read('control:'+record.id))?.cancel)return {ok:false,text:'O cancelamento dessa tarefa já foi solicitado; não a retomei.'};
-        if(requestId&&record.resumeRequests?.some(x=>x.id===requestId))return {...codingJobReceipt(record),replay:true};
-        const recovery=codingRecovery(record.result);
-        if(!recovery.canResume)return {...codingJobReceipt(record),ok:false};
-        if(!record.delivered)return {ok:false,text:'O resultado da pausa ainda está sendo salvo na conversa. Aguarde antes de retomar.'};
+        if(!record||record.id!==snapshot.id||record.state!=='paused')return codingJobReceipt(record,language);
+        if(record.policy!==policy)return {ok:false,text:t('coding.job.policy_changed',language)};
+        if((await store.read('control:'+record.id))?.cancel)return {ok:false,text:t('coding.job.cancel_already_requested',language)};
+        if(requestId&&record.resumeRequests?.some(x=>x.id===requestId))return {...codingJobReceipt(record,language),replay:true};
+        const recovery=codingRecovery(record.result,language);
+        if(!recovery.canResume)return {...codingJobReceipt(record,language),ok:false};
+        if(!record.delivered)return {ok:false,text:t('coding.job.pause_saving',language)};
         record.resumeCount=(record.resumeCount||0)+1;
         record.resumeRequests=[...(record.resumeRequests||[]).filter(x=>x.at>now()-14*86400_000),...(requestId?[{id:requestId,at:now()}]:[])];
-        record.state='queued';record.stage='Retomando do progresso salvo';record.nextRunAt=now();record.updatedAt=now();
+        record.state='queued';record.stage='resuming';record.nextRunAt=now();record.updatedAt=now();
         record.delivered=false;record.notification=null;
         await save(record);
-        return {...codingJobReceipt(record),text:'Retomada registrada para a mesma tarefa. Vou recuperar o progresso e os resultados já salvos; novas etapas continuam sujeitas ao saldo disponível.'};
+        return {...codingJobReceipt(record,language),text:t('coding.job.resumed',language)};
       });
     },
     async cancel(identity){
-      const scope=codingJobScope(identity),job=await store.read(scope);if(!job)return codingJobReceipt(null);
+      const scope=codingJobScope(identity),job=await store.read(scope),language=await languageFor(identity.userId);if(!job)return codingJobReceipt(null,language);
       if(ACTIVE.has(job.state)||job.state==='paused'){
         await store.withTask('control:'+job.id,async({save})=>save({cancel:true,at:now()}));
       }
@@ -195,13 +214,13 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
         await withJob(scope,async({record,save,archive})=>{
           if(record?.id!==job.id||!['paused','queued'].includes(record.state))return;
           await cancelTask(copy(record));record.state='cancelled';record.cancellationApplied=true;record.queuedInputs=[];
-          record.result={...record.result,ok:false,text:'Tarefa interrompida; alterações já feitas foram preservadas.'};record.updatedAt=now();await save(record);
+          record.result={...record.result,ok:false,text:t('coding.job.interrupted',language)};record.updatedAt=now();await save(record);
         }).catch(error=>{if(error?.code!=='TASK_LOCK_BUSY')throw error;});
       }
       const latest=await store.read(scope);
       return {ok:true,text:(ACTIVE.has(job.state)||job.state==='paused'&&latest?.state!=='cancelled')
-        ?'Recebi o pedido para parar. Vou interromper na próxima fronteira segura, preservar as alterações e remover as solicitações da fila.'
-        :codingJobReceipt(latest).text};
+        ?t('coding.job.stopping',language)
+        :codingJobReceipt(latest,language).text};
     },
     async metrics(){
       const jobs=(await store.entries()).filter(x=>x.scope.startsWith('["coding-job",')&&x.record).map(x=>x.record),at=now();
@@ -228,8 +247,14 @@ export function codingControlIntent(message){
   const text=message.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/[.!?]+$/,'').trim();
   if(/^(como (esta|ta|vai)( o (trabalho|projeto|andamento))?|qual (e )?o (status|andamento)|status|andamento)$/.test(text))return 'status';
   if(/^(pare|parar|pode parar|cancele|cancela)( (a tarefa|o trabalho|a programacao))?$/.test(text))return 'cancel';
+  // Resume is matched in every product language because the pause notice names the
+  // phrase (coding.resume_command) in the account language.
   if(/^(retomar|retome|retoma)( (a )?(programacao|tarefa|trabalho))?$/.test(text)
-    || /^(continuar|continue) (a )?(programacao|tarefa|trabalho)$/.test(text))return 'resume';
+    || /^(continuar|continue) (a )?(programacao|tarefa|trabalho)$/.test(text)
+    || /^resume (the )?(programming|coding|task|work)$/.test(text)
+    || /^continue (the )?(programming|coding|task|work)$/.test(text)
+    || /^(reanudar|reanuda|reanude)( (la |el )?(programacion|tarea|trabajo))?$/.test(text)
+    || /^(continuar|continua|continue) (la |el )?(programacion|tarea|trabajo)$/.test(text))return 'resume';
   return null;
 }
 

@@ -30,10 +30,10 @@ function observedEffect(out,mutating){
 export async function runCodingTask({store,scope,executionId,target,objetivo,tools,provider,system,language=LEGACY_TEXT_LANGUAGE,
   authorize,onUsage,onEvent=()=>{},shouldPause,now=()=>Date.now(),windowMs=15*60_000,quantumSteps=40,compactChars=96_000}) {
   if(!scope||!target||!String(objetivo||'').trim()||typeof authorize!=='function')throw Error('Invalid coding task identity');
-  if(!await authorize())return {ok:false,coding_task:{state:'paused',reason:'access_denied'},text:'O acesso ao ambiente mudou; não executei a tarefa.'};
+  if(!await authorize())return {ok:false,coding_task:{state:'paused',reason:'access_denied'},text:productI18n().t('coding.run.access_denied',language)};
   return store.withTask(scope,async({record,save})=>{
     if(record&&record.target!==target)throw Error('Coding target mismatch');
-    if(record?.status==='cancelled'&&(record.pending?.mutating||record.modelCall))return {ok:false,coding_task:{state:'paused',reason:'canceled_pending_reconciliation'},text:'A tarefa cancelada tem uma operação ou cobrança pendente de reconciliação. Não iniciei outra tarefa neste ambiente.'};
+    if(record?.status==='cancelled'&&(record.pending?.mutating||record.modelCall))return {ok:false,coding_task:{state:'paused',reason:'canceled_pending_reconciliation'},text:productI18n().t('coding.run.cancelled_pending',language)};
     if(executionId&&record?.lastExecutionId===executionId&&record.lastResult&&!['execution_window','execution_quantum','workspace_busy','new_user_input'].includes(record.lastResult.coding_task?.reason))return copy(record.lastResult);
     let task=record;
     if(!task||(['completed','cancelled'].includes(task.status)&&!task.pending&&!task.modelCall))
@@ -67,11 +67,11 @@ export async function runCodingTask({store,scope,executionId,target,objetivo,too
       prepareContext:context.prepare,
       async beforeStep({messages,step}) {
         await calls.consumed();task.history=copy(messages);await persist();
-        if(!await authorize())return {stop:'access_denied',text:'O acesso ao ambiente mudou.'};
-        if(task.pending?.mutating)return {stop:'uncertain_action',text:'Uma operação anterior precisa de reconciliação; não a repeti.'};
-        if(await shouldPause?.())return {stop:'new_user_input',text:'Progresso salvo para considerar sua nova instrução.'};
-        if(Number.isFinite(quantumSteps)&&quantumSteps>0&&step>=quantumSteps)return {stop:'execution_quantum',text:'Progresso salvo; vou liberar o executor para outras tarefas e retomar automaticamente.'};
-        if(now()-start>=windowMs)return {stop:'execution_window',text:'Progresso salvo; execução aguardando retomada operacional.'};
+        if(!await authorize())return {stop:'access_denied',text:productI18n().t('coding.run.access_changed',language)};
+        if(task.pending?.mutating)return {stop:'uncertain_action',text:productI18n().t('coding.run.needs_reconciliation',language)};
+        if(await shouldPause?.())return {stop:'new_user_input',text:productI18n().t('coding.run.new_input',language)};
+        if(Number.isFinite(quantumSteps)&&quantumSteps>0&&step>=quantumSteps)return {stop:'execution_quantum',text:productI18n().t('coding.run.quantum',language)};
+        if(now()-start>=windowMs)return {stop:'execution_window',text:productI18n().t('coding.run.window',language)};
         if(messages.length>14&&JSON.stringify(messages).length>compactChars){
           const cut=codingCompactionCut(messages);
           if(cut>1){
@@ -97,11 +97,11 @@ export async function runCodingTask({store,scope,executionId,target,objetivo,too
           messages.at(-1).content=JSON.stringify({resumo:text.slice(0,2000),resultado_persistente:ref,total:text.length,orientacao:'Use ler_resultado_de_programacao para recuperar páginas sem repetir a operação original.'});
         }
         task.history=copy(messages);event('tool',{tool:call.name,effect});await calls.toolConsumed(call);await persist();
-        if(effect==='unknown')return {stop:'uncertain_action',text:'O comando terminou sem confirmação suficiente do efeito. Preservei o estado e não repeti nem executei outra ação.'};
+        if(effect==='unknown')return {stop:'uncertain_action',text:productI18n().t('coding.run.unconfirmed_effect',language)};
       },
     };
     let result;
-    if(task.pending?.mutating)result={termination:'uncertain_action',text:'Uma operação anterior precisa de reconciliação; não a repeti.'};
+    if(task.pending?.mutating)result={termination:'uncertain_action',text:productI18n().t('coding.run.needs_reconciliation',language)};
     else try {
       if(task.modelCall?.kind==='compact'){if(!task.compactionResume?.tail)throw Error('Missing compaction checkpoint');await finishCompaction();}
       task.status='active';task.history=closeTaskHistory(task.history);await persist();
@@ -112,7 +112,7 @@ export async function runCodingTask({store,scope,executionId,target,objetivo,too
     task.status=result.termination==='completed'?'completed':'paused';
     task.lastResult={ok:task.status==='completed',coding_task:{id:task.id,target,state:task.status,reason:result.termination,calls:task.calls,tokens:task.tokens,
       consumptionPending:!!task.modelCall&&!task.modelCall.accounted,
-      progress:{recordedSteps:task.events.filter(e=>e.name==='tool').length,lastTool:task.events.findLast(e=>e.name==='tool')?.tool||null,pendingAction:task.pending?.name||null}},text:result.text||'A execução terminou sem confirmação textual de conclusão.'};
+      progress:{recordedSteps:task.events.filter(e=>e.name==='tool').length,lastTool:task.events.findLast(e=>e.name==='tool')?.tool||null,pendingAction:task.pending?.name||null}},text:result.text||productI18n().t('coding.run.finished_without_text',language)};
     task.lastExecutionId=executionId||null;
     if(result.termination==='completed')await calls.consumed();
     event('stop',{reason:result.termination});await persist();return task.lastResult;

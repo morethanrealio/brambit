@@ -1,25 +1,25 @@
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 export const codingPauseReason = result => result?.coding_task?.reason || result?.app_build?.motivo || 'execution_error';
 const resumable = new Set(['execution_window','execution_quantum','workspace_busy','new_user_input','execution_error',
   'account_credit_exhausted','account_credit_reserved','credit_reservation_unavailable','credit_quote_unavailable',
   'credit_reconciliation_required','credit_control_unavailable','provider_failure','provider_unavailable',
   'report_partial','report_rejected','report_unavailable','review_partial','edit_validation_pending']);
-export function codingRecovery(result) {
+// The next step goes straight to the person (chat, Telegram, WhatsApp), so it comes
+// from the catalog in the account language and names the resume phrase that
+// codingControlIntent recognizes in that language.
+export function codingRecovery(result,language=LEGACY_TEXT_LANGUAGE) {
   const reason = codingPauseReason(result);
   const canResume = resumable.has(reason);
-  const nextStep = reason === 'uncertain_action' || reason === 'canceled_pending_reconciliation'
-    ? 'Há uma operação com resultado incerto. É preciso conferir seu efeito no ambiente antes de continuar; não vou repeti-la.'
-    : ['access_denied','target_changed','mode_conflict','scope_clarification','draft_changed'].includes(reason)
-      ? 'Confira o acesso, o alvo e o escopo da tarefa antes de autorizar uma nova execução.'
-    : reason === 'account_credit_exhausted'
-      ? 'O progresso está salvo. Quando houver saldo, diga “retomar programação”.'
-    : reason === 'account_credit_reserved'
-      ? 'O progresso está salvo; há créditos reservados, o que não significa saldo esgotado. Depois da liberação, diga “retomar programação”.'
-    : reason === 'credit_reconciliation_required'
-      ? 'Diga “retomar programação” para tentar recuperar o resultado e a cobrança já registrados. Uma chamada ainda incerta não será reenviada.'
-    : reason === 'credit_reservation_unavailable'
-      ? 'O saldo livre não cobre a reserva estimada da próxima chamada. O progresso está salvo; retome quando houver saldo suficiente.'
-    : canResume ? 'O progresso está salvo. Diga “retomar programação” para continuar a mesma tarefa.'
-      : 'A tarefa precisa de uma instrução que resolva a pendência indicada antes de continuar.';
+  const key = reason === 'uncertain_action' || reason === 'canceled_pending_reconciliation' ? 'uncertain'
+    : ['access_denied','target_changed','mode_conflict','scope_clarification','draft_changed'].includes(reason) ? 'check_scope'
+    : reason === 'account_credit_exhausted' ? 'credit_exhausted'
+    : reason === 'account_credit_reserved' ? 'credit_reserved'
+    : reason === 'credit_reconciliation_required' ? 'credit_reconciliation'
+    : reason === 'credit_reservation_unavailable' ? 'credit_reservation'
+    : canResume ? 'resumable' : 'needs_instruction';
+  const {t}=productI18n();
+  const nextStep = t(`coding.recovery.${key}`, language, {command: t('coding.resume_command', language)});
   return { reason, canResume, nextStep };
 }
 export function codingConsumption(result) {

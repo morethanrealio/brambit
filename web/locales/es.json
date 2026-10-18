@@ -2096,6 +2096,73 @@
   "coding": {
     "stop": {
       "interrupted": "La ejecución se interrumpió; se conservó el estado."
+    },
+    "resume_command": "reanudar programación",
+    "recovery": {
+      "uncertain": "Hay una operación con resultado incierto. Hay que revisar su efecto en el entorno antes de continuar; no la voy a repetir.",
+      "check_scope": "Revisa el acceso, el destino y el alcance de la tarea antes de autorizar una nueva ejecución.",
+      "credit_exhausted": "El progreso está guardado. Cuando haya saldo, di “{command}”.",
+      "credit_reserved": "El progreso está guardado; hay créditos reservados, lo que no significa que se agotó el saldo. Cuando se liberen, di “{command}”.",
+      "credit_reconciliation": "Di “{command}” para intentar recuperar el resultado y el cobro ya registrados. Una llamada todavía incierta no se volverá a enviar.",
+      "credit_reservation": "El saldo libre no cubre la reserva estimada de la próxima llamada. El progreso está guardado; reanuda cuando haya saldo suficiente.",
+      "resumable": "El progreso está guardado. Di “{command}” para continuar la misma tarea.",
+      "needs_instruction": "La tarea necesita una instrucción que resuelva el pendiente indicado antes de continuar."
+    },
+    "stage": {
+      "preparing": "Preparando el entorno",
+      "reading": "Leyendo el código",
+      "editing": "Aplicando cambios",
+      "verifying": "Revisando cambios",
+      "running": "Ejecutando un paso en el entorno autorizado",
+      "resuming": "Reanudando desde el progreso guardado"
+    },
+    "job": {
+      "none": "No hay ninguna tarea de programación registrada en esta conversación.",
+      "completed": "La ejecución terminó; consulta las verificaciones y los pendientes en el resultado.",
+      "cancelled": "La tarea se detuvo. Los cambios ya hechos se conservaron.",
+      "needs_attention": "La tarea necesita atención antes de continuar.",
+      "waiting_after_pause_one": "La siguiente solicitud sigue esperando.",
+      "waiting_after_pause_other": "Las {count} solicitudes siguientes siguen esperando.",
+      "in_progress": "El trabajo está en curso. Último paso registrado: {stage}.",
+      "starting": "Empiezo ahora y te aviso en cuanto termine.",
+      "queued_next_one": "Hay 1 solicitud después de esta.",
+      "queued_next_other": "Hay {count} solicitudes después de esta.",
+      "interrupted": "Tarea detenida; los cambios ya hechos se conservaron.",
+      "execution_error": "La ejecución se interrumpió; el estado está guardado y ninguna operación incierta se repetirá automáticamente.",
+      "already_submitted": "Esta continuación ya se recibió. No inicié otra ejecución.",
+      "queue_full": "La cola de esta conversación ya tiene cinco solicitudes. Espera a que una termine o pídeme que pare.",
+      "queued_behind_pause": "Agregué la solicitud a la cola. La tarea anterior está en pausa: {next_step}",
+      "queued_follow": "Recibí la nueva solicitud y la puse después de la tarea actual. No interrumpí ni mezclé los dos alcances.",
+      "already_queued": "Esta solicitud ya está en la cola después de la tarea actual.",
+      "credit_balance": "Saldo libre de la cuenta: {available} créditos; reservados: {held}. La reserva del próximo paso se revisará antes de la llamada.",
+      "credit_unknown": "No pude consultar el saldo ahora; eso no indica que se agotó.",
+      "policy_changed": "Los permisos o el entorno cambiaron. Revisa el alcance antes de reanudar.",
+      "cancel_already_requested": "Ya se pidió detener esta tarea; no la reanudé.",
+      "pause_saving": "El resultado de la pausa todavía se está guardando en la conversación. Espera antes de reanudar.",
+      "resumed": "Reanudación registrada para la misma tarea. Voy a recuperar el progreso y los resultados ya guardados; los nuevos pasos siguen sujetos al saldo disponible.",
+      "stopping": "Recibí el pedido para parar. Voy a detenerme en el próximo punto seguro, conservar los cambios y quitar las solicitudes de la cola."
+    },
+    "run": {
+      "conversation_changed": "El acceso a la conversación o al asistente cambió; la tarea no se ejecutó.",
+      "continuation_revoked": "Esta continuación se canceló o perdió la autorización; no inicié otra ejecución.",
+      "missing_environment": "Faltó la identidad autorizada del entorno; no se ejecutó ninguna operación.",
+      "environment_changed": "El entorno o sus permisos cambiaron; no ejecuté la tarea.",
+      "workspace_busy": "Esperando a que otra ejecución libere este entorno.",
+      "access_denied": "El acceso al entorno cambió; no ejecuté la tarea.",
+      "access_changed": "El acceso al entorno cambió.",
+      "cancelled_pending": "La tarea cancelada tiene una operación o un cobro pendiente de conciliación. No inicié otra tarea en este entorno.",
+      "needs_reconciliation": "Una operación anterior necesita conciliación; no la repetí.",
+      "new_input": "Progreso guardado para tener en cuenta tu nueva instrucción.",
+      "quantum": "Progreso guardado; voy a liberar el ejecutor para otras tareas y reanudar automáticamente.",
+      "window": "Progreso guardado; la ejecución espera ser reanudada.",
+      "unconfirmed_effect": "El comando terminó sin confirmación suficiente de su efecto. Conservé el estado y no lo repetí ni ejecuté otra acción.",
+      "finished_without_text": "La ejecución terminó sin una confirmación escrita de que se completó."
+    },
+    "notify": {
+      "prefix": "{name} — programación: {text}",
+      "default_name": "Asistente",
+      "fallback": "La tarea se interrumpió; revisa el avance en la conversación de la app.",
+      "truncated": "… El resultado completo está en la conversación de la app {brand}."
     }
   }
 }
