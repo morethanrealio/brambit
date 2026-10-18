@@ -5,7 +5,7 @@
 // line in both pages AND facts (including closed ones, which are the history), without
 // accents, with ANY word, and ranks: a rare word weighs more than a common one,
 // and the line that matches more search words rises. Off by default: MEMORY_SEARCH_V2=1.
-import { termos } from './wiki-reconciliar.mjs';
+import { termos } from './wiki-reconcile.mjs';
 
 export const buscaV2Ligada = () => process.env.MEMORY_SEARCH_V2 === '1';
 

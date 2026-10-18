@@ -13,7 +13,7 @@ import {
   createProject, listProjects, getProject, getProjectByName,
   updateProjectFields, setAgentActiveProject, getActiveProjectForAgent,
 } from './db.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 // Normalizes what the user gave as "repo" in a clonable URL.
 // Accepts a full URL (https/ssh) or the "owner/repo" shortcut.

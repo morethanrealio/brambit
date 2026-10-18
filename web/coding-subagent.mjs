@@ -25,7 +25,7 @@ import { retainedFilePage } from '../core-proto/file-page.mjs';
 import { createBuildState } from './app-build-state.mjs';
 import { runAgent } from '../core-proto/core.mjs';
 import { comIdioma } from './locale.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 // Persistent coding sessions, keyed by sessionKey = `${agentId}:${threadId}`.
 // { history: [...], lastUsed: ms }. Idle > SESSION_TTL_MS gets collected (the work

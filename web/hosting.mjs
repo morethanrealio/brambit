@@ -17,13 +17,13 @@ import { validateDraft, validationPage, draftRevision } from './app-draft-valida
 import zlib from 'node:zlib';
 import { createHash, randomBytes } from 'node:crypto';
 import { ctl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
-import { linkDaPagina, marca } from './marca.mjs';
+import { linkDaPagina, marca } from './brand.mjs';
 import { lintAppB64, countLines } from './applint.mjs';
 import { resolverAncora } from './app-anchor.mjs';
 import { pioraSintaxe } from './app-syntax.mjs';
 import { draftOnlyNotice, deleteDraftOnly } from './app-draft-delete.mjs';
 import { avaliarReducao } from './app-shrink-guard.mjs';
-import { conferirPermissoes } from './permissoes.mjs';
+import { conferirPermissoes } from './permissions.mjs';
 import { ensureUserSubdomain, registerApp, setAppStatus, deleteAppRow, getAppRow, listAppsForUser,
   setAppSecret, listAppSecrets, deleteAppSecret, getAppSecretsDecrypted,
   setAppSnapshot, getAppSnapshot, setLibraryVisibility, listPublicApps, getPublicApp,
@@ -395,7 +395,7 @@ async function ensureDraftSeeded(ownerUserId, system, app) {
   return draft;
 }
 
-// ── App cap (permissions port, permissoes.mjs) ──
+// ── App cap (permissions port, permissions.mjs) ──
 // The cap applies only to a NEW app and counts the OWNER's apps, not the caller's:
 // in a collaborative publish (Mode B) the owner pays for the resource.
 // Republishing/editing an existing app is NEVER blocked. The cap and what to

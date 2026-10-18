@@ -106,8 +106,8 @@ for (const status of [403,429,302,'throw']) {
  for(const u of links)ok(r.texto.includes(u));ok(!r.texto.includes('⚠️'));
  const bad=url(404),s=await fontesEConferencia(`• Item ${bad}`,[],{strictLinks:true});eq(s.quebrados,[bad]);ok(!s.texto.includes(bad));
 }
-// Final cleanup the server uses (citacoes.mjs), imported for real.
-const {stripCitationMarkers:strip,limparTextoFinal,registroDeFontes,citarFontes}=await import('../web/citacoes.mjs');
+// Final cleanup the server uses (citations.mjs), imported for real.
+const {stripCitationMarkers:strip,limparTextoFinal,registroDeFontes,citarFontes}=await import('../web/citations.mjs');
 for(const marker of ['[cite: 1]','[cite: 1.1.3]','[cite: 1, 2]','[CITE: 7]']){
  eq(strip('Texto '+marker+'.'),'Texto.');eq(strip('Um '+marker+' texto'),'Um texto');eq(strip(marker+' Texto'),'Texto');
  eq(strip('Texto '+marker+'.\nFontes:\n[1] Fonte https://source.example.invalid/'),'Texto.\nFontes:\n[1] Fonte https://source.example.invalid/');

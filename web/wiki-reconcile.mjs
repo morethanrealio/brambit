@@ -7,7 +7,7 @@
 //
 // The model only DECIDES and points at the excerpt; the new line is assembled here via replace,
 // so outside the excerpt it stays letter-for-letter the old one (same rule as corrigirPerdedora).
-import { makeMemoriaModel } from './memoria-modelo.mjs';
+import { makeMemoriaModel } from './memory-model.mjs';
 
 export const reconciliarLigado = () => process.env.MEMORY_RECONCILE === '1';
 

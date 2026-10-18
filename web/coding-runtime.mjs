@@ -6,7 +6,7 @@ import {createCodingApprovals} from './coding-approvals.mjs';
 import {codingPolicySnapshot} from './coding-jobs.mjs';
 import {codingExecutionId} from './coding-recovery-policy.mjs';
 import {enderecosDe,materialDoDono,semLinksInventados} from './links.mjs';
-import {marca} from './marca.mjs';
+import {marca} from './brand.mjs';
 // Server-bound adapter composition. Dependency injection lets the complete
 // lifecycle run against isolated accounts/transports, never production fixtures.
 export function createProgrammingRuntime(deps){

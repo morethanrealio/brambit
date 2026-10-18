@@ -25,7 +25,7 @@
 
 import path from 'path';
 import { assertDeepSeekEgress } from '../core-proto/deepseek/scope.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 // Expected hosts, from the 2026-08-27 inventory. Each entry matches the exact
 // host OR any subdomain of it. A new integration goes in here in the same

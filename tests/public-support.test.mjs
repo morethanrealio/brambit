@@ -9,11 +9,11 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/publico.mjs');
-const { registrarRotasDoDono } = await import('../web/publico-dono.mjs');
-const { createRotas } = await import('../web/rotas.mjs');
+const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
+const { registrarRotasDoDono } = await import('../web/public-support-owner.mjs');
+const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
-const { criarAtendimentoDoServidor } = await import('../web/publico-canal.mjs');
+const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -467,8 +467,8 @@ test('open sign-up keeps public support off on every channel until it is closed'
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('publico.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {
-  const src = fs.readFileSync(new URL('../web/publico.mjs', import.meta.url), 'utf8');
+test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {
+  const src = fs.readFileSync(new URL('../web/public-support.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './locale.mjs', './publico-saidas.mjs', './vault.mjs']);
+  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './locale.mjs', './public-support-outputs.mjs', './vault.mjs']);
 });

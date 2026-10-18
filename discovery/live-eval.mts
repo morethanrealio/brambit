@@ -11,7 +11,7 @@ const provider = makeTogether({ model: TOGETHER_FLASH_MODEL, maxTokens: 12000 })
 // Journey brief through the briefDaJornada port of the repo's plugins; with no plugin, the core default.
 const { carregarPlugins, juntarPortas } = await import(pathToFileURL(path.join(repo, 'web/plugins.mjs')).href);
 const brief: string | undefined = juntarPortas(await carregarPlugins(), { publicBase: '', notifyOwner: async () => {} }).briefDaJornada?.();
-const { marca } = await import(pathToFileURL(path.join(repo, 'web/marca.mjs')).href);
+const { marca } = await import(pathToFileURL(path.join(repo, 'web/brand.mjs')).href);
 const cases = [
     { name: 'compras e decisões da semana', notes: [
         'Faço compras no sábado e esqueço itens, então acabo voltando ao mercado na semana.',

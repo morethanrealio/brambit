@@ -1,4 +1,4 @@
-// Offline test of spreadsheet EDITING by code (web/planilha-edit.mjs).
+// Offline test of spreadsheet EDITING by code (web/sheet-edit.mjs).
 // No DB, no S3, no sandbox: all dependencies come in via `deps`, and the
 // spreadsheet is a fake buffer. Run with: node tests/sheet-edit.test.mjs
 //
@@ -12,7 +12,7 @@ const {
   editSpreadsheet, pickSheetAsset, versionedCaption, hasCutMarker,
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
-} = await import('../web/planilha-edit.mjs');
+} = await import('../web/sheet-edit.mjs');
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };

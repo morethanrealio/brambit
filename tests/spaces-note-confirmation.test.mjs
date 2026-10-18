@@ -15,7 +15,7 @@ export const resolveSpace=async()=>({space:{id:'space-1',title:'Compras',isOwner
 export const getSpaceEntry=async id=>F().notas[id]?{...F().notas[id]}:null;
 export const updateSpaceEntry=async(id,_s,p)=>{F().gravadas.push({id,...p});if(p.body!=null)F().notas[id].body=String(p.body).trim();return {};};`;
 registerHooks({resolve(specifier,context,next){
-  if(specifier==='./compras.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
+  if(specifier==='./shopping.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
   if(specifier==='./db.mjs'&&context.parentURL?.endsWith('/web/spaces.mjs'))return {url:'data:text/javascript,'+encodeURIComponent(fakeDb),shortCircuit:true};
   return next(specifier,context);
 }});
@@ -24,7 +24,7 @@ const {createConfirmationSession,withConfirmationSession}=await import('../web/c
 const {handleConfirmation}=await import('../web/confirmation-flow.mjs');
 const {gateTool}=await import('../web/confirm.mjs');
 const {spacesTools}=await import('../web/spaces.mjs');
-const {cartaoEdicaoNota,diffLinhas}=await import('../web/nota-diff.mjs');
+const {cartaoEdicaoNota,diffLinhas}=await import('../web/note-diff.mjs');
 
 const LISTA=['## Lista Atual','','### 🛒 Supermercado','- Leite','- Pão','','### 🧴 Farmácia','- Protetor','','## Histórico','','### 29/09','- Café'].join('\n');
 const comLinha=(texto,depoisDe,nova)=>texto.replace(depoisDe,`${depoisDe}\n${nova}`);

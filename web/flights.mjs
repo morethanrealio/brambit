@@ -30,7 +30,7 @@ import { createHash } from 'node:crypto';
 import {
   getFlightCache, putFlightCache, recordFlightPrice, flightPriceStats,
 } from './db.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const CACHE_MIN = () => Number(process.env.FLIGHT_CACHE_MIN || 180); // 3h
 

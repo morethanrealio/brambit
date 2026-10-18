@@ -3,7 +3,7 @@
 // just like the real fetch, which is exactly the detail the bug ignored.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lerCorpoComTeto } from '../web/baixar-corpo.mjs';
+import { lerCorpoComTeto } from '../web/download-body.mjs';
 
 process.env.COMFY_URL = 'http://worker.invalido';
 process.env.COMFY_TOKEN = 'token-de-teste';

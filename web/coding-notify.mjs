@@ -1,7 +1,7 @@
 // Explicit origin only. Never fall back to another channel or regenerate text
 // with a paid model. The job outbox prevents retrying an unknown send.
 import {codingJobReceipt} from './coding-jobs.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 export function createCodingNotifier({getAgent,getTelegramBot,getWhatsAppLink,waEnabled,sendTelegram,sendWhatsApp}){
  return async job=>{
   const agent=await getAgent(job.agentId,job.userId);if(!agent)return {state:'unavailable'};

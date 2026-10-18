@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega, LIMITE_ENTREGA_MS } from '../web/video-poll-decisao.mjs';
+import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega, LIMITE_ENTREGA_MS } from '../web/video-poll-decision.mjs';
 
 // Finding #25: a video job that failed on delivery stayed 'queued' forever, the
 // poller would downgrade/re-upload the mp4 every minute, and the owner could never

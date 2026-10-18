@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readProfile, routeAllowed, redirectFor } from '../web/profiles.mjs';
-import { createPermissionsFromEnv } from '../web/permissoes.mjs';
+import { createPermissionsFromEnv } from '../web/permissions.mjs';
 import { APP_PAGES, PUBLIC_SUPPORT_PAGE, movedPagePath } from '../web/page-paths.mjs';
 
 const allowed = (current, method, pathname, registered = false) => routeAllowed(method, pathname, { registered, current });

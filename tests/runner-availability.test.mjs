@@ -1,13 +1,13 @@
 // No real server/DB/daemon. The complete module is evaluated in a VM; only synthetic
 // touch and simulated clock. Real timers, network and processes are forbidden.
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 const denied=()=>{throw Error('REAL I/O FORBIDDEN');};net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;
 for(const n of ['spawn','spawnSync','exec','execSync','execFile','execFileSync','fork'])cp[n]=denied;syncBuiltinESMExports();
 let n=0;const eq=(a,b)=>{assert.deepEqual(a,b);n++;};const ok=a=>{assert.ok(a);n++;};
 let clock=Date.parse('2026-09-10T12:00:00Z');class Clock extends Date{static now(){return clock;}}
-const source=readFileSync('./web/runner.mjs','utf8').replace("import { marca } from './marca.mjs';",'').replaceAll('export ','');
+const source=readFileSync('./web/runner.mjs','utf8').replace("import { marca } from './brand.mjs';",'').replaceAll('export ','');
 function instance(){const context=vm.createContext({marca,Date:Clock,setTimeout:denied,clearTimeout:denied,console:{log(){},warn(){},error(){}}});vm.runInContext(source+';globalThis.p={touch,runnerAvailability,runnerContextForTurn,runnerOnline,runnerStatus,runnerContext};',context);return context.p;}
 const p=instance(),opts={agentId:'agent-a',runnerForThisAgent:true,terminalAvailable:true};
 eq(p.runnerAvailability('user-a').state,'unknown');ok(p.runnerContextForTurn('user-a',opts).includes('NÃO prova'));ok(p.runnerContextForTurn('user-a',opts).includes('servidor pode ter reiniciado'));

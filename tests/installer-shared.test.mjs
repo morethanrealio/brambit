@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sharedUrlOf } from '../installer/shared.mjs';
 import { createInstallationPlugin } from '../installer/plugin/index.mjs';
-import { definirMarca, hostDaMarca } from '../web/marca.mjs';
+import { definirMarca, hostDaMarca } from '../web/brand.mjs';
 
 test('the shared address is an https origin other devices open', () => {
   assert.deepEqual(sharedUrlOf(''), {});

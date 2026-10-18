@@ -23,10 +23,10 @@
 // and subtypes (edit/delete/join).
 
 import crypto from 'crypto';
-import { hostDaMarca, marca } from './marca.mjs';
+import { hostDaMarca, marca } from './brand.mjs';
 import { tagIdioma } from './locale.mjs';
 import { splitMessage } from './channel-split.mjs';
-import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
+import { comReenvio, criarAvisoCanal } from './channel-notice.mjs';
 
 const SLACK_API = 'https://slack.com/api';
 
@@ -166,7 +166,7 @@ export function verifySlackSignature(rawBody, timestamp, signature) {
 //   runConversation(agent, userId, text) -> reply
 //   loadAgent(agentId, userId) -> agent   (validates ownership)
 //   db = { getSlackLink, upsertSlackLink, setSlackActiveAgent, listAgents, getUserByEmail }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// avisoCanal = { idiomaDe, registrar } (channel-notice.mjs): language of the error notice and
 // its recording in the Slack thread's history.
 //   pessoa(slackUserId) → {nome,email,time}: who is speaking (default: Slack users.info).
 export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal = {}, pessoa = pessoaDoSlack }) {
@@ -217,7 +217,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     const postar = (t, opts = {}) => postMessage(evt.channel, t, threadTs, { ...opts, nome });
     const reply = (t) => postar(t).catch((e) => console.error('[slack] post:', e?.message ?? e));
     // Runs the turn and delivers. Turn failure and delivery-only failure have
-    // different notices (aviso-canal.mjs); the ready response is resent, never redone.
+    // different notices (channel-notice.mjs); the ready response is resent, never redone.
     const responder = async (agent, userId, canal) => {
       nome = agent.name;
       const enviarAviso = (t) => postar(t);

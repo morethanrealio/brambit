@@ -5,7 +5,7 @@ import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
 // Metric = estimated token count (chars/4). Hysteresis: triggers at HIGH, trims down to LOW.
 // Everything tunable via env. See projetos/arquitetura-memoria.md (section 6).
 
-import { makeMemoriaModel } from './memoria-modelo.mjs';
+import { makeMemoriaModel } from './memory-model.mjs';
 
 export const COMPACT_HIGH = () => Number(process.env.COMPACT_HIGH || 24000); // trigger
 export const COMPACT_LOW = () => Number(process.env.COMPACT_LOW || 12000);   // post-trim target

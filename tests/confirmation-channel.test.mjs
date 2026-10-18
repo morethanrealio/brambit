@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === './compras.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
+    if (specifier === './shopping.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
       return { url: 'data:text/javascript,export function descreverCarrinho(){throw Error("unused offline")};export function plataformaDoCarrinho(){throw Error("unused offline")}', shortCircuit: true };
     }
     return nextResolve(specifier, context);

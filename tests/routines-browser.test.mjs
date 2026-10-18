@@ -19,7 +19,7 @@ await page.route('**/*',async r=>{const u=new URL(r.request().url());if(u.hostna
  }
  let f=path.resolve(root,'.'+u.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)||fs.statSync(f).isDirectory())f=path.join(root,'index.html');
  const html=path.extname(f)==='.html';
- await r.fulfill({body:html?translatePage(fs.readFileSync(f,'utf8'),'pt-BR',carregaCatalogos('web/site-textos'),{vars:{brand:'__MARCA__'}}):fs.readFileSync(f),contentType:({'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'})[path.extname(f)]||'application/octet-stream'});
+ await r.fulfill({body:html?translatePage(fs.readFileSync(f,'utf8'),'pt-BR',carregaCatalogos('web/site-texts'),{vars:{brand:'__MARCA__'}}):fs.readFileSync(f),contentType:({'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'})[path.extname(f)]||'application/octet-stream'});
 });
 const box=page.locator('#routinesBox'),cards=box.locator('article'),rw=()=>writes.filter(w=>w.path.startsWith('/api/routine/'));
 async function load(){await page.goto('http://localhost/skills-and-apps');await box.getByRole('button',{name:'Atualizar',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('#routinesBox').getAttribute('aria-busy')==='false');}

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { HIDDEN_KEYS, parseExample, prepareSave, registerConfigAdmin } from '../web/config-admin.mjs';
 import { defaultTools, runCheck } from '../web/config-checks.mjs';
-import { createRotas } from '../web/rotas.mjs';
+import { createRotas } from '../web/routes.mjs';
 import { startConfigFile, stopConfigFile } from '../web/config-file.mjs';
 
 const quiet = { log() {}, warn() {}, error() {} };

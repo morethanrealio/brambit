@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 import { connectorActionReceipt } from './connector-action-evidence.mjs';
 import { recurrenceLabel } from './calendar-recurrence.mjs';
 // Action receipts are created by the code at the execution boundary, never by

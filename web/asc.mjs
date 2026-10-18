@@ -13,7 +13,7 @@
 // full log. Same shape as the other connector tools: { name, description,
 // parameters, async run(args) } -> string.
 import crypto from 'crypto';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const ASC = 'https://api.appstoreconnect.apple.com';
 

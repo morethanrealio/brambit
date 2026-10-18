@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkGrounding, groundingRetryPrompt, applyGroundingFallback } from '../web/grounding-guard.mjs';
-import { definirMarca } from '../web/marca.mjs';
+import { definirMarca } from '../web/brand.mjs';
 
 // The POSITIVE cases below are reduced transcripts of real user
 // conversations (frustration findings from group 1, 2026-09-18). Each one is a

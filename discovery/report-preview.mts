@@ -25,7 +25,7 @@ const provider = makeTogether({ model: TOGETHER_FLASH_MODEL, maxTokens: 16000 })
 // Journey brief through the briefDaJornada port of the repo's plugins; with no plugin, the core default.
 const { carregarPlugins, juntarPortas } = await import(pathToFileURL(path.join(repo, 'web/plugins.mjs')).href);
 const brief: string | undefined = juntarPortas(await carregarPlugins(), { publicBase: '', notifyOwner: async () => {} }).briefDaJornada?.();
-const { marca } = await import(pathToFileURL(path.join(repo, 'web/marca.mjs')).href);
+const { marca } = await import(pathToFileURL(path.join(repo, 'web/brand.mjs')).href);
 let reason: string | null = null;
 for (let attempt = 1; attempt <= 2; attempt++) {
     const response = await provider.complete({ system: `Você é o assistente pessoal ${marca().nome}. Responda em português do Brasil. Modo rascunho privado: não execute ações, não grave memória e não envie mensagens.`, messages: [{ role: 'user', content: reportPrompt(context, reason, brief) }], tools: [] });

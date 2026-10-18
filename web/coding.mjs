@@ -1,5 +1,5 @@
 import { readOnlyCommand } from './read-only-command.mjs';
-import { marca, siteDaMarca } from './marca.mjs';
+import { marca, siteDaMarca } from './brand.mjs';
 // ── Coding tools over SSH (from the sandbox) ──
 //
 // Mirrors the Agent SDK design: a small, sharp, file-oriented toolset instead

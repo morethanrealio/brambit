@@ -8,7 +8,7 @@ export function mergeThreadHistory(base, current, completed) {
   return [...completed,...current.slice(base.length)];
 }
 // `pergunta`: the person's message that goes into the history BEFORE the text, when their
-// turn broke without recording anything (aviso-canal.mjs). History only: their line in
+// turn broke without recording anything (channel-notice.mjs). History only: their line in
 // messages was already recorded at the start of the turn (startThreadTurn).
 export async function appendThreadMessage(pool, schema, {threadId,userId,text,clean,deliveryKey,attachments,pergunta}) {
   const c=await pool.connect();

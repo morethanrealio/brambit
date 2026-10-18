@@ -1,6 +1,6 @@
 // Here "marca" is already the operation's mark on Asaas (externalReference); the
 // product's name comes as marcaDoProduto so it isn't shadowed by it.
-import { hostDaMarca, marca as marcaDoProduto, uaApi } from './marca.mjs';
+import { hostDaMarca, marca as marcaDoProduto, uaApi } from './brand.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 // ── Connectors by VAULT API key/token (Notion, Splitwise, Infinity) ──
@@ -2236,4 +2236,4 @@ export function asaasTools({
     },
   ];
 }
-import { recortar } from './recorte.mjs';
+import { recortar } from './declared-truncation.mjs';

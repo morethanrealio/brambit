@@ -8,7 +8,7 @@
 -- org_id NULL, which is exactly "paid by the person" (today's behavior).
 --
 -- No FK to mtr_harness.orgs on purpose: this migration runs before deploy,
--- when the orgs table may not exist yet (boot creates it, empresa.mjs).
+-- when the orgs table may not exist yet (boot creates it, company.mjs).
 -- And a call's billing record must not vanish or change owner together with
 -- the company.
 BEGIN;

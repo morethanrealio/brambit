@@ -51,7 +51,7 @@ check(fetchCalls.length === 1, 'a single call (no relaxing or fallback)');
 
 // 1b) with the turn's registry, the numbering is for the whole turn: the 2nd search
 // reuses the number of whoever already appeared (that's the one that goes to the final list).
-const { registroDeFontes } = await import('../web/citacoes.mjs');
+const { registroDeFontes } = await import('../web/citations.mjs');
 const reg = registroDeFontes();
 reg.add({ title: 'Outra', uri: 'https://outra.example.invalid/' });
 const comReg = await webSearchTool({ onUsage: () => {}, fontes: reg }).run({ consulta: 'vento sul em Florianópolis' });

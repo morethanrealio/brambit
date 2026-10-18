@@ -9,7 +9,7 @@
 //
 // Locks (F1): joining, creating and leaving change WHICH account pays for the
 // person's usage, so they take the same locks as the credit reserve, in the
-// same order (person, then company; travas-de-conta.mjs) and BEFORE the
+// same order (person, then company; account-locks.mjs) and BEFORE the
 // company row lock. So no reserve is caught in the middle of an account swap.
 //
 // Rules:
@@ -27,7 +27,7 @@
 // the hooks below, wired by a plugin; in the open version none is wired and
 // the company is just members, domains and invites.
 
-import { lockCreditUser, lockCreditOrg } from './travas-de-conta.mjs';
+import { lockCreditUser, lockCreditOrg } from './account-locks.mjs';
 
 // Public email providers: don't identify any company, so they don't go into
 // the domain list and can't be used to create a company. Short list on
@@ -121,7 +121,7 @@ const erro = (status, error, extra = {}) => ({ ok: false, status, error, ...extr
 //    and whatever didn't go through stays pending for a retry.
 //  - linhaDoConvite(): sentence (or null) about how the company account works
 //    for whoever installs it, which goes in the invite e-mail
-//    (empresa-convite-email.mjs).
+//    (company-invite-email.mjs).
 export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {}) {
   const gancho = {
     avisoAoConvidar: async () => null, impedeEntrada: async () => null,
@@ -347,7 +347,7 @@ export function createEmpresaStore(pool, { S = 'mtr_harness', ...ganchos } = {})
         const aviso = alvo ? await gancho.avisoAoConvidar(alvo.id) : null;
         if (aviso) out.aviso = aviso;
         // The invite e-mail goes out in the route, after the commit
-        // (empresa-convite-email.mjs).
+        // (company-invite-email.mjs).
         return out;
       });
     },

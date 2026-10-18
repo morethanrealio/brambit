@@ -2,7 +2,7 @@
 // Open models sometimes write the call in the content instead of filling the
 // structured tool_calls field. This is a MODEL thing (GLM, DeepSeek), not a provider
 // thing: the same model does the same at any endpoint. That's why the readers live here,
-// outside any adapter, and the compatible engine (compativel.mjs) uses them according to
+// outside any adapter, and the compatible engine (compatible.mjs) uses them according to
 // each provider's configuration.
 
 // Parses the GLM TEXT tool-call format:

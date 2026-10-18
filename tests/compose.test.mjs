@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { composeImage, comporTools, registrarFontes, cor } from '../web/compor.mjs';
+import { composeImage, comporTools, registrarFontes, cor } from '../web/compose.mjs';
 import { renderPdfPagesToPng } from '../web/pdf.mjs';
-import { pdfSoDesenho, pdfComTexto } from '../test-support/pdf-minimo.mjs';
+import { pdfSoDesenho, pdfComTexto } from '../test-support/minimal-pdf.mjs';
 
 // The case that originated all of this: a user asked, several times, for a
 // congratulations card with THEIR LOGO inside, and never received it. gerar_imagem sends a

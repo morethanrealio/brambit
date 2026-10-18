@@ -2,7 +2,7 @@
 // gets one repair, and a raw command line never reaches the user.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toolNameLines, stripToolNameLines } from '../core-proto/providers/ferramenta-em-texto.mjs';
+import { toolNameLines, stripToolNameLines } from '../core-proto/providers/tool-in-text.mjs';
 import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 
 const names = ['send_to_drive', 'read_file'];

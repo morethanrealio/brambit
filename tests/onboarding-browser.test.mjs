@@ -1,10 +1,10 @@
 // Browser with real HTML/module and simulated API: no real Harness server, account, or LLM.
 import {translatePage,carregaCatalogos} from '../web/page-i18n.mjs';
-import {marcaNaPagina} from '../web/marca.mjs';import {screenTexts} from '../web/screen-texts.mjs';import {leitorDoApp} from '../web/plugins.mjs';
+import {marcaNaPagina} from '../web/brand.mjs';import {screenTexts} from '../web/screen-texts.mjs';import {leitorDoApp} from '../web/plugins.mjs';
 import {chromium} from 'playwright-core';import {readFileSync,existsSync,mkdirSync,writeFileSync} from 'node:fs';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';
 const root=resolve('web/public'),source=leitorDoApp([],root+'/index.html')(root+'/index.html'),html=source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 // Core without plugin or brand: the slots disappear and the name is the default.
-const catalogos=carregaCatalogos(resolve('web/site-textos'));
+const catalogos=carregaCatalogos(resolve('web/site-texts'));
 const out=process.env.ONBOARDING_SCREENSHOTS||'/tmp/brambs-onboarding-browser';mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});let checks=0;
 const A='00000000-0000-4000-8000-000000000002';

@@ -4,11 +4,11 @@ import { confirmedAction, actionEvidenceFor } from '../web/action-evidence.mjs';
 import { frameText } from '../web/confirm-sentences.mjs';
 import { connectorActionReceipt, shareableLink } from '../web/connector-action-evidence.mjs';
 // Offline: real tool/parser/renderer bodies in VM, synthetic carts/HTTP only.
-// Never imports compras.mjs (DB/vault dependencies), starts server or calls a shop.
+// Never imports shopping.mjs (DB/vault dependencies), starts server or calls a shop.
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const src = fs.readFileSync(new URL('../web/compras.mjs', import.meta.url), 'utf8');
+const src = fs.readFileSync(new URL('../web/shopping.mjs', import.meta.url), 'utf8');
 const confirm = fs.readFileSync(new URL('../web/confirm.mjs', import.meta.url), 'utf8');
 const parsers = src.slice(src.indexOf('// Parsing remains local'), src.indexOf('function totais('));
 const factory = src.slice(src.indexOf('export function comprasTools('), src.indexOf('// Short block for the end of the prompt:')).replace('export function', 'function');

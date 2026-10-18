@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
-import { modelsFilePath, loadModels, modelsTable } from '../core-proto/modelos.mjs';
+import { modelsFilePath, loadModels, modelsTable } from '../core-proto/models.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dotenv = path.join(root, '.env');

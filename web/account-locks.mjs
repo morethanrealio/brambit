@@ -1,6 +1,6 @@
 // Locks on a person's account and a company's (Postgres advisory lock, per
 // transaction). Whoever changes WHICH account pays for someone's usage (joining, creating and
-// leaving a company, in empresa.mjs) and whoever records usage (conta-pagadora.mjs)
+// leaving a company, in company.mjs) and whoever records usage (paying-account.mjs)
 // take the same locks, ALWAYS in this order: person, then company. Never
 // hold the connection during an HTTP call.
 const LOCK_SQL='SELECT pg_advisory_xact_lock(hashtextextended($1, 0))';

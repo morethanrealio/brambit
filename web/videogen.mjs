@@ -13,7 +13,7 @@
 // Billing: by the REAL `video_seconds` returned by GET when done, not by the
 // estimated `credits_seconds` of the POST nor by processing time.
 
-import { lerCorpoComTeto } from './baixar-corpo.mjs';
+import { lerCorpoComTeto } from './download-body.mjs';
 
 const COMFY_URL = () => (process.env.COMFY_URL || '').replace(/\/+$/, '');
 const COMFY_TOKEN = () => process.env.COMFY_TOKEN || '';

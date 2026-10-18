@@ -4,7 +4,7 @@
 // they cut out a chunk and run it separately, or just look for a phrase. They break when
 // the code moves, with no bug at all.
 //
-// The test-support/testes-que-leem-codigo.txt list is the backlog of these tests and can
+// The test-support/tests-that-read-code.txt list is the backlog of these tests and can
 // only shrink: a new test in this style fails the CI, and a test from the list that
 // stopped reading the code (was rewritten importing the module) has to come off it.
 // In phase E, whoever extracts a module out of server.mjs rewrites, in the same PR, the
@@ -21,7 +21,7 @@ import { listTests } from './run-suite.mjs';
 // Root = folder it runs from (npm/CI run at the root): whoever installs Brambit as a
 // package runs the same guard in their own repo, with node node_modules/brambit/....
 const root = process.cwd();
-export const LIST = 'test-support/testes-que-leem-codigo.txt';
+export const LIST = 'test-support/tests-that-read-code.txt';
 
 // Production code read as text. Excludes what's served to the browser
 // (web/public): browser tests serve the whole folder, and that's legitimate.

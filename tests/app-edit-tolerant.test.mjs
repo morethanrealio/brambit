@@ -13,7 +13,7 @@
 //      after a REFUSED edit doesn't count as stubbornness (cap of 3).
 // All offline: no SSH, no database, no user app.
 import { dominioDosApps, urlDoApp } from '../web/appshost.mjs';
-import { linkDaPagina, marca } from '../web/marca.mjs';
+import { linkDaPagina, marca } from '../web/brand.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -126,7 +126,7 @@ test('syntax gate understands CommonJS, ESM and JSON, and skips what it cannot p
   assert.equal((await checarSintaxe('a.json', '{"a":}')).estado, 'erro');
   // HTML/CSS have no parser here: doesn't make up a verdict.
   assert.equal((await checarSintaxe('index.html', '<div>')).estado, 'pulado');
-  assert.equal((await checarSintaxe('estilo.css', 'body {')).estado, 'pulado');
+  assert.equal((await checarSintaxe('style.css', 'body {')).estado, 'pulado');
   assert.equal(await pioraSintaxe('index.html', '<div>', '<div'), null);
 });
 

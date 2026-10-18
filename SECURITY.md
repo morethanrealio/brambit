@@ -42,7 +42,7 @@ limit described.
   people type, not a secret key. `POST /api/signup` allows 5 attempts per hour
   per address before it checks the code, and a code only counts while its
   invite has room left.
-- *SHA-1 in `web/uuid-de.mjs`.* It builds name-based UUIDs (version 5, RFC
+- *SHA-1 in `web/uuid-from.mjs`.* It builds name-based UUIDs (version 5, RFC
   4122), not a signature or a password hash.
 - *`Access-Control-Allow-Origin: *` in `web/hosting.mjs`.* It is inside the
   starter code written for the user's own apps, not in Brambit's server.

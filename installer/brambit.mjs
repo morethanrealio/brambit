@@ -42,7 +42,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dbEnvOf, freePort, postgresBin, prepareDatabase, startPostgres, waitReady } from '../dev/local.mjs';
-import { parseModels } from '../core-proto/modelos.mjs';
+import { parseModels } from '../core-proto/models.mjs';
 import { configValues, ENCRYPTED_PREFIX, writeConfig } from '../web/config-file.mjs';
 import { checkAi, writeAi } from './ai-setup.mjs';
 import { aiOf, audioOf, endpoint, listModels, modelsYaml, PROVIDERS } from './providers.mjs';

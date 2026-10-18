@@ -27,4 +27,4 @@ jobs:
       - name: Free
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node .github/scripts/reservas.mjs
+        run: node .github/scripts/reservations.mjs

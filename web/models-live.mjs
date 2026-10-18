@@ -6,7 +6,7 @@
 // the last good configuration and logs why; a deleted file goes back to the
 // built-in routing.
 import fs from 'node:fs';
-import { modelsFilePath, loadModels, modelsTable } from '../core-proto/modelos.mjs';
+import { modelsFilePath, loadModels, modelsTable } from '../core-proto/models.mjs';
 import { registerPrices } from './pricing.mjs';
 import { onConfigChange } from './config-file.mjs';
 

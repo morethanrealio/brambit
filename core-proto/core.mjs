@@ -8,7 +8,7 @@ import { retainedFilePage } from './file-page.mjs';
 import { STOP } from './provider.mjs';
 import { protocolCode, CODING_TOOLS, codingAvailable, CODING_EXECUTION_POLICY, protocolRepairFor, PROMISE_REPAIR,
   codingPromise, codingTurnContext, codingFallback, protocolFallback, executionSignature } from './turn-recovery.mjs';
-import { toolNameLines, stripToolNameLines, toolTextRepair } from './providers/ferramenta-em-texto.mjs';
+import { toolNameLines, stripToolNameLines, toolTextRepair } from './providers/tool-in-text.mjs';
 
 // Sanitizes text entering history/messages: removes LOOSE UTF-16
 // surrogates (an emoji pair cut in half by a .slice()) and the NUL character.

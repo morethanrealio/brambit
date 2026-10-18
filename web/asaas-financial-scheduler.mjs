@@ -4,7 +4,7 @@ import {
   asaasResponseError,
   submitAsaasBillImmediate,
 } from './connectors-vault.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 export async function processAsaasWithdrawalAuthorization({ payload, token, expectedToken, decide } = {}) {
   if (!expectedToken || !secureAsaasTokenMatch(token, expectedToken)) {

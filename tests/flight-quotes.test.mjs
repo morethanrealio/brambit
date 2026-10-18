@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 import vm from 'node:vm';
 
-const source = readFileSync(new URL('../web/voos.mjs', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../web/flights.mjs', import.meta.url), 'utf8')
   .replace(/import \{ createHash \} from 'node:crypto';/, '')
   .replace(/import \{[\s\S]*?\} from '\.\/db.mjs';/, '')
-  .replace("import { marca } from './marca.mjs';", '').replaceAll('export ', '');
+  .replace("import { marca } from './brand.mjs';", '').replaceAll('export ', '');
 const leg = (from, to, date, hour, price, token, notes = []) => ({ price, departure_token: token,
   flights: [{ departure_airport: { id: from, time: `${date} ${hour}:00` },
     arrival_airport: { id: to, time: `${date} ${String(Number(hour) + 1).padStart(2, '0')}:20` },

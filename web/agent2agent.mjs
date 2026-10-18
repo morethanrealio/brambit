@@ -30,7 +30,7 @@ import {
   answerExternalQuestion, listContacts, resolveContactRequest, inviteContact, getUserLocale,
 } from './db.mjs';
 import { comIdioma, tagIdioma } from './locale.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 import { primeiroNome } from './agent-inbox.mjs';
 
 const MAX_ROUNDS = () => Number(process.env.A2A_MAX_ROUNDS || 3);      // rodadas (1 rodada = A fala, B fala)

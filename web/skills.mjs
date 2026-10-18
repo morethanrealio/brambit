@@ -6,7 +6,7 @@
 // (progressive disclosure in the prompt), and (Phase 2) shareable between connections.
 // See projetos/skill-implementacao.md.
 
-import { comAviso } from './recorte.mjs';
+import { comAviso } from './declared-truncation.mjs';
 import {
   createSkill, resolveSkill, listInstalledSkills, listSkillsAuthored,
   installSkill, uninstallSkill, updateSkill, deleteSkill,

@@ -5,7 +5,7 @@
 // key lists. "other" is any service speaking the OpenAI protocol (OpenRouter,
 // Ollama, vLLM...), with the model picked from its list or typed by hand.
 import { stringify } from 'yaml';
-import { choiceFor } from '../core-proto/modelos.mjs';
+import { choiceFor } from '../core-proto/models.mjs';
 
 export const PROVIDERS = {
   together: { url: 'https://api.together.xyz/v1', model: 'deepseek-ai/DeepSeek-V4.1-Flash', keyVar: 'TOGETHER_API_KEY' },
@@ -116,7 +116,7 @@ export const AUDIO_PROVIDERS = ['gemini', 'openai'];
 export const audioOf = (cfg) => cfg.audio?.provider || (AUDIO_PROVIDERS.includes(cfg.ai.provider) ? cfg.ai.provider : 'none');
 
 // The AI that answers the conversation, read back from models.yaml (as
-// core-proto/modelos.mjs loads it) → {provider, url, model, keyVar} or null. A provider
+// core-proto/models.mjs loads it) → {provider, url, model, keyVar} or null. A provider
 // written by hand under a name of its own counts as "other", at its address.
 export function aiOf(models) {
   const main = models && choiceFor('chat', models)?.primary;

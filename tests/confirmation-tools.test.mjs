@@ -11,7 +11,7 @@ import tls from 'node:tls';
 const denied=()=>{throw Error('EXTERNAL IO FORBIDDEN');};
 net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;
 registerHooks({resolve(specifier,context,next){
-  if(specifier==='./compras.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
+  if(specifier==='./shopping.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
   return next(specifier,context);
 }});
 const {confirmationFixture}=await import('../test-support/confirmation-fixture.mjs');
@@ -95,7 +95,7 @@ test('checkout restores the encrypted session after cache loss and rechecks pric
     plataforma:'vtex',origin:'https://synthetic.invalid',moeda:'BRL',orderFormId:'synthetic-form',jar:new Map([['session','private-synthetic-cookie']]),
     produto:{nome:'Synthetic product',qtd:1},valor:1000,frete:{preco:0},pix:{id:125}};
   carts.set(`${f.scope.userId}:cart`,cart);
-  const src=readFileSync(new URL('../web/compras.mjs',import.meta.url),'utf8');
+  const src=readFileSync(new URL('../web/shopping.mjs',import.meta.url),'utf8');
   const factory=src.slice(src.indexOf('export function comprasTools('),src.indexOf('// Short block for the end of the prompt:')).replace('export function','function');
   const ctx=vm.createContext({Map,Date,JSON,URL,console:{log(){}},CARTS:carts,CART_TTL_MS:40*60_000,
     getCarrinho:(u,id)=>carts.get(`${u}:${id}`),brl:n=>String(n/100),carrinhoVivoDoThread:()=>null,

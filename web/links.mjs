@@ -47,7 +47,7 @@
 // HTTP) and is already loaded by the server: duplicating the language
 // normalization here would cost more than importing it, because two copies
 // drift apart the first time one of them changes.
-import { uaBot } from './marca.mjs';
+import { uaBot } from './brand.mjs';
 import { tagIdioma, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
 import { fetchFixado } from './net-pin.mjs';
 
@@ -386,7 +386,7 @@ export async function resolveGroundingUri(uri) {
 
 /**
  * Numbered list "[1] title — url", with redirects already resolved.
- * With `registro` (the turn's registroDeFontes, citacoes.mjs) the number is the
+ * With `registro` (the turn's registroDeFontes, citations.mjs) the number is the
  * registry's: fixed for the whole turn, it's what the model writes in the response and
  * what the platform swaps for the real source. A source without a resolved address has
  * no number, because it cannot be cited.
@@ -562,7 +562,7 @@ function semLinksMontados(text, broken) {
   });
 }
 
-// Public support's "sites the assistant may send people to" (publico.mjs). An
+// Public support's "sites the assistant may send people to" (public-support.mjs). An
 // entry is a domain and covers its subdomains: shop.example also lets
 // www.shop.example and checkout.shop.example through.
 export const LINK_SITES_MAX = 20;

@@ -1,5 +1,5 @@
 import { tagIdioma } from './locale.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const fold = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
   .replace(/[^a-z0-9]+/g, ' ').trim();

@@ -1,7 +1,7 @@
 import { defaultTimezone } from './locale.mjs';
 import { driveSearchQuery, driveSearchParameters, DRIVE_SEARCH_RULE, completeDriveSearch } from './drive-search.mjs';
 import { readGoogleDocument } from './document-read.mjs';
-import { recortar } from './recorte.mjs';
+import { recortar } from './declared-truncation.mjs';
 import { emailHeader } from './security-boundaries.mjs';
 import { searchPagination, searchCursorSchema, SEARCH_PAGINATION_RULE, searchItems, driveSearchMeta } from './search-pagination.mjs';
 import { emailPagination, emailCursorSchema, EMAIL_PAGINATION_RULE } from './email-pagination.mjs';
@@ -12,9 +12,9 @@ import { recurrenceSchema, calendarRecurrence, recurrenceDefaultEnd, calendarWin
 // refreshed). Reading is always allowed; writing (sending email, creating an
 // event, uploading a file) when the user granted that service's write scope.
 import { extractPdfText } from './pdf.mjs';
-import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
+import { analisePlanilhaConector, tipoPlanilha } from './sheet.mjs';
 import { ocrPdf, describeImage } from './media.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const DRIVE = 'https://www.googleapis.com/drive/v3';
@@ -585,7 +585,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
           const ocr = await ocrImageFallback(buf, name, mime || 'image/jpeg');
           return ocr || JSON.stringify({ name, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
-        // A spreadsheet doesn't come back as text (see planilha.mjs).
+        // A spreadsheet doesn't come back as text (see sheet.mjs).
         if (tipoPlanilha(name, mime)) {
           return JSON.stringify({ name, mimeType: mime, analise: await analisePlanilhaConector(onSheetLoad, buf, name, mime) });
         }
@@ -785,7 +785,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
         }
         // Spreadsheet (Google Sheets, Excel, CSV): downloads the bytes and sends
         // them to the analysis environment; the result only carries the structure
-        // (see planilha.mjs). Google Sheets' native format is exported as .xlsx:
+        // (see sheet.mjs). Google Sheets' native format is exported as .xlsx:
         // Drive's CSV export only brings the FIRST sheet, and a multi-sheet
         // spreadsheet was going blind (case from 2026-09-30). Same drive.readonly
         // scope; nothing new in the OAuth.

@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBody } from './http-body.mjs';
-import { SEGUE } from './rotas.mjs';
+import { SEGUE } from './routes.mjs';
 import { ConfigValueError, ENCRYPTED_PREFIX, configFilePath, configValues, formatValue, status, writeConfig } from './config-file.mjs';
 import { vaultEnabled } from './vault.mjs';
 import { pool, S } from './db.mjs';

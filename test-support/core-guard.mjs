@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Core guard (core x cloud split). The root nuvem.txt lists the files of a hosted
+// Core guard (core x cloud split). The root cloud.txt lists the files of a hosted
 // cloud deployment; everything else is the core, which is open. Two proofs:
 //
 //  1. No core file imports a cloud file, starts it as a process, or cites its
@@ -11,9 +11,9 @@
 //     tables, migrations, server), with the network blocked as in tests/server-boot.test.mjs.
 //     Checks the pages, sign-up and login of an account.
 //
-// Usage: node test-support/nucleo-guard.mjs          (both proofs)
-//        node test-support/nucleo-guard.mjs --no-boot (only 1)
-// Without nuvem.txt (in the core repository) the cloud is empty: 1 passes and 2 boots the repo as is.
+// Usage: node test-support/core-guard.mjs          (both proofs)
+//        node test-support/core-guard.mjs --no-boot (only 1)
+// Without cloud.txt (in the core repository) the cloud is empty: 1 passes and 2 boots the repo as is.
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -26,9 +26,9 @@ import { migrationOrder, postgresBin } from '../dev/local.mjs';
 import { buildGraph } from './affected.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const MANIFESTO = 'nuvem.txt';
+export const MANIFESTO = 'cloud.txt';
 
-// Lines from nuvem.txt become one test per file: folder (ends in /), pattern with * or exact path.
+// Lines from cloud.txt become one test per file: folder (ends in /), pattern with * or exact path.
 export function lerNuvem(texto) {
   const entradas = texto.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   const teste = (e) => {

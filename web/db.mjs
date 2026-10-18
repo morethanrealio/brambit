@@ -1,6 +1,6 @@
 import { createInboundDecisionResponder } from './inbound-decision.mjs';
 import { createChecklistStore } from './checklists.mjs';
-import { createEmpresaStore } from './empresa.mjs';
+import { createEmpresaStore } from './company.mjs';
 import { createWaInbox } from './whatsapp-inbox.mjs';import { ownerFeaturesOn } from './profiles.mjs';
 import { createEmailQueue } from './email-queue.mjs';
 import { createGoogleAccountRemoval } from './google-account-removal.mjs';
@@ -9,8 +9,8 @@ import { anonymizeSnapshotBlob } from './anonymize.mjs';
 import {createCheckoutRecoveryStore} from './checkout-recovery.mjs';
 import { createDiscoveryStore } from './discovery-store.mjs';
 import {createPendingUsageWrites} from './incremental-usage.mjs';
-import {conferirContaPagadora} from './conta-pagadora.mjs';
-import { marca } from './marca.mjs';
+import {conferirContaPagadora} from './paying-account.mjs';
+import { marca } from './brand.mjs';
 import {createTaskMetrics} from './task-metrics.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import { createOnboardingStore } from './onboarding-store.mjs';
@@ -72,11 +72,11 @@ export const waInbox = createWaInbox(pool,{seal:encryptSecret,open:decryptSecret
 export const onboardingStore = createOnboardingStore(pool);
 
 export const S = 'mtr_harness';
-// Company account F0 (empresa.mjs): company, domains, members and invites.
+// Company account F0 (company.mjs): company, domains, members and invites.
 // What billing does on join and on creation a plugin wires in later
 // (through empresaStore.ligar).
 export const empresaStore = createEmpresaStore(pool, { S });
-// Payer-account port (conta-pagadora.mjs): who pays for the consumption recorded here.
+// Payer-account port (paying-account.mjs): who pays for the consumption recorded here.
 // Without it nothing records consumption (boot wires it up with configurarContaPagadora).
 let contaPagadora = null;
 export function configurarContaPagadora(c) { contaPagadora = conferirContaPagadora(c); }
@@ -7838,7 +7838,7 @@ export async function markQuestionsSeenByA(userId, ids) {
 }
 
 // ── Flights: search cache + price history ────────────────────
-// See the flight_searches/flight_prices migration in initDb and web/voos.mjs.
+// See the flight_searches/flight_prices migration in initDb and web/flights.mjs.
 
 // Cached response of a search, if still within the window (minutes). Returns
 // { payload, fetchedAt, ageMin } or null. Also increments the hit counter

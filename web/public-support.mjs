@@ -16,7 +16,7 @@ import { defaultTimezone } from './locale.mjs';
 import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
 import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
 import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
-import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './publico-saidas.mjs';
+import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -411,7 +411,7 @@ export function comandoDoContato(mensagem) {
 //    for this turn and the owner's instructions are added after it; pular with
 //    saidas answers without calling the model (opening, fixed response).
 //   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
-//    rich outputs (publico-saidas.mjs).
+//    rich outputs (public-support-outputs.mjs).
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
 //    estado(), lembrar(chave,valor)}.
