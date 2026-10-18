@@ -92,6 +92,7 @@ export const validEmail = (e) => typeof e === 'string' && EMAIL_RE.test(e);
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo';
+const GOOGLE_REVOKE = 'https://oauth2.googleapis.com/revoke';
 
 export const googleEnabled = () =>
   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
@@ -214,6 +215,21 @@ export async function googleExchange(code) {
   });
   if (!r.ok) throw new Error(`token ${r.status}: ${await r.text()}`);
   return r.json(); // { access_token, id_token, ... }
+}
+
+// Revokes the person's grant at Google. Google drops the whole grant of that
+// account for this app (every scope, every token it issued, for every client of the
+// Google Cloud project), not just the token sent. Returns false when Google
+// answers invalid_token: already revoked or expired, nothing left to revoke.
+export async function googleRevoke(token) {
+  const r = await fetch(GOOGLE_REVOKE, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token }), signal: AbortSignal.timeout(5000),
+  });
+  if (r.ok) return true;
+  const raw = await r.text();
+  if (r.status === 400 && /invalid_token/.test(raw)) return false;
+  throw new Error(`google revoke ${r.status}`);
 }
 
 // Fetches the user's name + email from the access_token.

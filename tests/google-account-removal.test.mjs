@@ -38,3 +38,36 @@ test('a removed login-e-mail account does not come back on restart, and the othe
   assert.equal((await db.query('SELECT count(*)::int AS n FROM mtr_harness.google_tokens')).rows[0].n, 0);
   assert.deepEqual((await db.query('SELECT google_email FROM mtr_harness.agents')).rows, [{ google_email: null }]);
 });
+
+// Google drops the whole grant of a Google account for the app, so revoking for one
+// user would cut off another user who connected the same Google account.
+test('removing revokes at Google, except while another user shares the account, and a failure does not block', async (t) => {
+  const db = new PGlite(); t.after(() => db.close());
+  const other = '00000000-0000-4000-8000-000000000002';
+  await db.exec(`CREATE SCHEMA mtr_harness;
+    CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY, email text);
+    CREATE TABLE mtr_harness.agents(id serial PRIMARY KEY, user_id uuid, google_email text);
+    CREATE TABLE mtr_harness.google_tokens(user_id uuid PRIMARY KEY, refresh_token text);
+    CREATE TABLE mtr_harness.google_accounts(user_id uuid REFERENCES mtr_harness.users(id) ON DELETE CASCADE, google_email text NOT NULL,
+      access_token text, refresh_token text, is_primary boolean NOT NULL DEFAULT false,
+      updated_at timestamptz DEFAULT now(), PRIMARY KEY (user_id, google_email));
+    INSERT INTO mtr_harness.users VALUES ('${dono}', 'ana@gmail.com'), ('${other}', 'bia@gmail.com');
+    INSERT INTO mtr_harness.google_accounts(user_id, google_email, access_token, refresh_token) VALUES
+      ('${dono}', 'ana@gmail.com', 'at-ana', 'rt-ana'),
+      ('${dono}', 'team@company.com', 'at-team-ana', 'rt-team-ana'),
+      ('${other}', 'team@company.com', 'at-team-bia', 'rt-team-bia');`);
+  const pool = { query: (sql, values) => db.query(sql, values) };
+  const revoked = [];
+  let fail = false;
+  const g = createGoogleAccountRemoval(pool, { revoke: async (token) => { revoked.push(token); if (fail) throw new Error('google down'); } });
+  const accounts = async () => (await db.query('SELECT user_id, google_email FROM mtr_harness.google_accounts ORDER BY google_email')).rows;
+
+  assert.equal(await g.removeGoogleAccount(dono, 'ana@gmail.com'), true);
+  assert.equal(await g.removeGoogleAccount(dono, 'team@company.com'), true);
+  assert.deepEqual(revoked, ['rt-ana']);
+
+  fail = true;
+  assert.equal(await g.removeGoogleAccount(other, 'team@company.com'), true);
+  assert.deepEqual(revoked, ['rt-ana', 'rt-team-bia']);
+  assert.deepEqual(await accounts(), []);
+});
