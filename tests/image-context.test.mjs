@@ -39,7 +39,7 @@ vm.runInContext(server.slice(start,end),ctx);gets=[];await tool.run({});eq(owner
 ok(!server.slice(start,end).includes('listMediaAssets'));ok(server.includes('caption = boundedImageCaption(d.text, 4000, d.truncated)'));
 // Provider's MAX_TOKENS: real function, simulated gen/usage, zero API.
 const media=readFileSync('./web/media.mjs','utf8');const ds=media.indexOf('export async function describeImage('),de=media.indexOf('// PDF OCR via Gemini',ds);
-let reason='MAX_TOKENS';const mctx=vm.createContext({isGeminiComparison:()=>false,selectedDeepSeek:()=>null,modeloPara:()=>null,process:{env:{PRIMARY_TEXT_MODEL:'gemini-3.7-flash'}},TOGETHER_FLASH_MODEL:'deepseek-ai/DeepSeek-V4.1-Flash',togetherEnabled:()=>false,gen:async()=>({candidates:[{finishReason:reason,content:{parts:[{text:'texto parcial'}]}}]}),usageFrom:()=>({}),console:{log(){}}});
+let reason='MAX_TOKENS';const mctx=vm.createContext({isGeminiComparison:()=>false,selectedDeepSeek:()=>null,modelFor:()=>null,process:{env:{PRIMARY_TEXT_MODEL:'gemini-3.7-flash'}},TOGETHER_FLASH_MODEL:'deepseek-ai/DeepSeek-V4.1-Flash',togetherEnabled:()=>false,gen:async()=>({candidates:[{finishReason:reason,content:{parts:[{text:'texto parcial'}]}}]}),usageFrom:()=>({}),console:{log(){}}});
 vm.runInContext(media.slice(ds,de).replace('export ','')+';globalThis.describe=describeImage;',mctx);
 eq((await mctx.describe(Buffer.from('fake'),'image/png','teste')).truncated,true);reason='STOP';eq((await mctx.describe(Buffer.from('fake'),'image/png','teste')).truncated,false);
 console.log(`${n} verificações aprovadas: contexto, ambiguidade, propriedade, cortes e integração real com dependências simuladas.`);

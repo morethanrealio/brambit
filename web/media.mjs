@@ -15,7 +15,7 @@ import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
 import {GEMINI_COMPARISON_MODEL,isGeminiComparison} from '../core-proto/deepseek/comparison.mjs';
 import {makeGemini} from '../core-proto/providers/gemini.mjs';
 import {throwIfAttemptControl} from '../core-proto/provider-attempt.mjs';
-import {modeloPara} from '../core-proto/modelos.mjs';
+import {modelFor} from '../core-proto/modelos.mjs';
 import fs from 'fs';
 import path from 'path';
 import crypto, { randomUUID } from 'crypto';
@@ -307,7 +307,7 @@ export async function describeImage(buffer, mime, question, { maxOut = 0 } = {})
     return {text:result.text || '',usage:result.usage,truncated:result.protocolError?.code === 'output_truncated'};
   }
   const selected = selectedDeepSeek(maxOut || 32768);
-  const configurado = !selected && modeloPara('leitura_imagem', { maxTokens: maxOut || 32768 }); // modelos.yaml
+  const configurado = !selected && modelFor('image_reading', { maxTokens: maxOut || 32768 }); // models.yaml
   if (configurado) {
     const result = await configurado.complete({messages:[{role:'user',content:q,images:[{mimeType:mime || 'image/jpeg',data:buffer.toString('base64')}]}]});
     requireProviderContent(result);

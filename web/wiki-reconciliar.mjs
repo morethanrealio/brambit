@@ -3,13 +3,13 @@
 // already stated, doesn't write it again (R1: the turn tool and the housekeeping were both
 // writing the same thing). If a line states the old value, updates IT instead of
 // adding another one, and fixes the other pages that repeat the old value (R3:
-// each subject lives on one page only). Off by default: MEMORIA_RECONCILIAR=1.
+// each subject lives on one page only). Off by default: MEMORY_RECONCILE=1.
 //
 // The model only DECIDES and points at the excerpt; the new line is assembled here via replace,
 // so outside the excerpt it stays letter-for-letter the old one (same rule as corrigirPerdedora).
 import { makeMemoriaModel } from './memoria-modelo.mjs';
 
-export const reconciliarLigado = () => process.env.MEMORIA_RECONCILIAR === '1';
+export const reconciliarLigado = () => process.env.MEMORY_RECONCILE === '1';
 
 const MAX_CAND = 8;
 const RESERVADAS = new Set(['atualizacoes']);

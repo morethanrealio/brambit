@@ -3,7 +3,7 @@ import {STOP} from '../provider.mjs';
 import {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './ferramenta-em-texto.mjs';
 import {validarChamadas,mensagemProtocolo,comRetentativa} from './regras.mjs';
 // ── Single engine for any OpenAI-compatible provider ──
-// Together, DeepInfra, OpenAI, Nemotron and any address from modelos.yaml speak
+// Together, DeepInfra, OpenAI, Nemotron and any base URL from models.yaml speak
 // the same protocol: POST /chat/completions with a Bearer key. What changes between
 // them is configuration (address, key, body fields) and MODEL quirks
 // (writing the tool call as text, reasoning until it exhausts the output). Each

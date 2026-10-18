@@ -187,7 +187,7 @@ jobs:
       - name: Test prerequisites (Postgres, Chromium, pandas)
         run: |
           pip install pandas openpyxl
-          echo "PLANILHA_PY=$(which python)" >> "$GITHUB_ENV"
+          echo "SHEET_PY=$(which python)" >> "$GITHUB_ENV"
           # Embedded Postgres 14 (npm), the same version as production; the runner has another.
           pg=$(node --input-type=module -e "const m=await import('./dev/local.mjs');console.log(m.postgresBin())")
           [ -x "$pg/initdb" ] || { echo "::error::Embedded Postgres not installed (npm ci)"; exit 1; }

@@ -1,7 +1,7 @@
 // Connects public support (publico.mjs) to the server and to WhatsApp.
 //
 // Phase 1 uses the installation's single number. Whoever installs it chooses WHICH assistant
-// handles those without an account (ATENDIMENTO_PUBLICO_AGENTE = agent id); the owner
+// handles those without an account (PUBLIC_SUPPORT_AGENT = agent id); the owner
 // of that assistant turns it on and off in public_agents.ativo. Without the variable, or with
 // support turned off, nothing changes: an unlinked number keeps receiving the
 // login message. The choice belongs to the installation, not to each user, because the
@@ -22,7 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Joins the initDb schema list.
 export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); };
 
-export const agentePublicoDoNumero = (valor = process.env.ATENDIMENTO_PUBLICO_AGENTE) => {
+export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
   return UUID.test(id) ? id : null;
 };

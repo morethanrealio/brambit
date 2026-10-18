@@ -65,7 +65,7 @@ again.
 Outside Linux (Docker Desktop on macOS or Windows) Docker runs inside a VM
 and the script has no way to block the network: the sandbox's code can reach
 your local network. The script refuses to proceed unless you run it with
-`SANDBOX_SEM_FIREWALL=1`; only do this with your own code.
+`SANDBOX_NO_FIREWALL=1`; only do this with your own code.
 
 ## Dedicated machine (production)
 

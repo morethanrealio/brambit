@@ -8,7 +8,7 @@
 //
 // Changing the AI is a page of the app (/installation/ai, the launcher's setup
 // page in "change" mode): it writes the keys to the config file and the model to
-// modelos.yaml, which the server follows live, so the assistant never stops.
+// models.yaml, which the server follows live, so the assistant never stops.
 // Turning Brambit off is the launcher's job, which holds the database and the
 // server: the server only asks, over the message channel (IPC) the launcher
 // opened when starting it. Without the launcher (BRAMBIT_INSTALLATION unset)
@@ -24,7 +24,7 @@
 // others open, not the neutral brand's localhost.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { arquivoModelos, carregarModelos } from '../../core-proto/modelos.mjs';
+import { modelsFilePath, loadModels } from '../../core-proto/modelos.mjs';
 import { audioProvider } from '../../web/audio-provider.mjs';
 import { ConfigValueError, configFilePath } from '../../web/config-file.mjs';
 import { readBody } from '../../web/http-body.mjs';
@@ -60,10 +60,10 @@ export function systemNoteOf(info, language) {
   ].join(' ');
 }
 
-// What runs now, read live: the AI from modelos.yaml, the audio from the config.
+// What runs now, read live: the AI from models.yaml, the audio from the config.
 function current() {
   let ai = null;
-  try { ai = aiOf(carregarModelos()); } catch {}
+  try { ai = aiOf(loadModels()); } catch {}
   return { ai, audio: audioProvider() || 'none' };
 }
 
@@ -139,7 +139,7 @@ export function createInstallationPlugin({ info = readInfo(), sendToLauncher = p
         if (!(await isOwner(ctx))) return SEGUE;
         const r = await checkAi(await readBody(req), savedKey);
         if (r.error) return send(res, 400, { error: r.error, status: r.status }, noCache);
-        try { writeAi(r, { configFile: configFilePath(), modelsFile: arquivoModelos() }); }
+        try { writeAi(r, { configFile: configFilePath(), modelsFile: modelsFilePath() }); }
         catch (e) { if (e instanceof ConfigValueError) return send(res, 400, { error: 'key_rejected' }, noCache); throw e; }
         reloadModels();
         send(res, 200, { ok: true }, noCache);

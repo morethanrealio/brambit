@@ -267,7 +267,7 @@ async function ensureCache({ key, model, system, toolBlocks, search, hasTools, c
 // credits in a single response — that's what burned through a user's credit on
 // 2026-06-30. 8192 (~6 thousand words) is generous for any legitimate response and
 // limits the damage of a degenerate generation to ~25 credits.
-// `apiKey`: key coming from modelos.yaml; without it, the usual GEMINI_API_KEY.
+// `apiKey`: key coming from models.yaml; without it, the usual GEMINI_API_KEY.
 export function makeGemini({ model = 'gemini-3.5-flash', search = false, thinkingBudget, maxOutputTokens = 8192, apiKey } = {}) {
   const key = apiKey ?? process.env.GEMINI_API_KEY;
   return wrapProvider({

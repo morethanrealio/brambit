@@ -67,12 +67,12 @@ DOMINIO_PADRAO = "localhost"
 DOMINIO = os.environ.get("APPS_DOMAIN") or DOMINIO_PADRAO
 
 # Author of commits with no person behind them: the host's brand name in
-# lowercase, read from the same marca.json as the router (see router.py); without
+# lowercase, read from the same brand.json as the router (see router.py); without
 # it, the neutral default.
 def _autor_padrao():
     try:
-        with open(os.environ.get("BRAMBS_MARCA_FILE", "/opt/brambs-router/marca.json"), encoding="utf-8") as f:
-            return str(json.load(f).get("nome") or "Brambit").lower()
+        with open(os.environ.get("BRAMBS_BRAND_FILE", "/opt/brambs-router/brand.json"), encoding="utf-8") as f:
+            return str(json.load(f).get("name") or "Brambit").lower()
     except Exception:
         return "brambit"
 AUTOR_PADRAO = _autor_padrao()

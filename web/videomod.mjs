@@ -12,7 +12,7 @@
 // answer is BLOCK. A guardrail that fails open is no guardrail.
 
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
-import { modeloPara } from '../core-proto/modelos.mjs';
+import { modelFor } from '../core-proto/modelos.mjs';
 
 const MODEL = 'gemini-3.1-flash-lite';
 
@@ -59,7 +59,7 @@ export async function moderateVideoPrompt({ prompt = '', audioText = '' } = {}) 
   }
   let r;
   try {
-    r = await (modeloPara('classificacao', { maxTokens: 512 }) || makeGemini({ model: MODEL, thinkingBudget: 0, maxOutputTokens: 512 }))
+    r = await (modelFor('classification', { maxTokens: 512 }) || makeGemini({ model: MODEL, thinkingBudget: 0, maxOutputTokens: 512 }))
       .complete({ system: SYSTEM, messages: [{ role: 'user', content: text.slice(0, 8000) }], tools: [] });
   } catch (e) {
     return { allowed: false, categories: [], labels: [], reason: 'Moderação indisponível no momento. Tente de novo.', usage: null, model: MODEL, failClosed: true, error: String(e?.message ?? e) };

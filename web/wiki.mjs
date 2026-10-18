@@ -40,15 +40,15 @@ const AREAS = {
   compras: 'Compras',
 };
 const OVERFLOW = 'notas';            // where the fact falls when the profile is at the cap
-// R4 (flag MEMORIA_HISTORICO=1): no line leaves the page without leaving the old
+// R4 (flag MEMORY_HISTORY=1): no line leaves the page without leaving the old
 // version in the history (closed memory_facts), including a line that isn't a fact.
-export const historicoLigado = () => process.env.MEMORIA_HISTORICO === '1';
+export const historicoLigado = () => process.env.MEMORY_HISTORY === '1';
 const ATUALIZACOES = 'atualizacoes'; // record of what changed; maintained only by the server
 const MARCA_LINKS = '## Mais detalhe';
 const CAB_ATUALIZACOES = 'O que mudou na sua memória (mais recente primeiro). Página mantida automaticamente.';
 const MAX_ATUALIZACOES = 60;
 // Cap of FACTS in the profile (the rest becomes a link). Overridable without a deploy.
-const PERFIL_MAX = () => Math.max(5, Number(process.env.PERFIL_MAX_LINHAS || 15));
+const PERFIL_MAX = () => Math.max(5, Number(process.env.PROFILE_MAX_LINES || 15));
 
 // One page per person (`pessoa-ana`), instead of a line in a `pessoas` page.
 const ehPaginaDePessoa = (slug) => /^pessoa-[a-z0-9-]{2,}$/.test(slug);
@@ -264,7 +264,7 @@ export async function wikiContext(userId, owner) {
   }
   // Keys of the current facts: without them the assistant invents a new key for the
   // same subject and the old fact is never replaced.
-  // R2 (MEMORIA_BUSCA_V2=1): all keys, not just the 40 newest; an old fact
+  // R2 (MEMORY_SEARCH_V2=1): all keys, not just the 40 newest; an old fact
   // outside the list used to get rewritten with a new key.
   const fatos = await listCurrentFacts(userId, { limit: buscaV2Ligada() ? 400 : 40 }).catch(() => []);
   if (fatos.length) {
@@ -295,7 +295,7 @@ export async function wikiContext(userId, owner) {
 // 2026-09-01 A/B test (gemini MUTATES a fact, V4 Flash CONDENSES and eats lines) are
 // invisible in the result: the page stays plausible, just smaller. Without this counter,
 // any change to the memory operation is a matter of faith.
-// Line content only goes into the log with PERFIL_DIFF_VERBOSE=1 (the profile is personal
+// Line content only goes into the log with PROFILE_DIFF_VERBOSE=1 (the profile is personal
 // data; the default logs only the numbers).
 const norm = (s) => String(s || '').replace(/^\s*[-*•]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase();
 const linhasDe = (txt) => String(txt || '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -358,7 +358,7 @@ export function logDiffPerfil(userId, slug, antes, depois, extra = '') {
   const tag = `[perfil diff] u=${String(userId).slice(0, 8)} ${slug} +${d.add} -${d.del} ~${d.chg}` +
     ` linhas=${d.linhasAntes}->${d.linhas} chars=${d.charsAntes}->${d.chars}${extra ? ' ' + extra : ''}`;
   console.log(tag);
-  if (process.env.PERFIL_DIFF_VERBOSE === '1') {
+  if (process.env.PROFILE_DIFF_VERBOSE === '1') {
     for (const l of d.perdidas.slice(0, 5)) console.log(`  [perfil PERDEU] ${l.slice(0, 160)}`);
     for (const [s, e] of d.mudadas.slice(0, 5)) console.log(`  [perfil MUDOU] ${s.slice(0, 90)} => ${e.slice(0, 90)}`);
   }
@@ -1150,10 +1150,10 @@ export async function patchUserProfile(userId, userMsg, assistantMsg, { dryRun =
 }
 
 // Automatic per-turn maintenance of the `perfil` page (user layer, per person).
-// Since 2026-09-02 the default is PATCH (above); `PERFIL_MODO=rewrite` reverts to the
+// Since 2026-09-02 the default is PATCH (above); `PROFILE_MODE=rewrite` reverts to the
 // old rewrite behavior without needing a deploy.
 export async function updateUserProfile(userId, userMsg, assistantMsg, { language = null, fonte = {} } = {}) {
-  if (process.env.PERFIL_MODO !== 'rewrite') {
+  if (process.env.PROFILE_MODE !== 'rewrite') {
     try {
       return await patchUserProfile(userId, userMsg, assistantMsg, { language, fonte });
     } catch (e) {

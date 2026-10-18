@@ -36,12 +36,12 @@ export function videoGenEnabled() {
 // app. This way the assistant doesn't even know video exists and doesn't promise what it can't
 // deliver (that's what used to happen: the promise originated from the tool's description, and the
 // guard only kicked in later, inside the run).
-// ON BY DEFAULT: turning the feature back on is an explicit act (VIDEO_EM_REVISAO=0 in
+// ON BY DEFAULT: turning the feature back on is an explicit act (VIDEO_UNDER_REVIEW=0 in
 // the box's .env), never an oversight.
 // The poller (pollVideoJobs) keeps running on purpose: a job created BEFORE the
 // review keeps being delivered to the owner.
 export function videoEmRevisao() {
-  return String(process.env.VIDEO_EM_REVISAO ?? '1') !== '0';
+  return String(process.env.VIDEO_UNDER_REVIEW ?? '1') !== '0';
 }
 
 function authHeaders(extra = {}) {

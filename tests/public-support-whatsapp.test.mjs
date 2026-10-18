@@ -12,7 +12,7 @@ import {encryptSecret,decryptSecret} from '../web/vault.mjs';
 import {createWhatsAppHandler} from '../web/whatsapp.mjs';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<500;i++){if(await fn())return;await wait(10);}throw Error('Expected state did not arrive');}
-Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CANAL_REENVIO_MS:'0,0',WA_PUBLICO_JUNTAR_MS:'50',WA_PUBLICO_JUNTAR_MAX_MS:'2000',WA_ESPERA_ENTREGA_MS:'0'});
+Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CHANNEL_RESEND_MS:'0,0',WA_PUBLIC_MERGE_MS:'50',WA_PUBLIC_MERGE_MAX_MS:'2000',WA_DELIVERY_WAIT_MS:'0'});
 const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'synthetic-phone'},messages}}]}]});
 const DONO='5511000000001',CLIENTE='5511000000002';
 let n=0;const msg=(from,text,extra={})=>({id:'publico-'+(++n),from,type:'text',text:{body:text},...extra});
@@ -84,7 +84,7 @@ test('WhatsApp: unknown sender goes to public support only when enabled; owner a
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
  await t.test('a rejected output falls back to its backup text; with an image, the next one waits for delivery',async()=>{
-  sent.length=0;process.env.WA_ESPERA_ENTREGA_MS='3000';t.after(()=>{process.env.WA_ESPERA_ENTREGA_MS='0';});
+  sent.length=0;process.env.WA_DELIVERY_WAIT_MS='3000';t.after(()=>{process.env.WA_DELIVERY_WAIT_MS='0';});
   turno=async()=>({text:'x',saidas:[{tipo:'template',nome:'recusado',idioma:'pt_BR',componentes:[],reserva:'Opções: 1. Blusa'},
    {tipo:'imagem',url:'https://x.example/a.jpg',reserva:'Foto: https://x.example/a.jpg'},{tipo:'texto',texto:'Gostou?'}]});
   const m=msg(CLIENTE,'oi');await h.accept(payload([m]));await h.process(payload([m]));

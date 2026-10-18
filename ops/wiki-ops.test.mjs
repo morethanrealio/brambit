@@ -107,7 +107,7 @@ const base = '- mora em São Paulo\n- trabalha com produto\n- treina de manhã';
 
 // ── PHASE 2: profile ceiling, area/person pages, links section ──
 {
-  // Ceiling = 15 facts (PERFIL_MAX_LINHAS). When full: the new fact is NOT cut nor
+  // Ceiling = 15 facts (PROFILE_MAX_LINES). When full: the new fact is NOT cut nor
   // discarded, it's routed to the overflow page.
   const cheio = Array.from({ length: 15 }, (_, i) => `- fato numero ${i} do perfil`).join('\n');
   const r = aplicarOps([{ op: 'add', pagina: 'perfil', texto: 'gosta de café coado' }], { perfil: cheio, notas: '' });

@@ -40,7 +40,7 @@ export function textoAvisoCanal(language, tipo) {
 // actually arrived, so the resend can duplicate a part; a repeated answer is
 // better than a missing one.
 export function esperasDeReenvio() {
-  const env = process.env.CANAL_REENVIO_MS;
+  const env = process.env.CHANNEL_RESEND_MS;
   if (env === undefined) return [2000, 8000];
   return env.split(',').map(Number).filter(n => Number.isFinite(n) && n >= 0);
 }

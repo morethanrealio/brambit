@@ -2,12 +2,12 @@
 // Deadline = the issue label `deadline: N day(s)`; without it, PRAZO_PADRAO days. Counted
 // from the assignment or the assignee last comment, whichever is newer.
 // Never expires: an assignee with an open PR linked to the issue, or a team member
-// (write access). Run by reservas.yml; RESERVAS_SIMULAR=1 only lists, changes nothing.
+// (write access). Run by reservas.yml; RESERVATIONS_DRY_RUN=1 only lists, changes nothing.
 const PRAZO_PADRAO = 7;
 const DIA = 86_400_000;
 const repo = process.env.GITHUB_REPOSITORY;
 const token = process.env.GH_TOKEN;
-const simular = process.env.RESERVAS_SIMULAR === '1';
+const simular = process.env.RESERVATIONS_DRY_RUN === '1';
 if (!repo || !token) throw new Error('GITHUB_REPOSITORY and GH_TOKEN are required.');
 
 async function gh(caminho, { method = 'GET', body } = {}) {

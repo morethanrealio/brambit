@@ -4,10 +4,10 @@
 // (missing "horário"), and "buscar Cadu" doesn't find "busca o Cadu". This one searches line by
 // line in both pages AND facts (including closed ones, which are the history), without
 // accents, with ANY word, and ranks: a rare word weighs more than a common one,
-// and the line that matches more search words rises. Off by default: MEMORIA_BUSCA_V2=1.
+// and the line that matches more search words rises. Off by default: MEMORY_SEARCH_V2=1.
 import { termos } from './wiki-reconciliar.mjs';
 
-export const buscaV2Ligada = () => process.env.MEMORIA_BUSCA_V2 === '1';
+export const buscaV2Ligada = () => process.env.MEMORY_SEARCH_V2 === '1';
 
 const RESERVADAS = new Set(['atualizacoes']);
 const MARCA_LINKS = '## Mais detalhe';

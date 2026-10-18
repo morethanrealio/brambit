@@ -36,7 +36,7 @@ export function makeOpenAI({
   maxTokens = 8192,          // hard output ceiling (anti-loop, same as Gemini)
   temperature = 0.7,         // ignored on reasoning models
   reasoningEffort = 'low',   // only applies to reasoning models (gpt-5*/o*)
-  // Any OpenAI-compatible provider (modelos.yaml): address, key and name
+  // Any OpenAI-compatible provider (models.yaml): base URL, key and name
   // come from the configuration. Without them, it's the usual OpenAI. apiKey null = provider
   // without a key (e.g.: Ollama on the local machine).
   url = BASE(),

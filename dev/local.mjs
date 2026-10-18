@@ -5,7 +5,7 @@
 // password, and the data lives in .local/ (delete it to start over).
 // Runs on Linux, macOS and Windows.
 //
-// Usage: npm run local             (reads .env and modelos.yaml from the root; needs a model key)
+// Usage: npm run local             (reads .env and models.yaml from the root; needs a model key)
 //        npm run local -- --check  starts, checks sign-up and login, and exits (used by CI)
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import pg from 'pg';
-import { carregarModelos, descreverModelos, tabelaModelos } from '../core-proto/modelos.mjs';
+import { loadModels, describeModels, modelsTable } from '../core-proto/modelos.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = path.join(root, '.local');
@@ -148,12 +148,11 @@ async function main() {
     BRAMBIT_CONFIG_FILE: process.env.BRAMBIT_CONFIG_FILE || dotEnvFile,
     BRAMBIT_CONFIG_PINNED: [...new Set([...pinned, ...String(process.env.BRAMBIT_CONFIG_PINNED || '').split(',').filter(Boolean)])].join(','),
   };
-  const models = carregarModelos({ env });
+  const models = loadModels({ env });
   if (models) {
-    console.log(`[local] modelos.yaml\n${tabelaModelos({ cfg: models, env })}`);
-    // 'SEM CHAVE' is the marker the core's model table prints for a missing key.
-    if (descreverModelos({ cfg: models, env }).some((l) => l.principal.includes('SEM CHAVE'))) {
-      console.warn('[local] a function has no key in .env (marked above): it will answer "service unavailable".');
+    console.log(`[local] models.yaml\n${modelsTable({ cfg: models, env })}`);
+    if (describeModels({ cfg: models, env }).some((l) => l.missingKey)) {
+      console.warn('[local] a task has no key in .env (marked above): it will answer "service unavailable".');
     }
   } else if (!['TOGETHER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY'].some((k) => env[k])) {
     console.warn('[local] no model key in .env: the server starts, but the chat will answer "service unavailable". See the Quick start in the README.');

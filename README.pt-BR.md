@@ -147,9 +147,9 @@ Para desenvolver o Brambit. Requisitos: Node.js 24 (a versão do CI) em Windows,
 ```bash
 npm ci
 cp .env.example .env
-cp modelos.example.yaml modelos.yaml   # escolha provedores e modelos (explicado no arquivo)
-# cole no .env a chave de cada provedor que o modelos.yaml usa
-npm run modelos                        # confere: função → modelo, e avisa chave faltando
+cp models.example.yaml models.yaml     # escolha provedores e modelos (explicado no arquivo)
+# cole no .env a chave de cada provedor que o models.yaml usa
+npm run models                         # confere: tarefa → modelo, e avisa chave faltando
 npm run local
 ```
 
@@ -165,18 +165,19 @@ firewall). Ele imprime as duas linhas `SANDBOX_*` pro `.env`. Detalhe em
 
 ## Provedores e modelos
 
-O Brambit não traz modelo próprio. A escolha fica no `modelos.yaml`, um arquivo comentado com três seções:
+O Brambit não traz modelo próprio. A escolha fica no `models.yaml`, um arquivo comentado com três seções:
 
-- `provedores`: apelido, endereço da API e o *nome* da variável do `.env` com a
-  chave. Qualquer serviço compatível com a API da OpenAI entra sem código
+- `providers` (provedores): apelido, endereço da API em `base_url` e, em `api_key_env`, o *nome*
+  da variável do `.env` com a chave. Qualquer serviço compatível com a API da OpenAI entra sem código
   (Together, OpenAI, OpenRouter, Groq, DeepSeek, Ollama local...); o Gemini entra
-  com `tipo: gemini`.
-- `funcoes`: o modelo de cada função (conversa, imagem, pesquisa, programação,
-  memória, classificação...), com um modelo `reserva` opcional que entra se o
-  principal cair. Função sem linha herda do `padrao`, então uma linha basta.
-- `precos`: preço de modelo novo, pra o registro de gasto sair certo.
+  com `type: gemini`.
+- `tasks` (tarefas): o modelo de cada tarefa (`chat` conversa, `image` imagem, `research` pesquisa,
+  `coding` programação, `memory` memória, `classification` classificação...), com um modelo
+  `fallback` (reserva) opcional que entra se o principal cair. Tarefa sem linha herda do
+  `default` (padrão), então uma linha basta.
+- `prices` (preços): preço de modelo novo, pra o registro de gasto sair certo.
 
-Sem `modelos.yaml`, vale o roteamento embutido, e basta uma destas chaves no `.env`:
+Sem `models.yaml`, vale o roteamento embutido, e basta uma destas chaves no `.env`:
 
 | Provedor | Variável | Modelo de texto usado |
 | --- | --- | --- |
@@ -258,7 +259,7 @@ cada porta tem um padrão que deixa a instância inteira funcionando.
   de `tests/` e o `ops/tenancy-runner-test.mjs` rodam na suíte; `ops/tenancy-test.mjs`
   e `ops/tenancy-write-test.mjs` testam um servidor no ar com duas sessões reais e
   rodam à mão.
-- `dev/`: `npm run local` e `npm run modelos`.
+- `dev/`: `npm run local` e `npm run models`.
 - `installer/`: o que os instaladores de uma linha usam, o `npm run brambit` (Brambit no
   seu computador) e as provas de ponta a ponta deles.
 - `test-support/`: apoio da suíte de testes.

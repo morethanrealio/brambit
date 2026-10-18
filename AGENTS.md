@@ -19,7 +19,7 @@ The only exceptions:
 - `README.pt-BR.md` and `CLA.md`, which exist in Portuguese on purpose.
 
 Part of the core still has Portuguese names from before the project went open
-(`nome`, `portas`, `ligar`, `modelos.yaml`, `createPermissoesSimples`...). Use
+(`nome`, `portas`, `ligar`, `createPermissoesSimples`...). Use
 them as they are; do not rename them in passing. Renaming them is its own pull
 request.
 

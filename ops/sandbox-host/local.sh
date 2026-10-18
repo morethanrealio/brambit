@@ -76,11 +76,11 @@ FW
 else
   NET_OK=0
   echo
-  echo "[sandbox] ATENÇÃO: fora do Linux (ex.: Docker Desktop no macOS) não há como este"
-  echo "[sandbox] script bloquear a rede: o código rodado no sandbox alcança a sua rede"
-  echo "[sandbox] local e serviços desta máquina. Use só com código seu, ou rode o"
-  echo "[sandbox] sandbox numa máquina Linux (modo máquina dedicada, ver README)."
-  [ "${SANDBOX_SEM_FIREWALL:-}" = "1" ] || die "pra seguir assim mesmo: SANDBOX_SEM_FIREWALL=1 $0"
+  echo "[sandbox] WARNING: outside Linux (e.g. Docker Desktop on macOS) this script has no"
+  echo "[sandbox] way to block the network: code run in the sandbox reaches your local"
+  echo "[sandbox] network and this machine's services. Use it only with your own code, or"
+  echo "[sandbox] run the sandbox on a Linux machine (dedicated machine mode, see README)."
+  [ "${SANDBOX_NO_FIREWALL:-}" = "1" ] || die "to proceed anyway: SANDBOX_NO_FIREWALL=1 $0"
 fi
 
 # 4. DNS from inside the sandbox (the firewall only allows DNS to 8.8.8.8 and 1.1.1.1)

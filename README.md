@@ -144,9 +144,9 @@ with it (Postgres 14 from npm); nothing else to install.
 ```bash
 npm ci
 cp .env.example .env
-cp modelos.example.yaml modelos.yaml   # pick providers and models (explained in the file)
-# add to .env the key of each provider modelos.yaml uses
-npm run modelos                        # checks: job → model, and warns about missing keys
+cp models.example.yaml models.yaml     # pick providers and models (explained in the file)
+# add to .env the key of each provider models.yaml uses
+npm run models                         # checks: task → model, and warns about missing keys
 npm run local
 ```
 
@@ -163,19 +163,19 @@ firewall). It prints the two `SANDBOX_*` lines for `.env`. Details in
 
 ## Providers and models
 
-Brambit ships no model of its own. The choice lives in `modelos.yaml`, a commented
+Brambit ships no model of its own. The choice lives in `models.yaml`, a commented
 file with three sections:
 
-- `provedores` (providers): a nickname, the API address and the *name* of the
+- `providers`: a nickname, the API `base_url` and, in `api_key_env`, the *name* of the
   `.env` variable holding the key. Any OpenAI-compatible service works without code
   (Together, OpenAI, OpenRouter, Groq, DeepSeek, local Ollama...); Gemini uses
-  `tipo: gemini`.
-- `funcoes` (jobs): the model for each job (chat, images, research, coding, memory,
-  classification...), with an optional `reserva` (fallback) model used if the main
-  one fails. A job with no line inherits `padrao` (default), so one line is enough.
-- `precos` (prices): the price of a new model, so spend is recorded correctly.
+  `type: gemini`.
+- `tasks`: the model for each task (`chat`, `image`, `research`, `coding`, `memory`,
+  `classification`...), with an optional `fallback` model used if the main
+  one fails. A task with no line inherits `default`, so one line is enough.
+- `prices`: the price of a new model, so spend is recorded correctly.
 
-Without `modelos.yaml`, the built-in routing applies and one of these keys in `.env`
+Without `models.yaml`, the built-in routing applies and one of these keys in `.env`
 is enough:
 
 | Provider | Variable | Text model used |
@@ -258,7 +258,7 @@ a plugin, each port has a default that keeps the whole instance working.
   `tests/` and `ops/tenancy-runner-test.mjs` run in the suite; `ops/tenancy-test.mjs`
   and `ops/tenancy-write-test.mjs` probe a running server with two real sessions and
   are run by hand.
-- `dev/`: `npm run local` and `npm run modelos`.
+- `dev/`: `npm run local` and `npm run models`.
 - `installer/`: the one-line installers' helpers, `npm run brambit` (Brambit on your own
   computer) and their end-to-end checks.
 - `test-support/`: test suite helpers.
