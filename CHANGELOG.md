@@ -1,24 +1,15 @@
 # Changelog
 
-Notable changes to Brambit, newest first. Versions are git tags; an app pins
-one in its `package.json` (`brambit#vX.Y.Z`) and moves to a new one on purpose.
-Every entry is something any installation can use: features that serve a
-single deployment or client live in that deployment's plugins, not here.
+From the version after 0.2.24 on, release notes are published with each version
+on [GitHub Releases](https://github.com/morethanrealio/brambit/releases), generated
+from the pull requests it carries ([docs/releasing.md](docs/releasing.md)). This
+file keeps the notes of 0.2.24 and earlier and is no longer edited.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Changes merged since the last tag go under "Unreleased".
+Versions are git tags; an app pins one in its `package.json` (`brambit#vX.Y.Z`)
+and moves to a new one on purpose.
 
 The public history of this repository starts at 0.2.23. The notes of earlier
 versions stay below for reference, but their tags are no longer published.
-
-## [Unreleased]
-
-### Fixed
-- When a long conversation is summarized, phone numbers, addresses, prices,
-  dates, times, e-mail addresses and booking details written in English or
-  Spanish are kept word for word, as they already were in Portuguese. Before,
-  most of them went into the summary and could be lost. Phones, e-mails, month
-  names and times like `15h` are now kept in Portuguese too (#36).
 
 ## [0.2.24] - 2026-10-17
 
@@ -740,5 +731,4 @@ service built on it.
 - Guards and the test suite run from the directory they are called from, so
   an app that installs Brambit can run them on its own repo.
 
-[Unreleased]: https://github.com/morethanrealio/brambit/compare/v0.2.23...HEAD
 [0.2.23]: https://github.com/morethanrealio/brambit/releases/tag/v0.2.23

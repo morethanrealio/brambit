@@ -286,7 +286,7 @@ Don't assume the same protection for every eval script in the repository.
 ## Resources
 
 - [Contributing guide](CONTRIBUTING.md) and [open work](https://github.com/morethanrealio/brambit/issues)
-- [Changelog](CHANGELOG.md)
+- [Releases](https://github.com/morethanrealio/brambit/releases) (notes up to 0.2.24 in [CHANGELOG.md](CHANGELOG.md))
 - [Security policy](SECURITY.md)
 - [Governance](GOVERNANCE.md) and [maintainers](MAINTAINERS.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)

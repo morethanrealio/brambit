@@ -1,0 +1,31 @@
+# Release notes that GitHub writes when a version is published
+# (`gh release create vX.Y.Z --generate-notes`, or "Generate release notes" on the
+# release page). Each pull request merged since the previous tag goes under the
+# first category whose label it has. How a version is cut: docs/releasing.md.
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking change
+    - title: New features
+      labels:
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Translations
+      labels:
+        - translation
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Dependencies
+      labels:
+        - dependencies
+        - github_actions
+    - title: Other changes
+      labels:
+        - "*"

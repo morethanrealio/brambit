@@ -42,6 +42,11 @@ make a good first contribution.
 ## What a good PR has
 
 - One subject per PR, describing the problem, what changed and how you tested it.
+- A title that says, in plain words, what changes for whoever runs Brambit. It
+  becomes a line of the release notes ([`docs/releasing.md`](docs/releasing.md)), so
+  there is no changelog to edit.
+- When an installation has to do something after upgrading (a renamed setting, a
+  reinstall), the description says what.
 - A test when the change could break without anyone noticing. A test that only
   restates the code doesn't help.
 - No secrets, keys, real user data, IPs or internal hosts, in code or in tests. CI
