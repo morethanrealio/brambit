@@ -2,7 +2,7 @@
 
 <h1 align="center">Brambit</h1>
 
-<h3 align="center">O motor open source de assistentes pessoais de IA: uma instalação, muitas pessoas, cada uma no seu espaço.</h3>
+<h3 align="center">O motor open source de assistentes pessoais de IA: um servidor, muitas pessoas, cada uma no seu espaço.</h3>
 
 <p align="center">
   <a href="LICENSE"><img alt="Licença: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
@@ -13,12 +13,19 @@
 
 <p align="center"><a href="README.md">Read in English</a></p>
 
-O Brambit dá a cada pessoa de uma instalação os seus próprios assistentes de IA. Eles
-conversam num app web e pelo Telegram, WhatsApp, e-mail e Slack, lembram do que
-importa, usam conectores (Google, Microsoft, GitHub e servidores MCP remotos), rodam
-código num sandbox, criam e hospedam pequenos apps e executam rotinas agendadas. O
-modelo é escolha de quem instala: qualquer provedor compatível com a API da OpenAI, ou
-o Gemini, com a sua chave.
+O Brambit é um software que roda no seu próprio servidor e dá a cada pessoa de uma
+família, de um time ou de uma empresa os próprios assistentes de IA. Agentes pessoais
+open source como OpenClaw, NanoClaw e Hermes Agent são feitos para um desenvolvedor:
+você configura pelo terminal e por arquivos de configuração, e em geral é a única
+pessoa que usa. O Brambit é feito para ser compartilhado: uma pessoa instala, e todo
+mundo usa pelo navegador.
+
+As pessoas conversam com os seus assistentes num app web e pelo Telegram, WhatsApp,
+e-mail e Slack. Os assistentes lembram do que importa, usam conectores (Google,
+Microsoft, GitHub e servidores MCP remotos), rodam código num sandbox, criam e
+hospedam pequenos apps e executam rotinas agendadas. O modelo é escolha de quem
+instala: qualquer provedor compatível com a API da OpenAI, ou o Gemini, com a sua
+chave.
 
 O Brambit é o motor do [Brambs](https://brambs.com.br), o serviço hospedado mantido
 pelo mesmo time, na More Than Real. O Brambs roda este código mais os próprios
@@ -33,12 +40,7 @@ seu servidor, o modelo que você escolher e os dados guardados com você. O prov
 do modelo recebe o contexto de cada chamada, e os serviços opcionais que você ligar
 (busca na web, geração de imagem, voz) recebem o que o trabalho deles precisa.
 
-Agentes pessoais open source como OpenClaw, NanoClaw e Hermes Agent são feitos para
-um desenvolvedor: você configura pelo terminal e por arquivos de configuração, e em
-geral é a única pessoa que usa. O Brambit é feito para ser compartilhado: uma pessoa
-instala, e todo mundo usa pelo navegador.
-
-- *Muita gente, uma instalação.* Cada pessoa tem a própria conta, assistentes,
+- *Muita gente, um servidor.* Cada pessoa tem a própria conta, assistentes,
   memória e conexões, e o próprio sandbox de código (um container por conta). Testes
   automáticos conferem que uma conta não consegue ler nem alterar os dados de outra
   pela API. Uma família, um time ou uma empresa podem dividir a mesma instância.
