@@ -9,7 +9,7 @@ import tls from 'node:tls';
 const denied = () => { throw Error('External IO forbidden'); };
 net.Socket.prototype.connect = tls.connect = globalThis.fetch = denied;
 registerHooks({resolve(specifier, context, next) {
-  if (specifier === './compras.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
+  if (specifier === './shopping.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
     return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
   }
   return next(specifier, context);

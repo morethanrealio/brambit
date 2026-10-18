@@ -4,7 +4,7 @@
 // Drive is a fake fetch; the tools are real.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pastaDoAssistenteTools } from '../web/drive-equipe.mjs';
+import { pastaDoAssistenteTools } from '../web/team-drive.mjs';
 import { ensureAssistantFolder } from '../web/connectors.mjs';
 
 const PASTA = 'application/vnd.google-apps.folder';

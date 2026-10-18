@@ -1,4 +1,4 @@
-// Owner's view of public support (publico.mjs): configuring an assistant's
+// Owner's view of public support (public-support.mjs): configuring an assistant's
 // public mode, viewing contacts and conversations (read-only), blocking,
 // exporting and deleting a contact. The screen is web/public/public-support.html (/public-support).
 //
@@ -7,7 +7,7 @@
 // The ones that change state are POST and go through the server's global CSRF.
 import { readBody } from './http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
-import { AGENT_HOURLY_LIMIT_MAX } from './publico.mjs';
+import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
 import { LINK_SITES_MAX, normalizeSite } from './links.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,7 +47,7 @@ export function camposDaConfig(b = {}) {
   return { campos: c };
 }
 
-// deps: routes (rotas.mjs), store (createPublicoStore), send/fail/tooManyRequests
+// deps: routes (routes.mjs), store (createPublicoStore), send/fail/tooManyRequests
 // from the server, agenteDoNumero() = id of the assistant that serves the installation's number,
 // webStore (public-web.mjs) = the website and API channel's settings, available() → false
 // while the installation keeps public support off (the screen then says why).

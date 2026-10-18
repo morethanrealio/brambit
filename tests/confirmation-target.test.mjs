@@ -8,7 +8,7 @@ import { registerHooks } from 'node:module';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === './compras.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
+    if (specifier === './shopping.mjs' && context.parentURL?.endsWith('/web/confirm.mjs')) {
       return {
         url: 'data:text/javascript,export function descreverCarrinho(){throw Error("unused offline")};export function plataformaDoCarrinho(){throw Error("unused offline")}',
         shortCircuit: true,

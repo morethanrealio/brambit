@@ -1,4 +1,4 @@
-// Connects public support (publico.mjs) to the server and to WhatsApp.
+// Connects public support (public-support.mjs) to the server and to WhatsApp.
 //
 // Phase 1 uses the installation's single number. Whoever installs it chooses WHICH assistant
 // handles those without an account (PUBLIC_SUPPORT_AGENT = agent id); the owner
@@ -9,8 +9,8 @@
 // their assistant.
 import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
-import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './publico.mjs';
-import { registrarRotasDoDono } from './publico-dono.mjs';
+import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
+import { registrarRotasDoDono } from './public-support-owner.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
@@ -33,13 +33,13 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 
 // deps: database pool/S; makeProvider(ident) already tied to the owner's spend;
 // recordUsages and creditStatus from the server; ferramentas = tools port;
-// ganchos = plugin's atendimentoPublico port (script; see publico.mjs).
+// ganchos = plugin's atendimentoPublico port (script; see public-support.mjs).
 // Returns what the WhatsApp channel uses: atende() says whether support is on
 // for the number; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
-// (publico-dono.mjs) and the public web channel (public-web.mjs).
+// (public-support-owner.mjs) and the public web channel (public-web.mjs).
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
 // it hands to the public would also hand out accounts paid by the owner. null =

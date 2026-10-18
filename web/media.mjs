@@ -15,7 +15,7 @@ import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
 import {GEMINI_COMPARISON_MODEL,isGeminiComparison} from '../core-proto/deepseek/comparison.mjs';
 import {makeGemini} from '../core-proto/providers/gemini.mjs';
 import {throwIfAttemptControl} from '../core-proto/provider-attempt.mjs';
-import {modelFor} from '../core-proto/modelos.mjs';
+import {modelFor} from '../core-proto/models.mjs';
 import fs from 'fs';
 import path from 'path';
 import crypto, { randomUUID } from 'crypto';

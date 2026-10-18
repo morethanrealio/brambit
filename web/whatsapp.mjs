@@ -1,4 +1,4 @@
-import { hostDaMarca, marca, siteDaMarca } from './marca.mjs';
+import { hostDaMarca, marca, siteDaMarca } from './brand.mjs';
 import { batchedConfirmationTarget, channelReplyParts } from './confirmation-target.mjs';
 // ── WhatsApp channel (WABA Cloud API, single shared number) ──
 // One business number serves MULTIPLE users. Unlike Telegram (1 bot per
@@ -14,13 +14,13 @@ import { batchedConfirmationTarget, channelReplyParts } from './confirmation-tar
 import crypto from 'crypto';
 import { CHANNEL_CTX_END } from './confirm.mjs';
 import { markVoiceInput } from './voice-input.mjs';
-import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
+import { notaMidiaSemTexto } from './media-without-text.mjs';
 import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markdownParaWa } from './wa-format.mjs';
-import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
-import { imagemParaWa } from './wa-imagem.mjs';
-import { avisarEntrega, esperarEntrega } from './wa-entrega.mjs';
+import { comReenvio, criarAvisoCanal } from './channel-notice.mjs';
+import { imagemParaWa } from './wa-image.mjs';
+import { avisarEntrega, esperarEntrega } from './wa-delivery.mjs';
 import { isAckOnly } from './whatsapp-held-delivery.mjs';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
@@ -93,7 +93,7 @@ export function prepararTextoWa(text) {
 // Plain text, cut into WA_CHUNK-char pieces.
 // Returns the wamids of the parts that were sent (to index the reply and allow
 // the user to "reply/quote" it later). Callers that ignore the return value remain fine.
-// `reenvio`: retries each part that failed with an uncertain error (aviso-canal.mjs), per
+// `reenvio`: retries each part that failed with an uncertain error (channel-notice.mjs), per
 // part, so as not to resend the ones Meta already accepted. On error, `error.wamids`
 // carries the parts that went out (billing and quoting still apply to them).
 async function sendText(to, text, { requireReceipt = false, tracking, reenvio = false } = {}) {
@@ -125,11 +125,11 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
   return wamids;
 }
 
-// Rich outputs from public-facing support (publico-saidas.mjs, already normalized),
+// Rich outputs from public-facing support (public-support-outputs.mjs, already normalized),
 // one Meta message per output, in order. Text goes through sendText (split into
 // bubbles), and so does a data output's reserve (data alone is skipped); image, link button (cta_url) and approved template go out directly, with
-// images uploaded beforehand as JPEG/PNG (wa-imagem.mjs). An output with an image that
-// has another one after it waits for Meta to confirm delivery (wa-entrega.mjs), otherwise the
+// images uploaded beforehand as JPEG/PNG (wa-image.mjs). An output with an image that
+// has another one after it waits for Meta to confirm delivery (wa-delivery.mjs), otherwise the
 // next text arrives before the photo. An output with a `reserva` that Meta rejects,
 // right away or later via the webhook, becomes this text. Without a reserve, the error is the same
 // as sendText's: `error.wamids` carries what already went out.
@@ -613,7 +613,7 @@ export function verifySignature(rawBody, signature) {
 //   runConversation(agent, userId, text) -> reply
 //   loadAgent(agentId, userId) -> agent   (validates ownership)
 //   db = { getWhatsAppLink, listAgents, setWhatsAppActiveAgent }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// avisoCanal = { idiomaDe, registrar } (channel-notice.mjs): language of the error notice and
 // its registration in the WhatsApp thread history.
 export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAgent, db, transcribe, getMedia, inbox = null, aoReprovar = null, avisoCanal = {}, publico = null, heldDelivery = null }) {
   const seen = new Set(); // ids already processed (dedup of Meta retries)
@@ -769,7 +769,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     return pumpPromise;
   }
 
-  // Unknown on a number with public support (publico-canal.mjs): the one who
+  // Unknown on a number with public support (public-support-channel.mjs): the one who
   // replies is the public assistant, outside the pump (the turn calls the model) and
   // without any of the owner's flow (menu, @name, reaction, confirmation, msg reference).
   // Chopped-up messages become a single turn: waits JUNTAR_MS after the last one (at
@@ -1105,7 +1105,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
                 console.warn(`[whatsapp] REJECTED by Meta: destino=${phoneForLog(st.recipient_id)} code=${err?.code ?? '?'} "${err?.title || err?.message || 'sem detalhe'}" wamid=${st.id}`);
                 // Whoever registered the send as 'sent' (born from Meta's 200, which is
                 // just "accepted") corrects it now, at the only moment the truth
-                // about delivery exists (event whatsapp_reprovada, eventos.mjs).
+                // about delivery exists (event whatsapp_reprovada, events.mjs).
                 if (aoReprovar) {
                   await Promise.resolve().then(() => aoReprovar({
                     wamid: st.id,

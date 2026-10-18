@@ -1,5 +1,5 @@
 import { tagIdioma } from './locale.mjs';
-import { hostDaMarca } from './marca.mjs';
+import { hostDaMarca } from './brand.mjs';
 import { productI18n } from './i18n.mjs';
 import { needsHolding } from './whatsapp-held-delivery.mjs';
 

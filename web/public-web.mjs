@@ -1,10 +1,10 @@
 // Public support over the web: a site's chat widget, or a server, talks to an
-// assistant's public mode over HTTP. The turn itself is publico.mjs's, with
+// assistant's public mode over HTTP. The turn itself is public-support.mjs's, with
 // channel 'web'; this module only decides who may call and which contact it is.
 //
 // The agent goes in the query string (?agent=<id>), so one installation serves
 // as many public assistants as there are owners who turned the web channel on.
-// The owner turns it on in /public-support (publico-dono.mjs) and chooses how it
+// The owner turns it on in /public-support (public-support-owner.mjs) and chooses how it
 // is called:
 //  - From a browser: only from the origins the owner listed (CORS). The contact
 //    is a token this module issues on the first message and signs with the
@@ -19,7 +19,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { indiceCego } from './vault.mjs';
-import { chaveDoContato, normalizeEvent } from './publico.mjs';
+import { chaveDoContato, normalizeEvent } from './public-support.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);
@@ -169,9 +169,9 @@ export function createPublicWebStore(pool, { S = 'mtr_harness' } = {}) {
   };
 }
 
-// deps: rotas (rotas.mjs), webStore (createPublicWebStore), turno = the public
+// deps: rotas (routes.mjs), webStore (createPublicWebStore), turno = the public
 // turn (createAtendimentoPublico().turno), send/fail/tooManyRequests/clientIp from the server;
-// available() → false while the installation keeps public support off (publico-canal.mjs).
+// available() → false while the installation keeps public support off (public-support-channel.mjs).
 export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, tooManyRequests, clientIp = (req) => req.socket?.remoteAddress, available = async () => true }) {
   const notFound = (res) => send(res, 404, { error: 'not_found' });
 

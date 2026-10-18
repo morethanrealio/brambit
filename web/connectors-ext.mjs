@@ -1,8 +1,8 @@
 import { defaultTimezone } from './locale.mjs';
-import { marca, uaApi } from './marca.mjs';
+import { marca, uaApi } from './brand.mjs';
 import { normalizeEmailBody, limitEmailBody } from './email-body.mjs';
 import { microsoftToolAllowed } from './microsoft-scopes.mjs';
-import { recortar } from './recorte.mjs';
+import { recortar } from './declared-truncation.mjs';
 import { searchPagination, searchCursorSchema, SEARCH_PAGINATION_RULE, searchItems, githubSearchMeta, slackSearchMeta, graphSearchNextPath } from './search-pagination.mjs';
 import { emailPagination, emailCursorSchema, EMAIL_PAGINATION_RULE, graphEmailNextPath } from './email-pagination.mjs';
 import { recurrenceSchema, calendarRecurrence, recurrenceDefaultEnd, calendarWindow } from './calendar-recurrence.mjs';
@@ -17,7 +17,7 @@ import { linkedinIdentity } from './providers.mjs';
 // attachments (PDF extractor, spreadsheet converter, image OCR), so the user
 // gets the same response regardless of where the file lives.
 import { extractPdfText } from './pdf.mjs';
-import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
+import { analisePlanilhaConector, tipoPlanilha } from './sheet.mjs';
 import { ocrPdf, describeImage } from './media.mjs';
 
 // ── GitHub ──
@@ -729,7 +729,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
           return JSON.stringify({ nome, mimeType: mime, note: 'Imagem sem texto legível.' });
         }
         // Spreadsheet (Excel, CSV): goes to the analysis environment and the
-        // result only carries the structure, never the cells (see planilha.mjs).
+        // result only carries the structure, never the cells (see sheet.mjs).
         if (tipoPlanilha(nome, mime)) {
           const buf = await msGetBytes(token, `/me/drive/items/${item}/content`);
           return JSON.stringify({ nome, mimeType: mime, analise: await analisePlanilhaConector(onSheetLoad, buf, nome || 'planilha.xlsx', mime) });

@@ -10,7 +10,7 @@ import {
   listSpaceMembers, addSpaceMember, removeSpaceMember, resolveConnectedUser, contatoAmbiguoMsg,
   getSpaceEntry, updateSpaceEntry, deleteSpaceEntry, setSpaceMode,
 } from './db.mjs';
-import { cartaoEdicaoNota } from './nota-diff.mjs';
+import { cartaoEdicaoNota } from './note-diff.mjs';
 
 // Assistant tools for THIS user (enter the registry on request).
 // `convidar_para_espaco` comes out of here and is registered GATED in server.mjs.

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'discovery/tsconfig.json'], { stdio: 'inherit' });
 for (const file of ['store', 'runtime', 'routes', 'conversation', 'closing', 'report', 'report-instructions', 'report-format', 'report-account']) {
-    const src = readFileSync(`.discovery-build/${file}.mjs`, 'utf8').replace(/'\.\/(store|conversation|closing|report(?:-instructions|-format|-account)?)\.mjs'/g, "'./discovery-$1.mjs'").replace("'../web/marca.mjs'", "'./marca.mjs'");
+    const src = readFileSync(`.discovery-build/${file}.mjs`, 'utf8').replace(/'\.\/(store|conversation|closing|report(?:-instructions|-format|-account)?)\.mjs'/g, "'./discovery-$1.mjs'").replace("'../web/brand.mjs'", "'./brand.mjs'");
     writeFileSync(`web/discovery-${file}.mjs`, src);
 }
 // Admin panel screen: a plugin's file; the core alone does not compile it.

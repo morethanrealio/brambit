@@ -3,7 +3,7 @@
 // routine still runs, without calling the model, at zero cost.
 // Pure, offline, no database. Run with: node tests/routine-credit-notice.test.mjs
 
-import { deveAvisarRotinaSemCredito, ROUTINE_CREDIT_WARN_MS } from '../web/rotina-aviso-credito.mjs';
+import { deveAvisarRotinaSemCredito, ROUTINE_CREDIT_WARN_MS } from '../web/routine-credit-notice.mjs';
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };

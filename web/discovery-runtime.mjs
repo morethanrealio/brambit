@@ -1,7 +1,7 @@
 import { configurationIntent, controlIntent, completionIntent, retryIntent } from './discovery-conversation.mjs';
 import { createHash } from 'node:crypto';
 import { QUIET_DAYS, SILENCE_DAYS, sanitizeReason, slotKind } from './discovery-store.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 /** Channel name as the owner knows it, to ask for the right connection. */
 export const channelLabel = (c) => ({ telegram: 'Telegram', whatsapp: 'WhatsApp', app: `aplicativo do ${marca().nome}` }[c] || c);
 export const GUIDE = `JORNADA DE DESCOBERTA, opt-in temporário do dono, não uma campanha nem terapia.

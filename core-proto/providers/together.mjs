@@ -1,9 +1,9 @@
 import {TOGETHER_FLASH_MODEL,flashReasoning,estimateTogetherFlashInput,togetherRejectionDiagnostic} from './together-flash-contract.mjs';
-import {makeCompativel} from './compativel.mjs';
+import {makeCompativel} from './compatible.mjs';
 export {TOGETHER_FLASH_MODEL} from './together-flash-contract.mjs';
-export {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './ferramenta-em-texto.mjs';
+export {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './tool-in-text.mjs';
 // ── Real adapter: Together AI (OpenAI-compatible Chat Completions) ──
-// Preset of the compatible engine (compativel.mjs). The key comes from
+// Preset of the compatible engine (compatible.mjs). The key comes from
 // process.env.TOGETHER_API_KEY (NEVER hardcoded in the repo). It runs
 // GLM-5.2 (zai-org/GLM-5.2) MUCH faster than DeepInfra: DeepInfra serves the
 // model in FP4 at ~40 tok/s (the slowest of all), Together serves the same
@@ -53,7 +53,7 @@ export function makeTogether({
     camposDiretos: () => ({ max_tokens: maxTokens, temperature, ...togetherReasoning(model, reasoningEffort, true) }),
     // Streaming to measure INACTIVITY: a stuck GLM would sit at undici's default
     // timeout (~minutes) before "fetch failed". Together (serverless) occasionally
-    // returns 503/429 due to capacity (the retry is a common rule, regras.mjs).
+    // returns 503/429 due to capacity (the retry is a common rule, rules.mjs).
     stream: { inatividadeMs: 25_000, diagnosticoRecusa: togetherRejectionDiagnostic },
     ...(model === TOGETHER_FLASH_MODEL ? { contarEntrada: estimateTogetherFlashInput } : {}),
     // GLM and DeepSeek sometimes write the call as TEXT when the Together

@@ -5,7 +5,7 @@
 // whoever is browsing, and it's terrible for whoever maintains it, because touching the HTML
 // adds new text with no notice at all. This script is the notice.
 //
-// run: node site-i18n-pendentes.mjs [en|es]
+// run: node site-i18n-pending.mjs [en|es]
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +18,7 @@ const PUBLIC = path.join(__dirname, 'web', 'public');
 // with data-i18n (docs/i18n.md, "Pages").
 const PAGINAS = ['index'];
 
-const catalogos = carregaCatalogos(path.join(__dirname, 'web', 'site-textos'));
+const catalogos = carregaCatalogos(path.join(__dirname, 'web', 'site-texts'));
 const idiomas = process.argv[2] ? [process.argv[2]] : Object.keys(catalogos);
 
 const porTexto = new Map();

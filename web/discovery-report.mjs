@@ -1,5 +1,5 @@
 import { REPORT_INSTRUCTIONS } from './discovery-report-instructions.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 export { parseReport, renderReport, renderReportMarkdown, emptyReport, reportFailure } from './discovery-report-format.mjs';
 export const HISTORY_DAYS = 20;
 export function redact(text) {

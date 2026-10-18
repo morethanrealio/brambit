@@ -2,7 +2,7 @@ import { ownedMediaKey } from './security-boundaries.mjs';
 
 // A job is the billing key, not a polling attempt. Starts no network and runs
 // no DDL. The transaction keeps the debit and local completion inseparable.
-// Runs in the paying account's transaction (conta-pagadora.mjs, injected as
+// Runs in the paying account's transaction (paying-account.mjs, injected as
 // `transacao`) and stamps org_id with the account paying now; with a company
 // plugin, a member's video is debited from the company balance. creditUsd = US$ per
 // billing unit (gasto.dolarPorCredito()); only needs to be > 0 when billing.

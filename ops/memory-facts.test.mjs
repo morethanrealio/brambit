@@ -1,5 +1,5 @@
 // Tests for the keyed facts layer (memory v2, Phase 1). Pure: doesn't touch the database.
-// Run: node ops/memoria-fatos.test.mjs   (needs node_modules because of db.mjs)
+// Run: node ops/memory-facts.test.mjs   (needs node_modules because of db.mjs)
 import { aplicarOps, expandirDefinir, normAssunto, parseDesde, linhaDoFato, valorDaLinha, trocarNaLinha } from '../web/wiki.mjs';
 
 let ok = 0, fail = 0;

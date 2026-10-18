@@ -20,7 +20,7 @@
 
 import zlib from 'node:zlib';
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
-import { modelFor } from '../core-proto/modelos.mjs';
+import { modelFor } from '../core-proto/models.mjs';
 
 const CHEAP_MODEL = 'gemini-3.1-flash-lite';
 const TEXT_EXT = /\.(js|mjs|ts|jsx|tsx|html?|css|json|py|txt|md|csv)$/i;

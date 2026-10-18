@@ -1,7 +1,7 @@
 import {wrapProvider,providerAttempt,throwIfAttemptControl,chatAttemptUsage} from '../provider-attempt.mjs';
 import {STOP} from '../provider.mjs';
-import {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './ferramenta-em-texto.mjs';
-import {validarChamadas,mensagemProtocolo,comRetentativa} from './regras.mjs';
+import {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './tool-in-text.mjs';
+import {validarChamadas,mensagemProtocolo,comRetentativa} from './rules.mjs';
 // ── Single engine for any OpenAI-compatible provider ──
 // Together, DeepInfra, OpenAI, Nemotron and any base URL from models.yaml speak
 // the same protocol: POST /chat/completions with a Bearer key. What changes between
@@ -30,7 +30,7 @@ import {validarChamadas,mensagemProtocolo,comRetentativa} from './regras.mjs';
 //   erroSemUrl          message when the address wasn't configured
 //   semProntidao        doesn't report readiness to the credit layer (own server)
 //
-// Common rules (regras.mjs), the same for everyone: malformed call (broken JSON,
+// Common rules (rules.mjs), the same for everyone: malformed call (broken JSON,
 // missing/duplicate id) refuses the whole batch without executing anything; a name outside the
 // catalog passes through and the core warns the model; a transient refusal (429/5xx) retries.
 

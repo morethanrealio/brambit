@@ -7,23 +7,23 @@
 //  esquema({pool,S}): the plugin's tables and columns; initDb runs after the
 //   core's, in the list's order. Optional.
 //  portas(nucleo) → pieces that answer the core's ports, all optional:
-//   permissoes (permissoes.mjs), contaPagadora (conta-pagadora.mjs), gasto
-//   (gasto.mjs), ferramentas (ferramentas.mjs), contaPagamento
-//   (conta-pagamento.mjs), ganchosDaEmpresa (empresa.mjs, store.ligar),
+//   permissoes (permissions.mjs), contaPagadora (paying-account.mjs), gasto
+//   (spend.mjs), ferramentas (tools.mjs), contaPagamento
+//   (payment-account.mjs), ganchosDaEmpresa (company.mjs, store.ligar),
 //   premiacaoDoConvite() → line about the referral reward or null,
 //   assuntosConversados(userId) → the person's subjects for the routine offer
-//   (rotina-oferta.mjs), diagnosticoDosFiltros(turno) → {removidas, corte}, which
+//   (routine-offer.mjs), diagnosticoDosFiltros(turno) → {removidas, corte}, which
 //   observes the before/after of the turn's verification filters, and
 //   briefDaJornada() → text that replaces the default brief of the journey
 //   feedback (discovery/report-instructions.mts), and chaveDeepSeek() → key for the official
 //   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and
 //   atendimentoPublico → hooks for the public-support script
-//   (publico.mjs: antesDoModelo, depoisDoModelo), and systemNote({language}) → a
+//   (public-support.mjs: antesDoModelo, depoisDoModelo), and systemNote({language}) → a
 //   stable note about the installation added to the assistant's instructions
 //   (before the language directive), or null. Runs at the start of boot; the core brings only
 //   what already exists at that time (publicBase, notifyOwner).
-//  ligar(servidor): routes (rotas.mjs), subscriptions and tasks (eventos.mjs) and
-//   published media (midia-publica.mjs). Runs with the server mounted; the server
+//  ligar(servidor): routes (routes.mjs), subscriptions and tasks (events.mjs) and
+//   published media (public-media.mjs). Runs with the server mounted; the server
 //   brings the ports and the HTTP and sending helpers the plugin uses.
 //   In the public-support usage profile (profiles.mjs) only the /api/ routes
 //   registered with rotas.registrar answer.
@@ -34,13 +34,13 @@
 //   GET/HEAD. The server looks in the brand folders, then the plugin ones in
 //   list order, and last in web/public.
 //  siteTextos: folders with the translation catalogs (en.json, es.json) of these
-//   pages, in the web/site-textos format; they complete the core's catalog.
+//   pages, in the web/site-texts format; they complete the core's catalog.
 //  textosServidor: folders with the catalogs (en.json, es.json) of the messages that
 //   the plugin's modules answer via send/fail ({tag}.json keyed by the Portuguese sentence);
 //   an older format, new text goes in `locales`. fontesMensagens: those modules (absolute path), from
 //   which the catalog check and mensagens-i18n-pendentes pull the keys.
 //  app: folders with pieces of the logged-in app's screen (style, menu, panels,
-//   script), one file per index.html slot (see app-encaixes.mjs).
+//   script), one file per index.html slot (see app-slots.mjs).
 //  locales: folders with the plugin's translation catalogs (<tag>.json, see
 //   docs/i18n.md and i18n.mjs); they sit above the core's and the instance's.
 //  csp: external origins the plugin's pages load (analytics, conversion tag),
@@ -51,7 +51,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
-import {leitorDePagina} from './app-encaixes.mjs';
+import {leitorDePagina} from './app-slots.mjs';
 import {conferirCsp} from './csp.mjs';
 import {useLocalePlugins} from './i18n.mjs';
 

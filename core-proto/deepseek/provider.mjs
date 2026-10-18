@@ -1,7 +1,7 @@
 // Official DeepSeek adapter. One completion, no provider fallback, no credential logs.
-// Tool-call validation and transient retry are the COMMON rules (regras.mjs),
+// Tool-call validation and transient retry are the COMMON rules (rules.mjs),
 // identical for every provider.
-import { validarChamadas, mensagemProtocolo, comRetentativa } from '#regras-provedor';
+import { validarChamadas, mensagemProtocolo, comRetentativa } from '#provider-rules';
 export const DEEPSEEK_AGENT_MODEL = 'deepseek41flash';
 export const DEEPSEEK_API_MODEL = 'deepseek-flash';
 const obj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) ? v : {};

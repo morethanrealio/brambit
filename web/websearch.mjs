@@ -12,7 +12,7 @@
 //
 // The cost of each search is reported via onUsage (kind='search') to fall into the same
 // credit pipeline as the other calls.
-import { uaBot } from './marca.mjs';
+import { uaBot } from './brand.mjs';
 import { isDeepSeekTurn } from '../core-proto/deepseek/scope.mjs';
 import { groundedSearch } from '../core-proto/providers/gemini.mjs';
 import { extractPdfText } from './pdf.mjs';
@@ -21,7 +21,7 @@ import dns from 'dns';
 import net from 'net';
 import { fetchFixado } from './net-pin.mjs';
 import { pageContentQuality, improvePageReading, PARTIAL_PAGE_MARKER } from './page-content-quality.mjs';
-import { analisePlanilhaConector, tipoPlanilha } from './planilha.mjs';
+import { analisePlanilhaConector, tipoPlanilha } from './sheet.mjs';
 
 // ── Anti-SSRF protection for abrir_link ──
 // abrir_link fetches a URL controlled by the model/user FROM INSIDE the VPC. Without a
@@ -408,7 +408,7 @@ function nameFromUrl(u) {
 // private bucket (rule: all media goes into the owner's folder). Injected by the server.
 
 // ── Spreadsheet by link ──
-// A spreadsheet never reaches the model as text (see planilha.mjs): the page text
+// A spreadsheet never reaches the model as text (see sheet.mjs): the page text
 // from Google Sheets or Tavily only brings a piece of the cells, and the model
 // used to answer "it's not in the spreadsheet" looking at that piece. A Google Sheets link
 // becomes the .xlsx export (all tabs) and goes to the analysis environment; a direct link
@@ -524,7 +524,7 @@ async function lerPaginaDireto(url) {
 }
 
 export function openLinkTool({ onUsage, savePdf, onSheetLoad, fontes = null } = {}) {
-  // A page that was read enters the turn's source registry (citacoes.mjs): the number
+  // A page that was read enters the turn's source registry (citations.mjs): the number
   // goes along with the content for the model to cite with [n].
   const ref = (url, title) => {
     const n = fontes?.add({ title: title || url, uri: url });

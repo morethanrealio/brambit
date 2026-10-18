@@ -12,7 +12,7 @@
 // answer is BLOCK. A guardrail that fails open is no guardrail.
 
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
-import { modelFor } from '../core-proto/modelos.mjs';
+import { modelFor } from '../core-proto/models.mjs';
 
 const MODEL = 'gemini-3.1-flash-lite';
 

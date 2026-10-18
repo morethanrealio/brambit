@@ -1,6 +1,6 @@
-import {makeCompativel} from './compativel.mjs';
+import {makeCompativel} from './compatible.mjs';
 // ── Real adapter: DeepInfra (OpenAI-compatible Chat Completions) ──
-// Default of the compatible engine (compativel.mjs). The key comes from
+// Default of the compatible engine (compatible.mjs). The key comes from
 // process.env.DEEPINFRA_API_KEY (NEVER hardcode in the repo). Used to TEST
 // GLM-5.2 (zai-org/GLM-5.2) side by side with Gemini and OpenAI.
 //

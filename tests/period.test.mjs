@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentPeriod } from '../web/periodo.mjs';
+import { currentPeriod } from '../web/period.mjs';
 
 // The billing month starts at local midnight of day 1; a shift here moves
 // usage between months without any error.

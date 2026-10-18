@@ -43,7 +43,7 @@ export function safeName(name) {
 }
 
 // Canonical path of the spreadsheet inside the user's sandbox. Exported because
-// EDITING (planilha-edit.mjs) needs the same path that loading uses —
+// EDITING (sheet-edit.mjs) needs the same path that loading uses —
 // if the two diverge, the sub-agent edits one file and we read another.
 export function sheetSandboxPath(filename) {
   return `/workspace/planilhas/${safeName(filename)}`;
@@ -141,7 +141,7 @@ export function notaPlanilhaIlegivel(filename, motivo) {
 }
 
 // Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
-// structure. This is the edit path (planilha-edit.mjs), which has its own
+// structure. This is the edit path (sheet-edit.mjs), which has its own
 // verification and doesn't show the spreadsheet to the model.
 export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   if (!sandboxEnabled()) return { ok: false, error: 'ambiente de análise desligado' };

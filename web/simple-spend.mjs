@@ -1,11 +1,11 @@
-// Core default implementation of the spend port (gasto.mjs). No credits and no
+// Core default implementation of the spend port (spend.mjs). No credits and no
 // billing: the model is called directly and usage is recorded as is, in US$.
 // Optional: monthly US$ cap per person (tetoUsd), and `spend` (createCreditSpend
 // with unit 'usd') so the assistant can say how much the person spent. Past the cap,
 // status.over stops the turn before calling the model, like a plan allowance would. It's
 // a soft cap: the call that crosses it finishes; the next one doesn't start.
 import {randomUUID} from 'node:crypto';
-import {conferirGasto} from './gasto.mjs';
+import {conferirGasto} from './spend.mjs';
 import {tagIdioma} from './locale.mjs';
 import {ferramentaConsultarGasto} from './credit-spend.mjs';
 // Without credit or a plan, the only reason to block a turn is the US$ cap.

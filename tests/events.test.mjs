@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createEventos,ligarCicloDeVida} from '../web/eventos.mjs';
+import {createEventos,ligarCicloDeVida} from '../web/events.mjs';
 
 test('a failing subscriber does not take down the emitter or the other subscribers', async()=>{
  const logs=[],vistos=[];

@@ -24,13 +24,13 @@
 // others open, not the neutral brand's localhost.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { modelsFilePath, loadModels } from '../../core-proto/modelos.mjs';
+import { modelsFilePath, loadModels } from '../../core-proto/models.mjs';
 import { audioProvider } from '../../web/audio-provider.mjs';
 import { ConfigValueError, configFilePath } from '../../web/config-file.mjs';
 import { readBody } from '../../web/http-body.mjs';
-import { definirMarca, marca } from '../../web/marca.mjs';
-import { reloadModels } from '../../web/modelos-live.mjs';
-import { SEGUE } from '../../web/rotas.mjs';
+import { definirMarca, marca } from '../../web/brand.mjs';
+import { reloadModels } from '../../web/models-live.mjs';
+import { SEGUE } from '../../web/routes.mjs';
 import { checkAi, writeAi } from '../ai-setup.mjs';
 import { aiOf, endpoint, listModels, PROVIDERS } from '../providers.mjs';
 
@@ -83,7 +83,7 @@ export function createInstallationPlugin({ info = readInfo(), sendToLauncher = p
   return {
     nome: 'installation',
     app: [path.join(here, 'app')],
-    siteTextos: [path.join(here, 'site-textos')],
+    siteTextos: [path.join(here, 'site-texts')],
     portas: () => (info ? { systemNote: ({ language }) => systemNoteOf({ ...info, ...current() }, language) } : {}),
     ligar({ rotas, send, sendHtml }) {
       if (!info) return;

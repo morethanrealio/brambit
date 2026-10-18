@@ -1,6 +1,6 @@
 // Real editSpreadsheet with in-memory dependencies. No XLSX/customer/API writes.
 import assert from 'node:assert/strict';
-const { editSpreadsheet } = await import(process.env.SHEET_MODULE_URL || '../web/planilha-edit.mjs');
+const { editSpreadsheet } = await import(process.env.SHEET_MODULE_URL || '../web/sheet-edit.mjs');
 let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};const ok=(x,msg)=>{assert(x,msg);checks++;};
 const MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 function fixture(mode,{retry=false,noEvidence=false}={}){

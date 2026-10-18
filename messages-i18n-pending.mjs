@@ -11,12 +11,12 @@
 // to store. They stay in Portuguese, and they're here so no one looks
 // in the catalog for an entry that cannot exist.
 //
-// run: node mensagens-i18n-pendentes.mjs [en|es]
+// run: node messages-i18n-pending.mjs [en|es]
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extraiMensagens, FONTES_MENSAGENS } from './web/mensagens-i18n.mjs';
+import { extraiMensagens, FONTES_MENSAGENS } from './web/messages-i18n.mjs';
 import { fatiaJs, carregaCatalogos } from './web/site-i18n.mjs';
 import { carregarPlugins, textosDoServidor } from './web/plugins.mjs';
 

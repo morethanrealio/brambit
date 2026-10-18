@@ -10,7 +10,7 @@ process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extraiMensagens, traduzMensagem, traduzResposta, idiomaDaRequisicao, serverMessages, FONTES_MENSAGENS } from '../web/mensagens-i18n.mjs';
+import { extraiMensagens, traduzMensagem, traduzResposta, idiomaDaRequisicao, serverMessages, FONTES_MENSAGENS } from '../web/messages-i18n.mjs';
 import { fatiaJs } from '../web/site-i18n.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

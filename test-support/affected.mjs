@@ -29,7 +29,7 @@ const LITERAL = /(['"`])((?:\.{1,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\/?)\1/g;
 const SPAWNS = /\b(?:spawn|fork|execFile)\w*\s*\(/;
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"`])([^'"`]+)\1/g;
 
-// The package.json "imports" alias (#nucleo/web/x.mjs, #regras-provedor) becomes the
+// The package.json "imports" alias (#nucleo/web/x.mjs, #provider-rules) becomes the
 // path at the root; with no matching alias, null.
 function apelido(ref, imports) {
   for (const [k, v] of Object.entries(imports)) {

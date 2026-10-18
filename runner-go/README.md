@@ -22,7 +22,7 @@ server).
 ## Brand
 
 Name, site and prefixes are not in the source: they come in at build time
-(`marca.go`, filled in via `-ldflags -X`). With nothing set, it's the core's:
+(`brand.go`, filled in via `-ldflags -X`). With nothing set, it's the core's:
 
 | | default (core) | with `PRODUCT=Acme` |
 |---|---|---|

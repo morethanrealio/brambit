@@ -10,8 +10,8 @@
 import { productI18n } from './i18n.mjs';
 import { normalizeRoutineDays, parseRoutineDays } from './scheduler.mjs';
 import { routineArgsTimeLabel, routineTimeLabel } from './routine-time.mjs';
-import { descreverCarrinho, plataformaDoCarrinho } from './compras.mjs';
-import { marca } from './marca.mjs';
+import { descreverCarrinho, plataformaDoCarrinho } from './shopping.mjs';
+import { marca } from './brand.mjs';
 import { configurationLabel, completionLabel, retryLabel } from './discovery-conversation.mjs';
 
 // Looks up `confirm.<key>` in one language; every placeholder must be passed.

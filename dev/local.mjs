@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import pg from 'pg';
-import { loadModels, describeModels, modelsTable } from '../core-proto/modelos.mjs';
+import { loadModels, describeModels, modelsTable } from '../core-proto/models.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = path.join(root, '.local');

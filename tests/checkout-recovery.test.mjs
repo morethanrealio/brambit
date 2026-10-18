@@ -7,7 +7,7 @@ process.env.VAULT_KEY=Buffer.alloc(32,7).toString('base64');
 const s={userId:'11111111-1111-4111-8111-111111111111',agentId:'22222222-2222-4222-8222-222222222222',threadId:'33333333-3333-4333-8333-333333333333'};
 const other={...s,userId:'44444444-4444-4444-8444-444444444444'};
 const code='00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***63041D3D';
-const src=fs.readFileSync(new URL('../web/compras.mjs',import.meta.url),'utf8'),ctx=vm.createContext({URL,pixCodeDiagnostic,pixCrc16});
+const src=fs.readFileSync(new URL('../web/shopping.mjs',import.meta.url),'utf8'),ctx=vm.createContext({URL,pixCodeDiagnostic,pixCrc16});
 vm.runInContext(src.slice(src.indexOf('// Parsing remains local'),src.indexOf('function totais('))+';globalThis.parse=extrairPix;',ctx);
 const parsePix=ctx.parse;
 function fakeDb(){const rows=new Map(),calls=[];return {rows,calls,async query(sql,p=[]){

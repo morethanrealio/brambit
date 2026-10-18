@@ -5,10 +5,10 @@
 // `perfil` page into the system prompt. See projetos/arquitetura-memoria.md.
 
 import { listWikiPages, listWikiPagesFull, getWikiPage, upsertWikiPage, searchWikiPages, normWikiSlug, listCurrentFacts, listAllFacts, setFact, closeFact, updateFactLine, addHistorico, listMemoryAmbiguities, getMemoryAmbiguity, closeMemoryAmbiguity, reopenMemoryAmbiguity, revertFactSwap, getUserTimezone } from './db.mjs';
-import { makeMemoriaModel } from './memoria-modelo.mjs';
+import { makeMemoriaModel } from './memory-model.mjs';
 import { tagIdioma, defaultTimezone } from './locale.mjs';
-import { buscaV2Ligada, buscarNaMemoria, formatarAchados } from './memoria-busca.mjs';
-import { reconciliarLigado, planejarOp } from './wiki-reconciliar.mjs';
+import { buscaV2Ligada, buscarNaMemoria, formatarAchados } from './memory-search.mjs';
+import { reconciliarLigado, planejarOp } from './wiki-reconcile.mjs';
 
 // Always-injected page: the short and stable "who you are" (successor to the flat profile).
 const PERFIL = 'perfil';
@@ -763,7 +763,7 @@ export async function desfazerDuvida(userId, id) {
 // saves pages, saves facts and keeps facts in sync with line fixes
 // made via the old paths (fix/remove/move). `paginas` = bodies already read;
 // the pages the facts touch are loaded here.
-// R1+R3 (see wiki-reconciliar.mjs): swaps each add/definir for what the reconciler
+// R1+R3 (see wiki-reconcile.mjs): swaps each add/definir for what the reconciler
 // decided. "Already there" skips the op; "update" becomes a definir on the line that already
 // exists (a line without a fact gets a synthetic fact with the old value, so the swap leaves
 // history in memory_facts); the other pages that repeat the old value

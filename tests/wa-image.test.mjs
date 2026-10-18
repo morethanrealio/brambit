@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCanvas } from '@napi-rs/canvas';
-import { paraJpegOuPng, tipoDaImagem } from '../web/wa-imagem.mjs';
+import { paraJpegOuPng, tipoDaImagem } from '../web/wa-image.mjs';
 
 test('WebP becomes JPEG; JPEG passes through as is', async () => {
   const c = createCanvas(40, 20); c.getContext('2d').fillRect(0, 0, 10, 10);

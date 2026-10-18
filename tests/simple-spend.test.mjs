@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGastoSimples} from '../web/gasto-simples.mjs';
+import {createGastoSimples} from '../web/simple-spend.mjs';
 
 test('no cap never blocks; with a cap it blocks once the monthly value is reached', async()=>{
  const livre=createGastoSimples({gravarUso:async()=>{}});

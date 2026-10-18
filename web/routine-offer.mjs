@@ -10,7 +10,7 @@
 
 import { routineOfferGate, pool, S } from './db.mjs';
 
-// Facts from the CONVERSATION side of the routine offer (rotina-oferta.mjs): capability (what
+// Facts from the CONVERSATION side of the routine offer (routine-offer.mjs): capability (what
 // they have connected) and what's already running on its own for them. Runs every turn of
 // whoever passes the guardrail, so it goes in a single query. The subjects talked about come
 // from the assuntosConversados port.

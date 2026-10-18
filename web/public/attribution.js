@@ -21,7 +21,7 @@
 // sent to the server: the send is index.html's marcarOrigem(), at the moment
 // the account is created.
 //
-// Used as `<script src="/atribuicao.js"></script>`: same-origin script,
+// Used as `<script src="/attribution.js"></script>`: same-origin script,
 // allowed by the CSP's `script-src 'self'`, so it does NOT need a nonce.
 (function () {
   var KEY = 'brambs_attr';

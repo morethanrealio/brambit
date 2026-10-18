@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { loadModels, choiceFor, parseModels } from '../core-proto/modelos.mjs';
+import { loadModels, choiceFor, parseModels } from '../core-proto/models.mjs';
 
 test('with no models.yaml, no task is configured', () => {
   const cfg = loadModels({ env: { BRAMBIT_MODELS_FILE: '/does/not/exist/models.yaml' }, reload: true });
@@ -36,7 +36,7 @@ test('a live edit applies, and a broken edit keeps the last good file', async (t
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const { startModelsWatch, stopModelsWatch } = await import('../web/modelos-live.mjs');
+  const { startModelsWatch, stopModelsWatch } = await import('../web/models-live.mjs');
   const file = join(mkdtempSync(join(tmpdir(), 'brambit-models-')), 'models.yaml');
   const yaml = (m) => `providers:\n  a: { base_url: https://a/v1 }\ntasks:\n  default: a/${m}\n`;
   writeFileSync(file, yaml('m1'));

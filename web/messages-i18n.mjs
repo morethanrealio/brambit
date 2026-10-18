@@ -18,7 +18,7 @@
 // an invented message is a wrong sentence.
 import { IDIOMAS_OK, defaultLanguage, LEGACY_TEXT_LANGUAGE, tagIdioma } from './locale.mjs';
 import { fatiaJs } from './site-i18n.mjs';
-import { hostDaMarca, marca } from './marca.mjs';
+import { hostDaMarca, marca } from './brand.mjs';
 import { CORE_LOCALES_DIR, createI18n, localeLayers, readCatalogDir } from './i18n.mjs';
 
 // A core message key: what the core's fail()/send() emit instead of a sentence.
@@ -62,7 +62,7 @@ export const FONTES_MENSAGENS = ['server.mjs'];
 //
 // Templates are left out (backticks with `${}`): their text only exists assembled, at
 // runtime, so there's no stable key to store in a catalog. There are
-// few of them and they stay in Portuguese; `mensagens-i18n-pendentes.mjs` lists them.
+// few of them and they stay in Portuguese; `messages-i18n-pending.mjs` lists them.
 export function extraiMensagens(js) {
   const fora = [];
   const vistos = new Set();

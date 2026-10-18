@@ -30,14 +30,14 @@ export const sandboxShell=(...a)=>S().shell(...a);`;
 // Network for abrir_link: each fetchFixado falls into globalThis.__net(url, opts).
 const fakeNetPin = 'export const fetchFixado=(...a)=>globalThis.__net(...a);';
 registerHooks({ resolve(specifier, context, next) {
-  if (specifier === './sandbox.mjs' && context.parentURL?.endsWith('/web/planilha.mjs')) return { url: 'data:text/javascript,' + encodeURIComponent(fakeSandbox), shortCircuit: true };
+  if (specifier === './sandbox.mjs' && context.parentURL?.endsWith('/web/sheet.mjs')) return { url: 'data:text/javascript,' + encodeURIComponent(fakeSandbox), shortCircuit: true };
   if (specifier === './net-pin.mjs' && context.parentURL?.endsWith('/web/websearch.mjs')) return { url: 'data:text/javascript,' + encodeURIComponent(fakeNetPin), shortCircuit: true };
   return next(specifier, context);
 } });
 process.env.SANDBOX_URL = 'http://sandbox.invalid';
 process.env.SANDBOX_TOKEN = 'MOCK_ONLY';
 
-const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets } = await import('../web/planilha.mjs');
+const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets } = await import('../web/sheet.mjs');
 const { googleTools } = await import('../web/connectors.mjs');
 const { microsoftTools } = await import('../web/connectors-ext.mjs');
 const { openLinkTool, exportGoogleSheets } = await import('../web/websearch.mjs');

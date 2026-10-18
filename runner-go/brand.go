@@ -6,7 +6,7 @@ import "strings"
 // -ldflags -X), so whoever installs the server can generate their own Runner without
 // touching the source. With nothing set, it's the core's: "Brambit Runner", ~/.brambit-runner.json,
 // BRAMBIT_RUNNER_TOKEN. slug has to match the server's (slugDaMarca, in
-// web/marca.mjs): it's where the executable names and the /runner commands come from.
+// web/brand.mjs): it's where the executable names and the /runner commands come from.
 var (
 	produto = "Brambit"
 	slug    = "brambit"

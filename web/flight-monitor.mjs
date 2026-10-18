@@ -2,7 +2,7 @@
 // calculate variation, or draft the delivery. External dependencies are
 // injected.
 import { createHash } from 'node:crypto';
-import { hostDaMarca } from './marca.mjs';
+import { hostDaMarca } from './brand.mjs';
 import { flightPriceCents, percentageDrop } from './flight-alert-policy.mjs';
 const money = n => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 const oneLine = s => String(s).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();

@@ -7,7 +7,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 net.Socket.prototype.connect=tls.connect=()=>{throw Error('External IO forbidden');};
 registerHooks({resolve(specifier,context,next){
-  if(specifier==='./compras.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
+  if(specifier==='./shopping.mjs'&&context.parentURL?.endsWith('/web/confirm.mjs'))return {url:'data:text/javascript,export const descreverCarrinho=()=>null;export const plataformaDoCarrinho=()=>null;',shortCircuit:true};
   return next(specifier,context);
 }});
 const {googleTools}=await import('../web/connectors.mjs');

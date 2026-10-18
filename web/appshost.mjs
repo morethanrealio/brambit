@@ -11,7 +11,7 @@
 //   APPS_HOST_KEY = /home/ubuntu/.ssh/brambs-apps   (channel's private key)
 
 import { spawn } from 'node:child_process';
-import { hostDaMarca } from './marca.mjs';
+import { hostDaMarca } from './brand.mjs';
 
 const SSH_TARGET = () => process.env.APPS_HOST_SSH || '';
 const SSH_KEY    = () => process.env.APPS_HOST_KEY || '';

@@ -1,2 +1,2 @@
 declare module '*.mjs';
-declare module '#regras-provedor';
+declare module '#provider-rules';

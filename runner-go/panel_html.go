@@ -2,7 +2,7 @@ package main
 
 // Local panel page (served on 127.0.0.1 by the app itself). Self-contained,
 // no external resource. On serve, __K__ becomes the session nonce and __NOME__,
-// __PRODUTO__ and __SITE__ come from the brand (marca.go).
+// __PRODUTO__ and __SITE__ come from the brand (brand.go).
 const panelHTML = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>

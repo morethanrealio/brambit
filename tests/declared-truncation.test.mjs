@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recortar, comAviso } from '../web/recorte.mjs';
+import { recortar, comAviso } from '../web/declared-truncation.mjs';
 
 test('text within the cap passes through whole and with no marker', () => {
   const r = recortar('abc', 10);

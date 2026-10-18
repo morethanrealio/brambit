@@ -19,7 +19,7 @@ import { calendarRecurrence, recurrenceLabel, recurrenceOccurrences } from './ca
 
 // The confirmation text for a PURCHASE has to bring the REAL value of the cart
 // built at the store, not a number the model repeated: that's the value the owner
-// is approving. That's why the sentence comes from compras.mjs itself, built on top
+// is approving. That's why the sentence comes from shopping.mjs itself, built on top
 // of the stored cart, and not from the call's args.
 // The routine's cadence is read by the SAME normalizer the tool uses to save,
 // otherwise the confirmation card would describe a day different from what's going to be saved

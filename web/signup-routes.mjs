@@ -17,7 +17,7 @@
 import { createPendingSignupStore, confirmRequest, matchingRequest } from './signup-confirmation.mjs';
 import { hashPassword, verifyPassword, newToken, sessionCookie, validEmail } from './auth.mjs';
 import { sendEmail, mailEnabled } from './mailer.mjs';
-import { marca, siteDaMarca, hostDaMarca } from './marca.mjs';
+import { marca, siteDaMarca, hostDaMarca } from './brand.mjs';
 
 export function registerSignupRoutes(rotas, d) {
   const { send, fail, readBody, tooManyRequests, rateLimit } = d;

@@ -1,7 +1,7 @@
 // Regression from the 2026-09-14 incident. Everything offline: no channel, DB or LLM.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 import { routineChannelText, routineExecutionInfo, routineExecutionText } from '../web/routine-execution.mjs';
 import { standaloneRefusal, refusalAcknowledgement, enforceFreshCheckClaims, enforceRoutineEmailContract } from '../web/turn-claim-guard.mjs';
 

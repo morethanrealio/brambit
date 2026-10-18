@@ -1,4 +1,4 @@
-import { hostDaMarca, siteDaMarca } from './marca.mjs';
+import { hostDaMarca, siteDaMarca } from './brand.mjs';
 import { channelReplyParts } from './confirmation-target.mjs';
 // ── Telegram channel (bot per user, their own BotFather token) ──
 // Each user brings their own token; we run their bot with long-polling
@@ -8,11 +8,11 @@ import { channelReplyParts } from './confirmation-target.mjs';
 // chat is served (the bot is private to the owner).
 
 import { timingSafeEqual } from 'node:crypto';
-import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
+import { notaMidiaSemTexto } from './media-without-text.mjs';
 import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markVoiceInput } from './voice-input.mjs';
-import { comReenvio, criarAvisoCanal } from './aviso-canal.mjs';
+import { comReenvio, criarAvisoCanal } from './channel-notice.mjs';
 
 // Compares the pairing code without leaking partial matches through response time.
 export function codeEq(a, b) {
@@ -77,7 +77,7 @@ export async function validateBotToken(token) {
 // chars (it would cut words and URLs mid-way); now it uses channel-split.mjs.
 const TG_CHUNK = 4000;
 
-// `reenvio`: retries each part that failed with an uncertain error (aviso-canal.mjs). It's
+// `reenvio`: retries each part that failed with an uncertain error (channel-notice.mjs). It's
 // per part, so as not to resend the ones Telegram already accepted.
 async function sendMessage(token, chatId, text, { requireReceipt = false, reenvio = false } = {}) {
   // Plain text (no parse_mode) so malformed markdown from the model doesn't break it.
@@ -236,7 +236,7 @@ async function downloadFile(token, fileId, mimeHint) {
 // Manages the pollers. Injects the server's dependencies (avoids circular import).
 // runConversation(agent, userId, text, images) -> reply ; loadAgent(agentId, userId) -> agent
 // transcribe(buffer, mime, userId) -> text (STT); db = { getTelegramBot, bindTelegramChat, setTelegramOffset }
-// avisoCanal = { idiomaDe, registrar } (aviso-canal.mjs): language of the error notice and
+// avisoCanal = { idiomaDe, registrar } (channel-notice.mjs): language of the error notice and
 // its logging in the Telegram thread history.
 export function createTelegramManager({ runConversation, reactionConfirm, loadAgent, db, getMedia, transcribe, avisoCanal = {} }) {
   const avisar = criarAvisoCanal({ rotulo: 'telegram', ...avisoCanal });

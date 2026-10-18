@@ -1,5 +1,5 @@
 import { dominioDosApps, urlDoApp } from '../web/appshost.mjs';
-import { linkDaPagina, marca } from '../web/marca.mjs';
+import { linkDaPagina, marca } from '../web/brand.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import vm from 'node:vm';import zlib from 'node:zlib';import {createHash} from 'node:crypto';
 import {ToolRegistry} from '../core-proto/core.mjs';

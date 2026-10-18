@@ -7,9 +7,9 @@
 // never assistente@ (the inbox where users talk to the assistant).
 // The address must be the SMTP-authenticated one or have "Send as" on it.
 // Replies go to the inviter (Reply-To). Name and site come from the brand
-// (marca.mjs); the rule is the operator's sentence about how the company
-// account works (linhaDoConvite hook in empresa.mjs), or nothing.
-import { marca, siteDaMarca } from './marca.mjs';
+// (brand.mjs); the rule is the operator's sentence about how the company
+// account works (linhaDoConvite hook in company.mjs), or nothing.
+import { marca, siteDaMarca } from './brand.mjs';
 
 const limpa = (s) => String(s || '').replace(/[\r\n]+/g, ' ').trim();
 

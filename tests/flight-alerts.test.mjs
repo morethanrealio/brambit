@@ -1,6 +1,6 @@
 import { createScheduledDelivery } from '../web/scheduled-delivery.mjs';
 // Isolated dry-run: fake providers, DB and delivery. Never start server.
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 import net from 'node:net';import tls from 'node:tls';import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {createHash} from 'node:crypto';
 const denied=()=>{throw Error('REAL I/O FORBIDDEN');};net.Socket.prototype.connect=denied;tls.connect=denied;globalThis.fetch=denied;
@@ -63,7 +63,7 @@ for(const value of [null,quote(100,{stale:true}),quote(100,{fromCache:true}),quo
  }
 }
 // Actual flight tool in VM: fresh bypasses local fallback AND SerpApi cache.
-const source=readFileSync('./web/voos.mjs','utf8').replace(/import \{ createHash \} from 'node:crypto';/,'').replace(/import \{[\s\S]*?\} from '\.\/db.mjs';/,'').replace("import { marca } from './marca.mjs';",'').replaceAll('export ','');
+const source=readFileSync('./web/flights.mjs','utf8').replace(/import \{ createHash \} from 'node:crypto';/,'').replace(/import \{[\s\S]*?\} from '\.\/db.mjs';/,'').replace("import { marca } from './brand.mjs';",'').replaceAll('export ','');
 let http=[],cacheReads=0,cacheWrites=0,mode='good',observed;
 const ctx=vm.createContext({marca,createHash,Date,process:{env:{SERPAPI_KEY:'MOCK_ONLY'}},URLSearchParams,AbortSignal,Intl,Number,String,Set,
  getFlightCache:async()=>{cacheReads++;return {payload:{best_flights:[{price:1}]},stale:false,fetchedAt:now,ageMin:0};},

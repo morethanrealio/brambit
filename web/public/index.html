@@ -576,7 +576,7 @@
   .connect-actions :focus-visible { outline:3px solid #914221; outline-offset:3px; }
 </style>
 <!-- First-touch attribution (gclid/utm). Same origin: no nonce needed. -->
-<script src="/atribuicao.js"></script>
+<script src="/attribution.js"></script>
 <link rel="stylesheet" href="/routines.css">
 <!--encaixe:cabeca-->
 <link rel="stylesheet" href="/signup-privacy.css">
@@ -1700,7 +1700,7 @@ function showAuthCard(which) { // 'login' | 'forgot' | 'reset' | 'confirmEmail' 
   E('confirmLinkCard').classList.toggle('hidden', which !== 'confirmLink');
 }
 // App slots: a plugin with its own screen brings pieces of this page (the app/
-// folder, see web/app-encaixes.mjs), which go into the encaixe:* markers. Its
+// folder, see web/app-slots.mjs), which go into the encaixe:* markers. Its
 // script lands right below and hooks in here: tab routes, what runs on entering
 // the app, on every tab switch, and when the account is created (marcarCadastro).
 const ganchosDoApp = { rotas: {}, aoEntrar: [], aoTrocarAba: [], aoCadastrar: [] };
@@ -1816,7 +1816,7 @@ E('pwToggle').onclick = () => {
   E('pwToggle').setAttribute('aria-label', show ? tx('auth.hide_password') : tx('auth.show_password'));
 };
 // ── Where the person CAME FROM (attribution) ──
-// The CAPTURE lives in /atribuicao.js, included on every public page, because
+// The CAPTURE lives in /attribution.js, included on every public page, because
 // any of them can be an ad's landing page (full reasoning in that file). Here
 // is only the SENDING, which depends on being logged in and on the api() helper.
 const ATTR_KEY = (window.Atribuicao && window.Atribuicao.KEY) || 'brambs_attr';
@@ -3973,7 +3973,7 @@ function dmy(s) {
 // cycle of someone who's already a subscriber. The whole showcase uses this function to avoid quoting two numbers.
 function planCredits(p) { return p.credits_shown != null ? p.credits_shown : p.credits; }
 
-// Install without credits (open core, gasto-simples.mjs): the server sends
+// Install without credits (open core, simple-spend.mjs): the server sends
 // only the month's spend in US$ (usedUsd) and the optional cap (limitUsd), with no plan,
 // package, or coupon. With credits, the response never carries usedUsd.
 function gastoSimples(c) { return !!(c && 'usedUsd' in c); }

@@ -6,7 +6,7 @@
 //
 // Only turns on if SANDBOX_URL + SANDBOX_TOKEN are in the environment (sandboxEnabled()).
 
-import { tipoPlanilha } from './planilha.mjs';
+import { tipoPlanilha } from './sheet.mjs';
 
 const sandboxUrl = () => process.env.SANDBOX_URL || '';     // ex http://10.0.0.20:9000
 const sandboxToken = () => process.env.SANDBOX_TOKEN || '';
@@ -177,7 +177,7 @@ export function sandboxTools(userId) {
         required: ['path'],
       },
       async run({ path }) {
-        // Spreadsheet doesn't become text for the model (see planilha.mjs): the content
+        // Spreadsheet doesn't become text for the model (see sheet.mjs): the content
         // is queried by code, which reads the whole file.
         if (tipoPlanilha(path, '')) return 'Este arquivo é uma planilha e não é lido como texto. Para consultar os dados use analisar_planilha, ou leia com pandas no sandbox_python.';
         const r = await call('/read', { userId, path });

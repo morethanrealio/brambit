@@ -13,13 +13,13 @@
 // can't aim at the infra from inside. The backend is on the VPC, it would be dangerous.
 // The key never enters the sandbox the model runs code in: SSH goes through a
 // second per-user container (same image and firewall) that only runnerd reaches.
-import { comAviso } from './recorte.mjs';
+import { comAviso } from './declared-truncation.mjs';
 import { sandboxEnabled, sandboxShell, sandboxSsh, sandboxSshKeygen } from './sandbox.mjs';
 import { encryptSecret, decryptSecret, vaultEnabled } from './vault.mjs';
 import { addConnection, listConnections, getConnection } from './db.mjs';
 import { runnerOnline, runnerExec } from './runner.mjs';
 import { createHash } from 'node:crypto';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const executionEffect=(state,operation)=>({version:1,state,operation});
 const executionResult=(body,state,operation)=>JSON.stringify({...body,effect:executionEffect(state,operation)});

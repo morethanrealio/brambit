@@ -16,7 +16,7 @@
 // OS/desktop client). Authenticates on handshake with Bearer <device_token>;
 // the server resolves token -> userId before calling anything here.
 
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 const HOLD_MS = 25_000;        // how long the long-poll holds the response before sending idle
 const ONLINE_TTL_MS = 45_000;  // device is "online" if it polled/responded within this

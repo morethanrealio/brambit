@@ -1,5 +1,5 @@
 import { tagIdioma } from './locale.mjs';
-import { marca } from './marca.mjs';
+import { marca } from './brand.mjs';
 
 // GROUNDING GUARD
 //
@@ -140,7 +140,7 @@ function checkCupons(text, ctx) {
 // response. Widening this needs data, not a guess.
 // Only applies to a turn with NO tool at all: when there was a query, the
 // response's source list is assembled by the platform from what the tools
-// returned (citacoes.mjs), and the model's surrounding prose ("just
+// returned (citations.mjs), and the model's surrounding prose ("just
 // checked", "the video is on Facebook") isn't a source name. One finding per
 // line.
 function checkFontes(text, ctx) {

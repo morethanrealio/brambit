@@ -1,6 +1,6 @@
 // First: applies the config file to process.env before any module reads it.
 import './config-boot.mjs';
-import {arquivoDoSite,definirPastasDoSite,hostDaMarca,linkDaPagina,marca,marcaNaPagina,siteDaMarca,slugDaMarca,uaBot} from './marca.mjs';
+import {arquivoDoSite,definirPastasDoSite,hostDaMarca,linkDaPagina,marca,marcaNaPagina,siteDaMarca,slugDaMarca,uaBot} from './brand.mjs';
 import { pendingRoutineEdit, routineTestOutcome } from './routine-edit-test.mjs';
 import { proposalPresentation, confirmationTargetsInMessage, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
 import { DRIVE_SEARCH_RULE } from './drive-search.mjs';
@@ -19,7 +19,7 @@ import { reminderHistoryText } from './reminder-history.mjs';
 import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff } from './channel-confirmation.mjs';
 import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
-import { avisosTurno, imagensDesligadas } from './avisos-turno.mjs';
+import { avisosTurno, imagensDesligadas } from './turn-notices.mjs';
 import { confirmationStore, getConfirmationAuthorizationContext, reminderDeliveryTracking, recordReminderDeliveryStatus } from './db.mjs';
 import { recordReminderDeliveryStatuses } from './reminder-delivery-ledger.mjs';
 import {createCodingNotifier} from './coding-notify.mjs';
@@ -38,15 +38,15 @@ import { microsoftOnboardingScope, microsoftContextServices } from './microsoft-
 import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
-import {createEventos,criadorDeConta} from './eventos.mjs';
-import {createRotas} from './rotas.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';
-import {createMidiaPublica} from './midia-publica.mjs';
+import {createEventos,criadorDeConta} from './events.mjs';
+import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';
+import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
-import {createPermissionsFromEnv} from './permissoes.mjs';import {prepararResposta} from './cookie-local.mjs';
-import {createContaPagadoraSimples} from './conta-pagadora.mjs';
-import {createFerramentasSimples} from './ferramentas.mjs';
-import {createContaPagamentoSimples} from './conta-pagamento.mjs';
-import {createGastoSimples} from './gasto-simples.mjs';
+import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
+import {createContaPagadoraSimples} from './paying-account.mjs';
+import {createFerramentasSimples} from './tools.mjs';
+import {createContaPagamentoSimples} from './payment-account.mjs';
+import {createGastoSimples} from './simple-spend.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
 // Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS
@@ -54,18 +54,18 @@ import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
 const plugins=await carregarPlugins();
 const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
-const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissoes.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
+const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissions.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
-configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Payer account port (conta-pagadora.mjs): who pays for each person's usage.
-if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Business account (empresa.mjs): paid plan, packages, refund and cancellation on entry and on creation.
-const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (ferramentas.mjs): tools that whoever installs plugs into the turn.
-const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (conta-pagamento.mjs).
+configurarContaPagadora(pecas.contaPagadora??createContaPagadoraSimples()); // Payer account port (paying-account.mjs): who pays for each person's usage.
+if(pecas.ganchosDaEmpresa)empresaStore.ligar(pecas.ganchosDaEmpresa); // Business account (company.mjs): paid plan, packages, refund and cancellation on entry and on creation.
+const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (tools.mjs): tools that whoever installs plugs into the turn.
+const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
-const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (eventos.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml}); // Routes port (rotas.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs) and the admin settings (config-admin.mjs).
-const midiaPublica=createMidiaPublica(); // Published media port (midia-publica.mjs): a plugin says which third-party keys /api/media may serve.
-// Port 1 (gasto.mjs): the rest of the server only talks to `gasto`, never to credit directly.
-// Without a plugin, no credit and no billing: usage is logged in US$ (gasto-simples.mjs).
+const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs) and the admin settings (config-admin.mjs).
+const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
+// Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
+// Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
 const gasto=pecas.gasto??createGastoSimples({gravarUso:insertUsageEvent,spend:createCreditSpend(pool,{unidade:'usd'})});
 let creditCleanupTimer;
 let appAccessReconcileTimer;
@@ -81,7 +81,7 @@ const creditPushGuard = createRepeatPushGuard();
 const creditReplyGuard = createRepeatPushGuard({ windowMs: CREDIT_REPLY_WINDOW_MS });
 import {rememberSettledUsage,isSettledUsage} from './execution-credit-receipt.mjs';
 import { makeAppTaskControlTool } from './app-task-runner.mjs';
-import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega } from './video-poll-decisao.mjs';
+import { decidirCobrancaNaoConcluida, decidirFalhaNaEntrega } from './video-poll-decision.mjs';
 const appTaskStore = createAppTaskStore({root: process.env.APP_TASK_STORE_DIR || fileURLToPath(new URL('../.brambs-coding-tasks/', import.meta.url)), seal:sealAppTask, open:openAppTask, acquire:pgTaskLock(pgConfig)});
 import { encryptSecret as sealAppTask, decryptSecret as openAppTask, vaultEnabled, vaultConfigured, encryptSecret, decryptSecret, initVaultNoBoot, nomeDaChaveExterna } from './vault.mjs';
 import { createAppTaskStore, pgTaskLock } from './app-task-store.mjs';
@@ -158,16 +158,16 @@ import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 import { makeGeminiRouter, makeGemini } from '../core-proto/providers/gemini.mjs';
 import { makeNemotron } from '../core-proto/providers/nemotron.mjs';
 import { makeOpenAI, openaiEnabled } from '../core-proto/providers/openai.mjs';
-import { loadModels, modelFor } from '../core-proto/modelos.mjs';import { startModelsWatch } from './modelos-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
+import { loadModels, modelFor } from '../core-proto/models.mjs';import { startModelsWatch } from './models-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
 import { makeDeepInfra, deepinfraEnabled } from '../core-proto/providers/deepinfra.mjs';
 import { makeTogether, togetherEnabled } from '../core-proto/providers/together.mjs';
 import { STOP } from '../core-proto/provider.mjs';
 import { webSearchTool, openLinkTool, serpapiEnabled, lensSearchByUrl, shoppingSearch, createSearchBudget, SEARCH_LIMIT_MSG } from './websearch.mjs';
 import { fontesEConferencia, conferirLinks, linksMontados, materialDoDono, hostsNossos as hostsDeLinks, resolveGroundingUri } from './links.mjs';
-import { limparTextoFinal, desgrudarPontuacaoDeLink, registroDeFontes, citarFontes } from './citacoes.mjs';
+import { limparTextoFinal, desgrudarPontuacaoDeLink, registroDeFontes, citarFontes } from './citations.mjs';
 import { extractPdfText, renderPdfPagesToPng } from './pdf.mjs';
-import { comporTools } from './compor.mjs';
-import { notaMidiaSemTexto } from './midia-sem-texto.mjs';
+import { comporTools } from './compose.mjs';
+import { notaMidiaSemTexto } from './media-without-text.mjs';
 import { xlsxToText, xlsxParts, xlsxCells } from './xlsxread.mjs';
 import { allowedOrigins, fromOwnSite } from './csrf.mjs';
 
@@ -437,7 +437,7 @@ function withFallback(primary, fallback, tag) {
 // models.yaml (whoever installs picks provider and model per task): when the
 // file exists, the configured task wins over the built-in routing of the factories
 // below, with its own fallback behind it. Without the file it returns null and nothing changes. An
-// error in the file brings down the boot right here; later edits apply live (modelos-live.mjs).
+// error in the file brings down the boot right here; later edits apply live (models-live.mjs).
 const modelosCfg = () => loadModels();
 startModelsWatch();
 const configurado = (task, maxOut) => modelFor(task, { maxTokens: maxOut || PRIMARY_MAX_OUT, combine: withFallback });
@@ -913,7 +913,7 @@ async function runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsa
 // table transit through a tool argument, which the blob limiter would truncate; on a
 // regeneration the model would copy its own cut-off call and the spreadsheet would lose
 // rows (incident from 2026-09-09). The prompt and orchestration live in
-// planilha-edit.mjs; here we only wire up the provider + sandbox tools.
+// sheet-edit.mjs; here we only wire up the provider + sandbox tools.
 async function runSheetEditorSubagent({ objetivo, path, filename, sheets, rows, userId, onUsage, language, onToolOutput }) {
   const sub = new ToolRegistry();
   for (const t of sandboxTools(userId)) sub.add(t);
@@ -1061,20 +1061,20 @@ import {
   listSharedAppsForCollaborator,
 } from './db.mjs';
 import { IDIOMAS_OK, defaultLanguage, defaultTimezone, localeDoAcceptLanguage, instrucaoDeIdioma, comIdioma, tagIdioma, idiomaPorExtenso, lembreteDeIdioma, idiomaDoTurno } from './locale.mjs';
-import { freioDeIdioma, logDerivaIdioma } from './freio-idioma.mjs';
+import { freioDeIdioma, logDerivaIdioma } from './language-guard.mjs';
 import { translatePage, carregaCatalogos } from './page-i18n.mjs';
-import { traduzResposta, idiomaDaRequisicao, serverMessages } from './mensagens-i18n.mjs';
+import { traduzResposta, idiomaDaRequisicao, serverMessages } from './messages-i18n.mjs';
 import { registerSignupRoutes } from './signup-routes.mjs';
 import { costOf } from './pricing.mjs';
 import { MODELS, DEFAULT_MODEL, isValidModel, modelById, modelCatalog, pickAutoModel, isTestProvider } from './models.mjs';
-import { currentPeriod } from './periodo.mjs';
-import { deveAvisarRotinaSemCredito } from './rotina-aviso-credito.mjs';
+import { currentPeriod } from './period.mjs';
+import { deveAvisarRotinaSemCredito } from './routine-credit-notice.mjs';
 import { startScheduler, normalizeRoutineDays, routineDaysLabel, intervalLabel, localParts, isPauseOnlyRoutineChange } from './scheduler.mjs';
 import { parseRoutineTime, routineTimeLabel, routineSupersedeKey } from './routine-time.mjs';
 import { sendEmail, mailEnabled } from './mailer.mjs';
 import { insertMobileError, registerPushTokenDb, unregisterPushTokenDb, listPushTokensForUserDb, removePushTokensDb } from './db.mjs';
 import { createTelegramManager, validateBotToken, sendTelegramMessage, sendTelegramVideo, sendTelegramDocument } from './telegram.mjs';
-import { criarAtendimentoDoServidor, esquemaDoAtendimento, PUBLIC_WEB_PATHS } from './publico-canal.mjs';
+import { criarAtendimentoDoServidor, esquemaDoAtendimento, PUBLIC_WEB_PATHS } from './public-support-channel.mjs';
 import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sendWhatsAppTemplate, sendWhatsAppProactive, sendWhatsAppDocument, whatsappWindowOpen as waWindowOpen, WA_TEMPLATE_MAX, setWaHooks } from './whatsapp.mjs';
 
 // Lets proactive sending check WhatsApp's 24h window from our own data
@@ -1120,7 +1120,7 @@ import { inboxDigest } from './agent-inbox.mjs';
 import { agentToAgentTool, confirmAgentDecisionTool, respondDecisionTool, respondExternalQuestionTool, listContactsTool, acceptContactTool, declineContactTool, inviteContactTool } from './agent2agent.mjs';
 import { createEmailPoller, emailEnabled, normalizeSubject } from './email.mjs';
 import { createSlackHandler, slackEnabled, verifySlackSignature } from './slack.mjs';
-import { avisoNaThread } from './aviso-canal.mjs';
+import { avisoNaThread } from './channel-notice.mjs';
 import {
   hashPassword, verifyPassword, newToken, readSid, readCookie, readAuthCookie, sessionCookie, clearCookie, validEmail,
   googleEnabled, googleAuthUrl, googleAccountFromCode, stateCookie, clearStateCookie,
@@ -1134,7 +1134,7 @@ import {
   appleEnabled, appleRevokeReady, verifyAppleIdentityToken, appleExchangeCode, appleRevoke,
 } from './apple-auth.mjs';
 import { googleTools, calendarWritesPorConta, uploadBinaryToDrive, ensureAssistantFolder, fetchGmailAttachment, sniffBinary } from './connectors.mjs';
-import { pastaDoAssistenteTools, PASTA_LEITURA, PASTA_ESCRITA } from './drive-equipe.mjs';
+import { pastaDoAssistenteTools, PASTA_LEITURA, PASTA_ESCRITA } from './team-drive.mjs';
 import { githubTools, slackTools, nuvemshopTools, microsoftTools, linkedinTools, uploadToOneDrive, ensureOneDriveFolder, microsoftHasFiles, RECONECTAR_MSG } from './connectors-ext.mjs';
 import { notionTools, splitwiseTools, infinityTools, asaasTools, asaasCall } from './connectors-vault.mjs';
 import { createAsaasFinancialScheduler } from './asaas-financial-scheduler.mjs';
@@ -1154,18 +1154,18 @@ import { skillsTools, skillInstallTool, skillShareTool, skillRunTool, skillsCont
 import { trackersTools, trackersContext } from './trackers.mjs';
 import { checklistTools, CHECKLIST_CONTEXT } from './checklists.mjs';
 import { checklistStore, resolveTracker, rescheduleReminder, empresaStore } from './db.mjs';
-import { enviarConviteEmpresa } from './empresa-convite-email.mjs';
+import { enviarConviteEmpresa } from './company-invite-email.mjs';
 import { reminderManagementTools } from './reminder-management.mjs';
 import { recurrenceSchema, recurrenceLabel, recurrenceOccurrences, localDateTimeInstant } from './calendar-recurrence.mjs';
-import { comprasTools, comprasContext } from './compras.mjs';
-import { voosTools, voosEnabled } from './voos.mjs';
+import { comprasTools, comprasContext } from './shopping.mjs';
+import { voosTools, voosEnabled } from './flights.mjs';
 import {
   routineNudgeContext, ofertaRegistrada, ofertaNaoFeita, CATALOGO as CATALOGO_ROTINA,
-} from './rotina-oferta.mjs';
+} from './routine-offer.mjs';
 import { monitorsTools } from './monitors.mjs';
 import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
-import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './planilha.mjs';
-import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './planilha-edit.mjs';
+import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
+import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { generateDocument, SUPPORTED_FORMATS, extractDocumentText } from './docgen.mjs';
@@ -1231,7 +1231,7 @@ function parseRecurrence({ repetirCadaMin, repetirAte, startMs, tz }) {
 
 // Safety net for the assistant's FINAL text, provider-independent. The
 // pure part (leaked tool-call, citations, punctuation stuck to a link) lives in
-// citacoes.mjs; here is only the masking of secrets that happened to end up in the
+// citations.mjs; here is only the masking of secrets that happened to end up in the
 // prose (extra defense; tool outputs already come out masked at the source).
 const TOOLS_COM_FONTES = new Set(['buscar_web', 'pesquisar', 'abrir_link']);
 function sanitizeAssistantText(t, opts = {}) {
@@ -1662,7 +1662,7 @@ async function vaultSecret(userId, provider) {
 
 // Asaas credential. A person can have more than one Asaas account stored
 // (the operator's + their own account); the rule for which one applies lives in the
-// payment account port (conta-pagamento.mjs), not in the vault's registration order.
+// payment account port (payment-account.mjs), not in the vault's registration order.
 // Here we only resolve the chosen account's secret.
 // Returns { key, rotulo, contaBrambs, ambigua } or null.
 async function asaasCred(userId) {
@@ -1888,7 +1888,7 @@ async function getCreditStatus(userId) { return gasto.status(userId); }
 // low) lives in a plugin; this is what the allowance gate returns when a routine
 // tries to run with no credit at all. Own app_config key so neither resets the
 // other; the value is { [userId]: { at, period } }. The window and the rule for
-// when to notify live in rotina-aviso-credito.mjs (deveAvisarRotinaSemCredito), with its own test.
+// when to notify live in routine-credit-notice.mjs (deveAvisarRotinaSemCredito), with its own test.
 const ROUTINE_CREDIT_WARN_KEY = 'routine_credit_warned';
 
 // Subscription bonus, paid period, Apple, company and handleStripeEvent moved
@@ -2542,7 +2542,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // null when we don't know, and null does NOT mean "outside Brazil".
   const { language: userLang, country: userCountry } = await getUserLocale(userId);
   const idiomaResposta = idiomaDaResposta(userLang);
-  // Mandatory identification of the operator's payment account (conta-pagamento.mjs
+  // Mandatory identification of the operator's payment account (payment-account.mjs
   // port): when the message opens the journey, the seal and the institutional text
   // come from the server, not the model, and go into both the delivered text and the history.
   // null = turn without identification.
@@ -3059,7 +3059,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     });
     addGated(registry, gWrites, thread.id);
   }
-  // Team assistant with the 'drive' group: only its OWN folder in the owner's Drive (drive-equipe.mjs).
+  // Team assistant with the 'drive' group: only its OWN folder in the owner's Drive (team-drive.mjs).
   if (agentCategory === 'grupo' && toolConfig.groups?.includes?.('drive')) {
     const pasta = pastaDoAssistenteTools({ token: gToken, caps, agentId: agent.id, folderName: agent.name, onAccess: (e) => { logSensitiveAccess({ userId, ...e }); },
       onSheetLoad: (buf, fname, mime) => loadSpreadsheetIntoSandbox(userId, buf, fname, { mime }) });
@@ -3230,7 +3230,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // in the owner's name and, with their OK, close the order. Always active: the trigger is
   // a LINK pasted in the chat, not a topic routing could predict.
   // fechar_pedido goes through the GUARD (addGated) because it's the only irreversible step:
-  // it creates a real order and charges. The rest is reversible and runs directly. See compras.mjs.
+  // it creates a real order and charges. The rest is reversible and runs directly. See shopping.mjs.
   {
     const cTools = comprasTools(userId, agent.id, { threadId: thread.id });
     for (const t of cTools.filter((t) => t.name !== 'fechar_pedido')) registry.add(t);
@@ -5103,7 +5103,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Search budget for the whole turn (main agent + research sub-agents).
   const searchBudget = createSearchBudget();
   // Sources the search tools actually returned in the turn; the list at the end
-  // of the reply comes from here, not from the model's text (see citacoes.mjs).
+  // of the reply comes from here, not from the model's text (see citations.mjs).
   const fontesDoTurno = registroDeFontes();
   // Ids of the images the user attached IN THIS turn (filled in just below, when
   // the uploads are persisted). Exists because a tool that sends the user's photo
@@ -5285,7 +5285,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       // model only receives the structure (sheets, rows, columns), never the cells.
       // Any question about the content goes through analisar_planilha. If the
       // environment fails, the note says it couldn't be read; there's no fallback to
-      // text (see planilha.mjs). The raw file goes to the owner's bucket.
+      // text (see sheet.mjs). The raw file goes to the owner's bucket.
       if (kind === 'planilha') {
         const tipo = tipoPlanilha(name, f.mime) || 'excel';
         if (s3Enabled()) {
@@ -5920,7 +5920,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const name = asset.caption || `arquivo-${asset.id}`;
         const ext = (String(asset.caption || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
         const mime = asset.mime || bytes.contentType || '';
-        // Spreadsheet never becomes text for the model (see planilha.mjs): loads it in
+        // Spreadsheet never becomes text for the model (see sheet.mjs): loads it in
         // pandas and returns only the structure, or a note that it couldn't be opened.
         const tipo = tipoPlanilha(name, mime);
         if (tipo) {
@@ -6069,7 +6069,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }
   // FLIGHT search (Google Flights). Sits alongside the search tools
   // because that's what it is: a price lookup on a real source, with its own cache and
-  // history (see voos.mjs). Always active when the source is
+  // history (see flights.mjs). Always active when the source is
   // configured — the trigger is the owner asking for a flight, not a subject predictable by
   // routing. The cost of each real search is logged as kind='search'.
   if (voosEnabled()) {
@@ -6664,7 +6664,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     } catch (e) { console.error('[freio_fundamentacao]', e?.message ?? e); }
   }
-  // LANGUAGE GUARD (freio-idioma.mjs): a response in Chinese without the person asking for it gets rewritten before delivery.
+  // LANGUAGE GUARD (language-guard.mjs): a response in Chinese without the person asking for it gets rewritten before delivery.
   if (text && !approvedAppContinuation) text = await freioDeIdioma({ text, language: idiomaResposta, pedido: kind === 'routine' ? '' : savedUserMsg, provider, usages, onde: `thread=${thread.id} agent=${agent.id}` });
   let curationResult = null;
   if (curationHistory !== null) {
@@ -6924,14 +6924,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }} : {}) };
 }
 
-// Channel error notice (aviso-canal.mjs): person's language + the channel's thread history.
+// Channel error notice (channel-notice.mjs): person's language + the channel's thread history.
 // Channel STT: transcribes the audio and logs the cost (kind='stt'); switch off = STT_DISABLED (the channel notifies).
 const transcreverDoCanal = async (buffer, mime, userId) => {
   if (!(await getUserMediaPrefs(userId)).stt) throw new Error('STT_DISABLED');
   const { text, usage } = await transcribeAudio(buffer, mime);
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-// Public service (publico-canal.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
+// Public service (public-support-channel.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
 const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
   signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
@@ -8463,7 +8463,7 @@ const TEXT_DOC_RE = /\.(html?|txt|md|markdown|csv|tsv|json|xml|svg)$/i;
 // PRECISE mime (anchored at the start) — avoids matching "xml" inside Office
 // mimes (e.g. application/vnd.openxmlformats...docx/xlsx), which are binary zips.
 const TEXT_MIME_RE = /^(text\/|application\/(json|xml|xhtml\+xml)|image\/svg\+xml)/i;
-// Spreadsheet (xlsx/xlsm/xls/csv/tsv) is decided by tipoPlanilha (planilha.mjs)
+// Spreadsheet (xlsx/xlsm/xls/csv/tsv) is decided by tipoPlanilha (sheet.mjs)
 // BEFORE text: CSV must not fall into the path that dumps the file as text.
 function docKind(name = '', mime = '') {
   if (/pdf/i.test(mime) || /\.pdf$/i.test(name)) return 'pdf';
@@ -8521,7 +8521,7 @@ const SECURITY_HEADERS = {
 // the CSP header with the version that authorizes that nonce. The only path for
 // serving HTML. Site translation catalogs. Kept OUTSIDE public/ on purpose: they're
 // source, not a file to serve. Read once at startup; deploy restarts the process.
-const CATALOGOS_SITE = carregaCatalogos([path.join(__dirname, 'site-textos'), ...textosDoSite(plugins), ...marca().siteTextos]);
+const CATALOGOS_SITE = carregaCatalogos([path.join(__dirname, 'site-texts'), ...textosDoSite(plugins), ...marca().siteTextos]);
 // Catalog of response MESSAGES (the JSON's `error`/`message`). Separate from the
 // site's because the source is different: that one comes from HTML, this one from
 // code literals. Same reading, core + plugins, and same fallback in Portuguese.
@@ -9644,7 +9644,7 @@ async function atenderRequest(req, res) {
   // price table, the offer link and company billing (corporate plan) come from
   // a plugin through the routes port.
 
-  // Routes the distribution plugged in (rotas.mjs). A plugin might add e.g.
+  // Routes the distribution plugged in (routes.mjs). A plugin might add e.g.
   // payment webhooks, personal and company billing, and admin or
   // metrics dashboards.
   if (await rotas.atender(req, res, url, { currentUser, idiomaDaPagina })) return;

@@ -1,7 +1,7 @@
-import {makeCompativel} from './compativel.mjs';
+import {makeCompativel} from './compatible.mjs';
 // ── Real adapter: Nemotron (NVIDIA NIM, OpenAI-compatible) ──
 // PROPRIETARY model running on our own machine (4×L40S) behind HTTPS, no API
-// key. Default of the compatible engine (compativel.mjs). It's a
+// key. Default of the compatible engine (compatible.mjs). It's a
 // REASONING model: it generates a <think>…</think> block before the response; here
 // we separate the reasoning (outside the final response) from the delivered text.
 //

@@ -1,5 +1,5 @@
 import { DiscoveryError, object, preferences, type DiscoveryStore, type Journey } from './store.mjs';
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 export const CHAT_CONSENT = 'discovery-v2-chat';
 export function configurationText(input: unknown, language = 'pt-BR'): string {
     const b = object(input), p = preferences(b);

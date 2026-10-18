@@ -1,5 +1,5 @@
 import { REPORT_INSTRUCTIONS } from './report-instructions.mjs';
-import { marca } from '../web/marca.mjs';
+import { marca } from '../web/brand.mjs';
 export { parseReport, renderReport, renderReportMarkdown, emptyReport, reportFailure } from './report-format.mjs';
 export type { JourneyReport } from './report-format.mjs';
 /** Bounded, dated evidence. Customer text is data, never execution authority. */
