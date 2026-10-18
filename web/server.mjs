@@ -1137,7 +1137,7 @@ import {
 import { googleTools, calendarWritesPorConta, uploadBinaryToDrive, ensureAssistantFolder, fetchGmailAttachment, sniffBinary } from './connectors.mjs';
 import { pastaDoAssistenteTools, PASTA_LEITURA, PASTA_ESCRITA } from './team-drive.mjs';
 import { podarRegistryGrupo } from './group-agent-tools.mjs';
-import { scopeGithubTools } from './github-repo-scope.mjs';
+import { scopeGithubTools, repoInScope } from './github-repo-scope.mjs';
 import { githubTools, slackTools, nuvemshopTools, microsoftTools, linkedinTools, uploadToOneDrive, ensureOneDriveFolder, microsoftHasFiles, RECONECTAR_MSG } from './connectors-ext.mjs';
 import { notionTools, splitwiseTools, infinityTools, asaasTools, asaasCall } from './connectors-vault.mjs';
 import { createAsaasFinancialScheduler } from './asaas-financial-scheduler.mjs';
@@ -2438,6 +2438,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // 'super' is what enables free mode (live terminal). See podarRegistryGrupo.
   const agentCategory = AGENT_CATEGORIES?.includes(agent?.category) ? agent.category : 'pessoal';
   const toolConfig = (agent?.tool_config && typeof agent.tool_config === 'object') ? agent.tool_config : {};
+  // A team assistant reaches only the GitHub repositories its owner enabled (undefined = no limit).
+  const githubRepos = agentCategory === 'grupo' ? (toolConfig.repos || []) : undefined;
   // User's media preferences (generate image / read image / STT / TTS).
   const mprefs = await getUserMediaPrefs(userId);
   // User's timezone (IANA). null = not set → falls back to the São Paulo default. Used
@@ -3023,8 +3025,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // wrapped by the confirmation guard (addGated).
   const provTools = await providerTools(userId, {
     folderName: agent?.name || marca().nome,
-    // A team assistant reaches only the GitHub repositories its owner enabled.
-    githubRepos: agentCategory === 'grupo' ? (toolConfig.repos || []) : undefined,
+    githubRepos,
     onUsage: (e) => mediaUsages.push(e),
     // A spreadsheet read from OneDrive enters the analysis environment (pandas), same as the
     // one coming from Drive: this is what lets analisar_planilha read the whole file.
@@ -4490,7 +4491,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Agent's ACTIVE project (dev mode): if there is one, the coding toolset operates on the
   // project's workspace (via devexec), not on the user's server (via SSH).
   const activeProject = agent.active_project_id
-    ? await getProject(agent.active_project_id, userId)
+    ? await getProject(agent.active_project_id, userId).then((p) => (p && repoInScope(p.repoUrl, githubRepos) ? p : null))
     : null;
   const getGithubToken = () => validProviderToken(userId, 'github');
   // ROUTING GUARDRAIL (apps-processo-fix Phase 4): if the turn clearly targets
@@ -4751,7 +4752,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           if (!activeProject) for (const t of sshTools(userId)) sub.add(t);
           for (const t of codingTools(userId, {
             project: activeProject ? { ownerUserId: userId, nome: activeProject.nome } : null,
-            getGithubToken,
+            getGithubToken, githubRepos,
           })) sub.add(t);
         }
         // Coding = heavy reasoning: robust primary (or the product's Gemini override,
@@ -4797,7 +4798,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
           registry,
           codingTools(userId, {
             project: activeProject ? { ownerUserId: userId, nome: activeProject.nome } : null,
-            getGithubToken,
+            getGithubToken, githubRepos,
           }),
           thread.id,
           gateOpts,
@@ -4810,7 +4811,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       }
     }
     // Project (dev mode): create/enter/list/leave/deploy. Not gated.
-    for (const t of projectTools(userId, agent.id, { getGithubToken })) registry.add(t);
+    for (const t of projectTools(userId, agent.id, { getGithubToken, githubRepos })) registry.add(t);
     // Permission mode + allowlist (not gated: asking IS already the authorization). Only with
     // coding on (sandbox+vault). Take effect from the NEXT message on.
     if (sandboxEnabled() && vaultEnabled()) {

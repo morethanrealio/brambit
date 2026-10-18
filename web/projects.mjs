@@ -14,6 +14,7 @@ import {
   updateProjectFields, setAgentActiveProject, getActiveProjectForAgent,
 } from './db.mjs';
 import { marca } from './brand.mjs';
+import { githubRepoOf, repoInScope, normalizeRepoList } from './github-repo-scope.mjs';
 
 // Normalizes what the user gave as "repo" in a clonable URL.
 // Accepts a full URL (https/ssh) or the "owner/repo" shortcut.
@@ -34,8 +35,16 @@ async function githubTokenSafe(getGithubToken) {
   try { return await getGithubToken(); } catch { return null; }
 }
 
-export function projectTools(userId, agentId, { getGithubToken } = {}) {
+// `githubRepos` (team assistants only): a project is always one of these GitHub
+// repositories, so the owner's other projects stay out of reach.
+export function projectTools(userId, agentId, { getGithubToken, githubRepos } = {}) {
   if (!devexecEnabled()) return [];
+  const outOfScope = () => {
+    const list = normalizeRepoList(githubRepos);
+    return list.length
+      ? `On this assistant a project must be one of the enabled GitHub repositories: ${list.join(', ')}.`
+      : 'No GitHub repository is enabled for this assistant. The owner picks them in the assistant settings.';
+  };
 
   return [
     {
@@ -51,6 +60,10 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
         required: ['nome'],
       },
       async run({ nome, repo, deploy_target }) {
+        if (githubRepos !== undefined) {
+          if (!repoInScope(repo, githubRepos)) return outOfScope();
+          repo = githubRepoOf(repo);
+        }
         const created = await createProject(userId, { nome, repoUrl: normalizeRepo(repo), deployTargetType: deploy_target || 'own_ssh' });
         if (created.error === 'nome_vazio') return 'Dá um nome pro projeto.';
         if (created.error === 'ja_existe') return `Você já tem um projeto chamado "${nome}". Use "entrar no projeto ${nome}" ou escolha outro nome.`;
@@ -82,7 +95,7 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
       description: 'Lists the user\'s development projects and marks which one is active now.',
       parameters: { type: 'object', properties: {}, required: [] },
       async run() {
-        const list = await listProjects(userId);
+        const list = (await listProjects(userId)).filter((p) => repoInScope(p.repoUrl, githubRepos));
         if (!list.length) return 'Você ainda não tem projetos. Crie um com "cria um projeto do repo tal".';
         const active = await getActiveProjectForAgent(agentId);
         const lines = list.map((p) => `• ${p.nome}${active && active.id === p.id ? ' (ATIVO)' : ''} — ${p.repoUrl || 'sem repo'} · deploy ${p.deployTargetType}`);
@@ -103,6 +116,7 @@ export function projectTools(userId, agentId, { getGithubToken } = {}) {
         let p = await getProjectByName(userId, projeto);
         if (!p && /^[0-9a-f-]{16,}$/i.test(projeto)) p = await getProject(projeto, userId);
         if (!p) return `Não achei um projeto chamado "${projeto}". Use "listar projetos".`;
+        if (!repoInScope(p.repoUrl, githubRepos)) return outOfScope();
         const { user, proj } = wsRef(userId, p.nome);
         const prov = await devCreate({ user, proj });
         if (!prov.ok) return `Não consegui subir o workspace do projeto: ${prov.error || prov.stderr || 'erro'}.`;

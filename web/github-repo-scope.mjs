@@ -30,6 +30,32 @@ export function normalizeRepoList(list) {
   return [...out];
 }
 
+// 'owner/name' of a repository given as 'owner/name' or as a github.com URL
+// (https or ssh form), or null for anything else.
+export function githubRepoOf(ref) {
+  const s = typeof ref === 'string' ? ref.trim() : '';
+  const m = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)?([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(s);
+  return m ? repoFullName(m[1], m[2]) : null;
+}
+
+// Whether a project's repository is reachable. `repos` undefined = not a team assistant.
+export function repoInScope(ref, repos) {
+  return repos === undefined || normalizeRepoList(repos).includes(githubRepoOf(ref));
+}
+
+// Shell snippet that stops a push unless every push URL of the remote is an enabled
+// repository. A remote can have several push URLs and git pushes to all of them, so
+// all are checked. `dir` and `remote` come already quoted.
+export function pushTargetCheck(repos, dir, remote) {
+  const allowed = normalizeRepoList(repos)
+    .flatMap((r) => [`https://github.com/${r}`, `git@github.com:${r}`, `ssh://git@github.com/${r}`]).join('|');
+  const refuse = `echo 'This remote is not one of the GitHub repositories enabled for this assistant.'; exit 2`;
+  if (!allowed) return `${refuse};`;
+  return `U="$(git -C ${dir} remote get-url --push --all ${remote})" || exit 2; `
+    + `printf '%s\\n' "$U" | while IFS= read -r L; do L="$(printf '%s' "$L" | tr 'A-Z' 'a-z')"; L="\${L%/}"; L="\${L%.git}"; `
+    + `case "$L" in ${allowed}) ;; *) ${refuse};; esac; done || exit 2;`;
+}
+
 // Tools that name one repository in their arguments.
 const REPO_ARG_TOOLS = new Set(['github_read_path', 'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue']);
 const SEARCH_KEY = { github_search_repos: 'full_name', github_search_issues: 'repo' };
