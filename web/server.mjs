@@ -739,7 +739,7 @@ async function runResearchSubagent({ objetivo, formato, onUsage, language, searc
   // Same budget as the calling turn: a repeated search across sub-agents comes back
   // from cache and the cap applies to the whole turn, not per sub-agent.
   // Same source registry as the turn: the sub-agent's [n] is valid in the final response.
-  sub.add(webSearchTool({ onUsage, budget: searchBudget, fontes }));
+  sub.add(webSearchTool({ onUsage, budget: searchBudget, fontes, language }));
   sub.add(openLinkTool({ onUsage, fontes }));
   // READ/SEARCH sub-agents (research, Google, connectors) only gather
   // information and synthesize text: work where the cheap model ties the strong one
@@ -5700,7 +5700,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         id,pergunta,turnIds:turnImageIds,imageCount:images?.length || 0,
         message,history:thread.history || [],
       }, {
-        getAsset:assetId=>getMediaAsset(userId,assetId),fetch:fetchMedia,describe:describeImage,
+        getAsset:assetId=>getMediaAsset(userId,assetId),fetch:fetchMedia,describe:(b,m,q)=>describeImage(b,m,q,{language:idiomaResposta}),
         onUsage:usage=>mediaUsages.push({usage,kind:'vision'}),
       }),
     });
@@ -5940,7 +5940,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Model WITHOUT built-in search (OpenAI): grounds it via the buscar_web tool, whose
   // backend is a grounded search on Gemini. The search cost is logged as kind='search'.
   if (useWebSearch) {
-    registry.add(webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno }));
+    registry.add(webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno, language: idiomaResposta }));
     // Opens a link the user sends (reads the actual content of the page instead of
     // guessing/searching by keyword on a bare link — fix for the 2026-07-01 bug).
     // If the link is a PDF, the text is extracted and the file goes to the owner's bucket.
@@ -6842,7 +6842,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
 // Channel STT: transcribes the audio and logs the cost (kind='stt'); switch off = STT_DISABLED (the channel notifies).
 const transcreverDoCanal = async (buffer, mime, userId) => {
   if (!(await getUserMediaPrefs(userId)).stt) throw new Error('STT_DISABLED');
-  const { text, usage } = await transcribeAudio(buffer, mime);
+  const { text, usage } = await transcribeAudio(buffer, mime, { language: (await getUserLocale(userId).catch(() => null))?.language });
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
 // Public service (public-support-channel.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
@@ -10616,7 +10616,7 @@ async function atenderRequest(req, res) {
     let mime = 'audio/wav';
     if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; }
     try {
-      const { text, usage } = await transcribeAudio(outBuf, mime);
+      const { text, usage } = await transcribeAudio(outBuf, mime, { language: (await getUserLocale(user.id).catch(() => null))?.language });
       await recordUsages([usage], { userId: user.id, turnId: randomUUID(), kind: 'stt' });
       return send(res, 200, { text: String(text || '') });
     } catch (e) { return fail(res, 500, 'server.failed_transcribe_audio', e); }

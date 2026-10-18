@@ -52,8 +52,8 @@ t('empty query still errors', (await tool.run({ consulta: ' ' })).startsWith('ER
 
 // Server wiring: budget shared with the research sub-agent
 const src = readFileSync(new URL('../web/server.mjs', import.meta.url), 'utf8');
-t('main agent uses the turn budget', src.includes('webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno })'));
-t('sub-agent uses the same budget', src.includes('webSearchTool({ onUsage, budget: searchBudget, fontes })') && src.includes('language: userLang, searchBudget, fontes: fontesDoTurno })'));
+t('main agent uses the turn budget', src.includes('webSearchTool({ onUsage: (e) => mediaUsages.push(e), budget: searchBudget, fontes: fontesDoTurno, language: idiomaResposta })'));
+t('sub-agent uses the same budget', src.includes('webSearchTool({ onUsage, budget: searchBudget, fontes, language })') && src.includes('language: userLang, searchBudget, fontes: fontesDoTurno })'));
 t('search stops when the turn cap is hit', src.includes('if (searchBudget.exhausted) return SEARCH_LIMIT_MSG(searchBudget.max);'));
 t('no separate search cap', !src.includes('MAX_PESQUISAS_POR_TURNO'));
 t('repeated balance message in the conversation does not save a reply', src.includes('skipAssistant: creditStopRepetida') && src.includes("creditReplyGuard.allow(thread.id, termination, text)"));

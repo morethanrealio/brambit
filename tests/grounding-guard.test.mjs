@@ -109,7 +109,7 @@ test('the handoff instruction names the missing tool', () => {
   const { findings } = checkGrounding('Fonte: Canção Nova', { toolOutputs: [] });
   const p = groundingRetryPrompt(findings);
   assert.match(p, /buscar_web/);
-  assert.match(p, /não invente/i);
+  assert.match(p, /do not invent/i);
 });
 
 test('the low-level net removes the unsupported line and never returns silence', () => {
@@ -155,9 +155,11 @@ test('calibration: what has a source is not flagged', () => {
 
 test('handoff instruction is an internal review, nothing leaks to the person', () => {
   const { findings } = checkGrounding('Cupom: VERAO2026', { toolOutputs: [] });
-  for (const lang of ['pt-BR', 'en', 'es']) {
+  for (const [lang, name] of [['pt-BR', 'Brazilian Portuguese'], ['en', 'English'], ['es', 'Spanish']]) {
     const p = groundingRetryPrompt(findings, lang);
     assert.match(p, /VERAO2026/);
-    assert.match(p, /(n[ãa]o v[êe]|not see|no ve)/i, lang);
+    assert.match(p, /not see/i, lang);
+    // the rewrite has to stay in the language of the turn
+    assert.match(p, new RegExp(`Write the reply in ${name}\\.`), lang);
   }
 });

@@ -427,7 +427,7 @@ function extractSources(cand) {
 // (5k searches/month). thinkingBudget 0: the "thinking" is the main model's job, here we
 // just want to retrieve facts+links. Returns usage in the standard shape so it enters the
 // cost pipeline (kind='search').
-export async function groundedSearch(query, { model = 'gemini-3.5-flash' } = {}) {
+export async function groundedSearch(query, { model = 'gemini-3.5-flash', language = '' } = {}) {
   if (isDeepSeekTurn()) throw new Error('Grounding Gemini desabilitado: este assistente usa DeepSeek com Tavily.');
   const key = process.env.GEMINI_API_KEY;
   const body = {
@@ -438,9 +438,11 @@ export async function groundedSearch(query, { model = 'gemini-3.5-flash' } = {})
     // sense, and nothing made up. Used for any kind of search (price, place,
     // product, news). The main model is the one that "assembles" the response; here the goal is
     // to maximize useful-fact density per search.
+    // `language` is the spelled-out language of the turn (e.g. 'English'), so the
+    // facts come back in the language the reply will be written in.
     systemInstruction: {
       parts: [{
-        text: 'Você é um motor de busca. Responda em pt-BR, denso e objetivo, SÓ com o que as fontes trazem (não invente nada). Extraia dados CONCRETOS: nomes próprios (lugares, produtos, marcas, empresas), números (preços, horários, datas), endereços/bairros. Quando a consulta pedir opções (lugares, restaurantes, produtos), liste VÁRIAS opções nomeadas com um dado distintivo de cada uma. Se algo não estiver nas fontes, não preencha; deixe de fora.',
+        text: `You are a search engine. Answer in ${language || 'the language of the query'}, dense and objective, with ONLY what the sources say (invent nothing). Extract CONCRETE data: proper names (places, products, brands, companies), numbers (prices, times, dates), addresses/neighborhoods. When the query asks for options (places, restaurants, products), list SEVERAL named options with one distinguishing detail each. If something is not in the sources, do not fill it in; leave it out.`,
       }],
     },
     generationConfig: { maxOutputTokens: 3072, thinkingConfig: { thinkingBudget: 0 } },

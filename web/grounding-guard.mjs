@@ -1,4 +1,4 @@
-import { tagIdioma } from './locale.mjs';
+import { tagIdioma, idiomaPorExtenso } from './locale.mjs';
 import { marca } from './brand.mjs';
 
 // GROUNDING GUARD
@@ -301,21 +301,21 @@ function safeJson(v) {
 }
 
 const ORIENTACAO = {
-  link_nao_consultado: 'o endereço não veio, igual, de nada consultado neste turno (só vale o endereço copiado da página ou da busca)',
-  cupom_nao_consultado: 'o código não apareceu em nenhuma consulta deste turno',
-  fonte_nao_lida: 'essa fonte não foi lida neste turno',
-  preco_sem_consulta: 'esse valor não veio de nenhuma consulta deste turno',
-  saldo_sem_consulta: 'o saldo/plano não foi consultado neste turno',
-  arquivo_nao_lido: 'o conteúdo do arquivo não foi lido neste turno',
+  link_nao_consultado: 'the address did not come, verbatim, from anything consulted in this turn (only an address copied from the page or the search counts)',
+  cupom_nao_consultado: 'the code did not appear in any lookup in this turn',
+  fonte_nao_lida: 'this source was not read in this turn',
+  preco_sem_consulta: 'this amount did not come from any lookup in this turn',
+  saldo_sem_consulta: 'the balance/plan was not looked up in this turn',
+  arquivo_nao_lido: 'the content of the file was not read in this turn',
 };
 
 const FERRAMENTA = {
-  link_nao_consultado: 'buscar_web ou a leitura de página',
+  link_nao_consultado: 'buscar_web or reading the page',
   cupom_nao_consultado: 'buscar_web',
-  fonte_nao_lida: 'buscar_web ou a leitura da página da fonte',
+  fonte_nao_lida: 'buscar_web or reading the source page',
   preco_sem_consulta: 'buscar_web',
   saldo_sem_consulta: 'consultar_creditos',
-  arquivo_nao_lido: 'a leitura do arquivo',
+  arquivo_nao_lido: 'reading the file',
 };
 
 /**
@@ -323,21 +323,16 @@ const FERRAMENTA = {
  * rewrites the whole reply, confirming with the tool what it can and removing
  * (or saying naturally that it's unavailable) what it can't. The reader gets
  * only the final reply: no "I checked again", no tool name, no sign that a
- * review happened (06/10).
+ * review happened (06/10). Written in English like the rest of the prompt; the
+ * last line names the language of the turn, so the rewrite stays in it.
  */
 export function groundingRetryPrompt(findings, language = 'pt-BR') {
   const itens = [...new Map(findings.map(f => [f.kind + (f.kind === 'link_nao_consultado' ? f.trecho : f.dado), f])).values()].slice(0, 12)
-    .map(f => `- ${ORIENTACAO[f.kind] || 'sem origem verificada'}${f.kind === 'link_nao_consultado' ? ` (${f.trecho})` : f.dado ? ` (${trecho(f.dado)})` : ''}; para confirmar: ${FERRAMENTA[f.kind] || 'a ferramenta adequada'}`)
+    .map(f => `- ${ORIENTACAO[f.kind] || 'no verified origin'}${f.kind === 'link_nao_consultado' ? ` (${f.trecho})` : f.dado ? ` (${trecho(f.dado)})` : ''}; to confirm: ${FERRAMENTA[f.kind] || 'the appropriate tool'}`)
     .join('\n');
-  const head = {
-    en: 'Internal review (the person does not see this message). In the reply you were about to send, these items do not appear in anything consulted in this conversation:',
-    es: 'Revisión interna (la persona no ve este mensaje). En la respuesta que ibas a entregar, estos datos no aparecen en nada consultado en esta conversación:',
-  }[tagIdioma(language)] || 'Revisão interna (a pessoa não vê esta mensagem). Na resposta que você ia entregar, estes dados não aparecem em nada que foi consultado nesta conversa:';
-  const tail = {
-    en: 'Rewrite the SAME full reply, as the person will read it. For each item: if a tool can confirm it, confirm it and use only what it returns; if not, drop it or say naturally that this information is not available. Do not mention review, lookups, tools, verification or that you redid the reply, and do not invent a substitute.',
-    es: 'Reescribe la MISMA respuesta completa, como la persona la va a leer. Para cada dato: si una herramienta puede confirmarlo, confírmalo y usa solo lo que devuelva; si no, quítalo o di con naturalidad que esa información no está disponible. No menciones revisión, consultas, herramientas, verificación ni que rehiciste la respuesta, y no inventes un sustituto.',
-  }[tagIdioma(language)] || 'Reescreva a MESMA resposta completa, do jeito que a pessoa vai ler. Para cada item: se uma ferramenta puder confirmar, confirme e use só o que ela devolver; se não puder, tire o dado ou diga com naturalidade que essa informação não está disponível. Não mencione revisão, consulta, ferramenta, verificação nem que refez a resposta, e não invente um substituto.';
-  return `${head}\n${itens}\n\n${tail}`;
+  const head = 'Internal review (the person does not see this message). In the reply you were about to send, these items do not appear in anything consulted in this conversation:';
+  const tail = 'Rewrite the SAME full reply, as the person will read it. For each item: if a tool can confirm it, confirm it and use only what it returns; if not, drop it or say naturally that this information is not available. Do not mention review, lookups, tools, verification or that you redid the reply, and do not invent a substitute.';
+  return `${head}\n${itens}\n\n${tail}\nWrite the reply in ${idiomaPorExtenso(language)}.`;
 }
 
 const AVISO = {
