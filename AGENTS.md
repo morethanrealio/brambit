@@ -9,7 +9,7 @@ has the contribution workflow.
 ALWAYS use English for everything you write in this repository: comments, code,
 identifiers (functions, variables, files, folders, environment variables, routes,
 JSON keys), log lines, error codes, tests, commit messages, branch names, pull
-requests, issues, `TODO.md`, docs and `CHANGELOG.md`.
+requests, issues, `TODO.md`, docs and release notes.
 
 The only exceptions:
 
@@ -61,8 +61,11 @@ area you changed: `node --test tests/<file>.test.mjs` or the matching
 minutes; run it only when asked. Add a test only when it catches a plausible
 change that nothing else (CI, boot, normal use) would catch.
 
-## Changelog
+## Pull requests and releases
 
-Every user-visible change gets a line under `## [Unreleased]` in
-`CHANGELOG.md` (Added, Changed, Fixed, Removed). Renamed settings or commands
-go under Changed, saying what the person has to do.
+Don't edit `CHANGELOG.md`: release notes are generated from pull request titles
+and labels when a version is published ([`docs/releasing.md`](docs/releasing.md)).
+Write the pull request title as one plain sentence about what changes for whoever
+runs Brambit. When an installation has to do something after upgrading (a renamed
+setting or command, a reinstall), say what in the pull request description; the
+`breaking change` label puts it at the top of the notes.

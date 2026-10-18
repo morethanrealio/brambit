@@ -287,7 +287,7 @@ Essa proteção não deve ser presumida para qualquer script de eval do reposit�
 ## Recursos
 
 - [Guia de contribuição](CONTRIBUTING.md) e [trabalho em aberto](https://github.com/morethanrealio/brambit/issues)
-- [Changelog](CHANGELOG.md)
+- [Versões](https://github.com/morethanrealio/brambit/releases) (notas até a 0.2.24 no [CHANGELOG.md](CHANGELOG.md))
 - [Política de segurança](SECURITY.md)
 - [Governança](GOVERNANCE.md) e [mantenedores](MAINTAINERS.md)
 - [Código de conduta](CODE_OF_CONDUCT.md)
