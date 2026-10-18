@@ -3,9 +3,37 @@
 // login e-mail). Nothing writes to it any more, but the boot copies it into
 // google_accounts with ON CONFLICT DO NOTHING. So removing that account without
 // deleting the old row brought it back, token included, on the next restart.
+//
+// Removing also revokes the grant at Google, so the app leaves the person's
+// Google account ("Third-party apps with account access") and a token left in an
+// old backup stops working. Google revokes the whole grant of that Google account
+// for this app, so it is kept while another user of this install still has the
+// same Google account connected: revoking would cut them off too. A failed
+// revocation never blocks the removal the person asked for.
+import { googleRevoke } from './auth.mjs';
+import { decMaybe } from './vault.mjs';
+
 const S = 'mtr_harness';
 
-export function createGoogleAccountRemoval(pool) {
+export function createGoogleAccountRemoval(pool, { revoke = googleRevoke } = {}) {
+  async function revokeAtGoogle(userId, email) {
+    const { rows } = await pool.query(
+      `SELECT g.access_token, g.refresh_token,
+              EXISTS (SELECT 1 FROM ${S}.google_accounts o
+                       WHERE o.google_email = g.google_email AND o.user_id <> g.user_id
+                         AND (o.refresh_token IS NOT NULL OR o.access_token IS NOT NULL)) AS shared
+         FROM ${S}.google_accounts g WHERE g.user_id=$1 AND g.google_email=$2`, [userId, email]);
+    const row = rows[0];
+    if (!row || row.shared) return;
+    try {
+      // The refresh token outlives the access token, and revoking either one drops the grant.
+      const token = decMaybe(row.refresh_token) || decMaybe(row.access_token);
+      if (token) await revoke(token);
+    } catch (e) {
+      console.warn(`[google] revoking user ${userId}'s grant failed:`, e?.message ?? e);
+    }
+  }
+
   // Idempotent boot backfill: brings each user's single account from google_tokens
   // (the connected account == the login e-mail), marked as primary.
   async function backfillLegacy() {
@@ -19,6 +47,7 @@ export function createGoogleAccountRemoval(pool) {
 
   async function removeGoogleAccount(userId, googleEmail) {
     const email = String(googleEmail || '').toLowerCase();
+    await revokeAtGoogle(userId, email);
     // One statement: the account and its old copy go together, so a crash in between
     // can't leave the copy for the backfill to restore.
     const { rows } = await pool.query(
@@ -31,7 +60,7 @@ export function createGoogleAccountRemoval(pool) {
        SELECT is_primary FROM gone`, [userId, email]);
     // unlinks the agents that pointed to this account (they fall back to the primary one)
     await pool.query(`UPDATE ${S}.agents SET google_email = NULL WHERE user_id=$1 AND google_email=$2`, [userId, email]);
-    // se apagou a principal e sobrou conta, promove a mais recente
+    // if the primary one was deleted and another account is left, promote the most recent one
     if (rows[0]?.is_primary) {
       const { rows: next } = await pool.query(
         `SELECT google_email FROM ${S}.google_accounts WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 1`, [userId]);
