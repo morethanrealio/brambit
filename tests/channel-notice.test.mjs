@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-process.env.CANAL_REENVIO_MS = '0,0';
+process.env.CHANNEL_RESEND_MS = '0,0';
 const { createTelegramManager } = await import('../web/telegram.mjs');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

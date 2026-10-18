@@ -158,7 +158,7 @@ import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 import { makeGeminiRouter, makeGemini } from '../core-proto/providers/gemini.mjs';
 import { makeNemotron } from '../core-proto/providers/nemotron.mjs';
 import { makeOpenAI, openaiEnabled } from '../core-proto/providers/openai.mjs';
-import { carregarModelos, modeloPara } from '../core-proto/modelos.mjs';import { startModelsWatch } from './modelos-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
+import { loadModels, modelFor } from '../core-proto/modelos.mjs';import { startModelsWatch } from './modelos-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
 import { makeDeepInfra, deepinfraEnabled } from '../core-proto/providers/deepinfra.mjs';
 import { makeTogether, togetherEnabled } from '../core-proto/providers/together.mjs';
 import { STOP } from '../core-proto/provider.mjs';
@@ -374,7 +374,7 @@ function geminiEnabled() { return !!process.env.GEMINI_API_KEY; }
 // is primary). Grounding still exists via buscar_web/pesquisar.
 function makeTextFallback({ maxOut } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
-  const cfg = configurado('conversa', maxOut); if (cfg) return cfg;
+  const cfg = configurado('chat', maxOut); if (cfg) return cfg;
   const openai = openaiEnabled() ? makeOpenAI({ model: FALLBACK_MODEL(), ...(maxOut ? { maxTokens: maxOut } : {}) }) : null;
   if (geminiEnabled()) return withFallback(
     makeGemini({ model: FALLBACK_TEXT_MODEL(), search: false, maxOutputTokens: maxOut || PRIMARY_MAX_OUT }),
@@ -434,13 +434,13 @@ function withFallback(primary, fallback, tag) {
     },
   };
 }
-// modelos.yaml (whoever installs picks provider and model per function): when the
-// file exists, the configured function wins over the built-in routing of the factories
+// models.yaml (whoever installs picks provider and model per task): when the
+// file exists, the configured task wins over the built-in routing of the factories
 // below, with its own fallback behind it. Without the file it returns null and nothing changes. An
 // error in the file brings down the boot right here; later edits apply live (modelos-live.mjs).
-const modelosCfg = () => carregarModelos();
+const modelosCfg = () => loadModels();
 startModelsWatch();
-const configurado = (funcao, maxOut) => modeloPara(funcao, { maxTokens: maxOut || PRIMARY_MAX_OUT, juntar: withFallback });
+const configurado = (task, maxOut) => modelFor(task, { maxTokens: maxOut || PRIMARY_MAX_OUT, combine: withFallback });
 // Default text/image route. Gemini env is kept as an explicit rollback;
 // empty string restores the pre-override robust provider routing.
 const TOGETHER_FLASH_DEFAULT = 'deepseek-ai/DeepSeek-V4.1-Flash';
@@ -460,12 +460,12 @@ const primaryIsGeminiOverride = () => /^gemini[-.]/i.test(PRIMARY_TEXT_MODEL());
 const CHEAP_MODEL = () => process.env.CHEAP_MODEL || 'deepseek-ai/DeepSeek-V4-Flash';
 // EMERGENCY toggle for the default model: by default it runs on Together (fast).
 // If Together runs out of credit (402), setting
-// ROBUSTO_PROVIDER=deepinfra points the default at the SAME PRIMARY_MODEL on DeepInfra
+// ROBUST_PROVIDER=deepinfra points the default at the SAME PRIMARY_MODEL on DeepInfra
 // (slower, but with credit) until Together recharges. Revert = remove the
 // env var (or =together) + restart. It's a stopgap, not a final state (DeepInfra serves
 // 5.2 in FP4, slower). Reasoning stays ON in robusto (don't pass
 // reasoning:{enabled:false}); maxTokens with headroom so reasoning doesn't eat into the output.
-const ROBUSTO_PROVIDER = () => (process.env.ROBUSTO_PROVIDER || 'together').toLowerCase();
+const ROBUST_PROVIDER = () => (process.env.ROBUST_PROVIDER || 'together').toLowerCase();
 // Lever 1 (input tokens, Plan B): ALL of the CODE/APP tooling (build/
 // edit app, app admin, sandbox, SSH server/terminal, coding, dev
 // projects, permissions) leaves the initial tool set and sits behind abrir_ferramentas({grupo:
@@ -482,7 +482,7 @@ const APPS_INLINE = new Set(['listar_sistemas', 'chamar_sistema']);
 // 'barato' are only the read sub-agents, via makeSubagentProvider().
 function makePrimaryProvider(tier = 'robusto', { maxOut } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
-  const cfg = configurado(tier === 'barato' ? 'pesquisa' : 'conversa', maxOut || (tier === 'barato' ? 8192 : PRIMARY_MAX_OUT)); if (cfg) return cfg;
+  const cfg = configurado(tier === 'barato' ? 'research' : 'chat', maxOut || (tier === 'barato' ? 8192 : PRIMARY_MAX_OUT)); if (cfg) return cfg;
   const canGlm = togetherEnabled();
   const canCheap = deepinfraEnabled();
   let primary;
@@ -495,7 +495,7 @@ function makePrimaryProvider(tier = 'robusto', { maxOut } = {}) {
     // (bug from 2026-08-15, planner). 8192 = DeepInfra's own default; output is
     // negligible in cost. BUILD turns already go to robusto (16384) via the tier.
     primary = makeDeepInfra({ model: CHEAP_MODEL(), temperature: 0.3, maxTokens: maxOut || 8192, reasoning: { enabled: false } });
-  } else if (ROBUSTO_PROVIDER() === 'deepinfra' && canCheap) {
+  } else if (ROBUST_PROVIDER() === 'deepinfra' && canCheap) {
     // Stopgap: robusto on DeepInfra's GLM-5.2 (Together out of credit). Reasoning
     // ON (robusto thinks); maxTokens with headroom (32768 in build via maxOut,
     // 16384 default) so reasoning doesn't consume the whole cap and return empty.
@@ -584,7 +584,7 @@ function makeDeepSeekProvider({ maxOut } = {}) {
 // by the owner themself still takes precedence via selectedDeepSeek.
 function makeHeavyProvider(site, { maxOut = PRIMARY_MAX_OUT } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected.forBillingPhase?.({kind:'subagent'})||selected;
-  const cfg = configurado('programacao', maxOut); if (cfg) return wrapProvider(cfg).forBillingPhase({kind:'subagent'});
+  const cfg = configurado('coding', maxOut); if (cfg) return wrapProvider(cfg).forBillingPhase({kind:'subagent'});
   const official = makeOfficialDeepSeek(maxOut);
   const provider = togetherEnabled()
     ? withFallback(
@@ -610,7 +610,7 @@ function makeHeavyProvider(site, { maxOut = PRIMARY_MAX_OUT } = {}) {
 // the product's search tool, so the capability doesn't go away.
 function makeGeminiPrimary({ maxOut = 32768 } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
-  const cfg = configurado('conversa', maxOut); if (cfg) return cfg;
+  const cfg = configurado('chat', maxOut); if (cfg) return cfg;
   const gemini = makeGemini({ model: PRIMARY_TEXT_MODEL(), search: true, maxOutputTokens: maxOut });
   if (!togetherEnabled() && !openaiEnabled() && !deepinfraEnabled()) return gemini;
   const fallback = makePrimaryProvider('robusto', { maxOut });
@@ -636,7 +636,7 @@ function makeGeminiPrimary({ maxOut = 32768 } = {}) {
 // Auxiliary cheap/coding providers and explicit per-agent selections stay intact.
 function makeTogetherFlashPrimary({ maxOut = 32768, vision = false } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
-  const cfg = configurado(vision ? 'imagem' : 'conversa', maxOut); if (cfg) return cfg;
+  const cfg = configurado(vision ? 'image' : 'chat', maxOut); if (cfg) return cfg;
   const gemini = geminiEnabled() ? makeGemini({model:FALLBACK_TEXT_MODEL(), search:false, maxOutputTokens:maxOut}) : null;
   const backup = vision ? withFallback(gemini || makeOpenAI({model:FALLBACK_MODEL(),maxTokens:maxOut}),
     gemini && openaiEnabled() ? makeOpenAI({model:FALLBACK_MODEL(),maxTokens:maxOut}) : null, 'vision-reserve') : makeTextFallback({maxOut});
@@ -654,7 +654,7 @@ function makeTogetherFlashPrimary({ maxOut = 32768, vision = false } = {}) {
 // without Gemini configured, it becomes the path again. Nothing was removed.
 function makeVisionProvider({ maxOut = 32768 } = {}) {
   const selected = selectedDeepSeek(maxOut); if (selected) return selected;
-  const cfg = configurado('imagem', maxOut); if (cfg) return cfg;
+  const cfg = configurado('image', maxOut); if (cfg) return cfg;
   if (primaryIsTogetherFlash()) return makeTogetherFlashPrimary({maxOut,vision:true});
   if (!geminiEnabled()) return makeOpenAI({ model: FALLBACK_MODEL(), ...(maxOut ? { maxTokens: maxOut } : {}) });
   const model = primaryIsGeminiOverride() ? PRIMARY_TEXT_MODEL() : FALLBACK_TEXT_MODEL();
@@ -6256,7 +6256,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // The raw photo path does NOT die: it's this one, only the reader changes.
     provider = makeVisionProvider({ maxOut: 32768 });
     console.log(`[router] vision=${modelosCfg() ? provider.name : primaryIsTogetherFlash() ? TOGETHER_FLASH_DEFAULT : 'gemini'} thread=${thread.id}`);
-    buscaNativa = !modelosCfg() && !primaryIsTogetherFlash() && geminiEnabled(); // Together, modelos.yaml and their fallbacks use tool-based search.
+    buscaNativa = !modelosCfg() && !primaryIsTogetherFlash() && geminiEnabled(); // Together, models.yaml and their fallbacks use tool-based search.
   } else if (forcedProvider) {
     // FIXED model assigned to this agent by the owner (outside of routing). Comes BEFORE
     // the PRIMARY_TEXT_MODEL override on purpose: the owner's explicit choice
@@ -6264,8 +6264,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[router] forced=${agent.model} thread=${thread.id} provider=${forcedProvider.name}`);
     provider = forcedProvider;
   } else if (modelosCfg()) {
-    provider = configurado('conversa', 32768);
-    console.log(`[router] modelos.yaml conversa=${provider.name} thread=${thread.id}`);
+    provider = configurado('chat', 32768);
+    console.log(`[router] models.yaml chat=${provider.name} thread=${thread.id}`);
   } else if (usePrimaryLLM && primaryIsTogetherFlash()) {
     provider = makeTogetherFlashPrimary({maxOut:32768});
     console.log(`[router] primary-override=${TOGETHER_FLASH_DEFAULT} thread=${thread.id}`);
@@ -6596,7 +6596,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // platform itself wrote.
   let groundingFindings = [];
   let groundingDesfecho = null;
-  if (text && !approvedAppContinuation && process.env.FREIO_FUNDAMENTACAO !== '0') {
+  if (text && !approvedAppContinuation && process.env.GROUNDING_GUARD !== '0') {
     try {
       // The native search only hands over vertexaisearch redirects; the real
       // addresses behind them are material (same cache as the "Fontes:" block).
@@ -6734,8 +6734,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Broken links are removed; unverified ones stay with no notice, routines too
   // (since 2026-10-06). Full rule in links.mjs.
   // Parallel checks: cap of 8 links, 3s per request, without redoing the search.
-  // Can be turned off via FONTES_LINKS=0 without removing anything from its place.
-  if (text && !curationResult && process.env.FONTES_LINKS !== '0') {
+  // Can be turned off via SOURCE_LINKS=0 without removing anything from its place.
+  if (text && !curationResult && process.env.SOURCE_LINKS !== '0') {
     try {
       const r = await fontesEConferencia(text, fontesGrounding || [], { mostrarFontes: buscaNativa, language: idiomaResposta, strictLinks: kind === 'routine', authenticatedEmailSources:searchCoverage.emailSourceLinks(), conferir: conferirDoTurno });
       // montados = links still made up after the guard's redo: taken out, not opened. Logged by host only (the path may carry data).
@@ -6933,7 +6933,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
 };
 // Public service (publico-canal.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
 const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
-  signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('conversa', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
+  signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Telegram channel: runs one bot per user (their BotFather token). Injects the
 // deps to avoid a circular import. The pollers start up at boot (listEnabledTelegramBots).
@@ -7277,7 +7277,7 @@ async function isolatedAgentDraft(agent, userId, task, {discoveryDraft=false,rep
     makeProvider: () => {
       const identity={userId,agentId:agent.id,threadId:null,kind:discoveryDraft?'discovery':'broadcast',noBill};
       if(agent?.model===DEEPSEEK_AGENT_MODEL||isDeepSeekTurn())return makeOfficialDeepSeek(PRIMARY_MAX_OUT,identity);
-      const provider=forcedAgentProvider(agent?.model)||configurado('conversa',PRIMARY_MAX_OUT)||(primaryIsTogetherFlash()?makeTogetherFlashPrimary({maxOut:PRIMARY_MAX_OUT}):primaryIsGeminiOverride()&&geminiEnabled()
+      const provider=forcedAgentProvider(agent?.model)||configurado('chat',PRIMARY_MAX_OUT)||(primaryIsTogetherFlash()?makeTogetherFlashPrimary({maxOut:PRIMARY_MAX_OUT}):primaryIsGeminiOverride()&&geminiEnabled()
         ?makeGemini({model:PRIMARY_TEXT_MODEL(),search:false,maxOutputTokens:PRIMARY_MAX_OUT}):makePrimaryProvider());
       return gasto.vincular({provider,...identity});
     },
@@ -7869,7 +7869,7 @@ async function updateProfile(agent, userMsg, assistantMsg) {
   ].join('\n');
   const prompt = `Perfil atual:\n${agent.profile?.trim() || '(vazio)'}\n\nNova troca:\nUsuário: ${userMsg}\nAgente: ${assistantMsg}`;
   try {
-    const r = await (configurado('memoria', 8192) || makeGemini({ model: 'gemini-3.5-flash' })).complete({
+    const r = await (configurado('memory', 8192) || makeGemini({ model: 'gemini-3.5-flash' })).complete({
       system: sys, messages: [{ role: 'user', content: prompt }], tools: [],
     });
     return r.text?.trim() || agent.profile || '';

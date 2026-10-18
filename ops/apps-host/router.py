@@ -204,25 +204,25 @@ def ensure_up(name, port):
     return ip                    # last attempt, let the proxy handle it
 
 # Host brand: name, site, logo and the badge text. Comes from an optional JSON
-# (BRAMBS_MARCA_FILE, default /opt/brambs-router/marca.json, which deploy.sh
-# installs when the repository has ops/apps-host/marca.json); without it, the
+# (BRAMBS_BRAND_FILE, default /opt/brambs-router/brand.json, which deploy.sh
+# installs when the repository has ops/apps-host/brand.json); without it, the
 # neutral brand applies. BRAMBS_SITE_URL and BRAMBS_LOGO_URL from the unit's
 # environment take precedence. Read at boot: a new brand takes effect on the
 # restart that deploy.sh already does.
-MARCA_FILE = os.environ.get("BRAMBS_MARCA_FILE", "/opt/brambs-router/marca.json")
-def _marca():
+BRAND_FILE = os.environ.get("BRAMBS_BRAND_FILE", "/opt/brambs-router/brand.json")
+def _brand():
     try:
-        with open(MARCA_FILE, encoding="utf-8") as f:
+        with open(BRAND_FILE, encoding="utf-8") as f:
             m = json.load(f)
         return m if isinstance(m, dict) else {}
     except Exception:
         return {}
-_m = _marca()
-NOME = str(_m.get("nome") or "Brambit")
+_m = _brand()
+NOME = str(_m.get("name") or "Brambit")
 SITE = os.environ.get("BRAMBS_SITE_URL") or str(_m.get("site") or "http://localhost:8080/")
 LOGO = os.environ.get("BRAMBS_LOGO_URL") or str(_m.get("logo") or SITE.rstrip("/") + "/logo.svg")
-SELO = str(_m.get("selo") or "Feito com " + NOME)
-SELO_ARIA = str(_m.get("selo_aria") or SELO + ", ir para " + NOME)
+SELO = str(_m.get("badge") or "Feito com " + NOME)
+SELO_ARIA = str(_m.get("badge_aria") or SELO + ", ir para " + NOME)
 
 LANDING = ("<!doctype html><meta charset=utf-8>"
            "<title>" + _attr(NOME) + "</title>"

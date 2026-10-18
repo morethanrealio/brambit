@@ -9,7 +9,7 @@ process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 //  3. the block is not appended when the text already carries the list, in all three languages
 //     (the model writes "Sources:"/"Fuentes:" when it replies in another language).
 //
-// Link verification is isolated: `FONTES_LINKS` is not part of this and no test
+// Link verification is isolated: `SOURCE_LINKS` is not part of this and no test
 // depends on the network. The ones that exercise the 404 notice simulate HTTP responses.
 //
 // run: node tests/links-i18n.test.mjs

@@ -1,11 +1,11 @@
 // The AI providers the setup page offers, how to list the models a key can use
-// (which also tests the key, without spending anything) and the modelos.yaml
+// (which also tests the key, without spending anything) and the models.yaml
 // written from the choice. Each provider has a recommended model the core
 // already prices (web/pricing.mjs); the person may pick any other chat model the
 // key lists. "other" is any service speaking the OpenAI protocol (OpenRouter,
 // Ollama, vLLM...), with the model picked from its list or typed by hand.
 import { stringify } from 'yaml';
-import { escolhaDe } from '../core-proto/modelos.mjs';
+import { choiceFor } from '../core-proto/modelos.mjs';
 
 export const PROVIDERS = {
   together: { url: 'https://api.together.xyz/v1', model: 'deepseek-ai/DeepSeek-V4.1-Flash', keyVar: 'TOGETHER_API_KEY' },
@@ -115,15 +115,15 @@ export const AUDIO_PROVIDERS = ['gemini', 'openai'];
 // audio, and none otherwise.
 export const audioOf = (cfg) => cfg.audio?.provider || (AUDIO_PROVIDERS.includes(cfg.ai.provider) ? cfg.ai.provider : 'none');
 
-// The AI that answers the conversation, read back from modelos.yaml (as
+// The AI that answers the conversation, read back from models.yaml (as
 // core-proto/modelos.mjs loads it) → {provider, url, model, keyVar} or null. A provider
 // written by hand under a name of its own counts as "other", at its address.
 export function aiOf(models) {
-  const main = models && escolhaDe('conversa', models)?.principal;
-  const p = main && models.provedores[main.provedor];
+  const main = models && choiceFor('chat', models)?.primary;
+  const p = main && models.providers[main.provider];
   if (!p) return null;
-  const provider = PROVIDERS[p.nome] ? p.nome : 'other';
-  return { provider, url: p.endereco ?? PROVIDERS[provider].url, model: main.modelo, keyVar: p.chave };
+  const provider = PROVIDERS[p.name] ? p.name : 'other';
+  return { provider, url: p.baseUrl ?? PROVIDERS[provider].url, model: main.model, keyVar: p.keyEnv };
 }
 
 // What the person chose for audio, given the text choice → {provider:'none'},
@@ -138,15 +138,15 @@ export function audioChoice({ audio, audioKey }, text) {
   return key ? { provider, key } : { error: 'audio_missing_key' };
 }
 
-// modelos.yaml with a single provider doing every function. The key is NOT in
+// models.yaml with a single provider doing every task. The key is NOT in
 // it: only the name of the variable that holds it in the config file. The keys
-// of the file itself (provedores, funcoes, padrao...) are the core's format.
+// of the file itself (providers, tasks, default...) are the core's format.
 // With the price the provider published, the spend the app shows is the real one;
 // without it the core uses its own table or a conservative estimate.
 export function modelsYaml({ provider, url, model, key, price }) {
   const p = PROVIDERS[provider];
-  const prov = p.type === 'gemini' ? { tipo: 'gemini', chave: p.keyVar } : { endereco: url, ...(key ? { chave: p.keyVar } : {}) };
-  const doc = { provedores: { [provider]: prov }, funcoes: { padrao: { modelo: `${provider}/${model}`, ...(p.options ? { opcoes: p.options } : {}) } } };
-  if (price) doc.precos = { [model]: { entrada: price.in, cache: price.cachedIn, saida: price.out } };
+  const prov = p.type === 'gemini' ? { type: 'gemini', api_key_env: p.keyVar } : { base_url: url, ...(key ? { api_key_env: p.keyVar } : {}) };
+  const doc = { providers: { [provider]: prov }, tasks: { default: { model: `${provider}/${model}`, ...(p.options ? { options: p.options } : {}) } } };
+  if (price) doc.prices = { [model]: { input: price.in, cached_input: price.cachedIn, output: price.out } };
   return `# Written by Brambit when the AI is chosen (Settings › This computer). Edits apply\n# while it runs; choosing the AI again on that screen rewrites this file.\n${stringify(doc)}`;
 }

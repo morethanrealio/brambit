@@ -24,7 +24,7 @@ server).
 Name, site and prefixes are not in the source: they come in at build time
 (`marca.go`, filled in via `-ldflags -X`). With nothing set, it's the core's:
 
-| | default (core) | with `PRODUTO=Acme` |
+| | default (core) | with `PRODUCT=Acme` |
 |---|---|---|
 | name on screen | Brambit Runner | Acme Runner |
 | executable | `brambit-runner-linux` etc. | `acme-runner-linux` etc. |
@@ -32,7 +32,7 @@ Name, site and prefixes are not in the source: they come in at build time
 | local config | `~/.brambit-runner.json` | `~/.acme-runner.json` |
 | default write folder | `~/Documents/Brambit` | `~/Documents/Acme` |
 
-`PRODUTO` has to be the same brand name as the server's (`marca().nome`):
+`PRODUCT` has to be the same brand name as the server's (`marca().nome`):
 it's where `/runner` takes the names of the files to download and the commands
 it shows. Renaming an install that already has the Runner installed changes the
 local config and the variables, so the old Runners stop finding the token.
@@ -40,11 +40,11 @@ local config and the variables, so the old Runners stop finding the token.
 ## Build (binaries served at /runner)
 
 ```sh
-PRODUTO=Acme SITE=https://acme.exemplo ./build.sh
+PRODUCT=Acme SITE=https://acme.exemplo ./build.sh
 ```
 
 Builds the four executables in `web/public/runner-bin` (variables at the top of
-`build.sh`). The Mac double-click app (`<PRODUTO>-Runner-Mac.zip`, with the
+`build.sh`). The Mac double-click app (`<PRODUCT>-Runner-Mac.zip`, with the
 `.app`) doesn't come out of the script.
 
 `-H windowsgui` on Windows is NOT optional and doesn't come from the source: it's a link flag.

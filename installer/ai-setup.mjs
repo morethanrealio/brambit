@@ -2,7 +2,7 @@
 // or the model" page inside the app (installation plugin): test what the person
 // chose, then write it where the server reads it. The keys and the audio go in
 // the config file (BRAMBIT_CONFIG_FILE, keys encrypted with the vault) and the
-// model in modelos.yaml; the running server follows both live.
+// model in models.yaml; the running server follows both live.
 import { writeFileSync } from 'node:fs';
 import { writeConfig } from '../web/config-file.mjs';
 import { audioChoice, choice, listModels, modelsYaml, PROVIDERS, testKey } from './providers.mjs';
@@ -29,7 +29,7 @@ export async function checkAi(p, savedKey = () => '') {
 
 // Writes a checked choice. The keys of other providers stay in the file: going
 // back to one of them does not ask for its key again. The config file first, so
-// the key is there when modelos.yaml starts pointing at it.
+// the key is there when models.yaml starts pointing at it.
 export function writeAi({ ai, audio }, { configFile, modelsFile, extra = {} }) {
   const keyVar = PROVIDERS[ai.provider].keyVar;
   const updates = { ...extra, [keyVar]: ai.key || null, BRAMBIT_AUDIO_PROVIDER: audio.provider };

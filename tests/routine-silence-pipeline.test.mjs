@@ -17,7 +17,7 @@ import { runAgent, ToolRegistry } from '../core-proto/core.mjs';
 
 const denied = () => { throw Error('External IO forbidden'); };
 net.Socket.prototype.connect = tls.connect = globalThis.fetch = denied;
-process.env.FONTES_LINKS = '0';
+process.env.SOURCE_LINKS = '0';
 const source = readFileSync(new URL('../web/server.mjs', import.meta.url), 'utf8');
 const start = source.indexOf('  const routineFinal = routineFinalText(') >= 0
   ? source.indexOf('  const routineFinal = routineFinalText(')

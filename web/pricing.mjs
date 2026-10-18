@@ -136,7 +136,7 @@ export function pricingFallbackMetrics() {
   };
 }
 
-// Prices declared in the precos section of modelos.yaml (whoever installs provides their
+// Prices declared in the prices section of models.yaml (whoever installs provides their
 // provider's prices). They win over the table above for the same model id.
 export function registerPrices(prices = {}) {
   for (const [model, p] of Object.entries(prices)) PRICES[model] = p;

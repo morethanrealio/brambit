@@ -4,7 +4,7 @@
 // (sheets, columns, row count), never the cells. If the environment fails,
 // the result says it could not read it; there is no fallback to text.
 // Real network blocked. The only process that runs is the probe's local python
-// (PLANILHA_PY or /tmp/pdvenv/bin/python), skipped if pandas is not present.
+// (SHEET_PY or /tmp/pdvenv/bin/python), skipped if pandas is not present.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -124,7 +124,7 @@ test('connector without analysis environment, or with it breaking, returns the f
 });
 
 // ── The real probe, with local pandas ──
-const PY = process.env.PLANILHA_PY || '/tmp/pdvenv/bin/python';
+const PY = process.env.SHEET_PY || '/tmp/pdvenv/bin/python';
 const temPandas = fs.existsSync(PY) && spawnSync(PY, ['-c', 'import pandas, openpyxl'], { stdio: 'ignore' }).status === 0;
 function sandboxLocal() {
   const raiz = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'planilha-'));

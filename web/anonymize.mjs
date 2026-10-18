@@ -20,7 +20,7 @@
 
 import zlib from 'node:zlib';
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
-import { modeloPara } from '../core-proto/modelos.mjs';
+import { modelFor } from '../core-proto/modelos.mjs';
 
 const CHEAP_MODEL = 'gemini-3.1-flash-lite';
 const TEXT_EXT = /\.(js|mjs|ts|jsx|tsx|html?|css|json|py|txt|md|csv)$/i;
@@ -94,7 +94,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
   const files = readSnapshot(blob);
   if (!files) return fail('unreadable snapshot');
   if (!Object.keys(files).length) return { ok: true, blob, changed: false, applied: 0 };
-  if (!process.env.GEMINI_API_KEY && !modeloPara('classificacao')) { log('[anon] sem GEMINI_API_KEY'); return fail('no model key'); }
+  if (!process.env.GEMINI_API_KEY && !modelFor('classification')) { log('[anon] no GEMINI_API_KEY'); return fail('no model key'); }
 
   // Decodes only the text files.
   const textFiles = [];
@@ -111,7 +111,7 @@ export async function anonymizeSnapshotBlob(blob, { log = () => {} } = {}) {
 
   let arr;
   try {
-    const r = await (modeloPara('classificacao', { maxTokens: 4096 }) || makeGemini({ model: CHEAP_MODEL, thinkingBudget: 0, maxOutputTokens: 4096 }))
+    const r = await (modelFor('classification', { maxTokens: 4096 }) || makeGemini({ model: CHEAP_MODEL, thinkingBudget: 0, maxOutputTokens: 4096 }))
       .complete({
         system: 'You anonymize code for public publication. You reply only with valid JSON, no comments.',
         messages: [{ role: 'user', content: buildPrompt(textFiles) }],

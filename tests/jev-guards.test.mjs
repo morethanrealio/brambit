@@ -12,13 +12,13 @@ test('Jev with no key stays off and returns null (the old rule still applies)', 
   } finally { if (key !== undefined) process.env.TYPESAFE_API_KEY = key; }
 });
 
-test('JEV_TRAVAS=0 turns it off even with a key', () => {
-  const [key, flag] = [process.env.TYPESAFE_API_KEY, process.env.JEV_TRAVAS];
-  process.env.TYPESAFE_API_KEY = 'k'; process.env.JEV_TRAVAS = '0';
+test('JEV_GUARDS=0 turns it off even with a key', () => {
+  const [key, flag] = [process.env.TYPESAFE_API_KEY, process.env.JEV_GUARDS];
+  process.env.TYPESAFE_API_KEY = 'k'; process.env.JEV_GUARDS = '0';
   try { assert.equal(jevEnabled(), false); }
   finally {
     if (key === undefined) delete process.env.TYPESAFE_API_KEY; else process.env.TYPESAFE_API_KEY = key;
-    if (flag === undefined) delete process.env.JEV_TRAVAS; else process.env.JEV_TRAVAS = flag;
+    if (flag === undefined) delete process.env.JEV_GUARDS; else process.env.JEV_GUARDS = flag;
   }
 });
 

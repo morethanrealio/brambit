@@ -133,7 +133,7 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
 // next text arrives before the photo. An output with a `reserva` that Meta rejects,
 // right away or later via the webhook, becomes this text. Without a reserve, the error is the same
 // as sendText's: `error.wamids` carries what already went out.
-const ESPERA_ENTREGA_MS = () => Number(process.env.WA_ESPERA_ENTREGA_MS ?? 15000);
+const ESPERA_ENTREGA_MS = () => Number(process.env.WA_DELIVERY_WAIT_MS ?? 15000);
 const RESERVA_TARDIA_MS = 5 * 60 * 1000;
 const subirImagem = (url) => imagemParaWa(url, (buf, mime) => uploadMedia(buf, mime, mime === 'image/png' ? 'imagem.png' : 'imagem.jpg'));
 // Replaces every {type:'image', image:{link}} in a template's components with the
@@ -775,7 +775,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   // Chopped-up messages become a single turn: waits JUNTAR_MS after the last one (at
   // most JUNTAR_MAX_MS since the first), and whatever arrives during a turn waits for
   // it to finish and joins the next one. One turn per phone number. Phase 1: text only.
-  const JUNTAR_MS=()=>Number(process.env.WA_PUBLICO_JUNTAR_MS??1500),JUNTAR_MAX_MS=()=>Number(process.env.WA_PUBLICO_JUNTAR_MAX_MS??5000);
+  const JUNTAR_MS=()=>Number(process.env.WA_PUBLIC_MERGE_MS??1500),JUNTAR_MAX_MS=()=>Number(process.env.WA_PUBLIC_MERGE_MAX_MS??5000);
   const filaPublico=new Map(),esperaPublico=new Map();
   function atenderPublico(msg,from){
     if(msg._inboxId)loaded.add(msg._inboxId);

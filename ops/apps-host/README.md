@@ -22,20 +22,20 @@ package):
 
 | script | what it does |
 | ------ | --------- |
-| `check-drift.sh [--marca F] [--carimbo V]` | read-only. Compares installed vs. host and exits 1 if they diverge. |
-| `deploy.sh [--aplicar] [--marca F] [--carimbo V]` | publishes. Dry-run by default. |
+| `check-drift.sh [--brand F] [--stamp V]` | read-only. Compares installed vs. host and exits 1 if they diverge. |
+| `deploy.sh [--apply] [--brand F] [--stamp V]` | publishes. Dry-run by default. |
 
 ```bash
 ops/apps-host/check-drift.sh            # does what's live match what's installed?
 ops/apps-host/deploy.sh                 # dry run: what would change
-ops/apps-host/deploy.sh --aplicar       # publishes for real
+ops/apps-host/deploy.sh --apply         # publishes for real
 ```
 
 `deploy.sh` runs `test_auth.py` **before** sending any byte, makes a backup
 (`.bak.<epoch>`), uploads, checks the md5 of what arrived, compiles with
 `py_compile`, runs `test_auth.py` again **against the files that remain in
 use**, restarts `brambs-router` only if it changed (`ctl.py` is one-shot per
-call, no restart needed), stamps the version (`--carimbo`, defaults to the
+call, no restart needed), stamps the version (`--stamp`, defaults to the
 commit of the folder it was called from) into
 `/opt/brambs-router/.deployed-sha`, and **restores the backup if any step
 fails**.
@@ -75,7 +75,7 @@ The defaults below apply when nothing is configured.
 | ----- | ---- | ------ |
 | apps domain | `APPS_DOMAIN` in the backend's `.env`. `web/appshost.mjs` sends `dominio` in every JSON; `ctl.py` uses it to build the link returned by `publish`, the `Host` of the smoke test, and the commit email. Without `dominio` in the JSON (old backend), `APPS_CTL_PATH`'s `ctl.py` falls back to the `APPS_DOMAIN` of its own environment, which `sudo` usually clears. | the brand's site host; without a valid domain, `localhost` |
 | `ctl.py` path | `APPS_CTL_PATH` in the backend's `.env` | `/opt/brambs-ctl/ctl.py`, where `deploy.sh` installs it |
-| host brand (name, site, logo and badge text; the name is also the author of commits with no person behind them) | `marca.json` next to `deploy.sh` or the file passed in `--marca` (`{"nome", "site", "logo", "selo", "selo_aria"}`, all optional), which `deploy.sh` installs at `/opt/brambs-router/marca.json` and restarts the router; `BRAMBS_SITE_URL` and `BRAMBS_LOGO_URL` in the unit's environment override it | `Brambit`, `http://localhost:8080/`, `<site>/logo.svg` and "Made with Brambit" |
+| host brand (name, site, logo and badge text; the name is also the author of commits with no person behind them) | `brand.json` next to `deploy.sh` or the file passed in `--brand` (`{"name", "site", "logo", "badge", "badge_aria"}`, all optional), which `deploy.sh` installs at `/opt/brambs-router/brand.json` and restarts the router; `BRAMBS_SITE_URL` and `BRAMBS_LOGO_URL` in the unit's environment override it | `Brambit`, `http://localhost:8080/`, `<site>/logo.svg` and "Made with Brambit" |
 | router paths | `BRAMBS_REGISTRY`, `BRAMBS_INTERNAL_KEY_FILE`, `BRAMBS_USERS`, `BRAMBS_HOME`, `BRAMBS_LOG_DIR` in the unit's environment | `/opt/brambs-router/...`, `/opt/brambs-home`, `/var/log/brambs` |
 
 **Cookies between apps.** Apps run code written by anyone, and every app is a

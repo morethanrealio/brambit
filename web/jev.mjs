@@ -5,7 +5,7 @@
 // fires an action, Jev can only VETO a wrong rule trigger; anything extra it
 // finds goes to the model, which goes through the confirmation card.
 //
-// Without TYPESAFE_API_KEY, with JEV_TRAVAS=0, on error or timeout, returns null
+// Without TYPESAFE_API_KEY, with JEV_GUARDS=0, on error or timeout, returns null
 // and the caller keeps the old rule: never worse than today.
 // Questions and criteria come from an eval on 28/09,
 // 150/158 hits against 90/158 for the rules.
@@ -14,7 +14,7 @@ const URL_JEV = 'https://api.typesafe.ai/v1/systemone';
 const TIMEOUT_MS = () => Number(process.env.JEV_TIMEOUT_MS) || 2000;
 
 export function jevEnabled() {
-  return !!process.env.TYPESAFE_API_KEY && process.env.JEV_TRAVAS !== '0';
+  return !!process.env.TYPESAFE_API_KEY && process.env.JEV_GUARDS !== '0';
 }
 
 // A single `choice` question. Returns the chosen label (one of the criteria

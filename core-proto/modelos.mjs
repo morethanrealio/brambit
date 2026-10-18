@@ -1,13 +1,13 @@
-// ── Providers and models per function (modelos.yaml) ──
+// ── Providers and models per task (models.yaml) ──
 // Whoever installs Brambit picks, in a commented file, WHICH providers to use
-// and WHICH model each function uses (with an optional fallback model). A
-// provider is data, not code: name + address + the .env variable holding the key.
+// and WHICH model each task uses (with an optional fallback model). A
+// provider is data, not code: name + base URL + the .env variable holding the key.
 // Any service speaking the OpenAI protocol (/chat/completions) fits this way;
-// Gemini has its own protocol and comes in with `tipo: gemini`.
+// Gemini has its own protocol and comes in with `type: gemini`.
 //
 // Without the file, everything returns null and the server follows the usual
 // built-in routing (which is the case for our production today). The example model, with each field
-// explained, is in modelos.example.yaml at the root of the repo.
+// explained, is in models.example.yaml at the root of the repo.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,145 +17,145 @@ import { makeGemini } from './providers/gemini.mjs';
 import { throwIfAttemptControl } from './provider-attempt.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TIPOS = new Set(['openai', 'gemini']);
+const TYPES = new Set(['openai', 'gemini']);
 
-// A function without a line in the file uses its "parent" function's; `padrao` is the root of all of them.
-export const FUNCOES = {
-  padrao: { mae: null, o: 'tudo que não tiver linha própria' },
-  conversa: { mae: 'padrao', o: 'turno do assistente com o usuário (precisa chamar ferramentas)' },
-  imagem: { mae: 'conversa', o: 'turno em que o usuário mandou foto (precisa enxergar imagem)' },
-  leitura_imagem: { mae: 'imagem', o: 'descrever/ler texto de uma imagem guardada ou anexo' },
-  pesquisa: { mae: 'padrao', o: 'sub-agentes de leitura: web, Google, conectores, resumo da home' },
-  programacao: { mae: 'padrao', o: 'escrever código, construir app, planilhas' },
-  memoria: { mae: 'padrao', o: 'manter o perfil e o resumo das conversas' },
-  classificacao: { mae: 'padrao', o: 'tarefas curtas de rótulo/JSON: assuntos, moderação, risco de app, ofertas de rotina' },
+// A task without a line in the file uses its parent task's; `default` is the root of all of them.
+export const TASKS = {
+  default: { parent: null, about: 'everything that has no line of its own' },
+  chat: { parent: 'default', about: 'assistant turn with the user (needs to call tools)' },
+  image: { parent: 'chat', about: 'turn where the user sent a photo (needs to see images)' },
+  image_reading: { parent: 'image', about: 'describe or read the text of a stored image or attachment' },
+  research: { parent: 'default', about: 'reading sub-agents: web, Google, connectors, home summary' },
+  coding: { parent: 'default', about: 'writing code, building apps, spreadsheets' },
+  memory: { parent: 'default', about: 'keeping the profile and the conversation summary' },
+  classification: { parent: 'default', about: 'short label/JSON tasks: topics, moderation, app risk, routine offers' },
 };
 
-export function arquivoModelos(env = { MODELOS_ARQUIVO: process.env.MODELOS_ARQUIVO }) {
-  return env.MODELOS_ARQUIVO ? path.resolve(env.MODELOS_ARQUIVO) : path.join(ROOT, 'modelos.yaml');
+export function modelsFilePath(env = { BRAMBIT_MODELS_FILE: process.env.BRAMBIT_MODELS_FILE }) {
+  return env.BRAMBIT_MODELS_FILE ? path.resolve(env.BRAMBIT_MODELS_FILE) : path.join(ROOT, 'models.yaml');
 }
 
 // Reads and validates. A typo in the file brings down the boot with the
-// problem's line, instead of turning into a mysterious "serviço indisponível" in the chat.
-export function lerModelos(texto, origem = 'modelos.yaml') {
-  const erro = (msg) => { throw new Error(`${origem}: ${msg}`); };
+// problem's line, instead of turning into a mysterious "service unavailable" in the chat.
+export function parseModels(text, source = 'models.yaml') {
+  const fail = (msg) => { throw new Error(`${source}: ${msg}`); };
   let doc;
-  try { doc = parse(texto) ?? {}; } catch (e) { erro(`não consegui ler o arquivo (${e.message})`); }
-  if (typeof doc !== 'object' || Array.isArray(doc)) erro('o arquivo precisa ter as seções provedores e funcoes');
-  const provedores = {};
-  for (const [nome, p] of Object.entries(doc.provedores ?? {})) {
-    if (!p || typeof p !== 'object') erro(`provedor "${nome}" precisa de campos (endereco, chave)`);
-    const tipo = p.tipo ?? 'openai';
-    if (!TIPOS.has(tipo)) erro(`provedor "${nome}": tipo "${tipo}" não existe (use openai ou gemini)`);
-    if (tipo === 'openai' && !p.endereco) erro(`provedor "${nome}": falta o endereco (ex.: https://api.together.xyz/v1)`);
-    if (tipo === 'gemini' && !p.chave) erro(`provedor "${nome}": o Gemini precisa da chave`);
-    if (p.chave != null && !/^[A-Z][A-Z0-9_]*$/.test(String(p.chave))) {
-      erro(`provedor "${nome}": chave é o NOME da variável do .env (ex.: TOGETHER_API_KEY), não a chave em si`);
+  try { doc = parse(text) ?? {}; } catch (e) { fail(`could not read the file (${e.message})`); }
+  if (typeof doc !== 'object' || Array.isArray(doc)) fail('the file needs the providers and tasks sections');
+  const providers = {};
+  for (const [name, p] of Object.entries(doc.providers ?? {})) {
+    if (!p || typeof p !== 'object') fail(`provider "${name}" needs fields (base_url, api_key_env)`);
+    const type = p.type ?? 'openai';
+    if (!TYPES.has(type)) fail(`provider "${name}": type "${type}" does not exist (use openai or gemini)`);
+    if (type === 'openai' && !p.base_url) fail(`provider "${name}": base_url is missing (e.g. https://api.together.xyz/v1)`);
+    if (type === 'gemini' && !p.api_key_env) fail(`provider "${name}": Gemini needs api_key_env`);
+    if (p.api_key_env != null && !/^[A-Z][A-Z0-9_]*$/.test(String(p.api_key_env))) {
+      fail(`provider "${name}": api_key_env is the NAME of the .env variable (e.g. TOGETHER_API_KEY), not the key itself`);
     }
-    provedores[nome] = { nome, tipo, endereco: p.endereco ? String(p.endereco).replace(/\/+$/, '') : null, chave: p.chave ?? null };
+    providers[name] = { name, type, baseUrl: p.base_url ? String(p.base_url).replace(/\/+$/, '') : null, keyEnv: p.api_key_env ?? null };
   }
-  const alvo = (valor, onde) => {
-    const v = typeof valor === 'string' ? { modelo: valor } : valor;
-    if (!v?.modelo) erro(`${onde}: falta o modelo (formato provedor/modelo)`);
-    const s = String(v.modelo), i = s.indexOf('/');
-    if (i <= 0 || i === s.length - 1) erro(`${onde}: "${s}" precisa ser provedor/modelo (ex.: together/deepseek-ai/DeepSeek-V4.1-Flash)`);
-    const provedor = s.slice(0, i);
-    if (!provedores[provedor]) erro(`${onde}: o provedor "${provedor}" não está na seção provedores`);
-    if (v.opcoes != null && (typeof v.opcoes !== 'object' || Array.isArray(v.opcoes))) erro(`${onde}: opcoes precisa ser uma lista de campo: valor`);
-    return { provedor, modelo: s.slice(i + 1), opcoes: v.opcoes ?? null };
+  const target = (value, where) => {
+    const v = typeof value === 'string' ? { model: value } : value;
+    if (!v?.model) fail(`${where}: model is missing (format provider/model)`);
+    const s = String(v.model), i = s.indexOf('/');
+    if (i <= 0 || i === s.length - 1) fail(`${where}: "${s}" must be provider/model (e.g. together/deepseek-ai/DeepSeek-V4.1-Flash)`);
+    const provider = s.slice(0, i);
+    if (!providers[provider]) fail(`${where}: provider "${provider}" is not in the providers section`);
+    if (v.options != null && (typeof v.options !== 'object' || Array.isArray(v.options))) fail(`${where}: options must be a list of field: value`);
+    return { provider, model: s.slice(i + 1), options: v.options ?? null };
   };
-  const funcoes = {};
-  for (const [nome, f] of Object.entries(doc.funcoes ?? {})) {
-    if (!FUNCOES[nome]) erro(`função "${nome}" não existe (use: ${Object.keys(FUNCOES).join(', ')})`);
-    if (f == null) continue;
-    const principal = alvo(f, `funcoes.${nome}`);
-    const reserva = typeof f === 'object' && f.reserva ? alvo(f.reserva, `funcoes.${nome}.reserva`) : null;
-    funcoes[nome] = { principal, reserva };
+  const tasks = {};
+  for (const [name, t] of Object.entries(doc.tasks ?? {})) {
+    if (!TASKS[name]) fail(`task "${name}" does not exist (use: ${Object.keys(TASKS).join(', ')})`);
+    if (t == null) continue;
+    const primary = target(t, `tasks.${name}`);
+    const fallback = typeof t === 'object' && t.fallback ? target(t.fallback, `tasks.${name}.fallback`) : null;
+    tasks[name] = { primary, fallback };
   }
-  if (!funcoes.padrao && !funcoes.conversa) erro('preencha pelo menos funcoes.padrao (ou funcoes.conversa)');
-  const precos = {};
-  for (const [modelo, p] of Object.entries(doc.precos ?? {})) {
-    const n = (k) => { const x = Number(p?.[k] ?? 0); if (!Number.isFinite(x) || x < 0) erro(`precos.${modelo}.${k} precisa ser um número`); return x; };
-    precos[modelo] = { in: n('entrada'), cachedIn: n('cache'), out: n('saida') };
+  if (!tasks.default && !tasks.chat) fail('fill in at least tasks.default (or tasks.chat)');
+  const prices = {};
+  for (const [model, p] of Object.entries(doc.prices ?? {})) {
+    const n = (k) => { const x = Number(p?.[k] ?? 0); if (!Number.isFinite(x) || x < 0) fail(`prices.${model}.${k} must be a number`); return x; };
+    prices[model] = { in: n('input'), cachedIn: n('cached_input'), out: n('output') };
   }
-  return { provedores, funcoes, precos };
+  return { providers, tasks, prices };
 }
 
 let cache;
-export function carregarModelos({ env = process.env, recarregar = false } = {}) {
-  if (cache !== undefined && !recarregar) return cache;
-  const file = arquivoModelos(env);
-  cache = existsSync(file) ? lerModelos(readFileSync(file, 'utf8'), path.basename(file)) : null;
+export function loadModels({ env = process.env, reload = false } = {}) {
+  if (cache !== undefined && !reload) return cache;
+  const file = modelsFilePath(env);
+  cache = existsSync(file) ? parseModels(readFileSync(file, 'utf8'), path.basename(file)) : null;
   return cache;
 }
 
-// Resolves the inheritance: { funcao, de, principal, reserva } or null.
-export function escolhaDe(funcao, cfg = carregarModelos()) {
+// Resolves the inheritance: { task, from, primary, fallback } or null.
+export function choiceFor(task, cfg = loadModels()) {
   if (!cfg) return null;
-  for (let f = funcao; f; f = FUNCOES[f]?.mae) {
-    if (cfg.funcoes[f]) return { funcao, de: f, ...cfg.funcoes[f] };
+  for (let t = task; t; t = TASKS[t]?.parent) {
+    if (cfg.tasks[t]) return { task, from: t, ...cfg.tasks[t] };
   }
   return null;
 }
 
-export function construirModelo(alvo, { maxTokens = 8192, cfg = carregarModelos(), env = process.env } = {}) {
-  const p = cfg.provedores[alvo.provedor];
-  const apiKey = p.chave ? (env[p.chave] || '') : null;
-  if (p.tipo === 'gemini') {
+export function buildModel(target, { maxTokens = 8192, cfg = loadModels(), env = process.env } = {}) {
+  const p = cfg.providers[target.provider];
+  const apiKey = p.keyEnv ? (env[p.keyEnv] || '') : null;
+  if (p.type === 'gemini') {
     // search:false: search comes in through the buscar_web tool, same as the others.
-    return makeGemini({ model: alvo.modelo, search: false, maxOutputTokens: maxTokens, apiKey, ...(alvo.opcoes?.thinkingBudget != null ? { thinkingBudget: alvo.opcoes.thinkingBudget } : {}) });
+    return makeGemini({ model: target.model, search: false, maxOutputTokens: maxTokens, apiKey, ...(target.options?.thinkingBudget != null ? { thinkingBudget: target.options.thinkingBudget } : {}) });
   }
   return makeOpenAI({
-    model: alvo.modelo, maxTokens, url: `${p.endereco}/chat/completions`, apiKey, provider: p.nome,
-    ...(alvo.opcoes ? { extras: alvo.opcoes } : {}),
+    model: target.model, maxTokens, url: `${p.baseUrl}/chat/completions`, apiKey, provider: p.name,
+    ...(target.options ? { extras: target.options } : {}),
   });
 }
 
 // Simple fallback for auxiliary modules; the server passes its own (withFallback),
 // which also handles billing when the primary fails mid-turn.
-function juntarSimples(principal, reserva, tag) {
-  let usePrincipal = true;
+function simpleFallback(primary, fallback, tag) {
+  let usePrimary = true;
   return {
-    name: `${principal.name}->fallback:${reserva.name}`,
+    name: `${primary.name}->fallback:${fallback.name}`,
     async complete(args) {
-      if (usePrincipal) {
-        try { return await principal.complete(args); }
+      if (usePrimary) {
+        try { return await primary.complete(args); }
         catch (e) {
           throwIfAttemptControl(e);
-          usePrincipal = false;
-          console.error(`[${tag}] ${principal.name} failed, falling back to ${reserva.name}: ${e?.message ?? e}`);
+          usePrimary = false;
+          console.error(`[${tag}] ${primary.name} failed, falling back to ${fallback.name}: ${e?.message ?? e}`);
         }
       }
-      return reserva.complete(args);
+      return fallback.complete(args);
     },
   };
 }
 
-// Provider ready for the function, or null when the file doesn't exist (the usual routing).
-export function modeloPara(funcao, { maxTokens = 8192, juntar = juntarSimples } = {}) {
-  const e = escolhaDe(funcao);
-  if (!e) return null;
-  const principal = construirModelo(e.principal, { maxTokens });
-  return e.reserva ? juntar(principal, construirModelo(e.reserva, { maxTokens }), `modelos:${funcao}`) : principal;
+// Provider ready for the task, or null when the file doesn't exist (the usual routing).
+export function modelFor(task, { maxTokens = 8192, combine = simpleFallback } = {}) {
+  const c = choiceFor(task);
+  if (!c) return null;
+  const primary = buildModel(c.primary, { maxTokens });
+  return c.fallback ? combine(primary, buildModel(c.fallback, { maxTokens }), `models:${task}`) : primary;
 }
 
-// Rows of the "function → model" table from boot and from `npm run modelos`.
-export function descreverModelos({ cfg = carregarModelos(), env = process.env } = {}) {
+// Rows of the "task → model" table from boot and from `npm run models`.
+export function describeModels({ cfg = loadModels(), env = process.env } = {}) {
   if (!cfg) return null;
-  const rotulo = (a) => {
-    if (!a) return '-';
-    const p = cfg.provedores[a.provedor];
-    return `${a.provedor}/${a.modelo}${p.chave && !env[p.chave] ? ` (SEM CHAVE: ${p.chave} vazia no .env)` : ''}`;
+  const label = (t) => {
+    if (!t) return '-';
+    const p = cfg.providers[t.provider];
+    return `${t.provider}/${t.model}${p.keyEnv && !env[p.keyEnv] ? ` (NO KEY: ${p.keyEnv} is empty in .env)` : ''}`;
   };
-  return Object.keys(FUNCOES).map((funcao) => {
-    const e = escolhaDe(funcao, cfg);
-    return { funcao, principal: rotulo(e?.principal), reserva: rotulo(e?.reserva), herdada: e && e.de !== funcao ? e.de : null };
+  return Object.keys(TASKS).map((task) => {
+    const c = choiceFor(task, cfg);
+    return { task, primary: label(c?.primary), fallback: label(c?.fallback), inheritedFrom: c && c.from !== task ? c.from : null, missingKey: [c?.primary, c?.fallback].some((t) => t && cfg.providers[t.provider].keyEnv && !env[cfg.providers[t.provider].keyEnv]) };
   });
 }
 
-export function tabelaModelos(opts) {
-  const linhas = descreverModelos(opts);
-  if (!linhas) return null;
-  const w = Math.max(...linhas.map((l) => l.funcao.length));
-  return linhas.map((l) => `  ${l.funcao.padEnd(w)}  ${l.principal}${l.reserva !== '-' ? `  | reserva: ${l.reserva}` : ''}${l.herdada ? `  (herdada de ${l.herdada})` : ''}`).join('\n');
+export function modelsTable(opts) {
+  const rows = describeModels(opts);
+  if (!rows) return null;
+  const w = Math.max(...rows.map((r) => r.task.length));
+  return rows.map((r) => `  ${r.task.padEnd(w)}  ${r.primary}${r.fallback !== '-' ? `  | fallback: ${r.fallback}` : ''}${r.inheritedFrom ? `  (inherited from ${r.inheritedFrom})` : ''}`).join('\n');
 }

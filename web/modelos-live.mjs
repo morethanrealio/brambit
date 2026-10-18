@@ -1,30 +1,30 @@
-// ── modelos.yaml, followed live ──
-// Loads modelos.yaml at boot (a typo stops the boot with the line of the
+// ── models.yaml, followed live ──
+// Loads models.yaml at boot (a typo stops the boot with the line of the
 // problem, as before) and then follows it while the server runs: an edit by
-// hand or by the launcher, or MODELOS_ARQUIVO pointing at another file in the
+// hand or by the launcher, or BRAMBIT_MODELS_FILE pointing at another file in the
 // config file, applies on the next model call. A file that stops reading keeps
 // the last good configuration and logs why; a deleted file goes back to the
 // built-in routing.
 import fs from 'node:fs';
-import { arquivoModelos, carregarModelos, tabelaModelos } from '../core-proto/modelos.mjs';
+import { modelsFilePath, loadModels, modelsTable } from '../core-proto/modelos.mjs';
 import { registerPrices } from './pricing.mjs';
 import { onConfigChange } from './config-file.mjs';
 
 let watched = null;
 
 function reload(log) {
-  const before = carregarModelos();
+  const before = loadModels();
   let cfg;
-  try { cfg = carregarModelos({ recarregar: true }); }
-  catch (e) { log.error(`[modelos] ${e.message}; keeping the previous configuration`); return; }
+  try { cfg = loadModels({ reload: true }); }
+  catch (e) { log.error(`[models] ${e.message}; keeping the previous configuration`); return; }
   // Whoever wrote the file may have reloaded it already (reloadModels).
   if (JSON.stringify(cfg) === JSON.stringify(before)) return;
-  if (cfg) { registerPrices(cfg.precos); log.log(`[modelos] reloaded ${arquivoModelos()}\n${tabelaModelos()}`); }
-  else if (before) log.log(`[modelos] ${arquivoModelos()} is gone: back to the built-in routing`);
+  if (cfg) { registerPrices(cfg.prices); log.log(`[models] reloaded ${modelsFilePath()}\n${modelsTable()}`); }
+  else if (before) log.log(`[models] ${modelsFilePath()} is gone: back to the built-in routing`);
 }
 
 function watch(log, intervalMs) {
-  const file = arquivoModelos();
+  const file = modelsFilePath();
   if (watched === file) return;
   if (watched) fs.unwatchFile(watched);
   watched = file;
@@ -35,12 +35,12 @@ function watch(log, intervalMs) {
 }
 
 export function startModelsWatch({ intervalMs = 2000, log = console } = {}) {
-  const cfg = carregarModelos();
-  if (cfg) { registerPrices(cfg.precos); log.log(`[modelos] modelos.yaml\n${tabelaModelos()}`); }
+  const cfg = loadModels();
+  if (cfg) { registerPrices(cfg.prices); log.log(`[models] models.yaml\n${modelsTable()}`); }
   if (intervalMs <= 0) return;
   watch(log, intervalMs);
   onConfigChange((keys) => {
-    if (!keys.includes('MODELOS_ARQUIVO')) return;
+    if (!keys.includes('BRAMBIT_MODELS_FILE')) return;
     watch(log, intervalMs);
     reload(log);
   });

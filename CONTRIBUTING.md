@@ -15,7 +15,7 @@ merge.
 ## Run it on your machine
 
 The steps are in the [README](README.md#quick-start): `npm ci`, copy
-`.env.example` and `modelos.example.yaml`, add the key for your LLM provider and run
+`.env.example` and `models.example.yaml`, add the key for your LLM provider and run
 `npm run local`. You don't need any project credential or access to production.
 
 ## Workflow

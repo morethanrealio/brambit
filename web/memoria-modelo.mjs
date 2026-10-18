@@ -6,10 +6,10 @@
 // Without a Together key, falls back to Gemini.
 import { makeTogether, togetherEnabled, TOGETHER_FLASH_MODEL } from '../core-proto/providers/together.mjs';
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
-import { modeloPara } from '../core-proto/modelos.mjs';
+import { modelFor } from '../core-proto/modelos.mjs';
 
 export function makeMemoriaModel({ maxTokens = 8192 } = {}) {
-  const cfg = modeloPara('memoria', { maxTokens }); if (cfg) return cfg; // modelos.yaml
+  const cfg = modelFor('memory', { maxTokens }); if (cfg) return cfg; // models.yaml
   if (togetherEnabled()) return makeTogether({ model: TOGETHER_FLASH_MODEL, maxTokens, reasoningEffort: 'low' });
   return makeGemini({ model: 'gemini-3.5-flash', thinkingBudget: 0, maxOutputTokens: maxTokens });
 }

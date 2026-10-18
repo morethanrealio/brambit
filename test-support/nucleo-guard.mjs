@@ -12,7 +12,7 @@
 //     Checks the pages, sign-up and login of an account.
 //
 // Usage: node test-support/nucleo-guard.mjs          (both proofs)
-//        node test-support/nucleo-guard.mjs --sem-boot (only 1)
+//        node test-support/nucleo-guard.mjs --no-boot (only 1)
 // Without nuvem.txt (in the core repository) the cloud is empty: 1 passes and 2 boots the repo as is.
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -167,7 +167,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   }
   console.log(`imports: no core file imports or mentions the cloud (${files.filter(nuvem.ehNuvem).length} cloud files)`);
-  if (!process.argv.includes('--sem-boot')) {
+  if (!process.argv.includes('--no-boot')) {
     try { await bootSemNuvem(files, nuvem); }
     catch (e) { console.error(e.message); process.exit(1); }
   }

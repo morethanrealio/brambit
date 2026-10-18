@@ -13,8 +13,8 @@
 // server uses it in its links; Brambit itself still listens on 127.0.0.1 only.
 //
 // The settings live in brambit.env in that folder (keys encrypted with the
-// vault key next to it) and the AI in modelos.yaml: the server reads both and
-// follows them while it runs (BRAMBIT_CONFIG_FILE, MODELOS_ARQUIVO), and the
+// vault key next to it) and the AI in models.yaml: the server reads both and
+// follows them while it runs (BRAMBIT_CONFIG_FILE, BRAMBIT_MODELS_FILE), and the
 // owner edits them in the app (Settings › This computer, plugin installer/plugin).
 // installation.json only keeps the port and the date of the setup. What the
 // launcher itself decides (address, database, folders) is pinned
@@ -42,7 +42,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dbEnvOf, freePort, postgresBin, prepareDatabase, startPostgres, waitReady } from '../dev/local.mjs';
-import { lerModelos } from '../core-proto/modelos.mjs';
+import { parseModels } from '../core-proto/modelos.mjs';
 import { configValues, ENCRYPTED_PREFIX, writeConfig } from '../web/config-file.mjs';
 import { checkAi, writeAi } from './ai-setup.mjs';
 import { aiOf, audioOf, endpoint, listModels, modelsYaml, PROVIDERS } from './providers.mjs';
@@ -52,7 +52,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.resolve(process.env.BRAMBIT_DATA_DIR || path.join(os.homedir(), '.brambit'));
 const installFile = path.join(dataDir, 'installation.json');
 const configFile = path.join(dataDir, 'brambit.env');
-const modelsFile = path.join(dataDir, 'modelos.yaml');
+const modelsFile = path.join(dataDir, 'models.yaml');
 const runningFile = path.join(dataDir, 'running.json');
 const version = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const log = (m) => console.log(`[brambit] ${m}`);
@@ -73,7 +73,7 @@ const CONFIG_HEADER = [
 
 // A setup saved by an older launcher kept everything in installation.json: the
 // owner, the AI and its keys (encrypted with this same vault). It moves to
-// brambit.env and modelos.yaml once, in an order that survives a stop halfway:
+// brambit.env and models.yaml once, in an order that survives a stop halfway:
 // installation.json only loses those fields at the end.
 function migrate() {
   const old = readInstallation();
@@ -221,7 +221,7 @@ async function status() {
   // A setup an older launcher saved is only moved on the next start.
   let ai = setup.ai, audio = ai && audioOf(setup);
   if (!ai) {
-    try { ai = aiOf(lerModelos(readFileSync(modelsFile, 'utf8'), modelsFile)); } catch {}
+    try { ai = aiOf(parseModels(readFileSync(modelsFile, 'utf8'), modelsFile)); } catch {}
     try { audio = configValues(readFileSync(configFile, 'utf8')).BRAMBIT_AUDIO_PROVIDER || 'none'; } catch { audio = 'none'; }
   }
   log(ai ? `AI: ${ai.provider} · ${ai.model} · audio: ${audio}` : `AI: not readable from ${modelsFile}`);
@@ -367,7 +367,7 @@ async function start(noBrowser) {
     CODING_JOB_STORE_DIR: path.join(dataDir, 'coding-jobs'),
     CREDIT_CALL_STORE_DIR: path.join(dataDir, 'credit-calls'),
     BRAMBIT_LOCALES_DIR: path.join(dataDir, 'locales'),
-    MODELOS_ARQUIVO: modelsFile,
+    BRAMBIT_MODELS_FILE: modelsFile,
     BRAMBIT_PLUGINS: path.join(root, 'installer', 'plugin', 'enabled.mjs'),
     BRAMBIT_INSTALLATION: JSON.stringify({ version, url: base, ...(shared && { shared }), dataDir, since }),
     BRAMBS_LOCAL: '1', VAULT_KEY_FILE: process.env.VAULT_KEY_FILE,
