@@ -8,8 +8,18 @@
 // configured, log and go on (Apple login works without it; revocation doesn't).
 // Google: every connected Google account, with the rule in
 // google-account-removal.mjs (kept while another user shares that Google account).
-import { getAppleRefreshToken, revokeGoogleAccounts } from './db.mjs';
+// Other connectors: every one with a revocation call, with the rules in
+// oauth-revocation.mjs. disconnectProvider does the same for one connector.
+import { getAppleRefreshToken, revokeGoogleAccounts, pool, deleteOAuthToken } from './db.mjs';
 import { appleRevokeReady, appleRevoke } from './apple-auth.mjs';
+import { createOAuthRevocation } from './oauth-revocation.mjs';
+
+const { revokeOAuthGrant, revokeOAuthGrants } = createOAuthRevocation(pool);
+
+export async function disconnectProvider(userId, provider) {
+  await revokeOAuthGrant(userId, provider);
+  await deleteOAuthToken(userId, provider);
+}
 
 export async function revokeProviderGrants(userId) {
   const appleToken = await getAppleRefreshToken(userId).catch(() => null);
@@ -23,4 +33,5 @@ export async function revokeProviderGrants(userId) {
   }
   try { await revokeGoogleAccounts(userId); }
   catch (e) { console.error(`[account-delete] Google revocation user ${userId}:`, e?.message ?? e); }
+  await revokeOAuthGrants(userId).catch((e) => console.error(`[account-delete] connector revocation user ${userId}:`, e?.message ?? e));
 }

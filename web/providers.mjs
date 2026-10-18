@@ -1,5 +1,6 @@
 import { microsoftOnboardingScope } from './microsoft-scopes.mjs';
 import crypto from 'node:crypto';
+import { uaApi } from './brand.mjs';
 
 // ── Generic OAuth connectors (GitHub, Slack, and whatever comes next) ──
 // Same pattern as Google (auth.mjs), but in a registry: to add a new service
@@ -24,6 +25,19 @@ const PROVIDERS = {
       if (j.error) throw new Error(`github oauth: ${j.error_description || j.error}`);
       return { access_token: j.access_token, refresh_token: null, scope: j.scope || '', expiry: null };
     },
+    // Deleting the grant drops every token of this app for that GitHub user and
+    // takes the app off their "Authorized OAuth Apps" list. When another user of
+    // this install connected the same GitHub account (or that can't be checked),
+    // only this token goes, so they keep access.
+    revoke: async (p, row, others) => {
+      const owner = await githubTokenOwner(p, row.access_token);
+      if (owner === null) return; // token already invalid
+      const ids = others.length > 25 ? [undefined]
+        : await Promise.all(others.map((o) => githubTokenOwner(p, o.access_token).catch(() => undefined)));
+      const kind = ids.some((id) => id === undefined || id === owner) ? 'token' : 'grant';
+      const r = await githubApp(p, 'DELETE', kind, row.access_token);
+      if (r.status !== 204) throw new Error(`github revoke ${kind} ${r.status}`);
+    },
   },
   slack: {
     label: 'Slack',
@@ -39,6 +53,18 @@ const PROVIDERS = {
       if (!j.ok) throw new Error(`slack oauth: ${j.error || 'falhou'}`);
       const u = j.authed_user || {};
       return { access_token: u.access_token, refresh_token: null, scope: u.scope || '', expiry: null };
+    },
+    // auth.revoke revokes the person's user token; it needs no scope.
+    revoke: async (p, row) => {
+      const r = await fetch('https://slack.com/api/auth.revoke', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${row.access_token}`, 'content-type': 'application/x-www-form-urlencoded' },
+        body: '',
+        signal: AbortSignal.timeout(5000),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j.ok || j.error === 'invalid_auth') return; // invalid_auth = token already invalid
+      throw new Error(`slack revoke ${r.status}: ${j.error || 'failed'}`);
     },
   },
   nuvemshop: {
@@ -196,6 +222,19 @@ const PROVIDERS = {
       if (!r.ok) throw new Error(`notion refresh ${r.status}: ${(await r.text()).slice(0, 200)}`);
       return p.parseToken(await r.json());
     },
+    // Kept while another user of this install holds the same integration (bot).
+    revoke: async (p, row, others) => {
+      if (row.meta?.bot_id && others.some((o) => o.meta?.bot_id === row.meta.bot_id)) return;
+      const basic = Buffer.from(`${p.clientId()}:${p.clientSecret()}`).toString('base64');
+      const r = await fetch('https://api.notion.com/v1/oauth/revoke', {
+        method: 'POST',
+        // The version the revoke reference documents; the tools keep their own.
+        headers: { Authorization: `Basic ${basic}`, 'content-type': 'application/json', 'Notion-Version': '2026-03-11' },
+        body: JSON.stringify({ token: row.access_token }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!r.ok) throw new Error(`notion revoke ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    },
   },
   linkedin: {
     label: 'LinkedIn',
@@ -328,8 +367,49 @@ const PROVIDERS = {
       });
       return canvaToken(p, body, 'refresh');
     },
+    // RFC 7009 at the revocation_endpoint the server advertises (the same /token
+    // URL). Revoking the refresh token also ends the access tokens issued from it.
+    revoke: async (p, row) => {
+      const basic = Buffer.from(`${p.clientId()}:${p.clientSecret()}`).toString('base64');
+      const body = row.refresh_token
+        ? new URLSearchParams({ token: row.refresh_token, token_type_hint: 'refresh_token' })
+        : new URLSearchParams({ token: row.access_token, token_type_hint: 'access_token' });
+      const r = await fetch(p.tokenUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: `Basic ${basic}` },
+        body,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!r.ok) throw new Error(`canva revoke ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    },
   },
 };
+
+// GitHub's OAuth app endpoints, authenticated as the app (client id + secret).
+async function githubApp(p, method, path, accessToken) {
+  const basic = Buffer.from(`${p.clientId()}:${p.clientSecret()}`).toString('base64');
+  return fetch(`https://api.github.com/applications/${p.clientId()}/${path}`, {
+    method,
+    headers: {
+      authorization: `Basic ${basic}`,
+      accept: 'application/vnd.github+json',
+      'content-type': 'application/json',
+      'user-agent': uaApi(),
+    },
+    body: JSON.stringify({ access_token: accessToken }),
+    signal: AbortSignal.timeout(5000),
+  });
+}
+
+// GitHub user id behind a token, or null when the token is no longer valid.
+async function githubTokenOwner(p, accessToken) {
+  const r = await githubApp(p, 'POST', 'token', accessToken);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`github token check ${r.status}`);
+  const id = (await r.json()).user?.id;
+  if (id == null) throw new Error('github token check: no user');
+  return id;
+}
 
 // Call to Canva's /token with Basic auth (client_secret_basic).
 async function canvaToken(p, body, tag) {
@@ -441,6 +521,15 @@ export async function providerExchange(name, code, opts = {}) {
 export async function providerRefresh(name, refreshToken) {
   const p = PROVIDERS[name];
   return p?.refresh ? p.refresh(p, refreshToken) : null;
+}
+
+// Revokes the person's access at the provider. `row` is their stored token and
+// `others` the same provider's tokens of the other users, for providers whose
+// revocation reaches past one token. Microsoft, LinkedIn and Nuvemshop offer no
+// revocation without asking for more access, so their disconnect stays local.
+export async function providerRevoke(name, row, others = []) {
+  const p = PROVIDERS[name];
+  if (p?.revoke && providerEnabled(name)) await p.revoke(p, row, others);
 }
 
 // Home to go back to after the callback (derived from the redirect URI itself).

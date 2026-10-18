@@ -1006,7 +1006,7 @@ import {
   videoBilling, insertUsageEvent, getUsage, getUsageTotals, countUsageByModelSince,
   bumpToolCalls, recordToolCatalog, logSensitiveAccess,
   listMcpServers, addMcpServer, deleteMcpServer,
-  saveOAuthToken, getOAuthToken, listOAuthProviders, deleteOAuthToken, deleteOAuthTokenByStoreId,
+  saveOAuthToken, getOAuthToken, listOAuthProviders, deleteOAuthTokenByStoreId,
   addConnection, listConnections, getConnection, deleteConnection, updateConnectionSecret,
   saveAsaasOperation, getAsaasOperationForOwner, claimDueAsaasReceiptNotifications, finishAsaasReceiptNotification,
   createAsaasBillSchedule, getAsaasBillScheduleForOwner, listAsaasBillSchedulesForOwner,
@@ -1130,7 +1130,7 @@ import {
 import { takeMobileAuthCode, appReturnVars, handleAppConnect, appLoginFlow, appLoginLink } from './mobile-login.mjs';
 import { registerMobileConnect } from './mobile-connect.mjs';
 import { createConnectSave } from './connect-save.mjs';
-import { revokeProviderGrants } from './provider-revocation.mjs';
+import { revokeProviderGrants, disconnectProvider } from './provider-revocation.mjs';
 import {
   appleEnabled, appleRevokeReady, verifyAppleIdentityToken, appleExchangeCode, appleRevoke,
 } from './apple-auth.mjs';
@@ -11327,7 +11327,7 @@ async function atenderRequest(req, res) {
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const { provider } = await readBody(req);
     if (!PROVIDER_NAMES.includes(provider)) return send(res, 400, { error: 'server.invalid_provider' });
-    await deleteOAuthToken(user.id, provider);
+    await disconnectProvider(user.id, provider);
     return send(res, 200, { ok: true });
   }
 
