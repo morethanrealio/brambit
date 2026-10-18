@@ -1014,7 +1014,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         + 'RELATIVE PATHS: since the app runs under a subpath (/nome_do_sistema/), every href/src/fetch in the HTML and JS must be RELATIVE (style.css, app.js, api/status), never with a leading slash (/style.css). The publish normalizes absolute paths to relative on its own, but generate them relative from the start. '
         + 'The publish VALIDATES the boot AND the assets: if the app crashes, or if a CSS/JS referenced in the HTML does not load, it is NOT published and you get the reason so you can fix it; only say it is live when ok:true. CONFIRMED ACTION before executing. '
         + 'IF YOU ARE GOING TO MANAGE THE SYSTEM DATA (create/edit/query records through the chat): expose a real API in server.js/app.py (GET/POST/etc. routes that read and write to SQLite) and call that API with the chamar_sistema tool. You do NOT register anything "from memory": publishing the screen registers no data at all. If the API needs login, leave a way for you yourself to authenticate (e.g.: accept a token that you keep) or an internal route. After publishing, confirm the real state with a GET via chamar_sistema before saying what is there. '
-        + 'SECRETS (mandatory): NEVER write an API key, password, token or connection string directly in the code; the publish REFUSES if it finds a secret in the source. Store each secret with definir_segredo and in the code use only process.env.NOME (Node) or os.environ["NOME"] (Flask). Secrets are injected into the app as environment variables at boot. '
+        + 'SECRETS (mandatory): NEVER write an API key, password, token or connection string directly in the code; the publish REFUSES if it finds a secret in the source. Store each secret with definir_segredo and in the code use only process.env.NAME (Node) or os.environ["NAME"] (Flask). Secrets are injected into the app as environment variables at boot. '
         + 'URL ACCESS — ASK FIRST (mandatory for a NEW app): every app is born PRIVATE, protected by a username and password requested in the browser. Before the first publish, ask the user whether they want the app PUBLIC (anyone with the link can open it) or PRIVATE (only whoever has the password). '
         + 'If they say public, pass acesso:"publico". If they do not know, say it is just for them, or you cannot ask, keep the default (private) — it is the safe one. '
         + 'When publishing private, the tool returns `credenciais` (generated username and password): DELIVER both to the user in your reply, telling them it is the login to open the app. Republishing does NOT change the password nor unlock the app. Afterwards, the definir_acesso_sistema tool is what changes that.',
@@ -1112,7 +1112,7 @@ export function hostingTools(userId, agentId, opts = {}) {
             // is left waiting for a publication that never happened (case
             // from 2026-09-17).
             usuario: 'Não publiquei: achei uma chave/senha escrita direto no código do app, e publicar assim deixaria ela exposta. Vou guardar no cofre do app e publicar de novo.',
-            agente: 'NUNCA escreva chave/senha/token direto no fonte. Guarde cada segredo com a tool definir_segredo (cofre cifrado) e no código use só process.env.NOME (Node) ou os.environ["NOME"] (Flask). '
+            agente: 'NUNCA escreva chave/senha/token direto no fonte. Guarde cada segredo com a tool definir_segredo (cofre cifrado) e no código use só process.env.NAME (Node) ou os.environ["NAME"] (Flask). '
               + 'Encontrei: ' + lst + '. Tire do código, defina no cofre e publique de novo.',
             segredos_encontrados: leaks,
           };
@@ -1755,7 +1755,7 @@ export function hostingTools(userId, agentId, opts = {}) {
       name: 'definir_segredo',
       description:
         'Stores a SECRET of a system (API key, password, token, connection string) in an ENCRYPTED VAULT, to be injected into the app as an environment variable. '
-        + 'GOLDEN RULE: a secret never goes in the code. In the app code use process.env.NOME (Node) or os.environ["NOME"] (Flask); here you set the real value. '
+        + 'GOLDEN RULE: a secret never goes in the code. In the app code use process.env.NAME (Node) or os.environ["NAME"] (Flask); here you set the real value. '
         + 'The key (name) must be UPPERCASE/digits/_ (e.g.: OPENAI_API_KEY, DB_PASSWORD). You can set it BEFORE publishing (kept for the next publish) or AFTER (applied immediately, the app restarts with the new value). '
         + 'The value stays encrypted, NEVER appears in the source and does NOT travel when the app is replicated by another user.',
       parameters: {
