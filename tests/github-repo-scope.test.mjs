@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { scopeGithubTools, pushTargetCheck, repoInScope } from '../web/github-repo-scope.mjs';
+import { gateTool } from '../web/confirm.mjs';
+import { actionEvidenceFor } from '../web/action-evidence.mjs';
 
 const fake = (name, run) => ({ name, description: name, parameters: { type: 'object' }, run });
 const scoped = (repos, overrides = {}) => {
@@ -37,6 +39,14 @@ test('repository arguments outside the list, or escaping it, never reach GitHub'
   const pre = await tool('github_create_issue').preflight({ owner: 'acme', repo: 'secret', title: 't' }, {});
   assert.match(pre.erro, /not enabled/);
   assert.equal(await tool('github_create_issue').preflight({ owner: 'acme', repo: 'web', title: 't' }, {}), undefined);
+
+  // Nothing was registered, so there is no receipt: an 'unknown' one replaced the
+  // reply with "check the service" and hid the reason from the person.
+  const args = { owner: 'acme', repo: 'secret', title: 't' };
+  const out = await gateTool(tool('github_create_issue'), 'github-scope-refusal').run(args);
+  assert.match(out, /not enabled/);
+  assert.equal(actionEvidenceFor('github_create_issue', args, out), null);
+  assert.equal(calls.length, 1);
 });
 
 test('listing and searching show only the enabled repositories', async () => {

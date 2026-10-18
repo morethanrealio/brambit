@@ -68,7 +68,9 @@ export function scopeGithubTools(tools, repos) {
   const refuse = (args = {}) => {
     if (!allowed.size) return noRepos;
     const full = repoFullName(args.owner, args.repo);
-    if (!full || !allowed.has(full)) return `The repository ${args.owner}/${args.repo} is not enabled for this assistant. Enabled repositories: ${[...allowed].join(', ')}.`;
+    // A permission limit, not a typo: without saying so, the gate's "fix the argument and
+    // call again" led the model to retry the action in another enabled repository.
+    if (!full || !allowed.has(full)) return `The repository ${args.owner}/${args.repo} is not enabled for this assistant. Enabled repositories: ${[...allowed].join(', ')}. This is a permission limit: do not retry in another repository; tell the person the owner can enable it in the assistant settings.`;
     // read_path joins the path into the URL and '..' would climb out of the repository.
     if (args.path !== undefined && (typeof args.path !== 'string' || args.path.split('/').some((s) => s === '.' || s === '..'))) return 'Invalid path: it cannot contain "." or ".." segments.';
     if (args.number !== undefined && !/^\d{1,10}$/.test(String(args.number))) return 'Invalid issue number.';

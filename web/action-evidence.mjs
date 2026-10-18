@@ -187,6 +187,11 @@ function receipt(name, args, out) {
   if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
     state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',id:d?.lista?.id};
   const connector = connectorActionReceipt(name, args, d);
+  // The confirmation gate refused the call before registering anything (a
+  // preflight error such as a repository the assistant may not use): there is
+  // no action to vouch for. An 'unknown' receipt here replaced the whole reply
+  // with "check the service", hiding the reason the model was given.
+  if (connector && typeof out === 'string' && out.startsWith('NÃO registrei o pedido')) return null;
   if (connector) return typeof out === 'string' && out.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO')
     ? { ...connector, state: 'pending' } : connector;
   if (!NATIVE.has(name) && !MAIL.has(name)) return null;
