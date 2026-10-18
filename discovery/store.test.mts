@@ -2,7 +2,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { createDiscoveryStore, SCHEMA, preferences, dueSlot, silenceStep, QUIET_DAYS, REENGAGE_DAYS, SILENCE_DAYS, type Pool, type Journey } from './store.mjs';
-import { incoming, createDiscoveryRunner, sourceId, prompt, CLOSING } from './runtime.mjs';
+import { incoming, createDiscoveryRunner, sourceId, prompt, CLOSING, withClosing } from './runtime.mjs';
+import { controlIntent } from './conversation.mjs';
 const pg = new PGlite();
 let runtime = true;
 const db = { query: async (sql: string, args?: unknown[]) => sql === SCHEMA ? (await pg.exec(sql)).at(-1)! : pg.query(sql, args), release: () => { } };
@@ -129,7 +130,7 @@ test('silence ladder: sends a notice on the third day, stays quiet during the pr
     const noticePrompt = prompt(notice!, [], `${day(t3)}:notice`);
     assert.match(noticePrompt, /short-pause notice/);
     assert.match(noticePrompt, /Do not ask any question/);
-    assert.ok(noticePrompt.includes(CLOSING.notice));
+    assert.ok(noticePrompt.includes(CLOSING.pt.notice));
     await store.finish(notice!, 'accepted', 'receipt-notice');
     let state = (await store.get(u))!;
     assert.equal(state.silence_stage, 'notified');
@@ -153,7 +154,7 @@ test('silence ladder: sends a notice on the third day, stays quiet during the pr
     assert.ok(invite);
     const invitePrompt = prompt(invite!, [], `${day(t6)}:reengage`);
     assert.match(invitePrompt, /how their life has been/);
-    assert.ok(invitePrompt.includes(CLOSING.reengage));
+    assert.ok(invitePrompt.includes(CLOSING.pt.reengage));
     assert.match(prompt(invite!, [], `${day(t6)}:lunch`), /lunch: invite/);
     await store.finish(invite!, 'accepted', 'receipt-reengage');
     state = (await store.get(u))!;
@@ -273,6 +274,24 @@ test('in-flight stop drains and never sends a prepared message', async () => {
     const tick = runner.tick(); await ready; const duplicate = runner.tick(); let drained = false;
     const stop = runner.stop().then(() => { drained = true; }); await Promise.resolve(); assert.equal(drained, false);
     release('Como foi sua manhã?'); await Promise.all([tick, duplicate, stop]); assert.equal(drained, true); assert.equal(sends, 0);
+});
+test('closing follows the account language and its pause command works', async () => {
+    for (const [language, closings] of Object.entries(CLOSING))
+        for (const [kind, text] of Object.entries(closings)) {
+            // The command the closing tells the person to say has to actually pause.
+            assert.equal(controlIntent(text.match(/(?:diga|say|di) ([^.]+)\.$/)![1]), 'pause', `${language} ${kind}`);
+            // A message that already ends with it does not get it twice.
+            assert.equal(withClosing(`Oi.\n\n${text}`, kind, language), `Oi.\n\n${text}`, `${language} ${kind}`);
+        }
+    await reset(); const p = await accept(); const now = new Date(); now.setUTCHours(15, 30, 0, 0);
+    const slot = now.toISOString().slice(0, 10) + ':lunch'; let instruction = '', sent = '';
+    const runner = createDiscoveryRunner({ ...store, due: async () => [{ p, slot }], claim: (user: string, s: string) => store.claim(user, s, now) }, {
+        prepare: async () => {}, language: async () => 'en', generate: async (_p, i) => { instruction = i; return 'How was your morning?'; },
+        send: async (_p, text) => { sent = text; return { ok: true, id: 'receipt' }; }, persist: async () => {}
+    });
+    await runner.tick(); await runner.stop();
+    assert.ok(instruction.endsWith(`“${CLOSING.en.check}”`));
+    assert.equal(sent, `How was your morning?\n\n${CLOSING.en.check}`);
 });
 test('history persistence failure does not turn receipt into retry', async () => {
     await reset(); const p = await accept(); const now = new Date(); now.setUTCHours(15, 30, 0, 0);

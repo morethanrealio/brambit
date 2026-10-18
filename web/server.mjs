@@ -11885,7 +11885,7 @@ const discoveryRunner=createDiscoveryRunner(discoveryStore,{
     else if(p.channel==='app'){if(!await hasPushToken(p.user_id))throw Error('channel_unavailable');}
     else {const link=await getWhatsAppLinkForUser(p.user_id);if(!waEnabled()||!link?.wa_phone)throw Error('channel_unavailable');}
   },
-  generate:async(p,prompt)=>{const agent=await getAgentOwned(p.agent_id,p.user_id);if(!agent)throw Error('agent_unavailable');return isolatedAgentDraft(agent,p.user_id,prompt,{discoveryDraft:true});},
+  generate:async(p,prompt)=>{const agent=await getAgentOwned(p.agent_id,p.user_id);if(!agent)throw Error('agent_unavailable');return isolatedAgentDraft(agent,p.user_id,prompt,{discoveryDraft:true});},language:async p=>(await getUserLocale(p.user_id).catch(()=>null))?.language,
   // The provider's error no longer disappears: it comes back classified (deterministic
   // rejection vs. uncertainty) and with the reason, which the store saves already sanitized.
   send:async(p,text)=>{
