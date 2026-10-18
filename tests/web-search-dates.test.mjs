@@ -162,3 +162,14 @@ test('ordinary searches still use Gemini without Tavily and on Tavily failure', 
   assert.equal(calls[1].url, 'https://tavily.test/search'); assert.match(calls[2].url, /generativelanguage\.googleapis\.com/);
   for (const call of [calls[0], calls[2]]) assert.equal(call.body.contents[0].parts[0].text, 'IA aplicada');
 });
+
+test('the Gemini search summary follows the language of the turn, on both Gemini paths', async () => {
+  const gemini = () => ({ json: { candidates: [{ content: { parts: [{ text: 'Summary.' }] } }], usageMetadata: { totalTokenCount: 3 } } });
+  const asked = (call) => call.body.systemInstruction.parts[0].text;
+  delete process.env.TAVILY_API_KEY; replies = [gemini()];
+  await webSearchTool({ language: 'en' }).run({ consulta: 'AI news' });
+  process.env.TAVILY_API_KEY = 'MOCK_ONLY'; replies = [{ status: 500, text: 'temporary failure' }, gemini()];
+  await webSearchTool({ language: 'es' }).run({ consulta: 'noticias IA' });
+  assert.match(asked(calls[0]), /Answer in English\b/);
+  assert.match(asked(calls[2]), /Answer in Spanish\b/);
+});

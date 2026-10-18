@@ -16,6 +16,7 @@ import {GEMINI_COMPARISON_MODEL,isGeminiComparison} from '../core-proto/deepseek
 import {makeGemini} from '../core-proto/providers/gemini.mjs';
 import {throwIfAttemptControl} from '../core-proto/provider-attempt.mjs';
 import {modelFor} from '../core-proto/models.mjs';
+import { idiomaPorExtenso, LEGACY_TEXT_LANGUAGE } from './locale.mjs';
 import fs from 'fs';
 import path from 'path';
 import crypto, { randomUUID } from 'crypto';
@@ -294,10 +295,10 @@ async function saveMedia(buffer, ext, mime) {
 // A tool's result in the core is text only, so for the agent to "see again"
 // an old image we do a vision re-read (image -> text). Returns
 // { text, usage } in the standard shape so it falls into the credit pipeline.
-export async function describeImage(buffer, mime, question, { maxOut = 0 } = {}) {
+export async function describeImage(buffer, mime, question, { maxOut = 0, language } = {}) {
   const q = (question && question.trim())
     ? question.trim()
-    : 'Descreva objetivamente o conteúdo desta imagem em português do Brasil, incluindo qualquer texto legível.';
+    : `Objectively describe the content of this image in ${idiomaPorExtenso(language || LEGACY_TEXT_LANGUAGE)}, including any legible text (transcribe it as written, without translating).`;
   // Covers initial captions, stored-image rereads and connector image OCR too.
   // Explicit per-agent DeepSeek remains authoritative over the global default.
   if (isGeminiComparison()) {
@@ -351,7 +352,7 @@ export async function describeImage(buffer, mime, question, { maxOut = 0 } = {})
 export async function ocrPdf(buffer, question) {
   const q = (question && question.trim())
     ? question.trim()
-    : 'Extraia TODO o texto legível deste documento em português do Brasil, na ordem em que aparece. Preserve números, códigos, valores e datas exatamente como estão. Se for um boleto ou guia (DAS, DARF, boleto bancário), destaque no início a LINHA DIGITÁVEL completa (a sequência de números para pagamento) e o valor e a data de vencimento.';
+    : 'Extract ALL legible text from this document, in the order it appears and in the language it is written in (do not translate). Keep numbers, codes, amounts and dates exactly as they are. If it is a Brazilian bank slip or tax form (boleto, DAS, DARF), put the full linha digitável (the payment number sequence), the amount and the due date at the start.';
   const data = await gen('gemini-3.5-flash', {
     contents: [{ role: 'user', parts: [
       { text: q },
@@ -487,7 +488,7 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
 }
 
 // ── Transcription (STT) ── audio comes in as multimodal input on Flash.
-export async function transcribeAudio(buffer, mime = 'audio/ogg') {
+export async function transcribeAudio(buffer, mime = 'audio/ogg', { language = LEGACY_TEXT_LANGUAGE } = {}) {
   if (audioProvider() === 'openai') {
     const { text, usage } = await openaiTranscribe(buffer, mime);
     console.log(`[media stt] in=${usage.in} out=${usage.out} total=${usage.total} -> ${text.length} chars`);
@@ -495,7 +496,7 @@ export async function transcribeAudio(buffer, mime = 'audio/ogg') {
   }
   const data = await gen(STT_MODEL, {
     contents: [{ role: 'user', parts: [
-      { text: 'Transcreva o áudio a seguir no idioma em que foi falado (normalmente português do Brasil; se a pessoa falar inglês ou outra língua, transcreva nessa língua, sem traduzir). Devolva APENAS o texto falado, sem comentários, sem aspas.' },
+      { text: `Transcribe the following audio in the language it was spoken (usually ${idiomaPorExtenso(language)}; if the person speaks another language, transcribe in that language, without translating). Return ONLY the spoken text, no comments, no quotes.` },
       { inlineData: { mimeType: mime, data: buffer.toString('base64') } },
     ] }],
     generationConfig: { thinkingConfig: { thinkingBudget: 0 } },

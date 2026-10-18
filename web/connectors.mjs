@@ -486,7 +486,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   // Image OCR/vision (scanned attachment that came as .jpg/.png instead of PDF).
   const ocrImageFallback = async (buf, name, mime) => {
     try {
-      const { text, usage } = await describeImage(buf, mime, 'Extraia TODO o texto legível desta imagem em português do Brasil. Se for um boleto ou guia (DAS, DARF, boleto bancário), destaque no início a LINHA DIGITÁVEL completa, o valor e a data de vencimento.');
+      const { text, usage } = await describeImage(buf, mime, 'Extract ALL legible text from this image, in the language it is written in (do not translate). If it is a Brazilian bank slip or tax form (boleto, DAS, DARF), put the full linha digitável, the amount and the due date at the start.');
       if (usage) onUsage({ usage, kind: 'vision' });
       if (text) return JSON.stringify({ name, mimeType: mime, ocr: true, text });
     } catch (e) {

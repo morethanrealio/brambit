@@ -13,6 +13,7 @@
 // The cost of each search is reported via onUsage (kind='search') to fall into the same
 // credit pipeline as the other calls.
 import { uaBot } from './brand.mjs';
+import { idiomaPorExtenso } from './locale.mjs';
 import { isDeepSeekTurn } from '../core-proto/deepseek/scope.mjs';
 import { groundedSearch } from '../core-proto/providers/gemini.mjs';
 import { extractPdfText } from './pdf.mjs';
@@ -314,8 +315,10 @@ export function createSearchBudget({ max = MAX_SEARCHES_PER_TURN() } = {}) {
   };
 }
 
-export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL(), budget = null, fontes = null } = {}) {
+// `language` = language of the turn: the search summary comes back in it.
+export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL(), budget = null, fontes = null, language = null } = {}) {
   const useTavily = tavilyEnabled();
+  const searchLanguage = language ? idiomaPorExtenso(language) : '';
   return {
     name: 'buscar_web',
     description: 'Searches for CURRENT information on the web (price, opening hours, news, availability, address, event, places, products, any real-time data or anything you are not sure about). A single search already returns SEVERAL concrete results (names, addresses, sources). Use ALWAYS when you need a factual/current fact instead of answering from memory. EFFICIENCY MATTERS: search BROADLY, by category/region (e.g.: "melhores casas de jazz em São Paulo endereço programação"), NEVER a separate search for each item/place/product (that makes the response far too slow). For an itinerary/list, 1 to 3 broad searches are enough; only search again if a specific piece of data is missing. Do not answer generically if you have not searched enough yet, but also do not keep searching item by item. Build a SIMPLE query, a few words in pt-BR: do NOT use exact-phrase quotes or the site: operator with a guessed domain (they zero out the results). If the user says "vá no site de X", find the official site and OPEN it with abrir_link instead of hunting for the fact by keyword. NEVER conclude that something "não existe" just because a search came back empty.',
@@ -349,7 +352,7 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL(), budget
       try {
         const { text, sources, usage, empty, relaxedNote } = useTavily
           ? await tavilySearch(consulta, { dateFilters })
-          : await groundedSearch(consulta, { model });
+          : await groundedSearch(consulta, { model, language: searchLanguage });
         if (usage && onUsage) onUsage({ usage, kind: 'search' });
         if (empty || (!text && !sources.length)) {
           if (filtered) return `${dateNote}Não achei resultados com esses filtros. A janela foi preservada, inclusive ao simplificar a consulta quando aplicável. Isso não comprova ausência de publicações; não amplie o período nem preencha com fontes antigas.`;
@@ -375,7 +378,7 @@ export function webSearchTool({ onUsage, model = SEARCH_FALLBACK_MODEL(), budget
         if (useTavily) {
           noteTavilyFailure(e, onUsage);
           try {
-            const { text, sources, usage } = await groundedSearch(consulta, { model });
+            const { text, sources, usage } = await groundedSearch(consulta, { model, language: searchLanguage });
             if (usage && onUsage) onUsage({ usage, kind: 'search' });
             const lista = await renderFontes(sources, fontes);
             return `${text || '(sem resumo)'}\n\nFontes:\n${lista || '(sem fontes)'}`;

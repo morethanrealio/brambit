@@ -33,7 +33,7 @@ text=await read({id:a},{...deps,describe:async()=>({text:''})});ok(text.includes
 const server=readFileSync('./web/server.mjs','utf8');
 const start=server.indexOf("    registry.add({\n      name: 'ver_midia'");const end=server.indexOf('\n    });',start)+8;
 let tool,ownerSeen;const ctx=vm.createContext({isGeminiComparison:()=>false,registry:{add:t=>{tool=t;}},readContextImage:read,
- turnImageIds:[],images:[],message:'e esse mapa?',thread:{history:hist},userId:'synthetic-owner',mediaUsages:[],
+ turnImageIds:[],images:[],message:'e esse mapa?',thread:{history:hist},userId:'synthetic-owner',idiomaResposta:'pt-BR',mediaUsages:[],
  getMediaAsset:async(owner,id)=>{ownerSeen=owner;return deps.getAsset(id);},fetchMedia:deps.fetch,describeImage:deps.describe,listMediaAssets:denied});
 vm.runInContext(server.slice(start,end),ctx);gets=[];await tool.run({});eq(ownerSeen,'synthetic-owner');eq(gets,[a]);
 ok(!server.slice(start,end).includes('listMediaAssets'));ok(server.includes('caption = boundedImageCaption(d.text, 4000, d.truncated)'));

@@ -722,7 +722,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
         if (mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|bmp)$/i.test(nome)) {
           const buf = await msGetBytes(token, `/me/drive/items/${item}/content`);
           try {
-            const { text, usage } = await describeImage(buf, mime || 'image/jpeg', 'Extraia TODO o texto legível desta imagem em português do Brasil.');
+            const { text, usage } = await describeImage(buf, mime || 'image/jpeg', 'Extract ALL legible text from this image, in the language it is written in (do not translate).');
             if (usage) onUsage({ usage, kind: 'vision' });
             if (text) return JSON.stringify({ nome, mimeType: mime, ocr: true, text });
           } catch (e) { console.error('[onedrive] describeImage failed:', e?.message ?? e); }
