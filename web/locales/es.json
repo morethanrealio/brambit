@@ -2086,5 +2086,10 @@
       "greeting": "Hola,",
       "body": "{greeting}\n\nRecibimos un pedido para restablecer la contraseña de tu cuenta en {brand}. Para crear una contraseña nueva, solo abre el enlace de abajo (vale por 10 minutos):\n\n{link}\n\nSi no fuiste tú quien lo pidió, puedes ignorar este correo; tu contraseña sigue siendo la misma.\n\n{brand}"
     }
+  },
+  "coding": {
+    "stop": {
+      "interrupted": "La ejecución se interrumpió; se conservó el estado."
+    }
   }
 }

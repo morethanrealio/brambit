@@ -58,7 +58,7 @@ async function runProgrammingJob(job,control,achados=[]){
     return {tools:registry,provider:makeProvider()};
   };
   return appTaskStore.withTask(JSON.stringify(['coding-workspace','advanced',userId,expected.projectId||'personal']),()=>
-    makeCodarTool({buildCodingContext,executionId:codingExecutionId(job),sessionKey:`${userId}:${agentId}:${threadId}`,taskStore:appTaskStore,targetIdentity:JSON.stringify(expected),authorize,onUsage,onEvent,shouldPause}).run({objetivo:job.args.objetivo})
+    makeCodarTool({buildCodingContext,executionId:codingExecutionId(job),sessionKey:`${userId}:${agentId}:${threadId}`,taskStore:appTaskStore,targetIdentity:JSON.stringify(expected),authorize,onUsage,onEvent,shouldPause,language}).run({objetivo:job.args.objetivo})
   ).catch(error=>{if(error?.code==='TASK_LOCK_BUSY')return {ok:false,coding_task:{state:'paused',reason:'workspace_busy'},text:'Aguardando outra execução liberar este ambiente.'};throw error;});
 }
 // The job's text goes straight to the person (chat, Telegram, WhatsApp) with no

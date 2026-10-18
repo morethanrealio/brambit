@@ -418,7 +418,7 @@ export function makeCodarTool({ buildCodingContext, sessionKey, executionId, onU
         const { tools, provider } = await buildCodingContext();
         if(taskStore){
           if(typeof provider.completeDurable!=='function')throw Error('Contabilização durável indisponível; execução não iniciada.');
-          return await runCodingTask({store:taskStore,executionId,scope:JSON.stringify(['advanced',sessionKey,targetIdentity]),target:targetIdentity,
+          return await runCodingTask({store:taskStore,executionId,language,scope:JSON.stringify(['advanced',sessionKey,targetIdentity]),target:targetIdentity,
             objetivo,tools,provider,system:comIdioma(CODING_SUBAGENT_SYSTEM,language),authorize,onUsage,onEvent,shouldPause});
         }
         return await runCodingSubagent({

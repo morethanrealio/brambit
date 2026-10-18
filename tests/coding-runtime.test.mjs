@@ -178,3 +178,11 @@ test('a job result keeps links its tools returned (even before a pause) and drop
  const {rows}=await f.db.query('SELECT content FROM fixture.messages ORDER BY id');
  assert.equal(rows.at(-1).content,'Pronto, segui https://docs.real.example/guia.\nSeu app: https://ana.apps.example/demo/');
 });
+test('advanced job stop message reaches the person in the account language',async t=>{
+ const f=await fixture(t);f.deps.getUserLocale=async()=>({language:'en'});f.deps.codingTools=()=>[];f.deps.sshTools=()=>[];
+ f.deps.makeHeavyProvider=()=>({name:'synthetic',completeDurable:async()=>{throw Error('network')}});
+ const runtime=createProgrammingRuntime(f.deps),jobs=createCodingJobs({store:f.jobStore,execute:runtime.execute,deliver:f.deliver});
+ const environment={projectId:null,runner:false,ssh:false,sshLivre:false,livre:false,mode:'aceitar_edicoes',category:'pessoal'};
+ await jobs.submit(identity,{kind:'advanced',args:{objetivo:'Inspect'},environment,policy:codingPolicySnapshot(f.agent)},'stop-language');await jobs.drive(codingJobScope(identity));
+ assert.deepEqual((await f.db.query('SELECT content FROM fixture.messages')).rows.map(r=>r.content),['The run was interrupted; its progress was saved.']);
+});

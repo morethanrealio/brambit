@@ -4,6 +4,8 @@ import {runAgent,ToolRegistry} from '../core-proto/core.mjs';
 import {createAppModelCalls} from './app-model-call.mjs';
 import {closeTaskHistory} from './app-task-runner.mjs';
 import {creditPauseReason,creditStopMessage} from './execution-credit-errors.mjs';
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 // Transport permissions belong to the adapter, never to model text. Unknown
 // commands are effectful even when their name happens to contain "read".
 const READS=new Set(['ler_arquivo','listar_arquivos','buscar_codigo','buscar_no_codigo','rodar_leitura','ler_resultado_de_programacao','recuperar_contexto_de_codigo']);
@@ -25,7 +27,7 @@ function observedEffect(out,mutating){
   if(value?.ok===true)return 'applied';
   return 'unknown';
 }
-export async function runCodingTask({store,scope,executionId,target,objetivo,tools,provider,system,
+export async function runCodingTask({store,scope,executionId,target,objetivo,tools,provider,system,language=LEGACY_TEXT_LANGUAGE,
   authorize,onUsage,onEvent=()=>{},shouldPause,now=()=>Date.now(),windowMs=15*60_000,quantumSteps=40,compactChars=96_000}) {
   if(!scope||!target||!String(objetivo||'').trim()||typeof authorize!=='function')throw Error('Invalid coding task identity');
   if(!await authorize())return {ok:false,coding_task:{state:'paused',reason:'access_denied'},text:'O acesso ao ambiente mudou; não executei a tarefa.'};
@@ -105,7 +107,7 @@ export async function runCodingTask({store,scope,executionId,target,objetivo,too
       task.status='active';task.history=closeTaskHistory(task.history);await persist();
       result=await runAgent({provider:wrapped,tools:registry,system,
         history:task.history,userInput:String(objetivo),maxSteps:Infinity,salvage:false,control,onEvent});
-    }catch(e){const reason=creditPauseReason(e);result={termination:reason||'execution_error',text:reason?creditStopMessage(reason):'A execução foi interrompida; o estado foi preservado.'};}
+    }catch(e){const reason=creditPauseReason(e);result={termination:reason||'execution_error',text:reason?creditStopMessage(reason,language):productI18n().t('coding.stop.interrupted',language)};}
     task.history=closeTaskHistory(result.messages||task.history);
     task.status=result.termination==='completed'?'completed':'paused';
     task.lastResult={ok:task.status==='completed',coding_task:{id:task.id,target,state:task.status,reason:result.termination,calls:task.calls,tokens:task.tokens,
