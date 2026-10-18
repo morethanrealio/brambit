@@ -2096,6 +2096,73 @@
   "coding": {
     "stop": {
       "interrupted": "A execução foi interrompida; o estado foi preservado."
+    },
+    "resume_command": "retomar programação",
+    "recovery": {
+      "uncertain": "Há uma operação com resultado incerto. É preciso conferir seu efeito no ambiente antes de continuar; não vou repeti-la.",
+      "check_scope": "Confira o acesso, o alvo e o escopo da tarefa antes de autorizar uma nova execução.",
+      "credit_exhausted": "O progresso está salvo. Quando houver saldo, diga “{command}”.",
+      "credit_reserved": "O progresso está salvo; há créditos reservados, o que não significa saldo esgotado. Depois da liberação, diga “{command}”.",
+      "credit_reconciliation": "Diga “{command}” para tentar recuperar o resultado e a cobrança já registrados. Uma chamada ainda incerta não será reenviada.",
+      "credit_reservation": "O saldo livre não cobre a reserva estimada da próxima chamada. O progresso está salvo; retome quando houver saldo suficiente.",
+      "resumable": "O progresso está salvo. Diga “{command}” para continuar a mesma tarefa.",
+      "needs_instruction": "A tarefa precisa de uma instrução que resolva a pendência indicada antes de continuar."
+    },
+    "stage": {
+      "preparing": "Preparando o ambiente",
+      "reading": "Lendo o código",
+      "editing": "Aplicando alterações",
+      "verifying": "Verificando alterações",
+      "running": "Executando uma etapa no ambiente autorizado",
+      "resuming": "Retomando do progresso salvo"
+    },
+    "job": {
+      "none": "Nenhuma tarefa de programação registrada nesta conversa.",
+      "completed": "A execução terminou; consulte as verificações e pendências no resultado.",
+      "cancelled": "A tarefa foi interrompida. Alterações já realizadas foram preservadas.",
+      "needs_attention": "A tarefa precisa de atenção antes de continuar.",
+      "waiting_after_pause_one": "A solicitação seguinte continua aguardando.",
+      "waiting_after_pause_other": "As {count} solicitações seguintes continuam aguardando.",
+      "in_progress": "O trabalho está em andamento. Última etapa registrada: {stage}.",
+      "starting": "Vou começar agora e te aviso assim que concluir.",
+      "queued_next_one": "Há 1 solicitação na sequência.",
+      "queued_next_other": "Há {count} solicitações na sequência.",
+      "interrupted": "Tarefa interrompida; alterações já feitas foram preservadas.",
+      "execution_error": "A execução foi interrompida; o estado está salvo e nenhuma operação incerta será repetida automaticamente.",
+      "already_submitted": "Essa continuação já foi recebida. Não iniciei outra execução.",
+      "queue_full": "A fila desta conversa já tem cinco solicitações. Aguarde uma concluir ou peça para parar.",
+      "queued_behind_pause": "Registrei a solicitação na fila. A tarefa anterior está pausada: {next_step}",
+      "queued_follow": "Recebi a nova solicitação e a coloquei na sequência da tarefa atual. Não interrompi nem misturei os dois escopos.",
+      "already_queued": "Essa solicitação já está na sequência da tarefa atual.",
+      "credit_balance": "Saldo livre da conta: {available} créditos; reservados: {held}. A reserva da próxima etapa será conferida antes da chamada.",
+      "credit_unknown": "Não consegui consultar o saldo agora; isso não indica saldo esgotado.",
+      "policy_changed": "As permissões ou o ambiente mudaram. Confira o escopo antes de retomar.",
+      "cancel_already_requested": "O cancelamento dessa tarefa já foi solicitado; não a retomei.",
+      "pause_saving": "O resultado da pausa ainda está sendo salvo na conversa. Aguarde antes de retomar.",
+      "resumed": "Retomada registrada para a mesma tarefa. Vou recuperar o progresso e os resultados já salvos; novas etapas continuam sujeitas ao saldo disponível.",
+      "stopping": "Recebi o pedido para parar. Vou interromper na próxima fronteira segura, preservar as alterações e remover as solicitações da fila."
+    },
+    "run": {
+      "conversation_changed": "O acesso à conversa ou ao assistente mudou; a tarefa não foi executada.",
+      "continuation_revoked": "Esta continuação foi cancelada ou perdeu a autorização; não iniciei outra execução.",
+      "missing_environment": "Faltou a identidade autorizada do ambiente; nenhuma operação executada.",
+      "environment_changed": "O ambiente ou suas permissões mudaram; não executei a tarefa.",
+      "workspace_busy": "Aguardando outra execução liberar este ambiente.",
+      "access_denied": "O acesso ao ambiente mudou; não executei a tarefa.",
+      "access_changed": "O acesso ao ambiente mudou.",
+      "cancelled_pending": "A tarefa cancelada tem uma operação ou cobrança pendente de reconciliação. Não iniciei outra tarefa neste ambiente.",
+      "needs_reconciliation": "Uma operação anterior precisa de reconciliação; não a repeti.",
+      "new_input": "Progresso salvo para considerar sua nova instrução.",
+      "quantum": "Progresso salvo; vou liberar o executor para outras tarefas e retomar automaticamente.",
+      "window": "Progresso salvo; execução aguardando retomada operacional.",
+      "unconfirmed_effect": "O comando terminou sem confirmação suficiente do efeito. Preservei o estado e não repeti nem executei outra ação.",
+      "finished_without_text": "A execução terminou sem confirmação textual de conclusão."
+    },
+    "notify": {
+      "prefix": "{name} — programação: {text}",
+      "default_name": "Assistente",
+      "fallback": "A tarefa foi interrompida; confira o andamento na conversa do app.",
+      "truncated": "… O resultado completo está na conversa do app {brand}."
     }
   }
 }

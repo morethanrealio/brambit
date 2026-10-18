@@ -2163,7 +2163,7 @@ const hostsDeLinksDoUsuario=async userId=>hostsDeLinks({marca:[hostDaMarca(),...
 const programmingRuntime=createProgrammingRuntime({confirmationStore,getAgentOwned,getThreadOwned,getUserLocale,hasProviderExecution,withProviderExecution,gasto,DEEPSEEK_AGENT_MODEL,isDeepSeekTurn,withDeepSeek,makeOfficialDeepSeek,GEMINI_COMPARISON_ID,isGeminiComparison,withGeminiComparison,recordUsages,makeHeavyProvider,primaryIsGeminiOverride,makeGeminiPrimary,makePrimaryProvider,hostingTools,APP_SUB_TOOLS,appTaskStore,getProject,userHasSshKey,runnerOnline,runnerBoundAgentId,livreTools,sshTools,codingTools,validProviderToken,hostsDeLinksDoUsuario});
 const codingJobs=createCodingJobs({store:codingJobStore,execute:programmingRuntime.execute,
   onSnapshot:job=>taskMetrics.record(programmingMeasurement(job)),
-  cancelTask:programmingRuntime.cancelTask,creditStatus:userId=>gasto.disponivel(userId),
+  cancelTask:programmingRuntime.cancelTask,creditStatus:userId=>gasto.disponivel(userId),languageOf:async userId=>(await getUserLocale(userId))?.language,
   notify:createCodingNotifier({getAgent:getAgentOwned,getTelegramBot:getTelegramBotForDelivery,getWhatsAppLink:getWhatsAppLinkForUser,waEnabled,sendTelegram:sendTelegramMessage,sendWhatsApp:sendWhatsAppProactive}),
   deliver:async job=>{
     const text=codingJobReceipt(job).text;

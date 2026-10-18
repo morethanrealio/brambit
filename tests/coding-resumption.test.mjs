@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCodingJobs,codingJobScope,codingControlIntent} from '../web/coding-jobs.mjs';
+import {productI18n} from '../web/i18n.mjs';
 import {codingDeliveryKey} from '../web/coding-recovery-policy.mjs';
 const identity={userId:'synthetic',agentId:'agent',threadId:'thread'},scope=codingJobScope(identity);
 const input={kind:'advanced',args:{objetivo:'Original'},policy:'policy'};
@@ -85,5 +86,9 @@ test('an approved scope continuation can replace a paused job while preserving q
 });
 test('resume grammar is explicit and does not act on quotations or unrelated text',()=>{
  for(const text of ['retomar programação','retome a tarefa','continue a programação','continuar trabalho'])assert.equal(codingControlIntent(text),'resume');
- for(const text of ['O documento diz “continue”','continue','continue a explicação','pode seguir com outro assunto'])assert.equal(codingControlIntent(text),null);
+ for(const text of ['O documento diz “continue”','continue','continue a explicação','pode seguir com outro assunto','resume','write my resume'])assert.equal(codingControlIntent(text),null);
+});
+test('the resume phrase named in each language’s pause notice is recognized as resume',()=>{
+ const {t,languages}=productI18n();
+ for(const language of languages)assert.equal(codingControlIntent(t('coding.resume_command',language)),'resume',language);
 });

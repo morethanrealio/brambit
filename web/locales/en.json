@@ -2096,6 +2096,73 @@
   "coding": {
     "stop": {
       "interrupted": "The run was interrupted; its progress was saved."
+    },
+    "resume_command": "resume programming",
+    "recovery": {
+      "uncertain": "An operation has an uncertain outcome. Its effect on the environment has to be checked before continuing; I will not repeat it.",
+      "check_scope": "Check the task's access, target and scope before authorizing a new run.",
+      "credit_exhausted": "Your progress is saved. When credit is available, say “{command}”.",
+      "credit_reserved": "Your progress is saved; some credits are reserved, which does not mean your balance ran out. Once they are released, say “{command}”.",
+      "credit_reconciliation": "Say “{command}” to try to recover the result and the charge already recorded. A call that is still uncertain will not be sent again.",
+      "credit_reservation": "Your available balance does not cover the estimated reservation for the next call. Your progress is saved; resume when there is enough balance.",
+      "resumable": "Your progress is saved. Say “{command}” to continue the same task.",
+      "needs_instruction": "The task needs an instruction that resolves the pending issue above before it can continue."
+    },
+    "stage": {
+      "preparing": "Preparing the environment",
+      "reading": "Reading the code",
+      "editing": "Applying changes",
+      "verifying": "Checking changes",
+      "running": "Running a step in the authorized environment",
+      "resuming": "Resuming from saved progress"
+    },
+    "job": {
+      "none": "No programming task is recorded in this conversation.",
+      "completed": "The run finished; see the checks and pending items in the result.",
+      "cancelled": "The task was stopped. Changes already made were kept.",
+      "needs_attention": "The task needs attention before it can continue.",
+      "waiting_after_pause_one": "The next request is still waiting.",
+      "waiting_after_pause_other": "The next {count} requests are still waiting.",
+      "in_progress": "The work is in progress. Last recorded step: {stage}.",
+      "starting": "I'm starting now and will let you know as soon as it's done.",
+      "queued_next_one": "There is 1 request after this one.",
+      "queued_next_other": "There are {count} requests after this one.",
+      "interrupted": "Task stopped; changes already made were kept.",
+      "execution_error": "The run was interrupted; its state is saved and no uncertain operation will be repeated automatically.",
+      "already_submitted": "This continuation was already received. I did not start another run.",
+      "queue_full": "This conversation's queue already has five requests. Wait for one to finish or ask me to stop.",
+      "queued_behind_pause": "I added the request to the queue. The previous task is paused: {next_step}",
+      "queued_follow": "I got the new request and queued it after the current task. I did not interrupt or mix the two scopes.",
+      "already_queued": "This request is already queued after the current task.",
+      "credit_balance": "Available account balance: {available} credits; reserved: {held}. The reservation for the next step will be checked before the call.",
+      "credit_unknown": "I couldn't check the balance right now; this does not mean it ran out.",
+      "policy_changed": "The permissions or the environment changed. Check the scope before resuming.",
+      "cancel_already_requested": "Stopping this task was already requested; I did not resume it.",
+      "pause_saving": "The result of the pause is still being saved to the conversation. Wait before resuming.",
+      "resumed": "Resume recorded for the same task. I'll recover the progress and results already saved; new steps still depend on the available balance.",
+      "stopping": "Got it, stopping. I'll stop at the next safe point, keep the changes and clear the queued requests."
+    },
+    "run": {
+      "conversation_changed": "Access to the conversation or the assistant changed; the task was not run.",
+      "continuation_revoked": "This continuation was cancelled or lost its authorization; I did not start another run.",
+      "missing_environment": "The authorized environment identity was missing; no operation was run.",
+      "environment_changed": "The environment or its permissions changed; I did not run the task.",
+      "workspace_busy": "Waiting for another run to free this environment.",
+      "access_denied": "Access to the environment changed; I did not run the task.",
+      "access_changed": "Access to the environment changed.",
+      "cancelled_pending": "The cancelled task has an operation or charge waiting for reconciliation. I did not start another task in this environment.",
+      "needs_reconciliation": "A previous operation needs reconciliation; I did not repeat it.",
+      "new_input": "Progress saved so your new instruction can be taken into account.",
+      "quantum": "Progress saved; I'll free the runner for other tasks and resume automatically.",
+      "window": "Progress saved; the run is waiting to be resumed.",
+      "unconfirmed_effect": "The command finished without enough confirmation of its effect. I kept the state and did not repeat it or run anything else.",
+      "finished_without_text": "The run finished without a written confirmation that it was done."
+    },
+    "notify": {
+      "prefix": "{name} — programming: {text}",
+      "default_name": "Assistant",
+      "fallback": "The task was interrupted; check its progress in the app conversation.",
+      "truncated": "… The full result is in the {brand} app conversation."
     }
   }
 }
