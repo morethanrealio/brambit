@@ -1136,6 +1136,7 @@ import {
 import { googleTools, calendarWritesPorConta, uploadBinaryToDrive, ensureAssistantFolder, fetchGmailAttachment, sniffBinary } from './connectors.mjs';
 import { pastaDoAssistenteTools, PASTA_LEITURA, PASTA_ESCRITA } from './team-drive.mjs';
 import { podarRegistryGrupo } from './group-agent-tools.mjs';
+import { scopeGithubTools } from './github-repo-scope.mjs';
 import { githubTools, slackTools, nuvemshopTools, microsoftTools, linkedinTools, uploadToOneDrive, ensureOneDriveFolder, microsoftHasFiles, RECONECTAR_MSG } from './connectors-ext.mjs';
 import { notionTools, splitwiseTools, infinityTools, asaasTools, asaasCall } from './connectors-vault.mjs';
 import { createAsaasFinancialScheduler } from './asaas-financial-scheduler.mjs';
@@ -1358,7 +1359,7 @@ async function providerTools(userId, opts = {}) {
   let names = [];
   try { names = await listOAuthProviders(userId); } catch { return []; }
   const out = [];
-  if (names.includes('github')) out.push(...githubTools({ token: () => validProviderToken(userId, 'github') }));
+  if (names.includes('github')) out.push(...scopeGithubTools(githubTools({ token: () => validProviderToken(userId, 'github') }), opts.githubRepos));
   if (names.includes('slack')) out.push(...slackTools({ token: () => validProviderToken(userId, 'slack') }));
   if (names.includes('microsoft')) {
     // `scope` of the token = what Microsoft granted on THIS connection. Whoever connected
@@ -3021,6 +3022,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // wrapped by the confirmation guard (addGated).
   const provTools = await providerTools(userId, {
     folderName: agent?.name || marca().nome,
+    // A team assistant reaches only the GitHub repositories its owner enabled.
+    githubRepos: agentCategory === 'grupo' ? (toolConfig.repos || []) : undefined,
     onUsage: (e) => mediaUsages.push(e),
     // A spreadsheet read from OneDrive enters the analysis environment (pandas), same as the
     // one coming from Drive: this is what lets analisar_planilha read the whole file.

@@ -22,6 +22,7 @@ import { createConfirmationStore } from './confirmation-store.mjs';
 import { prepareCurationChange } from './curation-config.mjs';
 import { prepareEmailSearchChange } from './email-search-config.mjs';
 import { createCurationStore } from './curation-store.mjs';
+import { normalizeToolConfig } from './agent-tool-config.mjs';
 // ── Persistent memory + accounts (Postgres) ──
 // Stores users, sessions, agents, raw message log and a short PROFILE
 // that the agent builds up about the user. Everything in the mtr_harness schema
@@ -7215,10 +7216,7 @@ export async function saveTurn(id, { history, profile, summary, userMsg, assista
 //             account tools and self-reconfiguration are ALWAYS blocked.
 // 'super'   = free mode (live terminal), 1:1 only and with a connected server.
 export const AGENT_CATEGORIES = ['pessoal', 'grupo', 'super'];
-// Tool groups that can be enabled on a 'grupo' agent (allow-list in tool_config.groups).
-// 'shell' = shell/code on the dedicated box; 'produtos' = scrape + RAG/catalog;
-// 'projeto' = create/manage project; 'web' = search/open link; 'apps' = mini-PaaS; 'drive' = own Drive folder.
-export const AGENT_TOOL_GROUPS = ['shell', 'produtos', 'projeto', 'web', 'apps', 'drive'];
+export { AGENT_TOOL_GROUPS, normalizeToolConfig } from './agent-tool-config.mjs';
 
 export async function setAgentCategory(agentId, userId, category, toolConfig) {
   if (!AGENT_CATEGORIES.includes(category)) return { ok: false, error: 'categoria inválida' };
@@ -7228,16 +7226,6 @@ export async function setAgentCategory(agentId, userId, category, toolConfig) {
     [agentId, userId, category, JSON.stringify(cfg)],
   );
   return { ok: rowCount > 0, category, toolConfig: cfg };
-}
-
-// Sanitizes the tool_config coming from the UI: only known groups, short host string.
-export function normalizeToolConfig(tc) {
-  const o = (tc && typeof tc === 'object') ? tc : {};
-  const groups = Array.isArray(o.groups)
-    ? o.groups.filter((g) => AGENT_TOOL_GROUPS.includes(g))
-    : [];
-  const host = typeof o.host === 'string' ? o.host.trim().slice(0, 200) : '';
-  return { groups: [...new Set(groups)], host };
 }
 
 // ── Phase 2 coding: permission mode + command allowlist (per agent) ──
