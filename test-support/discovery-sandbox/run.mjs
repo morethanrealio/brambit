@@ -27,7 +27,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const session=crypto.randomBytes(32).toString('hex'),access=crypto.randomBytes(24).toString('hex');
 let child,db,pgStarted=false,web,internalPort,thread,busy=false,closing=false;
 const log=await fs.open(path.join(root,'server.log'),'a',0o600);
-const env={...clean,PGHOST:socket,PGPORT:'5432',PGUSER:'sandbox',PGDATABASE:'postgres',PGPASSWORD:'',PORT:'0',HOST:'127.0.0.1',DISCOVERY_SANDBOX_SOCKET:socket,DISCOVERY_ENABLED:'1',VAULT_KEY:crypto.randomBytes(32).toString('base64'),APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0',TOGETHER_API_KEY:snapshot.modelKey,PRIMARY_TEXT_MODEL:'deepseek-ai/DeepSeek-V4.1-Flash',PUBLIC_BASE_URL:`http://127.0.0.1:${port}`};
+const env={...clean,PGHOST:socket,PGPORT:'5432',PGUSER:'sandbox',PGDATABASE:'postgres',PGPASSWORD:'',PORT:'0',HOST:'127.0.0.1',DISCOVERY_SANDBOX_SOCKET:socket,DISCOVERY_ENABLED:'1',VAULT_KEY:crypto.randomBytes(32).toString('base64'),APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0',TOGETHER_API_KEY:snapshot.modelKey,PRIMARY_TEXT_MODEL:'deepseek-ai/DeepSeek-V4.1-Flash-1017',PUBLIC_BASE_URL:`http://127.0.0.1:${port}`};
 delete snapshot.modelKey;
 async function stopApp(){if(!child)return;const p=child;child=null;if(p.exitCode===null){p.kill('SIGTERM');await Promise.race([new Promise(r=>p.once('exit',r)),sleep(70000)]);if(p.exitCode===null)throw Error('Application is still draining; refusing to reset');}}
 async function startApp(){

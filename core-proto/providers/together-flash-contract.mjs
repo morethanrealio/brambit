@@ -1,6 +1,16 @@
 // Together's public HTTP schema takes a string enum, even though DeepSeek's
 // reference encoder also accepts integers. Keep model internals off the wire.
-export const TOGETHER_FLASH_MODEL='deepseek-ai/DeepSeek-V4.1-Flash';
+// Default V4.1 Flash checkpoint. Together also keeps serving the undated launch
+// ID; every ID in TOGETHER_FLASH_MODELS shares this route's contract. A new
+// checkpoint goes in the set together with its line in web/pricing.mjs.
+export const TOGETHER_FLASH_MODEL='deepseek-ai/DeepSeek-V4.1-Flash-1017';
+export const TOGETHER_FLASH_MODELS=new Set(['deepseek-ai/DeepSeek-V4.1-Flash',TOGETHER_FLASH_MODEL]);
+export const isTogetherFlashModel=model=>TOGETHER_FLASH_MODELS.has(model);
+// Checkpoint the Flash routes run: PRIMARY_TEXT_MODEL when it names one (so the
+// .env can pin an older checkpoint), otherwise the default above.
+export function togetherFlashModel(env=process.env){
+ return isTogetherFlashModel(env.PRIMARY_TEXT_MODEL)?env.PRIMARY_TEXT_MODEL:TOGETHER_FLASH_MODEL;
+}
 export function flashReasoning(effort,direct=false){
  const value=direct?'low':(effort??'low');
  if(!['low','medium','high'].includes(value))throw Error('Together Flash reasoning effort must be low, medium or high');
@@ -16,7 +26,7 @@ export function flashReasoning(effort,direct=false){
 // 2.25 keeps a 2x median margin (1st percentile still 1.46x). Images keep 1536.
 const TEXT_OVERESTIMATE=2.25;
 export function estimateTogetherFlashInput(spec){
- if(spec?.provider!=='together'||spec.model!==TOGETHER_FLASH_MODEL||spec.body?.model!==TOGETHER_FLASH_MODEL||!Array.isArray(spec.body.messages))throw Error('Unsupported Together quote');
+ if(spec?.provider!=='together'||!isTogetherFlashModel(spec.model)||spec.body?.model!==spec.model||!Array.isArray(spec.body.messages))throw Error('Unsupported Together quote');
  const body=structuredClone(spec.body);let images=0;
  for(const m of body.messages){
   if(!Array.isArray(m.content))continue;

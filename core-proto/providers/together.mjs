@@ -1,6 +1,6 @@
-import {TOGETHER_FLASH_MODEL,flashReasoning,estimateTogetherFlashInput,togetherRejectionDiagnostic} from './together-flash-contract.mjs';
+import {isTogetherFlashModel,flashReasoning,estimateTogetherFlashInput,togetherRejectionDiagnostic} from './together-flash-contract.mjs';
 import {makeCompativel} from './compatible.mjs';
-export {TOGETHER_FLASH_MODEL} from './together-flash-contract.mjs';
+export {TOGETHER_FLASH_MODEL,isTogetherFlashModel,togetherFlashModel} from './together-flash-contract.mjs';
 export {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './tool-in-text.mjs';
 // ── Real adapter: Together AI (OpenAI-compatible Chat Completions) ──
 // Preset of the compatible engine (compatible.mjs). The key comes from
@@ -34,7 +34,7 @@ export function togetherEnabled() {
 
 // Provider HTTP contract differs from the reference model's numeric effort.
 export function togetherReasoning(model,effort,direct=false){
-  return model===TOGETHER_FLASH_MODEL ? flashReasoning(effort,direct)
+  return isTogetherFlashModel(model) ? flashReasoning(effort,direct)
     : direct ? {reasoning:{enabled:false}} : {reasoning_effort:effort??'high'};
 }
 
@@ -42,7 +42,7 @@ export function makeTogether({
   model = 'zai-org/GLM-5.2',
   maxTokens = 16384,          // TOTAL output ceiling (reasoning + text). Generous so the
                               // reasoning finishes and ALWAYS leaves room for the visible text.
-  temperature = model === TOGETHER_FLASH_MODEL ? 1.0 : 0.7,
+  temperature = isTogetherFlashModel(model) ? 1.0 : 0.7,
   reasoningEffort,   // GLM-5.2: 'high' | 'max' (model default = 'max'). We use
                               // 'high' so reasoning doesn't monopolize the output ceiling.
 } = {}) {
@@ -55,7 +55,7 @@ export function makeTogether({
     // timeout (~minutes) before "fetch failed". Together (serverless) occasionally
     // returns 503/429 due to capacity (the retry is a common rule, rules.mjs).
     stream: { inatividadeMs: 25_000, diagnosticoRecusa: togetherRejectionDiagnostic },
-    ...(model === TOGETHER_FLASH_MODEL ? { contarEntrada: estimateTogetherFlashInput } : {}),
+    ...(isTogetherFlashModel(model) ? { contarEntrada: estimateTogetherFlashInput } : {}),
     // GLM and DeepSeek sometimes write the call as TEXT when the Together
     // parser fails on a long generation (bug from 2026-07-01; DSML from two cases
     // on 2026-09-01). Recovers; if that doesn't work, re-samples; residue never leaks.

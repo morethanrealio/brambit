@@ -58,7 +58,7 @@ export function parseModels(text, source = 'models.yaml') {
     const v = typeof value === 'string' ? { model: value } : value;
     if (!v?.model) fail(`${where}: model is missing (format provider/model)`);
     const s = String(v.model), i = s.indexOf('/');
-    if (i <= 0 || i === s.length - 1) fail(`${where}: "${s}" must be provider/model (e.g. together/deepseek-ai/DeepSeek-V4.1-Flash)`);
+    if (i <= 0 || i === s.length - 1) fail(`${where}: "${s}" must be provider/model (e.g. together/deepseek-ai/DeepSeek-V4.1-Flash-1017)`);
     const provider = s.slice(0, i);
     if (!providers[provider]) fail(`${where}: provider "${provider}" is not in the providers section`);
     if (v.options != null && (typeof v.options !== 'object' || Array.isArray(v.options))) fail(`${where}: options must be a list of field: value`);

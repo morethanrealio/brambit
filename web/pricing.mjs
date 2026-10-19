@@ -8,6 +8,8 @@
 const PRICES = {
   // Together public standard rates verified 2026-09-13; no DeepSeek-direct peak discount.
   'deepseek-ai/DeepSeek-V4.1-Flash': { in: 0.30, cachedIn: 0.006, out: 1.20 },
+  // 1017 checkpoint, same rates (Together /v1/models, verified 2026-10-19).
+  'deepseek-ai/DeepSeek-V4.1-Flash-1017': { in: 0.30, cachedIn: 0.006, out: 1.20 },
   // Official API, peak USD/1M on 2026-09-11. Provider tags off-peak calls.
   'deepseek-flash': { in: 0.30, cachedIn: 0.006, out: 1.20 },
   // 3.1 Flash-Lite: $0.25 in / $1.50 out / cache $0.025 (ai.google.dev/pricing, 2026-06-29).
