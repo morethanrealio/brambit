@@ -19,7 +19,7 @@ const PESSOAS = {
 const AGENTES = { 'ag-equipe': { id: 'ag-equipe', name: 'Comercial', category: 'grupo' }, 'ag-pessoal': { id: 'ag-pessoal', name: 'Max', category: 'pessoal' } };
 
 function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } = {}) {
-  const postados = [], turnos = [];
+  const postados = [], turnos = [], statuses = [];
   const links = new Map([
     ['T1:CCOM', { user_id: DONO, agent_id: 'ag-equipe' }], ['T1:DDONO', { user_id: DONO, agent_id: 'ag-equipe' }],
     ['T1:DANA', { user_id: DONO, agent_id: 'ag-equipe' }], ['T1:CPESSOAL', { user_id: DONO, agent_id: 'ag-pessoal' }],
@@ -27,8 +27,9 @@ function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } 
   const fetchOriginal = globalThis.fetch;
   t.after(() => { globalThis.fetch = fetchOriginal; });
   globalThis.fetch = async (url, init) => {
-    assert.match(String(url), /^https:\/\/slack\.com\/api\/chat\.postMessage$/, 'no real network');
     const corpo = JSON.parse(init.body);
+    if (String(url) === 'https://slack.com/api/assistant.threads.setStatus') { statuses.push(corpo); return { status: 200, json: async () => ({ ok: true }) }; }
+    assert.match(String(url), /^https:\/\/slack\.com\/api\/chat\.postMessage$/, 'no real network');
     if (semCustomize && corpo.username) return { status: 200, json: async () => ({ ok: false, error: 'missing_scope' }) };
     postados.push(corpo);
     return { status: 200, json: async () => ({ ok: true }) };
@@ -49,7 +50,7 @@ function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } 
   let n = 0;
   const enviar = (evt) => handler.process({ type: 'event_callback', event_id: 'E' + (++n), team_id: 'T1',
     authorizations: [{ user_id: 'UBOT' }], event: { ts: String(n), ...evt } });
-  return { enviar, postados, turnos, links };
+  return { enviar, postados, turnos, links, statuses };
 }
 
 test('team channel: members and the owner share one conversation per channel, named; guests and outsiders get silence', async (t) => {
@@ -65,7 +66,9 @@ test('team channel: members and the owner share one conversation per channel, na
     { agent: 'ag-equipe', userId: DONO, text: '[Rafa] resume pra Ana', canal: 'CCOM' },
     { agent: 'ag-equipe', userId: DONO, text: '[Bia Rafa] oi', canal: 'CCOM' },
   ]);
-  assert.deepEqual(s.postados.map((p) => [p.text, p.username]), [['RESPOSTA', 'Comercial'], ['RESPOSTA', 'Comercial'], ['RESPOSTA', 'Comercial']]);
+  // Every reply in the thread of the message it answers, whichever event Slack delivered.
+  assert.deepEqual(s.postados.map((p) => [p.text, p.username, p.thread_ts]), [['RESPOSTA', 'Comercial', '1'], ['RESPOSTA', 'Comercial', '2'], ['RESPOSTA', 'Comercial', '3']]);
+  assert.deepEqual(s.statuses.filter((e) => e.status).map((e) => [e.thread_ts, e.status]), [['1', 'está pensando...'], ['2', 'está pensando...'], ['3', 'está pensando...']]);
 });
 
 test('team assistant DM: the owner gets it, anyone else the channel-only notice', async (t) => {
@@ -127,6 +130,7 @@ test('the real member lookup sends the user id where Slack reads it, so a member
       const found = u.searchParams.get('user') === 'UMEMBER';
       return { status: 200, json: async () => (found ? { ok: true, user: { team_id: 'T1', real_name: 'Ana', profile: {} } } : { ok: false, error: 'user_not_found' }) };
     }
+    if (u.pathname === '/api/assistant.threads.setStatus') return { status: 200, json: async () => ({ ok: true }) };
     assert.equal(u.pathname, '/api/chat.postMessage', 'no real network');
     posted.push(JSON.parse(init.body).text);
     return { status: 200, json: async () => ({ ok: true }) };
