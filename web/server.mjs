@@ -3718,10 +3718,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if (horario.error) return horario.error;
     const cad = normalizeRoutineDays({ dias, dias_da_semana, dias_do_mes, semana_do_mes });
     if (cad.error) return cad.error;
-    const ch = String(canal ?? '').toLowerCase().trim();
-    if (ch && !['telegram', 'email', 'whatsapp'].includes(ch)) {
-      return `Canal "${ch}" não reconhecido. Use telegram, whatsapp, email, ou omita.`;
-    }
+    // The same channel rule as the run: "app" is in the schema, so it passes here too.
+    const ch = normalizarCanalRotina(canal);
+    if (ch.error) return ch.error;
     const rec = parseRecurrence({ repetirCadaMin: repetir_cada_min, repetirAte: repetir_ate, startMs: Date.now(), tz: userTz });
     if (rec?.error) return rec.error;
     return null;
