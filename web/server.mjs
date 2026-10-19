@@ -6932,8 +6932,8 @@ const emailPoller = createEmailPoller({
 // email); the assistant is picked inside the chat (sticky per person,
 // switchable via @name / "menu"). Isolated "Slack" thread per agent.
 const slackHandler = createSlackHandler({
-  runConversation: async (agent, userId, message, onProgress, canal) => { // canal: team assistant, one shared memory per channel
-    const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: canal ? `Slack · ${canal}` : 'Slack' });
+  runConversation: async (agent, userId, message, onProgress, conversation) => { // conversation: team channel, one per Slack thread
+    const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: conversation || 'Slack' });
     return runConversationInThread(agent, thread, userId, message, { kind: 'slack', onProgress });
   },
   loadAgent: getAgentOwned,

@@ -57,12 +57,12 @@ export async function comReenvio(enviar, { esperas = esperasDeReenvio(), rotulo 
 
 // Builds a channel's `avisar`. The person's language and the logging into the
 // channel thread's history come from the server; only the shared rule stays here.
-// avisar({ agent, userId, tipo, mensagem, enviar }): sends the notice and, if
+// avisar({ agent, userId, tipo, mensagem, enviar, conversation }): sends the notice and, if
 // it was not definitely refused, logs it to the history (with the question,
 // when `turno`). Never throws: the notice is the last resort of a path that
 // already failed.
 export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
-  return async function avisar({ agent, userId, tipo, mensagem, enviar }) {
+  return async function avisar({ agent, userId, tipo, mensagem, enviar, conversation }) {
     let text = textoAvisoCanal(null, tipo);
     try { text = textoAvisoCanal((await idiomaDe?.(userId))?.language, tipo); } catch { /* stays pt-BR */ }
     let recusado = false;
@@ -71,20 +71,20 @@ export function criarAvisoCanal({ rotulo, idiomaDe, registrar }) {
       console.error(`[${rotulo}] error notice not delivered:`, e?.message ?? e);
     }
     if (recusado || !registrar) return;
-    try { await registrar({ agent, userId, text, pergunta: tipo === 'turno' ? mensagem : null }); } catch (e) {
+    try { await registrar({ agent, userId, text, pergunta: tipo === 'turno' ? mensagem : null, conversation }); } catch (e) {
       console.error(`[${rotulo}] error notice outside history:`, e?.message ?? e);
     }
   };
 }
 
 // Server's default logging: the notice enters the channel's fixed thread
-// (`title`), inside the thread lock, so it doesn't cross with a turn writing
+// (`title`, or the `conversation` the turn ran in), inside the thread lock, so it doesn't cross with a turn writing
 // at the same time.
 export function avisoNaThread({ idiomaDe, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread }) {
   return (title) => ({
     idiomaDe,
-    registrar: async ({ agent, userId, text, pergunta }) => {
-      const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title });
+    registrar: async ({ agent, userId, text, pergunta, conversation }) => {
+      const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: conversation || title });
       await withThreadLock(thread.id, () => appendAssistantToThread({ threadId: thread.id, userId, text, pergunta }));
     },
   });
