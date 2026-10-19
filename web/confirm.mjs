@@ -360,8 +360,9 @@ export function describeDone(name, args = {}, language = null) {
 // switches language in between. An older pending action (recorded before this
 // change, or restored from the database) doesn't have the field and falls back
 // to pt-BR, today's default behavior.
-// Tools with confirmation whose output is a fixed pt-BR success sentence.
-const FRASE_PRONTA_PT = new Set(['criar_rotina']);
+// Tools with confirmation whose output is a fixed pt-BR success sentence. Their
+// failures must come back as { ok: false }: any other plain text is read as success.
+const FRASE_PRONTA_PT = new Set(['criar_rotina', 'cancelar_rotina']);
 export function renderConfirmed(pend, r) {
   const lang = pend?.language ? tagIdioma(pend.language) : defaultLanguage();
   const feito = () => describeDone(pend.name, pend.args, pend.language);
