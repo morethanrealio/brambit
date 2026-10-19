@@ -164,3 +164,27 @@ test('the same natural approval works in English and Spanish',()=>{
     for(const text of no[lang]) assert.notEqual(selectConfirmation(rows,text,undefined,false,null,null,ids).kind,'confirm',text);
   }
 });
+
+test('on a card that cancels or stops something, its own verb is part of the yes (dev test of 0.3.0, 18/10)',async()=>{
+  const card=(confirmationText,label=confirmationText)=>[{id:'r1',number:1,name:'cancelar_rotina',state:'pending',presented:true,confirmationText,label,args:{},source:{ownerText:'A'}}];
+  const cases=[
+    ['cancelar de vez a rotina "Resumo de contas"',['pode cancelar sim','sim, pode cancelar','sim, cancela'],['cancela','cancela isso'],['não, não cancela','não precisa cancelar']],
+    ['permanently cancel the routine "Bills summary"',['yes, cancel it','go ahead and cancel it','yes, cancel it, thanks!'],['cancel it'],["no, don't cancel"]],
+    ['cancelar definitivamente la rutina "Resumen de cuentas"',['sí, cancélala','sí, puedes cancelarla'],['cancélala'],['no, no la canceles']],
+    ['stop the system "Plant shop" (offline until restarted; data is kept)',['yes, stop it'],['stop it'],["no, don't stop it"]],
+    ['parar o sistema "Loja" (sai do ar até ser reiniciado; os dados ficam)',['pode parar sim'],['pare'],['não, não para']],
+  ];
+  for(const [text,yes,bare,no] of cases){
+    const rows=card(text);
+    for(const m of yes) assert.equal(selectConfirmation(rows,m,undefined,false,null,'r1',['r1']).kind,'confirm',m);
+    for(const m of bare) assert.equal(selectConfirmation(rows,m,undefined,false,null,'r1',['r1']).kind,'ambiguous',m);
+    for(const m of no) assert.notEqual(selectConfirmation(rows,m,undefined,false,null,'r1',['r1']).kind,'confirm',m);
+  }
+  // On any other card the same words still refuse.
+  assert.equal(selectConfirmation(card('enviar um e-mail para ana@example.invalid'),'cancela',undefined,false,null,'r1',['r1']).kind,'cancel');
+  // What stays with the model about the card is told it was not executed; other topics are not.
+  const rows=card('permanently cancel the routine "Bills summary"');
+  const session={rows,implicitTargetId:'r1',implicitTargetIds:['r1']};
+  assert.match((await handleConfirmation(session,{message:"no, don't cancel"})).note,/NOT executed: 1\. permanently cancel/);
+  assert.equal(await handleConfirmation(session,{message:'what time is it?'}),null);
+});
