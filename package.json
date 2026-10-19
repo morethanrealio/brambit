@@ -1,6 +1,6 @@
 {
   "name": "brambit",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "main": "index.js",
   "imports": {
     "#provider-rules": "./core-proto/providers/rules.mjs"
