@@ -180,11 +180,15 @@ test('on a card that cancels or stops something, its own verb is part of the yes
     for(const m of bare) assert.equal(selectConfirmation(rows,m,undefined,false,null,'r1',['r1']).kind,'ambiguous',m);
     for(const m of no) assert.notEqual(selectConfirmation(rows,m,undefined,false,null,'r1',['r1']).kind,'confirm',m);
   }
+  // The verb under a negation refuses the card instead of leaving it open (dev test of 0.3.0, 19/10).
+  for(const [text,m] of [['permanently cancel the routine "Bills summary"',"No, don't cancel it."],['cancelar definitivamente la rutina "Resumen de cuentas"','No, no la canceles.'],['create the routine "Weekly menu"',"No, don't create it."]])
+    assert.equal(selectConfirmation(card(text),m,undefined,false,null,'r1',['r1']).kind,'cancel',m);
+  assert.notEqual(selectConfirmation(card('permanently cancel the routine "Bills summary"'),'No, cancel it.',undefined,false,null,'r1',['r1']).kind,'cancel');
   // On any other card the same words still refuse.
   assert.equal(selectConfirmation(card('enviar um e-mail para ana@example.invalid'),'cancela',undefined,false,null,'r1',['r1']).kind,'cancel');
   // What stays with the model about the card is told it was not executed; other topics are not.
   const rows=card('permanently cancel the routine "Bills summary"');
   const session={rows,implicitTargetId:'r1',implicitTargetIds:['r1']};
-  assert.match((await handleConfirmation(session,{message:"no, don't cancel"})).note,/NOT executed: 1\. permanently cancel/);
+  assert.match((await handleConfirmation(session,{message:'did you cancel it?'})).note,/NOT executed: 1\. permanently cancel/);
   assert.equal(await handleConfirmation(session,{message:'what time is it?'}),null);
 });

@@ -239,16 +239,26 @@ function cardVerbFamily(rows) {
 // Words of what the person said, each with whether it carried an accent.
 const spokenWords = text => (String(text || '').replace(/[’‘`]/g, "'").match(/[\p{L}\p{N}']+/gu) || [])
   .flatMap(raw => wordsOf(raw).map(w => ({ w, accented: folded(raw) !== raw.toLowerCase() })));
+// The card's verb under a negation is the refusal: "No, don't cancel it" and "No,
+// no la canceles" fell through as small talk and left the card open (dev test of
+// 0.3.0, 2026-10-19). The negation has to sit in the verb's own clause, so "No,
+// cancel it" stays out.
+const negatedVerb = (said, isVerb) => said.split(/[,;.!:]/).some(clause => {
+  const words = spokenWords(clause);
+  const at = words.findIndex(isVerb);
+  return at > 0 && words.slice(0, at).some(t => NEGATION_WORD.test(t.w));
+});
 function ownVerbConsent(text, rows) {
   const said = String(text || '').trim();
   if (!rows.length || !said || said.endsWith('?')) return null;
   const family = cardVerbFamily(rows);
   const tokens = spokenWords(said);
   const isVerb = t => family.test(t.w, t.accented);
-  if (!family || !tokens.some(isVerb) || tokens.some(t => NEGATION_WORD.test(t.w))) return null;
+  if (!family || !tokens.some(isVerb)) return null;
   // The how-to-confirm line ("responda “pode”") is not part of the card's subject.
   const card = new Set(rows.flatMap(cardWords).filter(w => !plainConsent(w)));
-  const rest = tokens.filter(t => !isVerb(t) && !card.has(t.w) && !OWN_VERB_FILLER.has(t.w)).map(t => t.w).join(' ');
+  const rest = tokens.filter(t => !isVerb(t) && !card.has(t.w) && !OWN_VERB_FILLER.has(t.w) && !NEGATION_WORD.test(t.w)).map(t => t.w).join(' ');
+  if (tokens.some(t => NEGATION_WORD.test(t.w))) return /^(?:do)?$/.test(rest) && negatedVerb(said, isVerb) ? 'refuse' : null;
   return !rest ? family.bare : plainConsent(rest) ? 'consent' : null;
 }
 // Whether a message talks about what the cards do: their own leading verb, or a word
@@ -331,7 +341,7 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
   const verbConsent = viaReaction || edit || explicit.length ? null : ownVerbConsent(body, verbScope);
   if (verbConsent === 'bare') return {kind:'ambiguous',rows:verbScope};
   const consentOnly = plainConsent(body) || verbConsent === 'consent';
-  let decision = viaReaction ? (confirm ? 'confirm' : 'cancel') : edit ? 'edit' : confirm || verbConsent ? 'confirm' : cancel ? 'cancel' : null;
+  let decision = viaReaction ? (confirm ? 'confirm' : 'cancel') : edit ? 'edit' : confirm || verbConsent === 'consent' ? 'confirm' : cancel || verbConsent === 'refuse' ? 'cancel' : null;
   const discoveryConsent = visible.length === 1 && visible[0].name === 'jornada_configurar' && confirmsPending(visible[0],said);
   if (!decision && discoveryConsent) decision = 'confirm';
   let selected = explicit.map(n => rows.find(r => r.number === n)).filter(Boolean);
