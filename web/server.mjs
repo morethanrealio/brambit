@@ -4040,9 +4040,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     },
     run: async ({ titulo, id }) => {
       const rows = await listRoutinesForUser(userId);
-      if (!rows.length) return 'Você não tem nenhuma rotina pra cancelar.';
+      // Failures go out as { ok: false }: plain text is read as success (FRASE_PRONTA_PT).
+      if (!rows.length) return { ok: false, error: 'Você não tem nenhuma rotina pra cancelar.' };
       const sel = resolveRoutine(rows, { id, titulo, verbo: 'cancelar', tool: 'cancelar_rotina' });
-      if (sel.err) return sel.err;
+      if (sel.err) return { ok: false, error: sel.err };
       await deleteRoutine(sel.row.id, userId);
       return `Rotina "${sel.row.title}" (#${routineCode(sel.row, rows)}, ${routineCadence(sel.row)}) cancelada. Não vou mais executá-la.`;
     },
