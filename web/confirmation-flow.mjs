@@ -187,6 +187,44 @@ function phraseSelection(rows, text) {
   if (!found.length) return null;
   return { rows: found, consent: /\b(?:pode|sim|isso|ok|okay|beleza|confirmo|confirma|confirme|autorizo|aprovo|yes|yeah|yep|sure|please|go ahead|si|vale|dale|adelante|puedes|puede)\b/.test(lead), bare: !lead.trim() };
 }
+// A card whose own action is cancelling or stopping something collides with the
+// refusal words: "cancel", "stop" and "pare" also mean "don't do it". "Pode
+// cancelar sim", "Yes, cancel it" and "Sí, cancélala" in reply to "permanently
+// cancel the routine X" fell through as small talk, and the model then said it had
+// cancelled while the routine stayed on (dev test of 0.3.0, 2026-10-18). On these
+// cards the card's own leading verb is part of the yes: the rest has to be pure
+// consent, the card's own words or a pronoun. The verb alone ("Cancela.", "Stop
+// it.") can mean either the action or "drop this request", so it shows the card again.
+const OWN_VERBS = [
+  { lead: /^cancel(?:ar)?$/, forms: /^cancel[a-z]*$/ },
+  { lead: /^stop$/, forms: /^stop(?:ped|ping)?$/ },
+  { lead: /^parar$/, forms: /^par(?:ar|e|a)$/ },
+  { lead: /^detener$/, forms: /^det(?:en|ien)[a-z]*$/ },
+];
+const OWN_VERB_FILLER = new Set(['it','this','that','them','now','and','then','please','thanks','thank','you','valeu','obrigado','obrigada','gracias','por','favor','e','y','entao','agora','ahora',
+  'o','a','os','as','lo','la','los','las','el','ela','ele','isso','isto','esse','essa','este','esta','eso','esto']);
+const NEGATION_WORD = /^(?:nao|no|not|nope|nem|never|nunca|jamais|nada|ninguna|ninguno|dont|cant|wont|didnt|doesnt|shouldnt)$|n't$/;
+const wordsOf = text => folded(String(text || '')).replace(/[’‘`]/g, "'").match(/[a-z0-9']+/g) || [];
+const cardWords = row => wordsOf(String(row.confirmationText || '').split(/\n\s*\n/)[0]);
+const ownVerbFamily = rows => rows.length ? OWN_VERBS.find(f => rows.every(r => f.lead.test(cardWords(r).find(w => !/^(?:permanently|definitivamente)$/.test(w)) || ''))) : undefined;
+function ownVerbConsent(text, rows) {
+  const said = String(text || '').trim();
+  if (!rows.length || !said || said.endsWith('?')) return null;
+  const family = ownVerbFamily(rows);
+  const tokens = wordsOf(said);
+  if (!family || !tokens.some(w => family.forms.test(w)) || tokens.some(w => NEGATION_WORD.test(w))) return null;
+  // The how-to-confirm line ("responda “pode”") is not part of the card's subject.
+  const card = new Set(rows.flatMap(cardWords).filter(w => !plainConsent(w)));
+  const rest = tokens.filter(w => !family.forms.test(w) && !card.has(w) && !OWN_VERB_FILLER.has(w)).join(' ');
+  return !rest ? 'bare' : plainConsent(rest) ? 'consent' : null;
+}
+// Whether a message talks about what the cards do: their own leading verb, or a word
+// of their subject (compared by its first five letters, so "cancela" meets "cancelar").
+function mentionsCards(text, rows) {
+  const family = ownVerbFamily(rows);
+  const stems = new Set(rows.flatMap(cardWords).filter(w => w.length >= 5 && !plainConsent(w)).map(w => w.slice(0, 5)));
+  return wordsOf(text).some(w => family?.forms.test(w) || (w.length >= 5 && stems.has(w.slice(0, 5))));
+}
 function approvalOfTargets(text, rows) {
   if (!naturalApproval(text)) return false;
   let rest = folded(text);
@@ -254,8 +292,13 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
   const naturalCancel = !body.trim().endsWith('?') && /^(?:por favor[, ]+)?(?:cancela|cancele|cancelar|cancel)\b/i.test(folded(body));
   const plainCancel = cancellation(body);
   const cancel = plainCancel || naturalCancel;
-  let decision = viaReaction ? (confirm ? 'confirm' : 'cancel') : edit ? 'edit' : confirm ? 'confirm' : cancel ? 'cancel' : null;
   const visible = displayedRows(rows, implicitIds.length ? implicitIds : implicitId ? [implicitId] : []);
+  const referenced = target === undefined ? [] : rows.filter(r => r.messageRefs?.some(ref => ref.channel === target?.channel && ref.messageId === target?.messageId));
+  const verbScope = [referenced, visible, pending].map(s => s.filter(r => r.state === 'pending')).find(s => s.length) || [];
+  const verbConsent = viaReaction || edit || explicit.length ? null : ownVerbConsent(body, verbScope);
+  if (verbConsent === 'bare') return {kind:'ambiguous',rows:verbScope};
+  const consentOnly = plainConsent(body) || verbConsent === 'consent';
+  let decision = viaReaction ? (confirm ? 'confirm' : 'cancel') : edit ? 'edit' : confirm || verbConsent ? 'confirm' : cancel ? 'cancel' : null;
   const discoveryConsent = visible.length === 1 && visible[0].name === 'jornada_configurar' && confirmsPending(visible[0],said);
   if (!decision && discoveryConsent) decision = 'confirm';
   let selected = explicit.map(n => rows.find(r => r.number === n)).filter(Boolean);
@@ -264,7 +307,7 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       && !/^(?:confirma|confirme)[.! ]*$/.test(folded(body))) return {kind:'ambiguous',rows:pending};
   let matches = [];
   if (target !== undefined) {
-    matches = rows.filter(r => r.messageRefs?.some(ref => ref.channel === target?.channel && ref.messageId === target?.messageId));
+    matches = referenced;
     if (viaReaction && !pending.length && !matches.length) return {kind:'ignore'};
     if (!validConfirmationReference(target)) return {kind:decision || explicit.length ? 'unknown' : 'continue',rows:pending};
     if (!matches.length && !decision && !explicit.length) return {kind:'continue'};
@@ -277,7 +320,7 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       if (!explicit.length && !viaReaction && decision === 'confirm') {
         const named = naturalTargets(rows,said,false);
         if (named.some(r => !matches.some(m => m.id === r.id))) return {kind:'unknown',rows:pending};
-        if (matches.length === 1 && !plainConsent(body) && !approvalOfTargets(said,matches)
+        if (matches.length === 1 && !consentOnly && !approvalOfTargets(said,matches)
             && !(phraseSelection(matches,said)?.consent)
             && !(matches[0].name === 'jornada_configurar' && confirmsPending(matches[0],said))) return {kind:'ambiguous',rows:matches};
       }
@@ -289,7 +332,7 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
           if (decision === 'confirm' && !phrased?.consent && !approvalOfTargets(said,narrowed)) return {kind:'ambiguous',rows:matches};
           selected = narrowed;
         }
-        else if (decision === 'confirm' && !plainConsent(body)
+        else if (decision === 'confirm' && !consentOnly
           && !allConsent(body)) {
           return {kind:'ambiguous',rows:matches};
         }
@@ -323,7 +366,7 @@ export function selectConfirmation(rows, message, target, viaReaction = false, i
       // A reaction's decision already came from the tap itself (positive/negative),
       // not from matching free text, so the plain-consent phrase check below does
       // not apply to it; it still needs a usable row to land on, same as any other.
-      if (decision === 'confirm' && !viaReaction && !plainConsent(body) && !discoveryConsent) return {kind:'ambiguous',rows:pending};
+      if (decision === 'confirm' && !viaReaction && !consentOnly && !discoveryConsent) return {kind:'ambiguous',rows:pending};
       // Simple consent goes to the single card the person just saw, even with
       // older requests still pending; those stay open. A targetless refusal
       // still requires a single pending one.
@@ -431,7 +474,16 @@ async function handleGroup(session, rows, {decision, viaReaction, inputId, resol
 export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
   resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000 } = {}) {
   const selected = selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []);
-  if (selected.kind === 'continue') return null;
+  if (selected.kind === 'continue') {
+    // A card was on screen and this message was not taken as a decision on it. Without
+    // saying so, the model answered "Yes, cancel it" with "the routine is cancelled"
+    // while it was still on (dev test of 0.3.0, 2026-10-18).
+    const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
+    const shown = shownIds.map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
+    const said = userSaid(message);
+    if (!shown.length || !(naturalApproval(said) || mentionsCards(said, shown))) return null;
+    return { note: `[SYSTEM: still waiting for the owner's confirmation and NOT executed: ${shown.map(r => `${r.number}. ${r.label}`).join('; ')}. This message was not taken as a decision on it, so never say or imply it was done. If the owner wants it done, call the same tool again with the same arguments and the confirmation card is shown again; otherwise just answer the message. Do not repeat this block.]` };
+  }
   if (selected.kind === 'ignore') return {ignore:true};
   if (selected.kind === 'replay') {
     if (selected.rows?.length > 1) {
