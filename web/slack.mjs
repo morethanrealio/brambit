@@ -27,6 +27,7 @@ import { hostDaMarca, marca } from './brand.mjs';
 import { tagIdioma } from './locale.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { comReenvio, criarAvisoCanal } from './channel-notice.mjs';
+import { productI18n } from './i18n.mjs';
 
 const SLACK_API = 'https://slack.com/api';
 
@@ -131,6 +132,21 @@ async function postMessage(channel, text, threadTs, { reenvio = false, nome = nu
   }
 }
 
+// Slack's loading status in the reply's thread ("<app> is thinking...") while a turn runs.
+// Works in channel threads with the chat:write scope (Slack changelog, 2026-03-05). Slack
+// clears it when the app posts in the thread and after two minutes, so a long turn renews
+// it, and the end clears it in case nothing was posted.
+const STATUS_RENEW_MS = 90 * 1000;
+function workingStatus(channel, threadTs, status) {
+  if (!threadTs) return { renew() {}, stop: async () => {} };
+  const set = (s) => slackApi('assistant.threads.setStatus', { channel_id: channel, thread_ts: threadTs, status: s })
+    .catch((e) => console.error('[slack] setStatus:', e?.message ?? e));
+  set(status);
+  const timer = setInterval(() => set(status), STATUS_RENEW_MS);
+  timer.unref?.();
+  return { renew: () => { set(status); }, stop: () => { clearInterval(timer); return set(''); } };
+}
+
 // DM auto-reply where the team assistants live (channel only, no DM).
 export const SO_NO_CANAL = {
   'pt-BR': 'Oi! Os assistentes da equipe só conversam nos canais do Slack onde estão. É só me mencionar lá. Por mensagem direta eu não respondo.',
@@ -215,9 +231,12 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     let text = (evt.text || '').trim();
     text = text.replace(/<@[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // app_mention replies in the mention's thread; DM replies at the top (or in the thread
-    // if the person mentioned it inside one).
-    const threadTs = type === 'app_mention' ? (evt.thread_ts || evt.ts) : evt.thread_ts;
+    const privado = conversaPrivada(evt);
+    // Outside a DM the reply always goes in the message's thread. Deciding by event type
+    // left it loose in the channel whenever Slack delivered the 'message' copy of a mention
+    // before the app_mention (the dedup below keeps the first). A DM replies at the top, or
+    // in the thread the person wrote in.
+    const threadTs = privado ? evt.thread_ts : (evt.thread_ts || evt.ts);
     // Name the replies go out under: the assistant's, once it's known.
     let nome = null;
     const postar = (t, opts = {}) => postMessage(evt.channel, t, threadTs, { ...opts, nome });
@@ -227,23 +246,29 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     const responder = async (agent, userId, canal) => {
       nome = agent.name;
       const enviarAviso = (t) => postar(t);
-      let res;
-      try { res = await runConversation(agent, userId, text, reply, canal); } catch (e) {
-        console.error('[slack] conversation error:', e?.message ?? e);
-        await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso });
-        return;
-      }
-      if (res?.suppressed) return;
-      const out = typeof res === 'string' ? res : res?.text;
-      try { await postar(out || '(sem resposta)', { reenvio: true }); } catch (e) {
-        console.error('[slack] reply not delivered:', e?.message ?? e);
-        await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso });
-      }
+      let language = null;
+      try { language = (await avisoCanal.idiomaDe?.(userId))?.language; } catch { /* instance default */ }
+      const status = workingStatus(evt.channel, threadTs, productI18n().t('delivery.slack.thinking', tagIdioma(language)));
+      // A progress post clears Slack's status, so it comes back right after.
+      const onProgress = (t) => reply(t).then(() => status.renew());
+      try {
+        let res;
+        try { res = await runConversation(agent, userId, text, onProgress, canal); } catch (e) {
+          console.error('[slack] conversation error:', e?.message ?? e);
+          await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso });
+          return;
+        }
+        if (res?.suppressed) return;
+        const out = typeof res === 'string' ? res : res?.text;
+        try { await postar(out || '(sem resposta)', { reenvio: true }); } catch (e) {
+          console.error('[slack] reply not delivered:', e?.message ?? e);
+          await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso });
+        }
+      } finally { await status.stop(); }
     };
 
     const teamId = meta.teamId || evt.team || '';
     const channel = evt.channel;
-    const privado = conversaPrivada(evt);
 
     // Channel/group (non-DM) via the 'message' event: only responds if the channel is
     // connected by code (otherwise the bot would become noise in someone else's channel). Without

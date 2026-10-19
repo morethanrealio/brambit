@@ -1999,6 +1999,9 @@
     "whatsapp_held": {
       "reminder": "⏰ Seu lembrete \"{summary}\" está pronto. Não mandei direto porque, depois de 24h sem conversa, o WhatsApp junta tudo numa linha só. Me manda um OK que eu te mando formatado.",
       "routine": "Seu \"{title}\" de hoje está pronto. Não mandei direto porque, depois de 24h sem conversa, o WhatsApp junta tudo numa linha só. Me manda um OK que eu te mando formatado."
+    },
+    "slack": {
+      "thinking": "está pensando..."
     }
   },
   "system_settings": {
