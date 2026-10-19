@@ -1,6 +1,7 @@
 // Public support on WhatsApp: whoever writes to the number without an account goes to the
-// public assistant only when the installation turned it on; the number's connection code
-// still works before that; the linked owner never falls into public. Real inbox
+// public assistant only when the installation turned it on, gets a neutral reply while it is
+// off, and the login message only where there is no public support; the number's connection
+// code still works before that; the linked owner never falls into public. Real inbox
 // (local PostgreSQL) and the real handler; the public turn is fake. Chopped-up messages
 // become a single turn, and rich plugin outputs go out as their own messages.
 import test from 'node:test';
@@ -35,8 +36,8 @@ test('WhatsApp: unknown sender goes to public support only when enabled; owner a
  const lookupRecipient=from=>db.getWhatsAppLink(from);
  const done=async()=>!(await f.pool.query("SELECT 1 FROM mtr_harness.whatsapp_inbox WHERE state NOT IN ('completed','ignored','uncertain')")).rows.length;
  const estado=async id=>(await f.pool.query('SELECT state FROM mtr_harness.whatsapp_inbox WHERE wamid=$1',[id])).rows[0]?.state;
- let ligado=true;const turnos=[],dono=[];let turno=async({mensagem})=>({text:'público: '+mensagem});
- const publico={atende:async()=>ligado,turno:async m=>{turnos.push(m);return turno(m);}};
+ let ligado=true,indisponivel='indisponível';const turnos=[],dono=[];let turno=async({mensagem})=>({text:'público: '+mensagem});
+ const publico={atende:async()=>ligado,turno:async m=>{turnos.push(m);return turno(m);},unavailableReply:()=>indisponivel};
  const inbox=createWaInbox(f.pool,{seal:encryptSecret,open:decryptSecret,lookupRecipient});t.after(()=>inbox.release());
  const h=createWhatsAppHandler({inbox,db,publico,
   loadAgent:async(id,user)=>user===uuid(1)&&id===uuid(11)?{id,name:'Alpha'}:null,runConversation:async(a,u,text)=>{dono.push(text);return {text:'dono: '+text};}});
@@ -99,8 +100,12 @@ test('WhatsApp: unknown sender goes to public support only when enabled; owner a
   await chegar(m);assert.deepEqual(sent,[]);assert.equal(await estado(m.id),'uncertain');
   turno=async({mensagem})=>({text:'público: '+mensagem});
  });
- await t.test('disabled: today\'s login message, no public turn',async()=>{
+ await t.test('off but set up: the neutral reply, never the login message; no public turn',async()=>{
   sent.length=0;turnos.length=0;ligado=false;
+  await chegar(msg(CLIENTE,'oi'));assert.deepEqual(sent.map(s=>s.text),['indisponível']);assert.deepEqual(turnos,[]);
+ });
+ await t.test('no public support here: the login message, no public turn',async()=>{
+  sent.length=0;indisponivel=null;
   await chegar(msg(CLIENTE,'oi'));assert.match(sent[0].text,/faça login/);assert.deepEqual(turnos,[]);
  });
 });

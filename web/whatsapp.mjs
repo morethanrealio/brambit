@@ -856,6 +856,8 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
         return;
       }
       if (publico && await publico.atende()) return atenderPublico(msg, from);
+      const unavailable = publico?.unavailableReply?.();
+      if (unavailable) { await sendReply(unavailable); return; }
       await sendReply( `Oi! Pra falar comigo por aqui, entre em ${hostDaMarca()}, faça login e conecte seu número de WhatsApp (com DDD e o 55 na frente).`);
       return;
     }

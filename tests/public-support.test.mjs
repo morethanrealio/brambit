@@ -465,6 +465,19 @@ test('open sign-up keeps public support off on every channel until it is closed'
   assert.deepEqual(await estado(), [true, 200, false]);
 });
 
+// Whoever writes to a number set up for public support is looking for the brand, not for
+// Brambit: while support is off they get the neutral reply. Only an installation with no
+// public support (no assistant chosen, not the public-support profile) sends the login message.
+test('a stranger only gets the login message where the installation has no public support', async (t) => {
+  const { pool, ag } = await montar(t);
+  const reply = (opts) => criarAtendimentoDoServidor({ pool, makeProvider: modelo().provider, recordUsages: async () => {}, creditStatus: async () => ({ over: false }),
+    limpezaMs: 0, agenteDoNumero: () => null, enabled: true, publicOnly: false, ...opts }).whatsapp.unavailableReply();
+  assert.equal(reply({ agenteDoNumero: () => ag }), RESPOSTA_INDISPONIVEL);
+  assert.equal(reply({ publicOnly: true }), RESPOSTA_INDISPONIVEL);
+  assert.equal(reply({}), null);
+  assert.equal(reply({ agenteDoNumero: () => ag, enabled: false }), null);
+});
+
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
 test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {

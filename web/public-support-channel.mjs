@@ -2,17 +2,18 @@
 //
 // Phase 1 uses the installation's single number. Whoever installs it chooses WHICH assistant
 // handles those without an account (PUBLIC_SUPPORT_AGENT = agent id); the owner
-// of that assistant turns it on and off in public_agents.ativo. Without the variable, or with
-// support turned off, nothing changes: an unlinked number keeps receiving the
-// login message. The choice belongs to the installation, not to each user, because the
+// of that assistant turns it on and off in public_agents.ativo. Without the variable (and
+// outside the public-support profile) an unlinked number keeps receiving the login
+// message; with it, while support is off, a stranger gets a neutral "can't answer
+// right now" reply instead. The choice belongs to the installation, not to each user, because the
 // number is a single one: if any owner could turn it on, every stranger would go to
 // their assistant.
 import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
-import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
+import { createPublicoStore, createAtendimentoPublico, esquemaPublico, RESPOSTA_INDISPONIVEL } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
-import { publicSupportOn } from './profiles.mjs';
+import { publicSupportOn, ownerFeaturesOn } from './profiles.mjs';
 
 export { PUBLIC_WEB_PATHS };
 
@@ -35,7 +36,9 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // recordUsages and creditStatus from the server; ferramentas = tools port;
 // ganchos = plugin's atendimentoPublico port (script; see public-support.mjs).
 // Returns what the WhatsApp channel uses: atende() says whether support is on
-// for the number; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
+// for the number; turno({endereco,mensagem}) → {text,saidas?,userId,agentId};
+// unavailableReply() → what a stranger gets while support is off, or null when
+// this installation has no public support (they then get the login message).
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
@@ -45,8 +48,9 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // it hands to the public would also hand out accounts paid by the owner. null =
 // a plugin decides sign-up, and with it whether that is safe.
 // enabled=false (the personal usage profile, profiles.mjs) keeps it off too.
+// publicOnly = the public-support profile, where the number serves no accounts.
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
-  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn }) {
+  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, publicOnly = !ownerFeaturesOn }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
   // A failed check counts as open. Logged once each time it turns support off.
@@ -83,6 +87,9 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem }),
+      // Whoever writes here is looking for the brand behind the number, not for
+      // Brambit, so they never get the login message while support is off.
+      unavailableReply: () => (enabled && (agenteDoNumero() || publicOnly) ? RESPOSTA_INDISPONIVEL : null),
     },
   };
 }
