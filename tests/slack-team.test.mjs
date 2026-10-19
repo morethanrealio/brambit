@@ -115,3 +115,29 @@ test('an app without chat:write.customize still delivers, under its own name', a
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', text: 'oi' });
   assert.deepEqual(s.postados.map((p) => [p.text, p.username]), [['RESPOSTA', undefined]]);
 });
+
+test('the real member lookup sends the user id where Slack reads it, so a member gets an answer', async (t) => {
+  const fetchOriginal = globalThis.fetch;
+  t.after(() => { globalThis.fetch = fetchOriginal; });
+  const posted = [], turns = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(String(url));
+    // Like Slack: users.info ignores a JSON body and reads only the query string or a form body.
+    if (u.pathname === '/api/users.info') {
+      const found = u.searchParams.get('user') === 'UMEMBER';
+      return { status: 200, json: async () => (found ? { ok: true, user: { team_id: 'T1', real_name: 'Ana', profile: {} } } : { ok: false, error: 'user_not_found' }) };
+    }
+    assert.equal(u.pathname, '/api/chat.postMessage', 'no real network');
+    posted.push(JSON.parse(init.body).text);
+    return { status: 200, json: async () => ({ ok: true }) };
+  };
+  const handler = createSlackHandler({
+    runConversation: async (_agent, _userId, text) => { turns.push(text); return 'RESPOSTA'; },
+    loadAgent: async (agentId) => AGENTES[agentId] || null,
+    db: { getSlackChannelLink: async () => ({ user_id: DONO, agent_id: 'ag-equipe' }), getSlackLink: async () => null, getUserByEmail: async () => null },
+  });
+  await handler.process({ type: 'event_callback', event_id: 'EREAL', team_id: 'T1', authorizations: [{ user_id: 'UBOT' }],
+    event: { type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UMEMBER', ts: '1', text: 'oi' } });
+  assert.deepEqual(turns, ['[Ana] oi']);
+  assert.deepEqual(posted, ['RESPOSTA']);
+});

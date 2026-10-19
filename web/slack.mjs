@@ -41,15 +41,18 @@ function slug(s) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-async function slackApi(method, body) {
-  const r = await fetch(`${SLACK_API}/${method}`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-      'content-type': 'application/json; charset=utf-8',
-    },
-    body: JSON.stringify(body || {}),
-  });
+// `get`: read methods (users.info) take their arguments only from the query string or a
+// form body. Slack ignores a JSON body there and users.info answers user_not_found, which
+// left a team assistant silent with everyone in its channel.
+async function slackApi(method, body, { get = false } = {}) {
+  const authorization = `Bearer ${process.env.SLACK_BOT_TOKEN}`;
+  const r = get
+    ? await fetch(`${SLACK_API}/${method}?${new URLSearchParams(body || {})}`, { headers: { authorization } })
+    : await fetch(`${SLACK_API}/${method}`, {
+      method: 'POST',
+      headers: { authorization, 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(body || {}),
+    });
   const j = await r.json().catch(() => ({}));
   if (!j.ok) {
     // Same as Telegram: a Slack refusal (channel doesn't exist, no permission) is
@@ -81,7 +84,7 @@ async function pessoaDoSlack(slackUserId) {
   if (c && Date.now() - c.em < PESSOA_TTL_MS) return c.pessoa;
   let pessoa = { nome: null, email: null };
   try {
-    const j = await slackApi('users.info', { user: slackUserId });
+    const j = await slackApi('users.info', { user: slackUserId }, { get: true });
     const p = j.user?.profile || {};
     const u = j.user || {};
     pessoa = { nome: (p.display_name || p.real_name || u.real_name || u.name || '').trim() || null,
@@ -89,7 +92,10 @@ async function pessoaDoSlack(slackUserId) {
       time: (u.is_restricted || u.is_ultra_restricted || u.is_bot || u.deleted) ? null : (u.team_id || null) };
     if (pessoas.size > 5000) pessoas.clear();
     pessoas.set(slackUserId, { pessoa, em: Date.now() });
-  } catch { /* unknown: not the owner, no name */ }
+  } catch (e) {
+    // Unknown: not the owner, no name. Logged because the caller then stays silent.
+    console.error('[slack] users.info:', e?.message ?? e);
+  }
   return pessoa;
 }
 
