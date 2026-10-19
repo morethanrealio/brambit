@@ -1,6 +1,6 @@
 // Item 16: a team assistant ('grupo') bound to a Slack channel talks to every full
-// member of the workspace IN THE CHANNEL, in one conversation per channel, knowing who
-// is speaking; guests and people from other workspaces get silence. Its DM is only the
+// member of the workspace IN THE CHANNEL, in one conversation per Slack thread, knowing
+// who is speaking; guests and people from other workspaces get silence. Its DM is only the
 // owner's; anyone else gets the "channel only" notice. A personal assistant bound to a
 // channel answers only its owner. Only the owner disconnects. Slack API and the turn are
 // fakes; the routing is real.
@@ -19,7 +19,7 @@ const PESSOAS = {
 const AGENTES = { 'ag-equipe': { id: 'ag-equipe', name: 'Comercial', category: 'grupo' }, 'ag-pessoal': { id: 'ag-pessoal', name: 'Max', category: 'pessoal' } };
 
 function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } = {}) {
-  const postados = [], turnos = [], statuses = [];
+  const postados = [], turnos = [], statuses = [], avisos = [];
   const links = new Map([
     ['T1:CCOM', { user_id: DONO, agent_id: 'ag-equipe' }], ['T1:DDONO', { user_id: DONO, agent_id: 'ag-equipe' }],
     ['T1:DANA', { user_id: DONO, agent_id: 'ag-equipe' }], ['T1:CPESSOAL', { user_id: DONO, agent_id: 'ag-pessoal' }],
@@ -35,7 +35,10 @@ function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } 
     return { status: 200, json: async () => ({ ok: true }) };
   };
   const handler = createSlackHandler({
-    runConversation: async (agent, userId, text, _onProgress, canal) => { turnos.push({ agent: agent.id, userId, text, canal }); return 'RESPOSTA'; },
+    runConversation: async (agent, userId, text, _onProgress, conversation) => { turnos.push({ agent: agent.id, userId, text, conversation });
+      if (text.endsWith('quebra')) throw new Error('provider down');
+      return 'RESPOSTA';
+    },
     loadAgent: async (agentId, userId) => (userId === DONO ? AGENTES[agentId] || null : null),
     db: {
       getSlackChannelLink: async (team, ch) => links.get(`${team}:${ch}`) || null,
@@ -44,16 +47,16 @@ function montar(t, { semCustomize = false, temEquipe = true, idioma = 'pt-BR' } 
       getUserByEmail: async (email) => (email === 'dono@ex.invalid' ? { id: DONO } : null),
       slackDonoEquipe: async () => (temEquipe ? DONO : null),
     },
-    avisoCanal: { idiomaDe: async (userId) => (userId === DONO ? { language: idioma } : null) },
+    avisoCanal: { idiomaDe: async (userId) => (userId === DONO ? { language: idioma } : null), registrar: async (r) => { avisos.push(r); } },
     pessoa: async (u) => PESSOAS[u] || { nome: null, email: null },
   });
   let n = 0;
   const enviar = (evt) => handler.process({ type: 'event_callback', event_id: 'E' + (++n), team_id: 'T1',
     authorizations: [{ user_id: 'UBOT' }], event: { ts: String(n), ...evt } });
-  return { enviar, postados, turnos, links, statuses };
+  return { enviar, postados, turnos, links, statuses, avisos };
 }
 
-test('team channel: members and the owner share one conversation per channel, named; guests and outsiders get silence', async (t) => {
+test('team channel: one conversation per Slack thread shared by members and the owner, named; guests and outsiders get silence', async (t) => {
   const s = montar(t);
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', text: 'qual a meta do mês?' });
   await s.enviar({ type: 'app_mention', channel: 'CCOM', user: 'UDONO', text: '<@UBOT> resume pra Ana' });
@@ -61,21 +64,30 @@ test('team channel: members and the owner share one conversation per channel, na
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UCONVIDADO', text: 'oi' });
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UFORA', text: 'oi' });
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UDESCONHECIDO', text: 'oi' });
+  await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', thread_ts: '1', text: 'e a do trimestre?' });
+  // Each new message in the channel starts its own conversation; a reply continues its thread's.
   assert.deepEqual(s.turnos, [
-    { agent: 'ag-equipe', userId: DONO, text: '[Ana] qual a meta do mês?', canal: 'CCOM' },
-    { agent: 'ag-equipe', userId: DONO, text: '[Rafa] resume pra Ana', canal: 'CCOM' },
-    { agent: 'ag-equipe', userId: DONO, text: '[Bia Rafa] oi', canal: 'CCOM' },
+    { agent: 'ag-equipe', userId: DONO, text: '[Ana] qual a meta do mês?', conversation: 'Slack · CCOM · 1' },
+    { agent: 'ag-equipe', userId: DONO, text: '[Rafa] resume pra Ana', conversation: 'Slack · CCOM · 2' },
+    { agent: 'ag-equipe', userId: DONO, text: '[Bia Rafa] oi', conversation: 'Slack · CCOM · 3' },
+    { agent: 'ag-equipe', userId: DONO, text: '[Ana] e a do trimestre?', conversation: 'Slack · CCOM · 1' },
   ]);
   // Every reply in the thread of the message it answers, whichever event Slack delivered.
-  assert.deepEqual(s.postados.map((p) => [p.text, p.username, p.thread_ts]), [['RESPOSTA', 'Comercial', '1'], ['RESPOSTA', 'Comercial', '2'], ['RESPOSTA', 'Comercial', '3']]);
-  assert.deepEqual(s.statuses.filter((e) => e.status).map((e) => [e.thread_ts, e.status]), [['1', 'está pensando...'], ['2', 'está pensando...'], ['3', 'está pensando...']]);
+  assert.deepEqual(s.postados.map((p) => [p.text, p.username, p.thread_ts]), [['RESPOSTA', 'Comercial', '1'], ['RESPOSTA', 'Comercial', '2'], ['RESPOSTA', 'Comercial', '3'], ['RESPOSTA', 'Comercial', '1']]);
+  assert.deepEqual(s.statuses.filter((e) => e.status).map((e) => [e.thread_ts, e.status]), [['1', 'está pensando...'], ['2', 'está pensando...'], ['3', 'está pensando...'], ['1', 'está pensando...']]);
+});
+
+test('a team turn that breaks: the notice enters the conversation of the thread it ran in', async (t) => {
+  const s = montar(t);
+  await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', thread_ts: '0', text: 'quebra' });
+  assert.deepEqual(s.avisos.map((a) => [a.pergunta, a.conversation]), [['[Ana] quebra', 'Slack · CCOM · 0']]);
 });
 
 test('team assistant DM: the owner gets it, anyone else the channel-only notice', async (t) => {
   const s = montar(t);
   await s.enviar({ type: 'message', channel_type: 'im', channel: 'DDONO', user: 'UDONO', text: 'resumo do dia' });
   await s.enviar({ type: 'message', channel_type: 'im', channel: 'DANA', user: 'UANA', text: 'resumo do dia' });
-  assert.deepEqual(s.turnos, [{ agent: 'ag-equipe', userId: DONO, text: 'resumo do dia', canal: undefined }]);
+  assert.deepEqual(s.turnos, [{ agent: 'ag-equipe', userId: DONO, text: 'resumo do dia', conversation: undefined }]);
   assert.deepEqual(s.postados.map((p) => p.text), ['RESPOSTA', SO_NO_CANAL['pt-BR']]);
 });
 
@@ -83,7 +95,7 @@ test('personal assistant bound to a channel answers only its owner', async (t) =
   const s = montar(t);
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CPESSOAL', user: 'UANA', text: 'lê o e-mail do dono' });
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CPESSOAL', user: 'UDONO', text: 'resumo do dia' });
-  assert.deepEqual(s.turnos, [{ agent: 'ag-pessoal', userId: DONO, text: 'resumo do dia', canal: undefined }]);
+  assert.deepEqual(s.turnos, [{ agent: 'ag-pessoal', userId: DONO, text: 'resumo do dia', conversation: undefined }]);
   assert.equal(s.postados.length, 1);
 });
 

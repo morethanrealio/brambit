@@ -12,9 +12,10 @@
 //
 // Connected channel (item 16 of the 10/2026 audit) depends on the assistant's category:
 // - 'grupo' (team assistant): any full member of the workspace talks to it IN THE
-//   CHANNEL (guests and people from other workspaces don't), in ONE conversation per
-//   channel; the turn carries none of the owner's private context (server.mjs). In a DM
-//   only the owner gets it; anyone else gets the "channel only" notice.
+//   CHANNEL (guests and people from other workspaces don't), in one conversation per
+//   Slack thread (a new message in the channel starts one, replies in its thread
+//   continue it); the turn carries none of the owner's private context (server.mjs).
+//   In a DM only the owner gets it; anyone else gets the "channel only" notice.
 // - 'pessoal'/'super': answers only its owner (checked by the account e-mail), DM or channel.
 // Only the owner disconnects.
 //
@@ -153,6 +154,11 @@ export const SO_NO_CANAL = {
   en: "Hi! Team assistants only talk in the Slack channels they're in. Just mention me there. I don't reply to direct messages.",
   es: '¡Hola! Los asistentes del equipo solo conversan en los canales de Slack donde están. Solo mencióname allí. No respondo mensajes directos.',
 };
+// Team channel conversation of one Slack thread (threadTs = the thread's first message).
+// One conversation for the whole channel mixed every thread: a test from hours before
+// kept steering a new request (team assistant case of 19/10/2026).
+export const threadConversationTitle = (channel, threadTs) => `Slack · ${channel} · ${threadTs}`;
+
 // Speaker's name in the shared channel conversation, without the means to fake another line.
 const nomeDoFalante = (n) => String(n || '').replace(/[[\]\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Alguém';
 
@@ -185,7 +191,9 @@ export function verifySlackSignature(rawBody, timestamp, signature) {
 }
 
 // Injects the server's deps (avoids circular import):
-//   runConversation(agent, userId, text) -> reply
+//   runConversation(agent, userId, text, onProgress, conversation) -> reply
+//     conversation: title of a team channel thread's conversation (threadConversationTitle);
+//     undefined = the person's "Slack" conversation.
 //   loadAgent(agentId, userId) -> agent   (validates ownership)
 //   db = { getSlackLink, upsertSlackLink, setSlackActiveAgent, listAgents, getUserByEmail }
 // avisoCanal = { idiomaDe, registrar } (channel-notice.mjs): language of the error notice and
@@ -243,7 +251,7 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
     const reply = (t) => postar(t).catch((e) => console.error('[slack] post:', e?.message ?? e));
     // Runs the turn and delivers. Turn failure and delivery-only failure have
     // different notices (channel-notice.mjs); the ready response is resent, never redone.
-    const responder = async (agent, userId, canal) => {
+    const responder = async (agent, userId, conversation) => {
       nome = agent.name;
       const enviarAviso = (t) => postar(t);
       let language = null;
@@ -253,16 +261,16 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       const onProgress = (t) => reply(t).then(() => status.renew());
       try {
         let res;
-        try { res = await runConversation(agent, userId, text, onProgress, canal); } catch (e) {
+        try { res = await runConversation(agent, userId, text, onProgress, conversation); } catch (e) {
           console.error('[slack] conversation error:', e?.message ?? e);
-          await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso });
+          await avisar({ agent, userId, tipo: 'turno', mensagem: text, enviar: enviarAviso, conversation });
           return;
         }
         if (res?.suppressed) return;
         const out = typeof res === 'string' ? res : res?.text;
         try { await postar(out || '(sem resposta)', { reenvio: true }); } catch (e) {
           console.error('[slack] reply not delivered:', e?.message ?? e);
-          await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso });
+          await avisar({ agent, userId, tipo: 'entrega', enviar: enviarAviso, conversation });
         }
       } finally { await status.stop(); }
     };
@@ -334,9 +342,9 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
         return;
       }
       if (!text) { await reply(`Oi! Sou o *${agent.name}*. Pode mandar sua mensagem.`); return; }
-      // Team channel: one conversation per channel, so the model needs to know who is speaking.
+      // Team channel: several people share a thread's conversation, so the model needs to know who is speaking.
       if (equipe) text = `[${nomeDoFalante(quem.nome)}] ${text}`;
-      await responder(agent, chLink.user_id, equipe ? channel : undefined);
+      await responder(agent, chLink.user_id, equipe ? threadConversationTitle(channel, threadTs) : undefined);
       return;
     }
 
