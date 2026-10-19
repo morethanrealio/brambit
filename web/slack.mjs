@@ -29,6 +29,7 @@ import { tagIdioma } from './locale.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { comReenvio, criarAvisoCanal } from './channel-notice.mjs';
 import { productI18n } from './i18n.mjs';
+import { CHANNEL_CTX_END } from './confirm.mjs';
 
 const SLACK_API = 'https://slack.com/api';
 
@@ -343,7 +344,9 @@ export function createSlackHandler({ runConversation, loadAgent, db, avisoCanal 
       }
       if (!text) { await reply(`Oi! Sou o *${agent.name}*. Pode mandar sua mensagem.`); return; }
       // Team channel: several people share a thread's conversation, so the model needs to know who is speaking.
-      if (equipe) text = `[${nomeDoFalante(quem.nome)}] ${text}`;
+      // The label is channel envelope, not the person's words: without CHANNEL_CTX_END a plain "yes" became
+      // "[Name] yes" and never approved a pending card (team assistant case of 19/10/2026).
+      if (equipe) text = `[${nomeDoFalante(quem.nome)}]${CHANNEL_CTX_END} ${text}`;
       await responder(agent, chLink.user_id, equipe ? threadConversationTitle(channel, threadTs) : undefined);
       return;
     }
