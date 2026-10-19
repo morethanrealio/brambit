@@ -9,6 +9,11 @@ import { tagIdioma } from './locale.mjs';
 // the request itself (row.language, the same one that already picks the card's
 // "May I proceed?"), otherwise an English "cancel" got back "Cancelei a ação
 // de..." in Portuguese.
+//
+// A refusal repeats the card's request as "I won't <request>": only its first
+// line and without the warning after " — " (the payment cards carry "this is
+// real money..."), so it reads as one plain sentence.
+const refusedAction = label => String(label || '').split('\n')[0].split(' — ')[0].trim().replace(/[.:;,]\s*$/, '');
 const TEXTOS = {
   'pt-BR': {
     none: 'Não há nenhuma ação aguardando confirmação.',
@@ -19,8 +24,8 @@ const TEXTOS = {
     recovered: 'Recuperei este pedido. Confira os detalhes e confirme pelo número.',
     textOnlyOne: 'Essa ação exige confirmação por texto. Responda ao pedido indicando que confirma.',
     textOnlyMany: 'Para essas ações, preciso da sua confirmação por texto.',
-    canceledOne: l => `Cancelei a ação de ${l}.`,
-    canceledMany: n => `Cancelei essas ${n} ações.`,
+    canceledOne: l => `Tudo bem, não vou ${refusedAction(l)}. Nada foi alterado.`,
+    canceledMany: n => `Tudo bem, não vou fazer essas ${n} ações. Nada foi alterado.`,
     groupNotStarted: l => `Não iniciei essas ações: não consegui revalidar os detalhes de ${l}. Vou precisar conferir esse item antes de continuar.`,
     groupUncertain: l => `Não consegui confirmar o resultado de ${l}. Não vou repetir essa ação automaticamente.`,
     notExecuted: l => `Não executei a ação de ${l}: não consegui revalidar os mesmos detalhes e permissões. Precisamos conferir os detalhes novamente.`,
@@ -39,8 +44,8 @@ const TEXTOS = {
     recovered: 'I recovered this request. Check the details and confirm it by its number.',
     textOnlyOne: 'This action needs a written confirmation. Reply to the request saying you confirm.',
     textOnlyMany: 'For these actions I need your confirmation in writing.',
-    canceledOne: l => `I canceled the action: ${l}.`,
-    canceledMany: n => `I canceled these ${n} actions.`,
+    canceledOne: l => `OK, I won't ${refusedAction(l)}. Nothing was changed.`,
+    canceledMany: n => `OK, I won't do these ${n} actions. Nothing was changed.`,
     groupNotStarted: l => `I did not start these actions: I could not revalidate the details of ${l}. I need to check that item before going on.`,
     groupUncertain: l => `I could not confirm the result of ${l}. I will not repeat this action automatically.`,
     notExecuted: l => `I did not run the action ${l}: I could not revalidate the same details and permissions. We need to check the details again.`,
@@ -59,8 +64,8 @@ const TEXTOS = {
     recovered: 'Recuperé esta solicitud. Revisa los detalles y confírmala por su número.',
     textOnlyOne: 'Esta acción necesita confirmación por escrito. Responde a la solicitud diciendo que confirmas.',
     textOnlyMany: 'Para estas acciones necesito tu confirmación por escrito.',
-    canceledOne: l => `Cancelé la acción: ${l}.`,
-    canceledMany: n => `Cancelé estas ${n} acciones.`,
+    canceledOne: l => `De acuerdo, no voy a ${refusedAction(l)}. No se cambió nada.`,
+    canceledMany: n => `De acuerdo, no voy a hacer estas ${n} acciones. No se cambió nada.`,
     groupNotStarted: l => `No inicié estas acciones: no pude volver a validar los detalles de ${l}. Tengo que revisar ese punto antes de seguir.`,
     groupUncertain: l => `No pude confirmar el resultado de ${l}. No voy a repetir esta acción automáticamente.`,
     notExecuted: l => `No ejecuté la acción ${l}: no pude volver a validar los mismos detalles y permisos. Tenemos que revisar los detalles de nuevo.`,

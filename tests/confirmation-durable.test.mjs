@@ -82,7 +82,7 @@ test('cards bind separately and channel metadata still selects the right proposa
 test('canceling one request keeps another intact and invalidates every old reference',async t=>{
   const f=await fixture(t);const a=await f.propose(args(1));await f.propose(args(2));
   await f.store.bind(f.scope,[a.id],{channel:'telegram',messageId:'123:4'});
-  assert.match((await f.decide('cancela pedido 1')).text,/Cancelei.*recipient1/);
+  assert.match((await f.decide('cancela pedido 1')).text,/não vou .*recipient1.*Nada foi alterado/);
   await f.decide('pode',{target:{channel:'telegram',messageId:'123:4'}});
   assert.equal(f.effects.length,0);assert.equal((await f.session()).pending()[0].number,2);
 });

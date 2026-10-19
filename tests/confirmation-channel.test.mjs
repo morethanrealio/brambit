@@ -464,7 +464,7 @@ async function durableReactionFixture(t) {
 test('negative reaction cancels a durable approval before consuming it, and does not resurrect it next turn', async (t) => {
   const c = await durableReactionFixture(t);
   const reply = await c.handler({}, 'offline-user', false, c.target);
-  assert.match(reply.text, /[Cc]ancelei/);
+  assert.match(reply.text, /Nada foi alterado/);
   assert.equal(c.cancelled(), 1);
   assert.equal(peekPending(c.thread.id), undefined);
   assert.equal(await c.approvals.peek(), null, 'restoration does not find the canceled proposal');
