@@ -8,7 +8,7 @@ import { stringify } from 'yaml';
 import { choiceFor } from '../core-proto/models.mjs';
 
 export const PROVIDERS = {
-  together: { url: 'https://api.together.xyz/v1', model: 'deepseek-ai/DeepSeek-V4.1-Flash', keyVar: 'TOGETHER_API_KEY' },
+  together: { url: 'https://api.together.xyz/v1', model: 'deepseek-ai/DeepSeek-V4.1-Flash-1017', keyVar: 'TOGETHER_API_KEY' },
   openai: { url: 'https://api.openai.com/v1', model: 'gpt-5.4-mini', keyVar: 'OPENAI_API_KEY' },
   gemini: { type: 'gemini', url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.7-flash', keyVar: 'GEMINI_API_KEY' },
   // DeepInfra lists its models without a key, so the key is checked on an

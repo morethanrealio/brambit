@@ -63,7 +63,7 @@ providers:
 # On Gemini, the only option read is thinkingBudget.
 tasks:
   default:
-    model: together/deepseek-ai/DeepSeek-V4.1-Flash
+    model: together/deepseek-ai/DeepSeek-V4.1-Flash-1017
     options:
       reasoning_effort: high
     fallback: gemini/gemini-3.7-flash
@@ -71,8 +71,8 @@ tasks:
   # Examples (uncomment to use):
   # coding:
   #   model: openai/gpt-5.4-mini
-  #   fallback: together/deepseek-ai/DeepSeek-V4.1-Flash
-  # classification: together/deepseek-ai/DeepSeek-V4.1-Flash   ← short form, no fallback
+  #   fallback: together/deepseek-ai/DeepSeek-V4.1-Flash-1017
+  # classification: together/deepseek-ai/DeepSeek-V4.1-Flash-1017   ← short form, no fallback
   # memory:
   #   model: gemini/gemini-3.7-flash
   #   options:

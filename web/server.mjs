@@ -160,7 +160,7 @@ import { makeNemotron } from '../core-proto/providers/nemotron.mjs';
 import { makeOpenAI, openaiEnabled } from '../core-proto/providers/openai.mjs';
 import { loadModels, modelFor } from '../core-proto/models.mjs';import { startModelsWatch } from './models-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
 import { makeDeepInfra, deepinfraEnabled } from '../core-proto/providers/deepinfra.mjs';
-import { makeTogether, togetherEnabled } from '../core-proto/providers/together.mjs';
+import { makeTogether, togetherEnabled, TOGETHER_FLASH_MODEL, isTogetherFlashModel, togetherFlashModel } from '../core-proto/providers/together.mjs';
 import { STOP } from '../core-proto/provider.mjs';
 import { webSearchTool, openLinkTool, serpapiEnabled, lensSearchByUrl, shoppingSearch, createSearchBudget, SEARCH_LIMIT_MSG } from './websearch.mjs';
 import { fontesEConferencia, conferirLinks, linksMontados, materialDoDono, hostsNossos as hostsDeLinks, resolveGroundingUri } from './links.mjs';
@@ -443,10 +443,10 @@ startModelsWatch();
 const configurado = (task, maxOut) => modelFor(task, { maxTokens: maxOut || PRIMARY_MAX_OUT, combine: withFallback });
 // Default text/image route. Gemini env is kept as an explicit rollback;
 // empty string restores the pre-override robust provider routing.
-const TOGETHER_FLASH_DEFAULT = 'deepseek-ai/DeepSeek-V4.1-Flash';
 // Existing Gemini env remains a rollback switch; deployment must change it explicitly.
-const PRIMARY_TEXT_MODEL = () => process.env.PRIMARY_TEXT_MODEL ?? TOGETHER_FLASH_DEFAULT;
-const primaryIsTogetherFlash = () => PRIMARY_TEXT_MODEL() === TOGETHER_FLASH_DEFAULT;
+// Any V4.1 Flash checkpoint in the env keeps the Together route; the env picks which one.
+const PRIMARY_TEXT_MODEL = () => process.env.PRIMARY_TEXT_MODEL ?? TOGETHER_FLASH_MODEL;
+const primaryIsTogetherFlash = () => isTogetherFlashModel(PRIMARY_TEXT_MODEL());
 const primaryIsGeminiOverride = () => /^gemini[-.]/i.test(PRIMARY_TEXT_MODEL());
 // CHEAP MODEL: DeepSeek V4 Flash on DeepInfra, with reasoning OFF. Fast and
 // cheap, good enough for reading/synthesis and simple tool-calling (see
@@ -588,7 +588,7 @@ function makeHeavyProvider(site, { maxOut = PRIMARY_MAX_OUT } = {}) {
   const official = makeOfficialDeepSeek(maxOut);
   const provider = togetherEnabled()
     ? withFallback(
-        makeTogether({model:TOGETHER_FLASH_DEFAULT,maxTokens:maxOut,reasoningEffort:'high'}),
+        makeTogether({model:togetherFlashModel(),maxTokens:maxOut,reasoningEffort:'high'}),
         official,
         `heavy-${site}`,
       )
@@ -641,7 +641,7 @@ function makeTogetherFlashPrimary({ maxOut = 32768, vision = false } = {}) {
   const backup = vision ? withFallback(gemini || makeOpenAI({model:FALLBACK_MODEL(),maxTokens:maxOut}),
     gemini && openaiEnabled() ? makeOpenAI({model:FALLBACK_MODEL(),maxTokens:maxOut}) : null, 'vision-reserve') : makeTextFallback({maxOut});
   if (!togetherEnabled()) return backup || makeOpenAI({model:FALLBACK_MODEL(),maxTokens:maxOut});
-  return withFallback(makeTogether({model:TOGETHER_FLASH_DEFAULT,maxTokens:maxOut}),backup,'together-flash');
+  return withFallback(makeTogether({model:togetherFlashModel(),maxTokens:maxOut}),backup,'together-flash');
 }
 
 // ── Provider for the turn WITH IMAGE ──
@@ -6169,7 +6169,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // the same image.
     // The raw photo path does NOT die: it's this one, only the reader changes.
     provider = makeVisionProvider({ maxOut: 32768 });
-    console.log(`[router] vision=${modelosCfg() ? provider.name : primaryIsTogetherFlash() ? TOGETHER_FLASH_DEFAULT : 'gemini'} thread=${thread.id}`);
+    console.log(`[router] vision=${modelosCfg() ? provider.name : primaryIsTogetherFlash() ? togetherFlashModel() : 'gemini'} thread=${thread.id}`);
     buscaNativa = !modelosCfg() && !primaryIsTogetherFlash() && geminiEnabled(); // Together, models.yaml and their fallbacks use tool-based search.
   } else if (forcedProvider) {
     // FIXED model assigned to this agent by the owner (outside of routing). Comes BEFORE
@@ -6182,7 +6182,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     console.log(`[router] models.yaml chat=${provider.name} thread=${thread.id}`);
   } else if (usePrimaryLLM && primaryIsTogetherFlash()) {
     provider = makeTogetherFlashPrimary({maxOut:32768});
-    console.log(`[router] primary-override=${TOGETHER_FLASH_DEFAULT} thread=${thread.id}`);
+    console.log(`[router] primary-override=${togetherFlashModel()} thread=${thread.id}`);
   } else if (usePrimaryLLM && primaryIsGeminiOverride()) {
     // (Here, BEFORE this branch, there used to be a detour that swapped the main
     // turn's model to DeepSeek when the turn "looked like" an app build. It was removed:

@@ -24,7 +24,7 @@ tasks:
   assert.equal(choiceFor('image_reading', own).from, 'chat');
   assert.equal(choiceFor('image_reading', own).fallback.model, 'm1');
   assert.equal(choiceFor('memory', own).from, 'default');
-  assert.equal(choiceFor('chat', cfg).primary.model, 'deepseek-ai/DeepSeek-V4.1-Flash');
+  assert.equal(choiceFor('chat', cfg).primary.model, 'deepseek-ai/DeepSeek-V4.1-Flash-1017');
 });
 
 test('a key pasted in place of the variable name is rejected', () => {
