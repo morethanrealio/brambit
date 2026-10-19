@@ -211,17 +211,45 @@ const OWN_VERB_FILLER = new Set(['it','this','that','them','now','and','then','p
 const NEGATION_WORD = /^(?:nao|no|not|nope|nem|never|nunca|jamais|nada|ninguna|ninguno|dont|cant|wont|didnt|doesnt|shouldnt)$|n't$/;
 const wordsOf = text => folded(String(text || '')).replace(/[’‘`]/g, "'").match(/[a-z0-9']+/g) || [];
 const cardWords = row => wordsOf(String(row.confirmationText || '').split(/\n\s*\n/)[0]);
-const ownVerbFamily = rows => rows.length ? OWN_VERBS.find(f => rows.every(r => f.lead.test(cardWords(r).find(w => !/^(?:permanently|definitivamente)$/.test(w)) || ''))) : undefined;
+const cardLead = row => cardWords(row).find(w => !/^(?:permanently|definitivamente)$/.test(w)) || '';
+const ownVerbFamily = rows => rows.length ? OWN_VERBS.find(f => rows.every(r => f.lead.test(cardLead(r)))) : undefined;
+// Any other card: its own leading verb is a plain yes too. "Yes, go ahead and
+// create it" and "Sí, créala" in reply to "create the event X" showed the card
+// again (dev test of 0.3.0, 2026-10-18), because only fixed yes words counted.
+// Forms: the verb as printed and, for a pt/es infinitive, its imperative (cria,
+// crie, apague, publique); the Spanish attached pronoun (créala, bórralo) only
+// with its accent, same as esConsent. Here the verb alone ("Create it.", "Cria.")
+// is a yes. "leave", "deixar" and "dejar" also mean "drop it", so those cards
+// keep needing a yes word.
+const NO_VERB_FAMILY = /^(?:leave|deixar|dejar)$/;
+const ES_PRONOUN = /^(?:lo|la|los|las|me|nos)$/;
+function leadVerbFamily(lead) {
+  if (!/^[a-z]{3,}$/.test(lead) || NO_VERB_FAMILY.test(lead)) return undefined;
+  const stem = lead.length >= 5 && /(?:ar|er|ir)$/.test(lead) ? lead.slice(0, -2) : '';
+  const bases = new Set(stem ? [stem + 'a', stem + 'e', stem.replace(/c$/, 'qu') + 'e', stem.replace(/g$/, 'gu') + 'e'] : []);
+  const pronounForm = w => [...bases].some(b => w.startsWith(b) && ES_PRONOUN.test(w.slice(b.length)));
+  return { test: (w, accented) => w === lead || bases.has(w) || (accented && pronounForm(w)), bare: 'consent' };
+}
+function cardVerbFamily(rows) {
+  const own = ownVerbFamily(rows);
+  if (own) return { test: w => own.forms.test(w), bare: 'bare' };
+  const lead = rows.length ? cardLead(rows[0]) : '';
+  return rows.every(r => cardLead(r) === lead) ? leadVerbFamily(lead) : undefined;
+}
+// Words of what the person said, each with whether it carried an accent.
+const spokenWords = text => (String(text || '').replace(/[’‘`]/g, "'").match(/[\p{L}\p{N}']+/gu) || [])
+  .flatMap(raw => wordsOf(raw).map(w => ({ w, accented: folded(raw) !== raw.toLowerCase() })));
 function ownVerbConsent(text, rows) {
   const said = String(text || '').trim();
   if (!rows.length || !said || said.endsWith('?')) return null;
-  const family = ownVerbFamily(rows);
-  const tokens = wordsOf(said);
-  if (!family || !tokens.some(w => family.forms.test(w)) || tokens.some(w => NEGATION_WORD.test(w))) return null;
+  const family = cardVerbFamily(rows);
+  const tokens = spokenWords(said);
+  const isVerb = t => family.test(t.w, t.accented);
+  if (!family || !tokens.some(isVerb) || tokens.some(t => NEGATION_WORD.test(t.w))) return null;
   // The how-to-confirm line ("responda “pode”") is not part of the card's subject.
   const card = new Set(rows.flatMap(cardWords).filter(w => !plainConsent(w)));
-  const rest = tokens.filter(w => !family.forms.test(w) && !card.has(w) && !OWN_VERB_FILLER.has(w)).join(' ');
-  return !rest ? 'bare' : plainConsent(rest) ? 'consent' : null;
+  const rest = tokens.filter(t => !isVerb(t) && !card.has(t.w) && !OWN_VERB_FILLER.has(t.w)).map(t => t.w).join(' ');
+  return !rest ? family.bare : plainConsent(rest) ? 'consent' : null;
 }
 // Whether a message talks about what the cards do: their own leading verb, or a word
 // of their subject (compared by its first five letters, so "cancela" meets "cancelar").

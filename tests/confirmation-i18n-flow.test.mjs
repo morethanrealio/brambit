@@ -36,7 +36,9 @@ async function fixture(t,language){
 
 const SIM=[['en','yeah'],['en','yep'],['en','do it'],['en','yes, send it'],['en','go ahead'],['en','sounds good'],
   ['es','hazlo'],['es','envíalo'],['es','sí, envíalo'],['es','de acuerdo'],['es','me parece bien'],
-  ['pt-BR','sim'],['pt-BR','pode'],['pt-BR','manda']];
+  ['pt-BR','sim'],['pt-BR','pode'],['pt-BR','manda'],
+  // The card's own verb ("create the event...") is a yes too.
+  ['en','Yes, go ahead and create it.'],['es','Sí, créala.'],['pt-BR','sim, cria']];
 for(const [lang,text] of SIM) test(`"${text}" (${lang}) executes the action`,async t=>{
   const f=await fixture(t,lang);await f.decide(text);
   assert.deepEqual(f.effects,['Evento'],text);
@@ -53,7 +55,7 @@ for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancels and re
 
 // Collisions with Portuguese: without an accent, "mandalo/envialo" is not the Spanish
 // imperative, and a sentence that only starts out looking similar is not consent.
-for(const text of ['envialo','mandalo','o mandaloriano é bom','do it later?','hazlo mañana y después vemos'])
+for(const text of ['envialo','mandalo','o mandaloriano é bom','do it later?','hazlo mañana y después vemos','créala mañana'])
   test(`"${text}" does not execute`,async t=>{
     const f=await fixture(t,'es');await f.decide(text);assert.equal(f.effects.length,0,text);
   });
