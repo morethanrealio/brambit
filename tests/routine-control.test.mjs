@@ -276,7 +276,7 @@ test('a plain refusal keeps the proposal\'s precedence; a quote doesn\'t become 
   await sessions.withConfirmationSession(session, () => gateTool({name:'calendar_create',run:denied},f.scope.threadId).run({title:'Evento',start:'2026-09-25T13:00:00',end:'2026-09-25T13:30:00'}));
   await f.store.present(f.scope,session.pending().map(row => row.id));
   f.state.thread.history = [{role:'assistant',content:flow.proposalPresentation(session.pending())}];
-  assert.match((await f.turn('não')).text,/Cancelei/);
+  assert.match((await f.turn('não')).text,/Nada foi alterado/);
   assert.equal((await f.store.list(f.scope))[0].state,'canceled');
   for (const [message,opts] of [
     ['Pause a rotina Diaria',{confirmationTarget:{channel:'whatsapp',messageId:'unrelated'}}],

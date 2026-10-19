@@ -84,9 +84,9 @@ test('new requests never authorize a proposal that is pending', async t => {
 });
 
 const REFUSALS = [
-  ['pt-BR', ['Não precisa fazer nada', 'Não precisa fazer mais nada.', 'Por favor, não faça nada.', 'Não é necessário fazer nada, obrigado.', 'Não precisa fazer isso'], /Cancelei/],
-  ['en', ['No need to do anything', "You don't need to do anything.", 'Please do not do anything.', 'No need to proceed, thanks.', 'No need to do that', "You don't need to do that."], /canceled/],
-  ['es', ['No hace falta hacer nada', 'No necesitas hacer nada.', 'Por favor, no hagas nada.', 'No es necesario hacer nada, gracias.', 'No hace falta hacer eso', 'No es necesario hacer eso.'], /Cancelé/],
+  ['pt-BR', ['Não precisa fazer nada', 'Não precisa fazer mais nada.', 'Por favor, não faça nada.', 'Não é necessário fazer nada, obrigado.', 'Não precisa fazer isso'], /Nada foi alterado/],
+  ['en', ['No need to do anything', "You don't need to do anything.", 'Please do not do anything.', 'No need to proceed, thanks.', 'No need to do that', "You don't need to do that."], /Nothing was changed/],
+  ['es', ['No hace falta hacer nada', 'No necesitas hacer nada.', 'Por favor, no hagas nada.', 'No es necesario hacer nada, gracias.', 'No hace falta hacer eso', 'No es necesario hacer eso.'], /No se cambió nada/],
 ];
 for (const [language, messages, expected] of REFUSALS) {
   test(`natural refusal in ${language} persists the cancellation before the receipt`, async t => {

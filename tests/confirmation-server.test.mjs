@@ -146,7 +146,7 @@ test('natural refusal closes the sole visible proposal before the server saves i
   const rows=await f.store.list(f.scope);
   assert.equal(rows[0].state,'canceled');
   assert.equal(rows[0].decisionKey,'natural-refusal');
-  assert.match(result.text,/Cancelei/);
+  assert.match(result.text,/Nada foi alterado/);
   assert.equal(f.state.thread.history.at(-1).content,result.text);
   assert.equal(f.state.modelTurns,1,'refusal must not delegate the state change to model prose');
   assert.equal(f.state.cancelled,0,'the refusal refers to the proposal, not a background job');

@@ -43,8 +43,8 @@ for(const [lang,text] of SIM) test(`"${text}" (${lang}) executes the action`,asy
   assert.equal((await f.store.list(f.scope))[0].state,'completed');
 });
 
-const CANCELA=[['en','never mind',/canceled/],['en',"don't",/canceled/],['en','no thanks',/canceled/],
-  ['es','mejor no',/Cancelé/],['es','olvídalo',/Cancelé/],['es','no lo hagas',/Cancelé/],['pt-BR','não',/Cancelei/]];
+const CANCELA=[['en','never mind',/Nothing was changed/],['en',"don't",/Nothing was changed/],['en','no thanks',/Nothing was changed/],
+  ['es','mejor no',/No se cambió nada/],['es','olvídalo',/No se cambió nada/],['es','no lo hagas',/No se cambió nada/],['pt-BR','não',/Nada foi alterado/]];
 for(const [lang,text,reply] of CANCELA) test(`"${text}" (${lang}) cancels and replies in the language`,async t=>{
   const f=await fixture(t,lang);const r=await f.decide(text);
   assert.equal(f.effects.length,0);assert.match(r.text,reply);
