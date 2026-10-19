@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSlackHandler, SO_NO_CANAL } from '../web/slack.mjs';
+import { CHANNEL_CTX_END as E, userSaid } from '../web/confirm.mjs';
 
 const DONO = 'user-dono';
 const PESSOAS = {
@@ -67,11 +68,13 @@ test('team channel: one conversation per Slack thread shared by members and the 
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', thread_ts: '1', text: 'e a do trimestre?' });
   // Each new message in the channel starts its own conversation; a reply continues its thread's.
   assert.deepEqual(s.turnos, [
-    { agent: 'ag-equipe', userId: DONO, text: '[Ana] qual a meta do mês?', conversation: 'Slack · CCOM · 1' },
-    { agent: 'ag-equipe', userId: DONO, text: '[Rafa] resume pra Ana', conversation: 'Slack · CCOM · 2' },
-    { agent: 'ag-equipe', userId: DONO, text: '[Bia Rafa] oi', conversation: 'Slack · CCOM · 3' },
-    { agent: 'ag-equipe', userId: DONO, text: '[Ana] e a do trimestre?', conversation: 'Slack · CCOM · 1' },
+    { agent: 'ag-equipe', userId: DONO, text: `[Ana]${E} qual a meta do mês?`, conversation: 'Slack · CCOM · 1' },
+    { agent: 'ag-equipe', userId: DONO, text: `[Rafa]${E} resume pra Ana`, conversation: 'Slack · CCOM · 2' },
+    { agent: 'ag-equipe', userId: DONO, text: `[Bia Rafa]${E} oi`, conversation: 'Slack · CCOM · 3' },
+    { agent: 'ag-equipe', userId: DONO, text: `[Ana]${E} e a do trimestre?`, conversation: 'Slack · CCOM · 1' },
   ]);
+  // The speaker label is channel envelope: what the person typed is what decides a pending card.
+  assert.equal(userSaid(s.turnos[0].text), 'qual a meta do mês?');
   // Every reply in the thread of the message it answers, whichever event Slack delivered.
   assert.deepEqual(s.postados.map((p) => [p.text, p.username, p.thread_ts]), [['RESPOSTA', 'Comercial', '1'], ['RESPOSTA', 'Comercial', '2'], ['RESPOSTA', 'Comercial', '3'], ['RESPOSTA', 'Comercial', '1']]);
   assert.deepEqual(s.statuses.filter((e) => e.status).map((e) => [e.thread_ts, e.status]), [['1', 'está pensando...'], ['2', 'está pensando...'], ['3', 'está pensando...'], ['1', 'está pensando...']]);
@@ -80,7 +83,7 @@ test('team channel: one conversation per Slack thread shared by members and the 
 test('a team turn that breaks: the notice enters the conversation of the thread it ran in', async (t) => {
   const s = montar(t);
   await s.enviar({ type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UANA', thread_ts: '0', text: 'quebra' });
-  assert.deepEqual(s.avisos.map((a) => [a.pergunta, a.conversation]), [['[Ana] quebra', 'Slack · CCOM · 0']]);
+  assert.deepEqual(s.avisos.map((a) => [a.pergunta, a.conversation]), [[`[Ana]${E} quebra`, 'Slack · CCOM · 0']]);
 });
 
 test('team assistant DM: the owner gets it, anyone else the channel-only notice', async (t) => {
@@ -154,6 +157,6 @@ test('the real member lookup sends the user id where Slack reads it, so a member
   });
   await handler.process({ type: 'event_callback', event_id: 'EREAL', team_id: 'T1', authorizations: [{ user_id: 'UBOT' }],
     event: { type: 'message', channel_type: 'channel', channel: 'CCOM', user: 'UMEMBER', ts: '1', text: 'oi' } });
-  assert.deepEqual(turns, ['[Ana] oi']);
+  assert.deepEqual(turns, [`[Ana]${E} oi`]);
   assert.deepEqual(posted, ['RESPOSTA']);
 });
