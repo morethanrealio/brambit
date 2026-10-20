@@ -35,10 +35,11 @@ export const GRUPO_TOOL_GROUPS = {
   web: new Set(['buscar_web', 'abrir_link']),
   drive: new Set([...PASTA_LEITURA, ...PASTA_ESCRITA]), // only the assistant's own Drive folder
   // The owner's GitHub connection, limited to the repositories in tool_config.repos
-  // (github-repo-scope.mjs). 'github' is the read sub-agent; create/comment keep their confirmation.
+  // (github-repo-scope.mjs). 'github' is the read sub-agent; the writes keep their confirmation.
   github: new Set([
     'github', 'github_list_repos', 'github_read_path', 'github_search_repos', 'github_search_issues',
     'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue',
+    'github_create_pull_request',
   ]),
   // mini-PaaS (publicar/gerir sisteminhas).
   apps: new Set([

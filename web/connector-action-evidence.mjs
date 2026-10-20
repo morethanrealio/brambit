@@ -29,6 +29,7 @@ const definitions = {
   notion_append: ['page', 'updated', d => d.id, () => 'Notion'],
   github_create_issue: ['issue', 'created', d => d.id, a => `${a.owner}/${a.repo}`],
   github_comment_issue: ['issue', 'commented', d => d.id, a => `${a.owner}/${a.repo} #${a.number}`],
+  github_create_pull_request: ['pull_request', 'created', d => d.id, a => `${a.owner}/${a.repo}`],
   slack_post_message: ['message', 'accepted', d => d.ts, (a,d) => d.channel],
   hotmail_send: ['message', 'accepted', d => d.requestId, a => a.to],
 };

@@ -57,7 +57,7 @@ export function pushTargetCheck(repos, dir, remote) {
 }
 
 // Tools that name one repository in their arguments.
-const REPO_ARG_TOOLS = new Set(['github_read_path', 'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue']);
+const REPO_ARG_TOOLS = new Set(['github_read_path', 'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request']);
 const SEARCH_KEY = { github_search_repos: 'full_name', github_search_issues: 'repo' };
 
 // `repos` undefined = not a team assistant, the tools are returned untouched.
@@ -74,6 +74,8 @@ export function scopeGithubTools(tools, repos) {
     // read_path joins the path into the URL and '..' would climb out of the repository.
     if (args.path !== undefined && (typeof args.path !== 'string' || args.path.split('/').some((s) => s === '.' || s === '..'))) return 'Invalid path: it cannot contain "." or ".." segments.';
     if (args.number !== undefined && !/^\d{1,10}$/.test(String(args.number))) return 'Invalid issue number.';
+    // 'owner:branch' would bring in commits from a fork that is not enabled.
+    if (args.head !== undefined && String(args.head).includes(':')) return 'The pull request has to come from a branch of this same repository.';
     return null;
   };
   // Without its own repo: qualifier, a search is limited to the enabled repositories.
@@ -82,7 +84,7 @@ export function scopeGithubTools(tools, repos) {
   return tools.map((tool) => {
     const run = tool.run.bind(tool);
     if (REPO_ARG_TOOLS.has(tool.name)) {
-      // preflight lets the confirmation gate refuse create/comment before asking the owner.
+      // preflight lets the confirmation gate refuse a write before asking the owner.
       return { ...tool,
         preflight: async (args, ctx) => { const why = refuse(args); return why ? { erro: why } : tool.preflight?.(args, ctx); },
         run: async (args = {}) => refuse(args) ?? run(args) };

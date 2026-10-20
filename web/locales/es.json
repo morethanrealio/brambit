@@ -473,6 +473,13 @@
       "request": "comentar en el issue {repo}#{number}",
       "done": "Comentario publicado en el issue {repo}#{number}."
     },
+    "github_create_pull_request": {
+      "request": "abrir un pull request{draft} en GitHub{repo}, de la rama {head} a {base}: \"{title}\"",
+      "done": "Pull request abierto{draft}{repo}, de la rama {head} a {base}: \"{title}\".",
+      "in_repo": " en {repo}",
+      "default_base": "la rama principal",
+      "as_draft": " como borrador"
+    },
     "slack_post_message": {
       "request": "publicar un mensaje en Slack{channel}",
       "done": "Mensaje publicado en Slack{channel}.",

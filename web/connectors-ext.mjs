@@ -169,6 +169,25 @@ export function githubTools({ token }) {
         return JSON.stringify({ ok: true, id: c.id, url: c.html_url, note: 'Comentário publicado.' });
       },
     },
+    {
+      name: 'github_create_pull_request',
+      description: 'Opens a pull request in a repository, from a branch that is already on GitHub (in a project, push it first with git_push). ALWAYS confirm repository, branches, title and description with the user BEFORE opening; do not open without their explicit ok.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' },
+        head: { type: 'string', description: 'Branch with the changes, already pushed to this repository.' },
+        base: { type: 'string', description: 'Branch the changes go into. Default: the repository\'s default branch.' },
+        title: { type: 'string' }, body: { type: 'string' },
+        draft: { type: 'boolean', description: 'Open as a draft. Default false.' },
+      }, required: ['owner', 'repo', 'head', 'title'] },
+      async run({ owner, repo, head, base, title, body, draft }) {
+        const into = base || (await ghReq(token, `/repos/${owner}/${repo}`)).default_branch;
+        const payload = { title, head, base: into };
+        if (body) payload.body = body;
+        if (draft) payload.draft = true;
+        const p = await ghReq(token, `/repos/${owner}/${repo}/pulls`, { method: 'POST', body: payload });
+        return JSON.stringify({ ok: true, id: p.id, number: p.number, url: p.html_url, head, base: into, draft: !!p.draft, note: 'Pull request opened.' });
+      },
+    },
   ];
 }
 
