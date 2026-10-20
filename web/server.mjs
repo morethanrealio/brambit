@@ -4788,11 +4788,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       if (subLivre) for (const t of sshTools(userId)) if (t.name === 'gerar_chave_ssh') registry.add(t);
       console.log(`[codar] sub assembled (thread=${thread.id}, livre=${subLivre ? (sshLivre ? 'ssh' : 'runner') : 'nao'}, coding-ssh=${subCoding ? 'sim' : 'nao'})`);
     }
-    // Coding-SSH gated in the main agent: when it didn't go to the sub (outside
-    // aceitar_edicoes) and isn't suppressed (free via SSH, or a targeted app).
-    if (!sshLivre && !suppressCodingSSH && permMode !== 'aceitar_edicoes') {
+    // Coding gated in the main agent, outside aceitar_edicoes. A super agent's terminal already
+    // reaches its server, so inside a project only the project's tools come in here.
+    if ((!sshLivre || !!activeProject) && !suppressCodingSSH && permMode !== 'aceitar_edicoes') {
       if (codingSshUsable) {
-        addGated(registry, sshTools(userId), thread.id, gateOpts);
+        if (!sshLivre) addGated(registry, sshTools(userId), thread.id, gateOpts);
         // Coding (Agent SDK style) over the same sandbox-SSH transport: read/
         // list/search/rodar_leitura inline; edit/write/rodar_comando gated.
         addGated(
