@@ -26,7 +26,8 @@ export { withoutLinksOutside };
 export const SAIDAS_MAX = 10;
 export const SAIDA_TEXTO_MAX = 4000;
 export const LEGENDA_MAX = 1024;
-export const ROTULO_MAX = 20;       // WhatsApp link button accepts up to 20
+export const ROTULO_MAX = 40;       // a link button's label on a channel without its own limit
+const ROTULO_MAX_DO_CANAL = { whatsapp: 20 }; // WhatsApp link button accepts up to 20
 export const COMPONENTES_MAX = 20000; // chars of the JSON of a template's components
 export const DATA_MAX = 8000;         // chars of the JSON of a data output
 const NOME = /^[a-z][a-z0-9_.-]{0,63}$/;
@@ -37,13 +38,13 @@ const https = (v) => {
   catch { return null; }
 };
 
-function normalizar(s) {
-  const r = normalizarTipo(s);
+function normalizar(s, rotuloMax) {
+  const r = normalizarTipo(s, rotuloMax);
   const reserva = r && r.tipo !== 'texto' ? corte(s.reserva, SAIDA_TEXTO_MAX) : '';
   return r && reserva ? { ...r, reserva } : r;
 }
 
-function normalizarTipo(s) {
+function normalizarTipo(s, rotuloMax) {
   if (!s || typeof s !== 'object') return null;
   if (s.tipo === 'texto') { const texto = corte(s.texto, SAIDA_TEXTO_MAX); return texto ? { tipo: 'texto', texto } : null; }
   if (s.tipo === 'imagem') {
@@ -52,7 +53,7 @@ function normalizarTipo(s) {
     return { tipo: 'imagem', url, ...(legenda ? { legenda } : {}) };
   }
   if (s.tipo === 'botao') {
-    const url = https(s.url), texto = corte(s.texto, LEGENDA_MAX), rotulo = corte(s.rotulo, ROTULO_MAX);
+    const url = https(s.url), texto = corte(s.texto, LEGENDA_MAX), rotulo = corte(s.rotulo, rotuloMax);
     const imagem = s.imagem === undefined ? null : https(s.imagem);
     if (s.imagem !== undefined && !imagem) return null;
     return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url, ...(imagem ? { imagem } : {}) } : null;
@@ -76,9 +77,11 @@ function normalizarTipo(s) {
   return null;
 }
 
-export function normalizarSaidas(saidas) {
+// `canal` picks the button label limit: the channel's own, or ROTULO_MAX.
+export function normalizarSaidas(saidas, { canal } = {}) {
   if (!Array.isArray(saidas)) return [];
-  return saidas.slice(0, SAIDAS_MAX).map(normalizar).filter(Boolean);
+  const rotuloMax = ROTULO_MAX_DO_CANAL[canal] ?? ROTULO_MAX;
+  return saidas.slice(0, SAIDAS_MAX).map((s) => normalizar(s, rotuloMax)).filter(Boolean);
 }
 
 // Text version: goes to the history (the model sees what the person received) and to

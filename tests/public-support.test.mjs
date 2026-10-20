@@ -156,6 +156,16 @@ test('plugin hooks: script without the model, turn instructions plus the owner\'
   assert.equal(r3.text, 'resposta 1'); assert.equal(r3.saidas, undefined);
 });
 
+test('a button label is cut at the limit of the channel it goes out on: 20 on WhatsApp, more on the web', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true });
+  const rotulo = 'Start the skin analysis';
+  const a = atendimento(store, modelo(), { ganchos: { depoisDoModelo: ({ texto }) => ({ saidas: [{ tipo: 'botao', texto, rotulo, url: 'https://loja.example/p' }] }) } });
+  const turno = async (canal) => (await a.turno({ agentId: ag, canal, endereco: '9', mensagem: 'oi' })).saidas[0].rotulo;
+  assert.equal(await turno('whatsapp'), 'Start the skin analy');
+  assert.equal(await turno('web'), rotulo);
+});
+
 // A message can try to talk the assistant into sending people to another site.
 test('sites the assistant may send people to: other sites\' buttons and addresses leave the answer', async (t) => {
   const { store, dono, ag } = await montar(t);
