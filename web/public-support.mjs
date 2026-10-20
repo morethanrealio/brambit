@@ -512,7 +512,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         canal, mensagem: msg, event: ev, primeira: !history.length,
         estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
       const antes = await gancho('antesDoModelo', ctx);
-      const prontas = normalizarSaidas(antes?.saidas);
+      const prontas = normalizarSaidas(antes?.saidas, { canal });
       if (antes?.pular === true && prontas.length) {
         const text = textoDasSaidas(prontas);
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas }]);
@@ -534,7 +534,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
-      const doPlugin = normalizarSaidas((await gancho('depoisDoModelo', { ...ctx, texto: text }))?.saidas);
+      const doPlugin = normalizarSaidas((await gancho('depoisDoModelo', { ...ctx, texto: text }))?.saidas, { canal });
       // Links to sites the owner didn't list leave (a button becomes its text), so a
       // message that talks the model into it can't send people to another site.
       const sites = agente.link_sites || [];
