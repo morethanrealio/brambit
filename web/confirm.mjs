@@ -105,6 +105,7 @@ export const GATED_TOOLS = new Set([
   'github_create_issue',
   'github_comment_issue',
   'github_create_pull_request',
+  'github_propose_changes',
   'slack_post_message',
   // Posts to the person's PUBLIC profile, in their name. It was left out: the only
   // guard was a sentence in the description asking the model to confirm, which is
@@ -174,6 +175,7 @@ export const IRREVERSIBLE_TOOLS = new Set([
   'github_create_issue',
   'github_comment_issue',
   'github_create_pull_request',
+  'github_propose_changes',
   'slack_post_message',
   // Public post in the person's name, indexed by search engines. Deleting it later
   // doesn't undo who already saw it: confirmation by text, a thumbs-up isn't enough.

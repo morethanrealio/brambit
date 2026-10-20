@@ -480,6 +480,16 @@
       "default_base": "la rama principal",
       "as_draft": " como borrador"
     },
+    "github_propose_changes": {
+      "request": "abrir un pull request{draft} en GitHub{repo} con los commits {source}, {branch} a {base}: \"{title}\"",
+      "done": "Pull request abierto{draft}{repo} con los commits {source}, {branch} a {base}: \"{title}\".",
+      "of_folder": "de la carpeta {dir}",
+      "of_project": "del proyecto",
+      "from_branch": "de la rama {branch}",
+      "current_branch": "de la rama actual de la carpeta",
+      "notice": "{commits} commit(s) van de la rama {branch} a {base}",
+      "untracked": "{count} archivo(s) de la carpeta no están en git y quedan fuera del pull request"
+    },
     "slack_post_message": {
       "request": "publicar un mensaje en Slack{channel}",
       "done": "Mensaje publicado en Slack{channel}.",

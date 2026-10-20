@@ -1168,6 +1168,7 @@ import {
 } from './routine-offer.mjs';
 import { monitorsTools } from './monitors.mjs';
 import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
+import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
@@ -4711,16 +4712,15 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // Sandbox (code execution in the isolated container). Suppressed when the turn
     // targets a basic app (route-guard) so as not to give the model a parallel path.
     if (!targetedApp) for (const t of sandboxTools(userId)) registry.add(t);
+    if (provTools.some((t) => t.name === 'github_create_pull_request')) addGated(registry, scopeGithubTools(githubProposeTools({ userId, token: getGithubToken, sandbox: !targetedApp, project: activeProject }), githubRepos), thread.id);
     // Server/terminal. Two possible paths, and they do NOT aim at the same target:
-    //  • live terminal (free mode): SSH-in to a connected server (needs the
-    //    'super' category) OR the owner's LOCAL machine via the Brambit Runner
-    //    (needs only the binding in Connections).
+    //  • live terminal (free mode): SSH-in to a connected server (needs the 'super' category)
+    //    OR the owner's LOCAL machine via the Brambit Runner (needs only the binding in Connections).
     //  • coding-SSH: always a server over SSH.
-    // Free mode over SSH SUPPRESSES coding-SSH (it would be the same machine by two
-    // paths). Free mode only via the Runner does NOT: removing it would kill server
-    // access for whoever bound the Runner. Since both can land in the SAME
-    // `codar` sub-agent (the registry indexes by name: two `codar` = the second
-    // erases the first), the sub is assembled once, here.
+    // Free mode over SSH SUPPRESSES coding-SSH (it would be the same machine by two paths).
+    // Free mode only via the Runner does NOT: removing it would kill server access for whoever
+    // bound the Runner. Since both can land in the SAME `codar` sub-agent (the registry indexes
+    // by name: two `codar` = the second erases the first), the sub is assembled once, here.
     // With no key in the vault and no active project, EVERY coding-SSH tool is
     // impossible: the transport is `sshExec`, which dies with "you don't have an SSH
     // key yet" before trying anything. Leaving those tools in context offers the
@@ -7657,7 +7657,7 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
         'GENERATING A FILE (.docx, PDF, .md, .txt), THE DEFAULT PATH: when the user asks you to generate/create/assemble/export a document, Word, .doc, .docx or PDF from some content, use gerar_documento. It creates the file and DELIVERS it straight into the chat (a native document on WhatsApp/Telegram, a download link in the app) and keeps a copy in the user\'s private library. It works for ANY user, WITHOUT depending on Google Drive or any connection. Cases: "send me this as a PDF/Word", "make a .doc with this summary", and especially "turn this PDF into an editable document"; in that case you READ the PDF content (it already arrives extracted for you when the user attaches it) and call gerar_documento with format "docx". RULES: NEVER generate an .html/.txt/.md file for the user to "copy and paste by hand"; NEVER mention a file path, folder, /workspace, server or "I will leave the file at such a place" (the file goes attached, period); NEVER say you "cannot generate" the file when this tool is available. About layout: PDF/Word do not keep an identical structure, so you recreate an approximate structure (headings, sections, lists, bold), not a pixel-perfect copy; say that naturally instead of promising total fidelity or tangling yourself up saying you "cannot".',
       );
     }
-    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request', 'slack_post_message'].filter((n) => names.has(n));
+    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request', 'github_propose_changes', 'slack_post_message'].filter((n) => names.has(n));
     if (writeTools.length) {
       lines.push(
         '',

@@ -480,6 +480,16 @@
       "default_base": "the default branch",
       "as_draft": " as a draft"
     },
+    "github_propose_changes": {
+      "request": "open a pull request{draft} on GitHub{repo} with the commits {source}, {branch} into {base}: \"{title}\"",
+      "done": "Pull request opened{draft}{repo} with the commits {source}, {branch} into {base}: \"{title}\".",
+      "of_folder": "of the folder {dir}",
+      "of_project": "of the project",
+      "from_branch": "from branch {branch}",
+      "current_branch": "from the folder's current branch",
+      "notice": "{commits} commit(s) go from branch {branch} into {base}",
+      "untracked": "{count} file(s) in the folder are not in git and stay out of the pull request"
+    },
     "slack_post_message": {
       "request": "post a message on Slack{channel}",
       "done": "Message posted on Slack{channel}.",

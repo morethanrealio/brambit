@@ -57,7 +57,7 @@ export function pushTargetCheck(repos, dir, remote) {
 }
 
 // Tools that name one repository in their arguments.
-const REPO_ARG_TOOLS = new Set(['github_read_path', 'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request']);
+const REPO_ARG_TOOLS = new Set(['github_read_path', 'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request', 'github_propose_changes']);
 const SEARCH_KEY = { github_search_repos: 'full_name', github_search_issues: 'repo' };
 
 // `repos` undefined = not a team assistant, the tools are returned untouched.

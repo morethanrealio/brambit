@@ -36,6 +36,7 @@ test('known connectors need scoped receipt IDs, not only ok:true', () => {
     ['github_create_issue',{owner:'fixture',repo:'repo'},{ok:true,id:17}],
     ['github_comment_issue',{owner:'fixture',repo:'repo',number:1},{ok:true,id:18}],
     ['github_create_pull_request',{owner:'fixture',repo:'repo',head:'branch'},{ok:true,id:19}],
+    ['github_propose_changes',{owner:'fixture',repo:'repo',dir:'x'},{ok:true,id:20}],
     ['slack_post_message',{channel:'channel'},{ok:true,ts:'123.45',channel:'channel'}],
     ['hotmail_send',{to:'fixture@example.invalid'},{ok:true,requestId:'provider-request',httpStatus:202}],
   ];

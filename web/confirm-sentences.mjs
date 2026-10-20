@@ -82,6 +82,12 @@ const pullArgs = (a, c) => ({
   head: c.or(a.head, 'common.unknown'), base: c.or(a.base, 'github_create_pull_request.default_base'),
   draft: c.clause(a.draft, 'github_create_pull_request.as_draft'), title: a.title || '',
 });
+// The commits come from a workbench folder; "." is the active project itself.
+const proposeArgs = (a, c) => ({
+  ...pullArgs(a, c),
+  source: /^\.\/?$/.test(String(a.dir ?? '')) ? c.t('github_propose_changes.of_project') : c.t('github_propose_changes.of_folder', { dir: c.or(a.dir, 'common.unknown') }),
+  branch: a.branch ? c.t('github_propose_changes.from_branch', { branch: a.branch }) : c.t('github_propose_changes.current_branch'),
+});
 const inDir = (a, c) => c.clause(a.diretorio, 'common.in_dir', { dir: a.diretorio });
 const pushBranch = (a, c) => c.t(a.branch ? 'git_push.of_branch' : 'git_push.current_branch', { branch: a.branch });
 const runCommand = {
@@ -329,6 +335,10 @@ const SENTENCES = {
   github_create_pull_request: {
     request: (a, c) => c.t('github_create_pull_request.request', pullArgs(a, c)),
     done: (a, c) => c.t('github_create_pull_request.done', pullArgs(a, c)),
+  },
+  github_propose_changes: {
+    request: (a, c) => c.t('github_propose_changes.request', proposeArgs(a, c)),
+    done: (a, c) => c.t('github_propose_changes.done', proposeArgs(a, c)),
   },
   slack_post_message: {
     request: (a, c) => c.t('slack_post_message.request', { channel: c.clause(a.channel, 'slack_post_message.in_channel', { channel: a.channel }) }),
