@@ -7,6 +7,7 @@ import { DRIVE_SEARCH_RULE } from './drive-search.mjs';
 import { createProductCards, PRODUCT_RECOMMENDATION_CONTRACT } from './product-cards.mjs';
 import { createCurationEvidence, retainedCurationToolResult } from './curation-evidence.mjs';
 import { reminderChannelSelection } from './reminder-channel.mjs';
+import { parseOnboard } from './onboard-parse.mjs';
 import { readBody, readRaw } from './http-body.mjs';
 import { createConfirmationRecovery, migrateCodingConfirmation } from './confirmation-recovery.mjs';
 import { confirmationFingerprint } from './confirmation-store.mjs';
@@ -1688,7 +1689,7 @@ function vaultSaveTool(userId) {
       const provider = String(servico || '').trim().toLowerCase();
       const key = String(chave || '').trim();
       if (!provider) return 'Diga qual serviço (ex: splitwise, notion).';
-      if (!key) return 'A chave veio vazia; peça a API key ao usuário e tente de novo.';
+      if (!key) return 'The key came empty. Do not ask for it in the chat: tell the person to add it on the *Conexões › Cofre de credenciais* screen (the credential vault), then try again.';
       const kind = ['apikey', 'token', 'basic'].includes(tipo) ? tipo : 'apikey';
       let secretEnc;
       try { secretEnc = encryptSecret(key); } catch { return 'Falha ao cifrar a chave; não guardei nada.'; }
@@ -7324,26 +7325,6 @@ SUGESTOES:
 - <task 2>
 - <task 3>`;
 
-// Splits greeting, "to remember" facts and the 3 suggestions from the blocks at the end.
-function parseOnboard(text) {
-  const all = text || '';
-  const bullets = (chunk) => {
-    const out = [];
-    for (const line of (chunk || '').split('\n')) {
-      const s = line.replace(/^[\s•\-*\d.]+/, '').replace(/\*\*/g, '').trim();
-      if (s) out.push(s);
-    }
-    return out;
-  };
-  // Splits on the two markers; what comes before the first one is the greeting.
-  const sugSplit = all.split(/\n\s*SUGEST[ÕO]ES\s*:/i);
-  const beforeSug = sugSplit[0] || all;
-  const remSplit = beforeSug.split(/\n\s*PARA[_ ]LEMBRAR\s*:/i);
-  const welcome = (remSplit[0] || beforeSug).trim();
-  const notes = bullets(remSplit[1]).slice(0, 6);
-  const suggestions = bullets(sugSplit[1]).slice(0, 3);
-  return { welcome, suggestions, notes };
-}
 
 // Wizard state/results now persisted per account/assistant in onboardingStore.
 
@@ -7771,26 +7752,6 @@ function tailContext({ wiki = '', summary = '', crossChannel = '', agentInbox = 
     );
   }
   return parts.join('\n\n');
-}
-
-// Extracts/updates a short, stable user profile from the latest exchange.
-// Runs without search (cheap reasoning only) and returns the updated profile.
-async function updateProfile(agent, userMsg, assistantMsg) {
-  const sys = [
-    'Você mantém um PERFIL curto e estável do usuário de um assistente pessoal.',
-    'Guarde só fatos duradouros e úteis pra ajudar melhor: preferências, contexto (profissão, família, rotina), objetivos recorrentes, restrições e decisões já tomadas.',
-    'NÃO guarde conversa fiada, perguntas pontuais nem nada efêmero. Máximo ~10 linhas, em bullets curtos. Em pt-BR.',
-    'Devolva o perfil ATUALIZADO inteiro (perfil atual + o que aprendeu agora, sem duplicar). Só o perfil, sem comentários.',
-  ].join('\n');
-  const prompt = `Perfil atual:\n${agent.profile?.trim() || '(vazio)'}\n\nNova troca:\nUsuário: ${userMsg}\nAgente: ${assistantMsg}`;
-  try {
-    const r = await (configurado('memory', 8192) || makeGemini({ model: 'gemini-3.5-flash' })).complete({
-      system: sys, messages: [{ role: 'user', content: prompt }], tools: [],
-    });
-    return r.text?.trim() || agent.profile || '';
-  } catch {
-    return agent.profile || ''; // if it fails, keeps the profile it already had
-  }
 }
 
 // The language hangs off `res` because this function only sees `res`; when there
