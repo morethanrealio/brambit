@@ -461,8 +461,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   }
 
   // event: a page event instead of the message (normalizeEvent); an invalid one
-  // makes the turn empty.
-  async function turno({ agentId, canal, endereco, mensagem, event }) {
+  // makes the turn empty. imagens: photos the model sees with the message
+  // ({mimeType, data}, already checked by the channel); never stored.
+  async function turno({ agentId, canal, endereco, mensagem, event, imagens }) {
     const agente = await store.agente(agentId);
     if (!agente?.ativo) return { text: null, motivo: 'inativo' };
     const ev = event === undefined ? null : normalizeEvent(event);
@@ -522,7 +523,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
       let text = '';
       try {
-        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, history, maxSteps: PASSOS_MAX });
+        const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
+        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX });
         await recordUsage(r.usages || [], ident);
         text = typeof r.text === 'string' ? r.text.trim() : '';
       } catch (e) {

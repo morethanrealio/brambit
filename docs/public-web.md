@@ -51,6 +51,27 @@ The key:
   accepts any address. How Brambit gets the address is in
   [Caller address](#caller-address).
 
+### A photo with the message
+
+A server call may send one photo for the assistant to look at, in `image`,
+together with `message`:
+
+```json
+{ "message": "What do you think of this color on me?", "contact": "customer-123",
+  "image": "data:image/jpeg;base64,/9j/4AAQ…" }
+```
+
+- `image`: a data URL or plain base64 of a JPEG, PNG or WebP, up to 1 MB
+  decoded. Brambit reads the type from the bytes, not from the data URL.
+- Only from a server, with the key. A browser call with `image` gets
+  `400 image_needs_key`.
+- Only with `message`, not with `event`.
+- The photo is not stored. The model sees it in that turn only; the history
+  keeps the text and the answer.
+- The owner's model must read images (for example DeepSeek V4.1 Flash on
+  Together). If it does not, the call returns the short "not available"
+  notice in `text`.
+
 ## Page events
 
 Instead of `message`, send `event` when the person does something that is
@@ -81,7 +102,7 @@ in proxy logs, and the browser token is enough to read the conversation.
 ## Limits
 
 - 60 calls per minute per address (messages and history together).
-- Body up to 64 KB.
+- Body up to 64 KB, plus the photo when there is one.
 - The public-support limits the owner sets in `/public-support` apply as on
   WhatsApp: messages per hour from each contact (default 30), messages per
   hour from all contacts together (default 1000) and the daily spending cap
@@ -120,9 +141,13 @@ Keep a proxy in front when Brambit is reachable from the internet. With
 | 400 | `message_required` | No `message` and no `event` |
 | 400 | `message_or_event` | Both `message` and `event` |
 | 400 | `invalid_event` | `event` outside the rules above |
+| 400 | `image_needs_key` | `image` in a browser call |
+| 400 | `image_needs_message` | `image` without `message` |
+| 400 | `invalid_image` | `image` is not a JPEG, PNG or WebP in base64 |
 | 401 | `invalid_key` | Wrong or replaced key |
 | 403 | `origin_not_allowed` | Browser call from a website not listed |
 | 403 | `ip_not_allowed` | Server call from an address not listed |
 | 404 | `not_found` | Unknown agent, public mode or the web channel off, or sign-up open on the installation |
-| 413 | `body_too_large` | Body over 64 KB |
+| 413 | `body_too_large` | Body over 64 KB, not counting the photo |
+| 413 | `image_too_large` | Photo over 1 MB decoded |
 | 429 | | Too many calls from this address |
