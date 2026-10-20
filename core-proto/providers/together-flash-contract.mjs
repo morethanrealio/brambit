@@ -11,6 +11,11 @@ export const isTogetherFlashModel=model=>TOGETHER_FLASH_MODELS.has(model);
 export function togetherFlashModel(env=process.env){
  return isTogetherFlashModel(env.PRIMARY_TEXT_MODEL)?env.PRIMARY_TEXT_MODEL:TOGETHER_FLASH_MODEL;
 }
+// max_tokens on this route counts the reasoning too, and the reasoning comes
+// first, so a ceiling sized for the visible text alone can end before any text.
+// Measured on image readings at 'low': 2k-6k reasoning tokens for 0.5k-0.9k of
+// visible text. A caller's visible-text ceiling gets this room on top.
+export const FLASH_REASONING_ROOM=12288;
 export function flashReasoning(effort,direct=false){
  const value=direct?'low':(effort??'low');
  if(!['low','medium','high'].includes(value))throw Error('Together Flash reasoning effort must be low, medium or high');
