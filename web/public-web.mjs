@@ -16,10 +16,13 @@
 // There is no cookie here, so the paths are outside the server's CSRF check;
 // the origin check below replaces it. The public-support guards (hourly limit,
 // daily cap, stop and delete commands) apply as on WhatsApp.
+// A server's message may carry one photo for the model to look at. It is not
+// stored: the history keeps the text only.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { indiceCego } from './vault.mjs';
 import { chaveDoContato, normalizeEvent } from './public-support.mjs';
+import { sniffImagem } from './image-sniff.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);
@@ -28,6 +31,11 @@ export const WEB_KEY_IPS_MAX = 20;
 export const WEB_HISTORY_MAX = 50;
 export const WEB_CONTACT_MAX = 200;
 export const WEB_BODY_MAX = 64 * 1024;
+// The photo: decoded size and the formats vision models read. A body that carries
+// one may grow by the photo in base64; the rest of it keeps WEB_BODY_MAX.
+export const WEB_IMAGE_MAX = 1024 * 1024;
+const WEB_IMAGE_B64_MAX = Math.ceil(WEB_IMAGE_MAX / 3) * 4;
+const WEB_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 // History names the contact in this header, not in the address: an address ends up
 // in proxy access logs, and the browser token is all it takes to read the conversation.
 export const WEB_CONTACT_HEADER = 'Brambit-Contact';
@@ -41,15 +49,29 @@ const sameText = (a, b) => {
 
 // The route has no login, so the body is capped before it is buffered. Past the
 // cap the rest is read and dropped (the socket stays usable for the 413).
-async function readSmallJson(req) {
-  if (Number(req.headers['content-length'] || 0) > WEB_BODY_MAX) return null;
+// Returns { body, size } or null past the cap.
+async function readSmallJson(req, max) {
+  if (Number(req.headers['content-length'] || 0) > max) return null;
   const chunks = []; let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size <= WEB_BODY_MAX) chunks.push(chunk);
+    if (size <= max) chunks.push(chunk);
   }
-  if (size > WEB_BODY_MAX) return null;
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { return {}; }
+  if (size > max) return null;
+  let body;
+  try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { body = {}; }
+  return { body: body && typeof body === 'object' ? body : {}, size };
+}
+
+// The photo: a data URL or bare base64. Its bytes decide the type (the declared
+// one is ignored). Returns { image: {mimeType, data} } or { status, error }.
+function webImage(v) {
+  const b64 = typeof v === 'string' ? v.replace(/^data:[^,]*,/, '').replace(/\s+/g, '') : '';
+  const bytes = /^[A-Za-z0-9+/]+={0,2}$/.test(b64) ? Buffer.from(b64, 'base64') : null;
+  if (bytes?.length > WEB_IMAGE_MAX) return { status: 413, error: 'image_too_large' };
+  const type = bytes && sniffImagem(bytes)?.mime;
+  if (!WEB_IMAGE_TYPES.has(type)) return { status: 400, error: 'invalid_image' };
+  return { image: { mimeType: type, data: bytes.toString('base64') } };
 }
 
 // Browser contact token: random part + signature.
@@ -225,17 +247,31 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
     res.setHeader('Cache-Control', 'no-store');
     if (tooManyRequests(req, res, 'public-web', 60, 60_000)) return;
     try {
-      const b = await readSmallJson(req);
-      if (!b) return send(res, 413, { error: 'body_too_large' });
+      // Only a call with a key may carry a photo, so only it gets the larger cap.
+      const read = await readSmallJson(req, req.headers.authorization ? WEB_BODY_MAX + WEB_IMAGE_B64_MAX + 1024 : WEB_BODY_MAX);
+      if (!read) return send(res, 413, { error: 'body_too_large' });
+      const b = read.body;
       const c = await caller(req, res, url, b.contact);
       if (!c.address) return answer(res, c);
+      if (read.size - (typeof b.image === 'string' ? Buffer.byteLength(b.image) : 0) > WEB_BODY_MAX) return send(res, 413, { error: 'body_too_large' });
       // A turn is either a typed message or a page event ({type, data?}), never both.
       const message = typeof b.message === 'string' && b.message.trim() ? b.message : null;
       if (b.event !== undefined && message) return send(res, 400, { error: 'message_or_event' });
       const event = b.event === undefined ? undefined : normalizeEvent(b.event);
       if (event === null) return send(res, 400, { error: 'invalid_event' });
       if (!message && !event) return send(res, 400, { error: 'message_required' });
-      const r = await turno({ agentId: c.agentId, canal: 'web', endereco: c.address, ...(event ? { event } : { mensagem: message }) });
+      // A photo goes with a typed message and only from a server: a browser call has
+      // no key, and anyone can make one outside a browser.
+      let image = null;
+      if (b.image !== undefined && b.image !== null) {
+        if (!c.address.startsWith('api:')) return send(res, 400, { error: 'image_needs_key' });
+        if (!message) return send(res, 400, { error: 'image_needs_message' });
+        const p = webImage(b.image);
+        if (!p.image) return send(res, p.status, { error: p.error });
+        image = p.image;
+      }
+      const r = await turno({ agentId: c.agentId, canal: 'web', endereco: c.address, ...(event ? { event } : { mensagem: message }),
+        ...(image ? { imagens: [image] } : {}) });
       if (r.motivo === 'inativo') return notFound(res);
       const outputs = r.saidas || (r.text ? [{ tipo: 'texto', texto: r.text }] : []);
       return send(res, 200, { ...(c.token ? { contact: c.token } : {}), text: r.text ?? null, outputs });
