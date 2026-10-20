@@ -944,7 +944,7 @@ const CONNECTOR_DOMAINS = [
   {
     tool: 'github', label: 'GitHub',
     reads: new Set(['github_list_repos', 'github_read_path', 'github_search_repos', 'github_search_issues', 'github_list_issues', 'github_read_issue']),
-    description: 'Queries the user\'s GITHUB to READ/search repositories, files and issues. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). Do NOT use it to CREATE or COMMENT on an issue (that has its own tool in the main agent). The sub-agent does NOT see the conversation: describe the goal with context.',
+    description: 'Queries the user\'s GITHUB to READ/search repositories, files and issues. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). Do NOT use it to CREATE or COMMENT on an issue or to OPEN a pull request (those have their own tools in the main agent). The sub-agent does NOT see the conversation: describe the goal with context.',
     ex: '"lista as issues abertas do repo octocat/hello-world com número e título"',
   },
   {
@@ -2951,7 +2951,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const usePrimaryLLM = isDeepSeekTurn() || isGeminiComparison() || (!isNemotron && (togetherEnabled() || openaiEnabled() || !!modelosCfg()));
   const useWebSearch = usePrimaryLLM;
   // The WRITE tools (gmail_send, calendar_create, drive_upload,
-  // github_create_issue, github_comment_issue, slack_post_message) are wrapped
+  // github_create_issue, github_create_pull_request, slack_post_message...) are wrapped
   // by the confirmation guard (addGated): when called, they just
   // register the pending action and ask for the user's ok, without executing.
   if (Object.keys(caps).length) {
@@ -7656,11 +7656,11 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
         'GENERATING A FILE (.docx, PDF, .md, .txt), THE DEFAULT PATH: when the user asks you to generate/create/assemble/export a document, Word, .doc, .docx or PDF from some content, use gerar_documento. It creates the file and DELIVERS it straight into the chat (a native document on WhatsApp/Telegram, a download link in the app) and keeps a copy in the user\'s private library. It works for ANY user, WITHOUT depending on Google Drive or any connection. Cases: "send me this as a PDF/Word", "make a .doc with this summary", and especially "turn this PDF into an editable document"; in that case you READ the PDF content (it already arrives extracted for you when the user attaches it) and call gerar_documento with format "docx". RULES: NEVER generate an .html/.txt/.md file for the user to "copy and paste by hand"; NEVER mention a file path, folder, /workspace, server or "I will leave the file at such a place" (the file goes attached, period); NEVER say you "cannot generate" the file when this tool is available. About layout: PDF/Word do not keep an identical structure, so you recreate an approximate structure (headings, sections, lists, bold), not a pixel-perfect copy; say that naturally instead of promising total fidelity or tangling yourself up saying you "cannot".',
       );
     }
-    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_comment_issue', 'slack_post_message'].filter((n) => names.has(n));
+    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request', 'slack_post_message'].filter((n) => names.has(n));
     if (writeTools.length) {
       lines.push(
         '',
-        'WRITE ACTIONS available (' + writeTools.join(', ') + '): the NON-NEGOTIABLE RULE above applies (call the tool with the complete data, it stays pending, and it only runs with the "ok"). What is specific to them: ALWAYS show the details FIRST (recipient and text of the email; title, date/time and guests of the event; name and content of the file; text of the issue/comment/post). The other connected services remain read-only.',
+        'WRITE ACTIONS available (' + writeTools.join(', ') + '): the NON-NEGOTIABLE RULE above applies (call the tool with the complete data, it stays pending, and it only runs with the "ok"). What is specific to them: ALWAYS show the details FIRST (recipient and text of the email; title, date/time and guests of the event; name and content of the file; text of the issue/comment/post; repository, branches and title of the pull request). The other connected services remain read-only.',
       );
       if (names.has('drive_upload') || names.has('drive_upload_arquivo')) {
         lines.push(

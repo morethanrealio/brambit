@@ -44,6 +44,7 @@ const ARGS = {
   onedrive_upload_arquivo: { nome: 'contrato.pdf' },
   github_create_issue: { repo: 'org/app', title: 'Erro no login' },
   github_comment_issue: { repo: 'org/app', number: 12 },
+  github_create_pull_request: { repo: 'org/app', head: 'fix/login', title: 'Fix the login', draft: true },
   slack_post_message: { channel: '#geral' },
   linkedin_post: { text: 'Texto do post', link: 'https://x.com', visibility: 'CONNECTIONS' },
   confirmar_com_agente: { contato: 'Ana', decisao: 'fechado' },

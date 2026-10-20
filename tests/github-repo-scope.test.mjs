@@ -16,6 +16,7 @@ const scoped = (repos, overrides = {}) => {
   const runs = {
     github_read_path: async (a) => { calls.push(a); return 'file'; },
     github_create_issue: async (a) => { calls.push(a); return 'created'; },
+    github_create_pull_request: async (a) => { calls.push(a); return 'opened'; },
     github_list_repos: async (a) => { calls.push(a); return JSON.stringify([{ full_name: 'Acme/Web', private: true }, { full_name: 'acme/secret' }]); },
     github_search_issues: async (a) => { calls.push(a); return JSON.stringify({ items: [{ repo: 'acme/web' }, { repo: 'acme/secret' }], returned: 2, reported_total: 2 }); },
     ...overrides,
@@ -39,6 +40,9 @@ test('repository arguments outside the list, or escaping it, never reach GitHub'
   const pre = await tool('github_create_issue').preflight({ owner: 'acme', repo: 'secret', title: 't' }, {});
   assert.match(pre.erro, /not enabled/);
   assert.equal(await tool('github_create_issue').preflight({ owner: 'acme', repo: 'web', title: 't' }, {}), undefined);
+  // A pull request from 'owner:branch' would bring in a fork that is not enabled.
+  assert.match((await tool('github_create_pull_request').preflight({ owner: 'acme', repo: 'web', head: 'other:main', title: 't' }, {})).erro, /same repository/);
+  assert.equal(await tool('github_create_pull_request').preflight({ owner: 'acme', repo: 'web', head: 'fix/a', title: 't' }, {}), undefined);
 
   // Nothing was registered, so there is no receipt: an 'unknown' one replaced the
   // reply with "check the service" and hid the reason from the person.
