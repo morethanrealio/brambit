@@ -171,7 +171,7 @@ export function githubTools({ token }) {
     },
     {
       name: 'github_create_pull_request',
-      description: 'Opens a pull request in a repository, from a branch that is already on GitHub (in a project, push it first with git_push). ALWAYS confirm repository, branches, title and description with the user BEFORE opening; do not open without their explicit ok.',
+      description: 'Opens a pull request in a repository, from a branch that is already on GitHub (in a project, push it first with git_push; for commits in a sandbox folder, use github_propose_changes instead). ALWAYS confirm repository, branches, title and description with the user BEFORE opening; do not open without their explicit ok.',
       parameters: { type: 'object', properties: {
         owner: { type: 'string' }, repo: { type: 'string' },
         head: { type: 'string', description: 'Branch with the changes, already pushed to this repository.' },
