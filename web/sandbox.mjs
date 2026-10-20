@@ -114,6 +114,10 @@ export async function sandboxReadBytes(userId, path) {
 // purpose: SSH depends on the default home for known_hosts.
 const USER_ENV = 'export HOME=/workspace XDG_CACHE_HOME=/workspace/.cache npm_config_cache=/workspace/.cache/npm; ';
 
+// A command with the same environment as the model's sandbox_shell, for modules
+// that read what the model built there (e.g. github-propose.mjs).
+export const sandboxUserShell = (userId, command, timeoutMs = 60_000) => sandboxShell(userId, USER_ENV + command, timeoutMs);
+
 // Assembles the sandbox tools for THIS user (userId stays bound in the closure).
 export function sandboxTools(userId) {
   if (!sandboxEnabled()) return [];

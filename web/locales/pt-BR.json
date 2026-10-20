@@ -480,6 +480,16 @@
       "default_base": "a branch principal",
       "as_draft": " como rascunho"
     },
+    "github_propose_changes": {
+      "request": "abrir um pull request{draft} no GitHub{repo} com os commits {source}, {branch} para {base}: \"{title}\"",
+      "done": "Pull request aberto{draft}{repo} com os commits {source}, {branch} para {base}: \"{title}\".",
+      "of_folder": "da pasta {dir}",
+      "of_project": "do projeto",
+      "from_branch": "da branch {branch}",
+      "current_branch": "da branch atual da pasta",
+      "notice": "{commits} commit(s) vão da branch {branch} para {base}",
+      "untracked": "{count} arquivo(s) da pasta não estão no git e ficam fora do pull request"
+    },
     "slack_post_message": {
       "request": "postar uma mensagem no Slack{channel}",
       "done": "Mensagem postada no Slack{channel}.",
