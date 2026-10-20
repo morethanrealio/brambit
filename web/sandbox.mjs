@@ -118,6 +118,16 @@ const USER_ENV = 'export HOME=/workspace XDG_CACHE_HOME=/workspace/.cache npm_co
 // that read what the model built there (e.g. github-propose.mjs).
 export const sandboxUserShell = (userId, command, timeoutMs = 60_000) => sandboxShell(userId, USER_ENV + command, timeoutMs);
 
+// The sandbox has no GitHub credential on purpose, so a push to GitHub fails.
+// Without a pointer the model improvised (asked the person for a token in the
+// chat); the failed result now names the tool that publishes the commits.
+const PUSH = /\bgit\b[^|;&]*\bpush\b/;
+const NO_AUTH = /could not read Username|Authentication failed|Permission denied|denied to|\b403\b|terminal prompts disabled|Repository not found/i;
+export function pushHint(command, res) {
+  if (!PUSH.test(String(command)) || res.exitCode === 0 || !NO_AUTH.test(`${res.stdout || ''}\n${res.stderr || ''}`)) return '';
+  return '\n[This environment has no GitHub credential, on purpose. To open a pull request with these commits, call github_propose_changes with this folder (it is available when GitHub is connected); if it is not, ask the person to connect GitHub in Connections. Never ask for a token in the chat.]';
+}
+
 // Assembles the sandbox tools for THIS user (userId stays bound in the closure).
 export function sandboxTools(userId) {
   if (!sandboxEnabled()) return [];
@@ -135,7 +145,8 @@ export function sandboxTools(userId) {
       },
       async run({ command, timeout_s }) {
         const timeout = Math.min(Math.max(Number(timeout_s) || 60, 1), 120) * 1000;
-        return fmtRun(await call('/shell', { userId, command: USER_ENV + command, timeout }));
+        const res = await call('/shell', { userId, command: USER_ENV + command, timeout });
+        return fmtRun(res) + pushHint(command, res);
       },
     },
     {
