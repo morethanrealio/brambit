@@ -82,6 +82,18 @@ test('advanced runtime binds the project adapter and does not mount unrelated SS
  await jobs.submit(identity,{kind:'advanced',args:{objetivo:'Inspect source'},environment,policy:codingPolicySnapshot(f.agent)},'advanced');await jobs.drive(codingJobScope(identity));
  assert.deepEqual(target,{ownerUserId:'owner',nome:'repo-A'});assert.equal((await jobs.status(identity)).programming_job.state,'completed');
 });
+test('super agent in a project job gets its live terminal and the project tools',async t=>{
+ const f=await fixture(t);Object.assign(f.agent,{category:'super',active_project_id:'project-A'});const ran=[];let target;
+ f.deps.getProject=async(id,u)=>id==='project-A'&&u==='owner'?{id,nome:'repo-A'}:null;f.deps.userHasSshKey=async()=>true;
+ f.deps.livreTools=(uid,tid,runner,sshLivre)=>{assert.equal(sshLivre,true);return [{name:'terminal',run:async()=>{ran.push('terminal');return 'build-host';}}];};
+ f.deps.codingTools=(uid,opts)=>{target=opts.project;return [{name:'ler_arquivo',run:async()=>{ran.push('ler_arquivo');return 'source';}}];};
+ f.deps.sshTools=()=>{throw Error('the terminal replaces gated SSH')};let n=0;
+ f.provider.completeDurable=async()=>{n++;return n===1?{stop:'tool',toolCalls:[{id:'sh',name:'terminal',args:{comando:'hostname'}}]}:n===2?{stop:'tool',toolCalls:[{id:'read',name:'ler_arquivo',args:{caminho:'a'}}]}:{stop:'end',text:'Built and checked'};};
+ const runtime=createProgrammingRuntime(f.deps),jobs=createCodingJobs({store:f.jobStore,execute:runtime.execute,deliver:f.deliver});
+ const environment={projectId:'project-A',runner:false,ssh:true,sshLivre:true,livre:true,coding:true,mode:'aceitar_edicoes',category:'super'};
+ await jobs.submit(identity,{kind:'advanced',args:{objetivo:'Build on my server'},environment,policy:codingPolicySnapshot(f.agent)},'super-project');await jobs.drive(codingJobScope(identity));
+ assert.deepEqual(ran,['terminal','ler_arquivo']);assert.deepEqual(target,{ownerUserId:'owner',nome:'repo-A'});assert.equal((await jobs.status(identity)).programming_job.state,'completed');
+});
 test('two conversations cannot concurrently mutate the same app workspace',async t=>{
  const f=await fixture(t);await f.db.exec("INSERT INTO fixture.threads(id,agent_id,user_id)VALUES('thread2','agent','owner')");
  f.deps.getThreadOwned=async(id,u)=>['thread','thread2'].includes(id)&&u==='owner'?{id,agent_id:'agent'}:null;
