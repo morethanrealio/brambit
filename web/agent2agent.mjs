@@ -66,7 +66,7 @@ function knowledgeBlock({ ownerName, agent, profileText }) {
 // Extracts { intent, mensagem } from the model's output. Asks for JSON, but
 // is tolerant: if valid JSON doesn't come back, it infers the intent by
 // keywords and uses the whole text.
-function parseTurn(raw, side) {
+export function parseTurn(raw, side) {
   const text = String(raw || '').trim();
   // tries to find a JSON block
   const m = text.match(/\{[\s\S]*\}/);
@@ -74,7 +74,7 @@ function parseTurn(raw, side) {
     try {
       const o = JSON.parse(m[0]);
       const intent = INTENTS.includes(o.intent) ? o.intent : null;
-      const mensagem = String(o.mensagem || o.message || '').trim();
+      const mensagem = String(o.mensagem || o.mensaje || o.message || '').trim();
       if (intent && mensagem) return { intent, mensagem };
       if (mensagem) return { intent: inferIntent(mensagem, side), mensagem };
     } catch { /* cai no fallback abaixo */ }

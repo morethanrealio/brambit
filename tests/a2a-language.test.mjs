@@ -5,7 +5,7 @@ process.env.BRAMBIT_DEFAULT_LANGUAGE = 'pt-BR';
 // the language directive goes at the end, same as the other sub-agents.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { systemA, systemB } from '../web/agent2agent.mjs';
+import { parseTurn, systemA, systemB } from '../web/agent2agent.mjs';
 import { comIdioma } from '../web/locale.mjs';
 
 const baseA = { ownerAName: 'Ana', agentA: { name: 'Mara' }, ownerBName: 'Bruno', objetivo: 'marcar um café', ownerAProfileText: '' };
@@ -30,5 +30,12 @@ test("en/es: the JSON asks for the owner's language and the directive goes at th
     assert.match(b, new RegExp(`short question in ${language}>`));
     assert.ok(a.startsWith(systemA({ ...baseA, language })) && a.length > systemA({ ...baseA, language }).length);
     assert.ok(b.length > systemB({ ...baseB, language }).length);
+  }
+});
+
+// Issue #18: a model writing the JSON key in Spanish lost the message (the raw JSON went out).
+test('the turn JSON key is read in pt, es and en', () => {
+  for (const key of ['mensagem', 'mensaje', 'message']) {
+    assert.deepEqual(parseTurn(`{"intent":"propose","${key}":"Tuesday at 3pm?"}`, 'a'), { intent: 'propose', mensagem: 'Tuesday at 3pm?' });
   }
 });
