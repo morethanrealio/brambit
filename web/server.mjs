@@ -4733,7 +4733,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // `gerar_chave_ssh` stays OUTSIDE the gate, or nobody could create the
     // first key and the feature would die of circular dependency.
     const codingSshUsable = hasSshKey || !!activeProject;
-    const subLivre = !activeProject && livreActive;
+    const subLivre = livreActive;
     const subCoding = (!!activeProject || !sshLivre) && !suppressCodingSSH && codingSshUsable && permMode === 'aceitar_edicoes';
     if (subLivre || subCoding) {
       // ISOLATION (codar): the code loop lives INSIDE the sub-agent, with its
@@ -4766,12 +4766,12 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // With the Runner bound, this SAME tool is the port to the owner's PERSONAL
         // MACHINE (not just for code): it has to show up in the description, otherwise the
         // main agent doesn't see it as a path for "look at my desktop".
-        extra: runnerForThisAgent && !activeProject
+        extra: subLivre && runnerForThisAgent
           ? `IMPORTANT: this tool is also the way into your owner's PERSONAL MACHINE (${marca().nome} Runner active now). Use it for ANYTHING on their machine, not just programming: list/read files, look at the desktop, find a document, run a local command. Say in the goal that it is "on the owner's local machine, via the Runner". Reading is free; writing only in the authorized folders.`
           : undefined,
         sessionKey: `${userId}:${agent.id}:${thread.id}`,
         dispatch:['chat','telegram','whatsapp'].includes(kind)?args=>codingJobs.submit(codingIdentity,{kind:'advanced',args,userRequest:message,channel:kind,policy:codingPolicySnapshot(agent),
-          environment:{projectId:activeProject?.id||null,runner:!activeProject&&!!runnerForThisAgent,ssh:!activeProject&&!!hasSshKey,sshLivre:!activeProject&&!!sshLivre,livre:!activeProject&&!!subLivre,mode:permMode,category:agentCategory}},codingSubmissionId):undefined,
+          environment:{projectId:activeProject?.id||null,runner:(!activeProject||subLivre)&&!!runnerForThisAgent,ssh:(!activeProject||subLivre)&&!!hasSshKey,sshLivre:(!activeProject||subLivre)&&!!sshLivre,livre:!!subLivre,coding:!!subCoding,mode:permMode,category:agentCategory}},codingSubmissionId):undefined,
         taskStore:appTaskStore,
         targetIdentity:JSON.stringify({project:activeProject?.id||null,runner:!!runnerForThisAgent,ssh:!!sshLivre,mode:permMode}),
         authorize:async()=>{

@@ -57,8 +57,11 @@ async function runProgrammingJob(job,control,achados=[]){
   const project=expected.projectId?await getProject(expected.projectId,userId):null;
   const buildCodingContext=async()=>{
     const registry=new ToolRegistry();
+    // Same toolset the turn assembled: a super agent's live terminal stays inside a project,
+    // next to the project's coding tools when those went to the sub too. Jobs queued before
+    // `coding` existed had one or the other.
     if(expected.livre){for(const t of livreTools(userId,threadId,expected.runner,expected.sshLivre))registry.add(t);}
-    else {
+    if(expected.coding??!expected.livre){
       if(!project)for(const t of sshTools(userId))registry.add(t);
       for(const t of codingTools(userId,{project:project?{ownerUserId:userId,nome:project.nome}:null,getGithubToken:()=>validProviderToken(userId,'github')}))registry.add(t);
     }
