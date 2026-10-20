@@ -16,8 +16,9 @@
 // There is no cookie here, so the paths are outside the server's CSRF check;
 // the origin check below replaces it. The public-support guards (hourly limit,
 // daily cap, stop and delete commands) apply as on WhatsApp.
-// A server's message may carry one photo for the model to look at. It is not
-// stored: the history keeps the text only.
+// A message may carry one photo for the model to look at: a server's at any
+// time, a browser's only when the assistant asked that contact for one. It is
+// not stored: the history keeps the text only.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { indiceCego } from './vault.mjs';
@@ -247,8 +248,9 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
     res.setHeader('Cache-Control', 'no-store');
     if (tooManyRequests(req, res, 'public-web', 60, 60_000)) return;
     try {
-      // Only a call with a key may carry a photo, so only it gets the larger cap.
-      const read = await readSmallJson(req, req.headers.authorization ? WEB_BODY_MAX + WEB_IMAGE_B64_MAX + 1024 : WEB_BODY_MAX);
+      // Any call may carry a photo, so the cap leaves room for one; the rest of the
+      // body keeps WEB_BODY_MAX (checked once the photo is known).
+      const read = await readSmallJson(req, WEB_BODY_MAX + WEB_IMAGE_B64_MAX + 1024);
       if (!read) return send(res, 413, { error: 'body_too_large' });
       const b = read.body;
       const c = await caller(req, res, url, b.contact);
@@ -260,19 +262,20 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
       const event = b.event === undefined ? undefined : normalizeEvent(b.event);
       if (event === null) return send(res, 400, { error: 'invalid_event' });
       if (!message && !event) return send(res, 400, { error: 'message_required' });
-      // A photo goes with a typed message and only from a server: a browser call has
-      // no key, and anyone can make one outside a browser.
+      // A photo goes with a typed message. A browser call has no key, and anyone can
+      // make one outside a browser, so its photo counts only as the answer to the
+      // assistant's request (the turn asks the plugin, inside the contact's queue).
       let image = null;
       if (b.image !== undefined && b.image !== null) {
-        if (!c.address.startsWith('api:')) return send(res, 400, { error: 'image_needs_key' });
         if (!message) return send(res, 400, { error: 'image_needs_message' });
         const p = webImage(b.image);
         if (!p.image) return send(res, p.status, { error: p.error });
         image = p.image;
       }
       const r = await turno({ agentId: c.agentId, canal: 'web', endereco: c.address, ...(event ? { event } : { mensagem: message }),
-        ...(image ? { imagens: [image] } : {}) });
+        ...(image ? { imagens: [image], ...(c.address.startsWith('api:') ? {} : { imagesOnRequest: true }) } : {}) });
       if (r.motivo === 'inativo') return notFound(res);
+      if (r.motivo === 'photo_not_requested') return send(res, 400, { error: 'image_not_requested' });
       const outputs = r.saidas || (r.text ? [{ tipo: 'texto', texto: r.text }] : []);
       return send(res, 200, { ...(c.token ? { contact: c.token } : {}), text: r.text ?? null, outputs });
     } catch (e) { return fail(res, 500, 'public_web_failed', e); }

@@ -75,8 +75,10 @@ The owner sets up each assistant that answers the public in `/public-support`.
   and its contact is a token signed by the installation. A server calls with
   the assistant's key (`bpk_…`, stored as a hash), which the owner can lock to
   the servers' addresses. The contact goes in the `Brambit-Contact` header, not
-  in the URL, so it doesn't end up in access logs. Details in
-  [docs/public-web.md](docs/public-web.md).
+  in the URL, so it doesn't end up in access logs. A server may send a photo
+  with a message; a browser only when the agent's plugin says the assistant
+  asked that contact for one. Photos go to the model and are not stored.
+  Details in [docs/public-web.md](docs/public-web.md).
 - *Links:* the owner can list the sites the assistant may send people to. A
   button to any other site then becomes plain text, and other sites' addresses
   and e-mail addresses leave the answer. Not checked: WhatsApp templates, data
