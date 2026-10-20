@@ -9,9 +9,10 @@
   <a href="https://github.com/morethanrealio/brambit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/morethanrealio/brambit/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/morethanrealio/brambit/tags"><img alt="Versão" src="https://img.shields.io/github/v/tag/morethanrealio/brambit?label=version"></a>
   <img alt="Node.js 24" src="https://img.shields.io/badge/node-24-339933">
+  <a href="https://discord.com/invite/FZTM6dZvr"><img alt="Discord" src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
-<p align="center"><a href="README.md">Read in English</a></p>
+<p align="center"><a href="https://discord.com/invite/FZTM6dZvr">Entre na comunidade no Discord</a> · <a href="README.md">Read in English</a></p>
 
 O Brambit é um software que roda no seu próprio servidor e dá a cada pessoa de uma
 família, de um time ou de uma empresa os próprios assistentes de IA. Agentes pessoais
