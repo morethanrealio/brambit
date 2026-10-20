@@ -10,7 +10,7 @@
 // via the onAttachment callback — here we only generate, save and return the URL.
 
 import {requireProviderContent} from './execution-credit-errors.mjs';
-import {makeTogether,togetherEnabled,TOGETHER_FLASH_MODEL,isTogetherFlashModel,togetherFlashModel} from '../core-proto/providers/together.mjs';
+import {makeTogether,togetherEnabled,TOGETHER_FLASH_MODEL,FLASH_REASONING_ROOM,isTogetherFlashModel,togetherFlashModel} from '../core-proto/providers/together.mjs';
 import {selectedDeepSeek} from '../core-proto/deepseek/scope.mjs';
 import {GEMINI_COMPARISON_MODEL,isGeminiComparison} from '../core-proto/deepseek/comparison.mjs';
 import {makeGemini} from '../core-proto/providers/gemini.mjs';
@@ -317,10 +317,14 @@ export async function describeImage(buffer, mime, question, { maxOut = 0, langua
   const useTogether = isTogetherFlashModel(process.env.PRIMARY_TEXT_MODEL ?? TOGETHER_FLASH_MODEL) && togetherEnabled();
   if (selected || useTogether) {
     try {
-      const provider = selected || makeTogether({model:togetherFlashModel(),maxTokens:maxOut || 32768,reasoningEffort:'low'});
+      // maxOut is the visible-text ceiling; on Together Flash max_tokens also pays
+      // for the reasoning, which alone outgrew the 1400 of the receipt caption.
+      const provider = selected || makeTogether({model:togetherFlashModel(),maxTokens:maxOut ? maxOut + FLASH_REASONING_ROOM : 32768,reasoningEffort:'low'});
       const result = await provider.complete({messages:[{role:'user',content:q,images:[{mimeType:mime || 'image/jpeg',data:buffer.toString('base64')}]}]});
       requireProviderContent(result);
-      return {text:result.text || '',usage:result.usage,truncated:result.protocolError?.code === 'output_truncated'};
+      const truncated = result.protocolError?.code === 'output_truncated';
+      if (truncated && !result.text) console.error('[media vision] image reading cut before any text');
+      return {text:result.text || '',usage:result.usage,truncated};
     } catch (error) {
       throwIfAttemptControl(error);
       if (selected) throw error; // never escape an explicit account model selection

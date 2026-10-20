@@ -1,6 +1,6 @@
 import {isTogetherFlashModel,flashReasoning,estimateTogetherFlashInput,togetherRejectionDiagnostic} from './together-flash-contract.mjs';
 import {makeCompativel} from './compatible.mjs';
-export {TOGETHER_FLASH_MODEL,isTogetherFlashModel,togetherFlashModel} from './together-flash-contract.mjs';
+export {TOGETHER_FLASH_MODEL,FLASH_REASONING_ROOM,isTogetherFlashModel,togetherFlashModel} from './together-flash-contract.mjs';
 export {parseGlmToolCalls,parseDsmlToolCalls,stripDsml,hasDsmlResidue} from './tool-in-text.mjs';
 // ── Real adapter: Together AI (OpenAI-compatible Chat Completions) ──
 // Preset of the compatible engine (compatible.mjs). The key comes from
