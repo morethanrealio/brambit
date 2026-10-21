@@ -5,6 +5,7 @@ import { standaloneRefusal } from './turn-claim-guard.mjs';
 import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
 import { frameText } from './confirm-sentences.mjs';
+import { reconsider } from './consent-reader.mjs';
 
 // Texts the OWNER reads in this flow. They come out in the language recorded in
 // the request itself (row.language, the same one that already picks the card's
@@ -136,6 +137,18 @@ export function confirmationTargetsInMessage(rows, text) {
   if (new Set(cards.map(proposalCard)).size !== cards.length) return [];
   return cards.map(r => r.id);
 }
+// The cards in the assistant's last message are the ones a reply without a
+// number or a quote is about; the reader also gets that message as context.
+export function bindShownCards(session, history) {
+  const last = history?.at(-1);
+  const ids = last?.role === 'assistant' ? confirmationTargetsInMessage(session.pending(), last.content) : [];
+  session.implicitTargetIds = ids;
+  session.implicitTargetId = ids.length === 1 ? ids[0] : null;
+  session.lastAssistantText = last?.role === 'assistant' && typeof last.content === 'string' ? last.content : '';
+  session.recentTurns = (history || []).slice(-12)
+    .filter(m => ['user', 'assistant'].includes(m?.role) && typeof m.content === 'string' && m.content.trim()).slice(-6);
+}
+
 export function proposalList(rows, prefix, lang) {
   const t = lang ? textosConfirmacao(lang) : txRows(rows);
   if (!rows.length) return {text:t.none,attachments:[],proposalIds:[]};
@@ -522,16 +535,40 @@ async function handleGroup(session, rows, {decision, viaReaction, inputId, resol
   } finally {clearInterval(timer);}
 }
 
+// A refusal or change the reader found goes back to the model as a note instead
+// of a fixed reply: the same message often carries something else ("Actually we
+// won't take him to school. Remind me at 1:50 pm to...", real reply of 2026-09-23),
+// which the fixed "OK, I won't..." dropped. A change keeps the card until the model
+// proposes the same tool again, so a misread leaves the card as it was.
+async function readerDecision(session, selected, inputId) {
+  const rows = selected.rows || [selected.row];
+  const list = rows.map(r => `${r.number}. ${r.label}`).join('; ');
+  if (selected.kind === 'edit') {
+    const row = rows[0];
+    session.replaceOnPropose = new Set([row.id]);
+    return { note: `[SYSTEM: the owner's message may change pending card ${list}. It is still waiting and was NOT executed. If the message asks for that same action with different details, call ${row.name} again with the corrected arguments, starting from ${JSON.stringify(row.args)}; the new card replaces card ${row.number}. If the message is about something else, just answer it and card ${row.number} stays waiting. Never say or imply it was done. Do not repeat this block.]` };
+  }
+  let done;
+  if (rows.length > 1) {
+    done = await session.store.closeMany(session.scope, rows.map(r => r.id), inputId);
+    await session.refresh();
+  } else done = await session.close(rows[0], 'canceled', inputId);
+  if (!done) return replayRows(rows.map(r => session.rows.find(c => c.id === r.id) || r));
+  return { note: `[SYSTEM: canceled at the owner's request, nothing was executed: ${list}. Say so in one short sentence and answer the rest of the message, if there is more. Do not propose it again unless the owner asks. Do not repeat this block.]` };
+}
+
 export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
-  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000 } = {}) {
-  const selected = selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []);
+  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read } = {}) {
+  const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
+  const said = userSaid(message);
+  const selected = await reconsider(
+    selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []),
+    { rows: session.rows, said, target, viaReaction, shownIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [], read });
   if (selected.kind === 'continue') {
     // A card was on screen and this message was not taken as a decision on it. Without
     // saying so, the model answered "Yes, cancel it" with "the routine is cancelled"
     // while it was still on (dev test of 0.3.0, 2026-10-18).
-    const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
     const shown = shownIds.map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
-    const said = userSaid(message);
     if (!shown.length || !(naturalApproval(said) || mentionsCards(said, shown))) return null;
     return { note: `[SYSTEM: still waiting for the owner's confirmation and NOT executed: ${shown.map(r => `${r.number}. ${r.label}`).join('; ')}. This message was not taken as a decision on it, so never say or imply it was done. If the owner wants it done, call the same tool again with the same arguments and the confirmation card is shown again; otherwise just answer the message. Do not repeat this block.]` };
   }
@@ -549,6 +586,7 @@ export async function handleConfirmation(session, { message, target, viaReaction
       ? txRows(selected.rows).unknown
       : selected.kind === 'unseen' ? txRows(selected.rows).unseen : undefined, selected.rows?.length ? undefined : session.language);
   }
+  if (selected.reader && ['cancel', 'edit'].includes(selected.kind)) return readerDecision(session, selected, inputId);
   if (selected.rows?.length > 1) return handleGroup(session,selected.rows,{decision:selected.kind,viaReaction,inputId,resolveTool,afterComplete,heartbeatMs});
   const row = selected.row;
   if (selected.kind === 'inspect') return { note: `O dono está falando sobre o pedido ${row.number}: ${row.label}. Ele continua pendente; uma pergunta não autoriza execução.` };
