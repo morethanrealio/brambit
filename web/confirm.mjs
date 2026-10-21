@@ -555,7 +555,7 @@ export function gateTool(tool, threadId, opts = {}) {
     name: tool.name,
     description:
       tool.description +
-      ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. When called, it normally does NOT execute right away: the system records the request and only executes it after the user explicitly confirms in the next turn. Describe alongside what will be done. (Exception: if the user turned on the "aceitar edições" (accept edits) mode or pre-authorized the command, it runs directly and you get the result right away.)]',
+      ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. Depending on the call, it either runs right away (some actions that only affect the user, the "aceitar edições" (accept edits) mode, a pre-authorized command) or the system records the request and only executes it after the user confirms. The tool result says which one happened: report only that.]',
     parameters: tool.parameters,
     async run(args) {
       // Every gate keeps its own snapshot of the arguments, not just tools with
@@ -583,13 +583,15 @@ export function gateTool(tool, threadId, opts = {}) {
       if (!opts.confirmationPreview && (inlineByMode || inlineByAllow)) {
         return tool.run(args);
       }
-      // Some mutations are strictly risk-reducing and reversible
-      // (today: only PAUSING a routine, without changing anything else). The
-      // tool itself declares this narrow exception; we never infer it from the
-      // name nor from the model's text. It still goes through the preflight
-      // below before executing, to validate and resolve the real target.
-      const inlineByPolicy = typeof tool.runWithoutConfirmation === 'function'
-        && tool.runWithoutConfirmation(args) === true;
+      // Some calls run without a card: pausing a routine, or an action the
+      // owner asked for that only affects them (direct-actions.mjs). The policy
+      // decides by the arguments, never by the model's text, and may be async.
+      // A policy that fails keeps the card. The call still goes through the
+      // preflight below before executing, to validate and resolve the real target.
+      let inlineByPolicy = false;
+      if (!opts.confirmationPreview && typeof tool.runWithoutConfirmation === 'function') {
+        try { inlineByPolicy = (await tool.runWithoutConfirmation(args)) === true; } catch { inlineByPolicy = false; }
+      }
       // The legacy path keeps a single pending action; the persistent session
       // supports several. A call that runs without a card never waits on it.
       if (!opts.confirmationPreview && !inlineByPolicy && !currentConfirmationSession(threadId) && pending.has(threadId)) {
@@ -654,7 +656,17 @@ export function gateTool(tool, threadId, opts = {}) {
         /* continues with the basic label */
       }
       if (recusa) return `NÃO registrei o pedido: ${recusa} Corrija o argumento e chame a tool de novo (não peça confirmação de algo que não foi registrado).`;
-      if (!opts.confirmationPreview && inlineByPolicy) return tool.run(args);
+      if (!opts.confirmationPreview && inlineByPolicy) {
+        // Same bound target the card would have used (e.g. the calendar or the
+        // note as stored now), so running directly never skips that check.
+        if (typeof tool.prepareConfirmation !== 'function') return tool.run(args);
+        let prepared;
+        try {
+          prepared = await tool.prepareConfirmation(JSON.parse(JSON.stringify(args)));
+          if (typeof prepared?.run !== 'function') throw Error('Could not bind the target of the action.');
+        } catch (e) { return `NOT done: ${String(e?.message || 'Could not bind the target of the action.')} Nothing was executed.`; }
+        return prepared.run();
+      }
       // Security binding is NOT best-effort enrichment. Trusted tools may bind
       // their target before the card; failures must never register a runnable action.
       // The bound callback stays server-side; no model-supplied capability/ID grants access.

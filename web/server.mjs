@@ -13,7 +13,7 @@ import { createConfirmationRecovery, migrateCodingConfirmation } from './confirm
 import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
-import { createStopRoutineTool, selfStopOnly } from './routine-stop.mjs';
+import { createStopRoutineTool } from './routine-stop.mjs';
 import { presentPendingCards } from './pending-action-claims.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
@@ -1156,7 +1156,8 @@ import { canvaTools } from './canva.mjs';
 import { compactIfNeeded } from './memory.mjs';
 import { wikiTools, wikiContext, updateUserProfile } from './wiki.mjs';
 import { pruneWikiPageVersions } from './db.mjs';
-import { spacesTools, spaceInviteTool, spacesContext } from './spaces.mjs';
+import { spacesTools, spaceInviteTool, spacesContext, isPrivateSpace } from './spaces.mjs';
+import { turnGate } from './direct-actions.mjs';
 import { skillsTools, skillInstallTool, skillShareTool, skillRunTool, skillsContext, stripStaleSkillReads } from './skills.mjs';
 import { trackersTools, trackersContext } from './trackers.mjs';
 import { checklistTools, CHECKLIST_CONTEXT } from './checklists.mjs';
@@ -1181,7 +1182,7 @@ import { moderateVideoPrompt } from './videomod.mjs';
 import { createRender, getRender, fetchRenderVideo, videoGenEnabled, videoEmRevisao, MAX_VIDEO_SECONDS } from './videogen.mjs';
 import { scanBuffer, avEnabled } from './avscan.mjs';
 import { sniffImagem } from './image-sniff.mjs';
-import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, GATE_TOOLS, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
+import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
 import { sshTools, livreTools, userHasSshKey, maskSecrets } from './ssh.mjs';
 import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForTurn, runnerBoundAgentId, runnerSetBoundAgent, runnerReadFile } from './runner.mjs';
 import { codingTools } from './coding.mjs';
@@ -2325,23 +2326,6 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
 const emergencyTurnCooldown = new Map();
 const EMERGENCY_COOLDOWN_MS = 6 * 3600_000; // 1 emergency turn every 6h per thread
 
-// Narrow exceptions to the 2026-09-28 audit gate, always by arguments,
-// never by the model's text: checking the app's access without changing anything, and
-// going back to a MORE restricted permission mode.
-const PORTAO_SEM_CARTAO = {
-  definir_acesso_sistema: (a) => !a?.acesso,
-  definir_modo_permissao: (a) => ['padrao', 'plano'].includes(a?.modo),
-};
-// A routine has no one to click the card, and these two are how a
-// routine ends itself (window closed, a monitor that found what it was looking for).
-const PORTAO_ROTINA_SE_ENCERRA = new Set(['cancelar_rotina', 'remover_monitor']);
-function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
-  if (!tool || tool.confirmationTool || (!GATE_TOOLS.has(tool.name) && tool.requiresConfirmation !== true)) return tool;
-  if (kind === 'routine' && PORTAO_ROTINA_SE_ENCERRA.has(tool.name)) return selfStopOnly(tool);
-  const inline = PORTAO_SEM_CARTAO[tool.name];
-  return gateTool(inline ? { ...tool, runWithoutConfirmation: inline } : tool, threadId, gateOpts);
-}
-
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const baseHistory = structuredClone(thread.history || []);
   // `appClient` = the conversation arrived via the iOS app (X-Brambs-Mobile: 1
@@ -2898,7 +2882,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Sub-agents use their own registries and are left out on purpose.
   {
     const add = registry.add.bind(registry);
-    registry.add = (tool) => add(portaoDoTurno(tool, { kind, threadId: thread.id, gateOpts }));
+    const privateSpace = (args) => isPrivateSpace(userId, args);
+    registry.add = (tool) => add(turnGate(tool, { kind, threadId: thread.id, gateOpts, agentCategory, privateSpace }));
   }
   const confirmationSession = currentConfirmationSession(thread.id);
   if (confirmationSession) confirmationSession.context = { ...confirmationSession.context, googleEmail:gEmail, country:userCountry, timeZone:userTz, agentName:agent.name || null, authorizations:await getConfirmationAuthorizationContext(userId) };
@@ -4039,11 +4024,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Only the fields that change are passed.
   addGated(registry, [{
     name: 'editar_rotina',
-    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) happens right away and returns the real receipt; do not ask for a second confirmation. Resuming or changing anything else still waits for confirmation. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same confirmation authorizes applying the edit and only then testing the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
+    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) always happens right away and returns the real receipt. Any other change either applies right away or waits for the owner\'s confirmation; the tool result says which. Never ask for a confirmation in text. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same call applies the edit and only then tests the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
     parameters: {
       type: 'object',
       properties: {
-        testar_agora: {type:'boolean',description:'Only if the owner also asks for a test now. After confirmation, applies the edit and tests the saved version with real delivery on the configured channel.'},
+        testar_agora: {type:'boolean',description:'Only if the owner also asks for a test now. Applies the edit (after the confirmation, when one is needed) and then tests the saved version with real delivery on the configured channel.'},
         curadoria: curationToolSchema,
         busca_email: emailSearchToolSchema,
         ativa:{type:'boolean',description:'false to PAUSE, true to RESUME the same routine, without deleting history.'},
