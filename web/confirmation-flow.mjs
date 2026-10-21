@@ -561,7 +561,19 @@ async function readerDecision(session, selected, inputId) {
   return { note: `[SYSTEM: canceled at the owner's request, nothing was executed: ${list}. Say so in one short sentence and answer the rest of the message, if there is more. Do not propose it again unless the owner asks. Do not repeat this block.]` };
 }
 
-export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
+// A card nobody answered expires and nothing happens, while the person often
+// believes it was done. The next reply that goes through the model says so once,
+// in the conversation the card was in; nothing is sent on its own.
+export async function handleConfirmation(session, options = {}) {
+  const resolution = await resolveConfirmation(session, options);
+  if (resolution?.text !== undefined || resolution?.ignore) return resolution;
+  const expired = await session.store?.takeExpired(session.scope) || [];
+  if (!expired.length) return resolution;
+  const notice = `[SYSTEM: these confirmation cards expired without the owner's answer, so they were NOT done: ${expired.map(r => r.label).join('; ')}. Mention it once, in one short sentence, and offer to do it again; then answer the message as usual. Never say or imply it was done. Do not repeat this block.]`;
+  return { ...resolution, note: [resolution?.note, notice].filter(Boolean).join('\n\n') };
+}
+
+async function resolveConfirmation(session, { message, target, viaReaction = false, inputId = null,
   resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent, button = null } = {}) {
   const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
   const said = userSaid(message);
@@ -580,6 +592,9 @@ export async function handleConfirmation(session, { message, target, viaReaction
   }
   if (selected.kind === 'ignore') return {ignore:true};
   if (selected.kind === 'replay') {
+    // The reply below already says these expired: no later notice for them.
+    const expired = (selected.rows || [selected.row]).filter(r => r.state === 'expired').map(r => r.id);
+    if (expired.length) await session.store?.takeExpired(session.scope, expired);
     if (selected.rows?.length > 1) {
       for (const row of selected.rows) if (row.state === 'completed') await afterComplete(row).catch(() => {});
       return replayRows(selected.rows);
