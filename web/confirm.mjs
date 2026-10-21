@@ -714,10 +714,14 @@ export function gateTool(tool, threadId, opts = {}) {
           // target replaces the previous still-pending one, instead of stacking
           // cards that conflict with each other. Only after the new one is
           // recorded: if it fails, nothing disappears.
+          // Same for a card the consent reader saw the owner change in this turn
+          // (confirmation-flow.mjs readerDecision): it stays open until here.
           const alvo = typeof tool.supersedeKey === 'function' ? tool.supersedeKey(confirmedArgs) : null;
-          if (alvo) {
-            for (const old of session.pending()) {
-              if (old.id === saved?.id || old.name !== tool.name || tool.supersedeKey(old.args || {}) !== alvo) continue;
+          const changed = session.replaceOnPropose;
+          for (const old of session.pending()) {
+            if (old.id === saved?.id || old.name !== tool.name) continue;
+            if (changed?.has(old.id) || (alvo && tool.supersedeKey(old.args || {}) === alvo)) {
+              changed?.delete(old.id);
               await session.close(old, 'superseded').catch(() => {});
             }
           }

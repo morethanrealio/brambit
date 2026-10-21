@@ -2,7 +2,7 @@
 import './config-boot.mjs';
 import {arquivoDoSite,definirPastasDoSite,hostDaMarca,linkDaPagina,marca,marcaNaPagina,siteDaMarca,slugDaMarca,uaBot} from './brand.mjs';
 import { pendingRoutineEdit, routineTestOutcome } from './routine-edit-test.mjs';
-import { confirmationTargetsInMessage, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
+import { bindShownCards, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
 import { DRIVE_SEARCH_RULE } from './drive-search.mjs';
 import { createProductCards, PRODUCT_RECOMMENDATION_CONTRACT } from './product-cards.mjs';
 import { createCurationEvidence, retainedCurationToolResult } from './curation-evidence.mjs';
@@ -2232,10 +2232,7 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
     const session = !opts.ephemeral && !opts.noTools && !opts.webhook
       ? await createConfirmationSession(confirmationStore, scope, { policy: codingPolicySnapshot(agent) }) : null;
     if (session) {
-      const last = fresh.history?.at(-1);
-      const ids = last?.role === 'assistant' ? confirmationTargetsInMessage(session.pending(), last.content) : [];
-      session.implicitTargetIds = ids;
-      session.implicitTargetId = ids.length === 1 ? ids[0] : null;
+      bindShownCards(session, fresh.history);
       // Language for responses that have no request at all to pull the language from
       // ("no action awaiting confirmation").
       session.language = (await getUserLocale(userId).catch(() => null))?.language || 'pt-BR';
