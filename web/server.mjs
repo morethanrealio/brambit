@@ -2,7 +2,7 @@
 import './config-boot.mjs';
 import {arquivoDoSite,definirPastasDoSite,hostDaMarca,linkDaPagina,marca,marcaNaPagina,siteDaMarca,slugDaMarca,uaBot} from './brand.mjs';
 import { pendingRoutineEdit, routineTestOutcome } from './routine-edit-test.mjs';
-import { proposalPresentation, confirmationTargetsInMessage, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
+import { confirmationTargetsInMessage, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
 import { DRIVE_SEARCH_RULE } from './drive-search.mjs';
 import { createProductCards, PRODUCT_RECOMMENDATION_CONTRACT } from './product-cards.mjs';
 import { createCurationEvidence, retainedCurationToolResult } from './curation-evidence.mjs';
@@ -14,6 +14,7 @@ import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
 import { createStopRoutineTool, selfStopOnly } from './routine-stop.mjs';
+import { presentPendingCards } from './pending-action-claims.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
@@ -6652,12 +6653,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // offers, a "platform team" persona and invented nicknames are prompt rules:
   // the regex cuts that lived here erased confirmation questions and data the
   // owner asked for (29/09/2026).
-  // Shows the card of the proposal the gate really stored, including details
-  // prepared by financial tools. The confirmation can't approve an LLM
-  // paraphrase that left out the date, recurrence or recipient.
-  const deterministicConfirmation = confirmationSession
-    ? proposalPresentation(confirmationSession.pending().filter(p => confirmationSession.createdIds.has(p.id)))
-    : peekPending(thread.id)?.confirmationText;
+  // Shows the card the gate really stored (an LLM paraphrase can drop the date,
+  // recurrence or recipient) and cuts "done" claims about actions still on a card.
+  const pendingCards = confirmationSession && presentPendingCards(text, confirmationSession, { journal: actionJournal.entries, toolCounts });
+  if (pendingCards) { diag.corte('acao_pendente', text, pendingCards.text); text = pendingCards.text; }
+  const deterministicConfirmation = confirmationSession ? pendingCards.card : peekPending(thread.id)?.confirmationText;
   const diagAntesJournal = text;
   text = actionJournal.finish(text, { termination, authenticatedEmailSources:searchCoverage.emailSourceLinks(), suppressRoutineMemoryReceipts: routineNoNews, proposalShown: Boolean(deterministicConfirmation) });
   if (diag.removidas.length) diag.corte('ja_fiz_sem_prova', diagAntesJournal, text, { removidas: diag.removidas, recibos: actionJournal.entries });

@@ -785,7 +785,8 @@
       "address_mismatch": "he wrote \"{written}\" and this message is going to \"{target}\"",
       "target_none": "There is no pending confirmation for that message. No action was executed. Please request the action again.",
       "target_unmatched": "I could not match your reply to the current confirmation request. The action is still pending.",
-      "target_how": "To confirm this action, reply “go ahead” to this message. To cancel it, reply “cancel” to this message."
+      "target_how": "To confirm this action, reply “go ahead” to this message. To cancel it, reply “cancel” to this message.",
+      "not_done_yet": "Not done yet: it needs your confirmation."
     },
     "jornada_concluir": {
       "done": "Journey completed. I’m preparing practical ways {brand} can help and will let you know here when they are ready."

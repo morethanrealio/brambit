@@ -4,6 +4,7 @@ import { confirmationFingerprint, validConfirmationReference } from './confirmat
 import { standaloneRefusal } from './turn-claim-guard.mjs';
 import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
+import { frameText } from './confirm-sentences.mjs';
 
 // Texts the OWNER reads in this flow. They come out in the language recorded in
 // the request itself (row.language, the same one that already picks the card's
@@ -85,24 +86,31 @@ const amendment = text => !text.trim().endsWith('?') && (confirmacaoComRessalva(
 const refusalEnEs = text => /^(?:no[, ]+)?(?:never ?mind|forget it|don'?t|do not|don'?t do (?:it|that)|do not do (?:it|that)|no thanks|no thank you|not now|hold off|no lo hagas|no hace falta|mejor no|olvidalo|cancelalo|dejalo|no gracias|ahora no|todavia no)(?:[, ]+(?:thanks|gracias))?[.! ]*$/.test(folded(String(text).trim()).replace(/[’]/g, "'"));
 const cancellation = text => standaloneRefusal(text) || refusalEnEs(text) || /^(?:por favor[, ]+)?(?:cancele?|cancelar|cancela|cancel|stop|cancela|cancele)(?:\s+(?:esse|este|o|this|the|esta|la|el))?[.! ]*$/i.test(folded(text));
 
-export function proposalCard(row) {
+// Every card states, in the platform's words, that nothing has happened yet:
+// the assistant's own text around it said "done" in 20 of 408 replies sent
+// while a card waited (production, 2026-10-21). Cards sent before this line
+// existed are still matched in the history (legacy).
+const notDoneYet = lang => `${frameText('not_done_yet', {}, lang === 'en' || lang === 'es' ? lang : 'pt-BR')} `;
+function card(row, legacy) {
   const lang = row.language;
   const question = lang === 'en' ? 'May I proceed?' : lang === 'es' ? '¿Puedo seguir?' : 'Posso seguir?';
   const reaction = isReactionConfirmable(row.name) ? ' 👍' : '';
   if (/\?\s*(?:👍)?\s*$/.test(row.confirmationText)) return row.confirmationText;
-  return `${row.confirmationText}\n\n${question}${reaction}`;
+  return `${row.confirmationText}\n\n${legacy ? '' : notDoneYet(lang)}${question}${reaction}`;
 }
+export const proposalCard = row => card(row, false);
 
 // Exact prepared details remain the authority; prose and internal request IDs
 // are not a language the person needs to learn.
-export function proposalPresentation(rows) {
+function presentation(rows, legacy) {
   if (!rows.length) return '';
-  if (rows.length === 1) return proposalCard(rows[0]);
+  if (rows.length === 1) return card(rows[0], legacy);
   const lang = rows[0].language;
   const question = lang === 'en' ? 'May I proceed with these actions?'
     : lang === 'es' ? '¿Puedo realizar estas acciones?' : 'Posso realizar essas ações?';
-  return `${rows.map(r => `• ${r.confirmationText}`).join('\n\n')}\n\n${question}`;
+  return `${rows.map(r => `• ${r.confirmationText}`).join('\n\n')}\n\n${legacy ? '' : notDoneYet(lang)}${question}`;
 }
+export const proposalPresentation = rows => presentation(rows, false);
 // The model copies the card it saw in the history into its own answer, usually
 // with its own closing question ("Posso aplicar?"), and the real card comes right
 // below it (2026-10-08 case: the routine change shown twice). Paragraphs equal to
@@ -122,8 +130,8 @@ export function withProposalCard(text, card) {
 export function confirmationTargetsInMessage(rows, text) {
   const value = String(text || '');
   const candidates = rows.filter(r => r.confirmationText && value.includes(r.confirmationText));
-  if (candidates.length > 1 && value.includes(proposalPresentation(candidates))) return candidates.map(r => r.id);
-  const cards = rows.filter(r => value.includes(proposalCard(r)));
+  if (candidates.length > 1 && [false, true].some(legacy => value.includes(presentation(candidates, legacy)))) return candidates.map(r => r.id);
+  const cards = rows.filter(r => value.includes(card(r, false)) || value.includes(card(r, true)));
   // Identical visible text cannot prove which immutable payload was shown.
   if (new Set(cards.map(proposalCard)).size !== cards.length) return [];
   return cards.map(r => r.id);

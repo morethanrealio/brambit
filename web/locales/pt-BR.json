@@ -785,7 +785,8 @@
       "address_mismatch": "ele escreveu \"{written}\" e este envio vai para \"{target}\"",
       "target_none": "Essa mensagem não tem uma confirmação pendente. Nenhuma ação foi executada. Peça a ação novamente.",
       "target_unmatched": "Não consegui vincular sua resposta ao pedido de confirmação atual. A ação continua pendente.",
-      "target_how": "Para confirmar essa ação, responda “pode” a esta mensagem. Para cancelar, responda “cancela” a esta mensagem."
+      "target_how": "Para confirmar essa ação, responda “pode” a esta mensagem. Para cancelar, responda “cancela” a esta mensagem.",
+      "not_done_yet": "Ainda não fiz: falta sua confirmação."
     },
     "jornada_concluir": {
       "done": "Jornada concluída. Estou preparando suas sugestões de uso do {brand} e aviso aqui quando estiverem prontas."
