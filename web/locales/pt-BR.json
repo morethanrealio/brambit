@@ -353,7 +353,11 @@
       "done_pause": "Rotina {routine} pausada."
     },
     "remover_evento": {
-      "request": "apagar o registro de {date} do tracker \"{tracker}\"",
+      "request": "apagar o que foi anotado {when} no tracker \"{tracker}\"",
+      "when_date": "em {date}",
+      "today": "hoje",
+      "yesterday": "ontem",
+      "day_before_yesterday": "anteontem",
       "done": "Registro apagado do tracker \"{tracker}\"."
     },
     "remover_tracker": {

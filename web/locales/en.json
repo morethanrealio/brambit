@@ -353,7 +353,11 @@
       "done_pause": "Routine {routine} paused."
     },
     "remover_evento": {
-      "request": "delete the {date} entry from the tracker \"{tracker}\"",
+      "request": "delete what was logged {when} in the tracker \"{tracker}\"",
+      "when_date": "on {date}",
+      "today": "today",
+      "yesterday": "yesterday",
+      "day_before_yesterday": "the day before yesterday",
       "done": "Entry deleted from the tracker \"{tracker}\"."
     },
     "remover_tracker": {
