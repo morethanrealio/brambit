@@ -357,8 +357,8 @@
       "done": "Registro borrado del tracker \"{tracker}\"."
     },
     "remover_tracker": {
-      "request": "borrar el tracker \"{tracker}\" con todos sus registros",
-      "done": "Tracker \"{tracker}\" borrado."
+      "request": "dejar de seguir el tracker \"{tracker}\" (el historial se conserva)",
+      "done": "Dejé de seguir el tracker \"{tracker}\"; el historial se conserva."
     },
     "remover_monitor": {
       "request": "dejar de monitorear \"{monitor}\" (el historial se conserva)",
