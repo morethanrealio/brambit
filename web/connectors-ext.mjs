@@ -627,7 +627,7 @@ export function microsoftTools({ token, scopes = null, folderName = marca().nome
     },
     {
       name: 'outlook_calendar_create',
-      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Outlook calendar. Provide title, start and end (ISO, e.g. 2026-08-12T15:00:00). Confirm the details with the user BEFORE creating. You can add location, description and attendees; attendees receive an invitation from Microsoft.',
+      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Outlook calendar. Provide title, start and end (ISO, e.g. 2026-08-12T15:00:00). You can add location, description and attendees; attendees receive an invitation from Microsoft.',
       parameters: { type: 'object', properties: {
         recorrencia: recurrenceSchema,
         titulo: { type: 'string' },

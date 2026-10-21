@@ -12,6 +12,17 @@ import {
 } from './db.mjs';
 import { cartaoEdicaoNota } from './note-diff.mjs';
 
+// True only when the Space resolves to one the user owns and nobody else is a
+// member: writing there reaches no one but them. Any doubt or error is false.
+export async function isPrivateSpace(userId, { espaco, dono } = {}) {
+  try {
+    const r = await resolveSpace(userId, espaco, dono);
+    if (r.error || !r.space?.isOwner) return false;
+    const members = await listSpaceMembers(r.space.id);
+    return members.every((m) => String(m.userId) === String(userId));
+  } catch { return false; }
+}
+
 // Assistant tools for THIS user (enter the registry on request).
 // `convidar_para_espaco` comes out of here and is registered GATED in server.mjs.
 export function spacesTools(userId, agentId) {
@@ -102,7 +113,7 @@ export function spacesTools(userId, agentId) {
     },
     {
       name: 'anotar_no_espaco',
-      description: 'Writes a note to a Space\'s live data. WARNING: writing here is PUBLISHING to all Space members (it is shared data, not your private memory). So the default is to NOT write: talking about the topic, discussing care, answering questions or learning about the subject stays in the private conversation and does NOT go into the Space. Only use it when (a) the user asks to record/share, or (b) it is clearly a shared FACT or STATE of the Space\'s actual topic (e.g. "temos uma jiboia nova", "reguei hoje", "comprar adubo", a decision by the couple). Never put opinion, reflection or general chat here. When you write a note, say in the reply what you noted, so it is visible to the user. Not gated (so it does not get in the way), so filtering is your responsibility.',
+      description: 'Writes a note to a Space\'s live data. WARNING: writing here is PUBLISHING to all Space members (it is shared data, not your private memory). So the default is to NOT write: talking about the topic, discussing care, answering questions or learning about the subject stays in the private conversation and does NOT go into the Space. Only use it when (a) the user asks to record/share, or (b) it is clearly a shared FACT or STATE of the Space\'s actual topic (e.g. "temos uma jiboia nova", "reguei hoje", "comprar adubo", a decision by the couple). Never put opinion, reflection or general chat here. When you write a note, say in the reply what you noted, so it is visible to the user. When the Space has other members, the user confirms before it is written; filtering is still your responsibility.',
       parameters: {
         type: 'object',
         properties: {
