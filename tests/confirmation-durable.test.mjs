@@ -122,6 +122,19 @@ test('expired proposals and interrupted claims cannot be executed on recovery',a
   assert.ok(claim);await f.db.query("UPDATE mtr_harness.confirmation_requests SET lease_until=now()-interval '1 minute' WHERE id=$1",[b.id]);
   assert.match((await f.decide('confirmo pedido 2')).text,/resultado incerto/);assert.equal(f.effects.length,0);
 });
+// A card nobody answered expires and nothing happens, while the person thought it
+// was done: the next reply says so, once, and not again after a reply that already did.
+test('an expired card is mentioned once, in the next reply that goes through the model',async t=>{
+  const f=await fixture(t);const a=await f.propose(args(1));
+  await f.db.query("UPDATE mtr_harness.confirmation_requests SET expires_at=now()-interval '1 minute' WHERE id=$1",[a.id]);
+  const first=await f.decide('what is on my calendar today?');
+  assert.match(first.note,/NOT done/);assert.ok(first.note.includes(a.label));
+  assert.equal(await f.decide('and tomorrow?'),null);
+  const b=await f.propose(args(2));
+  await f.db.query("UPDATE mtr_harness.confirmation_requests SET expires_at=now()-interval '1 minute' WHERE id=$1",[b.id]);
+  assert.match((await f.decide('confirmo pedido 2')).text,/expirad[oa]/);
+  assert.equal(await f.decide('and tomorrow?'),null);assert.equal(f.effects.length,0);
+});
 test('missing delivery/presentation evidence asks to show the card before executing',async t=>{
   const f=await fixture(t);const s=await f.session();await withConfirmationSession(s,()=>gateTool(f.tool,f.scope.threadId).run(args(1)));
   assert.match((await f.decide('confirmo pedido 1')).text,/Confira primeiro/);assert.equal(f.effects.length,0);
