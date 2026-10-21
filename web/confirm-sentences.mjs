@@ -169,6 +169,7 @@ const onedrive = {
 };
 
 // Same variables in the request and the done sentence.
+const routineRef = (a, c) => (a.id ? `#${String(a.id).replace(/^#/, '')}` : `"${c.q(a.titulo)}"`);
 const simple = (tool, vars) => ({
   request: (a, c) => c.t(`${tool}.request`, vars(a, c)),
   done: (a, c) => c.t(`${tool}.done`, vars(a, c)),
@@ -253,7 +254,11 @@ const SENTENCES = {
     host: c.clause(a.host, 'configurar_deploy.to_host', { host: `${a.usuario ? `${a.usuario}@` : ''}${a.host}` }),
     command: c.clause(a.comando, 'configurar_deploy.running', { command: a.comando }),
   })),
-  cancelar_rotina: simple('cancelar_rotina', (a, c) => ({ routine: a.id ? `#${String(a.id).replace(/^#/, '')}` : `"${c.q(a.titulo)}"` })),
+  // Only a permanent delete opens a card; a card opened before it existed pauses.
+  cancelar_rotina: {
+    request: (a, c) => c.t(a.permanently ? 'cancelar_rotina.request' : 'cancelar_rotina.request_pause', { routine: routineRef(a, c) }),
+    done: (a, c) => c.t(a.permanently ? 'cancelar_rotina.done' : 'cancelar_rotina.done_pause', { routine: routineRef(a, c) }),
+  },
   remover_evento: {
     request: (a, c) => c.t('remover_evento.request', { date: c.q(a.data, 'common.date_unknown'), tracker: c.q(a.tracker) }),
     done: (a, c) => c.t('remover_evento.done', { tracker: c.q(a.tracker) }),

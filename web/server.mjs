@@ -13,6 +13,7 @@ import { createConfirmationRecovery, migrateCodingConfirmation } from './confirm
 import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
+import { createStopRoutineTool, selfStopOnly } from './routine-stop.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
@@ -2338,7 +2339,7 @@ const PORTAO_SEM_CARTAO = {
 const PORTAO_ROTINA_SE_ENCERRA = new Set(['cancelar_rotina', 'remover_monitor']);
 function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
   if (!tool || tool.confirmationTool || (!GATE_TOOLS.has(tool.name) && tool.requiresConfirmation !== true)) return tool;
-  if (kind === 'routine' && PORTAO_ROTINA_SE_ENCERRA.has(tool.name)) return tool;
+  if (kind === 'routine' && PORTAO_ROTINA_SE_ENCERRA.has(tool.name)) return selfStopOnly(tool);
   const inline = PORTAO_SEM_CARTAO[tool.name];
   return gateTool(inline ? { ...tool, runWithoutConfirmation: inline } : tool, threadId, gateOpts);
 }
@@ -4029,28 +4030,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return actionResult({state:'routine_scheduled',id:job.id,target:canal,at,subject:routine.title},msg);
     },
   });
-  // Cancels (deletes) a routine, by title or by code.
-  registry.add({
-    name: 'cancelar_rotina',
-    description: 'Cancels (removes) one of the user\'s recurring routines. Pass the title of the routine (or part of it) they want to stop, OR the `id` (the #xxxx code that appears in listar_rotinas) when the title does not distinguish it. Use it ONLY when they want to STOP a routine FOR GOOD ("para de fazer X todo dia", "cancela a rotina de reuniões"). If they only want to CHANGE/REFORMAT an existing routine (switch channel, time, days, text or format), do NOT cancel it to recreate; use editar_rotina, which changes it in place without leaving the owner without the routine. If the title matches more than one routine, the tool returns the candidates with code and cadence: show them to the owner and call again with `id`.',
-    parameters: {
-      type: 'object',
-      properties: {
-        titulo: { type: 'string', description: 'Title (or part of it) of the routine to cancel.' },
-        id: { type: 'string', description: 'OPTIONAL. Routine code (the #xxxx from listar_rotinas). Use it when two routines have the same or similar titles: it is what identifies it without ambiguity.' },
-      },
-      required: [],
-    },
-    run: async ({ titulo, id }) => {
-      const rows = await listRoutinesForUser(userId);
-      // Failures go out as { ok: false }: plain text is read as success (FRASE_PRONTA_PT).
-      if (!rows.length) return { ok: false, error: 'Você não tem nenhuma rotina pra cancelar.' };
-      const sel = resolveRoutine(rows, { id, titulo, verbo: 'cancelar', tool: 'cancelar_rotina' });
-      if (sel.err) return { ok: false, error: sel.err };
-      await deleteRoutine(sel.row.id, userId);
-      return `Rotina "${sel.row.title}" (#${routineCode(sel.row, rows)}, ${routineCadence(sel.row)}) cancelada. Não vou mais executá-la.`;
-    },
-  });
+  // Stops a routine: pauses it, or deletes it only when the owner asks (routine-stop.mjs).
+  registry.add(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }));
   // Edits a routine that ALREADY EXISTS, in place (without deleting and recreating). Fixes the
   // gap where "reshaping a routine" turned into cancelar_rotina (immediate) +
   // criar_rotina (gated/pending), leaving the owner with no routine at all while the
@@ -6340,7 +6321,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // always useless and always costs the day's delivery. `oferecer_rotina` is removed for the
   // same reason (offering a routine INSIDE a routine is noise). Still standing:
   // `listar_rotinas` (read) and `cancelar_rotina` (a routine with a closed window,
-  // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself).
+  // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself: it pauses).
   if (!noTools && kind === 'routine') {
     const podadas = [];
     for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
