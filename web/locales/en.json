@@ -357,8 +357,8 @@
       "done": "Entry deleted from the tracker \"{tracker}\"."
     },
     "remover_tracker": {
-      "request": "delete the tracker \"{tracker}\" and all its entries",
-      "done": "Tracker \"{tracker}\" deleted."
+      "request": "stop tracking \"{tracker}\" (its history is kept)",
+      "done": "Stopped tracking \"{tracker}\"; its history is kept."
     },
     "remover_monitor": {
       "request": "stop monitoring \"{monitor}\" (history is kept)",

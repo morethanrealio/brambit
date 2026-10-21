@@ -151,6 +151,13 @@ export function bindShownCards(session, history) {
   session.lastAssistantText = last?.role === 'assistant' && typeof last.content === 'string' ? last.content : '';
   session.recentTurns = (history || []).slice(-12)
     .filter(m => ['user', 'assistant'].includes(m?.role) && typeof m.content === 'string' && m.content.trim()).slice(-6);
+  // A side question in between: its answer doesn't show the card again, so "No,
+  // leave it" right after had no card to refer to and the card expired unanswered
+  // (dev test, 2026-10-21). The cards of the latest earlier message that shows
+  // one, within the turns the reader sees, go to the reader only, never to the
+  // rules, and a yes to them doesn't run anything (consent-reader.mjs).
+  session.earlierShownIds = ids.length ? [] : [...session.recentTurns].reverse()
+    .filter(m => m.role === 'assistant').map(m => confirmationTargetsInMessage(session.pending(), m.content)).find(found => found.length) || [];
 }
 
 export function proposalList(rows, prefix, lang) {
@@ -577,7 +584,8 @@ async function resolveConfirmation(session, { message, target, viaReaction = fal
   resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent, button = null } = {}) {
   const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
   const said = userSaid(message);
-  const context = { rows: session.rows, said, viaReaction, shownIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [] };
+  const earlierIds = shownIds.length ? [] : session.earlierShownIds || [];
+  const context = { rows: session.rows, said, viaReaction, shownIds, earlierIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [] };
   // A pressed button names its card: none of the readers below get a say.
   const selected = button ? buttonSelection(session.rows, button, inputId) : await secondReading(await reconsider(
     selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []),
@@ -586,7 +594,7 @@ async function resolveConfirmation(session, { message, target, viaReaction = fal
     // A card was on screen and this message was not taken as a decision on it. Without
     // saying so, the model answered "Yes, cancel it" with "the routine is cancelled"
     // while it was still on (dev test of 0.3.0, 2026-10-18).
-    const shown = shownIds.map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
+    const shown = (shownIds.length ? shownIds : earlierIds).map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
     if (!shown.length || !(naturalApproval(said) || mentionsCards(said, shown))) return null;
     return { note: `[SYSTEM: still waiting for the owner's confirmation and NOT executed: ${shown.map(r => `${r.number}. ${r.label}`).join('; ')}. This message was not taken as a decision on it, so never say or imply it was done. If the owner wants it done, call the same tool again with the same arguments and the confirmation card is shown again; otherwise just answer the message. Do not repeat this block.]` };
   }

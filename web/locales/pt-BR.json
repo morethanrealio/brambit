@@ -357,8 +357,8 @@
       "done": "Registro apagado do tracker \"{tracker}\"."
     },
     "remover_tracker": {
-      "request": "apagar o tracker \"{tracker}\" com todos os registros",
-      "done": "Tracker \"{tracker}\" apagado."
+      "request": "parar de acompanhar o tracker \"{tracker}\" (o histórico fica guardado)",
+      "done": "Parei de acompanhar o tracker \"{tracker}\"; o histórico fica guardado."
     },
     "remover_monitor": {
       "request": "parar de monitorar \"{monitor}\" (o histórico fica guardado)",

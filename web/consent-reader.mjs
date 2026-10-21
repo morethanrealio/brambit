@@ -133,19 +133,22 @@ const decided = (kind, rows) => ({ kind, row: rows[0], ...(rows.length > 1 ? { r
 // What the reader changes in the rules' choice. Only "continue" and "ambiguous"
 // are reconsidered: every other kind is already a decision, a replay or an error
 // the rules own.
-export async function reconsider(selected, { rows = [], said = '', target, viaReaction = false, shownIds = [],
+export async function reconsider(selected, { rows = [], said = '', target, viaReaction = false, shownIds = [], earlierIds = [],
   assistantText = '', recent = [], read = readConsent, env = process.env } = {}) {
   if (viaReaction || !consentReaderEnabled(env.BRAMBIT_CONSENT_READER) || !['continue', 'ambiguous'].includes(selected?.kind)) return selected;
   // A quote of a message that isn't a card answers that message.
   if (selected.kind === 'continue' && target !== undefined) return selected;
   const open = r => r?.state === 'pending' && r.presented;
-  const candidates = (selected.kind === 'ambiguous' ? selected.rows || [] : shownIds.map(id => rows.find(r => r.id === id))).filter(open);
+  // Cards shown only before the last message: a refusal or a change is read,
+  // a yes is not (the model is told they still wait, confirmation-flow.mjs).
+  const earlier = selected.kind === 'continue' && !shownIds.length;
+  const candidates = (selected.kind === 'ambiguous' ? selected.rows || [] : (earlier ? earlierIds : shownIds).map(id => rows.find(r => r.id === id))).filter(open);
   if (!candidates.length || !String(said).trim()) return selected;
   const reading = await read({ cards: candidates, said, assistantText, recent });
   if (!reading) return selected;
   const chosen = reading.cards.length ? candidates.filter(r => reading.cards.includes(r.number)) : candidates.length === 1 ? candidates : [];
   if (reading.decision === 'approve') {
-    if (!chosen.length || approvalVeto(said)) return selected;
+    if (!chosen.length || earlier || approvalVeto(said)) return selected;
     // Cards that look the same to the person: a "yes" can't pick one of them.
     if (chosen.some(r => candidates.some(o => !chosen.includes(o) && face(o) === face(r)))) return selected;
     if (chosen.length > 1 && !chosen.every(r => shownIds.includes(r.id))) return selected;
