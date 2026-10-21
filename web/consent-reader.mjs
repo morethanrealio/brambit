@@ -5,9 +5,9 @@
 // never read a change request, so the old card stayed open next to the new one.
 //
 // The model only interprets. The platform checks that every card it names was
-// one of the candidates, a fixed lock can still refuse an approval, actions that
-// can't be undone stay with the rules, and any failure (no model, timeout, bad
-// JSON) keeps what the rules decided.
+// one of the candidates, a fixed lock can still refuse an approval, and any
+// failure (no model, timeout, bad JSON) keeps what the rules decided. A yes to an
+// action that can't be undone gets a second reading first (secondReading).
 import { makeTogether, togetherEnabled, togetherFlashModel, FLASH_REASONING_ROOM } from '../core-proto/providers/together.mjs';
 import { makeGemini } from '../core-proto/providers/gemini.mjs';
 import { modelFor } from '../core-proto/models.mjs';
@@ -75,17 +75,45 @@ export function parseReading(text, numbers) {
   return { decision: json.decision, cards };
 }
 
-export async function readConsent({ cards, said, assistantText = '', recent = [], model = readerModel(), timeoutMs = TIMEOUT_MS }) {
+// The model's text, or null on no model, error or timeout.
+async function ask(model, system, content, timeoutMs) {
   if (!model) return null;
   let timer;
-  const call = model.complete({ system: SYSTEM, messages: [{ role: 'user', content: readerPrompt({ cards, said, assistantText, recent }) }], tools: [] });
+  const call = model.complete({ system, messages: [{ role: 'user', content }], tools: [] });
   call.catch(() => {});
   try {
     const r = await Promise.race([call, new Promise(resolve => { timer = setTimeout(resolve, timeoutMs, null); })]);
-    return r ? parseReading(r.text, cards.map(c => c.number)) : null;
+    return r ? String(r.text || '') : null;
   } catch {
     return null;
   } finally { clearTimeout(timer); }
+}
+
+export async function readConsent({ cards, said, assistantText = '', recent = [], model = readerModel(), timeoutMs = TIMEOUT_MS }) {
+  const text = await ask(model, SYSTEM, readerPrompt({ cards, said, assistantText, recent }), timeoutMs);
+  return text === null ? null : parseReading(text, cards.map(c => c.number));
+}
+
+const CHECK_SYSTEM = `An action that can't be undone (deleting for good, sending something to other people) is shown to a person as a numbered card and only runs after a clear yes. Read the person's reply with the conversation and say whether it is a clear yes to doing exactly what the card(s) being checked show, now.
+
+Decisions:
+- approve: a clear yes to the checked card(s) as they are shown. Extra words don't matter.
+- change: they want something different from what the card shows, including details they asked for earlier in the conversation that the card doesn't show (another time, recipient, guests, text), or a yes with a change or a condition.
+- refuse: they don't want it.
+- other: a question, hesitation, a new separate request, a pasted text, an answer to a different question, or a yes to a different card.
+
+Answer with JSON only: {"decision":"approve|refuse|change|other"}`;
+
+// Second reading of a yes to an action that can't be undone: one decision about
+// the checked cards, with the same view of the conversation the reader gets.
+export async function checkConsent({ cards, checked, said, assistantText = '', recent = [], model = readerModel(), timeoutMs = TIMEOUT_MS }) {
+  const content = `${readerPrompt({ cards, said, assistantText, recent })}\n\nCard(s) being checked: ${checked.map(r => `#${r.number}`).join(', ')}`;
+  const text = await ask(model, CHECK_SYSTEM, content, timeoutMs);
+  const found = String(text || '').match(/\{[^{}]*\}/g);
+  try {
+    const decision = found && JSON.parse(found.at(-1)).decision;
+    return ['approve', 'refuse', 'change', 'other'].includes(decision) ? decision : null;
+  } catch { return null; }
 }
 
 const folded = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’‘`]/g, "'").trim();
@@ -118,8 +146,6 @@ export async function reconsider(selected, { rows = [], said = '', target, viaRe
   const chosen = reading.cards.length ? candidates.filter(r => reading.cards.includes(r.number)) : candidates.length === 1 ? candidates : [];
   if (reading.decision === 'approve') {
     if (!chosen.length || approvalVeto(said)) return selected;
-    // Deleting for good or reaching third parties stays with the rules.
-    if (chosen.some(r => !isReactionConfirmable(r.name))) return selected;
     // Cards that look the same to the person: a "yes" can't pick one of them.
     if (chosen.some(r => candidates.some(o => !chosen.includes(o) && face(o) === face(r)))) return selected;
     if (chosen.length > 1 && !chosen.every(r => shownIds.includes(r.id))) return selected;
@@ -129,4 +155,42 @@ export async function reconsider(selected, { rows = [], said = '', target, viaRe
   if (reading.decision === 'change') return chosen.length === 1 ? decided('edit', chosen) : selected;
   if (reading.decision === 'other' && selected.kind === 'ambiguous') return { kind: 'continue', reader: true };
   return selected;
+}
+
+// Cards already asked about once. In memory on purpose: after a restart the
+// worst case is one more question, never an action run without a yes.
+const askedOnce = new Set();
+const ASKED_MAX = 5000;
+function rememberAsked(ids) {
+  for (const id of ids) { askedOnce.delete(id); askedOnce.add(id); }
+  while (askedOnce.size > ASKED_MAX) askedOnce.delete(askedOnce.values().next().value);
+}
+
+// A "yes" to an action that can't be undone (deleting for good, sending to a
+// third party) gets a second reading before it runs (checkConsent). The second
+// reading never authorizes on its own:
+// - the rules said yes: it runs unless the second reading finds something else;
+//   with no model answer the rules decide, as before;
+// - the consent reader said yes: it runs only if the second reading also finds
+//   a yes.
+// Otherwise the platform asks once more ('doubleCheck'). The next "yes" the rules
+// take is not read again, so the question never loops; a reader yes that is
+// still in doubt goes back to the conversation. Jev was measured for this and
+// missed the reader's mistake the model caught ("Option 2" after asking for
+// another time).
+export async function secondReading(selected, { rows = [], said = '', viaReaction = false, shownIds = [], assistantText = '',
+  recent = [], consent = checkConsent, undoable = isReactionConfirmable, env = process.env } = {}) {
+  if (selected?.kind !== 'confirm' || viaReaction || !consentReaderEnabled(env.BRAMBIT_CONSENT_READER)) return selected;
+  const chosen = selected.rows || [selected.row];
+  const final = chosen.filter(r => !undoable(r.name));
+  if (!final.length) return selected;
+  const asked = final.every(r => askedOnce.has(r.id));
+  if (asked && !selected.reader) return selected;
+  const onScreen = [...new Map([...shownIds.map(id => rows.find(r => r.id === id)), ...chosen]
+    .filter(r => r?.state === 'pending').map(r => [r.id, r])).values()];
+  const verdict = await consent({ cards: onScreen, checked: chosen, said, assistantText, recent });
+  if (verdict === 'approve' || (verdict === null && !selected.reader)) return selected;
+  if (asked) return { kind: 'continue', reader: true };
+  rememberAsked(final.map(r => r.id));
+  return { kind: 'doubleCheck', row: chosen[0], rows: chosen };
 }

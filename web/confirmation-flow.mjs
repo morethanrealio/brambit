@@ -5,7 +5,7 @@ import { standaloneRefusal } from './turn-claim-guard.mjs';
 import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
 import { frameText } from './confirm-sentences.mjs';
-import { reconsider } from './consent-reader.mjs';
+import { reconsider, secondReading } from './consent-reader.mjs';
 
 // Texts the OWNER reads in this flow. They come out in the language recorded in
 // the request itself (row.language, the same one that already picks the card's
@@ -23,6 +23,7 @@ const TEXTOS = {
     whichOne: 'Qual dessas ações você quer confirmar, alterar ou cancelar? Pode indicar pelo nome ou horário.',
     unknown: 'Não consegui identificar a ação. Qual destas você quis dizer?',
     unseen: 'Confira primeiro os detalhes e me diga se posso seguir.',
+    doubleCheck: 'Antes de fazer, preciso confirmar com você, porque isso não dá para desfazer depois:',
     recovered: 'Recuperei este pedido. Confira os detalhes e confirme pelo número.',
     textOnlyOne: 'Essa ação exige confirmação por texto. Responda ao pedido indicando que confirma.',
     textOnlyMany: 'Para essas ações, preciso da sua confirmação por texto.',
@@ -43,6 +44,7 @@ const TEXTOS = {
     whichOne: 'Which of these actions do you want to confirm, change or cancel? You can point to it by name or time.',
     unknown: 'I could not tell which action you meant. Which of these is it?',
     unseen: 'Please check the details first and tell me if I may proceed.',
+    doubleCheck: 'Before I do this, I need to check with you, because it can\'t be undone afterwards:',
     recovered: 'I recovered this request. Check the details and confirm it by its number.',
     textOnlyOne: 'This action needs a written confirmation. Reply to the request saying you confirm.',
     textOnlyMany: 'For these actions I need your confirmation in writing.',
@@ -63,6 +65,7 @@ const TEXTOS = {
     whichOne: '¿Cuál de estas acciones quieres confirmar, cambiar o cancelar? Puedes indicarla por el nombre o la hora.',
     unknown: 'No pude identificar la acción. ¿Cuál de estas quisiste decir?',
     unseen: 'Revisa primero los detalles y dime si puedo seguir.',
+    doubleCheck: 'Antes de hacerlo, necesito confirmarlo contigo, porque esto no se puede deshacer después:',
     recovered: 'Recuperé esta solicitud. Revisa los detalles y confírmala por su número.',
     textOnlyOne: 'Esta acción necesita confirmación por escrito. Responde a la solicitud diciendo que confirmas.',
     textOnlyMany: 'Para estas acciones necesito tu confirmación por escrito.',
@@ -558,12 +561,13 @@ async function readerDecision(session, selected, inputId) {
 }
 
 export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
-  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read } = {}) {
+  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent } = {}) {
   const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
   const said = userSaid(message);
-  const selected = await reconsider(
+  const context = { rows: session.rows, said, viaReaction, shownIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [] };
+  const selected = await secondReading(await reconsider(
     selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []),
-    { rows: session.rows, said, target, viaReaction, shownIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [], read });
+    { ...context, target, read }), { ...context, consent });
   if (selected.kind === 'continue') {
     // A card was on screen and this message was not taken as a decision on it. Without
     // saying so, the model answered "Yes, cancel it" with "the routine is cancelled"
@@ -581,6 +585,7 @@ export async function handleConfirmation(session, { message, target, viaReaction
     if (selected.row.state === 'completed') await afterComplete(selected.row).catch(() => {});
     return terminalConfirmation(selected.row);
   }
+  if (selected.kind === 'doubleCheck') return proposalList(selected.rows, txRows(selected.rows).doubleCheck);
   if (['unknown', 'ambiguous', 'unseen'].includes(selected.kind)) {
     return proposalList(selected.rows, selected.kind === 'unknown'
       ? txRows(selected.rows).unknown
