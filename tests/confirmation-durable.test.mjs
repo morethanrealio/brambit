@@ -201,3 +201,12 @@ test('a routine card moves to the chat it was delivered to and a reply there app
   assert.deepEqual(f.effects,[args(1)]);
   assert.deepEqual((await f.store.list(chat)).filter(r=>r.state==='pending').map(r=>r.id),[waiting.id]);
 });
+
+test('a button decides only its own card, even one that cannot be undone, and a card it does not name is ignored',async t=>{
+  const f=await fixture(t);
+  const first=await f.propose(args(1));const second=await f.propose(args(2));
+  assert.equal((await f.decide('👍',{viaReaction:true,button:{id:randomUUID(),confirm:true}}))?.ignore,true);
+  await f.decide('👍',{viaReaction:true,button:{id:second.id,confirm:true}});
+  assert.deepEqual(f.effects,[args(2)]);
+  assert.equal((await f.store.list(f.scope)).find(r=>r.id===first.id).state,'pending');
+});

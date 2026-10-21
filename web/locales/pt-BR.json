@@ -802,6 +802,10 @@
       "request_fix": "corrigir a nota temporária selecionada para: {text}",
       "text_missing": "(texto faltando)",
       "done": "Nota temporária atualizada conforme a confirmação. O histórico normal do chat continua."
+    },
+    "buttons": {
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
     }
   },
   "onboarding": {

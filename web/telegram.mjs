@@ -1,5 +1,6 @@
 import { hostDaMarca, siteDaMarca } from './brand.mjs';
 import { channelReplyParts } from './confirmation-target.mjs';
+import { parseButtonPayload } from './confirmation-buttons.mjs';
 // ── Telegram channel (bot per user, their own BotFather token) ──
 // Each user brings their own token; we run their bot with long-polling
 // (getUpdates), no need for a public webhook. Routes the message to the agent
@@ -77,16 +78,21 @@ export async function validateBotToken(token) {
 // chars (it would cut words and URLs mid-way); now it uses channel-split.mjs.
 const TG_CHUNK = 4000;
 
+// Confirm / Cancel under a card (confirmation-buttons.mjs), one row of two.
+const keyboard = (buttons) => ({ inline_keyboard: [[buttons.confirm, buttons.cancel].map((b) => ({ text: b.text, callback_data: b.data }))] });
+
 // `reenvio`: retries each part that failed with an uncertain error (channel-notice.mjs). It's
 // per part, so as not to resend the ones Telegram already accepted.
-async function sendMessage(token, chatId, text, { requireReceipt = false, reenvio = false } = {}) {
+// `buttons` go under the last part, where the card ends.
+async function sendMessage(token, chatId, text, { requireReceipt = false, reenvio = false, buttons = null } = {}) {
   // Plain text (no parse_mode) so malformed markdown from the model doesn't break it.
   const chunks = splitMessage(text || '', TG_CHUNK);
   if (!chunks.length) chunks.push('');
   const receipts=[];
-  for (const c of chunks) {
+  for (const [i, c] of chunks.entries()) {
     try {
-      const enviar = () => tg(token, 'sendMessage', { chat_id: chatId, text: c });
+      const markup = buttons && i === chunks.length - 1 ? { reply_markup: keyboard(buttons) } : {};
+      const enviar = () => tg(token, 'sendMessage', { chat_id: chatId, text: c, ...markup });
       const receipt = await (reenvio ? comReenvio(enviar, { rotulo: 'telegram' }) : enviar());
       if (requireReceipt && (!Number.isSafeInteger(receipt?.message_id) || receipt.message_id <= 0)) {
         throw Object.assign(new Error('Telegram sem recibo para uma parte da mensagem'), { definitive: false });
@@ -260,13 +266,36 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     const agent = await loadAgent(fresh.agent_id, fresh.user_id);
     if (!agent) return;
     const res = await reactionConfirm?.(agent, fresh.user_id, positive, { channel: 'telegram', messageId: mr.message_id == null ? null : `${chatId}:${mr.message_id}`, inputId:updateId == null ? null : `telegram:${bot.token.split(':')[0]}:${updateId}` });
-    if (!res) return; // nada pendente
+    await deliverDecision(bot, chatId, res);
+  }
+
+  // Tap on a card's Confirm / Cancel button: decides that card and nothing else.
+  async function handleCallback(bot, cq, updateId) {
+    const button = parseButtonPayload(cq.data);
+    const chatId = String(cq.message?.chat?.id ?? '');
+    const messageId = cq.message?.message_id;
+    // Stops the spinner on the button; the outcome arrives as a message.
+    await tg(bot.token, 'answerCallbackQuery', { callback_query_id: cq.id }).catch(() => {});
+    if (!button || !chatId) return;
+    const fresh = await db.getTelegramBot(bot.token);
+    if (!fresh || !fresh.enabled || !fresh.chat_id || fresh.chat_id !== chatId) return;
+    const agent = await loadAgent(fresh.agent_id, fresh.user_id);
+    if (!agent) return;
+    // The buttons leave the card once pressed, so the same card can't be tapped twice.
+    if (messageId != null) await tg(bot.token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    const res = await reactionConfirm?.(agent, fresh.user_id, button.confirm, { channel: 'telegram', messageId: messageId == null ? null : `${chatId}:${messageId}`, inputId: updateId == null ? null : `telegram:${bot.token.split(':')[0]}:${updateId}`, button });
+    await deliverDecision(bot, chatId, res);
+  }
+
+  // Sends what a reaction or a button decided (nothing when no card was pending).
+  async function deliverDecision(bot, chatId, res) {
+    if (!res) return;
     const reply = typeof res === 'string' ? res : res?.text;
     const attachments = typeof res === 'string' ? [] : (res?.attachments || []);
     await sendAttachments(bot.token, chatId, attachments, getMedia).catch(() => {});
     if (reply) {
       for (const part of channelReplyParts(res)) {
-        const receipt = await sendMessage(bot.token, chatId, part.text, {requireReceipt:!!part.id});
+        const receipt = await sendMessage(bot.token, chatId, part.text, {requireReceipt:!!part.id, buttons:part.buttons});
         await part.onReplySent?.({channel:'telegram',messageIds:(receipt?.message_ids || []).filter(id=>id!=null).map(id=>`${chatId}:${id}`)});
       }
     }
@@ -275,6 +304,10 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
   async function handleUpdate(bot, update) {
     if (update.message_reaction) {
       await handleReaction(bot, update.message_reaction, update.update_id).catch((e) => console.error('[telegram] reaction:', e?.message ?? e));
+      return;
+    }
+    if (update.callback_query) {
+      await handleCallback(bot, update.callback_query, update.update_id).catch((e) => console.error('[telegram] button:', e?.message ?? e));
       return;
     }
     const msg = update.message;
@@ -391,7 +424,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     if (reply || !attachments.length) {
       for (const part of channelReplyParts(res, '(sem resposta)')) {
         let receipt;
-        try { receipt = await sendMessage(bot.token, chatId, part.text, { requireReceipt: !!part.id, reenvio: true }); } catch (e) {
+        try { receipt = await sendMessage(bot.token, chatId, part.text, { requireReceipt: !!part.id, reenvio: true, buttons: part.buttons }); } catch (e) {
           entregou = false;
           console.error('[telegram] reply not delivered:', e?.message ?? e);
           continue;
@@ -412,7 +445,7 @@ export function createTelegramManager({ runConversation, reactionConfirm, loadAg
     while (state && !state.stop) {
       try {
         const updates = await tg(bot.token, 'getUpdates', {
-          offset, timeout: 30, allowed_updates: ['message', 'message_reaction'],
+          offset, timeout: 30, allowed_updates: ['message', 'message_reaction', 'callback_query'],
         });
         for (const u of updates) {
           offset = u.update_id + 1;

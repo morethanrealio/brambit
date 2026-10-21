@@ -19,7 +19,7 @@ import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
-import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff } from './channel-confirmation.mjs';
+import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff, chatButtonOptions, chatReply } from './channel-confirmation.mjs';
 import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
 import { avisosTurno, imagensDesligadas } from './turn-notices.mjs';
@@ -2271,7 +2271,7 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
         const legacy = createCodingApprovals({store:appTaskStore,scope:JSON.stringify([userId,agent.id,thread.id])});
         const migrated = await migrateCodingConfirmation(session,legacy,resolveTool);
         const resolution = migrated ? proposalList([migrated],textosConfirmacao(migrated.language).recovered) : await handleConfirmation(session, {
-          message,target:opts.confirmationTarget,viaReaction:opts.viaReaction,inputId:opts.confirmationInputId || null,
+          message,target:opts.confirmationTarget,viaReaction:opts.viaReaction,inputId:opts.confirmationInputId || null,button:opts.confirmationButton,
           resolveTool,afterComplete:proposal => confirmationRecovery.continueCoding(scope,proposal),
         });
         if (resolution?.ignore) return null;
@@ -10481,7 +10481,7 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/chat') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
-    const { threadId, message, images, files, voice } = await readBody(req);
+    const { threadId, message, images, files, voice, confirmation } = await readBody(req);
     const imgs = normalizeImages(images);
     const docs = normalizeFiles(files);
     if (!message && !imgs.length && !docs.length) return send(res, 400, { error: 'server.empty_message' });
@@ -10496,8 +10496,8 @@ async function atenderRequest(req, res) {
       // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on
       // every call. It's the only way to tell app from site here: both use
       // this same route and the same 'chat' kind. See appClient in runConversationTurn.
-      const { text, attachments } = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient });
-      return send(res, 200, { reply: text, attachments });
+      const result = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient, ...chatButtonOptions(confirmation) });
+      return send(res, 200, chatReply(result));
     } catch (e) {
       return fail(res, 500, 'server.failed_talk_model', e);
     }

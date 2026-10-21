@@ -802,6 +802,10 @@
       "request_fix": "correct the selected temporary note to: {text}",
       "text_missing": "(text missing)",
       "done": "Temporary note updated as confirmed. Normal chat history remains."
+    },
+    "buttons": {
+      "confirm": "Confirm",
+      "cancel": "Cancel"
     }
   },
   "onboarding": {

@@ -1,5 +1,6 @@
 import { hostDaMarca, marca, siteDaMarca } from './brand.mjs';
 import { batchedConfirmationTarget, channelReplyParts } from './confirmation-target.mjs';
+import { parseButtonPayload } from './confirmation-buttons.mjs';
 // ── WhatsApp channel (WABA Cloud API, single shared number) ──
 // One business number serves MULTIPLE users. Unlike Telegram (1 bot per
 // user), here the webhook is shared: we route by the sender's phone number
@@ -96,7 +97,12 @@ export function prepararTextoWa(text) {
 // `reenvio`: retries each part that failed with an uncertain error (channel-notice.mjs), per
 // part, so as not to resend the ones Meta already accepted. On error, `error.wamids`
 // carries the parts that went out (billing and quoting still apply to them).
-async function sendText(to, text, { requireReceipt = false, tracking, reenvio = false } = {}) {
+// Confirm / Cancel under a card (confirmation-buttons.mjs): the card's last bubble goes
+// as a reply-button message, whose body has the same 1024 limit as a text bubble.
+const replyButtons = (body, buttons) => ({ type: 'interactive', interactive: { type: 'button', body: { text: body },
+  action: { buttons: [buttons.confirm, buttons.cancel].map((b) => ({ type: 'reply', reply: { id: b.data, title: b.text.slice(0, 20) } })) } } });
+
+async function sendText(to, text, { requireReceipt = false, tracking, reenvio = false, buttons = null } = {}) {
   const wamids = [];
   const parts = prepararTextoWa(text);
   await tracking?.start({ total: parts.length, recipient: to });
@@ -104,9 +110,9 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
     try {
       const opaque = await tracking?.beforePart(part);
       const enviar = () => graph(`${PHONE_ID()}/messages`, {
-        messaging_product: 'whatsapp', to, type: 'text',
+        messaging_product: 'whatsapp', to,
         ...(opaque ? { biz_opaque_callback_data: opaque } : {}),
-        text: { body: parte, preview_url: false },
+        ...(buttons && part === parts.length - 1 ? replyButtons(parte, buttons) : { type: 'text', text: { body: parte, preview_url: false } }),
       });
       const j = await (reenvio ? comReenvio(enviar, { rotulo: 'whatsapp' }) : enviar());
       const id = j?.messages?.[0]?.id;
@@ -703,7 +709,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       const saveRefs=(wamids,body)=>{if(db?.saveWaMsgRef)for(const w of wamids)db.saveWaMsgRef({wamid:w,userId:b.userId,agentId:b.agentId,direction:'out',body}).catch(()=>{});};
       if(reply||!attachments.length)for(const part of channelReplyParts(res,'(sem resposta)')){
         let wamids=null;
-        try{wamids=await sendText(from,part.text,{requireReceipt:!!inbox||!!part.id,reenvio:true});}
+        try{wamids=await sendText(from,part.text,{requireReceipt:!!inbox||!!part.id,reenvio:true,buttons:part.buttons});}
         catch(e){naoEntregue=true;console.error('[whatsapp] reply not delivered:',e?.code||e?.name||'error');saveRefs(e?.wamids||[],part.text);cobraveis+=e?.wamids?.length||0;continue;}
         cobraveis+=wamids.length;
         await part.onReplySent?.({channel:'whatsapp',messageIds:wamids});
@@ -873,23 +879,25 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
 
     // Reaction (👍/👎) on a message: confirms/cancels a pending action without
     // text. Thumbs up confirms a regular action; for irreversible ones the server asks for text.
-    if (msg.type === 'reaction') {
+    // A tap on a card's Confirm / Cancel button decides that card, irreversible ones included.
+    const button = msg.type === 'interactive' ? parseButtonPayload(msg.interactive?.button_reply?.id) : null;
+    if (msg.type === 'reaction' || button) {
       const emoji = msg.reaction?.emoji || '';
-      const positive = ['👍', '✅', '👌', '💯'].some((e) => emoji.includes(e));
-      const negative = ['👎', '❌'].some((e) => emoji.includes(e));
+      const positive = button ? button.confirm : ['👍', '✅', '👌', '💯'].some((e) => emoji.includes(e));
+      const negative = button ? !button.confirm : ['👎', '❌'].some((e) => emoji.includes(e));
       if (!positive && !negative) return; // reaction removed or neutral emoji
       const activeId = link.active_agent_id || agents[0].id;
       const agent = await loadAgent(activeId, link.user_id);
       if (!agent) return;
       try {
-        const res = await reactionConfirm?.(agent, link.user_id, positive, { channel: 'whatsapp', messageId: msg.reaction?.message_id || null, inputId:msg.id ? 'whatsapp:'+msg.id : null });
+        const res = await reactionConfirm?.(agent, link.user_id, positive, { channel: 'whatsapp', messageId: (button ? msg.context?.id : msg.reaction?.message_id) || null, inputId:msg.id ? 'whatsapp:'+msg.id : null, ...(button ? { button } : {}) });
         if (res) {
           const reply = typeof res === 'string' ? res : res?.text;
           const atts = typeof res === 'string' ? [] : (res?.attachments || []);
           let cobraveis = 0;
           if (reply) {
             for (const part of channelReplyParts(res)) {
-              const wamids = await sendText(from, part.text, {requireReceipt:!!msg._inboxId||!!part.id});
+              const wamids = await sendText(from, part.text, {requireReceipt:!!msg._inboxId||!!part.id, buttons:part.buttons});
               cobraveis += wamids.length;
               await part.onReplySent?.({channel:'whatsapp',messageIds:wamids});
             }

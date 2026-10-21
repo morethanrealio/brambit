@@ -1,8 +1,10 @@
 import { bindPendingMessage, peekPending, takePending, confirmationTargetMatches, confirmationTargetNotice } from './confirm.mjs';
 import { currentConfirmationSession } from './confirmation-session.mjs';
 import { proposalCard, proposalPresentation, textosConfirmacao, confirmationTargetsInMessage } from './confirmation-flow.mjs';
+import { cardButtons, buttonMessage } from './confirmation-buttons.mjs';
 
 export { batchedConfirmationTarget } from './confirmation-target.mjs';
+export { chatButtonOptions, chatReply } from './confirmation-buttons.mjs';
 
 // Capture the proposal before sending. A slow send cannot bind its receipt to
 // a different proposal created in the meantime. Only the actual confirmation
@@ -34,7 +36,7 @@ export function withConfirmationReceipt(threadId, result) {
     return { ...(typeof result === 'string' ? { text: result } : result),
       proposalIds: rows.map(row => row.id),
       confirmationCards: rows.map((row, index) => ({
-        id: row.id, text: `${index === 0 && intro ? intro+'\n\n' : ''}${proposalCard(row)}`,
+        id: row.id, text: `${index === 0 && intro ? intro+'\n\n' : ''}${proposalCard(row)}`, buttons: cardButtons(row),
         async onReplySent({ channel, messageIds = [] }) {
           for (const messageId of messageIds) {
             if (messageId == null) continue;
@@ -65,8 +67,9 @@ export function createReactionConfirmationHandler({ channel, getThread, withThre
   return async (agent, userId, positive, target) => {
     const thread = await getThread(agent, userId);
     const confirmationTarget = target ?? { channel, messageId: null };
-    if (durable) return runConversation(agent, thread, userId, positive ? '👍' : 'cancela', {
-      kind:channel, viaReaction:true, confirmationTarget, confirmationInputId:target?.inputId || null,
+    // A pressed button (target.button) carries the id of its card.
+    if (durable) return runConversation(agent, thread, userId, target?.button ? buttonMessage(target.button.confirm) : positive ? '👍' : 'cancela', {
+      kind:channel, viaReaction:true, confirmationTarget, confirmationInputId:target?.inputId || null, confirmationButton:target?.button || null,
     });
     if (!positive) {
       return withThreadLock(thread.id, async () => {
