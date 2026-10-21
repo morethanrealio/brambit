@@ -170,6 +170,13 @@ const onedrive = {
 
 // Same variables in the request and the done sentence.
 const routineRef = (a, c) => (a.id ? `#${String(a.id).replace(/^#/, '')}` : `"${c.q(a.titulo)}"`);
+
+// The day of a tracker entry: empty means today, like the tool.
+const EVENT_DAY_WORDS = { hoje: 'today', ontem: 'yesterday', anteontem: 'day_before_yesterday' };
+const eventDay = (data, c) => {
+  const word = data == null || data === '' ? 'hoje' : String(data).trim().toLowerCase();
+  return EVENT_DAY_WORDS[word] ? c.t(`remover_evento.${EVENT_DAY_WORDS[word]}`) : c.t('remover_evento.when_date', { date: /^\d{4}-\d{2}-\d{2}$/.test(word) ? cardDay(word, c.lang) : String(data) });
+};
 const simple = (tool, vars) => ({
   request: (a, c) => c.t(`${tool}.request`, vars(a, c)),
   done: (a, c) => c.t(`${tool}.done`, vars(a, c)),
@@ -259,8 +266,10 @@ const SENTENCES = {
     request: (a, c) => c.t(a.permanently ? 'cancelar_rotina.request' : 'cancelar_rotina.request_pause', { routine: routineRef(a, c) }),
     done: (a, c) => c.t(a.permanently ? 'cancelar_rotina.done' : 'cancelar_rotina.done_pause', { routine: routineRef(a, c) }),
   },
+  // The tool also takes the Portuguese words for today/yesterday/the day before
+  // (see resolveEventDate in trackers.mjs); say them in the user's language.
   remover_evento: {
-    request: (a, c) => c.t('remover_evento.request', { date: c.q(a.data, 'common.date_unknown'), tracker: c.q(a.tracker) }),
+    request: (a, c) => c.t('remover_evento.request', { when: eventDay(a.data, c), tracker: c.q(a.tracker) }),
     done: (a, c) => c.t('remover_evento.done', { tracker: c.q(a.tracker) }),
   },
   remover_tracker: simple('remover_tracker', (a, c) => ({ tracker: c.q(a.tracker) })),
