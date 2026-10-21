@@ -347,8 +347,10 @@
       "running": " ejecutando \"{command}\""
     },
     "cancelar_rotina": {
-      "request": "cancelar definitivamente la rutina {routine}",
-      "done": "Rutina {routine} cancelada."
+      "request": "borrar definitivamente la rutina {routine}",
+      "done": "Rutina {routine} borrada.",
+      "request_pause": "pausar la rutina {routine}",
+      "done_pause": "Rutina {routine} pausada."
     },
     "remover_evento": {
       "request": "borrar el registro del {date} del tracker \"{tracker}\"",

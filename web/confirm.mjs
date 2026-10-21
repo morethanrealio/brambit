@@ -366,7 +366,7 @@ export function describeDone(name, args = {}, language = null) {
 // to pt-BR, today's default behavior.
 // Tools with confirmation whose output is a fixed pt-BR success sentence. Their
 // failures must come back as { ok: false }: any other plain text is read as success.
-const FRASE_PRONTA_PT = new Set(['criar_rotina', 'cancelar_rotina']);
+const FRASE_PRONTA_PT = new Set(['criar_rotina']);
 export function renderConfirmed(pend, r) {
   const lang = pend?.language ? tagIdioma(pend.language) : defaultLanguage();
   const feito = () => describeDone(pend.name, pend.args, pend.language);
@@ -591,8 +591,8 @@ export function gateTool(tool, threadId, opts = {}) {
       const inlineByPolicy = typeof tool.runWithoutConfirmation === 'function'
         && tool.runWithoutConfirmation(args) === true;
       // The legacy path keeps a single pending action; the persistent session
-      // supports several.
-      if (!opts.confirmationPreview && !currentConfirmationSession(threadId) && pending.has(threadId)) {
+      // supports several. A call that runs without a card never waits on it.
+      if (!opts.confirmationPreview && !inlineByPolicy && !currentConfirmationSession(threadId) && pending.has(threadId)) {
         return 'Já existe uma ação aguardando a confirmação do usuário nesta conversa. Trate uma de cada vez: confirme (ou cancele) a anterior antes de propor outra.';
       }
       const lang = idiomaDoCartao(threadId);
