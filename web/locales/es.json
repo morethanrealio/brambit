@@ -802,6 +802,10 @@
       "request_fix": "corregir la nota temporal seleccionada: {text}",
       "text_missing": "(falta texto)",
       "done": "Nota temporal actualizada según la confirmación. El historial normal permanece."
+    },
+    "buttons": {
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
     }
   },
   "onboarding": {

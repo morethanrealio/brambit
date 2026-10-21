@@ -6,6 +6,7 @@ import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
 import { frameText } from './confirm-sentences.mjs';
 import { reconsider, secondReading } from './consent-reader.mjs';
+import { buttonSelection } from './confirmation-buttons.mjs';
 
 // Texts the OWNER reads in this flow. They come out in the language recorded in
 // the request itself (row.language, the same one that already picks the card's
@@ -561,11 +562,12 @@ async function readerDecision(session, selected, inputId) {
 }
 
 export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
-  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent } = {}) {
+  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent, button = null } = {}) {
   const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
   const said = userSaid(message);
   const context = { rows: session.rows, said, viaReaction, shownIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [] };
-  const selected = await secondReading(await reconsider(
+  // A pressed button names its card: none of the readers below get a say.
+  const selected = button ? buttonSelection(session.rows, button, inputId) : await secondReading(await reconsider(
     selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []),
     { ...context, target, read }), { ...context, consent });
   if (selected.kind === 'continue') {
@@ -602,7 +604,7 @@ export async function handleConfirmation(session, { message, target, viaReaction
     if (selected.kind === 'edit') return { note: `O pedido ${row.number} foi invalidado antes de qualquer execução. O dono pediu uma alteração: ${userSaid(message)}. Proponha novamente a ferramenta ${row.name} com os argumentos corrigidos, a partir destes dados: ${JSON.stringify(row.args)}. Outros pedidos continuam pendentes. Não execute a versão antiga.` };
     return { text: textosConfirmacao(row.language).canceledOne(row.label), attachments: [] };
   }
-  if (viaReaction && !isReactionConfirmable(row.name)) return proposalList([row], textosConfirmacao(row.language).textOnlyOne);
+  if (viaReaction && !button && !isReactionConfirmable(row.name)) return proposalList([row], textosConfirmacao(row.language).textOnlyOne);
   let prepared, adapter;
   try {
     ({prepared,adapter} = await prepareRow(session,row,resolveTool));

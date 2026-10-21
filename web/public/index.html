@@ -377,6 +377,11 @@
      over the normal accent gives 3.3:1 contrast, below the readable minimum; this
      way it's ~4.9:1. */
   .msg-card-btn, .msg a.msg-card-btn { display:block; margin:8px; padding:8px 12px; border-radius:8px; text-align:center; background:#a85c38; color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
+  .msg-confirm { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .msg-confirm-label { width:100%; font-size:12px; opacity:.8; }
+  .msg-confirm-btn { padding:7px 16px; border-radius:8px; border:1px solid #a85c38; background:#a85c38; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  .msg-confirm-btn.cancel { background:transparent; border-color:var(--line); color:inherit; }
+  .msg-confirm-btn:disabled { opacity:.5; cursor:default; }
   .msg audio { margin-top:6px; max-width:250px; display:block; }
   .mediarow { display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--line); }
   .mediarow:first-child { border-top:none; }
@@ -1663,6 +1668,27 @@ function addLocalNote(text) {
 function clearLocalNotes() {
   const m = E('msgs');
   if (m) m.querySelectorAll('[data-local="1"]').forEach(el => el.remove());
+}
+// Confirm / Cancel under the cards of a live reply. A press sends the button's
+// text together with the card it belongs to, and the server decides that card
+// only. Not drawn again when the conversation reloads: writing still works.
+function addConfirmationButtons(bubble, confirmations, threadId) {
+  if (!bubble || !confirmations || !confirmations.length) return;
+  confirmations.forEach(c => {
+    const row = document.createElement('div'); row.className = 'msg-confirm';
+    if (confirmations.length > 1 && c.label) { const l = document.createElement('div'); l.className = 'msg-confirm-label'; l.textContent = c.label; row.appendChild(l); }
+    [c.confirm, c.cancel].forEach((b, i) => {
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.className = 'msg-confirm-btn' + (i ? ' cancel' : '');
+      btn.textContent = b.text;
+      btn.addEventListener('click', () => {
+        row.querySelectorAll('button').forEach(x => { x.disabled = true; });
+        sendThread(b.text, [], [], threadId, { confirmation: b.data });
+      });
+      row.appendChild(btn);
+    });
+    bubble.appendChild(row);
+  });
 }
 function showErr(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
 
@@ -5128,7 +5154,7 @@ E('imgFile').onchange = async (e) => {
 
 // voice = the text is the transcript of what the person said; the server tells
 // the model so (markVoiceInput), as it does for channel audio.
-async function sendThread(text, images, files, threadId = currentThreadId, { voice = false } = {}) {
+async function sendThread(text, images, files, threadId = currentThreadId, { voice = false, confirmation = null } = {}) {
   E('micBtn').classList.remove('hint');
   if (!threadId) return;
   const epoch = chatViewEpoch;
@@ -5139,7 +5165,8 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
     .concat(files.map(f => ({ type: 'doc', name: f.name })));
   const gen = ++chatGen;
   const pending = chatPending.get(threadId) || new Set(); pending.add(gen); chatPending.set(threadId, pending);
-  if (visible()) { chatSending = true; clearLocalNotes(); addMsg(voice ? '🎤 ' + text : text, 'me', atts); }
+  let mine = null;
+  if (visible()) { chatSending = true; clearLocalNotes(); mine = addMsg(voice ? '🎤 ' + text : text, 'me', atts); }
   const typing = E('typing');
   if (visible()) { typing.textContent = tx('chat.typing'); typing.classList.remove('hidden'); }
   const heartbeatTimer = setTimeout(() => {
@@ -5149,6 +5176,7 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
   }, 60000);
   const payload = { threadId, message: text };
   if (voice) payload.voice = true;
+  if (confirmation) payload.confirmation = confirmation;
   try {
   if (images.length) {
     const packed = await packImages(images);
@@ -5173,7 +5201,9 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
       E('typing').classList.add('hidden');
       // A real reply becomes a normal bubble (it's in the history). A server error
       // becomes a local note, which doesn't count toward the poller's baseline.
-      if (res && (res.reply || (res.attachments && res.attachments.length))) { addMsg(res.reply || '', 'bot', res.attachments); markThreadRead(threadId); }
+      // A press on a card that was already decided saves nothing: its bubble goes.
+      if (res && (res.reply || (res.attachments && res.attachments.length))) { addConfirmationButtons(addMsg(res.reply || '', 'bot', res.attachments), res.confirmations, threadId); markThreadRead(threadId); }
+      else if (confirmation && res && !res.error) { if (mine) mine.remove(); }
       else addLocalNote((res && res.error) || tx('chat.reply_failed'));
     }
   } catch {

@@ -70,9 +70,10 @@ function fixture(t, durable = null) {
       unexpected.push(u); throw Error('Rede não permitida no teste');
     }
     const wa = u.startsWith('https://graph.facebook.com/');
-    if (body.type === 'text' || u.endsWith('/sendMessage')) {
+    if (body.type === 'text' || body.type === 'interactive' || u.endsWith('/sendMessage')) {
       const messageId = wa ? `wa-out-${id}-${++outputId}` : ++outputId;
-      const item = { channel: wa ? 'whatsapp' : 'telegram', messageId: wa ? String(messageId) : `${body.chat_id}:${messageId}`, rawId: String(messageId), text: wa ? body.text.body : body.text };
+      const text = !wa ? body.text : body.type === 'interactive' ? body.interactive.body.text : body.text.body;
+      const item = { channel: wa ? 'whatsapp' : 'telegram', messageId: wa ? String(messageId) : `${body.chat_id}:${messageId}`, rawId: String(messageId), text };
       await state.beforeSend?.(item);
       sent.push(item);
       return { ok: true, json: async () => wa ? { messages: [{ id: messageId }] } : { ok: true, result: { message_id: messageId } } };
