@@ -55,6 +55,16 @@ test('a bare yes confirms only the sole card just shown and leaves the older req
   await f.decide('sim');assert.deepEqual(f.effects,[args(2)]);
   assert.equal((await f.session()).pending().length,1);
 });
+// 2026-10-21 eval: a yes to an action that can't be undone is read a second time.
+// A doubted yes shows the card once more; the next yes runs without a third question.
+test('a doubted yes to an e-mail shows the card once more and the next yes sends it',async t=>{
+  const f=await fixture(t);await f.propose(args(1));
+  const read=[];const consent=async a=>{read.push(a.said);return 'other';};
+  const first=await f.decide('sim',{consent});
+  assert.equal(f.effects.length,0);assert.match(first.text,/não dá para desfazer/);
+  await f.decide('sim, pode enviar',{consent});
+  assert.deepEqual(f.effects,[args(1)]);assert.deepEqual(read,['sim']);
+});
 test('numbered selection executes only that immutable proposal after restart and replays its receipt',async t=>{
   const f=await fixture(t);await f.propose(args(1));const b=await f.propose(args(2));
   await f.decide('confirmo pedido 2');assert.deepEqual(f.effects,[args(2)]);
