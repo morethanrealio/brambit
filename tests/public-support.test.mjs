@@ -14,6 +14,7 @@ const { registrarRotasDoDono } = await import('../web/public-support-owner.mjs')
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
 const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
+const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/public-support-prompts.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -513,6 +514,26 @@ test('open sign-up keeps public support off on every channel until it is closed'
   assert.equal(avisos.length, 1);
   open = false;
   assert.deepEqual(await estado(), [true, 200, false]);
+});
+
+test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
+  const { pool, dono, outro, ag, ag2 } = await montar(t);
+  const p = createPromptStore(pool); await p.init(); await p.init();
+  assert.equal(await p.save({ agentId: ag, kind: 'written', content: 'x', userId: outro }), null);
+  assert.equal(await p.versions({ agentId: ag, kind: 'written', userId: outro }), null);
+  assert.equal(await p.save({ agentId: ag, kind: 'installation', content: 'x', userId: dono }), null);
+  for (let i = 1; i <= PROMPT_VERSIONS_KEPT + 3; i++) await p.save({ agentId: ag, kind: 'written', content: 'written ' + i, userId: dono });
+  await p.save({ agentId: ag2, kind: 'spoken', content: 'spoken by Bia', userId: dono });
+  await p.save({ kind: 'installation', content: 'rules', userId: outro });
+  const vs = await p.versions({ agentId: ag, kind: 'written', userId: dono });
+  assert.equal(vs.length, PROMPT_VERSIONS_KEPT); assert.equal(vs[0].content, 'written ' + (PROMPT_VERSIONS_KEPT + 3));
+  assert.deepEqual(await p.current(ag), { installation: 'rules', written: 'written ' + (PROMPT_VERSIONS_KEPT + 3), spoken: '' });
+  assert.equal(await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: outro }), null);
+  assert.equal(await p.restore({ agentId: ag2, kind: 'spoken', versionId: vs.at(-1).id, userId: dono }), null);
+  await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: dono });
+  await p.save({ kind: 'installation', content: '  ', userId: dono });
+  assert.deepEqual(await p.current(ag), { installation: '', written: 'written 4', spoken: '' });
+  assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
 });
 
 // Isolation is by construction: the module must not start importing whatever reads

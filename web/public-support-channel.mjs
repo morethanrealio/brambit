@@ -11,6 +11,7 @@ import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
+import { promptSchema } from './public-support-prompts.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
@@ -20,7 +21,7 @@ const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Joins the initDb schema list.
-export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); };
+export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
