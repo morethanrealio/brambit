@@ -370,7 +370,7 @@ export const INSTALLATION_PROMPT_DEFAULT = [
   HEALTH_GUARDRAIL,
 ].join('\n\n');
 
-// base: the plugin's instructions for this turn (antesDoModelo); the owner's
+// base: the assistant's instructions for this turn (antesDoModelo, else the written text); the owner's
 // (the /public-support box) come after them and add to them. installationPrompt
 // (the admin's edit, '' = INSTALLATION_PROMPT_DEFAULT) comes after everything else, so
 // it stays above whatever the owner, the plugin or a tool says.
@@ -418,14 +418,21 @@ export function comandoDoContato(mensagem) {
 //  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
 //   without it, or if reading them fails, the turn uses the defaults.
 //  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
+//   defaultTexts({agentId}) → {written, spoken?}: the assistant's default texts
+//    for typed and for voice turns. The owner edits them on /public-support (an
+//    edit replaces the default); spoken missing = the assistant has no voice
+//    text, and the owner sees only the written one.
 //   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes is the base
-//    for this turn and the owner's instructions are added after it; pular with
-//    saidas answers without calling the model (opening, fixed response).
+//    for this turn (built from ctx.texts, the one that fits the turn) and the
+//    owner's instructions are added after it; without it, the base is
+//    ctx.texts.written. pular with saidas answers without calling the model
+//    (opening, fixed response).
 //   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
 //    rich outputs (public-support-outputs.mjs).
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
-//    estado(), lembrar(chave,valor)}.
+//    texts: {written, spoken} in use for this assistant (the owner's edit, else
+//    the default; spoken null without a voice text), estado(), lembrar(chave,valor)}.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -447,6 +454,11 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     if (typeof ganchos?.[nome] !== 'function') return null;
     try { const r = await ganchos[nome](ctx); return r && typeof r === 'object' ? r : null; }
     catch (e) { log.error?.(`[publico] gancho ${nome} falhou:`, e?.message ?? e); return null; }
+  }
+  // The plugin's defaults for one assistant; spoken = null when it has no voice text.
+  async function defaultTexts(agentId) {
+    const d = await gancho('defaultTexts', { agentId });
+    return { written: typeof d?.written === 'string' ? d.written : '', spoken: typeof d?.spoken === 'string' ? d.spoken : null };
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
@@ -525,8 +537,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (!credito || credito.over !== false) return indisponivel('sem_saldo');
       if (await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return indisponivel('teto_diario');
       const history = await store.historico(contato.id);
+      const [edited, defaults] = await Promise.all([editedTexts(agente.agent_id), defaultTexts(agente.agent_id)]);
+      const texts = { written: edited.written || defaults.written, spoken: defaults.spoken == null ? null : edited.spoken || defaults.spoken };
       const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
-        canal, mensagem: msg, event: ev, primeira: !history.length,
+        canal, mensagem: msg, event: ev, primeira: !history.length, texts,
         estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
       const antes = await gancho('antesDoModelo', ctx);
       const prontas = normalizarSaidas(antes?.saidas, { canal });
@@ -536,8 +550,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { text, saidas: prontas, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
-      const edited = await editedTexts(agente.agent_id);
-      const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : '', instrucoes: agente.instrucoes,
+      const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
         canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
       let text = '';
       try {
@@ -568,5 +581,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     });
   }
 
-  return { turno, registro };
+  return { turno, registro, defaultTexts };
 }
