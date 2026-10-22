@@ -11,7 +11,7 @@ import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
-import { promptSchema } from './public-support-prompts.mjs';
+import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
@@ -50,6 +50,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
+  const prompts = createPromptStore(pool, { S });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -71,7 +72,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setInterval(limpar, limpezaMs).unref?.();
   }
   const atendimento = createAtendimentoPublico({
-    store, makeProvider, ferramentas, ganchos, log, agora: agoraPorExtenso,
+    store, makeProvider, ferramentas, ganchos, prompts, log, agora: agoraPorExtenso,
     saldo: creditStatus,
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
@@ -80,7 +81,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available });
   }
   return {
-    store, webStore, limpar,
+    store, webStore, prompts, limpar,
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem }),

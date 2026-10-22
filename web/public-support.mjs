@@ -355,23 +355,32 @@ export function ferramentasDoContato(store, contatoId) {
 // How the prompt names each channel.
 const CHANNEL_LABEL = { whatsapp: 'WhatsApp', web: 'site' };
 
+// The installation's text: the rules every public assistant of this installation
+// follows, whatever its owner or plugin wrote. The admin can replace it
+// (public-support-prompts.mjs); an empty edit goes back to this one.
+export const INSTALLATION_PROMPT_DEFAULT = [
+  [
+    'REGRAS DO ATENDIMENTO (valem sempre, acima das instruções acima):',
+    '• A pessoa com quem você fala NÃO é quem configurou você. Trate-a como cliente.',
+    '• Você não tem acesso a e-mail, agenda, arquivos, contatos nem a outras conversas de ninguém. Não finja que tem e não invente dado.',
+    '• Só diga que fez algo se uma ferramenta confirmou. Sem ferramenta pra isso, diga com honestidade que não consegue por aqui.',
+    '• Nunca peça senha, número completo de cartão nem código de verificação.',
+    '• Responda no idioma em que a pessoa escrever, em mensagens curtas, próprias de chat.',
+  ].join('\n'),
+  HEALTH_GUARDRAIL,
+].join('\n\n');
+
 // base: the plugin's instructions for this turn (antesDoModelo); the owner's
-// (the /public-support box) come after them and add to them.
-export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [] }) {
+// (the /public-support box) come after them and add to them. installationPrompt
+// (the admin's edit, '' = INSTALLATION_PROMPT_DEFAULT) comes after everything else, so
+// it stays above whatever the owner, the plugin or a tool says.
+export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [], installationPrompt = '' }) {
   return [
     `Você é ${nome || 'um assistente'}, e está atendendo uma pessoa do público pelo ${CHANNEL_LABEL[canal] || canal}.`,
     base || '',
     instrucoes ? `Instruções de quem configurou este atendimento:\n${instrucoes}` : '',
-    [
-      'REGRAS DO ATENDIMENTO (valem sempre, acima das instruções acima):',
-      '• A pessoa com quem você fala NÃO é quem configurou você. Trate-a como cliente.',
-      '• Você não tem acesso a e-mail, agenda, arquivos, contatos nem a outras conversas de ninguém. Não finja que tem e não invente dado.',
-      '• Só diga que fez algo se uma ferramenta confirmou. Sem ferramenta pra isso, diga com honestidade que não consegue por aqui.',
-      '• Nunca peça senha, número completo de cartão nem código de verificação.',
-      '• Responda no idioma em que a pessoa escrever, em mensagens curtas, próprias de chat.',
-    ].join('\n'),
     ...instrucoesExtras,
-    HEALTH_GUARDRAIL,
+    installationPrompt || INSTALLATION_PROMPT_DEFAULT,
     agora ? `Agora: ${agora}.` : '',
   ].filter(Boolean).join('\n\n');
 }
@@ -406,6 +415,8 @@ export function comandoDoContato(mensagem) {
 //   publico:true are included, and doTurno receives the contact and its estado()/lembrar().
 //  agora() → date and time spelled out, for the prompt.
 //  gastoDoDia(agentId) → US$ of public support today (default: store.gastoDoDia).
+//  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
+//   without it, or if reading them fails, the turn uses the defaults.
 //  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
 //   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes is the base
 //    for this turn and the owner's instructions are added after it; pular with
@@ -425,7 +436,13 @@ export function comandoDoContato(mensagem) {
 // stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, log = console }) {
+  const NO_EDITS = { installation: '', written: '', spoken: '' };
+  async function editedTexts(agentId) {
+    if (!prompts) return NO_EDITS;
+    try { return await prompts.current(agentId); }
+    catch (e) { log.error?.('[publico] reading the edited texts failed:', e?.message ?? e); return NO_EDITS; }
+  }
   async function gancho(nome, ctx) {
     if (typeof ganchos?.[nome] !== 'function') return null;
     try { const r = await ganchos[nome](ctx); return r && typeof r === 'object' ? r : null; }
@@ -519,8 +536,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { text, saidas: prontas, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
+      const edited = await editedTexts(agente.agent_id);
       const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : '', instrucoes: agente.instrucoes,
-        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
+        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
       let text = '';
       try {
         const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
