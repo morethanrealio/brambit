@@ -22,6 +22,7 @@ import { vaultEnabled } from './vault.mjs';
 import { pool, S } from './db.mjs';
 import { checksFor, runCheck } from './config-checks.mjs';
 import { readProfile } from './profiles.mjs';
+import { adminUser } from './admin-user.mjs';
 
 const EXAMPLE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env.example');
 const KEY_LINE = /^(#\s?)?([A-Z][A-Z0-9_]*)=(.*)$/;
@@ -171,14 +172,6 @@ export function prepareSave(raw, { env = process.env, fileValues = readFileValue
 }
 
 const reply = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
-
-// The logged-in administrator, or null.
-async function adminUser(ctx) {
-  const admin = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  if (!admin) return null;
-  const user = await ctx.currentUser?.();
-  return user && String(user.email || '').toLowerCase() === admin ? user : null;
-}
 
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'system-settings.html');
 

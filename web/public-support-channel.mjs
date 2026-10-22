@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
 import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
+import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
@@ -40,7 +41,8 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
-// (public-support-owner.mjs) and the public web channel (public-web.mjs).
+// (public-support-owner.mjs), the public web channel (public-web.mjs) and the
+// admin's installation text (public-support-admin.mjs).
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
 // it hands to the public would also hand out accounts paid by the owner. null =
@@ -79,6 +81,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   if (rotas) {
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available });
+    if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }
   return {
     store, webStore, prompts, limpar,

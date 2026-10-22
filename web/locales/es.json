@@ -2110,7 +2110,32 @@
     "reason_connection_refused": "el servidor rechazó la conexión",
     "reason_bad_url": "la dirección no es válida",
     "reason_bad_number_id": "el id del número debe tener solo dígitos",
-    "reason_unreachable": "no se pudo contactar el servicio"
+    "reason_unreachable": "no se pudo contactar el servicio",
+    "section_public_support": "Atención al público",
+    "public_support_text_label": "Texto de la instalación",
+    "public_support_text_help": "Reglas que sigue todo asistente que atiende al público en esta instalación, además del texto de cada asistente. El cambio se aplica desde el próximo mensaje, para todos los asistentes."
+  },
+  "text_history": {
+    "history_save": "Guardar",
+    "history_saving": "Guardando…",
+    "history_saved": "Guardado.",
+    "history_reset": "Volver al predeterminado",
+    "history_reset_confirm": "¿Volver al texto predeterminado? El texto actual queda en la lista de versiones.",
+    "history_using_default": "texto predeterminado",
+    "history_unsaved": "sin guardar",
+    "history_count": "{count} de {max} caracteres",
+    "history_too_long": "El texto supera los {max} caracteres.",
+    "history_failed": "No se pudo guardar. Inténtelo de nuevo.",
+    "history_load_failed": "No se pudo cargar este texto.",
+    "history_versions_one": "{count} versión guardada",
+    "history_versions_other": "{count} versiones guardadas",
+    "history_version_default": "predeterminado",
+    "history_version_current": "actual",
+    "history_view": "Ver",
+    "history_hide": "Ocultar",
+    "history_restore": "Restaurar",
+    "history_restore_confirm": "¿Usar de nuevo la versión del {date}? El texto actual queda en la lista de versiones.",
+    "history_none": "Todavía no hay versiones guardadas. Mientras no se guarde ninguna, se usa el texto predeterminado."
   },
   "emails": {
     "confirm_signup": {

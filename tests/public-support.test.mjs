@@ -15,6 +15,7 @@ const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
 const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/public-support-prompts.mjs');
+const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/public-support-admin.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -542,6 +543,39 @@ test('editable texts: only the owner reads and edits an assistant\'s, the newest
   await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
   assert.ok(m.chamadas[1].system.includes(INSTALLATION_PROMPT_DEFAULT));
   assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
+});
+
+// The installation's text changes what every public assistant here obeys: only ADMIN_EMAIL reaches it.
+test('installation text on the admin screen: admin only, saving the default stores no edit, old versions restore', async (t) => {
+  const { pool, dono, outro } = await montar(t);
+  const prompts = createPromptStore(pool); await prompts.init();
+  const saved = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = 'boss@example.com';
+  t.after(() => { if (saved === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = saved; });
+  const rotas = createRotas();
+  registerPublicSupportAdmin({ rotas, prompts, defaultText: 'default rules' });
+  const boss = { id: dono, email: 'Boss@example.com' }, stranger = { id: outro, email: 'someone@example.com' };
+  const ask = async (user, method, path, body) => {
+    const req = Readable.from(body === undefined ? [] : [JSON.stringify(body)]); req.method = method;
+    const res = { code: 0, out: '', writeHead(c) { this.code = c; }, end(x) { this.out += x ?? ''; } };
+    const answered = await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => user });
+    return { answered, code: res.code, json: res.out ? JSON.parse(res.out) : null };
+  };
+  for (const [method, path, body] of [['GET', INSTALLATION_PROMPT_PATH], ['POST', INSTALLATION_PROMPT_PATH, { content: 'mine' }], ['POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '1' }]]) {
+    assert.equal((await ask(stranger, method, path, body)).answered, false);
+    assert.equal((await ask(null, method, path, body)).answered, false);
+  }
+  assert.deepEqual(await prompts.current(), { installation: '', written: '', spoken: '' });
+  assert.deepEqual((await ask(boss, 'GET', INSTALLATION_PROMPT_PATH)).json, { content: '', default: 'default rules', max: 40000, versions: [] });
+  assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: 'x'.repeat(40001) })).json.error, 'too_long');
+  const edited = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: 'new rules' })).json;
+  assert.equal(edited.content, 'new rules');
+  const back = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: ' default rules\n' })).json;
+  assert.deepEqual([back.content, back.versions.length], ['', 2]);
+  const restored = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: edited.versions[0].id })).json;
+  assert.equal(restored.content, 'new rules');
+  assert.equal((await prompts.current()).installation, 'new rules');
+  assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '999' })).code, 404);
 });
 
 // Isolation is by construction: the module must not start importing whatever reads
