@@ -543,6 +543,15 @@ test('editable texts: only the owner reads and edits an assistant\'s, the newest
   await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
   assert.ok(m.chamadas[1].system.includes(INSTALLATION_PROMPT_DEFAULT));
   assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
+  // The plugin's defaults fill what the owner didn't edit; without a voice default there is no spoken text.
+  const seen = [], m2 = modelo();
+  const voice = { [ag]: { written: 'default written', spoken: 'default spoken' }, [ag2]: { written: 'Bia written' } };
+  const b = atendimento(store, m2, { prompts: p, ganchos: { defaultTexts: ({ agentId }) => voice[agentId], antesDoModelo: (ctx) => { seen.push(ctx.texts); } } });
+  await store.configurar(ag2, dono, { ativo: true });
+  await b.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  await b.turno({ agentId: ag2, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.deepEqual(seen, [{ written: 'written 4', spoken: 'default spoken' }, { written: 'Bia written', spoken: null }]);
+  assert.ok(m2.chamadas[0].system.includes('\n\nwritten 4\n\n') && m2.chamadas[1].system.includes('\n\nBia written\n\n'));
 });
 
 // The installation's text changes what every public assistant here obeys: only ADMIN_EMAIL reaches it.
