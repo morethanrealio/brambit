@@ -79,7 +79,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
   if (rotas) {
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available });
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }

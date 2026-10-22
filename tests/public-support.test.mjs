@@ -10,7 +10,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
 const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
-const { registrarRotasDoDono } = await import('../web/public-support-owner.mjs');
+const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
 const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
@@ -585,6 +585,37 @@ test('installation text on the admin screen: admin only, saving the default stor
   assert.equal(restored.content, 'new rules');
   assert.equal((await prompts.current()).installation, 'new rules');
   assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '999' })).code, 404);
+});
+
+// An assistant's texts on /public-support: only its owner, and spoken only where the plugin has a voice text.
+test('assistant texts on the owner screen: another account gets 404, the plugin default comes prefilled, no spoken text without voice', async (t) => {
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
+  const prompts = createPromptStore(pool); await prompts.init();
+  const defaults = { [ag]: { written: 'default written', spoken: 'default spoken' }, [ag2]: { written: 'Bia written', spoken: null } };
+  const rotas = createRotas();
+  const send = (res, status, json) => Object.assign(res, { status, json });
+  registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false,
+    agenteDoNumero: () => ag, prompts, defaultTexts: async (id) => defaults[id] ?? { written: '', spoken: null } });
+  const ask = async (who, method, path, body) => {
+    const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
+    const res = { setHeader() {} };
+    await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => ({ id: who }) });
+    return res;
+  };
+  for (const [method, path, body] of [['GET', `${AGENT_TEXTS_PATH}?agent=${ag}`], ['POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'written', content: 'mine' }],
+    ['POST', AGENT_TEXTS_PATH + '/restore', { agentId: ag, kind: 'written', versionId: '1' }]]) {
+    assert.equal((await ask(outro, method, path, body)).status, 404, `${method} ${path}`);
+  }
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag2, kind: 'spoken', content: 'voice' })).status, 404);
+  assert.deepEqual(await prompts.current(ag), { installation: '', written: '', spoken: '' });
+  const both = (await ask(dono, 'GET', `${AGENT_TEXTS_PATH}?agent=${ag}`)).json;
+  assert.deepEqual([both.written.content, both.written.default, both.spoken.default, both.spoken.max], ['', 'default written', 'default spoken', 40000]);
+  assert.equal((await ask(dono, 'GET', `${AGENT_TEXTS_PATH}?agent=${ag2}`)).json.spoken, null);
+  const edited = (await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'spoken', content: 'short answers' })).json;
+  assert.equal(edited.content, 'short answers');
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'spoken', content: 'default spoken ' })).json.content, '');
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH + '/restore', { agentId: ag, kind: 'spoken', versionId: edited.versions[0].id })).json.content, 'short answers');
+  assert.deepEqual(await prompts.current(ag), { installation: '', written: '', spoken: 'short answers' });
 });
 
 // Isolation is by construction: the module must not start importing whatever reads
