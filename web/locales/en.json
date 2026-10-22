@@ -2110,7 +2110,32 @@
     "reason_connection_refused": "the server refused the connection",
     "reason_bad_url": "the address is not valid",
     "reason_bad_number_id": "the phone number id must be digits only",
-    "reason_unreachable": "could not reach the service"
+    "reason_unreachable": "could not reach the service",
+    "section_public_support": "Public support",
+    "public_support_text_label": "Installation text",
+    "public_support_text_help": "Rules every assistant that answers the public on this installation follows, on top of each assistant's own text. A change applies from the next message, for every assistant."
+  },
+  "text_history": {
+    "history_save": "Save",
+    "history_saving": "Saving…",
+    "history_saved": "Saved.",
+    "history_reset": "Back to default",
+    "history_reset_confirm": "Go back to the default text? The current text stays in the version list.",
+    "history_using_default": "default text",
+    "history_unsaved": "not saved",
+    "history_count": "{count} of {max} characters",
+    "history_too_long": "The text is over {max} characters.",
+    "history_failed": "Could not save. Try again.",
+    "history_load_failed": "Could not load this text.",
+    "history_versions_one": "{count} saved version",
+    "history_versions_other": "{count} saved versions",
+    "history_version_default": "default",
+    "history_version_current": "current",
+    "history_view": "View",
+    "history_hide": "Hide",
+    "history_restore": "Restore",
+    "history_restore_confirm": "Use the version from {date} again? The current text stays in the version list.",
+    "history_none": "No saved versions yet. Until one is saved, the default text is in use."
   },
   "emails": {
     "confirm_signup": {

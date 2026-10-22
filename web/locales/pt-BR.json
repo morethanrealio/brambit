@@ -2110,7 +2110,32 @@
     "reason_connection_refused": "o servidor recusou a conexão",
     "reason_bad_url": "o endereço não é válido",
     "reason_bad_number_id": "o id do número deve ter só dígitos",
-    "reason_unreachable": "não foi possível falar com o serviço"
+    "reason_unreachable": "não foi possível falar com o serviço",
+    "section_public_support": "Atendimento ao público",
+    "public_support_text_label": "Texto da instalação",
+    "public_support_text_help": "Regras que todo assistente que atende o público nesta instalação segue, além do texto de cada assistente. A mudança vale a partir da próxima mensagem, para todos os assistentes."
+  },
+  "text_history": {
+    "history_save": "Salvar",
+    "history_saving": "Salvando…",
+    "history_saved": "Salvo.",
+    "history_reset": "Voltar ao padrão",
+    "history_reset_confirm": "Voltar ao texto padrão? O texto atual continua na lista de versões.",
+    "history_using_default": "texto padrão",
+    "history_unsaved": "não salvo",
+    "history_count": "{count} de {max} caracteres",
+    "history_too_long": "O texto passou de {max} caracteres.",
+    "history_failed": "Não foi possível salvar. Tente de novo.",
+    "history_load_failed": "Não foi possível carregar este texto.",
+    "history_versions_one": "{count} versão salva",
+    "history_versions_other": "{count} versões salvas",
+    "history_version_default": "padrão",
+    "history_version_current": "atual",
+    "history_view": "Ver",
+    "history_hide": "Esconder",
+    "history_restore": "Restaurar",
+    "history_restore_confirm": "Usar de novo a versão de {date}? O texto atual continua na lista de versões.",
+    "history_none": "Nenhuma versão salva ainda. Enquanto nada for salvo, vale o texto padrão."
   },
   "emails": {
     "confirm_signup": {

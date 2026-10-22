@@ -86,3 +86,18 @@ export function createPromptStore(pool, { S = 'mtr_harness' } = {}) {
     },
   };
 }
+
+// What a save stores: the default itself counts as no edit, so a later change of
+// the default still reaches that text.
+export const asEdit = (content, defaultText) => (String(content ?? '').trim() === String(defaultText ?? '').trim() ? '' : String(content ?? ''));
+
+// One text as its editor on screen sees it: content '' = the default is in use.
+// null = another account's assistant.
+export async function textState(prompts, { agentId = null, kind, userId }, defaultText) {
+  const versions = await prompts.versions({ agentId, kind, userId });
+  if (!versions) return null;
+  return {
+    content: versions[0]?.content ?? '', default: defaultText ?? '', max: PROMPT_MAX,
+    versions: versions.map((v) => ({ id: String(v.id), content: v.content, createdAt: new Date(v.created_at).toISOString() })),
+  };
+}

@@ -38,6 +38,21 @@
   .banner.info { background: #1b2233; border-color: #2c3b5e; }
   .toast { position: fixed; right: 20px; bottom: 20px; background: #15371f; border: 1px solid #2a6b3d; color: #6ee7a8; border-radius: 10px; padding: 8px 14px; font-size: 13px; }
   .hidden { display: none; }
+  .th-label { font-weight: 600; }
+  .th-box { display: block; width: 100%; min-height: 220px; resize: vertical; white-space: pre-wrap; }
+  .th-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; color: #8a8d96; font-size: 12px; }
+  .th-over { color: #f87171; }
+  .th-tag { display: inline-block; padding: 0 7px; border-radius: 999px; background: #23252c; color: #8a8d96; font-size: 11px; }
+  .th-tag:empty { display: none; }
+  .th-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  .th-result { font-size: 12px; }
+  .th-versions { margin-top: 14px; }
+  .th-versions summary { cursor: pointer; color: #8a8d96; font-size: 12px; }
+  .th-version { border-top: 1px solid #23252c; padding: 8px 0; }
+  .th-version-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; }
+  .th-version-head button { padding: 3px 10px; font-size: 12px; }
+  .th-full { white-space: pre-wrap; background: #0e0f13; border: 1px solid #23252c; border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; max-height: 320px; overflow: auto; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .th-none { color: #8a8d96; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -52,11 +67,21 @@
   <div id="waiting" class="banner info hidden"></div>
   <div id="fileErrors" class="banner hidden"></div>
   <div id="out" class="sub" data-i18n="system_settings.loading">Loading…</div>
+  <section id="publicSupport" class="hidden">
+    <h2 id="section-public-support" data-i18n="system_settings.section_public_support">Public support</h2>
+    <div class="group">
+      <div id="installationTextLabel" class="th-label" data-i18n="system_settings.public_support_text_label">Installation text</div>
+      <p class="note" data-i18n="system_settings.public_support_text_help">Rules every assistant that answers the public on this installation follows, on top of each assistant's own text. A change applies from the next message, for every assistant.</p>
+      <div id="installationText"></div>
+    </div>
+  </section>
   <div id="toast" class="toast hidden" data-i18n="system_settings.saved">Saved.</div>
 </main>
 
 <script type="application/json" data-i18n-texts="system_settings"></script>
+<script type="application/json" data-i18n-texts="text_history"></script>
 <script src="/page-texts.js"></script>
+<script src="/text-history.js"></script>
 <script nonce="__CSP_NONCE__">
 const t = window.pageText;
 const $ = (id) => document.getElementById(id);
@@ -165,6 +190,40 @@ function show(state) {
     $('nav').append(el('a', { href: '#' + id }, sectionTitle(s)));
     out.append(el('h2', { id }, sectionTitle(s)), ...s.groups.map((g) => renderGroup(g, state.file.active)));
   }
+  if (!$('publicSupport').classList.contains('hidden')) $('nav').append(publicSupportLink());
+}
+
+// Public support's installation text (public-support-admin.mjs). The route only
+// exists where public support can run, so a 404 keeps the section hidden.
+const INSTALLATION_TEXT = '/api/admin/public-support/installation-prompt';
+const publicSupportLink = () => el('a', { href: '#section-public-support' }, t('section_public_support'));
+
+async function textCall(path, body) {
+  const r = await fetch(path, body === undefined ? { credentials: 'same-origin' } : {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(String(r.status)), { code: data.error, status: r.status });
+  return data;
+}
+
+function loadInstallationText() {
+  window.textHistory($('installationText'), {
+    rows: 18, labelledBy: 'installationTextLabel',
+    api: {
+      load: () => textCall(INSTALLATION_TEXT),
+      save: (content) => textCall(INSTALLATION_TEXT, { content }),
+      restore: (versionId) => textCall(INSTALLATION_TEXT + '/restore', { versionId }),
+    },
+  }).catch((e) => {
+    if (e.status === 404) return false;
+    $('installationText').replaceChildren(el('p', { class: 'err' }, t('history_load_failed')));
+  }).then((found) => {
+    if (found === false) return;
+    $('publicSupport').classList.remove('hidden');
+    if ($('nav').children.length) $('nav').append(publicSupportLink());
+  });
 }
 
 async function load() {
@@ -247,6 +306,7 @@ async function test(group, name, button) {
 }
 
 load();
+loadInstallationText();
 </script>
 </body>
 </html>
