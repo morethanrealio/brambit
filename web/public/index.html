@@ -1721,6 +1721,17 @@ E('toggleLink').onclick = () => {
   renderAuthMode();
 };
 renderAuthMode(); // applies the mode coming from the URL already on load
+// Sign-up closed on this installation (/api/config, sign-in-screen.mjs): the
+// screen opens on "Log in" and doesn't offer "Create account", which would only
+// end in "sign-up is closed". /login?mode=sign-up still opens the form, for
+// whoever the admin let in.
+function applySignupClosed() {
+  if (!APP_CFG.signupClosed || loginQuery.get('mode') === 'sign-up') return;
+  signupMode = false;
+  E('toggleTxt').parentElement.classList.add('hidden');
+  E('toggleLink').classList.add('hidden');
+  renderAuthMode();
+}
 
 // ── Forgot / reset password ──
 function showAuthCard(which) { // 'login' | 'forgot' | 'reset' | 'confirmEmail' | 'confirmLink' | 'logged'
@@ -5321,6 +5332,7 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
 (async () => {
   const onboardingReturn = {provider:new URLSearchParams(location.search).get('e'), outcome:new URLSearchParams(location.search).get('connection_outcome')};
   APP_CFG = (await api('api/config')) || {};
+  applySignupClosed();
   E('micBtn').classList.toggle('hidden', !(APP_CFG.voice && navigator.mediaDevices && window.MediaRecorder));
   // Sign-up confirmation link (/confirm-email?token=...): the confirm button.
   // Checked before the reset below, which takes any ?token=.
