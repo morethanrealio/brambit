@@ -41,15 +41,17 @@ export function createPermissoesSimples({maxApps=null,discoMb=200,cadastroFechad
  });
 }
 // Default of the core, read from the environment. BRAMBIT_SIGNUP=closed closes
-// sign-up: only the owner (ADMIN_EMAIL) creates an account freely, everyone
-// else comes in with the owner's invite code or a company invite. Anything
+// sign-up: only the owner (ADMIN_EMAIL) and the e-mails in BRAMBIT_SIGNUP_ALLOWED
+// create an account freely, everyone else comes in with the owner's invite code
+// or a company invite. Anything
 // else, or unset, keeps sign-up open. Read on every call, so a change in the
 // config file applies without a restart; signup/admin passed in stay fixed.
 // The public-support usage profile (profiles.mjs) always closes sign-up.
 export function createPermissionsFromEnv({signup,admin,profile=usageProfile}={}){
  const atual=()=>{
   const cadastroFechado=profile==='public-support'||String(signup??process.env.BRAMBIT_SIGNUP??'').trim().toLowerCase()==='closed';
-  return createPermissoesSimples({cadastroFechado,liberados:cadastroFechado?[admin??process.env.ADMIN_EMAIL]:[]});
+  const liberados=[admin??process.env.ADMIN_EMAIL,...String(process.env.BRAMBIT_SIGNUP_ALLOWED??'').split(/[\s,;]+/)];
+  return createPermissoesSimples({cadastroFechado,liberados:cadastroFechado?liberados:[]});
  };
  return conferirPermissoes(Object.fromEntries(METODOS_PERMISSOES.map(m=>[m,(...args)=>atual()[m](...args)])));
 }

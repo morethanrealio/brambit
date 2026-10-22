@@ -8351,7 +8351,7 @@ const CATALOGOS_MSGS = serverMessages({ plugins, legacy: carregaCatalogos(textos
 // Sign-up with a password and its e-mail confirmation (signup-routes.mjs).
 const cadastro = registerSignupRoutes(rotas, { pool, send, fail, readBody, tooManyRequests, rateLimit, i18n: CATALOGOS_MSGS.i18n,
   getUserByEmail, purgeUser, criarConta, createUser, createReferredUserByCode, referralCodeExists, setUserLocaleIfEmpty, createSession,
-  permissoes, empresaStore, language: (req) => idiomaDoCookie(req) || idiomaDoHeader(req).language });
+  permissoes, empresaStore, coreSignup: !pecas.permissoes, language: (req) => idiomaDoCookie(req) || idiomaDoHeader(req).language });
 // Saving a data connection (site and app callbacks) and the app's connect flow.
 const connectSave = createConnectSave({ empresaStore, saveGoogleAccount, saveOAuthToken, microsoftAccountEmail });
 const mobileConnect = registerMobileConnect(rotas, { send, fail, readBody, save: connectSave });
@@ -8975,7 +8975,7 @@ async function atenderRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
-    return send(res, 200, { profile: usageProfile, google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), voice: sttEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE });
+    return send(res, 200, { profile: usageProfile, google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), voice: sttEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE, ...await cadastro.screen() });
   }
 
   // ── Sign-up source (campaign attribution) ──
