@@ -59,6 +59,25 @@
   .nota{font-size:13.5px;color:var(--mut);margin:0;}
   code{display:block;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;word-break:break-all;}
   #webOrigens,#linkSites{min-height:70px;}
+  .th-box{min-height:220px;white-space:pre-wrap;}
+  .th-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;color:var(--mut);font-size:12.5px;}
+  .th-over{color:var(--err);}
+  .th-tag{display:inline-block;padding:0 7px;border-radius:999px;background:var(--line2);color:var(--mut);font-size:11.5px;}
+  .th-tag:empty{display:none;}
+  .th-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;}
+  .th-actions button,.th-version-head button{border:0;border-radius:9px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;}
+  .th-actions button.ghost,.th-version-head button{background:transparent;border:1px solid var(--line);color:var(--mut);}
+  .th-actions button:disabled,.th-version-head button:disabled{opacity:.55;cursor:default;}
+  .th-result{font-size:13px;color:var(--mut);}
+  .th-result.ok{color:var(--ok);}
+  .th-result.err{color:var(--err);}
+  .th-versions{margin-top:12px;}
+  .th-versions summary{cursor:pointer;color:var(--mut);font-size:13px;}
+  .th-version{border-top:1px solid var(--line2);padding:8px 0;}
+  .th-version-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;color:var(--mut);}
+  .th-version-head button{padding:3px 10px;font-size:12.5px;font-weight:500;}
+  .th-full{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin:8px 0 0;max-height:320px;overflow:auto;font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .th-none{color:var(--mut);font-size:13px;}
   .hidden{display:none;}
 </style>
 </head>
@@ -93,6 +112,16 @@
     <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
     <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
     <label class="check" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
+    <div id="writtenTextBlock" class="hidden">
+      <label id="writtenTextLabel" data-i18n="public_service_page.written_text">Written text</label>
+      <p class="nota" data-i18n="public_service_page.written_text_help">What this assistant follows when someone types to it. It comes filled in with the text this assistant came with; a change applies from the next message.</p>
+      <div id="writtenText"></div>
+    </div>
+    <div id="spokenTextBlock" class="hidden">
+      <label id="spokenTextLabel" data-i18n="public_service_page.spoken_text">Spoken text</label>
+      <p class="nota" data-i18n="public_service_page.spoken_text_help">What it follows when someone talks to it by voice. It comes filled in with the text this assistant came with; a change applies from the next message.</p>
+      <div id="spokenText"></div>
+    </div>
     <label for="instrucoes" data-i18n="public_service_page.instructions">Extra instructions (what it does, tone, what it must not do). They add to the instructions that already come with this assistant, if any.</label>
     <textarea id="instrucoes" maxlength="20000"></textarea>
     <div class="row">
@@ -145,12 +174,14 @@
 </div>
 
 <script type="application/json" data-i18n-texts="public_service_page"></script>
+<script type="application/json" data-i18n-texts="text_history"></script>
 <script src="/page-texts.js"></script>
+<script src="/text-history.js"></script>
 <script nonce="__CSP_NONCE__">
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   var t = window.pageText, NO_SESSION = 'no-session';
-  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null;
+  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null, textsFor = null;
   function msg(el, t, cls){ el.textContent = t || ''; el.className = 'msg' + (cls ? ' ' + cls : ''); }
   function quando(d){ try { return new Date(d).toLocaleString(document.documentElement.lang, { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
   function pedir(caminho, corpo){
@@ -158,7 +189,7 @@
     if (corpo) { op.method = 'POST'; op.headers = { 'content-type':'application/json' }; op.body = JSON.stringify(corpo); }
     return fetch(caminho, op).then(function(r){
       if (r.status === 401) { location.href = '/login?mode=sign-in'; throw new Error(NO_SESSION); }
-      return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.error || t('error_generic')); return j; });
+      return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw Object.assign(new Error(j.error || t('error_generic')), { code: j.error }); return j; });
     });
   }
   function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -196,6 +227,32 @@
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('webChaveMsg'), '');
     fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos();
+    if (textsFor !== agenteAtual.agentId) loadTexts();
+  }
+
+  // The assistant's written and spoken texts (text-history.js), each saved on its
+  // own with its versions. Only reloaded when another assistant is picked, so
+  // saving the settings below keeps a text being edited.
+  var TEXTS = '/api/public-support/texts', KINDS = [['written', 'writtenText'], ['spoken', 'spokenText']];
+  function loadTexts(){
+    var id = textsFor = agenteAtual.agentId;
+    KINDS.forEach(function(k){ $(k[1]).textContent = ''; $(k[1] + 'Block').classList.add('hidden'); });
+    pedir(TEXTS + '?agent=' + encodeURIComponent(id)).then(function(j){
+      if (textsFor !== id) return;
+      KINDS.forEach(function(k){
+        var state = j[k[0]];
+        if (!state) return;
+        $(k[1] + 'Block').classList.remove('hidden');
+        window.textHistory($(k[1]), { rows: 12, labelledBy: k[1] + 'Label', api: {
+          load: function(){ return Promise.resolve(state); },
+          save: function(content){ return pedir(TEXTS, { agentId: id, kind: k[0], content: content }); },
+          restore: function(versionId){ return pedir(TEXTS + '/restore', { agentId: id, kind: k[0], versionId: versionId }); }
+        } });
+      });
+    }).catch(function(e){
+      if (textsFor !== id || e.message === NO_SESSION || e.code === 'not_found') return;
+      $('writtenTextBlock').classList.remove('hidden'); $('writtenText').appendChild(el('div', 'msg err', t('history_load_failed')));
+    });
   }
   $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
 
