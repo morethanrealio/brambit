@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
+const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
 const { registrarRotasDoDono } = await import('../web/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
@@ -517,7 +517,7 @@ test('open sign-up keeps public support off on every channel until it is closed'
 });
 
 test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
-  const { pool, dono, outro, ag, ag2 } = await montar(t);
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
   const p = createPromptStore(pool); await p.init(); await p.init();
   assert.equal(await p.save({ agentId: ag, kind: 'written', content: 'x', userId: outro }), null);
   assert.equal(await p.versions({ agentId: ag, kind: 'written', userId: outro }), null);
@@ -531,8 +531,16 @@ test('editable texts: only the owner reads and edits an assistant\'s, the newest
   assert.equal(await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: outro }), null);
   assert.equal(await p.restore({ agentId: ag2, kind: 'spoken', versionId: vs.at(-1).id, userId: dono }), null);
   await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: dono });
+  const m = modelo();
+  const a = atendimento(store, m, { prompts: p });
+  await store.configurar(ag, dono, { ativo: true });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.ok(m.chamadas[0].system.endsWith('rules\n\nAgora: segunda, 5 de outubro.'));
+  assert.ok(!m.chamadas[0].system.includes(INSTALLATION_PROMPT_DEFAULT));
   await p.save({ kind: 'installation', content: '  ', userId: dono });
   assert.deepEqual(await p.current(ag), { installation: '', written: 'written 4', spoken: '' });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.ok(m.chamadas[1].system.includes(INSTALLATION_PROMPT_DEFAULT));
   assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
 });
 
