@@ -218,7 +218,10 @@
     "avatar_failed_save": "Couldn't save the avatar. Try again.",
     "avatar_failed_remove": "Couldn't remove the avatar. Try again.",
     "avatar_not_found": "This assistant has no avatar.",
-    "avatar_voice_sample_failed": "Couldn't play this voice now. Try again."
+    "avatar_voice_sample_failed": "Couldn't play this voice now. Try again.",
+    "avatar_not_ready": "The avatar's photo is still getting ready. Try again in a minute.",
+    "avatar_live_not_found": "This conversation with the avatar has ended.",
+    "avatar_live_failed": "Couldn't talk to the avatar now. Try again."
   },
   "confirm": {
     "common": {
