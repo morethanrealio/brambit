@@ -32,21 +32,21 @@
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80",
     "html-to-text": "10.0.1",
-    "i18next": "^26.4.2",
+    "i18next": "^26.4.6",
     "imapflow": "^1.7.8",
     "mailparser": "^3.9.40",
     "nodemailer": "^10.1.2",
     "pdf-parse": "^2.4.5",
-    "pg": "^8.22.0",
+    "pg": "^8.23.1",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite": "0.5.10",
     "@types/node": "^22.0.0",
     "embedded-postgres": "14.23.0-beta.17",
     "eslint": "9.39.5",
     "globals": "17.13.0",
-    "playwright-core": "1.55.0",
+    "playwright-core": "1.64.1",
     "typescript": "5.9.3"
   }
 }
