@@ -56,6 +56,10 @@ export const EGRESS_ALLOW = [
   'api.telegram.org',
   'api.resend.com',
   'exp.host',
+  // assistant avatar (vidu.mjs): the face photo the owner gave it; VIDU_HOST
+  // picks one of the two
+  'api.vidu.com',
+  'api.vidu.cn',
   // login and billing
   'accounts.google.com',
   'oauth2.googleapis.com',
