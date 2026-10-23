@@ -97,6 +97,13 @@ export function createAvatarStore({ pool, S }) {
       return !!r;
     },
 
+    // The latest assistant reply in one of the user's chats, {id, content}: what a live avatar says (avatar-live.mjs).
+    latestReply: (threadId, userId) => one(
+      `SELECT m.id, m.content FROM ${S}.messages m JOIN ${S}.threads t ON t.id = m.thread_id
+        WHERE m.thread_id = $1 AND t.user_id = $2 AND m.role = 'assistant' ORDER BY m.id DESC LIMIT 1`,
+      [threadId, userId],
+    ),
+
     // The photo to register for an agent, with its owner; null once it is gone.
     forRegistration: (agentId) => one(`SELECT agent_id, user_id, photo, photo_mime, photo_sha256 FROM ${S}.agent_avatars WHERE agent_id = $1`, [agentId]),
 

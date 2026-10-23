@@ -463,12 +463,8 @@ export function audioToWav(inputBuffer) {
   });
 }
 
-export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
-  if (audioProvider() === 'openai') {
-    const speech = await openaiSpeech(text, voice);
-    console.log(`[media tts] in=${speech.usage.in} out=${speech.usage.out} total=${speech.usage.total}`);
-    return speech;
-  }
+// Gemini speech: raw PCM s16le mono and its sample rate.
+async function geminiPcm(text, voice) {
   const data = await gen(TTS_MODEL, {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
@@ -478,10 +474,18 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
   });
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const aud = parts.find((p) => p.inlineData?.data);
-  if (!aud) throw new Error('o modelo não devolveu áudio');
-  const pcm = Buffer.from(aud.inlineData.data, 'base64');
-  const wav = pcmToWav(pcm, rateFromMime(aud.inlineData.mimeType));
-  const usage = usageFrom(TTS_MODEL, data);
+  if (!aud) throw new Error('the model returned no audio');
+  return { buffer: Buffer.from(aud.inlineData.data, 'base64'), rate: rateFromMime(aud.inlineData.mimeType), usage: usageFrom(TTS_MODEL, data) };
+}
+
+export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
+  if (audioProvider() === 'openai') {
+    const speech = await openaiSpeech(text, voice);
+    console.log(`[media tts] in=${speech.usage.in} out=${speech.usage.out} total=${speech.usage.total}`);
+    return speech;
+  }
+  const { buffer: pcm, rate, usage } = await geminiPcm(text, voice);
+  const wav = pcmToWav(pcm, rate);
   console.log(`[media tts] in=${usage.in} out=${usage.out} total=${usage.total}`);
   // We prefer OGG/Opus (native voice note on WhatsApp/Telegram); WAV is the fallback.
   const ogg = await toOggOpus(wav);
@@ -490,6 +494,13 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
   // never reached WhatsApp and the assistant confirmed "mandado em voz" anyway).
   console.error('[media tts] ffmpeg unavailable or failed: audio came out as WAV, which WhatsApp rejects');
   return { buffer: wav, mime: 'audio/wav', ext: 'wav', usage };
+}
+
+// Speech as PCM s16le 24 kHz mono, what a live avatar takes (avatar-live.mjs).
+export async function synthesizePcm(text, voice = DEFAULT_VOICE) {
+  const speech = audioProvider() === 'openai' ? await openaiSpeech(text, voice, fetch, { format: 'pcm' }) : await geminiPcm(text, voice);
+  if (speech.rate !== 24000) throw new Error(`speech came at ${speech.rate} Hz, the avatar takes 24000`);
+  return { pcm: speech.buffer, usage: speech.usage };
 }
 
 // ── Transcription (STT) ── audio comes in as multimodal input on Flash.
