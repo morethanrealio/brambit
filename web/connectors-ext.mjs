@@ -6,6 +6,7 @@ import { recortar } from './declared-truncation.mjs';
 import { searchPagination, searchCursorSchema, SEARCH_PAGINATION_RULE, searchItems, githubSearchMeta, slackSearchMeta, graphSearchNextPath } from './search-pagination.mjs';
 import { emailPagination, emailCursorSchema, EMAIL_PAGINATION_RULE, graphEmailNextPath } from './email-pagination.mjs';
 import { recurrenceSchema, calendarRecurrence, recurrenceDefaultEnd, calendarWindow } from './calendar-recurrence.mjs';
+import { githubIssueMeta } from './github-issue-meta.mjs';
 // ── External connectors (GitHub, Slack) as core tools ──
 // Same shape as Google's tools (connectors.mjs): they receive an async `token()`
 // that returns a valid access_token and become tools in the harness tool-loop.
@@ -36,8 +37,59 @@ async function ghReq(token, path, { method = 'GET', body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 300)}`);
-  return r.json();
+  return r.status === 204 ? null : r.json();
 }
+
+// GraphQL is the only API for issue fields and Projects. GitHub answers 200 with
+// `errors` (INSUFFICIENT_SCOPES when the token lacks `project`), so those throw too.
+async function ghGraphql(token, query, variables = {}) {
+  const r = await fetch(GH + '/graphql', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await token()}`, 'User-Agent': 'brambs', 'content-type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!r.ok) throw new Error(`${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const j = await r.json();
+  if (j.errors?.length) {
+    const e = new Error(j.errors.map((x) => x.message).join('; ').slice(0, 300));
+    e.types = j.errors.map((x) => x.type).filter(Boolean);
+    throw e;
+  }
+  return j.data;
+}
+
+const ISSUE_FIELDS_SCHEMA = {
+  type: 'array',
+  description: 'Issue field values of the organization, e.g. [{"name":"Priority","value":"Low"},{"name":"Effort","value":"Medium"}]. Dates as YYYY-MM-DD; several options of a multi-select separated by commas.',
+  items: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' } }, required: ['name', 'value'] },
+};
+const GH_LIST = { type: 'array', items: { type: 'string' } };
+const lowerSet = (xs) => new Set((xs || []).map((x) => String(x).toLowerCase()));
+const hasIssueMeta = (a) => !!(a.labels?.length || a.assignees?.length || String(a.type ?? '').trim() || (Array.isArray(a.fields) ? a.fields.length : a.fields && Object.keys(a.fields).length));
+
+// What GitHub returned, not what was asked: labels, assignees and the type are
+// dropped without an error when the token cannot write to the repository.
+function issueState(i, { wanted = {}, unwanted = {}, fields }) {
+  const labels = (i.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
+  const assignees = (i.assignees || []).map((a) => a.login);
+  const type = i.type?.name || null;
+  const has = lowerSet(labels), assigned = lowerSet(assignees);
+  const notApplied = [
+    ...(wanted.labels || []).filter((l) => !has.has(l.toLowerCase())).map((l) => `label ${l}`),
+    ...(unwanted.labels || []).filter((l) => has.has(l.toLowerCase())).map((l) => `removing label ${l}`),
+    ...(wanted.assignees || []).filter((a) => !assigned.has(a.toLowerCase())).map((a) => `assignee ${a}`),
+    ...(unwanted.assignees || []).filter((a) => assigned.has(a.toLowerCase())).map((a) => `removing assignee ${a}`),
+    ...(wanted.type && wanted.type.toLowerCase() !== String(type).toLowerCase() ? [`type ${wanted.type}`] : []),
+    ...(fields?.failed ? [fields.failed] : []),
+  ];
+  return {
+    ok: true, id: i.id, number: i.number, url: i.html_url, labels, assignees, type,
+    fields: fields?.set?.length ? fields.set : undefined,
+    not_applied: notApplied.length ? notApplied : undefined,
+    partial: notApplied.length ? true : undefined,
+  };
+}
+const ISSUE_NOTE = 'Tell the person exactly what labels, assignees, type and fields above say; anything in not_applied was NOT saved (usually the GitHub account that connected has no write access to the repository), so never say it was.';
 
 const issueBrief = (i) => ({
   number: i.number, title: i.title, state: i.state,
@@ -46,7 +98,9 @@ const issueBrief = (i) => ({
   repo: i.repository_url ? i.repository_url.replace('https://api.github.com/repos/', '') : undefined,
 });
 
-export function githubTools({ token }) {
+// `scopes` = what GitHub granted on this connection (null = unknown, older row).
+export function githubTools({ token, scopes = null }) {
+  const meta = githubIssueMeta({ rest: (path, opts) => ghReq(token, path, opts), gql: (q, v) => ghGraphql(token, q, v), scopes });
   const repoPages = searchPagination({ defaultMax: 8, cap: 15 });
   const issuePages = searchPagination({ defaultMax: 10, cap: 20 });
   return [
@@ -149,15 +203,110 @@ export function githubTools({ token }) {
       },
     },
     {
+      name: 'github_issue_options',
+      description: 'Lists what an issue of a repository can be given: existing labels, assignable GitHub logins, issue types (Bug, Feature...), the organization\'s issue fields with their options (Priority, Effort...), and the open projects of the owner with their columns (Status, Size, Sprint...). Use it before creating or changing an issue with any of these, so you only use names that exist.',
+      parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' } }, required: ['owner', 'repo'] },
+      async run({ owner, repo }) {
+        return JSON.stringify(await meta.options(owner, repo));
+      },
+    },
+    {
       name: 'github_create_issue',
-      description: 'Opens an issue in a repository. ALWAYS confirm repository, title and body with the user BEFORE creating; do not create without their explicit ok.',
-      parameters: { type: 'object', properties: { owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, labels: { type: 'array', items: { type: 'string' } } }, required: ['owner', 'repo', 'title'] },
-      async run({ owner, repo, title, body, labels }) {
+      description: 'Opens an issue in a repository, optionally with labels, assignees (GitHub logins), the issue type and issue field values (Priority, Effort...). Only names that already exist are accepted (see github_issue_options): a label is never created, and anything unknown makes the call fail listing the valid options. Type, Size or Effort are NOT labels unless the repository has a label with that exact name. A project column (Status, Size, Sprint) is set afterwards with github_add_to_project. ALWAYS confirm repository, title, body and every label, assignee, type and field with the user BEFORE creating; do not create without their explicit ok.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' },
+        labels: { ...GH_LIST, description: 'Existing label names.' },
+        assignees: { ...GH_LIST, description: 'GitHub logins (not display names).' },
+        type: { type: 'string', description: 'Issue type, e.g. Bug, Feature, Task.' },
+        fields: ISSUE_FIELDS_SCHEMA,
+      }, required: ['owner', 'repo', 'title'] },
+      async preflight(a = {}) {
+        if (!hasIssueMeta(a)) return undefined;
+        const r = await meta.resolve(a.owner, a.repo, a);
+        return r.error ? { erro: r.error } : undefined;
+      },
+      async run({ owner, repo, title, body, labels, assignees, type, fields }) {
+        const r = hasIssueMeta({ labels, assignees, type, fields }) ? await meta.resolve(owner, repo, { labels, assignees, type, fields }) : null;
+        if (r?.error) return JSON.stringify({ ok: false, error: r.error, note: 'Nothing was created.' });
         const payload = { title };
         if (body) payload.body = body;
-        if (labels?.length) payload.labels = labels;
+        if (r?.labels?.length) payload.labels = r.labels;
+        if (r?.assignees?.length) payload.assignees = r.assignees;
+        if (r?.type) payload.type = r.type.name;
         const i = await ghReq(token, `/repos/${owner}/${repo}/issues`, { method: 'POST', body: payload });
-        return JSON.stringify({ ok: true, id: i.id, number: i.number, url: i.html_url, note: 'Issue criada.' });
+        const f = r?.fields?.length ? await meta.setFields(i.node_id, r.fields) : null;
+        return JSON.stringify({ ...issueState(i, { wanted: { labels: r?.labels, assignees: r?.assignees, type: r?.type?.name }, fields: f }), note: `Issue created. ${ISSUE_NOTE}` });
+      },
+    },
+    {
+      name: 'github_update_issue',
+      description: 'Changes the labels, assignees, issue type or issue field values (Priority, Effort...) of an existing issue. Only names that already exist are accepted (see github_issue_options); a field with an empty value is cleared. Project columns (Status, Size, Sprint) are set with github_add_to_project. ALWAYS confirm the issue and every change with the user BEFORE changing; do not change without their explicit ok.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' },
+        add_labels: GH_LIST, remove_labels: GH_LIST,
+        add_assignees: { ...GH_LIST, description: 'GitHub logins.' }, remove_assignees: { ...GH_LIST, description: 'GitHub logins.' },
+        type: { type: 'string', description: 'New issue type, e.g. Bug, Feature, Task.' },
+        fields: ISSUE_FIELDS_SCHEMA,
+      }, required: ['owner', 'repo', 'number'] },
+      async preflight(a = {}) {
+        const r = await meta.resolve(a.owner, a.repo, { labels: a.add_labels, assignees: a.add_assignees, type: a.type, fields: a.fields });
+        if (r.error) return { erro: r.error };
+        if (!a.add_labels?.length && !a.remove_labels?.length && !a.add_assignees?.length && !a.remove_assignees?.length && !r.type && !r.fields.length) return { erro: 'Nothing to change: pass labels, assignees, type or fields.' };
+        return undefined;
+      },
+      async run({ owner, repo, number, add_labels, remove_labels, add_assignees, remove_assignees, type, fields }) {
+        const r = await meta.resolve(owner, repo, { labels: add_labels, assignees: add_assignees, type, fields });
+        if (r.error) return JSON.stringify({ ok: false, error: r.error, note: 'Nothing was changed.' });
+        const removeLabels = (remove_labels || []).map(String), removeAssignees = (remove_assignees || []).map((x) => String(x).replace(/^@/, ''));
+        const current = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}`);
+        const patch = {};
+        if (r.labels?.length || removeLabels.length) {
+          const drop = lowerSet(removeLabels);
+          const kept = (current.labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => !drop.has(l.toLowerCase()));
+          patch.labels = [...new Set([...kept, ...(r.labels || [])])];
+        }
+        if (r.assignees?.length || removeAssignees.length) {
+          const drop = lowerSet(removeAssignees);
+          const kept = (current.assignees || []).map((u) => u.login).filter((l) => !drop.has(l.toLowerCase()));
+          patch.assignees = [...new Set([...kept, ...(r.assignees || [])])];
+        }
+        if (r.type) patch.type = r.type.name;
+        const i = Object.keys(patch).length ? await ghReq(token, `/repos/${owner}/${repo}/issues/${number}`, { method: 'PATCH', body: patch }) : current;
+        const f = r.fields.length ? await meta.setFields(i.node_id, r.fields) : null;
+        return JSON.stringify({ ...issueState(i, { wanted: { labels: r.labels, assignees: r.assignees, type: r.type?.name }, unwanted: { labels: removeLabels, assignees: removeAssignees }, fields: f }), note: `Issue updated. ${ISSUE_NOTE}` });
+      },
+    },
+    {
+      name: 'github_add_to_project',
+      description: 'Adds an existing issue to a GitHub project (board) of the repository\'s owner and optionally sets its columns, e.g. Status, Size, Sprint (see github_issue_options for the projects, columns and options). If the issue is already in the project, only the columns change. ALWAYS confirm the issue, the project and every column value with the user BEFORE adding; do not add without their explicit ok.',
+      parameters: { type: 'object', properties: {
+        owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' },
+        project: { type: 'string', description: 'Project title or number.' },
+        fields: { ...ISSUE_FIELDS_SCHEMA, description: 'Project column values, e.g. [{"name":"Size","value":"M"},{"name":"Status","value":"Todo"}]. Dates as YYYY-MM-DD; Sprint by iteration title.' },
+      }, required: ['owner', 'repo', 'number', 'project'] },
+      async preflight(a = {}) {
+        const p = await meta.resolveProject(a.owner, a.project, a.fields);
+        return p.error ? { erro: p.error } : undefined;
+      },
+      async run({ owner, repo, number, project, fields }) {
+        const p = await meta.resolveProject(owner, project, fields);
+        if (p.error) return JSON.stringify({ ok: false, error: p.error, note: 'Nothing was changed.' });
+        const issue = await ghReq(token, `/repos/${owner}/${repo}/issues/${number}`);
+        const added = await ghGraphql(token, 'mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) { item { id } } }', { projectId: p.project.id, contentId: issue.node_id });
+        const itemId = added?.addProjectV2ItemById?.item?.id;
+        if (!itemId) return JSON.stringify({ ok: false, error: 'GitHub did not return the project item.', note: 'Check the project on GitHub before trying again.' });
+        const set = [], notApplied = [];
+        for (const v of p.values) {
+          try {
+            await ghGraphql(token, 'mutation($input: UpdateProjectV2ItemFieldValueInput!) { updateProjectV2ItemFieldValue(input: $input) { projectV2Item { id } } }', { input: { projectId: p.project.id, itemId, fieldId: v.fieldId, value: v.value } });
+            set.push(v.shown);
+          } catch (e) { notApplied.push(`${v.shown}: ${String(e?.message || e).slice(0, 200)}`); }
+        }
+        return JSON.stringify({
+          ok: true, id: itemId, number: issue.number, url: issue.html_url, project: p.project.title, project_url: p.project.url,
+          fields: set.length ? set : undefined, not_applied: notApplied.length ? notApplied : undefined, partial: notApplied.length ? true : undefined,
+          note: 'Issue is in the project. Tell the person exactly which columns above were set; anything in not_applied was NOT saved, so never say it was.',
+        });
       },
     },
     {

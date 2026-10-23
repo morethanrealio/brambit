@@ -471,9 +471,31 @@
       "done": "File \"{name}\" uploaded to your OneDrive."
     },
     "github_create_issue": {
-      "request": "create an issue on GitHub{repo}: \"{title}\"",
-      "done": "Issue created{repo}: \"{title}\".",
+      "request": "create an issue on GitHub{repo}: \"{title}\"{details}",
+      "done": "Issue created{repo}: \"{title}\"{details}.",
       "in_repo": " in {repo}"
+    },
+    "github_issue": {
+      "with": " with {list}",
+      "labels": "labels {list}",
+      "assignees": "assignees {list}",
+      "type": "type {type}",
+      "fields": "fields {list}",
+      "field": "{name} = {value}",
+      "field_cleared": "{name} cleared",
+      "labels_added": "labels added: {list}",
+      "labels_removed": "labels removed: {list}",
+      "assignees_added": "assignees added: {list}",
+      "assignees_removed": "assignees removed: {list}"
+    },
+    "github_update_issue": {
+      "request": "change issue {repo}#{number} on GitHub: {changes}",
+      "done": "Issue {repo}#{number} changed: {changes}."
+    },
+    "github_add_to_project": {
+      "request": "add issue {repo}#{number} to the GitHub project \"{project}\"{fields}",
+      "done": "Issue {repo}#{number} added to the project \"{project}\"{fields}.",
+      "with_columns": " with {list}"
     },
     "github_comment_issue": {
       "request": "comment on issue {repo}#{number}",
