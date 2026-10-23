@@ -15,7 +15,7 @@ import { readyVoices, defaultVoice, isReadyVoice } from './tts-voices.mjs';
 import { viduConfig, deletePhoto } from './vidu.mjs';
 import { registerReadyPhoto, registrationError, RENEW_AFTER } from './avatar-photos.mjs';
 import { CONSENTS, avatarSchema, createAvatarStore } from './avatar-store.mjs';
-import { createAvatarLive, registerAvatarLive } from './avatar-live.mjs';
+import { createAvatarLive, registerAvatarLive, LIMITS } from './avatar-live.mjs';
 
 export { avatarSchema };
 
@@ -26,6 +26,27 @@ const STUCK_AFTER = 10 * 60e3;
 const RETRYABLE = new Set(['provider_unavailable', 'photo_not_ready']);
 
 export const avatarAvailable = () => !!viduConfig() && !!audioProvider();
+
+// The browser watches the face on an Agora channel (avatar-live.js, with the
+// Agora Web SDK in vendor/): the page may connect to Agora's servers, which
+// use ports other than 443, only while the installation has the avatar.
+const AGORA = ['https://*.agora.io:*', 'wss://*.agora.io:*', 'https://*.sd-rtn.com:*', 'wss://*.sd-rtn.com:*'];
+export const avatarCsp = () => (avatarAvailable() ? { 'connect-src': AGORA } : {});
+
+// The limits an installation sets (.env.example), read on every session.
+export function avatarLimits() {
+  const number = (v) => Number(String(v ?? '').trim() || NaN);
+  const minutes = (v, fallback, { zero = false } = {}) => {
+    const n = number(v);
+    return Number.isFinite(n) && (n > 0 || (zero && n === 0)) ? n * 60e3 : fallback;
+  };
+  const sessions = number(process.env.BRAMBIT_AVATAR_MAX_SESSIONS);
+  return {
+    max: minutes(process.env.BRAMBIT_AVATAR_SESSION_MINUTES, LIMITS.max),
+    daily: minutes(process.env.BRAMBIT_AVATAR_DAILY_MINUTES, LIMITS.daily, { zero: true }),
+    sessions: Number.isInteger(sessions) && sessions >= 0 ? sessions : LIMITS.sessions,
+  };
+}
 
 const voiceOf = (row, provider = audioProvider()) => (isReadyVoice(provider, row.voice) ? row.voice : defaultVoice(provider));
 
@@ -42,9 +63,10 @@ function view(row, provider) {
   };
 }
 
-// deps: {eventos, send, fail, recordUsages} from the server; store, vidu and
-// register are swappable for tests.
-export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store = createAvatarStore({ pool, S }), vidu = viduConfig, register = registerReadyPhoto, log = console.error }) {
+// deps: {eventos, send, fail, recordUsages, getCreditStatus} from the server;
+// store, vidu and register are swappable for tests.
+export function registerAvatar(rotas, { eventos, send, fail, recordUsages, getCreditStatus, store = createAvatarStore({ pool, S }), vidu = viduConfig, register = registerReadyPhoto, log = console.error }) {
+  const hasCredit = async (userId) => !(await getCreditStatus(userId))?.over;
   // Deletes a photo at Vidu, which would delete it itself within 90 days. → whether it did.
   async function deleteAtVidu(id) {
     const config = vidu();
@@ -101,7 +123,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
       }
     }
   }
-  const live = createAvatarLive({ vidu, tts: synthesizePcm, recordUsages, registerAgent, store, log });
+  const live = createAvatarLive({ vidu, tts: synthesizePcm, recordUsages, hasCredit, registerAgent, store, limits: avatarLimits, log });
   eventos.agendar({ nome: 'avatar-photos', primeiraEmMs: 2 * 60e3, aCadaMs: SWEEP_EVERY, rodar: sweep });
 
   // The account is about to be destroyed: its photos leave Vidu too (the rows go with the CASCADE).
@@ -219,7 +241,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
     }
   });
 
-  registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available: avatarAvailable, voiceOf });
+  registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available: avatarAvailable, voiceOf, hasCredit });
 
   return { registerAgent, sweep, release, live };
 }

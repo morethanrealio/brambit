@@ -104,6 +104,12 @@ export function createAvatarStore({ pool, S }) {
       [threadId, userId],
     ),
 
+    // A person's talk time with avatars since a moment, in seconds (billed every minute, avatar-live.mjs).
+    liveSecondsSince: async (userId, since) => Number((await one(
+      `SELECT COALESCE(SUM(tok_out), 0) AS s FROM ${S}.usage_events WHERE user_id = $1 AND kind = 'avatar' AND ts >= $2`,
+      [userId, since],
+    )).s),
+
     // The photo to register for an agent, with its owner; null once it is gone.
     forRegistration: (agentId) => one(`SELECT agent_id, user_id, photo, photo_mime, photo_sha256 FROM ${S}.agent_avatars WHERE agent_id = $1`, [agentId]),
 

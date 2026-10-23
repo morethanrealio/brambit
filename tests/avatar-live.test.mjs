@@ -1,8 +1,10 @@
 // Talking to an assistant's avatar (avatar-live.mjs, avatar-speech.mjs): the
 // avatar service bills every second a session is open, so a session nobody
 // watches or uses hangs up by itself, also one ended while it was still being
-// created; and the face only says the chat's newest assistant reply, read from
-// the database, once, without links or Markdown. Fake service and clock.
+// created; its seconds are billed to the owner, and the day's minutes or the
+// credit running out end it; and the face only says the chat's newest
+// assistant reply, read from the database, once, without links or Markdown.
+// Fake service and clock.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAvatarLive, LIMITS } from '../web/avatar-live.mjs';
@@ -11,9 +13,9 @@ import { spokenText, speechChunks } from '../web/avatar-speech.mjs';
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const RTC = { provider: 'agora', appId: 'app', channel: 'ch', uid: 'u', token: 'tok' };
 
-function setup(t, { replies = [], gate = null } = {}) {
+function setup(t, { replies = [], gate = null, hasCredit } = {}) {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 1e12 });
-  const calls = [], spoken = [];
+  const calls = [], spoken = [], billed = [];
   let audio = 0, sessions = 0;
   const api = {
     async createSession(config, { avatarId }) {
@@ -34,11 +36,12 @@ function setup(t, { replies = [], gate = null } = {}) {
   const live = createAvatarLive({
     vidu: () => ({ host: 'vidu.test', key: 'k' }), api, store,
     tts: async (text, voice) => { spoken.push(`${voice}: ${text}`); return { pcm: Buffer.alloc(9600), usage: { model: 'tts' } }; },
-    recordUsages: async (usages, dims) => calls.push(`bill ${dims.userId} ${dims.kind}`),
-    registerAgent: () => {}, now: () => Date.now(), onStop: () => {}, log: () => {}, info: () => {},
+    recordUsages: async (usages, dims) => (dims.kind === 'avatar' ? billed.push(usages[0].out) : calls.push(`bill ${dims.userId} ${dims.kind}`)),
+    hasCredit, registerAgent: () => {}, now: () => Date.now(), onStop: () => {}, log: () => {}, info: () => {},
   });
   const tick = async (ms) => { for (let left = ms; left > 0; left -= 100) { t.mock.timers.tick(Math.min(100, left)); await flush(); } await flush(); };
-  return { live, calls, spoken, replies, audio: () => audio, tick };
+  const seconds = () => billed.reduce((a, b) => a + b, 0);
+  return { live, calls, spoken, replies, audio: () => audio, tick, seconds };
 }
 
 function watcher() {
@@ -49,11 +52,12 @@ function watcher() {
 const open = (live, more = {}) => live.open({ userId: 'u1', agentId: 'agent-1-abc', threadId: 't1', photoId: 'p1', voice: 'Kore', ...more });
 
 test('a session nobody watches, or where nothing is said, hangs up by itself', async (t) => {
-  const { live, calls, tick } = setup(t);
+  const { live, calls, tick, seconds } = setup(t);
   open(live);
   await flush();
   await tick(LIMITS.unwatched);
   assert.deepEqual(calls, ['create p1', 'hangup L1']);
+  assert.equal(seconds(), LIMITS.unwatched / 1000, 'its seconds are billed when it ends');
 
   const s = open(live);
   const res = watcher();
@@ -65,6 +69,27 @@ test('a session nobody watches, or where nothing is said, hangs up by itself', a
   assert.equal(calls.at(-1), 'hangup L2');
   assert.match(res.events.at(-1), /event: end\ndata: {"reason":"idle"}/);
   assert.equal(res.ended, true);
+});
+
+test('a session is billed every minute, and ends when the credit or the day\'s minutes run out', async (t) => {
+  let credit = true;
+  const { live, calls, tick, seconds } = setup(t, { hasCredit: async () => credit });
+  const res = watcher();
+  live.watch(open(live), res);
+  await tick(LIMITS.billEvery * 2 + 100);
+  assert.equal(seconds(), LIMITS.billEvery * 2 / 1000, 'billed while it is open');
+  credit = false;
+  await tick(LIMITS.billEvery);
+  assert.match(res.events.at(-1), /"reason":"credit"/);
+  assert.equal(seconds(), LIMITS.billEvery * 3 / 1000);
+
+  credit = true;
+  assert.throws(() => open(live, { usedToday: LIMITS.daily - 30e3 }), { code: 'daily' });
+  const late = watcher();
+  live.watch(open(live, { usedToday: LIMITS.daily - 90e3 }), late);
+  await tick(90e3);
+  assert.match(late.events.at(-1), /"reason":"daily"/);
+  assert.equal(calls.at(-1), 'hangup L2');
 });
 
 test('a session ended while it was being created hangs up as soon as it exists', async (t) => {
