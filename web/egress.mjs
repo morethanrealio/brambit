@@ -19,7 +19,8 @@
 //   - `web/avscan.mjs` (clamd via `net.connect`)
 //   - `email.mjs`/`mailer.mjs`'s SMTP/IMAP (nodemailer/imap socket)
 //   - Postgres (`pg`)
-// These four are fixed, known destinations, not model-routed.
+//   - `web/vidu.mjs`'s live stream (a WebSocket to the same VIDU_HOST as its API)
+// These five are fixed, known destinations, not model-routed.
 //
 // Import ONCE, as early as possible, in `web/server.mjs`.
 

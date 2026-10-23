@@ -10,6 +10,17 @@
 // by content: sending the same photo again returns the id that already exists,
 // with its original creation date. Vidu deletes a photo 90 days after it was
 // created, so callers renew it before that (avatar-photos.mjs).
+//
+// Sessions (/live/s_avatar/component): a session with a photo opens an RTC
+// channel (managed_rtc, Agora) where Vidu publishes the face with the voice;
+// the browser only watches it. Vidu bills per second from the session's
+// creation until it sees the hangup on the stream, or the stream closes.
+// The stream (/live/v1/external-lives/{id}/stream) is a WebSocket from the
+// server: the speech goes in as PCM, the reply's text as type 10.
+import { randomUUID } from 'node:crypto';
+
+export const SAMPLE_RATE = 24000;   // PCM s16le mono, the only format Vidu takes
+export const FRAME_BYTES = 4800;    // 100 ms of it
 
 export function viduConfig({ key = process.env.VIDU_API_KEY, host = process.env.VIDU_HOST } = {}) {
   key = String(key || '').trim();
@@ -55,4 +66,88 @@ export async function readPhoto(vidu, id) {
 
 export async function deletePhoto(vidu, id) {
   await call(vidu, 'DELETE', `/live/v1/avatars/${encodeURIComponent(id)}`).catch((e) => { if (e.status !== 404) throw e; });
+}
+
+// → {id, rtc: {provider, appId, channel, uid, token}}. photoGone: the photo no
+// longer exists at Vidu (it has to be registered again).
+export async function createSession(vidu, { avatarId, model = 'vidu-s1' }) {
+  let d;
+  try {
+    d = parse(await call(vidu, 'POST', '/live/s_avatar/component', { model, avatar_id: avatarId, managed_rtc: { provider: 'agora' } }));
+  } catch (e) {
+    e.photoGone = e.status === 404 && /avatar_id/.test(e.body || '');
+    throw e;
+  }
+  if (!d?.live?.id) throw new Error(`vidu: session reply without live.id (${JSON.stringify(d).slice(0, 200)})`);
+  const c = d.managed_rtc || {};
+  return { id: String(d.live.id), rtc: { provider: c.provider, appId: c.app_id, channel: c.channel_id, uid: c.user_id, token: c.token } };
+}
+
+// The session's stream. The first frame is conn_init (type 1); an ack with
+// NOT_READY means the face is still loading, so conn_init goes again on the
+// same socket. Once ready: PCM frames (binary), the reply's text (type 10) and
+// a cut of the current speech (type 7). onDrop(reason): after ready, the
+// stream closed without a hangup from here (Vidu hung up, the network fell).
+export function openStream(vidu, liveId, { onDrop = () => {}, retryEvery = 1000, tries = 40, deadline = 60000, WebSocketImpl = globalThis.WebSocket } = {}) {
+  const OPEN = 1, CONNECTING = 0;
+  const connId = `brambit-${randomUUID().slice(0, 8)}`;
+  const ws = new WebSocketImpl(`wss://${vidu.host}/live/v1/external-lives/${encodeURIComponent(liveId)}/stream?conn_id=${connId}`, { headers: { authorization: `Token ${vidu.key}` } });
+  ws.binaryType = 'arraybuffer';
+  let seq = 0, ready = false, leaving = false, timer = null;
+  const send = (type, payload = {}) => {
+    if (ws.readyState === OPEN) ws.send(JSON.stringify({ type, live_id: liveId, conn_id: connId, seq_id: ++seq, payload }));
+  };
+  const init = () => send(1, { conn_init: { version: 1 } });
+
+  const isReady = new Promise((resolve, reject) => {
+    let n = 0;
+    timer = setTimeout(() => { reject(new Error('vidu: the face was not ready in time')); ws.close(); }, deadline);
+    ws.addEventListener('open', init);
+    ws.addEventListener('message', ({ data }) => {
+      if (typeof data !== 'string') return;
+      let m;
+      try { m = JSON.parse(data); } catch { return; }
+      if (m.type === 2) {
+        const ack = m.payload?.conn_init_ack || {};
+        if (ack.success) { ready = true; clearTimeout(timer); resolve(); }
+        else if (ack.error_code === 'NOT_READY' && ++n < tries) setTimeout(init, retryEvery);
+        else { reject(new Error(`vidu conn_init: ${ack.error_code || 'no code'} ${ack.error_msg || ''}`.trim())); ws.close(); }
+      } else if (m.type === 6) {
+        if (ready && !leaving) onDrop(`vidu hung up (${m.payload?.hangup?.hangup_reason || 'no reason'})`);
+        leaving = true;
+        ws.close();
+      }
+    });
+    // A refused upgrade (401, 403, 404...) also lands here, with no status.
+    ws.addEventListener('error', () => reject(new Error('vidu stream: the connection failed')));
+    ws.addEventListener('close', ({ code }) => {
+      clearTimeout(timer);
+      reject(new Error(`vidu closed the stream (${code})`));
+      if (ready && !leaving) onDrop(`stream closed (${code})`);
+      leaving = true;
+    });
+  });
+  isReady.catch(() => {});
+
+  const text = (type, content) => {
+    if (ready && String(content || '').trim()) send(type, { text_msg: { msg_id: `${connId}-${seq + 1}`, content, timestamp: Date.now() } });
+  };
+  return {
+    ready: isReady,
+    isReady: () => ready,
+    // Before the ack Vidu drops audio, so none is sent.
+    audio(pcm) { if (ready && ws.readyState === OPEN) ws.send(pcm); },
+    reply: (content) => text(10, content),
+    cut: () => { if (ready) send(7); },
+    // Billing only stops when Vidu sees the hangup: while still connecting it
+    // waits for the socket to open (closing mid-handshake, Vidu never knows).
+    hangup() {
+      if (leaving) return;
+      leaving = true;
+      clearTimeout(timer);
+      const bye = () => { send(5, { hangup: { hangup_reason: 'client_hangup' } }); ws.close(); };
+      if (ws.readyState === CONNECTING) ws.addEventListener('open', bye, { once: true });
+      else bye();
+    },
+  };
 }

@@ -50,13 +50,14 @@ export async function openaiTranscribe(buffer, mime = 'audio/ogg', fetchImpl = f
 }
 
 // Speech as Ogg Opus (the voice-note format WhatsApp and Telegram take, and
-// the browser plays) → { buffer, mime, ext, usage }. Only the streamed reply
-// carries the token usage, so it is read as server-sent events.
-export async function openaiSpeech(text, voice, fetchImpl = fetch) {
+// the browser plays) → { buffer, mime, ext, usage }; format 'pcm' gives raw
+// PCM s16le 24 kHz mono instead (a live avatar, avatar-live.mjs). Only the
+// streamed reply carries the token usage, so it is read as server-sent events.
+export async function openaiSpeech(text, voice, fetchImpl = fetch, { format = 'opus' } = {}) {
   const res = await fetchImpl(`${OPENAI_URL}/audio/speech`, {
     method: 'POST',
     headers: { authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: OPENAI_TTS_MODEL, input: text, voice: OPENAI_VOICES.has(voice) ? voice : OPENAI_DEFAULT_VOICE, response_format: 'opus', stream_format: 'sse' }),
+    body: JSON.stringify({ model: OPENAI_TTS_MODEL, input: text, voice: OPENAI_VOICES.has(voice) ? voice : OPENAI_DEFAULT_VOICE, response_format: format, stream_format: 'sse' }),
   });
   if (!res.ok) throw await openaiFailure(OPENAI_TTS_MODEL, res);
   const chunks = [];
@@ -69,5 +70,7 @@ export async function openaiSpeech(text, voice, fetchImpl = fetch) {
     else if (event.type === 'speech.audio.done') usage = event.usage;
   }
   if (!chunks.length) throw new Error(`openai ${OPENAI_TTS_MODEL}: no audio in the reply`);
-  return { buffer: Buffer.concat(chunks), mime: 'audio/ogg', ext: 'ogg', usage: usageOf(OPENAI_TTS_MODEL, usage) };
+  const buffer = Buffer.concat(chunks);
+  if (format === 'pcm') return { buffer, mime: 'audio/pcm', rate: 24000, usage: usageOf(OPENAI_TTS_MODEL, usage) };
+  return { buffer, mime: 'audio/ogg', ext: 'ogg', usage: usageOf(OPENAI_TTS_MODEL, usage) };
 }

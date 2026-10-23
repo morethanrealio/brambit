@@ -1,20 +1,21 @@
-// An assistant's avatar, step one: the owner gives it a face photo, says whose
-// face it is and picks the ready-made voice it speaks with (assistant settings,
+// An assistant's avatar: the owner gives it a face photo, says whose face it
+// is and picks the ready-made voice it speaks with (assistant settings,
 // avatar-settings.js); the photo is registered at the avatar service
 // (vidu.mjs) and kept alive there (avatar-photos.mjs). Talking to the avatar
-// comes later. The settings card only shows when the installation has the
-// avatar service (VIDU_API_KEY) and a speech provider (audio-provider.mjs).
+// is avatar-live.mjs. The settings card only shows when the installation has
+// the avatar service (VIDU_API_KEY) and a speech provider (audio-provider.mjs).
 import { createHash, randomUUID } from 'node:crypto';
 import { readBody } from './http-body.mjs';
-import { pool, S, getAgentOwned } from './db.mjs';
+import { pool, S, getAgentOwned, getThreadOwned } from './db.mjs';
 import { sniffImagem } from './image-sniff.mjs';
 import { audioProvider } from './audio-provider.mjs';
-import { synthesizeSpeech } from './media.mjs';
+import { synthesizeSpeech, synthesizePcm } from './media.mjs';
 import { productI18n } from './i18n.mjs';
 import { readyVoices, defaultVoice, isReadyVoice } from './tts-voices.mjs';
 import { viduConfig, deletePhoto } from './vidu.mjs';
 import { registerReadyPhoto, registrationError, RENEW_AFTER } from './avatar-photos.mjs';
 import { CONSENTS, avatarSchema, createAvatarStore } from './avatar-store.mjs';
+import { createAvatarLive, registerAvatarLive } from './avatar-live.mjs';
 
 export { avatarSchema };
 
@@ -26,13 +27,15 @@ const RETRYABLE = new Set(['provider_unavailable', 'photo_not_ready']);
 
 export const avatarAvailable = () => !!viduConfig() && !!audioProvider();
 
+const voiceOf = (row, provider = audioProvider()) => (isReadyVoice(provider, row.voice) ? row.voice : defaultVoice(provider));
+
 // What the settings screen gets about an avatar (never the photo bytes).
 function view(row, provider) {
   if (!row) return null;
   return {
     photoUrl: `/api/agent/avatar/photo?agentId=${row.agent_id}&v=${row.photo_sha256.slice(0, 12)}`,
     consent: row.consent,
-    voice: isReadyVoice(provider, row.voice) ? row.voice : defaultVoice(provider),
+    voice: voiceOf(row, provider),
     status: row.provider_status,
     error: row.provider_error,
     updatedAt: row.updated_at,
@@ -40,9 +43,8 @@ function view(row, provider) {
 }
 
 // deps: {eventos, send, fail, recordUsages} from the server; store, vidu and
-// register are swappable for tests. inUse(providerPhotoId) tells the sweep a
-// photo is in a live session, so it is not renewed under it.
-export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store = createAvatarStore({ pool, S }), vidu = viduConfig, register = registerReadyPhoto, inUse = () => false, log = console.error }) {
+// register are swappable for tests.
+export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store = createAvatarStore({ pool, S }), vidu = viduConfig, register = registerReadyPhoto, log = console.error }) {
   // Deletes a photo at Vidu, which would delete it itself within 90 days. → whether it did.
   async function deleteAtVidu(id) {
     const config = vidu();
@@ -90,7 +92,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
     await release(await store.dropArchived());
     for (const agentId of await store.stuck(STUCK_AFTER)) if (!running.has(agentId)) await registerAgent(agentId);
     for (const row of await store.aging(new Date(Date.now() - RENEW_AFTER))) {
-      if (await inUse(row.provider_photo_id)) continue;
+      if (live.holds(row.provider_photo_id)) continue;   // not renewed under a live session
       try {
         const done = await register({ vidu: config, image: `data:${row.photo_mime};base64,${row.photo.toString('base64')}`, name: 'brambit-avatar', log });
         await store.markReady(row.photo_sha256, { ...done, discarded: [row.provider_photo_id, ...done.discarded] });
@@ -99,10 +101,14 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
       }
     }
   }
+  const live = createAvatarLive({ vidu, tts: synthesizePcm, recordUsages, registerAgent, store, log });
   eventos.agendar({ nome: 'avatar-photos', primeiraEmMs: 2 * 60e3, aCadaMs: SWEEP_EVERY, rodar: sweep });
 
   // The account is about to be destroyed: its photos leave Vidu too (the rows go with the CASCADE).
-  eventos.inscrever('exclusao_final', async ({ userId }) => { for (const id of await store.ownPhotos(userId)) await deleteAtVidu(id); });
+  eventos.inscrever('exclusao_final', async ({ userId }) => {
+    live.endWhere((s) => s.userId === userId, 'account_deleted');
+    for (const id of await store.ownPhotos(userId)) await deleteAtVidu(id);
+  });
 
   async function owned(ctx, res, agentId, { archived = false } = {}) {
     const user = await ctx.currentUser();
@@ -147,6 +153,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
     try {
       const saved = await store.save({ agentId, userId: user.id, photo, consent: body.consent, voice: body.voice });
       if (!saved) return send(res, 400, { error: 'server.avatar_photo_required' });
+      live.endWhere((s) => s.agentId === agentId, 'changed');
       if (saved.released) release(saved.released).catch((e) => log('[avatar] release:', e?.message ?? e));
       if (saved.register) registerAgent(agentId);
       return send(res, 200, { ok: true, avatar: view(saved.row, provider) });
@@ -162,6 +169,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
     const user = await owned(ctx, res, agentId, { archived: true });
     if (!user) return;
     try {
+      live.endWhere((s) => s.agentId === agentId, 'removed');
       const id = await store.remove(agentId, user.id);
       const providerDeleted = !id || (await store.held(id)) || (await deleteAtVidu(id));
       return send(res, 200, { ok: true, providerDeleted });
@@ -211,5 +219,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, store
     }
   });
 
-  return { registerAgent, sweep, release };
+  registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available: avatarAvailable, voiceOf });
+
+  return { registerAgent, sweep, release, live };
 }
