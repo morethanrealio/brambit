@@ -25,6 +25,7 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { costOf } from './pricing.mjs';
 import { audioProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
+import { GEMINI_DEFAULT_VOICE } from './tts-voices.mjs';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,8 +34,8 @@ const MEDIA_DIR = path.join(__dirname, 'public', 'media');
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const STT_MODEL = 'gemini-3.5-flash';
-// Default TTS voice (pt-BR sounds good on Kore; swappable via tool later).
-const DEFAULT_VOICE = 'Kore';
+// Default TTS voice (pt-BR sounds good on Kore; an avatar picks its own, tts-voices.mjs).
+const DEFAULT_VOICE = GEMINI_DEFAULT_VOICE;
 
 export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
 export function ttsEnabled() { return !!audioProvider(); }

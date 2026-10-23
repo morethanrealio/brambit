@@ -1107,6 +1107,45 @@
                   <span id="whMsg" class="m-msg"></span>
                 </div>
               </div>
+
+              <!-- Avatar: a face that speaks this assistant's replies
+                   (avatar-settings.js). Hidden unless the installation has
+                   the avatar service and a voice. -->
+              <div class="m-card" id="avCard" style="display:none;">
+                <h2 data-i18n="index_page.avatar.title">Avatar</h2>
+                <p class="m-hint" data-i18n="index_page.avatar.lead">A face that speaks this assistant's replies out loud. Upload a front-facing photo with the face well lit. The photo goes to Vidu (vidu.com), the service that animates the face, and stays registered there while the avatar exists.</p>
+                <div class="m-field">
+                  <label for="avPhoto" data-i18n="index_page.avatar.photo">Face photo</label>
+                  <img id="avPreview" alt="" style="display:none; width:120px; height:120px; object-fit:cover; border-radius:12px; margin-bottom:6px" />
+                  <input type="file" id="avPhoto" accept="image/*" />
+                </div>
+                <div class="m-field">
+                  <label for="avConsent" data-i18n="index_page.avatar.consent">Whose face is this?</label>
+                  <select id="avConsent">
+                    <option value="" data-i18n="index_page.avatar.consent_pick">Choose…</option>
+                    <option value="self" data-i18n="index_page.avatar.consent_self">My own face</option>
+                    <option value="authorized" data-i18n="index_page.avatar.consent_authorized">Someone else’s, who authorized this use</option>
+                    <option value="fictional" data-i18n="index_page.avatar.consent_fictional">Nobody’s: it is not a real person</option>
+                  </select>
+                </div>
+                <div class="m-field">
+                  <label for="avVoice" data-i18n="index_page.avatar.voice">Voice</label>
+                  <div style="display:flex; gap:8px; align-items:center">
+                    <select id="avVoice" style="flex:1"></select>
+                    <button id="avListenBtn" type="button" data-i18n="index_page.avatar.listen">Listen</button>
+                  </div>
+                  <audio id="avAudio" preload="none"></audio>
+                </div>
+                <div class="m-field">
+                  <label data-i18n="index_page.avatar.status">Status</label>
+                  <div class="m-muted" id="avStatus" style="font-size:13px"></div>
+                </div>
+                <div class="m-actions">
+                  <button id="avSaveBtn" data-i18n="index_page.avatar.save">Save</button>
+                  <button id="avRemoveBtn" style="display:none;" data-i18n="index_page.avatar.remove">Remove avatar</button>
+                  <span id="avMsg" class="m-msg"></span>
+                </div>
+              </div>
             </section>
             </div>
           </div>
@@ -1477,6 +1516,7 @@
 
 <script type="application/json" data-i18n-texts="index_script"></script>
 <script src="/page-texts.js"></script>
+<script src="/avatar-settings.js"></script>
 <script nonce="__CSP_NONCE__">
 // Text this script shows comes from the catalogs' index_script area
 // (docs/i18n.md, "Pages"). txHtml is the same text for innerHTML: the catalog
@@ -3459,6 +3499,7 @@ function initMemoria() {
       setPromptMsg('');
     }).catch(function (e) { setPromptMsg(e.message, true); });
     renderWebhook(agentId);
+    if (window.avatarSettings) window.avatarSettings.render(agentId);
   }
 
   // Fills the per-agent Model selector. Only shows up when there is more than

@@ -9,8 +9,8 @@
 const OPENAI_URL = 'https://api.openai.com/v1';
 export const OPENAI_STT_MODEL = 'gpt-4o-mini-transcribe';
 export const OPENAI_TTS_MODEL = 'gpt-4o-mini-tts';
-const OPENAI_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
-const OPENAI_DEFAULT_VOICE = 'coral';
+export const OPENAI_VOICES = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
+export const OPENAI_DEFAULT_VOICE = 'coral';
 
 // 'gemini' | 'openai' | null (no audio).
 export function audioProvider() {

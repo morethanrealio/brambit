@@ -208,7 +208,17 @@
     "public_web_too_many_key_ips": "Hasta 20 direcciones de servidor.",
     "public_web_key_ip_invalid": "Cada dirección de servidor debe ser una IP o un rango (ej.: 203.0.113.7 o 203.0.113.0/24).",
     "public_daily_cap_invalid": "El tope diario debe ser un monto en US$ mayor que cero (vacío = US$10).",
-    "public_agent_hourly_limit_invalid": "El límite sumando todos los contactos va de 1 a 100000 mensajes por hora."
+    "public_agent_hourly_limit_invalid": "El límite sumando todos los contactos va de 1 a 100000 mensajes por hora.",
+    "avatar_unavailable": "El avatar no está disponible en esta instalación.",
+    "avatar_failed_load": "No pude cargar el avatar. Inténtalo de nuevo.",
+    "avatar_consent_required": "Indica de quién es el rostro de la foto.",
+    "avatar_voice_invalid": "Elige una de las voces de la lista.",
+    "avatar_photo_jpeg": "Envía la foto en JPEG.",
+    "avatar_photo_required": "Elige una foto del rostro para el avatar.",
+    "avatar_failed_save": "No pude guardar el avatar. Inténtalo de nuevo.",
+    "avatar_failed_remove": "No pude eliminar el avatar. Inténtalo de nuevo.",
+    "avatar_not_found": "Este asistente no tiene avatar.",
+    "avatar_voice_sample_failed": "No pude reproducir esta voz ahora. Inténtalo de nuevo."
   },
   "confirm": {
     "common": {
@@ -1490,6 +1500,21 @@
       "confirm": "Confirmar correo",
       "not_you": "¿No creaste una cuenta en {brand}? Cierra esta página.",
       "go_login": "Ir al inicio de sesión"
+    },
+    "avatar": {
+      "title": "Avatar",
+      "lead": "Un rostro que dice en voz alta las respuestas de este asistente. Sube una foto de frente, con el rostro bien iluminado. La foto va a Vidu (vidu.com), el servicio que anima el rostro, y queda registrada allí mientras exista el avatar.",
+      "photo": "Foto del rostro",
+      "consent": "¿De quién es este rostro?",
+      "consent_pick": "Elige…",
+      "consent_self": "Mi propio rostro",
+      "consent_authorized": "De otra persona, que autorizó este uso",
+      "consent_fictional": "De nadie: no es una persona real",
+      "voice": "Voz",
+      "listen": "Escuchar",
+      "status": "Estado",
+      "save": "Guardar",
+      "remove": "Eliminar avatar"
     }
   },
   "index_script": {
@@ -2047,6 +2072,47 @@
     "onboarding": {
       "load_failed": "No pude abrir el paso inicial. Tu configuración no se ha marcado como completa.",
       "reload": "Recargar para retomar"
+    },
+    "avatar": {
+      "none": "Todavía no hay avatar.",
+      "pending": "Enviando la foto a Vidu…",
+      "registering": "Vidu está preparando el rostro…",
+      "ready": "Listo: el rostro está registrado en Vidu.",
+      "retrying": "Vidu no respondió esta vez. Lo intentaré de nuevo por mi cuenta.",
+      "rejected": "Vidu no pudo usar esta foto. Prueba otra, de frente, con el rostro bien iluminado.",
+      "saved": "Guardado. ✓",
+      "removed": "Avatar eliminado, y la foto se borró en Vidu.",
+      "removed_later": "Avatar eliminado. Vidu no respondió, así que borrará la foto por su cuenta en un plazo de 90 días.",
+      "remove_confirm": "¿Eliminar el avatar de este asistente? La foto se borra aquí y en Vidu.",
+      "pick_photo": "Elige primero una foto del rostro.",
+      "pick_consent": "Indica de quién es el rostro de la foto.",
+      "read_failed": "No pude leer esa imagen.",
+      "listen_failed": "No pude reproducir esta voz ahora. Inténtalo de nuevo.",
+      "voice_option": "{voice} ({style})",
+      "style": {
+        "bright": "Brillante",
+        "upbeat": "Animada",
+        "informative": "Informativa",
+        "firm": "Firme",
+        "excitable": "Entusiasta",
+        "youthful": "Juvenil",
+        "breezy": "Ligera",
+        "easy_going": "Relajada",
+        "breathy": "Susurrante",
+        "clear": "Clara",
+        "smooth": "Aterciopelada",
+        "gravelly": "Ronca",
+        "soft": "Suave",
+        "even": "Uniforme",
+        "mature": "Madura",
+        "forward": "Directa",
+        "friendly": "Amigable",
+        "casual": "Desenfadada",
+        "gentle": "Delicada",
+        "lively": "Vivaz",
+        "knowledgeable": "Experta",
+        "warm": "Cálida"
+      }
     }
   },
   "delivery": {
@@ -2252,5 +2318,8 @@
       "installation_many": "Esta instalación permite {count} apps por persona y ya hay {current}.",
       "installation_other": "Esta instalación permite {count} apps por persona y ya hay {current}."
     }
+  },
+  "avatar": {
+    "voice_sample": "¡Hola! Así voy a sonar cuando te responda."
   }
 }
