@@ -340,6 +340,14 @@
   .chat-head .back:hover { color:var(--txt); }
   .dot { width:9px; height:9px; border-radius:50%; background:#39d98a; }
   .chat-head b { font-size:15px; flex:1; }
+  /* Talk with the assistant's avatar (avatar-live.js): the face above the messages. */
+  .chat-head .av-live-btn { width:32px; height:32px; border:1px solid var(--line); border-radius:50%; background:var(--card); font-size:16px; line-height:1; cursor:pointer; }
+  .chat-head .av-live-btn.on { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; }
+  .av-live { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px 0 12px; border-bottom:1px solid var(--line); }
+  .av-live video { height:240px; max-width:100%; object-fit:contain; background:#111; border-radius:12px; cursor:pointer; }
+  .av-live .av-bar { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--mut); }
+  .av-live .av-bar .err { color:#c0392b; }
+  .av-live .av-end { border:1px solid var(--line); border-radius:8px; background:none; color:var(--txt); padding:4px 10px; font-size:12.5px; cursor:pointer; }
   .msgs { flex:1; overflow-y:auto; padding:18px 2px; display:flex; flex-direction:column; gap:12px; }
   /* overflow-wrap:anywhere = only breaks when the "word" doesn't fit no matter
      what. Without it a long, space-less token (Pix code, token, raw URL)
@@ -1485,7 +1493,12 @@
 
           <!-- Chat / thread -->
           <div class="panel" id="panel-chat">
-            <div class="chat-head" data-i18n="index_page.chat.conversation_chats"><span class="dot"></span><b id="botname">Conversation</b><span class="back" id="backHome">← chats</span></div>
+            <div class="chat-head" data-i18n="index_page.chat.conversation_chats"><span class="dot"></span><b id="botname">Conversation</b><button class="av-live-btn hidden" id="avLiveBtn" title="Talk to the avatar" aria-label="Talk to the avatar" data-i18n-title="index_page.chat.talk_to_avatar" data-i18n-aria-label="index_page.chat.talk_to_avatar">🙂</button><span class="back" id="backHome">← chats</span></div>
+            <!-- Talk with the avatar (avatar-live.js): the face says each new reply. -->
+            <div class="av-live hidden" id="avLive">
+              <video id="avFace" muted playsinline autoplay></video>
+              <div class="av-bar"><span id="avLiveStatus"></span><button class="av-end hidden" id="avLiveEnd" data-i18n="index_page.chat.avatar_hang_up">Hang up</button></div>
+            </div>
             <div class="msgs" id="msgs"></div>
             <button class="to-end" id="toEnd" title="Back to the end of the chat" aria-label="Back to the end of the chat" data-i18n-title="index_page.chat.back_end_chat" data-i18n-aria-label="index_page.chat.back_end_chat">↓</button>
             <div class="typing hidden" id="typing" data-i18n="index_page.chat.typing">typing...</div>
@@ -1517,6 +1530,7 @@
 <script type="application/json" data-i18n-texts="index_script"></script>
 <script src="/page-texts.js"></script>
 <script src="/avatar-settings.js"></script>
+<script src="/avatar-live.js"></script>
 <script nonce="__CSP_NONCE__">
 // Text this script shows comes from the catalogs' index_script area
 // (docs/i18n.md, "Pages"). txHtml is the same text for innerHTML: the catalog
@@ -3232,7 +3246,7 @@ function renderConnFlash() {
   el.classList.remove('hidden');
 }
 function switchTab(name) {
-  if (name !== 'chat') { chatViewEpoch++; chatOpenRequest++; }
+  if (name !== 'chat') { chatViewEpoch++; chatOpenRequest++; window.avatarLive?.leave(); }
   document.querySelectorAll('.navitem').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
   ganchosDoApp.aoTrocarAba.forEach((f) => f(name)); // plugins with their own tab
@@ -4904,7 +4918,7 @@ let chatGen = 0; // changes on every send; invalidates recovery of a previous se
 let chatViewEpoch = 0, chatOpenRequest = 0, taskStarting = false;
 const chatPending = new Map();
 const showingChat = (id, epoch) => currentThreadId === id && chatViewEpoch === epoch && E('panel-chat').classList.contains('active');
-function openChatThread(threadId, title, agentName, msgs) {
+function openChatThread(threadId, title, agentName, msgs, agentId) {
   currentThreadId = threadId; chatViewEpoch++; chatGen++;
   E('micBtn').classList.remove('hint');
   chatSending = !!chatPending.get(threadId)?.size;
@@ -4918,6 +4932,7 @@ function openChatThread(threadId, title, agentName, msgs) {
   (msgs || []).forEach(m => addMsg(m.content, m.role === 'user' ? 'me' : 'bot', m.attachments));
   scrollChatToEnd(false); // always opens at the end, even with a long history
   E('input').focus();
+  window.avatarLive?.chat(agentId, threadId);
 }
 // ── Live notice on the open thread ──────────────────────────────────────────
 // The web chat had no refresh: PROACTIVE messages (video got ready,
@@ -4942,6 +4957,7 @@ async function syncOpenThread(openId) {
     addMsg(m.content, m.role === 'user' ? 'me' : 'bot', m.attachments);
     added++;
   }
+  if (added) window.avatarLive?.replied(openId);
   return added;
 }
 async function pollOpenThread() {
@@ -4998,7 +5014,7 @@ async function openThreadById(id) {
   // The GET above already marked the conversation as read on the server; clears the dot here
   // so it doesn't reappear on the list's next tick.
   localPatchThread(id, { unread: false });
-  openChatThread(res.id, res.title, res.agentName, res.messages);
+  openChatThread(res.id, res.title, res.agentName, res.messages, res.agentId);
 }
 // Inline send (the reply showed up on screen): tells the server it was read. If the
 // connection drops mid-turn this does NOT run, and the dot in the list stays as a notice.
@@ -5021,7 +5037,7 @@ async function startTask() {
     const res = await api('api/thread', { agentId });
     if (res.error || !res.id) return showErr(err, res.error || tx('chat.open_failed'));
     if (E('taskInput').value.trim() === text) E('taskInput').value = '';
-    if (epoch === chatViewEpoch) openChatThread(res.id, '', res.agentName, []);
+    if (epoch === chatViewEpoch) openChatThread(res.id, '', res.agentName, [], res.agentId);
     createdId = res.id;
   } catch { showErr(err, tx('chat.start_failed')); }
   finally { taskStarting = false; btn.disabled = false; }
@@ -5271,7 +5287,7 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
       // A real reply becomes a normal bubble (it's in the history). A server error
       // becomes a local note, which doesn't count toward the poller's baseline.
       // A press on a card that was already decided saves nothing: its bubble goes.
-      if (res && (res.reply || (res.attachments && res.attachments.length))) { addConfirmationButtons(addMsg(res.reply || '', 'bot', res.attachments), res.confirmations, threadId); markThreadRead(threadId); }
+      if (res && (res.reply || (res.attachments && res.attachments.length))) { addConfirmationButtons(addMsg(res.reply || '', 'bot', res.attachments), res.confirmations, threadId); markThreadRead(threadId); window.avatarLive?.replied(threadId); }
       else if (confirmation && res && !res.error) { if (mine) mine.remove(); }
       else addLocalNote((res && res.error) || tx('chat.reply_failed'));
     }
@@ -5325,6 +5341,7 @@ function micButton(state) {
   b.title = label; b.setAttribute('aria-label', label);
 }
 async function micStart() {
+  window.avatarLive?.hush();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { addLocalNote(tx('chat.mic_blocked')); return; }
