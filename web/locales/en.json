@@ -208,7 +208,17 @@
     "public_web_too_many_key_ips": "Up to 20 server addresses.",
     "public_web_key_ip_invalid": "Each server address must be an IP or a range (e.g. 203.0.113.7 or 203.0.113.0/24).",
     "public_daily_cap_invalid": "The daily cap must be an amount in US$ above zero (empty = US$10).",
-    "public_agent_hourly_limit_invalid": "The limit for all contacts together goes from 1 to 100000 messages per hour."
+    "public_agent_hourly_limit_invalid": "The limit for all contacts together goes from 1 to 100000 messages per hour.",
+    "avatar_unavailable": "The avatar is not available on this installation.",
+    "avatar_failed_load": "Couldn't load the avatar. Try again.",
+    "avatar_consent_required": "Say whose face is in the photo.",
+    "avatar_voice_invalid": "Pick one of the voices on the list.",
+    "avatar_photo_jpeg": "Send the photo as JPEG.",
+    "avatar_photo_required": "Choose a face photo for the avatar.",
+    "avatar_failed_save": "Couldn't save the avatar. Try again.",
+    "avatar_failed_remove": "Couldn't remove the avatar. Try again.",
+    "avatar_not_found": "This assistant has no avatar.",
+    "avatar_voice_sample_failed": "Couldn't play this voice now. Try again."
   },
   "confirm": {
     "common": {
@@ -1490,6 +1500,21 @@
       "confirm": "Confirm email",
       "not_you": "Didn't create an account on {brand}? Close this page.",
       "go_login": "Go to login"
+    },
+    "avatar": {
+      "title": "Avatar",
+      "lead": "A face that speaks this assistant's replies out loud. Upload a front-facing photo with the face well lit. The photo goes to Vidu (vidu.com), the service that animates the face, and stays registered there while the avatar exists.",
+      "photo": "Face photo",
+      "consent": "Whose face is this?",
+      "consent_pick": "Choose…",
+      "consent_self": "My own face",
+      "consent_authorized": "Someone else’s, who authorized this use",
+      "consent_fictional": "Nobody’s: it is not a real person",
+      "voice": "Voice",
+      "listen": "Listen",
+      "status": "Status",
+      "save": "Save",
+      "remove": "Remove avatar"
     }
   },
   "index_script": {
@@ -2047,6 +2072,47 @@
     "onboarding": {
       "load_failed": "I could not open the initial step. Your setup has not been marked complete.",
       "reload": "Reload to resume"
+    },
+    "avatar": {
+      "none": "No avatar yet.",
+      "pending": "Sending the photo to Vidu…",
+      "registering": "Vidu is preparing the face…",
+      "ready": "Ready: the face is registered at Vidu.",
+      "retrying": "Vidu didn't answer this time. I'll try again on my own.",
+      "rejected": "Vidu couldn't use this photo. Try another one, front-facing, with the face well lit.",
+      "saved": "Saved. ✓",
+      "removed": "Avatar removed, and the photo was deleted at Vidu.",
+      "removed_later": "Avatar removed. Vidu didn't answer, so it will delete the photo itself within 90 days.",
+      "remove_confirm": "Remove this assistant's avatar? The photo is deleted here and at Vidu.",
+      "pick_photo": "Choose a face photo first.",
+      "pick_consent": "Say whose face is in the photo.",
+      "read_failed": "I couldn't read that image.",
+      "listen_failed": "Couldn't play this voice now. Try again.",
+      "voice_option": "{voice} ({style})",
+      "style": {
+        "bright": "Bright",
+        "upbeat": "Upbeat",
+        "informative": "Informative",
+        "firm": "Firm",
+        "excitable": "Excitable",
+        "youthful": "Youthful",
+        "breezy": "Breezy",
+        "easy_going": "Easy-going",
+        "breathy": "Breathy",
+        "clear": "Clear",
+        "smooth": "Smooth",
+        "gravelly": "Gravelly",
+        "soft": "Soft",
+        "even": "Even",
+        "mature": "Mature",
+        "forward": "Forward",
+        "friendly": "Friendly",
+        "casual": "Casual",
+        "gentle": "Gentle",
+        "lively": "Lively",
+        "knowledgeable": "Knowledgeable",
+        "warm": "Warm"
+      }
     }
   },
   "delivery": {
@@ -2246,5 +2312,8 @@
       "fallback": "The task was interrupted; check its progress in the app conversation.",
       "truncated": "… The full result is in the {brand} app conversation."
     }
+  },
+  "avatar": {
+    "voice_sample": "Hi! This is how I'll sound when I answer you."
   }
 }

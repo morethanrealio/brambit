@@ -208,7 +208,17 @@
     "public_web_too_many_key_ips": "Até 20 endereços de servidor.",
     "public_web_key_ip_invalid": "Cada endereço de servidor precisa ser um IP ou uma faixa (ex.: 203.0.113.7 ou 203.0.113.0/24).",
     "public_daily_cap_invalid": "O teto diário precisa ser um valor em US$ maior que zero (vazio = US$10).",
-    "public_agent_hourly_limit_invalid": "O limite somando todos os contatos vai de 1 a 100000 mensagens por hora."
+    "public_agent_hourly_limit_invalid": "O limite somando todos os contatos vai de 1 a 100000 mensagens por hora.",
+    "avatar_unavailable": "O avatar não está disponível nesta instalação.",
+    "avatar_failed_load": "Não consegui carregar o avatar. Tente de novo.",
+    "avatar_consent_required": "Diga de quem é o rosto da foto.",
+    "avatar_voice_invalid": "Escolha uma das vozes da lista.",
+    "avatar_photo_jpeg": "Envie a foto em JPEG.",
+    "avatar_photo_required": "Escolha uma foto do rosto para o avatar.",
+    "avatar_failed_save": "Não consegui salvar o avatar. Tente de novo.",
+    "avatar_failed_remove": "Não consegui remover o avatar. Tente de novo.",
+    "avatar_not_found": "Este assistente não tem avatar.",
+    "avatar_voice_sample_failed": "Não consegui tocar esta voz agora. Tente de novo."
   },
   "confirm": {
     "common": {
@@ -1490,6 +1500,21 @@
       "confirm": "Confirmar e-mail",
       "not_you": "Não criou uma conta no {brand}? Feche esta página.",
       "go_login": "Ir para o login"
+    },
+    "avatar": {
+      "title": "Avatar",
+      "lead": "Um rosto que fala as respostas deste assistente em voz alta. Envie uma foto de frente, com o rosto bem iluminado. A foto vai para o Vidu (vidu.com), o serviço que anima o rosto, e fica cadastrada lá enquanto o avatar existir.",
+      "photo": "Foto do rosto",
+      "consent": "De quem é este rosto?",
+      "consent_pick": "Escolha…",
+      "consent_self": "O meu próprio rosto",
+      "consent_authorized": "De outra pessoa, que autorizou este uso",
+      "consent_fictional": "De ninguém: não é uma pessoa real",
+      "voice": "Voz",
+      "listen": "Ouvir",
+      "status": "Situação",
+      "save": "Salvar",
+      "remove": "Remover avatar"
     }
   },
   "index_script": {
@@ -2047,6 +2072,47 @@
     "onboarding": {
       "load_failed": "Não consegui abrir a etapa inicial. Seu cadastro não foi marcado como concluído.",
       "reload": "Recarregar para retomar"
+    },
+    "avatar": {
+      "none": "Ainda sem avatar.",
+      "pending": "Enviando a foto para o Vidu…",
+      "registering": "O Vidu está preparando o rosto…",
+      "ready": "Pronto: o rosto está cadastrado no Vidu.",
+      "retrying": "O Vidu não respondeu desta vez. Vou tentar de novo sozinho.",
+      "rejected": "O Vidu não conseguiu usar esta foto. Tente outra, de frente, com o rosto bem iluminado.",
+      "saved": "Salvo. ✓",
+      "removed": "Avatar removido, e a foto foi apagada no Vidu.",
+      "removed_later": "Avatar removido. O Vidu não respondeu, então ele mesmo apaga a foto em até 90 dias.",
+      "remove_confirm": "Remover o avatar deste assistente? A foto é apagada aqui e no Vidu.",
+      "pick_photo": "Escolha uma foto do rosto primeiro.",
+      "pick_consent": "Diga de quem é o rosto da foto.",
+      "read_failed": "Não consegui ler essa imagem.",
+      "listen_failed": "Não consegui tocar esta voz agora. Tente de novo.",
+      "voice_option": "{voice} ({style})",
+      "style": {
+        "bright": "Brilhante",
+        "upbeat": "Animada",
+        "informative": "Informativa",
+        "firm": "Firme",
+        "excitable": "Empolgada",
+        "youthful": "Jovem",
+        "breezy": "Leve",
+        "easy_going": "Tranquila",
+        "breathy": "Sussurrada",
+        "clear": "Clara",
+        "smooth": "Aveludada",
+        "gravelly": "Rouca",
+        "soft": "Suave",
+        "even": "Uniforme",
+        "mature": "Madura",
+        "forward": "Direta",
+        "friendly": "Amigável",
+        "casual": "Descontraída",
+        "gentle": "Delicada",
+        "lively": "Vivaz",
+        "knowledgeable": "Experiente",
+        "warm": "Calorosa"
+      }
     }
   },
   "delivery": {
@@ -2246,5 +2312,8 @@
       "fallback": "A tarefa foi interrompida; confira o andamento na conversa do app.",
       "truncated": "… O resultado completo está na conversa do app {brand}."
     }
+  },
+  "avatar": {
+    "voice_sample": "Oi! É assim que eu vou soar quando te responder."
   }
 }
