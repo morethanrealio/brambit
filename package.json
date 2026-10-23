@@ -44,7 +44,7 @@
     "@electric-sql/pglite": "0.5.8",
     "@types/node": "^22.0.0",
     "embedded-postgres": "14.23.0-beta.17",
-    "eslint": "9.39.5",
+    "eslint": "10.12.0",
     "globals": "17.13.0",
     "playwright-core": "1.55.0",
     "typescript": "5.9.3"
