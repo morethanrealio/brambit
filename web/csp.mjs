@@ -11,7 +11,9 @@
 // an ad conversion tag) widens the policy on purpose with its `csp` field
 // (plugins.mjs): extra https origins for the directives below, nothing else. No
 // keywords, no 'unsafe-*', no bare wildcard: a plugin can add a host, not turn
-// the policy off.
+// the policy off. A core feature that talks to another origin from the browser
+// (the avatar's video channel, avatar.mjs) widens it the same way, only while
+// the installation has that feature configured.
 export const DIRETIVAS_DE_PLUGIN = ['script-src', 'img-src', 'connect-src', 'frame-src'];
 const ORIGEM = /^https:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(:\d{1,5})?$/i;
 
@@ -25,9 +27,11 @@ export function conferirCsp(csp, quem = 'csp') {
   return csp;
 }
 
-// extras = {directive: [origin, ...]} from the plugins → buildCsp(nonce).
-export function criarCsp(extras = {}) {
-  const mais = (d) => [...new Set(extras[d] || [])].map((o) => ` ${o}`).join('');
+// sources = {directive: [origin, ...]}, the plugins' and the core features';
+// a function among them is asked on every call (a feature turned on or off
+// while the server runs) → buildCsp(nonce).
+export function criarCsp(...sources) {
+  const mais = (d) => [...new Set(sources.flatMap((s) => (typeof s === 'function' ? s() : s)?.[d] || []))].map((o) => ` ${o}`).join('');
   return function buildCsp(nonce) {
     const n = nonce ? ` 'nonce-${nonce}'` : '';
     return [

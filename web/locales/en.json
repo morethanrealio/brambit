@@ -221,7 +221,10 @@
     "avatar_voice_sample_failed": "Couldn't play this voice now. Try again.",
     "avatar_not_ready": "The avatar's photo is still getting ready. Try again in a minute.",
     "avatar_live_not_found": "This conversation with the avatar has ended.",
-    "avatar_live_failed": "Couldn't talk to the avatar now. Try again."
+    "avatar_live_failed": "Couldn't talk to the avatar now. Try again.",
+    "avatar_no_credit": "You have no credit left to talk to the avatar.",
+    "avatar_daily_limit": "You've used today's time with avatars. Try again tomorrow.",
+    "avatar_busy": "Too many people are talking to avatars right now. Try again in a few minutes."
   },
   "confirm": {
     "common": {
@@ -1481,13 +1484,15 @@
       "running_out_credits_before": "Running out of credits before the month turns over? Buy an extra pack, without changing plan. The credits add to your balance and are valid for 90 days from the purchase."
     },
     "chat": {
-      "conversation_chats": "<0/><1>Conversation</1><2>← chats</2>",
+      "conversation_chats": "<0/><1>Conversation</1><2/><3>← chats</3>",
       "back_end_chat": "Back to the end of the chat",
       "typing": "typing...",
       "attach_image_or_pdf": "Attach image or PDF",
       "write_message_shift_enter": "Write your message... (Shift+Enter for a new line)",
       "send": "Send",
-      "speak_message": "Speak your message"
+      "speak_message": "Speak your message",
+      "talk_to_avatar": "Talk to the avatar",
+      "avatar_hang_up": "Hang up"
     },
     "app": {
       "remember": "To remember"
@@ -2115,6 +2120,27 @@
         "lively": "Lively",
         "knowledgeable": "Knowledgeable",
         "warm": "Warm"
+      }
+    },
+    "avatar_live": {
+      "connecting": "Calling the avatar…",
+      "ready": "Talking: the face says each new reply.",
+      "tap_to_hear": "Tap the face to hear it.",
+      "failed": "Couldn't show the face. Try again.",
+      "speech_failed": "The face couldn't say the last reply.",
+      "end": {
+        "idle": "The talk ended: nothing was said for 5 minutes.",
+        "max": "The talk reached its time limit. Open another one if you like.",
+        "daily": "You've used today's time with avatars.",
+        "credit": "The talk ended: your credit ran out.",
+        "provider": "The avatar service ended the talk. Try again.",
+        "error": "Couldn't talk to the avatar now. Try again.",
+        "unwatched": "The talk ended because the page stopped watching it.",
+        "replaced": "This talk ended because another one opened.",
+        "changed": "The talk ended because the avatar changed.",
+        "removed": "The talk ended because the avatar was removed.",
+        "avatar_not_ready": "The avatar's photo is getting ready again. Try in a minute.",
+        "shutdown": "The server restarted. Open the talk again."
       }
     }
   },

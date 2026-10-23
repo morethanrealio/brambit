@@ -221,7 +221,10 @@
     "avatar_voice_sample_failed": "Não consegui tocar esta voz agora. Tente de novo.",
     "avatar_not_ready": "A foto do avatar ainda está sendo preparada. Tente de novo em um minuto.",
     "avatar_live_not_found": "Esta conversa com o avatar já terminou.",
-    "avatar_live_failed": "Não consegui falar com o avatar agora. Tente de novo."
+    "avatar_live_failed": "Não consegui falar com o avatar agora. Tente de novo.",
+    "avatar_no_credit": "Você não tem crédito para falar com o avatar.",
+    "avatar_daily_limit": "Você já usou o tempo de hoje com avatares. Tente de novo amanhã.",
+    "avatar_busy": "Muita gente está falando com avatares agora. Tente de novo em alguns minutos."
   },
   "confirm": {
     "common": {
@@ -1481,13 +1484,15 @@
       "running_out_credits_before": "Acabando o crédito antes do mês virar? Compre um pacote avulso, sem trocar de plano. Os créditos somam ao seu saldo e valem por 90 dias a partir da compra."
     },
     "chat": {
-      "conversation_chats": "<0/><1>Conversa</1><2>← conversas</2>",
+      "conversation_chats": "<0/><1>Conversa</1><2/><3>← conversas</3>",
       "back_end_chat": "Voltar pro fim da conversa",
       "typing": "digitando...",
       "attach_image_or_pdf": "Anexar imagem ou PDF",
       "write_message_shift_enter": "Escreva sua mensagem... (Shift+Enter pula linha)",
       "send": "Enviar",
-      "speak_message": "Falar sua mensagem"
+      "speak_message": "Falar sua mensagem",
+      "talk_to_avatar": "Falar com o avatar",
+      "avatar_hang_up": "Desligar"
     },
     "app": {
       "remember": "Para lembrar"
@@ -2115,6 +2120,27 @@
         "lively": "Vivaz",
         "knowledgeable": "Experiente",
         "warm": "Calorosa"
+      }
+    },
+    "avatar_live": {
+      "connecting": "Chamando o avatar…",
+      "ready": "Conversando: o rosto fala cada resposta nova.",
+      "tap_to_hear": "Toque no rosto para ouvir.",
+      "failed": "Não consegui mostrar o rosto. Tente de novo.",
+      "speech_failed": "O rosto não conseguiu falar a última resposta.",
+      "end": {
+        "idle": "A conversa terminou: nada foi dito por 5 minutos.",
+        "max": "A conversa chegou ao tempo máximo. Abra outra se quiser.",
+        "daily": "Você já usou o tempo de hoje com avatares.",
+        "credit": "A conversa terminou: seu crédito acabou.",
+        "provider": "O serviço do avatar encerrou a conversa. Tente de novo.",
+        "error": "Não consegui falar com o avatar agora. Tente de novo.",
+        "unwatched": "A conversa terminou porque a página parou de acompanhá-la.",
+        "replaced": "Esta conversa terminou porque outra foi aberta.",
+        "changed": "A conversa terminou porque o avatar mudou.",
+        "removed": "A conversa terminou porque o avatar foi removido.",
+        "avatar_not_ready": "A foto do avatar está sendo preparada de novo. Tente em um minuto.",
+        "shutdown": "O servidor reiniciou. Abra a conversa de novo."
       }
     }
   },

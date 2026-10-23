@@ -8,8 +8,11 @@
 //
 // The service bills every second a session is open, so a session also ends by
 // itself: when nobody watches it (the events stream closed) for a while, when
-// nothing was said for a while, after a maximum length, when its owner opens
-// another one, when the avatar changes or goes, and when the server stops.
+// nothing was said for a while, after a maximum length, when its owner's
+// minutes of the day or credit run out, when its owner opens another one, when
+// the avatar changes or goes, and when the server stops. Its seconds are
+// billed to the owner every minute and at the end (model LIVE_MODEL, kind
+// 'avatar'), so a server that dies mid-session loses at most a minute of it.
 // Logs carry the session's length and why it ended, never what was said.
 import { randomUUID } from 'node:crypto';
 import * as viduApi from './vidu.mjs';
@@ -17,7 +20,10 @@ import { readBody } from './http-body.mjs';
 import { photoAge, EXPIRES_AFTER } from './avatar-photos.mjs';
 import { spokenText, speechChunks, toFrames, sendPaced, wait } from './avatar-speech.mjs';
 
-export const LIMITS = { unwatched: 20e3, idle: 300e3, max: 1800e3 };
+// Times in ms. daily: a person's talk time in 24 h; sessions: how many are
+// open at once in the installation (0 = no limit, both).
+export const LIMITS = { unwatched: 20e3, idle: 300e3, max: 1800e3, daily: 3600e3, sessions: 5, billEvery: 60e3 };
+export const LIVE_MODEL = 'vidu-s1-live';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const event = (name, data = {}) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
 
@@ -27,9 +33,11 @@ function onProcessStop(fn) {
 }
 
 // deps: vidu() → the service config or null; tts(text, voice) → {pcm, usage};
-// recordUsages bills the speech to the owner; registerAgent(agentId) registers
-// the avatar's photo again when the service lost it.
-export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store, api = viduApi, limits = LIMITS, now = Date.now, onStop = onProcessStop, log = console.error, info = console.log }) {
+// recordUsages bills the speech and the session to the owner; hasCredit(userId)
+// → whether they can still spend; registerAgent(agentId) registers the
+// avatar's photo again when the service lost it; limits() → LIMITS, read on
+// every open (the admin settings change them while the server runs).
+export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async () => true, registerAgent, store, api = viduApi, limits = () => LIMITS, now = Date.now, onStop = onProcessStop, log = console.error, info = console.log }) {
   const sessions = new Map();   // id → session
   const byUser = new Map();     // userId → their session (one each)
 
@@ -40,7 +48,27 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
     s.timers[timer].unref?.();
   }
   // Speaking counts as activity: a long speech never runs into the idle limit.
-  const touch = (s) => arm(s, 'idle', limits.idle, () => (s.current ? touch(s) : end(s, 'idle')));
+  const touch = (s) => arm(s, 'idle', s.limits.idle, () => (s.current ? touch(s) : end(s, 'idle')));
+
+  // The seconds since the last bill, from when the service created the session.
+  function bill(s) {
+    if (!s.billedTo) return;
+    const at = now();
+    const seconds = Math.round((at - s.billedTo) / 1000);
+    if (seconds <= 0) return;
+    s.billedTo += seconds * 1000;
+    Promise.resolve(recordUsages([{ model: LIVE_MODEL, in: 0, out: seconds, total: seconds }], { userId: s.userId, agentId: s.agentId, threadId: s.threadId, turnId: s.id, kind: 'avatar' }))
+      .catch((e) => log('[avatar] usage:', e?.message ?? e));
+  }
+  function billing(s) {
+    arm(s, 'bill', s.limits.billEvery, async () => {
+      bill(s);
+      const ok = await hasCredit(s.userId).catch(() => true);
+      if (s.ended) return;
+      if (!ok) return end(s, 'credit');
+      billing(s);
+    });
+  }
 
   function end(s, reason, detail = '') {
     if (s.ended) return;
@@ -49,6 +77,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
     s.current?.abort();
     s.next = null;
     s.stream?.hangup();
+    bill(s);
     sessions.delete(s.id);
     if (byUser.get(s.userId) === s) byUser.delete(s.userId);
     info(`[avatar] live ${s.liveId || '-'} agent ${s.agentId.slice(0, 8)}: ${Math.round((now() - s.started) / 1000)} s, end: ${reason}${detail ? ` (${detail})` : ''}`);
@@ -63,9 +92,11 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
       if (!config) throw new Error('no VIDU_API_KEY');
       const created = await api.createSession(config, { avatarId: s.photoId });
       s.liveId = created.id;
+      s.billedTo = now();
       s.stream = api.openStream(config, created.id, { onDrop: (why) => end(s, 'provider', why) });
       // Ended while the session was being created: open its stream only to hang up.
-      if (s.ended) { s.stream.hangup(); info(`[avatar] live ${created.id}: created after its end, hung up`); return; }
+      if (s.ended) { s.stream.hangup(); bill(s); info(`[avatar] live ${created.id}: created after its end, hung up`); return; }
+      billing(s);
       // The browser only knows how to watch an Agora channel.
       if (created.rtc.provider !== 'agora' || !created.rtc.token) return end(s, 'error', `rtc channel ${created.rtc.provider || 'none'}`);
       s.rtc = created.rtc;
@@ -129,19 +160,26 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
 
   const live = {
     // Opening again the session already open for the same chat returns it.
-    open({ userId, agentId, threadId, photoId, voice, lastReplyId = null }) {
+    // usedToday: the owner's talk time in the last 24 h, in ms. Throws
+    // {code: 'daily'} when it is all used, {code: 'busy'} when the installation
+    // has its most sessions open.
+    open({ userId, agentId, threadId, photoId, voice, lastReplyId = null, usedToday = 0 }) {
       const current = byUser.get(userId);
       if (current?.agentId === agentId && current.threadId === threadId) return current;
+      const lim = { ...LIMITS, ...limits() };
+      const left = lim.daily ? lim.daily - usedToday : Infinity;
+      if (left < 60e3) throw Object.assign(new Error('avatar: no talk time left today'), { code: 'daily' });
+      if (lim.sessions && sessions.size - (current ? 1 : 0) >= lim.sessions) throw Object.assign(new Error('avatar: too many sessions open'), { code: 'busy' });
       if (current) end(current, 'replaced');
       const s = {
-        id: randomUUID(), userId, agentId, threadId, photoId, voice, lastReplyId,
-        liveId: '', started: now(), ended: false, ready: false, rtc: null, stream: null,
+        id: randomUUID(), userId, agentId, threadId, photoId, voice, lastReplyId, limits: lim,
+        liveId: '', started: now(), billedTo: 0, ended: false, ready: false, rtc: null, stream: null,
         watchers: new Set(), timers: {}, current: null, next: null,
       };
       sessions.set(s.id, s);
       byUser.set(userId, s);
-      arm(s, 'max', limits.max, () => end(s, 'max'));
-      arm(s, 'unwatched', limits.unwatched, () => end(s, 'unwatched'));
+      arm(s, 'max', Math.min(lim.max, left), () => end(s, lim.max <= left ? 'max' : 'daily'));
+      arm(s, 'unwatched', lim.unwatched, () => end(s, 'unwatched'));
       touch(s);
       start(s);
       return s;
@@ -162,7 +200,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
       res.on('close', () => {
         clearInterval(beat);
         s.watchers.delete(res);
-        if (!s.watchers.size && !s.ended) arm(s, 'unwatched', limits.unwatched, () => end(s, 'unwatched'));
+        if (!s.watchers.size && !s.ended) arm(s, 'unwatched', s.limits.unwatched, () => end(s, 'unwatched'));
       });
     },
 
@@ -197,8 +235,9 @@ export function createAvatarLive({ vidu, tts, recordUsages, registerAgent, store
 }
 
 // deps: owned(ctx, res, agentId) → the user, or null after answering;
-// getThreadOwned(threadId, userId); voiceOf(row) → the voice to speak with.
-export function registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available, voiceOf }) {
+// getThreadOwned(threadId, userId); voiceOf(row) → the voice to speak with;
+// hasCredit(userId) → whether they can still spend.
+export function registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available, voiceOf, hasCredit }) {
   rotas.registrar('POST', '/api/agent/avatar/live', async (req, res, url, ctx) => {
     if (!available()) return send(res, 503, { error: 'server.avatar_unavailable' });
     const body = await readBody(req).catch(() => ({}));
@@ -217,10 +256,14 @@ export function registerAvatarLive(rotas, { live, store, send, fail, owned, getT
         registerAgent(agentId);
         return send(res, 409, { error: 'server.avatar_not_ready' });
       }
+      if (!(await hasCredit(user.id))) return send(res, 402, { error: 'server.avatar_no_credit' });
       const latest = await store.latestReply(threadId, user.id);
-      const s = live.open({ userId: user.id, agentId, threadId, photoId: row.provider_photo_id, voice: voiceOf(row), lastReplyId: latest?.id ?? null });
+      const usedToday = (await store.liveSecondsSince(user.id, new Date(Date.now() - 24 * 3600e3))) * 1000;
+      const s = live.open({ userId: user.id, agentId, threadId, photoId: row.provider_photo_id, voice: voiceOf(row), lastReplyId: latest?.id ?? null, usedToday });
       return send(res, 200, { id: s.id });
     } catch (e) {
+      if (e?.code === 'daily') return send(res, 429, { error: 'server.avatar_daily_limit' });
+      if (e?.code === 'busy') return send(res, 503, { error: 'server.avatar_busy' });
       return fail(res, 500, 'server.avatar_live_failed', e);
     }
   });

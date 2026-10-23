@@ -93,6 +93,10 @@ const PRICES = {
   // sense for this feature. While we're in the current plan's free allowance,
   // the server zeroes the cost (SEARCH_FREE_MONTHLY in server.mjs).
   'serpapi-flights': { in: 0.0, cachedIn: 0.0, out: 15000.0 },
+  // ── Live avatar session (Vidu S1 Component), per second the session is open ──
+  // Same trick: 1 "output token" = 1 second (avatar-live.mjs bills them every
+  // minute). Vidu charges 1 credit per second at US$0.005 a credit.
+  'vidu-s1-live':    { in: 0.0, cachedIn: 0.0, out: 5000.0 },
   // Search telemetry events, not provider calls. They need to be
   // explicit here: they reach costOf with zero tokens and must not look like
   // a new model with no price in the operational alert.
