@@ -2027,6 +2027,7 @@
       "extra_bought": "Comprados el {date}: {n}",
       "extra_referral": "Bono por recomendación el {date}: {n}",
       "extra_plan_leftover": "Sobrante del plan anterior el {date}: {n}",
+      "extra_shared_assistant": "Ganancias de tus asistentes de la comunidad desde el {date}: {n}",
       "extra_granted": "Otorgados el {date}: {n}",
       "extra_expires": "vence el {date}",
       "extras_title": "Créditos extra",

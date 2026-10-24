@@ -4390,7 +4390,8 @@ function renderCreditsPanel(c) {
         const lv = { date: dt, n: '<b>' + nf(p.credits) + '</b>' };
         const label = p.source === 'compra' ? txHtml('billing.extra_bought', lv)
           : (p.source === 'indicacao' ? txHtml('billing.extra_referral', lv)
-          : (p.source === 'sobra-plano' ? txHtml('billing.extra_plan_leftover', lv) : txHtml('billing.extra_granted', lv)));
+          : (p.source === 'sobra-plano' ? txHtml('billing.extra_plan_leftover', lv)
+          : (p.source === 'shared-assistant' ? txHtml('billing.extra_shared_assistant', lv) : txHtml('billing.extra_granted', lv))));
         const exp = p.expiresAt ? ' · <span class="soft">' +
           txHtml('billing.extra_expires', { date: new Date(p.expiresAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' }) }) + '</span>' : '';
         return '<li>' + label +

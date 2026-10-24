@@ -2027,6 +2027,7 @@
       "extra_bought": "Purchased on {date}: {n}",
       "extra_referral": "Referral bonus on {date}: {n}",
       "extra_plan_leftover": "Left over from the previous plan on {date}: {n}",
+      "extra_shared_assistant": "Earned from your community assistants since {date}: {n}",
       "extra_granted": "Granted on {date}: {n}",
       "extra_expires": "expires {date}",
       "extras_title": "Extra credits",
