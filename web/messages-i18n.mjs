@@ -55,7 +55,7 @@ const CODIGO_DE_MAQUINA = /^[a-z][a-z0-9_-]*$/;
 // They emit keys, never sentences: the extraction below must find nothing in them.
 // A plugin's modules go in its own fontesMensagens, with the catalog in
 // textosServidor (plugins.mjs).
-export const FONTES_MENSAGENS = ['server.mjs'];
+export const FONTES_MENSAGENS = ['server.mjs', 'shared-assistants.mjs'];
 
 // User messages emitted as a literal in the code. Returns the unique
 // strings, in the order they appear.

@@ -42,7 +42,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {registerSharedAssistants,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
 import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -65,7 +65,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs) and the assistant avatar (avatar.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerSharedAssistants(rotas,{pool,send,fail,tooManyRequests});const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs), the community assistants (shared-assistants.mjs) and the assistant avatar (avatar.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
@@ -3177,10 +3177,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // makes that index actionable. Cost: 1 small schema, and only when there is a skill
   // installed (an assistant with no skill pays nothing). The create/edit/
   // install/share/run tools stay guarded in the group below.
-  if ((await listInstalledSkills(agent.id, userId)).length) {
-    const readSkill = skillsTools(userId, agent.id, thread.id).find((t) => t.name === 'ler_skill');
-    if (readSkill) registry.add(readSkill);
-  }
+  const readSkill = agent.shared ? sharedSkillTool(agent.shared) : (await listInstalledSkills(agent.id, userId)).length && skillsTools(userId, agent.id, thread.id).find((t) => t.name === 'ler_skill'); // community entry: the published copy
+  if (readSkill) registry.add(readSkill);
   // ── RARE suites loaded ON DEMAND (mega-tool `abrir_ferramentas`) ──
   // To shrink the fixed schema prefix (the biggest slice of input; see
   // knowledge/input-tokens-e-cache.md), rarely used suites do NOT enter the
@@ -6040,9 +6038,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     } };
   }
   // User's long-term memory (profile page + index) in the prompt. A 'grupo' turn is a
-  // channel full of other people: none of the owner's private blocks go in (semDono).
-  const semDono = ephemeral || agentCategory === 'grupo';
-  const wiki = agentCategory === 'grupo' ? '' : await wikiContext(userId, agent.owner);
+  // channel full of other people: none of the owner's private blocks go in (semDono). Nor in a community entry, whose role text comes from someone else.
+  const semDono = ephemeral || agentCategory === 'grupo' || !!agent.shared;
+  const wiki = agentCategory === 'grupo' || agent.shared ? '' : await wikiContext(userId, agent.owner);
   // User's personal subdomain (someone.<apps domain>): goes into the system prompt
   // so the agent knows it can publish systems / maintain their home. It's stable
   // per user (only changes if they change their username), so it doesn't break the per-turn cache.
@@ -6057,7 +6055,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Compact index of the Skills installed on this assistant (progressive
   // disclosure: only title + trigger + provenance; the body loads on demand
   // via ler_skill). Only in a non-ephemeral turn, like the other volatile blocks.
-  const skillsCtx = ephemeral ? null : await skillsContext(agent.id, userId, thread.id);
+  const skillsCtx = ephemeral ? null : agent.shared ? sharedSkillsContext(agent.shared) : await skillsContext(agent.id, userId, thread.id);
   const skills = skillsCtx?.text || '';
   // History without the FROZEN copy of skills in progress (the current body already goes in the
   // block above, reread from the database). Without this the model would see both versions of the
@@ -6208,7 +6206,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // got an empty string: in production, 0 of 118 agents have a summary and 59 of 700
   // threads do. In other words, we paid for the summary call, threw away the raw
   // turns, and delivered nothing in their place (the thread lost the start of the conversation).
-  const blocoCreditos = semDono ? '' : gasto.contextoDoTurno(credit);
+  const blocoCreditos = semDono && !agent.shared ? '' : gasto.contextoDoTurno(credit); // the entry spends the person's own credit
   const tail = tailContext({ wiki, summary: thread.summary || '', crossChannel, agentInbox, spaces, skills, trackers, runner, rotinaNudge, compras: semDono ? '' : comprasContext(), creditos: blocoCreditos });
   // Routine DISPATCH: the text we reinject here is the `prompt` saved in the routine,
   // and a good part of them was recorded in the voice of WHOEVER ASKED for the schedule ("Every Friday at
@@ -6279,6 +6277,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const { removidas, mantidas, travadas, host } = podarRegistryGrupo(registry, toolConfig);
     console.log(`[categoria] grupo agent=${agent?.id}: registry pruned, ${mantidas} tools kept, ${removidas} removed, ${travadas} SSH tools locked on host=${host || '(nenhum)'}`);
   }
+  if (!noTools && agent.shared) pruneSharedEntryRegistry(registry); // community entry: no self-reconfiguration nor skill management
   // Routine WITH a delivery channel: deliverRoutine is what delivers the result, with
   // the TEXT the model generates. If the model also calls enviar_mensagem (the prompt
   // "Send a message to so-and-so..." tempts it to), the content goes out via the tool AND the
@@ -6729,7 +6728,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Fired WITHOUT await (see runProfileHousekeeping): the person doesn't wait for the
   // profile update to receive the response that's already ready.
   const userTurns = messages.filter((m) => m.role === 'user').length;
-  if (!discovery.source && (userTurns === 1 || userTurns % 3 === 0)) {
+  if (!discovery.source && !agent.shared && (userTurns === 1 || userTurns % 3 === 0)) {
     runProfileHousekeeping({
       userId, agentId: agent.id, threadId: thread.id, turnId,
       userMsg: savedUserMsg, assistantMsg: text, language: userLang,
@@ -7424,7 +7423,7 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
   );
   lines.push(
     '',
-    'You have a long-term MEMORY about the user, shared among all their assistants. It is a WIKI: the "perfil" page is the SUMMARY (only what defines the person and is useful in almost every conversation; it has a size cap and already comes with an index of the other pages) and the DETAIL lives in area pages (comunicacao, preferencias, background, rotina, rede, objetivos, projetos, trabalho, saude, alimentacao, treinos, financas, casa, compras, notas). A fact about a specific person goes on one page per person, in the format "pessoa-name" (e.g. "pessoa-ana"), not in a generic list. Look things up with memoria_listar/memoria_ler/memoria_buscar. To SAVE: a fact that has ONE current value and may change (where they live, company, job title, size, main goal) goes through memoria_atualizar, with a stable key (topic); if the key already appears under "Fatos com chave", reuse it and the old value is replaced automatically, instead of both living side by side. Everything else goes through memoria_anotar (one fact per operation: add for a new fact, corrigir when the new one contradicts an old line), passing the target page; neither of them rewrites the page. The "perfil" page is also maintained automatically, so do not recreate it. The "atualizacoes" page is an automatic log of what changed: you do not write to it. memoria_escrever is only for CREATING a new page or for rewriting one when the owner asks; durable facts, nothing ephemeral.',
+    agent.shared ? ENTRY_MEMORY_RULE : 'You have a long-term MEMORY about the user, shared among all their assistants. It is a WIKI: the "perfil" page is the SUMMARY (only what defines the person and is useful in almost every conversation; it has a size cap and already comes with an index of the other pages) and the DETAIL lives in area pages (comunicacao, preferencias, background, rotina, rede, objetivos, projetos, trabalho, saude, alimentacao, treinos, financas, casa, compras, notas). A fact about a specific person goes on one page per person, in the format "pessoa-name" (e.g. "pessoa-ana"), not in a generic list. Look things up with memoria_listar/memoria_ler/memoria_buscar. To SAVE: a fact that has ONE current value and may change (where they live, company, job title, size, main goal) goes through memoria_atualizar, with a stable key (topic); if the key already appears under "Fatos com chave", reuse it and the old value is replaced automatically, instead of both living side by side. Everything else goes through memoria_anotar (one fact per operation: add for a new fact, corrigir when the new one contradicts an old line), passing the target page; neither of them rewrites the page. The "perfil" page is also maintained automatically, so do not recreate it. The "atualizacoes" page is an automatic log of what changed: you do not write to it. memoria_escrever is only for CREATING a new page or for rewriting one when the owner asks; durable facts, nothing ephemeral.',
   );
   lines.push(
     '',
@@ -9389,7 +9388,7 @@ async function atenderRequest(req, res) {
     if (!agentId.trim()) return send(res, 400, { error: 'server.missing_agentid' });
     try {
       const agent = await getAgentOwned(agentId, user.id);
-      if (!agent) return send(res, 404, { error: 'server.assistant_not_found' });
+      if (!agent || agent.shared) return send(res, 404, { error: 'server.assistant_not_found' }); // a community entry's prompt is its creator's
       let raw = '';
       // Debug view of the prompt: shows the version the owner actually receives,
       // language included. If reading the locale fails, falls back to the default.
@@ -9539,7 +9538,7 @@ async function atenderRequest(req, res) {
     if (!name || !String(name).trim()) return send(res, 400, { error: 'server.enter_new_name' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
+      if (!ag || ag.shared) return send(res, ag ? 409 : 404, { error: ag ? 'server.shared_assistant_read_only' : 'server.assistant_not_found' });
       const r = await renameAgent(agentId, user.id, name);
       if (!r.ok) return send(res, 400, { error: r.error || 'server.failed_rename' });
       return send(res, 200, { id: agentId, name: r.name, old: r.old || null, unchanged: !!r.unchanged });
@@ -9562,8 +9561,8 @@ async function atenderRequest(req, res) {
       // '' = uses the user's main one (the default for anyone with a single account).
       const gAccts = await listGoogleAccounts(user.id).catch(() => []);
       return send(res, 200, {
-        id: ag.id, name: ag.name, goal: ag.goal || '', instructions: ag.instructions || '',
-        style: ag.style || '', model: ag.model || 'auto', models: assignableAgentModels(ag.model),
+        id: ag.id, name: ag.name, goal: ag.goal || '', instructions: ag.shared ? '' : ag.instructions || '', shared: ag.shared ? { creator: ag.shared.creatorName, version: ag.shared.version } : undefined,
+        style: ag.shared ? '' : ag.style || '', model: ag.model || 'auto', models: assignableAgentModels(ag.model),
         category: AGENT_CATEGORIES.includes(ag.category) ? ag.category : 'pessoal',
         tool_config: normalizeToolConfig(ag.tool_config),
         google_email: ag.google_email || '',
@@ -9587,7 +9586,7 @@ async function atenderRequest(req, res) {
     if (!agentId) return send(res, 400, { error: 'server.enter_agent' });
     try {
       const ag = await getAgentOwned(agentId, user.id);
-      if (!ag) return send(res, 404, { error: 'server.assistant_not_found' });
+      if (!ag || ag.shared) return send(res, ag ? 409 : 404, { error: ag ? 'server.shared_assistant_read_only' : 'server.assistant_not_found' });
       const fields = {};
       if (name !== undefined) { if (!String(name).trim()) return send(res, 400, { error: 'server.name_cannot_be_empty' }); fields.name = name; }
       if (goal !== undefined) fields.goal = goal;

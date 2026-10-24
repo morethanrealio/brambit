@@ -22,7 +22,7 @@ import { createConfirmationStore } from './confirmation-store.mjs';
 import { prepareCurationChange } from './curation-config.mjs';
 import { prepareEmailSearchChange } from './email-search-config.mjs';
 import { createCurationStore } from './curation-store.mjs';
-import { normalizeToolConfig } from './agent-tool-config.mjs';
+import { normalizeToolConfig } from './agent-tool-config.mjs';import { sharedAssistantsSchema, entryColumns, withPublication } from './shared-assistants.mjs';
 // ── Persistent memory + accounts (Postgres) ──
 // Stores users, sessions, agents, raw message log and a short PROFILE
 // that the agent builds up about the user. Everything in the mtr_harness schema
@@ -1700,7 +1700,7 @@ export async function initDb(...esquemas) {
   await publicSnapshots.init();
   publicSnapshots.catchUp().catch((e) => console.error('[public-snapshot] catch-up:', e?.message || e));
   await empresaStore.init(); // before the distribution schema, which puts billing in it (C2, step 5b)
-  for (const esquema of esquemas) await esquema({ pool, S });
+  for (const esquema of [sharedAssistantsSchema, ...esquemas]) await esquema({ pool, S }); // community assistants (shared-assistants.mjs) first: getAgentOwned reads them
   await checklistStore.init();
   // Business account F1: who PAID for each line. user_id is still who used it;
   // org_id is stamped at write time when the person is a member (NULL = paid from
@@ -7122,7 +7122,7 @@ export async function createAgent({ userId, owner, name, goal, instructions }) {
 
 export async function listAgents(userId) {
   const { rows } = await pool.query(
-    `SELECT id, name, goal, google_email FROM ${S}.agents WHERE user_id = $1 AND archived_at IS NULL ORDER BY created_at DESC`,
+    `SELECT id, name, goal, google_email FROM ${S}.agents WHERE user_id = $1 AND archived_at IS NULL ORDER BY shared_entry, created_at DESC`, // community entries last: [0] is the default assistant
     [userId],
   );
   return rows;
@@ -7189,13 +7189,10 @@ export async function countActiveAgents(userId) {
 // the owner's credit). Only the HISTORY screens pass incluirArquivado.
 export async function getAgentOwned(id, userId, { incluirArquivado = false } = {}) {
   const { rows } = await pool.query(
-    `SELECT id, user_id, owner, name, goal, instructions, style, profile, summary, history, perm_mode, cmd_allowlist, model, former_names, active_project_id, category, tool_config, google_email, archived_at FROM ${S}.agents WHERE id = $1 AND user_id = $2`,
+    `SELECT id, user_id, owner, name, goal, instructions, style, profile, summary, history, perm_mode, cmd_allowlist, model, former_names, active_project_id, category, tool_config, google_email, archived_at, ${entryColumns(S)} FROM ${S}.agents a WHERE id = $1 AND user_id = $2`,
     [id, userId],
   );
-  const agent = rows[0] || null;
-  if (!agent) return null;
-  if (agent.archived_at && !incluirArquivado) return null;
-  return agent;
+  return withPublication(rows[0], { incluirArquivado }); // a community entry runs the creator's published version (shared-assistants.mjs)
 }
 
 // Persiste uma troca completa: history + profile + resumo no agente, e o log bruto.
