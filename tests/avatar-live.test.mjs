@@ -92,6 +92,28 @@ test('a session is billed every minute, and ends when the credit or the day\'s m
   assert.equal(calls.at(-1), 'hangup L2');
 });
 
+test('a visitor\'s session: billed as its kind, one per key, a cap per group, and ended with the reason its check gives', async (t) => {
+  const { live, calls, tick, seconds } = setup(t);
+  const ends = [];
+  let verdict = true;
+  const visitor = (name) => open(live, { threadId: null, key: `public:a:${name}`, group: 'public:a', groupMax: 2, left: LIMITS.max,
+    kinds: { live: 'publico', speech: 'publico' }, canSpend: async () => verdict, reply: async () => null,
+    onEnd: (s, reason) => ends.push(`${name} ${reason}`) });
+  const owner = open(live);
+  const a = visitor('a'), b = visitor('b');
+  assert.equal(visitor('a'), a, 'the same visitor gets the session already open');
+  assert.throws(() => visitor('c'), { code: 'busy' });
+  assert.equal(live.get(owner.id), owner, 'a visitor does not replace the owner\'s session');
+  for (const s of [owner, a, b]) live.watch(s, watcher());
+  await tick(LIMITS.billEvery + 100);
+  assert.equal(seconds(), LIMITS.billEvery / 1000, 'only the owner\'s session is billed as avatar');
+  assert.equal(calls.filter((c) => c === 'bill u1 publico').length, 2);
+  verdict = 'daily';
+  await tick(LIMITS.billEvery);
+  assert.deepEqual(ends, ['a daily', 'b daily']);
+  assert.equal(live.get(owner.id), owner);
+});
+
 test('a session ended while it was being created hangs up as soon as it exists', async (t) => {
   let open_;
   const { live, calls } = setup(t, { gate: new Promise((resolve) => { open_ = resolve; }) });

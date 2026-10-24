@@ -14,6 +14,10 @@
 // billed to the owner every minute and at the end (model LIVE_MODEL, kind
 // 'avatar'), so a server that dies mid-session loses at most a minute of it.
 // Logs carry the session's length and why it ended, never what was said.
+//
+// A visitor of a website talks to the face the same way (public-avatar.mjs):
+// its sessions pass their own key, where the reply comes from, what to check
+// every minute and the kind they are billed as, and the owner pays them.
 import { randomUUID } from 'node:crypto';
 import * as viduApi from './vidu.mjs';
 import { readBody } from './http-body.mjs';
@@ -26,6 +30,8 @@ export const LIMITS = { unwatched: 20e3, idle: 300e3, max: 1800e3, daily: 3600e3
 export const LIVE_MODEL = 'vidu-s1-live';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const event = (name, data = {}) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+// The usage kinds of an owner's talk time and of the face's speech.
+const OWNER_KINDS = { live: 'avatar', speech: 'tts' };
 
 function onProcessStop(fn) {
   process.once('SIGTERM', fn);
@@ -34,12 +40,13 @@ function onProcessStop(fn) {
 
 // deps: vidu() → the service config or null; tts(text, voice) → {pcm, usage};
 // recordUsages bills the speech and the session to the owner; hasCredit(userId)
-// → whether they can still spend; registerAgent(agentId) registers the
+// → whether they can still spend (what an owner's session checks every
+// minute); registerAgent(agentId) registers the
 // avatar's photo again when the service lost it; limits() → LIMITS, read on
 // every open (the admin settings change them while the server runs).
 export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async () => true, registerAgent, store, api = viduApi, limits = () => LIMITS, now = Date.now, onStop = onProcessStop, log = console.error, info = console.log }) {
   const sessions = new Map();   // id → session
-  const byUser = new Map();     // userId → their session (one each)
+  const byKey = new Map();      // key (the owner's id, or a visitor's) → their session (one each)
 
   const emit = (s, name, data) => { for (const res of s.watchers) res.write(event(name, data)); };
   function arm(s, timer, ms, fn) {
@@ -51,21 +58,25 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
   const touch = (s) => arm(s, 'idle', s.limits.idle, () => (s.current ? touch(s) : end(s, 'idle')));
 
   // The seconds since the last bill, from when the service created the session.
+  // → once they are recorded.
   function bill(s) {
-    if (!s.billedTo) return;
+    if (!s.billedTo) return Promise.resolve();
     const at = now();
     const seconds = Math.round((at - s.billedTo) / 1000);
-    if (seconds <= 0) return;
+    if (seconds <= 0) return Promise.resolve();
     s.billedTo += seconds * 1000;
-    Promise.resolve(recordUsages([{ model: LIVE_MODEL, in: 0, out: seconds, total: seconds }], { userId: s.userId, agentId: s.agentId, threadId: s.threadId, turnId: s.id, kind: 'avatar' }))
+    return Promise.resolve(recordUsages([{ model: LIVE_MODEL, in: 0, out: seconds, total: seconds }], { userId: s.userId, agentId: s.agentId, threadId: s.threadId, turnId: s.id, kind: s.kinds.live }))
       .catch((e) => log('[avatar] usage:', e?.message ?? e));
   }
+  // The check runs after the minute is recorded, so one that sums what was
+  // spent counts it: true goes on, false or a reason ends the session.
   function billing(s) {
     arm(s, 'bill', s.limits.billEvery, async () => {
-      bill(s);
-      const ok = await hasCredit(s.userId).catch(() => true);
+      await bill(s);
       if (s.ended) return;
-      if (!ok) return end(s, 'credit');
+      const verdict = await s.canSpend(s).catch(() => true);
+      if (s.ended) return;
+      if (verdict !== true) return end(s, verdict || 'credit');
       billing(s);
     });
   }
@@ -73,17 +84,19 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
   function end(s, reason, detail = '') {
     if (s.ended) return;
     s.ended = true;
+    s.endedAt = now();
     for (const t of Object.values(s.timers)) clearTimeout(t);
     s.current?.abort();
     s.next = null;
     s.stream?.hangup();
     bill(s);
     sessions.delete(s.id);
-    if (byUser.get(s.userId) === s) byUser.delete(s.userId);
+    if (byKey.get(s.key) === s) byKey.delete(s.key);
     info(`[avatar] live ${s.liveId || '-'} agent ${s.agentId.slice(0, 8)}: ${Math.round((now() - s.started) / 1000)} s, end: ${reason}${detail ? ` (${detail})` : ''}`);
     emit(s, 'end', { reason });
     for (const res of s.watchers) res.end();
     s.watchers.clear();
+    try { s.onEnd?.(s, reason); } catch (e) { log('[avatar] on end:', e?.message ?? e); }
   }
 
   async function start(s) {
@@ -136,7 +149,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
 
   async function speech(s, text) {
     const { pcm, usage } = await tts(text, s.voice);
-    Promise.resolve(recordUsages([usage], { userId: s.userId, turnId: randomUUID(), kind: 'tts' })).catch((e) => log('[avatar] usage:', e?.message ?? e));
+    Promise.resolve(recordUsages([usage], { userId: s.userId, agentId: s.agentId, turnId: randomUUID(), kind: s.kinds.speech })).catch((e) => log('[avatar] usage:', e?.message ?? e));
     return pcm;
   }
 
@@ -162,22 +175,31 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
     // Opening again the session already open for the same chat returns it.
     // usedToday: the owner's talk time in the last 24 h, in ms. Throws
     // {code: 'daily'} when it is all used, {code: 'busy'} when the installation
-    // has its most sessions open.
-    open({ userId, agentId, threadId, photoId, voice, lastReplyId = null, usedToday = 0 }) {
-      const current = byUser.get(userId);
+    // has its most sessions open, or the group its groupMax.
+    // A visitor's session (public-avatar.mjs) also passes: key, one session per
+    // key; reply(s) → the latest {id, content} to say; canSpend(s) → true, or
+    // why it ends; kinds, how its talk time and speech are billed; left, its
+    // talk time in ms instead of the daily one; onEnd(s, reason); meta, its own.
+    open({ userId, agentId, threadId = null, photoId, voice, lastReplyId = null, usedToday = 0,
+      key = userId, reply = null, canSpend = null, kinds = OWNER_KINDS, left = null, group = null, groupMax = 0, onEnd = null, meta = {} }) {
+      const current = byKey.get(key);
       if (current?.agentId === agentId && current.threadId === threadId) return current;
       const lim = { ...LIMITS, ...limits() };
-      const left = lim.daily ? lim.daily - usedToday : Infinity;
+      left ??= lim.daily ? lim.daily - usedToday : Infinity;
       if (left < 60e3) throw Object.assign(new Error('avatar: no talk time left today'), { code: 'daily' });
-      if (lim.sessions && sessions.size - (current ? 1 : 0) >= lim.sessions) throw Object.assign(new Error('avatar: too many sessions open'), { code: 'busy' });
+      const others = [...sessions.values()].filter((o) => o !== current);
+      if (lim.sessions && others.length >= lim.sessions) throw Object.assign(new Error('avatar: too many sessions open'), { code: 'busy' });
+      if (group && groupMax && others.filter((o) => o.group === group).length >= groupMax) throw Object.assign(new Error('avatar: too many sessions open'), { code: 'busy' });
       if (current) end(current, 'replaced');
       const s = {
-        id: randomUUID(), userId, agentId, threadId, photoId, voice, lastReplyId, limits: lim,
-        liveId: '', started: now(), billedTo: 0, ended: false, ready: false, rtc: null, stream: null,
+        id: randomUUID(), key, userId, agentId, threadId, photoId, voice, lastReplyId, limits: lim, kinds, group, meta, onEnd,
+        reply: reply || (() => store.latestReply(threadId, userId)),
+        canSpend: canSpend || (async () => (await hasCredit(userId)) || 'credit'),
+        liveId: '', started: now(), endedAt: 0, billedTo: 0, ended: false, ready: false, rtc: null, stream: null,
         watchers: new Set(), timers: {}, current: null, next: null,
       };
       sessions.set(s.id, s);
-      byUser.set(userId, s);
+      byKey.set(key, s);
       arm(s, 'max', Math.min(lim.max, left), () => end(s, lim.max <= left ? 'max' : 'daily'));
       arm(s, 'unwatched', lim.unwatched, () => end(s, 'unwatched'));
       touch(s);
@@ -208,7 +230,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
     // one queued. A reply arriving mid-speech waits for it; of several waiting,
     // only the latest is said. → whether one was queued.
     async speak(s) {
-      const reply = await store.latestReply(s.threadId, s.userId);
+      const reply = await s.reply(s);
       if (!reply || s.ended || (s.lastReplyId != null && BigInt(reply.id) <= BigInt(s.lastReplyId))) return false;
       s.lastReplyId = reply.id;
       s.next = reply.content;
@@ -226,6 +248,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
 
     end,
     endWhere(match, reason) { for (const s of [...sessions.values()]) if (match(s)) end(s, reason); },
+    where: (match) => [...sessions.values()].filter(match),
     // Whether a live session uses this provider photo (the sweep does not renew it then).
     holds: (photoId) => [...sessions.values()].some((s) => s.photoId === photoId),
   };

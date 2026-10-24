@@ -99,9 +99,106 @@ messages of that contact only:
 The contact goes in the header, not in the address: addresses are often kept
 in proxy logs, and the browser token is enough to read the conversation.
 
+## Avatar
+
+When the installation has avatars and the owner turns on "Face on the
+website" in `/public-support`, a visitor can talk to the assistant's face,
+in its voice. The photo and the voice are the ones set in the assistant's
+settings. While a talk is open, the face says each new reply to that
+contact; messages still go to `/api/public/messages` as above.
+
+From a browser, load the script from the Brambit server and open a talk for
+a contact that already sent a message:
+
+```html
+<video id="face" playsinline muted></video>
+<script src="https://brambit.example.com/public-avatar.js"></script>
+<script>
+  var talk = BrambitAvatar.open({
+    server: 'https://brambit.example.com', agent: '<agent id>', contact: '<token>',
+    video: document.getElementById('face'), sayLatest: true,
+    onState: function (state) { /* connecting, ready, tap_to_hear, speech_failed */ },
+    onEnd: function (reason) { /* see below */ },
+  });
+  // The visitor started to type or speak: the face stops talking.
+  talk.hush();
+</script>
+```
+
+`sayLatest: true` makes the face first say the reply already on the page.
+Some browsers keep the sound off until the visitor taps the page; the state
+is then `tap_to_hear`, and a tap on the video plays it. Leaving the page
+hangs up; `talk.end()` does it too.
+
+The page's Content Security Policy must allow the Brambit server and the
+video service:
+
+```text
+script-src  https://brambit.example.com
+connect-src https://brambit.example.com https://*.agora.io:* wss://*.agora.io:* https://*.sd-rtn.com:* wss://*.sd-rtn.com:*
+```
+
+From a server, open the talk with the key and pass the `id` to the page:
+
+```http
+POST /api/public/avatar?agent=<agent id>
+Authorization: Bearer bpk_<key>
+Content-Type: application/json
+
+{ "contact": "customer-123", "sayLatest": true }
+```
+
+```json
+{ "id": "<talk id>" }
+```
+
+The page then watches it with
+`BrambitAvatar.watch({ server, agent, id, video, onState, onEnd })`. The page
+still has to be on a listed website.
+
+Without the script:
+
+| Call | What it does |
+| --- | --- |
+| `POST /api/public/avatar?agent=` `{contact, sayLatest?}` | Opens a talk, returns `{id}`; the same contact again gets the talk already open |
+| `GET /api/public/avatar/events?agent=&id=` | Server-sent events: `rtc` (the Agora channel to join: `appId`, `channel`, `token`, `uid`), `ready`, `error`, `end` (`{reason}`) |
+| `POST /api/public/avatar/hush?agent=` `{id}` | The face stops talking |
+| `POST /api/public/avatar/end?agent=` `{id}` | Hangs up; a `text/plain` body works, for `navigator.sendBeacon` |
+
+A talk ends with one of these reasons:
+
+| `reason` | Why |
+| --- | --- |
+| `hangup` | The page hung up |
+| `unwatched` | Nobody watched the events for 20 seconds |
+| `idle` | Nothing was said for 5 minutes |
+| `max` | It reached the longest talk of the installation (30 minutes by default) |
+| `daily` | The visitor's minutes or the assistant's minutes of the day ran out |
+| `stopped` | The contact stopped the conversation, was blocked or was deleted |
+| `unavailable` | The owner's credit or the daily spending cap ran out, or the owner turned public support, the web channel or the face off |
+| `changed`, `removed`, `avatar_not_ready` | The assistant's face changed or is not usable |
+| `account_deleted` | The owner's account was deleted |
+| `provider`, `error`, `shutdown` | The video service or the server failed or stopped |
+
+The owner pays for the talk time like the rest of public support (about
+US$0.30 a minute, plus the speech), and it counts in the daily spending cap.
+The owner also sets, in `/public-support`:
+
+- minutes per day, all visitors together (default 20);
+- minutes for each visitor, every 24 hours (default 5). From a browser they
+  are counted per contact and per address, so a new contact token does not
+  give new minutes; visitors behind one shared address share them. Brambit
+  keeps this count in memory: a restart starts it over;
+- visitors talking at the same time (default 2), also under the
+  installation's limit on open talks.
+
+Talk time is checked every minute, so a talk can run up to a minute past a
+limit.
+
 ## Limits
 
-- 60 calls per minute per address (messages and history together).
+- 60 calls per minute per address (messages, history and the avatar's
+  events, hush and end together).
 - Body up to 64 KB, plus the photo when there is one.
 - The public-support limits the owner sets in `/public-support` apply as on
   WhatsApp: messages per hour from each contact (default 30), messages per
@@ -151,3 +248,19 @@ Keep a proxy in front when Brambit is reachable from the internet. With
 | 413 | `body_too_large` | Body over 64 KB, not counting the photo |
 | 413 | `image_too_large` | Photo over 1 MB decoded |
 | 429 | | Too many calls from this address |
+
+Avatar calls also return:
+
+| Status | `error` | When |
+| --- | --- | --- |
+| 400 | `contact_required` | Browser call without the contact token |
+| 403 | `avatar_disabled` | The owner did not turn the face on |
+| 403 | `contact_stopped` | The contact stopped the conversation or was blocked |
+| 404 | `session_not_found` | Unknown or ended talk |
+| 409 | `avatar_not_ready` | The assistant's face is not ready; try again later |
+| 409 | `message_first` | The contact has not sent a message yet |
+| 429 | `avatar_daily_limit` | Less than a minute left for this visitor or for the assistant today |
+| 503 | `avatar_busy` | Too many talks open at once |
+| 503 | `avatar_unavailable` | The installation has no avatars |
+| 503 | `unavailable` | The owner's credit or the daily spending cap ran out |
+| 429 | | Over 10 talks opened per minute from this address |
