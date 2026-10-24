@@ -29,16 +29,17 @@
 //   error is a message key from the plugin's catalog (default
 //   server.shared_assistant_publish_not_allowed). Without the hook, any signed-in
 //   person may publish.
-//  prices({userId, publications: [{id, agentId, creatorUserId, version}]}) →
+//  prices({userId, publications: [{id, agentId, creatorUserId, version, acceptedKey}]}) →
 //   {[publication id]: price | null}: what using each assistant costs on top of
 //   the person's own usage. price = {key, ...}: key changes whenever the price
 //   does; the rest goes to the screen as it is. null = no extra. Starting an
 //   entry for a priced assistant takes acceptedPrice equal to that key, so
 //   nobody starts paying a price they weren't shown. The entry keeps the key the
-//   person accepted: when the price key changes, every entry of that assistant
-//   pauses (its turns answer a notice and run no model, entryPricePause) until the
-//   person accepts the new price through start again. A plugin that lowers a
-//   price and doesn't want to pause anyone may keep the key.
+//   person accepted (acceptedKey, null when they have no entry or accepted none):
+//   when the key the hook gives differs from it, the entry pauses (its turns
+//   answer a notice and run no model, entryPricePause) until the person accepts
+//   the new price through start again. A plugin that doesn't want to pause
+//   someone whose price went down gives their acceptedKey back.
 // A hook that throws, or a price without a key, refuses the action (503): nothing
 // is published or started on a check that didn't run.
 // The charge goes through the spend port: every model call of an entry turn
@@ -225,8 +226,8 @@ function entryUrlSeed({ message = '', history = [], agent = {} } = {}) {
 // The plugin's sharedAssistants port and the database, set by registerSharedAssistants.
 let portHooks = null;
 let entryDb = null;
-const publicationRef = (r) => ({ id: r.id, agentId: r.agent_id, creatorUserId: r.creator_id, version: r.version });
-// [{id, agentId, creatorUserId, version}] → Map(publication id → price | null).
+const publicationRef = (r, acceptedKey = r.accepted_price_key) => ({ id: r.id, agentId: r.agent_id, creatorUserId: r.creator_id, version: r.version, acceptedKey: acceptedKey ?? null });
+// [{id, agentId, creatorUserId, version, acceptedKey}] → Map(publication id → price | null).
 async function pricesOf(hooks, userId, publications) {
   const out = new Map(publications.map((p) => [p.id, null]));
   if (typeof hooks?.prices !== 'function' || !publications.length) return out;
@@ -252,7 +253,7 @@ export async function entryPricePause(agent, { userId, language, kind, routineSc
   if (!s?.available || typeof portHooks?.prices !== 'function') return null;
   let key = 'server.shared_assistant_price_changed';
   try {
-    const price = (await pricesOf(portHooks, userId, [{ id: s.publicationId, agentId: s.sourceAgentId, creatorUserId: s.creatorId, version: s.version }])).get(s.publicationId);
+    const price = (await pricesOf(portHooks, userId, [{ id: s.publicationId, agentId: s.sourceAgentId, creatorUserId: s.creatorId, version: s.version, acceptedKey: s.acceptedPriceKey ?? null }])).get(s.publicationId);
     if (!price || price.key === s.acceptedPriceKey) return null;
     console.log(`[shared-assistants] entry ${agent.id} paused: price changed`);
   } catch (e) {
@@ -426,7 +427,7 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
            WHERE p.agent_id = e.source_agent_id AND p.status = 'published')
         ORDER BY e.created_at`, [user.id]);
     let prices;
-    try { prices = await pricesOf(hooks, user.id, rows.filter((r) => !r.own).map(publicationRef)); } catch (e) { return unavailable(res, 'prices', e); }
+    try { prices = await pricesOf(hooks, user.id, rows.filter((r) => !r.own).map((r) => publicationRef(r))); } catch (e) { return unavailable(res, 'prices', e); }
     // priceChanged: the person uses it and its price is no longer the one they
     // accepted, so their entry is paused until they accept this one.
     return send(res, 200, { assistants: rows.map((r) => {
@@ -454,7 +455,7 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
     const live = `SELECT id, accepted_price_key FROM ${S}.agents WHERE user_id = $1 AND source_agent_id = $2 AND shared_entry AND archived_at IS NULL`;
     const { rows: [had] } = await pool.query(live, [user.id, p.agent_id]);
     let price;
-    try { price = (await pricesOf(hooks, user.id, [publicationRef(p)])).get(p.id); } catch (e) { return unavailable(res, 'prices', e); }
+    try { price = (await pricesOf(hooks, user.id, [publicationRef(p, had?.accepted_price_key)])).get(p.id); } catch (e) { return unavailable(res, 'prices', e); }
     const toAccept = price && price.key !== had?.accepted_price_key;
     if (toAccept && body.acceptedPrice !== price.key) return send(res, 409, { error: 'server.shared_assistant_price_not_accepted', price });
     if (had) {

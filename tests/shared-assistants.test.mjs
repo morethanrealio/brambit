@@ -42,13 +42,14 @@ test('a community assistant shares only the published version, and each side see
   // The publication review answers from a fake endpoint, the only one let through the guard.
   await fs.writeFile(env.BRAMBIT_MODELS_FILE,'providers:\n  review:\n    base_url: http://review.invalid/v1\ntasks:\n  default: review/fake\n  classification: review/fake\n');
   const reviewer=path.join(root,'fake-reviewer.mjs');await fs.writeFile(reviewer,`const blocked=globalThis.fetch;globalThis.fetch=async(url,init)=>{if(!String(url).startsWith('http://review.invalid/'))return blocked(url,init);const text=JSON.parse(init.body).messages.at(-1).content;if(text.includes('REVIEW-DOWN'))return new Response('{}',{status:400});const verdict=text.includes('EXFIL-MARK')?{allowed:false,categories:['data_exfiltration'],field:'role',excerpt:'EXFIL-MARK',reason:'sends data out'}:{allowed:true,categories:[]};return new Response(JSON.stringify({choices:[{message:{role:'assistant',content:JSON.stringify(verdict)},finish_reason:'stop'}],usage:{prompt_tokens:9,completion_tokens:9,total_tokens:18}}),{status:200,headers:{'content-type':'application/json'}});};`);
-  // The plugin: B may not publish; a price only while the price file exists; both
-  // hooks throw while hooks-down exists. Its spend port logs what each model call brings.
+  // The plugin: B may not publish; a price only while the price file exists (with
+  // keep, a lower price gives back the key the person accepted); both hooks throw
+  // while hooks-down exists. Its spend port logs what each model call brings.
   await fs.writeFile(env.BRAMBIT_PLUGINS,`import fs from 'node:fs';import {createGastoSimples} from ${JSON.stringify(path.join(repo,'web/simple-spend.mjs'))};
 const at=n=>${JSON.stringify(root)}+'/'+n,up=()=>{if(fs.existsSync(at('hooks-down')))throw Error('hook down');};
 export default [{nome:'test-market',portas:()=>{const g=createGastoSimples({gravarUso:async()=>{}});return {
  sharedAssistants:{canPublish:({userId})=>(up(),{allowed:userId!==${JSON.stringify(B)}}),
-  prices:({publications})=>{up();const p=fs.existsSync(at('price'))?JSON.parse(fs.readFileSync(at('price'),'utf8')):null;return Object.fromEntries(publications.map(x=>[x.id,p]));}},
+  prices:({publications})=>{up();const p=fs.existsSync(at('price'))?JSON.parse(fs.readFileSync(at('price'),'utf8')):null;return Object.fromEntries(publications.map(x=>[x.id,p&&p.keep&&x.acceptedKey?{...p,key:x.acceptedKey}:p]));}},
  gasto:{...g,vincular:a=>{console.log('SPEND_ORIGIN='+JSON.stringify({agentId:a.agentId,origin:a.origin??null}));return g.vincular(a);}}};}}];`);
   let output='';child=spawn(process.execPath,['--import',path.join(repo,'test-support/boot-network-guard.mjs'),'--import',reviewer,'--import',observer,path.join(repo,'web/server.mjs')],{cwd:root,env,stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
@@ -152,6 +153,11 @@ export default [{nome:'test-market',portas:()=>{const g=createGastoSimples({grav
   assert.deepEqual(await ok(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice:'p2'}),{agentId:stC.agentId,created:false});
   assert.equal((await ok(SID_C,'GET','/api/shared-assistants')).assistants[0].priceChanged,false);
   assert.ok((await chatC()).calls,'C\'s entry stays paused after accepting the new price');
+  // The hook sees what C accepted, so a lower price can leave C's entry running.
+  await fs.writeFile(path.join(root,'price'),JSON.stringify({key:'p3',credits:3,keep:true}));
+  assert.ok((await chatC()).calls,'a lower price kept by the plugin paused the entry');
+  assert.deepEqual((await ok(SID_C,'GET','/api/shared-assistants')).assistants.map(x=>[x.price.key,x.priceChanged]),[['p2',false]]);
+  assert.deepEqual(await ok(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId}),{agentId:stC.agentId,created:false});
   await fs.rm(path.join(root,'price'));
 
   // A version the review refuses or can't check is not published: the entry keeps v1.
