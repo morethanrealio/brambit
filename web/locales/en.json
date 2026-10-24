@@ -846,6 +846,11 @@
     "buttons": {
       "confirm": "Confirm",
       "cancel": "Cancel"
+    },
+    "community_entry": {
+      "run_with_internet": "run this code in the isolated environment (sandbox), which has internet access and can send data out: {what}",
+      "too_long": "(too long, truncated)",
+      "a_task": "a task"
     }
   },
   "onboarding": {

@@ -737,13 +737,14 @@ Rules:
 • Bring proper names, numbers, addresses, dates, prices, sources; no generic answers like "a local restaurant". If you cannot confirm something, say so honestly instead of making it up.
 • When done, DELIVER the final answer in the requested format, direct and organized. Do not describe what you did; deliver the result. Cite each piece of data with the number of the source it came from, e.g. [2]. Do not write a list of sources at the end.`;
 
-async function runResearchSubagent({ objetivo, formato, onUsage, language, searchBudget = null, fontes = null, onToolOutput }) {
+async function runResearchSubagent({ objetivo, formato, onUsage, language, searchBudget = null, fontes = null, onToolOutput, guardLinks = (t) => t }) {
   const sub = new ToolRegistry();
   // Same budget as the calling turn: a repeated search across sub-agents comes back
   // from cache and the cap applies to the whole turn, not per sub-agent.
   // Same source registry as the turn: the sub-agent's [n] is valid in the final response.
-  sub.add(webSearchTool({ onUsage, budget: searchBudget, fontes, language }));
-  sub.add(openLinkTool({ onUsage, fontes }));
+  // guardLinks: the turn's egress guard in a community entry, identity otherwise.
+  sub.add(guardLinks(webSearchTool({ onUsage, budget: searchBudget, fontes, language })));
+  sub.add(guardLinks(openLinkTool({ onUsage, fontes })));
   // READ/SEARCH sub-agents (research, Google, connectors) only gather
   // information and synthesize text: work where the cheap model ties the strong one
   // (see evals). They go to the sub-agent provider (DeepSeek V4 Flash), high
@@ -5937,7 +5938,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (searchBudget.exhausted) return SEARCH_LIMIT_MSG(searchBudget.max);
         try {
           // The list at the end shows the main model where each [n] came from.
-          const resumo = await runResearchSubagent({ objetivo, formato, onToolOutput: saidaDeSubagente, onUsage: (e) => mediaUsages.push(e), language: userLang, searchBudget, fontes: fontesDoTurno });
+          const resumo = await runResearchSubagent({ objetivo, formato, onToolOutput: saidaDeSubagente, onUsage: (e) => mediaUsages.push(e), language: userLang, searchBudget, fontes: fontesDoTurno, guardLinks: registry.guardLinks });
           return citarFontes(resumo, fontesDoTurno, { language: userLang });
         } catch (e) {
           return `ERRO na pesquisa: ${e?.message ?? e}`;
@@ -6022,7 +6023,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   }
   if (opts.confirmationRestore) {
     for (const group of Object.values(deferredGroups)) group.populate();
-    if (agentCategory === 'grupo') podarRegistryGrupo(registry, toolConfig);
+    if (agentCategory === 'grupo') podarRegistryGrupo(registry, toolConfig); else if (agent.shared) pruneSharedEntryRegistry(registry, { message: '', history: [], agent, threadId: thread.id, gateOpts });
     const adapter = registry.map.get(opts.confirmationRestore.name);
     if (!adapter?.confirmationTool) return null;
     return { ...adapter, confirmedAttachments: () => attachments, executeConfirmed: async run => {
@@ -6277,7 +6278,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     const { removidas, mantidas, travadas, host } = podarRegistryGrupo(registry, toolConfig);
     console.log(`[categoria] grupo agent=${agent?.id}: registry pruned, ${mantidas} tools kept, ${removidas} removed, ${travadas} SSH tools locked on host=${host || '(nenhum)'}`);
   }
-  if (!noTools && agent.shared) pruneSharedEntryRegistry(registry); // community entry: no self-reconfiguration nor skill management
+  if (!noTools && agent.shared) pruneSharedEntryRegistry(registry, { message: kind === 'routine' || kind === 'webhook' ? '' : savedUserMsg, history: histParaModelo, agent, threadId: thread.id, gateOpts }); // community entry: no self-reconfiguration, no skill management, egress guard
   // Routine WITH a delivery channel: deliverRoutine is what delivers the result, with
   // the TEXT the model generates. If the model also calls enviar_mensagem (the prompt
   // "Send a message to so-and-so..." tempts it to), the content goes out via the tool AND the
