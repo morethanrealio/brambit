@@ -42,7 +42,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {registerSharedAssistants,spendOrigin,entryPricePause,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {registerSharedAssistants,missingAssistantError,spendOrigin,entryPricePause,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
 import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -10271,7 +10271,7 @@ async function atenderRequest(req, res) {
     if (!agentId) return send(res, 400, { error: 'server.pick_assistant' });
     let agent;
     try { agent = await getAgentOwned(agentId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
-    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
+    if (!agent) return send(res, 404, { error: await missingAssistantError(agentId, user.id) });
     try {
       const t = await createThread({ agentId, userId: user.id, title });
       return send(res, 200, { id: t.id, agentId, agentName: agent.name, title: t.title });
@@ -10490,7 +10490,7 @@ async function atenderRequest(req, res) {
     try { thread = await getThreadOwned(threadId, user.id); } catch (e) { return fail(res, 500, 'server.database_error', e); }
     if (!thread) return send(res, 404, { error: 'server.chat_not_found_reload_page' });
     const agent = await getAgentOwned(thread.agent_id, user.id);
-    if (!agent) return send(res, 404, { error: 'server.assistant_not_found_alt' });
+    if (!agent) return send(res, 404, { error: await missingAssistantError(thread.agent_id, user.id) });
     try {
       const msg = (voice && markVoiceInput(message)) || message || notaMidiaSemTexto({ images: imgs.length, files: docs.length });
       // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on

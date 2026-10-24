@@ -72,6 +72,7 @@
     "shared_assistant_price_not_accepted": "This assistant has a usage price. Check the price and confirm to start.",
     "shared_assistant_check_unavailable": "This could not be checked right now, so nothing was done. Try again in a little while.",
     "shared_assistant_price_changed": "The creator of this assistant changed its usage price, so it is paused for you. To keep using it, open the community assistants, check the new price and accept it. Nothing was done with your message.",
+    "shared_assistant_unavailable": "This community assistant is no longer available, so it doesn't answer anymore. Your conversations with it stay here.",
     "shared_assistant_review_refused": "The assistant was not published: its text has something that can't go to the community. Review it and try again.",
     "shared_assistant_review_data_exfiltration": "The assistant was not published: its text asks to send or copy the data of the people who use it somewhere else. Remove that part and try again.",
     "shared_assistant_review_credential_request": "The assistant was not published: its text asks the people who use it for passwords, verification codes or login details. Remove that part and try again.",

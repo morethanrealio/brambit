@@ -173,6 +173,13 @@ export default [{nome:'test-market',portas:()=>{const g=createGastoSimples({grav
   await ok(SID_A,'POST','/api/shared-assistants/unpublish',{agentId:ag.id});
   assert.equal(await lib.getAgentOwned(E,B),null,'a withdrawn assistant still runs');
   assert.deepEqual((await lib.getAgentOwned(E,B,{incluirArquivado:true})).shared,{available:false});
+  // The list tells each side what stopped: B's entry is withdrawn (not B's to
+  // publish), A's assistant has no live version; chatting with it says why.
+  const afterB=await ok(SID_B,'GET','/api/shared-assistants'),afterA=await ok(SID_A,'GET','/api/shared-assistants');
+  assert.deepEqual(afterB.withdrawn,[{agentId:E,name:'Chef Two'}]);assert.ok(!afterB.mine.some(m=>m.agentId===E));
+  assert.deepEqual(afterA.mine.filter(m=>m.agentId===ag.id).map(m=>m.publicationId),[null]);
+  const stoppedChat=await call(SID_B,'POST','/api/chat',{threadId:th.id,message:'hello'});
+  assert.equal(stoppedChat.status,404);assert.match(stoppedChat.json.error,/no longer available/);
   assert.ok((await history()).includes('BIA-PRIVATE'));
   await ok(SID_A,'POST','/api/shared-assistants/publish',{agentId:ag.id});
   assert.ok(await lib.getAgentOwned(E,B));

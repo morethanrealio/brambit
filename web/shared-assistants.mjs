@@ -222,8 +222,9 @@ function entryUrlSeed({ message = '', history = [], agent = {} } = {}) {
   return seed.filter((s) => typeof s === 'string' && s.trim());
 }
 
-// The plugin's sharedAssistants port, set by registerSharedAssistants.
+// The plugin's sharedAssistants port and the database, set by registerSharedAssistants.
 let portHooks = null;
+let entryDb = null;
 const publicationRef = (r) => ({ id: r.id, agentId: r.agent_id, creatorUserId: r.creator_id, version: r.version });
 // [{id, agentId, creatorUserId, version}] → Map(publication id → price | null).
 async function pricesOf(hooks, userId, publications) {
@@ -262,6 +263,20 @@ export async function entryPricePause(agent, { userId, language, kind, routineSc
   return { text: productI18n().t(key, language), attachments: [] };
 }
 
+// The error for a chat that can't run because its assistant didn't load
+// (getAgentOwned gave null): for one of the person's community entries whose
+// assistant was withdrawn (or the feature is off) it says so and that the history
+// stays, instead of "not found".
+export async function missingAssistantError(agentId, userId) {
+  const fallback = 'server.assistant_not_found_alt';
+  if (!entryDb || !agentId || !userId) return fallback;
+  try {
+    const { rows: [e] } = await entryDb.pool.query(
+      `SELECT 1 FROM ${entryDb.S}.agents WHERE id = $1 AND user_id = $2 AND shared_entry AND archived_at IS NULL`, [agentId, userId]);
+    return e ? 'server.shared_assistant_unavailable' : fallback;
+  } catch { return fallback; }
+}
+
 // turn (optional): { message, history, agent, threadId, gateOpts }. With it, the
 // entry also gets the egress guard (shared-entry-egress.mjs); without it (older
 // callers) only the deny-list runs.
@@ -282,6 +297,7 @@ export function pruneSharedEntryRegistry(registry, turn = null) {
 // hooks = the plugin's sharedAssistants port (see the top of this file).
 export function registerSharedAssistants(rotas, { pool, send, fail, tooManyRequests, recordUsages, hooks = null, S = 'mtr_harness' }) {
   portHooks = hooks;
+  entryDb = { pool, S };
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     if (!sharedAssistantsOn() || !ownerFeaturesOn) return SEGUE;
     res.setHeader('Cache-Control', 'no-store');
@@ -381,7 +397,8 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
   });
 
   // Live publications. The id is the publication's, never the assistant's; of
-  // the creator, only the first name.
+  // the creator, only the first name. Plus the person's own side: what they can
+  // publish (mine) and their entries that stopped (withdrawn).
   route('GET', '/api/shared-assistants', async ({ res, user }) => {
     const { rows } = await pool.query(
       `SELECT p.id, p.agent_id, p.name, p.goal, p.version, p.published_at, u.name AS creator, c.user_id AS creator_id, c.user_id = $1 AS own,
@@ -391,6 +408,23 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
          JOIN ${S}.users u ON u.id = c.user_id AND u.deleted_at IS NULL
          LEFT JOIN ${S}.agents e ON e.user_id = $1 AND e.source_agent_id = p.agent_id AND e.shared_entry AND e.archived_at IS NULL
         WHERE p.status = 'published' ORDER BY p.published_at DESC LIMIT 200`, [user.id]);
+    // mine: the person's own assistants that can be published, with the live
+    // version if there is one (agentId is theirs, so it can go to the screen).
+    const { rows: mine } = await pool.query(
+      `SELECT a.id, a.name, p.id AS publication_id, p.version, p.published_at FROM ${S}.agents a
+         LEFT JOIN ${S}.agent_publications p ON p.agent_id = a.id AND p.status = 'published'
+        WHERE a.user_id = $1 AND a.archived_at IS NULL AND NOT a.shared_entry AND (a.category IS NULL OR a.category = 'pessoal')
+        ORDER BY a.created_at`, [user.id]);
+    // withdrawn: the person's entries whose assistant is no longer published
+    // (withdrawn, archived, creator gone). They don't run; their history stays.
+    const { rows: withdrawn } = await pool.query(
+      `SELECT e.id, e.name FROM ${S}.agents e
+        WHERE e.user_id = $1 AND e.shared_entry AND e.archived_at IS NULL AND NOT EXISTS (
+          SELECT 1 FROM ${S}.agent_publications p
+            JOIN ${S}.agents c ON c.id = p.agent_id AND c.archived_at IS NULL
+            JOIN ${S}.users u ON u.id = c.user_id AND u.deleted_at IS NULL
+           WHERE p.agent_id = e.source_agent_id AND p.status = 'published')
+        ORDER BY e.created_at`, [user.id]);
     let prices;
     try { prices = await pricesOf(hooks, user.id, rows.filter((r) => !r.own).map(publicationRef)); } catch (e) { return unavailable(res, 'prices', e); }
     // priceChanged: the person uses it and its price is no longer the one they
@@ -399,7 +433,9 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
       const price = prices.get(r.id) ?? null;
       return { id: r.id, name: r.name, goal: r.goal, version: r.version, publishedAt: r.published_at,
         creator: primeiroNome(r.creator, ''), own: r.own, using: r.using, price, priceChanged: !!(r.using && price && price.key !== r.accepted_price_key) };
-    }) });
+    }),
+    mine: mine.map((m) => ({ agentId: m.id, name: m.name, publicationId: m.publication_id, version: m.version, publishedAt: m.published_at })),
+    withdrawn: withdrawn.map((w) => ({ agentId: w.id, name: w.name })) });
   });
 
   // { publicationId, acceptedPrice } → the person's entry for it (created on the
