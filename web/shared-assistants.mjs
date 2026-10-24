@@ -26,12 +26,24 @@ import { readBody } from './http-body.mjs';
 import { SEGUE } from './routes.mjs';
 import { ownerFeaturesOn } from './profiles.mjs';
 import { nomeDeTerceiro, primeiroNome } from './agent-inbox.mjs';
+import { reviewPublication } from './publication-review.mjs';
+import { randomUUID } from 'node:crypto';
 
 export const sharedAssistantsOn = () => String(process.env.BRAMBIT_SHARED_ASSISTANTS ?? '').trim().toLowerCase() === 'on';
 
 // Caps of the published copy: the role text goes into every turn of everyone
 // who uses the assistant.
 export const PUBLICATION_LIMITS = { name: 40, goal: 200, instructions: 8000, style: 4000, skills: 10, skillTitle: 120, skillTrigger: 300, skillBody: 8000 };
+// What the creator reads when the review refuses a version, by the first
+// category it found (publication-review.mjs).
+const REVIEW_ERRORS = {
+  data_exfiltration: 'server.shared_assistant_review_data_exfiltration',
+  credential_request: 'server.shared_assistant_review_credential_request',
+  safety_override: 'server.shared_assistant_review_safety_override',
+  covert_action: 'server.shared_assistant_review_covert_action',
+  impersonation: 'server.shared_assistant_review_impersonation',
+  harmful: 'server.shared_assistant_review_harmful',
+};
 const clip = (s, n) => String(s ?? '').trim().slice(0, n);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -165,8 +177,8 @@ export function pruneSharedEntryRegistry(registry) {
   return registry;
 }
 
-// Routes. deps: pool and send/fail/tooManyRequests from the server.
-export function registerSharedAssistants(rotas, { pool, send, fail, tooManyRequests, S = 'mtr_harness' }) {
+// Routes. deps: pool, send/fail/tooManyRequests and recordUsages from the server.
+export function registerSharedAssistants(rotas, { pool, send, fail, tooManyRequests, recordUsages, S = 'mtr_harness' }) {
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     if (!sharedAssistantsOn() || !ownerFeaturesOn) return SEGUE;
     res.setHeader('Cache-Control', 'no-store');
@@ -178,36 +190,65 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
   });
   const notFound = (res) => send(res, 404, { error: 'server.shared_assistant_not_found' });
 
-  // { agentId } → publishes a new version of one's own assistant.
+  // The version to publish, built from the assistant as it is now. lock = '' for
+  // the first read, 'FOR UPDATE' for the re-read inside the transaction.
+  async function versionOf(c, agentId, userId, lock = '') {
+    const { rows: [ag] } = await c.query(
+      `SELECT id, name, goal, instructions, style, model, category, shared_entry FROM ${S}.agents
+        WHERE id = $1 AND user_id = $2 AND archived_at IS NULL ${lock}`, [agentId, userId]);
+    if (!ag) return { status: 404, error: 'server.shared_assistant_not_found' };
+    if (ag.shared_entry || (ag.category && ag.category !== 'pessoal')) return { status: 409, error: 'server.shared_assistant_cannot_publish' };
+    if (!String(ag.instructions || '').trim()) return { status: 400, error: 'server.shared_assistant_needs_instructions' };
+    // Only the creator's own skills are copied, without their script.
+    const { rows: skills } = await c.query(
+      `SELECT s.slug, s.title, s.trigger, s.body FROM ${S}.skill_installs i JOIN ${S}.skills s ON s.id = i.skill_id
+        WHERE i.agent_id = $1 AND i.enabled AND s.owner_user_id = $2 ORDER BY s.title LIMIT $3`, [agentId, userId, PUBLICATION_LIMITS.skills]);
+    const L = PUBLICATION_LIMITS;
+    return { version: {
+      name: clip(ag.name, L.name), goal: clip(ag.goal, L.goal), instructions: clip(ag.instructions, L.instructions), style: clip(ag.style, L.style), model: ag.model || null,
+      skills: skills.map((s) => ({ slug: clip(s.slug, L.skillTitle), title: clip(s.title || s.slug, L.skillTitle), trigger: clip(s.trigger, L.skillTrigger), body: clip(s.body, L.skillBody) })),
+    } };
+  }
+
+  // { agentId } → publishes a new version of one's own assistant, once the review
+  // (publication-review.mjs) lets it through. The review runs outside the
+  // transaction; inside it the assistant is read again under lock and published
+  // only if it is still exactly what was reviewed.
   route('POST', '/api/shared-assistants/publish', async ({ req, res, user }) => {
     const agentId = uuid((await readBody(req)).agentId);
     if (!agentId) return notFound(res);
+    const first = await versionOf(pool, agentId, user.id);
+    if (!first.version) return send(res, first.status, { error: first.error });
+    // Each review is a model call the installation pays for.
+    if (tooManyRequests(req, res, 'shared-assistants-publish:' + user.id, 20, 3_600_000)) return;
+    const review = await reviewPublication(first.version);
+    if (review.usage && recordUsages) await recordUsages([review.usage], { userId: user.id, agentId, threadId: null, turnId: randomUUID(), kind: 'publication_review' }, { noBill: true }).catch(() => {});
+    if (review.failClosed) {
+      console.error(`[shared-assistants] review unavailable agent=${agentId}: ${review.reason}`);
+      return send(res, 503, { error: 'server.shared_assistant_review_unavailable' });
+    }
+    if (!review.allowed) {
+      console.log(`[shared-assistants] publish refused agent=${agentId} categories=${review.categories.join(',') || '-'}`);
+      return send(res, 422, { error: REVIEW_ERRORS[review.categories[0]] || 'server.shared_assistant_review_refused',
+        categories: review.categories, field: review.field, skill: review.skill, excerpt: review.excerpt });
+    }
     const c = await pool.connect();
     try {
       await c.query('BEGIN');
-      const { rows: [ag] } = await c.query(
-        `SELECT id, name, goal, instructions, style, model, category, shared_entry FROM ${S}.agents
-          WHERE id = $1 AND user_id = $2 AND archived_at IS NULL FOR UPDATE`, [agentId, user.id]);
-      if (!ag) { await c.query('ROLLBACK'); return notFound(res); }
-      if (ag.shared_entry || (ag.category && ag.category !== 'pessoal')) { await c.query('ROLLBACK'); return send(res, 409, { error: 'server.shared_assistant_cannot_publish' }); }
-      if (!String(ag.instructions || '').trim()) { await c.query('ROLLBACK'); return send(res, 400, { error: 'server.shared_assistant_needs_instructions' }); }
-      // Only the creator's own skills are copied, without their script.
-      const { rows: skills } = await c.query(
-        `SELECT s.slug, s.title, s.trigger, s.body FROM ${S}.skill_installs i JOIN ${S}.skills s ON s.id = i.skill_id
-          WHERE i.agent_id = $1 AND i.enabled AND s.owner_user_id = $2 ORDER BY s.title LIMIT $3`, [agentId, user.id, PUBLICATION_LIMITS.skills]);
-      const L = PUBLICATION_LIMITS;
-      const copy = skills.map((s) => ({ slug: clip(s.slug, L.skillTitle), title: clip(s.title || s.slug, L.skillTitle), trigger: clip(s.trigger, L.skillTrigger), body: clip(s.body, L.skillBody) }));
-      const name = clip(ag.name, L.name);
+      const now = await versionOf(c, agentId, user.id, 'FOR UPDATE');
+      if (!now.version) { await c.query('ROLLBACK'); return send(res, now.status, { error: now.error }); }
+      if (JSON.stringify(now.version) !== JSON.stringify(first.version)) { await c.query('ROLLBACK'); return send(res, 409, { error: 'server.shared_assistant_changed' }); }
+      const v = now.version;
       await c.query(`UPDATE ${S}.agent_publications SET status = 'superseded' WHERE agent_id = $1 AND status = 'published'`, [agentId]);
       const { rows: [pub] } = await c.query(
-        `INSERT INTO ${S}.agent_publications (agent_id, owner_user_id, version, name, goal, instructions, style, model, skills, status, published_at)
-         VALUES ($1, $2, (SELECT COALESCE(MAX(version), 0) + 1 FROM ${S}.agent_publications WHERE agent_id = $1), $3, $4, $5, $6, $7, $8::jsonb, 'published', now())
+        `INSERT INTO ${S}.agent_publications (agent_id, owner_user_id, version, name, goal, instructions, style, model, skills, status, review, published_at)
+         VALUES ($1, $2, (SELECT COALESCE(MAX(version), 0) + 1 FROM ${S}.agent_publications WHERE agent_id = $1), $3, $4, $5, $6, $7, $8::jsonb, 'published', $9::jsonb, now())
          RETURNING id, version`,
-        [agentId, user.id, name, clip(ag.goal, L.goal), clip(ag.instructions, L.instructions), clip(ag.style, L.style), ag.model || null, JSON.stringify(copy)]);
+        [agentId, user.id, v.name, v.goal, v.instructions, v.style, v.model, JSON.stringify(v.skills), JSON.stringify({ model: review.model, checkedAt: new Date().toISOString() })]);
       // The name in the entries' lists follows the published one.
-      await c.query(`UPDATE ${S}.agents SET name = $2 WHERE source_agent_id = $1 AND shared_entry AND name <> $2`, [agentId, name]);
+      await c.query(`UPDATE ${S}.agents SET name = $2 WHERE source_agent_id = $1 AND shared_entry AND name <> $2`, [agentId, v.name]);
       await c.query('COMMIT');
-      return send(res, 200, { ok: true, publicationId: pub.id, version: pub.version, skills: copy.length });
+      return send(res, 200, { ok: true, publicationId: pub.id, version: pub.version, skills: v.skills.length });
     } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; }
     finally { c.release(); }
   });
