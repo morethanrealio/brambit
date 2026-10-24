@@ -42,7 +42,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {registerSharedAssistants,spendOrigin,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {registerSharedAssistants,spendOrigin,entryPricePause,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
 import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -2493,8 +2493,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (!opts.confirmationRestore && !ephemeral && kind !== 'routine' && kind !== 'cockpit' && !webhook && !(thread.history?.length)) {
     eventos.emitir('primeira_mensagem', { userId });
   }
-  // Allowance control: if the month's credits are exhausted, don't run the model.
-  // Soft cap, applies to all channels (web, Telegram, WhatsApp, routines).
+  const pricePause = opts.confirmationRestore ? null : await entryPricePause(agent, { userId, language: idiomaResposta, kind, routineScheduled }); if (pricePause) return pricePause; // community entry whose price changed: paused until the person accepts the new one
+  // Allowance control: if the month's credits are exhausted, don't run the model. Soft cap, applies to all channels (web, Telegram, WhatsApp, routines).
   const credit = await getCreditStatus(userId);
   if (credit.over && !opts.confirmationRestore) {
     const avisos = avisosTurno(idiomaResposta);

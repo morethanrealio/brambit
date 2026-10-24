@@ -34,7 +34,11 @@
 //   the person's own usage. price = {key, ...}: key changes whenever the price
 //   does; the rest goes to the screen as it is. null = no extra. Starting an
 //   entry for a priced assistant takes acceptedPrice equal to that key, so
-//   nobody starts paying a price they weren't shown.
+//   nobody starts paying a price they weren't shown. The entry keeps the key the
+//   person accepted: when the price key changes, every entry of that assistant
+//   pauses (its turns answer a notice and run no model, entryPricePause) until the
+//   person accepts the new price through start again. A plugin that lowers a
+//   price and doesn't want to pause anyone may keep the key.
 // A hook that throws, or a price without a key, refuses the action (503): nothing
 // is published or started on a check that didn't run.
 // The charge goes through the spend port: every model call of an entry turn
@@ -48,6 +52,7 @@ import { nomeDeTerceiro, primeiroNome } from './agent-inbox.mjs';
 import { reviewPublication } from './publication-review.mjs';
 import { installEntryEgressGuard } from './shared-entry-egress.mjs';
 import { materialDoDono } from './links.mjs';
+import { productI18n } from './i18n.mjs';
 import { randomUUID } from 'node:crypto';
 
 export const sharedAssistantsOn = () => String(process.env.BRAMBIT_SHARED_ASSISTANTS ?? '').trim().toLowerCase() === 'on';
@@ -74,6 +79,7 @@ export async function sharedAssistantsSchema({ pool, S }) {
   await pool.query(`
     ALTER TABLE ${S}.agents ADD COLUMN IF NOT EXISTS shared_entry boolean NOT NULL DEFAULT false;
     ALTER TABLE ${S}.agents ADD COLUMN IF NOT EXISTS source_agent_id uuid REFERENCES ${S}.agents(id) ON DELETE SET NULL;
+    ALTER TABLE ${S}.agents ADD COLUMN IF NOT EXISTS accepted_price_key text;
     CREATE INDEX IF NOT EXISTS agents_source_agent_idx ON ${S}.agents(source_agent_id) WHERE source_agent_id IS NOT NULL;
     -- One live entry per person and assistant: starting it again opens the same one.
     CREATE UNIQUE INDEX IF NOT EXISTS agents_one_live_entry_idx ON ${S}.agents(user_id, source_agent_id)
@@ -105,7 +111,7 @@ export async function sharedAssistantsSchema({ pool, S }) {
 // archived and the creator's account isn't closed: archiving, closing the account
 // or deleting it takes the assistant away from every entry with no extra step.
 export function entryColumns(S = 'mtr_harness') {
-  return `a.shared_entry, a.source_agent_id, (SELECT jsonb_build_object('id', p.id, 'version', p.version, 'name', p.name, 'goal', p.goal,
+  return `a.shared_entry, a.source_agent_id, a.accepted_price_key, (SELECT jsonb_build_object('id', p.id, 'version', p.version, 'name', p.name, 'goal', p.goal,
       'instructions', p.instructions, 'style', p.style, 'model', p.model, 'skills', p.skills, 'creator', u.name, 'creatorId', c.user_id)
     FROM ${S}.agent_publications p
     JOIN ${S}.agents c ON c.id = p.agent_id AND c.archived_at IS NULL
@@ -140,7 +146,7 @@ export const ENTRY_MEMORY_RULE = 'MEMORY: the person you talk to has a long-term
 // (incluirArquivado), the row marked unavailable.
 export function withPublication(row, { incluirArquivado = false } = {}) {
   if (!row) return null;
-  const { shared_entry: entry, source_agent_id: sourceAgentId, publication: p, ...agent } = row;
+  const { shared_entry: entry, source_agent_id: sourceAgentId, accepted_price_key: acceptedPriceKey, publication: p, ...agent } = row;
   if (agent.archived_at && !incluirArquivado) return null;
   if (!entry) return agent;
   if (!p || !sharedAssistantsOn()) return incluirArquivado ? { ...agent, shared: { available: false } } : null;
@@ -149,7 +155,7 @@ export function withPublication(row, { incluirArquivado = false } = {}) {
     name: p.name, goal: p.goal || '', style: p.style || '', model: p.model || null,
     instructions: entryRole({ creator: p.creator, owner: agent.owner, instructions: p.instructions }),
     category: 'pessoal', perm_mode: 'padrao', cmd_allowlist: [], tool_config: {}, former_names: [],
-    shared: { available: true, publicationId: p.id, version: p.version, sourceAgentId, creatorId: p.creatorId, creatorName: p.creator || '', skills: Array.isArray(p.skills) ? p.skills : [] },
+    shared: { available: true, publicationId: p.id, version: p.version, sourceAgentId, creatorId: p.creatorId, creatorName: p.creator || '', skills: Array.isArray(p.skills) ? p.skills : [], acceptedPriceKey: acceptedPriceKey ?? null },
   };
 }
 
@@ -216,6 +222,46 @@ function entryUrlSeed({ message = '', history = [], agent = {} } = {}) {
   return seed.filter((s) => typeof s === 'string' && s.trim());
 }
 
+// The plugin's sharedAssistants port, set by registerSharedAssistants.
+let portHooks = null;
+const publicationRef = (r) => ({ id: r.id, agentId: r.agent_id, creatorUserId: r.creator_id, version: r.version });
+// [{id, agentId, creatorUserId, version}] → Map(publication id → price | null).
+async function pricesOf(hooks, userId, publications) {
+  const out = new Map(publications.map((p) => [p.id, null]));
+  if (typeof hooks?.prices !== 'function' || !publications.length) return out;
+  const r = await hooks.prices({ userId, publications });
+  if (!r || typeof r !== 'object') throw Error('prices gave no object');
+  for (const p of publications) {
+    const price = r[p.id];
+    if (price == null) continue;
+    if (typeof price !== 'object' || typeof price.key !== 'string' || !price.key) throw Error('price without a key for publication ' + p.id);
+    out.set(p.id, price);
+  }
+  return out;
+}
+
+// Runs in every turn (runConversationTurn) before the credit gate, so on every
+// channel. null = the turn goes on. An entry whose current price isn't the one
+// the person accepted gets a fixed notice instead, with no model call and
+// nothing saved: they accept the new price on the community list (start). A
+// scheduled routine stays silent, as with no credit. A price check that fails
+// pauses it too: nothing runs on a check that didn't run.
+export async function entryPricePause(agent, { userId, language, kind, routineScheduled = false } = {}) {
+  const s = agent?.shared;
+  if (!s?.available || typeof portHooks?.prices !== 'function') return null;
+  let key = 'server.shared_assistant_price_changed';
+  try {
+    const price = (await pricesOf(portHooks, userId, [{ id: s.publicationId, agentId: s.sourceAgentId, creatorUserId: s.creatorId, version: s.version }])).get(s.publicationId);
+    if (!price || price.key === s.acceptedPriceKey) return null;
+    console.log(`[shared-assistants] entry ${agent.id} paused: price changed`);
+  } catch (e) {
+    console.error(`[shared-assistants] prices hook failed in a turn: ${e?.message ?? e}`);
+    key = 'server.shared_assistant_check_unavailable';
+  }
+  if (kind === 'routine' && routineScheduled) return { text: '', attachments: [] };
+  return { text: productI18n().t(key, language), attachments: [] };
+}
+
 // turn (optional): { message, history, agent, threadId, gateOpts }. With it, the
 // entry also gets the egress guard (shared-entry-egress.mjs); without it (older
 // callers) only the deny-list runs.
@@ -235,6 +281,7 @@ export function pruneSharedEntryRegistry(registry, turn = null) {
 // Routes. deps: pool, send/fail/tooManyRequests and recordUsages from the server;
 // hooks = the plugin's sharedAssistants port (see the top of this file).
 export function registerSharedAssistants(rotas, { pool, send, fail, tooManyRequests, recordUsages, hooks = null, S = 'mtr_harness' }) {
+  portHooks = hooks;
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     if (!sharedAssistantsOn() || !ownerFeaturesOn) return SEGUE;
     res.setHeader('Cache-Control', 'no-store');
@@ -255,21 +302,6 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
     if (r?.allowed === true) return { allowed: true };
     if (r?.allowed === false) return { allowed: false, error: typeof r.error === 'string' && r.error ? r.error : 'server.shared_assistant_publish_not_allowed' };
     throw Error('canPublish gave no verdict');
-  }
-  const publicationRef = (r) => ({ id: r.id, agentId: r.agent_id, creatorUserId: r.creator_id, version: r.version });
-  // [{id, agentId, creatorUserId, version}] → Map(publication id → price | null).
-  async function pricesOf(userId, publications) {
-    const out = new Map(publications.map((p) => [p.id, null]));
-    if (typeof hooks?.prices !== 'function' || !publications.length) return out;
-    const r = await hooks.prices({ userId, publications });
-    if (!r || typeof r !== 'object') throw Error('prices gave no object');
-    for (const p of publications) {
-      const price = r[p.id];
-      if (price == null) continue;
-      if (typeof price !== 'object' || typeof price.key !== 'string' || !price.key) throw Error('price without a key for publication ' + p.id);
-      out.set(p.id, price);
-    }
-    return out;
   }
 
   // The version to publish, built from the assistant as it is now. lock = '' for
@@ -353,21 +385,26 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
   route('GET', '/api/shared-assistants', async ({ res, user }) => {
     const { rows } = await pool.query(
       `SELECT p.id, p.agent_id, p.name, p.goal, p.version, p.published_at, u.name AS creator, c.user_id AS creator_id, c.user_id = $1 AS own,
-              EXISTS (SELECT 1 FROM ${S}.agents e WHERE e.user_id = $1 AND e.source_agent_id = p.agent_id AND e.shared_entry AND e.archived_at IS NULL) AS using
+              e.id IS NOT NULL AS using, e.accepted_price_key
          FROM ${S}.agent_publications p
          JOIN ${S}.agents c ON c.id = p.agent_id AND c.archived_at IS NULL
          JOIN ${S}.users u ON u.id = c.user_id AND u.deleted_at IS NULL
+         LEFT JOIN ${S}.agents e ON e.user_id = $1 AND e.source_agent_id = p.agent_id AND e.shared_entry AND e.archived_at IS NULL
         WHERE p.status = 'published' ORDER BY p.published_at DESC LIMIT 200`, [user.id]);
     let prices;
-    try { prices = await pricesOf(user.id, rows.filter((r) => !r.own).map(publicationRef)); } catch (e) { return unavailable(res, 'prices', e); }
-    return send(res, 200, { assistants: rows.map((r) => ({
-      id: r.id, name: r.name, goal: r.goal, version: r.version, publishedAt: r.published_at,
-      creator: primeiroNome(r.creator, ''), own: r.own, using: r.using, price: prices.get(r.id) ?? null,
-    })) });
+    try { prices = await pricesOf(hooks, user.id, rows.filter((r) => !r.own).map(publicationRef)); } catch (e) { return unavailable(res, 'prices', e); }
+    // priceChanged: the person uses it and its price is no longer the one they
+    // accepted, so their entry is paused until they accept this one.
+    return send(res, 200, { assistants: rows.map((r) => {
+      const price = prices.get(r.id) ?? null;
+      return { id: r.id, name: r.name, goal: r.goal, version: r.version, publishedAt: r.published_at,
+        creator: primeiroNome(r.creator, ''), own: r.own, using: r.using, price, priceChanged: !!(r.using && price && price.key !== r.accepted_price_key) };
+    }) });
   });
 
-  // { publicationId } → the person's entry for it (created on the first time).
-  // The creator gets their own assistant back.
+  // { publicationId, acceptedPrice } → the person's entry for it (created on the
+  // first time). The creator gets their own assistant back. An entry paused by a
+  // new price comes back once acceptedPrice is that price's key.
   route('POST', '/api/shared-assistants/start', async ({ req, res, user }) => {
     const body = await readBody(req);
     const pubId = uuid(body.publicationId);
@@ -378,17 +415,21 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
         WHERE p.id = $1 AND p.status = 'published'`, [pubId]) : { rows: [] };
     if (!p) return notFound(res);
     if (p.creator_id === user.id) return send(res, 200, { agentId: p.agent_id, created: false });
-    const live = `SELECT id FROM ${S}.agents WHERE user_id = $1 AND source_agent_id = $2 AND shared_entry AND archived_at IS NULL`;
+    const live = `SELECT id, accepted_price_key FROM ${S}.agents WHERE user_id = $1 AND source_agent_id = $2 AND shared_entry AND archived_at IS NULL`;
     const { rows: [had] } = await pool.query(live, [user.id, p.agent_id]);
-    if (had) return send(res, 200, { agentId: had.id, created: false });
     let price;
-    try { price = (await pricesOf(user.id, [publicationRef(p)])).get(p.id); } catch (e) { return unavailable(res, 'prices', e); }
-    if (price && body.acceptedPrice !== price.key) return send(res, 409, { error: 'server.shared_assistant_price_not_accepted', price });
+    try { price = (await pricesOf(hooks, user.id, [publicationRef(p)])).get(p.id); } catch (e) { return unavailable(res, 'prices', e); }
+    const toAccept = price && price.key !== had?.accepted_price_key;
+    if (toAccept && body.acceptedPrice !== price.key) return send(res, 409, { error: 'server.shared_assistant_price_not_accepted', price });
+    if (had) {
+      if (toAccept) await pool.query(`UPDATE ${S}.agents SET accepted_price_key = $2 WHERE id = $1`, [had.id, price.key]);
+      return send(res, 200, { agentId: had.id, created: false });
+    }
     const { rows: [made] } = await pool.query(
-      `INSERT INTO ${S}.agents (user_id, owner, name, goal, instructions, shared_entry, source_agent_id)
-       VALUES ($1, $2, $3, '', '', true, $4)
+      `INSERT INTO ${S}.agents (user_id, owner, name, goal, instructions, shared_entry, source_agent_id, accepted_price_key)
+       VALUES ($1, $2, $3, '', '', true, $4, $5)
        ON CONFLICT (user_id, source_agent_id) WHERE source_agent_id IS NOT NULL AND archived_at IS NULL DO NOTHING RETURNING id`,
-      [user.id, user.name || '', p.name, p.agent_id]);
+      [user.id, user.name || '', p.name, p.agent_id, price?.key ?? null]);
     if (made) return send(res, 200, { agentId: made.id, created: true });
     const { rows: [raced] } = await pool.query(live, [user.id, p.agent_id]);
     return raced ? send(res, 200, { agentId: raced.id, created: false }) : notFound(res);

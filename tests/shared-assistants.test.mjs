@@ -5,7 +5,8 @@
 // or B's conversations going away with A's account. Also a version the
 // publication review refuses, or can't check, going live anyway. And the plugin's
 // say (sharedAssistants port): someone it doesn't allow publishing, someone
-// starting a priced assistant without accepting that price, a check that can't run
+// starting a priced assistant without accepting that price, running an entry whose
+// price changed until the new one is accepted, a check that can't run
 // letting the action through, or a model call of an entry turn reaching the spend
 // port without saying whose assistant it is (that's where the creator's price is charged).
 // Same isolation as tenancy-contract.test.mjs: its own Unix socket, no outbound
@@ -129,8 +130,28 @@ export default [{nome:'test-market',portas:()=>{const g=createGastoSimples({grav
   assert.deepEqual((await ok(SID_C,'GET','/api/shared-assistants')).assistants.map(x=>x.price),[{key:'p1',credits:5}]);
   for(const acceptedPrice of [undefined,'p0']){const r=await call(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice});assert.deepEqual([r.status,r.json?.price?.key],[409,'p1']);}
   assert.equal((await db.query(`SELECT count(*)::int n FROM mtr_harness.agents WHERE user_id=$1 AND shared_entry`,[C])).rows[0].n,0);
-  assert.equal((await ok(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice:'p1'})).created,true);
+  const stC=await ok(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice:'p1'});
+  assert.equal(stC.created,true);
   assert.equal((await ok(SID_A,'GET','/api/shared-assistants')).assistants[0].price,null);
+  // A new price pauses C's entry on every turn (no model call, nothing saved) until
+  // C accepts that price; a price check that can't run pauses it too.
+  const thC=(await ok(SID_C,'POST','/api/thread',{agentId:stC.agentId,title:'Cris'})).id;
+  const savedC=async()=>(await db.query(`SELECT count(*)::int n FROM mtr_harness.messages WHERE thread_id=$1`,[thC])).rows[0].n;
+  const chatC=async()=>{const from=output.length;const r=await ok(SID_C,'POST','/api/chat',{threadId:thC,message:'hello'});await delay(300);
+   return {reply:r.reply,calls:[...output.slice(from).matchAll(/SPEND_ORIGIN=(.*)/g)].map(m=>JSON.parse(m[1])).filter(o=>o.agentId===stC.agentId).length};};
+  assert.ok((await chatC()).calls,'C\'s entry at the accepted price made no model call');
+  await fs.writeFile(path.join(root,'price'),JSON.stringify({key:'p2',credits:8}));
+  const before=await savedC(),paused=await chatC();
+  assert.deepEqual([paused.calls,/price|preço|precio/i.test(paused.reply),await savedC()],[0,true,before],paused.reply);
+  await fs.writeFile(path.join(root,'hooks-down'),'');
+  assert.equal((await chatC()).calls,0);
+  await fs.rm(path.join(root,'hooks-down'));
+  assert.deepEqual((await ok(SID_C,'GET','/api/shared-assistants')).assistants.map(x=>[x.using,x.priceChanged]),[[true,true]]);
+  for(const acceptedPrice of [undefined,'p1']){const r=await call(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice});assert.deepEqual([r.status,r.json?.price?.key],[409,'p2']);}
+  assert.equal((await chatC()).calls,0);
+  assert.deepEqual(await ok(SID_C,'POST','/api/shared-assistants/start',{publicationId:pub.publicationId,acceptedPrice:'p2'}),{agentId:stC.agentId,created:false});
+  assert.equal((await ok(SID_C,'GET','/api/shared-assistants')).assistants[0].priceChanged,false);
+  assert.ok((await chatC()).calls,'C\'s entry stays paused after accepting the new price');
   await fs.rm(path.join(root,'price'));
 
   // A version the review refuses or can't check is not published: the entry keeps v1.
