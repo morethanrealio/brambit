@@ -2,7 +2,8 @@
 // disposable Postgres with two synthetic accounts: A publishes, B uses. Catches a
 // change that lets one side see the other's data: B reading A's role text,
 // memory or settings through the entry, A reaching B's entry or conversations,
-// or B's conversations going away with A's account.
+// or B's conversations going away with A's account. Also a version the
+// publication review refuses, or can't check, going live anyway.
 // Same isolation as tenancy-contract.test.mjs: its own Unix socket, no outbound
 // network (boot-network-guard), no inherited credentials.
 import test from 'node:test';
@@ -31,9 +32,12 @@ test('a community assistant shares only the published version, and each side see
   db=new pg.Client({host:socket,port:5432,user:'synthetic',database:'postgres',password:''});await db.connect();
   await db.query('CREATE SCHEMA mtr_harness');
   const pgEnv={PGHOST:socket,PGPORT:'5432',PGUSER:'synthetic',PGDATABASE:'postgres',PGPASSWORD:'',VAULT_KEY:Buffer.alloc(32,7).toString('base64'),BRAMBIT_SHARED_ASSISTANTS:'on'};
-  const env={PATH:process.env.PATH,HOME:root,TZ:'UTC',...pgEnv,PORT:'0',HOST:'127.0.0.1',TEST_BOOT_SOCKET:socket,APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0'};
+  const env={PATH:process.env.PATH,HOME:root,TZ:'UTC',...pgEnv,PORT:'0',HOST:'127.0.0.1',TEST_BOOT_SOCKET:socket,APP_TASK_STORE_DIR:path.join(root,'tasks'),CODING_JOB_STORE_DIR:path.join(root,'jobs'),CREDIT_CALL_STORE_DIR:path.join(root,'calls'),DEEPSEEK_FLASH_ENABLED:'0',BRAMBIT_MODELS_FILE:path.join(root,'models.yaml')};
   const observer=path.join(root,'listen-observer.mjs');await fs.writeFile(observer,`import net from 'node:net';const listen=net.Server.prototype.listen;net.Server.prototype.listen=function(...a){this.once('listening',()=>console.log('BOOT_TEST_PORT='+this.address().port));return listen.apply(this,a);};`);
-  let output='';child=spawn(process.execPath,['--import',path.join(repo,'test-support/boot-network-guard.mjs'),'--import',observer,path.join(repo,'web/server.mjs')],{cwd:root,env,stdio:['ignore','pipe','pipe']});
+  // The publication review answers from a fake endpoint, the only one let through the guard.
+  await fs.writeFile(env.BRAMBIT_MODELS_FILE,'providers:\n  review:\n    base_url: http://review.invalid/v1\ntasks:\n  default: review/fake\n  classification: review/fake\n');
+  const reviewer=path.join(root,'fake-reviewer.mjs');await fs.writeFile(reviewer,`const blocked=globalThis.fetch;globalThis.fetch=async(url,init)=>{if(!String(url).startsWith('http://review.invalid/'))return blocked(url,init);const text=JSON.parse(init.body).messages.at(-1).content;if(text.includes('REVIEW-DOWN'))return new Response('{}',{status:400});const verdict=text.includes('EXFIL-MARK')?{allowed:false,categories:['data_exfiltration'],field:'role',excerpt:'EXFIL-MARK',reason:'sends data out'}:{allowed:true,categories:[]};return new Response(JSON.stringify({choices:[{message:{role:'assistant',content:JSON.stringify(verdict)},finish_reason:'stop'}],usage:{prompt_tokens:9,completion_tokens:9,total_tokens:18}}),{status:200,headers:{'content-type':'application/json'}});};`);
+  let output='';child=spawn(process.execPath,['--import',path.join(repo,'test-support/boot-network-guard.mjs'),'--import',reviewer,'--import',observer,path.join(repo,'web/server.mjs')],{cwd:root,env,stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>output+=b);
   let port;for(let i=0;i<150;i++){await delay(100);port=output.match(/BOOT_TEST_PORT=(\d+)/)?.[1];if(port||child.exitCode!==null)break;}
   assert.ok(port,'server did not start up:\n'+output);
@@ -89,6 +93,15 @@ test('a community assistant shares only the published version, and each side see
   assert.equal((await call(SID_A,'GET','/api/agent/get?agentId='+E)).status,404);
   const aRead=await call(SID_A,'GET','/api/thread?id='+th.id);
   assert.equal(aRead.status,404);assert.ok(!aRead.txt.includes('BIA-PRIVATE'));
+
+  // A version the review refuses or can't check is not published: the entry keeps v1.
+  await ok(SID_A,'POST','/api/agent/update',{agentId:ag.id,instructions:ROLE_V2+' EXFIL-MARK'});
+  const refused=await call(SID_A,'POST','/api/shared-assistants/publish',{agentId:ag.id});
+  assert.equal(refused.status,422,refused.txt);assert.deepEqual([refused.json.categories,refused.json.excerpt],[['data_exfiltration'],'EXFIL-MARK']);
+  await ok(SID_A,'POST','/api/agent/update',{agentId:ag.id,instructions:ROLE_V2+' REVIEW-DOWN'});
+  assert.equal((await call(SID_A,'POST','/api/shared-assistants/publish',{agentId:ag.id})).status,503);
+  assert.ok((await lib.getAgentOwned(E,B)).instructions.includes(ROLE_V1));
+  assert.deepEqual((await db.query(`SELECT version FROM mtr_harness.agent_publications WHERE agent_id=$1`,[ag.id])).rows,[{version:1}]);
 
   // A new version reaches the entry; a withdrawn one stops it, B's history stays.
   await ok(SID_A,'POST','/api/agent/update',{agentId:ag.id,name:'Chef Two',instructions:ROLE_V2});
