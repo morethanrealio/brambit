@@ -20,7 +20,9 @@
 //   atendimentoPublico → hooks for the public-support script
 //   (public-support.mjs: defaultTexts, antesDoModelo, depoisDoModelo, photoRequested), and systemNote({language}) → a
 //   stable note about the installation added to the assistant's instructions
-//   (before the language directive), or null. Runs at the start of boot; the core brings only
+//   (before the language directive), or null, and sharedAssistants → who may publish
+//   an assistant to the community and what using one costs (shared-assistants.mjs:
+//   canPublish, prices). Runs at the start of boot; the core brings only
 //   what already exists at that time (publicBase, notifyOwner).
 //  ligar(servidor): routes (routes.mjs), subscriptions and tasks (events.mjs) and
 //   published media (public-media.mjs). Runs with the server mounted; the server
@@ -55,7 +57,7 @@ import {leitorDePagina} from './app-slots.mjs';
 import {conferirCsp} from './csp.mjs';
 import {useLocalePlugins} from './i18n.mjs';
 
-export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico','systemNote'];
+export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico','systemNote','sharedAssistants'];
 const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','locales','csp'];
 
 export function conferirPlugin(p){

@@ -42,7 +42,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {registerSharedAssistants,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {registerSharedAssistants,spendOrigin,sharedSkillTool,sharedSkillsContext,pruneSharedEntryRegistry,ENTRY_MEMORY_RULE} from './shared-assistants.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
 import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -65,7 +65,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerSharedAssistants(rotas,{pool,send,fail,tooManyRequests,recordUsages});const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs), the community assistants (shared-assistants.mjs) and the assistant avatar (avatar.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerSharedAssistants(rotas,{pool,send,fail,tooManyRequests,recordUsages,hooks:pecas.sharedAssistants});const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs), the community assistants (shared-assistants.mjs) and the assistant avatar (avatar.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
@@ -2360,7 +2360,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if(!hasProviderExecution(creditScopeIdentity)){
     const language=idiomaDaResposta((await getUserLocale(userId))?.language||'pt-BR');
     return withProviderExecution((provider,input,options,policy={})=>{
-      const bound=gasto.vincular({provider,userId,agentId:agent.id,threadId:thread.id,kind,language,...policy});
+      const bound=gasto.vincular({provider,userId,agentId:agent.id,threadId:thread.id,kind,language,origin:spendOrigin(agent),...policy});
       return options===null?bound.complete(input):bound.completeDurable(input,options);
     },()=>runConversationTurn(agent,thread,userId,message,opts),creditScopeIdentity);
   }
@@ -2374,7 +2374,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const codingApprovals=createCodingApprovals({store:appTaskStore,scope:creditScopeIdentity});
   if (agent?.model === DEEPSEEK_AGENT_MODEL && !isDeepSeekTurn()) {
     const billingLanguage=idiomaDaResposta((await getUserLocale(userId))?.language||'pt-BR');
-    return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId:agent.id,threadId:thread.id,kind,language:billingLanguage}), () => runConversationTurn(agent, thread, userId, message, opts));
+    return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId:agent.id,threadId:thread.id,kind,language:billingLanguage,origin:spendOrigin(agent)}), () => runConversationTurn(agent, thread, userId, message, opts));
   }
   if (agent?.model === GEMINI_COMPARISON_ID && !isGeminiComparison()) {
     return withGeminiComparison(() => runConversationTurn(agent, thread, userId, message, opts));
@@ -5971,9 +5971,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     registry.add(agentToAgentTool({
       fromUser: userId,
       fromAgent: agent.id,
-      makeProvider: identity => isDeepSeekTurn()
+      makeProvider: identity => (identity={...identity,origin:identity.agentId===agent.id?spendOrigin(agent):null}, isDeepSeekTurn()
         ? makeOfficialDeepSeek(32768,identity)
-        : gasto.vincular({provider:makePrimaryProvider(),...identity}),
+        : gasto.vincular({provider:makePrimaryProvider(),...identity})),
       originChannel,
       notifyOwner,
       bill: async (uid, aid, us) => {
@@ -6033,7 +6033,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       };
       return withProviderExecution((provider,input,options,policy={}) => {
         const bound=gasto.vincular({provider,userId,
-          agentId:agent.id,threadId:thread.id,kind,language:idiomaResposta,...policy});
+          agentId:agent.id,threadId:thread.id,kind,language:idiomaResposta,origin:spendOrigin(agent),...policy});
         return options===null?bound.complete(input):bound.completeDurable(input,options);
       }, execute, creditScopeIdentity);
     } };

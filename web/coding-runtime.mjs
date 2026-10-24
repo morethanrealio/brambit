@@ -8,6 +8,7 @@ import {codingExecutionId} from './coding-recovery-policy.mjs';
 import {enderecosDe,materialDoDono,semLinksInventados} from './links.mjs';
 import {marca} from './brand.mjs';
 import {productI18n} from './i18n.mjs';
+import {spendOrigin} from './shared-assistants.mjs';
 import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 // Server-bound adapter composition. Dependency injection lets the complete
 // lifecycle run against isolated accounts/transports, never production fixtures.
@@ -25,10 +26,10 @@ async function runProgrammingJob(job,control,achados=[]){
   if(!await approvalValid())return {ok:false,text:await stopText('continuation_revoked')};
   const identity=JSON.stringify([userId,agentId,threadId]),language=(await getUserLocale(userId))?.language||LEGACY_TEXT_LANGUAGE;
   if(!hasProviderExecution(identity))return withProviderExecution((provider,input,options,policy={})=>{
-    const bound=gasto.vincular({provider,userId,agentId,threadId,kind:'coding',language,...policy});
+    const bound=gasto.vincular({provider,userId,agentId,threadId,kind:'coding',language,origin:spendOrigin(agent),...policy});
     return options===null?bound.complete(input):bound.completeDurable(input,options);
   },()=>runProgrammingJob(job,control,achados),identity);
-  if(agent.model===DEEPSEEK_AGENT_MODEL&&!isDeepSeekTurn())return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId,threadId,kind:'coding',language}),()=>runProgrammingJob(job,control,achados));
+  if(agent.model===DEEPSEEK_AGENT_MODEL&&!isDeepSeekTurn())return withDeepSeek(max=>makeOfficialDeepSeek(max,{userId,agentId,threadId,kind:'coding',language,origin:spendOrigin(agent)}),()=>runProgrammingJob(job,control,achados));
   if(agent.model===GEMINI_COMPARISON_ID&&!isGeminiComparison())return withGeminiComparison(()=>runProgrammingJob(job,control,achados));
   // Stage keys; the receipt shows them in the account language (coding.stage.*).
   let stage='preparing';

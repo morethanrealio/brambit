@@ -1,10 +1,13 @@
 // Port 1: spend. The core only asks "may it spend?" and reports what it spent;
 // how much each person may spend is up to the plugged implementation (e.g. a
 // plugin billing in credits, with a plan allowance and a company paying account).
-//  vincular({provider,userId,agentId,threadId,kind,language,noBill}) → the same
-//    provider, but each physical call reserves first and settles after.
+//  vincular({provider,userId,agentId,threadId,kind,language,noBill,origin}) → the
+//    same provider, but each physical call reserves first and settles after.
+//    origin = null, or which community assistant the turn runs on and whose it is
+//    (spendOrigin in shared-assistants.mjs), so the implementation can add the
+//    creator's price on top of the same tokens.
 //  vincularDeepSeek({...identidade,maxTokens,secret}) → same for the official
-//    DeepSeek route, which measures its own usage.
+//    DeepSeek route, which measures its own usage; identidade carries origin too.
 //  disponivel(userId) → {remaining,held,available}. Preview: reserves nothing.
 //  status(userId) → {over,...}. over=true stops the turn before calling the model.
 //  registrar({userId,callId,usage,charge,dimensions}) → receipt for spend already
