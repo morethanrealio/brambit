@@ -243,5 +243,5 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, getCr
 
   registerAvatarLive(rotas, { live, store, send, fail, owned, getThreadOwned, registerAgent, available: avatarAvailable, voiceOf, hasCredit });
 
-  return { registerAgent, sweep, release, live };
+  return { registerAgent, sweep, release, live, store, voiceOf, available: avatarAvailable };
 }

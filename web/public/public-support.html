@@ -141,6 +141,17 @@
     <textarea id="webChaveIps" spellcheck="false"></textarea>
     <label data-i18n="public_service_page.web_endpoint">Address for calls</label>
     <code id="webEndereco" translate="no"></code>
+    <div id="avatarBlock" class="hidden">
+      <h3 data-i18n="public_service_page.avatar_title">Face on the website</h3>
+      <p class="nota" data-i18n="public_service_page.avatar_lead">Visitors of the websites above can also talk to this assistant's face, in its voice. The photo and the voice are set in the assistant's settings. You pay for that time like the rest of public support, about US$0.30 a minute, and it counts in the daily spending cap.</p>
+      <div id="avatarNoFace" class="warn hidden" data-i18n="public_service_page.avatar_no_face">This assistant's face is not ready yet. Add its photo in the assistant's settings.</div>
+      <label class="check" data-i18n="public_service_page.avatar_enabled"><input type="checkbox" id="avatarEnabled"/> Let visitors talk to the face</label>
+      <div class="row">
+        <div><label for="avatarDaily" data-i18n="public_service_page.avatar_daily_minutes">Minutes per day, all visitors together</label><input type="number" id="avatarDaily" min="1" max="1440"/></div>
+        <div><label for="avatarVisitor" data-i18n="public_service_page.avatar_visitor_minutes">Minutes for each visitor, every 24 hours</label><input type="number" id="avatarVisitor" min="1" max="1440"/></div>
+        <div><label for="avatarSessions" data-i18n="public_service_page.avatar_max_sessions">Visitors talking at the same time</label><input type="number" id="avatarSessions" min="1" max="100"/></div>
+      </div>
+    </div>
     <div class="acoes"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
     <div id="cfgMsg" class="msg"></div>
     <label data-i18n="public_service_page.web_key">Server key</label>
@@ -194,9 +205,11 @@
   }
   function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
+  var avatarAvailable = false;
   function carregarAgentes(manter){
     return pedir('/api/publico/agentes').then(function(j){
       agentes = j.agentes || [];
+      avatarAvailable = !!j.avatarAvailable;
       $('avisoCadastro').classList.toggle('hidden', !j.signupOpen);
       var sel = $('agente'); sel.textContent = '';
       $('semAgente').classList.toggle('hidden', agentes.length > 0);
@@ -222,6 +235,12 @@
     $('linkSites').value = (agenteAtual.linkSites || []).join('\n');
     $('webOrigens').value = (agenteAtual.webOrigins || []).join('\n');
     $('webChaveIps').value = (agenteAtual.webKeyIps || []).join('\n');
+    $('avatarBlock').classList.toggle('hidden', !avatarAvailable);
+    $('avatarNoFace').classList.toggle('hidden', agenteAtual.avatarFace === 'ready');
+    $('avatarEnabled').checked = !!agenteAtual.avatarEnabled;
+    $('avatarDaily').value = agenteAtual.avatarDailyMinutes;
+    $('avatarVisitor').value = agenteAtual.avatarVisitorMinutes;
+    $('avatarSessions').value = agenteAtual.avatarMaxSessions;
     $('webEndereco').textContent = location.origin + '/api/public/messages?agent=' + agenteAtual.agentId;
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
@@ -264,6 +283,8 @@
       linkSites: $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
       webEnabled: $('webAtivo').checked, webOrigins: $('webOrigens').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
       webKeyIps: $('webChaveIps').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean) };
+    if (avatarAvailable) Object.assign(corpo, { avatarEnabled: $('avatarEnabled').checked, avatarDailyMinutes: parseInt($('avatarDaily').value, 10),
+      avatarVisitorMinutes: parseInt($('avatarVisitor').value, 10), avatarMaxSessions: parseInt($('avatarSessions').value, 10) });
     b.disabled = true; msg($('cfgMsg'), t('saving'));
     pedir('/api/publico/configurar', corpo).then(function(){
       msg($('cfgMsg'), t('saved'), 'ok'); return carregarAgentes(agenteAtual.agentId);
