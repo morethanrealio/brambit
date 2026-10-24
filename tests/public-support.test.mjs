@@ -76,6 +76,21 @@ test('public turn: nothing from the agent beyond the name, only the contact\'s t
   assert.deepEqual(await store.estado(r.contatoId), { pedido: 'P1' });
 });
 
+test('public turn logs one line with the tools of each step, without what the contact wrote', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, instrucoes: 'Atenda clientes da loja.' });
+  const plugin = { doTurno: ({ contato }) => [
+      { name: 'ver_pedido', publico: true, description: 'x', parameters: { type: 'object', properties: { codigo: { type: 'string' } } }, run: async () => 'pedido de ' + contato.endereco },
+    ], vetar: () => null, instrucoes: () => [] };
+  const m = modelo([{ name: 'ver_pedido', args: { codigo: 'COD-DO-CONTATO' } }]);
+  const linhas = [];
+  const a = atendimento(store, m, { ferramentas: plugin, log: { error() {}, info: (l) => linhas.push(l) } });
+  const r = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511999990000', mensagem: 'cadê meu pedido?' });
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0], `[publico] turn agent=${ag} contact=${r.contatoId} termination=completed model_calls=2 tools=1:ver_pedido(${'pedido de 5511999990000'.length})`);
+  assert.ok(!/5511999990000|COD-DO-CONTATO|cadê/.test(linhas[0]), 'the contact\'s words or tool data reached the log');
+});
+
 test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {
   const { store, dono, ag, ag2 } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });

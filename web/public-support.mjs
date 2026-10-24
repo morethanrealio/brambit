@@ -406,6 +406,25 @@ export function comandoDoContato(mensagem) {
   return null;
 }
 
+// One log line per model turn, so an operator can see how a reply was built:
+// how it ended, how many model calls it took and which tools ran in each step,
+// with the size of what each one returned. Only names and sizes: tool
+// arguments and results carry what the contact wrote, so they never go to the log.
+const outputSize = (out) => {
+  if (typeof out === 'string') return out.length;
+  try { return JSON.stringify(out ?? '').length; } catch { return 0; }
+};
+export function turnLogLine({ agentId, contactId, termination, modelCalls, toolResults }) {
+  const steps = new Map();
+  for (const e of toolResults) {
+    const step = Number.isInteger(e.step) ? e.step + 1 : '?';
+    if (!steps.has(step)) steps.set(step, []);
+    steps.get(step).push(`${e.name}(${outputSize(e.out)}${e.failed ? ', failed' : ''})`);
+  }
+  const tools = [...steps].map(([step, names]) => `${step}:${names.join(',')}`).join(' ') || '-';
+  return `[publico] turn agent=${agentId} contact=${contactId} termination=${termination} model_calls=${modelCalls} tools=${tools}`;
+}
+
 // deps (the server injects):
 //  store: createPublicoStore.
 //  makeProvider({userId,agentId,contatoId}) → provider already tied to the owner's spend.
@@ -552,15 +571,20 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
         canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
-      let text = '';
+      let text = '', termination = 'error', modelCalls = 0;
+      const toolResults = [];
+      const onEvent = (e) => { if (e?.type === 'tool_result') toolResults.push(e); };
       try {
         const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
-        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX });
+        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX, onEvent });
+        termination = r.termination || 'unknown';
+        modelCalls = (r.usages || []).length;
         await recordUsage(r.usages || [], ident);
         text = typeof r.text === 'string' ? r.text.trim() : '';
       } catch (e) {
         log.error?.('[publico] turno falhou:', e?.message ?? e);
       }
+      log.info?.(turnLogLine({ agentId: agente.agent_id, contactId: contato.id, termination, modelCalls, toolResults }));
       if (!text) {
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };

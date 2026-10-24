@@ -584,7 +584,7 @@ export async function runAgent({ provider, tools, system, userInput, images, his
         }
       }
       await control?.beforeTool?.({call,messages});
-      onEvent({ type: 'tool_call', id: call.id, name: call.name, args: call.args });
+      onEvent({ type: 'tool_call', step, id: call.id, name: call.name, args: call.args });
       // Mark before execution. A tool that throws after an external write is
       // still unsafe to follow with a second model/provider decision.
       if (tools.providerFallbackSafe?.(call.name) !== true) unsafeToolAttempted = true;
@@ -603,7 +603,7 @@ export async function runAgent({ provider, tools, system, userInput, images, his
       const out = transformToolResult ? transformToolResult(call, rawOut) : rawOut;
       const falhou = (typeof rawOut === 'string' && rawOut.startsWith('ERRO')) || (rawOut && typeof rawOut === 'object' && rawOut.ok === false);
       turnLog.push({ name: call.name, hint: callHint(call), falhou });
-      onEvent({ type: 'tool_result', id: call.id, name: call.name, args: call.args, out: rawOut });
+      onEvent({ type: 'tool_result', step, id: call.id, name: call.name, args: call.args, out: rawOut, failed: falhou });
       messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: sanitizeText(toToolText(out)) });
       const toolBoundary=await control?.afterTool?.({call,out:rawOut,messages});
       if(toolBoundary?.stop){
