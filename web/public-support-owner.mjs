@@ -55,8 +55,9 @@ export function camposDaConfig(b = {}) {
 // while the installation keeps public support off (the screen then says why).
 // prompts (public-support-prompts.mjs) + defaultTexts(agentId) → {written, spoken}
 // (the plugin's texts, public-support.mjs) = the assistant's editable texts.
+// avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }) }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -77,8 +78,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       retencaoDias: a.retencao_dias, limitePorHora: a.limite_por_hora, tetoDiarioUsd: a.teto_diario_usd, agentHourlyLimit: a.agent_hourly_limit,
       linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero,
       webEnabled: a.web_enabled, webOrigins: a.web_origins, webHasKey: a.web_has_key, webKeyIps: a.web_key_ips,
+      ...(avatar ? avatar.view(a) : {}),
     }));
-    return send(res, 200, { agentes, signupOpen: !(await available()) });
+    // The face is set in the assistant's settings; this screen only says whether it is ready.
+    const avatarAvailable = !!avatar?.available();
+    if (avatarAvailable) for (const a of agentes) a.avatarFace = await avatar.face(a.agentId, user.id);
+    return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable });
   });
 
   rota('POST', '/api/publico/configurar', async ({ req, res, user }) => {
@@ -87,12 +92,17 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!agentId) return naoAchei(res);
     const { campos, erro } = camposDaConfig(b);
     const web = webFieldsFromBody(b);
-    if (erro || web.erro) return send(res, 400, { error: erro || web.erro });
+    const face = avatar ? avatar.fields(b) : { campos: {} };
+    if (erro || web.erro || face.erro) return send(res, 400, { error: erro || web.erro || face.erro });
     const r = await store.configurar(agentId, user.id, campos);
     if (!r) return naoAchei(res);
     const w = await webStore.configure(agentId, user.id, web.campos);
     if (!w) return naoAchei(res);
-    return send(res, 200, { ok: true, agentId: r.agent_id, ativo: r.ativo, instrucoes: r.instrucoes, retencaoDias: r.retencao_dias,
+    const v = avatar && (await avatar.configure(agentId, user.id, face.campos));
+    if (avatar && !v) return naoAchei(res);
+    // Sessions the new settings no longer allow end now.
+    if (avatar) avatar.agentChanged(agentId).catch((e) => console.error('[publico] avatar:', e?.message ?? e));
+    return send(res, 200, { ...(v ? avatar.view(v) : {}), ok: true, agentId: r.agent_id, ativo: r.ativo, instrucoes: r.instrucoes, retencaoDias: r.retencao_dias,
       limitePorHora: r.limite_por_hora, tetoDiarioUsd: r.teto_diario_usd, agentHourlyLimit: r.agent_hourly_limit, linkSites: r.link_sites,
       webEnabled: w.web_enabled, webOrigins: w.web_origins, webHasKey: w.web_has_key, webKeyIps: w.web_key_ips });
   });
@@ -126,6 +136,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!contatoId) return naoAchei(res);
     if (typeof b.bloqueado !== 'boolean') return send(res, 400, { error: 'bloqueado precisa ser verdadeiro ou falso.' });
     await store.bloquear(contatoId, b.bloqueado);
+    if (b.bloqueado) avatar?.contactClosed(contatoId);
     return send(res, 200, { ok: true, bloqueado: b.bloqueado });
   });
 
@@ -133,6 +144,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const contatoId = await contatoDoPedido(user, (await readBody(req)).contatoId);
     if (!contatoId) return naoAchei(res);
     await store.apagarContato(contatoId);
+    avatar?.contactClosed(contatoId);
     return send(res, 200, { ok: true });
   });
 

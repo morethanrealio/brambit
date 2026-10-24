@@ -13,10 +13,11 @@ import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './
 import { registrarRotasDoDono } from './public-support-owner.mjs';
 import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
 import { registerPublicSupportAdmin } from './public-support-admin.mjs';
-import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
+import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
+import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
-export { PUBLIC_WEB_PATHS };
+export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
 const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,14 +43,15 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
 // (public-support-owner.mjs), the public web channel (public-web.mjs) and the
-// admin's installation text (public-support-admin.mjs).
+// admin's installation text (public-support-admin.mjs). avatar = what
+// registerAvatar returns, for the face on the web channel (public-avatar.mjs).
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
 // it hands to the public would also hand out accounts paid by the owner. null =
 // a plugin decides sign-up, and with it whether that is safe.
 // enabled=false (the personal usage profile, profiles.mjs) keeps it off too.
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
-  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn }) {
+  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
   const prompts = createPromptStore(pool, { S });
@@ -79,8 +81,10 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
   if (rotas) {
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts });
-    registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available });
+    const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
+      send, fail, tooManyRequests, clientIp, available });
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null });
+    registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }
   return {

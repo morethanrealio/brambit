@@ -65,7 +65,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs) and the assistant avatar (avatar.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs) and the assistant avatar (avatar.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
@@ -6811,7 +6811,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
 // Public service (public-support-channel.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
-const atendimentoPublico = criarAtendimentoDoServidor({ pool, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
+const atendimentoPublico = criarAtendimentoDoServidor({ pool, avatar, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
   signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Telegram channel: runs one bot per user (their BotFather token). Injects the

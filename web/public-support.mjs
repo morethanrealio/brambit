@@ -32,6 +32,12 @@ export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
+// The avatar on a website (public-avatar.mjs), off until the owner turns it on.
+export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
+export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
+export const AVATAR_MAX_SESSIONS = 2;       // an assistant's visitor sessions open at once
+export const AVATAR_MINUTES_MAX = 1440;
+export const AVATAR_SESSIONS_MAX = 100;
 
 export const esquemaPublico = (S) => `
  CREATE TABLE IF NOT EXISTS ${S}.public_agents (
@@ -72,6 +78,10 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS event jsonb;
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS agent_hourly_limit integer NOT NULL DEFAULT ${AGENT_HOURLY_LIMIT} CHECK (agent_hourly_limit BETWEEN 1 AND ${AGENT_HOURLY_LIMIT_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS link_sites text[] NOT NULL DEFAULT '{}';
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_enabled boolean NOT NULL DEFAULT false;
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_daily_minutes integer NOT NULL DEFAULT ${AVATAR_DAILY_MINUTES} CHECK (avatar_daily_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_visitor_minutes integer NOT NULL DEFAULT ${AVATAR_VISITOR_MINUTES} CHECK (avatar_visitor_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
+ ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_max_sessions integer NOT NULL DEFAULT ${AVATAR_MAX_SESSIONS} CHECK (avatar_max_sessions BETWEEN 1 AND ${AVATAR_SESSIONS_MAX});
 `;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
@@ -233,6 +243,8 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
                 coalesce(p.agent_hourly_limit, ${AGENT_HOURLY_LIMIT}) AS agent_hourly_limit,
                 coalesce(p.web_enabled, false) AS web_enabled, coalesce(p.web_origins, '{}') AS web_origins, p.web_key_hash IS NOT NULL AS web_has_key,
                 coalesce(p.web_key_ips, '{}') AS web_key_ips, coalesce(p.link_sites, '{}') AS link_sites,
+                coalesce(p.avatar_enabled, false) AS avatar_enabled, coalesce(p.avatar_daily_minutes, ${AVATAR_DAILY_MINUTES}) AS avatar_daily_minutes,
+                coalesce(p.avatar_visitor_minutes, ${AVATAR_VISITOR_MINUTES}) AS avatar_visitor_minutes, coalesce(p.avatar_max_sessions, ${AVATAR_MAX_SESSIONS}) AS avatar_max_sessions,
                 (SELECT count(*)::int FROM ${S}.public_contacts c WHERE c.agent_id = a.id) AS contatos
            FROM ${S}.agents a LEFT JOIN ${S}.public_agents p ON p.agent_id = a.id AND p.user_id = a.user_id
           WHERE a.user_id = $1 AND a.archived_at IS NULL ORDER BY a.name`, [userId]);

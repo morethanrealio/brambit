@@ -51,7 +51,7 @@ const sameText = (a, b) => {
 // The route has no login, so the body is capped before it is buffered. Past the
 // cap the rest is read and dropped (the socket stays usable for the 413).
 // Returns { body, size } or null past the cap.
-async function readSmallJson(req, max) {
+export async function readSmallJson(req, max) {
   if (Number(req.headers['content-length'] || 0) > max) return null;
   const chunks = []; let size = 0;
   for await (const chunk of req) {
@@ -192,14 +192,12 @@ export function createPublicWebStore(pool, { S = 'mtr_harness' } = {}) {
   };
 }
 
-// deps: rotas (routes.mjs), webStore (createPublicWebStore), turno = the public
-// turn (createAtendimentoPublico().turno), send/fail/tooManyRequests/clientIp from the server;
-// available() → false while the installation keeps public support off (public-support-channel.mjs).
-export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, tooManyRequests, clientIp = (req) => req.socket?.remoteAddress, available = async () => true }) {
-  const notFound = (res) => send(res, 404, { error: 'not_found' });
-
-  // Who is calling: {address, token?} or {status, error}. The address keeps
-  // browser and server contacts apart, so neither can name the other's.
+// Who may call an assistant's web paths (the messages here, the avatar in
+// public-avatar.mjs). available() → false while the installation keeps public
+// support off (public-support-channel.mjs).
+export function createWebCaller({ webStore, clientIp = (req) => req.socket?.remoteAddress, available = async () => true }) {
+  // Who is calling: {agentId, address, token?, fresh?} or {status, error}. The
+  // address keeps browser and server contacts apart, so neither can name the other's.
   async function caller(req, res, url, contact) {
     const agentId = String(url.searchParams.get('agent') || '');
     if (!UUID.test(agentId)) return { status: 404 };
@@ -228,21 +226,33 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
     return { agentId, address: `browser:${id}`, token: contact };
   }
 
-  const answer = (res, c) => (c.status === 404 ? notFound(res) : send(res, c.status, { error: c.error }));
-
   // Browser preflight: answers with CORS only for a listed origin.
-  rotas.registrar('OPTIONS', PUBLIC_WEB_PATH, async (req, res, url) => {
+  async function preflight(req, res, url, methods) {
     const agentId = String(url.searchParams.get('agent') || '');
     const cfg = UUID.test(agentId) ? await webStore.config(agentId) : null;
     const origin = req.headers.origin;
     const headers = { 'Cache-Control': 'no-store', Vary: 'Origin' };
     if (cfg?.active && cfg.enabled && origin && cfg.origins.includes(origin) && await available()) {
-      Object.assign(headers, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST',
+      Object.assign(headers, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': methods,
         'Access-Control-Allow-Headers': `Content-Type, ${WEB_CONTACT_HEADER}`, 'Access-Control-Max-Age': '600' });
     }
     res.writeHead(204, headers);
     res.end();
-  });
+  }
+
+  return { caller, preflight };
+}
+
+// deps: rotas (routes.mjs), webStore (createPublicWebStore), turno = the public
+// turn (createAtendimentoPublico().turno), send/fail/tooManyRequests/clientIp from the server;
+// available() as in createWebCaller; afterTurn({agentId, address, result}) hears
+// every turn once answered (the avatar says the reply, public-avatar.mjs).
+export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, tooManyRequests, clientIp = (req) => req.socket?.remoteAddress, available = async () => true, afterTurn = null }) {
+  const notFound = (res) => send(res, 404, { error: 'not_found' });
+  const { caller, preflight } = createWebCaller({ webStore, clientIp, available });
+  const answer = (res, c) => (c.status === 404 ? notFound(res) : send(res, c.status, { error: c.error }));
+
+  rotas.registrar('OPTIONS', PUBLIC_WEB_PATH, (req, res, url) => preflight(req, res, url, 'GET, POST'));
 
   rotas.registrar('POST', PUBLIC_WEB_PATH, async (req, res, url) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -277,7 +287,9 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
       if (r.motivo === 'inativo') return notFound(res);
       if (r.motivo === 'photo_not_requested') return send(res, 400, { error: 'image_not_requested' });
       const outputs = r.saidas || (r.text ? [{ tipo: 'texto', texto: r.text }] : []);
-      return send(res, 200, { ...(c.token ? { contact: c.token } : {}), text: r.text ?? null, outputs });
+      send(res, 200, { ...(c.token ? { contact: c.token } : {}), text: r.text ?? null, outputs });
+      if (afterTurn) Promise.resolve().then(() => afterTurn({ agentId: c.agentId, address: c.address, result: r })).catch((e) => console.error('[public-web] after turn:', e?.message ?? e));
+      return;
     } catch (e) { return fail(res, 500, 'public_web_failed', e); }
   });
 
