@@ -3001,7 +3001,8 @@ export async function resolveSkill(callerUserId, query, dono) {
 // Installs (idempotent) a skill on an assistant. Increments install_count only on the
 // 1st time. Respects the per-assistant cap. Reactivates if it was disabled.
 export async function installSkill(skillId, userId, agentId) {
-  if (!agentId) return { error: 'sem_assistente' };
+  // Only on an assistant of the person installing (a community entry's source belongs to someone else).
+  if (!agentId || !(await pool.query(`SELECT 1 FROM ${S}.agents WHERE id = $1 AND user_id = $2`, [agentId, userId])).rows[0]) return { error: 'sem_assistente' };
   const already = await pool.query(
     `SELECT enabled FROM ${S}.skill_installs WHERE skill_id = $1 AND agent_id = $2`,
     [skillId, agentId],
@@ -4614,6 +4615,8 @@ export async function getUsageByModel({ from, to } = {}) {
 
 // ── Routines (time-based recurring tasks) ──
 export async function createRoutine({ userId, agentId, title, prompt, hour, minute, days, tz, channel, repeatEveryMin, repeatUntil, nextRun, curation, emailSearch }) {
+  // Only on an assistant of the person (a community entry's source belongs to someone else).
+  if (agentId && !(await pool.query(`SELECT 1 FROM ${S}.agents WHERE id = $1 AND user_id = $2`, [agentId, userId])).rows[0]) throw new Error('routine assistant does not belong to the user');
   // Explicit type when a structured search comes in: avoids the curation heuristic
   // blocking an email prompt that mentions "newsletter summary".
   const tipo=emailSearchTipo(emailSearch,curation);

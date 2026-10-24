@@ -865,6 +865,11 @@
     "buttons": {
       "confirm": "Confirmar",
       "cancel": "Cancelar"
+    },
+    "community_entry": {
+      "run_with_internet": "ejecutar este código en el entorno aislado (sandbox), que tiene acceso a internet y puede enviar datos afuera: {what}",
+      "too_long": "(demasiado largo, recortado)",
+      "a_task": "una tarea"
     }
   },
   "onboarding": {

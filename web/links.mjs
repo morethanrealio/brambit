@@ -312,6 +312,27 @@ export function enderecosDe(out, limite = 500) {
 }
 
 /**
+ * The absolute web addresses inside a TOOL ARGUMENT (an object, not prose): with
+ * a scheme (http/https) or protocol-relative (//host). A schemeless bare host is
+ * left out on purpose: a reading tool refuses it and a browser reads
+ * href="host/x" as relative to the current page, so it is not a way out. Used by
+ * the community-entry egress guard, which must not flag plain words like
+ * "node.js" the way the prose extractor above would.
+ */
+const URL_EM_ARG = /(?:https?:)?\/\/[^\s"'<>()[\]{}\\]+/gi;
+export function urlsDoArgumento(value, limite = 500) {
+  let txt;
+  try { txt = typeof value === 'string' ? value : JSON.stringify(value); } catch { return []; }
+  return [...new Set((String(txt ?? '').match(URL_EM_ARG) || []).map((u) => u.replace(/[.,;:!?]+$/, '')))]
+    .filter((u) => u.length <= 2048).slice(0, limite);
+}
+
+/** Is this address already, as it is, in the material? Wraps the private check. */
+export function enderecoNaMaterial(url, material) {
+  return noMaterial(url, Array.isArray(material) ? material.map(String) : [String(material)]);
+}
+
+/**
  * For text that goes out with no redo (a coding job's result): the made-up
  * links leave, with the sentence that only pointed at them.
  */

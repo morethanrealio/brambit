@@ -27,6 +27,8 @@ import { SEGUE } from './routes.mjs';
 import { ownerFeaturesOn } from './profiles.mjs';
 import { nomeDeTerceiro, primeiroNome } from './agent-inbox.mjs';
 import { reviewPublication } from './publication-review.mjs';
+import { installEntryEgressGuard } from './shared-entry-egress.mjs';
+import { materialDoDono } from './links.mjs';
 import { randomUUID } from 'node:crypto';
 
 export const sharedAssistantsOn = () => String(process.env.BRAMBIT_SHARED_ASSISTANTS ?? '').trim().toLowerCase() === 'on';
@@ -167,13 +169,36 @@ const ENTRY_DENIED_TOOLS = new Set([
   'renomear_assistente', 'ajustar_meu_estilo', 'definir_modo_permissao', 'permitir_comando', 'revogar_comando', 'gerar_chave_ssh',
   'criar_skill', 'listar_skills', 'editar_skill', 'apagar_skill', 'desinstalar_skill', 'ver_skills_de', 'instalar_skill', 'compartilhar_skill', 'rodar_skill',
 ]);
-export function pruneSharedEntryRegistry(registry) {
+// The strings a tool may draw a web address from in an entry turn: the person's
+// own message, their own earlier messages in the thread, and the published
+// assistant's own text (role, goal, skills). A URL that appears in none of these
+// (nor in a public web result from this turn) can't be opened, so the entry
+// can't send the person's data to an address they never chose. The person's
+// files, email, memory, a sandbox file and the assistant's own replies are NOT
+// here: they hold the data to protect, not addresses the person picked.
+function entryUrlSeed({ message = '', history = [], agent = {} } = {}) {
+  const seed = [String(message || ''), ...materialDoDono(agent)];
+  for (const m of Array.isArray(history) ? history : []) {
+    if (m?.role !== 'user' || m?.content == null) continue;
+    try { seed.push(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)); } catch { /* skip */ }
+  }
+  for (const s of agent?.shared?.skills || []) seed.push([s?.title, s?.trigger, s?.body].filter(Boolean).join('\n'));
+  return seed.filter((s) => typeof s === 'string' && s.trim());
+}
+
+// turn (optional): { message, history, agent, threadId, gateOpts }. With it, the
+// entry also gets the egress guard (shared-entry-egress.mjs); without it (older
+// callers) only the deny-list runs.
+export function pruneSharedEntryRegistry(registry, turn = null) {
   for (const name of [...registry.map.keys()]) if (ENTRY_DENIED_TOOLS.has(name)) registry.map.delete(name);
   // Tools added later in the turn (abrir_ferramentas opens groups mid-turn) go
   // through the same list. A later ler_skill is the person's own (the skills
   // group), so it would read their skills instead of the published ones.
   const add = registry.add.bind(registry);
   registry.add = (tool) => (ENTRY_DENIED_TOOLS.has(tool?.name) || tool?.name === 'ler_skill' ? registry : add(tool));
+  if (turn) installEntryEgressGuard(registry, {
+    material: entryUrlSeed(turn), threadId: turn.threadId, gateOpts: turn.gateOpts,
+  });
   return registry;
 }
 
