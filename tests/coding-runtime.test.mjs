@@ -168,6 +168,41 @@ test('canceling a paused job cancels its checkpoint and never silently resumes i
  assert.equal(f.steps,1);assert.equal(f.patches,0);
 });
 
+// gerenciar_tarefa_de_app settles the app task, not the job paused on it. Without the job
+// following, the conversation's queue stayed behind a pause only an exact "cancel" phrase undid.
+async function uncertainPause(t){
+ const f=await fixture(t),scope=codingJobScope(identity),policy=codingPolicySnapshot(f.agent),tools=f.deps.hostingTools();
+ f.deps.hostingTools=()=>tools.map(x=>x.name==='editar_arquivo_do_app'?{...x,run:async()=>({ok:false,error:'Storage timeout'})}:x);
+ const runtime=createProgrammingRuntime(f.deps);
+ const jobs=createCodingJobs({store:f.jobStore,execute:runtime.execute,deliver:f.deliver,cancelTask:runtime.cancelTask,taskState:runtime.taskState});
+ const input=objetivo=>({kind:'basic',args:{app:'demo',modo:'edicao',objetivo},userRequest:objetivo,policy});
+ await jobs.submit(identity,input('Fix server.js'),'first');await jobs.drive(scope);
+ const paused=(await jobs.status(identity)).programming_job;
+ assert.equal(paused.state,'paused');assert.equal(paused.recovery.reason,'uncertain_action');assert.equal(paused.recovery.canResume,false);
+ return {f,jobs,scope,policy,input,paused};
+}
+test('cancelling the app task through the conversation closes the paused job and runs the requests queued behind it',async t=>{
+ const {f,jobs,scope,input,paused}=await uncertainPause(t);
+ assert.equal((await jobs.submit(identity,input('Change the page title in server.js'),'second')).queued_request,true);
+ const tool=makeAppTaskControlTool({store:f.app,sessionKey:'owner:agent:thread:app',authorize:f.listing,onSettled:()=>jobs.settle(identity)});
+ assert.equal((await tool.run({app:'demo',acao:'resolver_pendencia',resultado:'nao_executada'})).ok,true);
+ assert.equal((await tool.run({app:'demo',acao:'cancelar'})).ok,true);
+ const closed=await f.jobStore.read(scope);
+ assert.equal(closed.state,'cancelled');assert.equal(closed.cancellationApplied,true);assert.equal(closed.queuedInputs.length,1);
+ await jobs.drive(scope);
+ const next=await f.jobStore.read(scope);
+ assert.notEqual(next.id,paused.id);assert.equal(next.requestId,'second');assert.equal(next.state,'queued');
+ await jobs.drive(scope);assert.ok((await f.jobStore.read(scope)).runCount>=1);
+});
+test('a resolved uncertain action makes the pause resumable, even when the job only learns it on resume',async t=>{
+ const {f,jobs,policy}=await uncertainPause(t);
+ assert.equal((await jobs.resume(identity,{policy})).ok,false);
+ const tool=makeAppTaskControlTool({store:f.app,sessionKey:'owner:agent:thread:app',authorize:f.listing});
+ assert.equal((await tool.run({app:'demo',acao:'resolver_pendencia',resultado:'concluida'})).ok,true);
+ const resumed=await jobs.resume(identity,{policy});
+ assert.equal(resumed.ok,true);assert.equal(resumed.programming_job.state,'queued');
+});
+
 // #57: the job's text reaches the person with no model turn to redo it, so a link
 // its tools never returned leaves; a link read before a pause still counts after it.
 test('a job result keeps links its tools returned (even before a pause) and drops made-up ones',async t=>{

@@ -2169,7 +2169,7 @@ const hostsDeLinksDoUsuario=async userId=>hostsDeLinks({marca:[hostDaMarca(),...
 const programmingRuntime=createProgrammingRuntime({confirmationStore,getAgentOwned,getThreadOwned,getUserLocale,hasProviderExecution,withProviderExecution,gasto,DEEPSEEK_AGENT_MODEL,isDeepSeekTurn,withDeepSeek,makeOfficialDeepSeek,GEMINI_COMPARISON_ID,isGeminiComparison,withGeminiComparison,recordUsages,makeHeavyProvider,primaryIsGeminiOverride,makeGeminiPrimary,makePrimaryProvider,hostingTools,APP_SUB_TOOLS,appTaskStore,getProject,userHasSshKey,runnerOnline,runnerBoundAgentId,livreTools,sshTools,codingTools,validProviderToken,hostsDeLinksDoUsuario});
 const codingJobs=createCodingJobs({store:codingJobStore,execute:programmingRuntime.execute,
   onSnapshot:job=>taskMetrics.record(programmingMeasurement(job)),
-  cancelTask:programmingRuntime.cancelTask,creditStatus:userId=>gasto.disponivel(userId),languageOf:async userId=>(await getUserLocale(userId))?.language,
+  cancelTask:programmingRuntime.cancelTask,taskState:programmingRuntime.taskState,creditStatus:userId=>gasto.disponivel(userId),languageOf:async userId=>(await getUserLocale(userId))?.language,
   notify:createCodingNotifier({getAgent:getAgentOwned,getTelegramBot:getTelegramBotForDelivery,getWhatsAppLink:getWhatsAppLinkForUser,waEnabled,sendTelegram:sendTelegramMessage,sendWhatsApp:sendWhatsAppProactive}),
   deliver:async job=>{
     const text=codingJobReceipt(job).text;
@@ -2728,7 +2728,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const durableProposal=opts.confirmationManaged ? null : await codingApprovals.peek();
   if(durableProposal && !peekPending(thread.id)){
     const host=hostingTools(userId,agent.id);
-    const control=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,
+    const control=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,onSettled:()=>codingJobs.settle(codingIdentity),
       authorize:async(app,dono)=>host.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})});
     const restored=control.restoreConfirmation(durableProposal.args,durableProposal.binding);
     restorePending(thread.id,{...durableProposal,durableId:durableProposal.id,
@@ -4868,7 +4868,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         },
         onAppTarget: (system) => lembrarAppAtual(userId, system),
       }));
-      addGated(registry,[makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,
+      addGated(registry,[makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,onSettled:()=>codingJobs.settle(codingIdentity),
         authorize:async(app,dono)=>await hostAll.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})})],thread.id,{codingApprovals,codingApprovalContext:{identity:codingIdentity,policy:codingPolicySnapshot(agent),channel:kind}});
       console.log(`[construir_app] sub assembled (thread=${thread.id}, tools=${hostBuild.length})`);
     }
