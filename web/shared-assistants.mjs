@@ -29,8 +29,9 @@
 //   and again inside the publishing transaction, while the assistant's row is
 //   locked (SELECT ... FOR UPDATE on agents): a plugin that blocks an assistant
 //   while holding that lock can't be raced by a publish already under review.
-//   error is a message key from the plugin's catalog (default
-//   server.shared_assistant_publish_not_allowed). Without the hook, any signed-in
+//   error is a server.* message key (default
+//   server.shared_assistant_publish_not_allowed; server.shared_assistant_taken_down
+//   for an assistant the operator took down). Without the hook, any signed-in
 //   person may publish.
 //  prices({userId, publications: [{id, agentId, creatorUserId, version, acceptedKey}]}) →
 //   {[publication id]: price | null}: what using each assistant costs on top of

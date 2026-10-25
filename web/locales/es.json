@@ -69,6 +69,7 @@
     "shared_assistant_changed": "El asistente cambió mientras se revisaba. Intenta publicarlo de nuevo.",
     "shared_assistant_review_unavailable": "No se pudo revisar el asistente ahora, así que no se publicó. Inténtalo de nuevo en un rato.",
     "shared_assistant_publish_not_allowed": "Tu cuenta no puede publicar asistentes en la comunidad.",
+    "shared_assistant_taken_down": "El equipo que administra este servicio retiró este asistente de la comunidad y no se puede volver a publicar.",
     "shared_assistant_price_not_accepted": "Este asistente tiene un precio de uso. Revisa el precio y confirma para empezar.",
     "shared_assistant_check_unavailable": "No se pudo comprobar esto ahora, así que no se hizo nada. Inténtalo de nuevo en un rato.",
     "shared_assistant_price_changed": "Quien creó este asistente cambió su precio de uso, así que está en pausa para ti. Para seguir usándolo, abre los asistentes de la comunidad, revisa el nuevo precio y acéptalo. No se hizo nada con tu mensaje.",

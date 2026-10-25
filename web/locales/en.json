@@ -69,6 +69,7 @@
     "shared_assistant_changed": "The assistant changed while it was being checked. Try publishing again.",
     "shared_assistant_review_unavailable": "The assistant could not be checked right now, so it was not published. Try again in a little while.",
     "shared_assistant_publish_not_allowed": "Your account cannot publish assistants to the community.",
+    "shared_assistant_taken_down": "This assistant was taken down from the community by the team that runs this service and cannot be published again.",
     "shared_assistant_price_not_accepted": "This assistant has a usage price. Check the price and confirm to start.",
     "shared_assistant_check_unavailable": "This could not be checked right now, so nothing was done. Try again in a little while.",
     "shared_assistant_price_changed": "The creator of this assistant changed its usage price, so it is paused for you. To keep using it, open the community assistants, check the new price and accept it. Nothing was done with your message.",
