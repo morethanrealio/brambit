@@ -25,7 +25,10 @@
 //
 // Price and who may publish belong to whoever installs it, through the plugin's
 // sharedAssistants port (plugins.mjs). Both hooks are optional:
-//  canPublish({userId, agentId}) → {allowed, error?}, checked before the review.
+//  canPublish({userId, agentId}) → {allowed, error?}, checked before the review
+//   and again inside the publishing transaction, while the assistant's row is
+//   locked (SELECT ... FOR UPDATE on agents): a plugin that blocks an assistant
+//   while holding that lock can't be raced by a publish already under review.
 //   error is a message key from the plugin's catalog (default
 //   server.shared_assistant_publish_not_allowed). Without the hook, any signed-in
 //   person may publish.
@@ -372,6 +375,11 @@ export function registerSharedAssistants(rotas, { pool, send, fail, tooManyReque
       const now = await versionOf(c, agentId, user.id, 'FOR UPDATE');
       if (!now.version) { await c.query('ROLLBACK'); return send(res, now.status, { error: now.error }); }
       if (JSON.stringify(now.version) !== JSON.stringify(first.version)) { await c.query('ROLLBACK'); return send(res, 409, { error: 'server.shared_assistant_changed' }); }
+      // Asked again under the lock: whatever the plugin recorded while the review
+      // ran (an operator taking the assistant down, holding the same row lock) is
+      // seen here, so it can't be published back in that window.
+      try { verdict = await publishVerdict(user.id, agentId); } catch (e) { await c.query('ROLLBACK'); return unavailable(res, 'canPublish', e); }
+      if (!verdict.allowed) { await c.query('ROLLBACK'); return send(res, 403, { error: verdict.error }); }
       const v = now.version;
       await c.query(`UPDATE ${S}.agent_publications SET status = 'superseded' WHERE agent_id = $1 AND status = 'published'`, [agentId]);
       const { rows: [pub] } = await c.query(
