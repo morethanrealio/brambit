@@ -2245,6 +2245,10 @@
       "default_name": "Assistant",
       "fallback": "The task was interrupted; check its progress in the app conversation.",
       "truncated": "… The full result is in the {brand} app conversation."
+    },
+    "app_limit": {
+      "installation_one": "This installation allows {count} app per person, and the current total is {current}.",
+      "installation_other": "This installation allows {count} apps per person, and the current total is {current}."
     }
   }
 }

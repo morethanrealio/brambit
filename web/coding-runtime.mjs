@@ -37,7 +37,7 @@ async function runProgrammingJob(job,control,achados=[]){
   const onUsage=async e=>recordUsages([e],{userId,agentId,threadId,turnId:job.id,kind:e.kind||'subagent'},{noBill:e.kind==='compact'&&e.noBill===true,eventId:e.executionCallId,strict:true});
   const makeProvider=()=>makeHeavyProvider(job.kind==='basic'?'app':'codar',{maxOut:32768});
   if(job.kind==='basic'){
-    const buildAppContext=async()=>{const registry=new ToolRegistry();for(const t of hostingTools(userId,agentId))if(APP_SUB_TOOLS.has(t.name))registry.add({...t,run:async args=>{const current=await getAgentOwned(agentId,userId);if(!current||codingPolicySnapshot(current)!==job.policy||!await approvalValid())return {ok:false,error:'Permissões do assistente alteradas; operação não executada.'};return t.run(args);}});return {tools:registry,provider:makeProvider()};};
+    const buildAppContext=async()=>{const registry=new ToolRegistry();for(const t of hostingTools(userId,agentId,{language}))if(APP_SUB_TOOLS.has(t.name))registry.add({...t,run:async args=>{const current=await getAgentOwned(agentId,userId);if(!current||codingPolicySnapshot(current)!==job.policy||!await approvalValid())return {ok:false,error:'Permissões do assistente alteradas; operação não executada.'};return t.run(args);}});return {tools:registry,provider:makeProvider()};};
     const tool=makeConstruirAppTool({buildAppContext,executionId:codingExecutionId(job),sessionKey:`${userId}:${agentId}:${threadId}:app`,taskStore:appTaskStore,userRequest:job.userRequest,onUsage,onEvent,shouldPause});
     const result=await tool.run(job.args);
     const journal=createAppBuildJournal({language,userRequest:job.userRequest});journal.toolResult({name:'construir_app'},result);

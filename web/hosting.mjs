@@ -416,10 +416,10 @@ function perm() {
   if (!permissoes) throw Error('Permissões não configuradas: chame configurarPermissoes no boot');
   return permissoes;
 }
-async function appQuotaBlock(ownerUserId, system, { appClient = false } = {}) {
+async function appQuotaBlock(ownerUserId, system, { appClient = false, language } = {}) {
   if (system && await getAppRow(ownerUserId, system)) return null; // already exists: it's an edit
   const atuais = (await listAppsForUser(ownerUserId)).length;
-  return perm().bloqueioDeApp({ ownerUserId, atuais, appClient });
+  return perm().bloqueioDeApp({ ownerUserId, atuais, appClient, language });
 }
 
 // Owner's disk quota, in the format ctl.py expects. ONE place only: every
@@ -922,6 +922,8 @@ export function hostingTools(userId, agentId, opts = {}) {
   const emitAppCard = emitAppCardRaw;
   // Conversation coming from the iOS app: see appQuotaBlock.
   const appClient = !!opts.appClient;
+  // The person's language, when a refusal reaches them as is (background app task).
+  const language = opts.language;
   // ── Guardrail: each app is looked after by ONE of the owner's assistants (apps.agent_id) ──
   // If the ACTIVE assistant doesn't own the app (and it's the user's own app,
   // not a collaboration between people), it does NOT act: it hands off to the
@@ -1066,7 +1068,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         // The owner's plan's app cap. Deliberately early: blocks before
         // spending a build/publish on the host. Only catches a NEW app (see
         // appQuotaBlock).
-        const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
+        const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient, language });
         if (quota) return quota;
         // Assembles the files: base = saved draft (written with
         // escrever_arquivo_do_app), with the files passed INLINE in this
@@ -1442,7 +1444,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         const existing = await getAppDraft(owner.ownerUserId, system);
         const jaTem = Object.keys(existing);
         if (!jaTem.length) {
-          const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
+          const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient, language });
           if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais }, 'app_scaffold');
         }
         if (jaTem.length) {
@@ -1510,7 +1512,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         // Incremental edit: if there's no draft yet and the app was already
         // published, seeds the draft with the last published code (snapshot)
         // before applying.
-        const quota = await newDraftQuotaBlock(owner.ownerUserId, system, owner.app, { appClient });
+        const quota = await newDraftQuotaBlock(owner.ownerUserId, system, owner.app, { appClient, language });
         if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais });
         const draft = await ensureDraftSeeded(owner.ownerUserId, system, owner.app);
         // Optimistic concurrency: if the agent says which version it READ,

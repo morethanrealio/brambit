@@ -26,13 +26,13 @@ function fixture(caller='A'){
  const ctx=vm.createContext({Buffer,console,process:{env:{}},Date,Map,Set,URL,zlib,createHash,randomBytes:()=>Buffer.alloc(12),filePage,validateDraft,validationPage,draftRevision,searchAppCode,rejectedEdit,resolverAncora,pioraSintaxe,
  countLines:s=>s.split('\n').length,dominioDosApps,urlDoApp,linkDaPagina,marca,hostingEnabled:()=>true,ctl:async()=>{external++;throw Error('forbidden external');},
  getAppRow:async(u,s)=>content[u]?.[s]?{system:s,agent_id:agent}:null,getAppDraft:async(u,s)=>{reads.push([u,s]);return {...content[u]?.[s]};},getAppSnapshot:async()=>null,
- capBlock:async({atuais})=>cap?{ok:false,error:'No new apps on this plan.',agente:'Explain the plan limit.',plano:'starter',teto:0,atuais}:null,
+ capBlock:async({atuais,language})=>cap?{ok:false,error:language==='en'?'No new apps on this plan.':'Wrong language.',agente:'Explain the plan limit.',plano:'starter',teto:0,atuais}:null,
  resolveConnectedUser:async(_,d)=>content[d]?{ok:true,userId:d}:{ok:false},isAppCollaborator:async()=>allow,
  listSharedAppsForCollaborator:async()=>shared&&allow?[{system:'demo',ownerUserId:'B'}]:[],
  listAppDraftSystems:async()=>[],listAppsForUser:async()=>[],listAgents:async()=>[],
  getUserById:async()=>({plan:'pro'}),conferirPermissoes:p=>p,
  ensureUserSubdomain:async()=>{external++;throw Error('forbidden allocation');},putAppDraftFile:async(u,s,p,c)=>{writes++;content[u]??={};content[u][s]??={};content[u][s][p]=c;}});
- vm.runInContext(src+`\nconfigurarPermissoes({bloqueioDeApp:capBlock,discoDoAppMb:()=>5120});resolveLabel=async()=>({label:'fixture',name:'Fixture'});globalThis.actual=hostingTools(${JSON.stringify(caller)},'agent');`,ctx);
+ vm.runInContext(src+`\nconfigurarPermissoes({bloqueioDeApp:capBlock,discoDoAppMb:()=>5120});resolveLabel=async()=>({label:'fixture',name:'Fixture'});globalThis.actual=hostingTools(${JSON.stringify(caller)},'agent',{language:'en'});`,ctx);
  const tools=new ToolRegistry();for(const t of ctx.actual)tools.add(t);
  return {tools,content,reads,get writes(){return writes;},get external(){return external;},allow:v=>allow=v,shared:v=>shared=v,agent:v=>agent=v,cap:v=>cap=v,newAppCheck:(app,dono)=>ctx.newAppQuotaBlock(caller,app,dono)};
 }
