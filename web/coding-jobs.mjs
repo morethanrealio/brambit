@@ -116,7 +116,8 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
           job.result=cancelled?{...copy(result||{}),ok:false,text:t('coding.job.cancelled',language)}:copy(result||{});
           if(cancelled){job.state='cancelled';job.queuedInputs=[];}
           else if(REQUEUE.has(reason)||closing&&reason==='new_user_input'){job.state='queued';job.nextRunAt=now()+2000;}
-          else job.state=result?.coding_task?.state==='completed'||result?.app_build?.motivo==='completed'?'completed':'paused';
+          // Over the plan cap the job is done: nothing to resume, and the queue moves on.
+          else job.state=result?.coding_task?.state==='completed'||['completed','app_limit'].includes(result?.app_build?.motivo)?'completed':'paused';
         }
         job.updatedAt=now();await save(job);
       }

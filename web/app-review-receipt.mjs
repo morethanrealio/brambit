@@ -1,5 +1,5 @@
 import {appReviewReply} from './app-review-reply.mjs';
-import {appEditingReply} from './app-editing-reply.mjs';
+import {appEditingReply,appLimitLine} from './app-editing-reply.mjs';
 import { buildQuestions } from './build-feedback.mjs';
 // Deterministic envelope + explicitly attributed static assessments. Never a
 // functional acceptance, delivery receipt, or permission to publish.
@@ -41,9 +41,9 @@ export function appTaskReceipt(build, language='pt-BR', options={}) {
       es:{none:'Ningún cambio de archivo confirmado en esta ronda.',files:'Archivos modificados en esta ronda',pending:'La edición no terminó con validación estática aprobada de la versión actual. La tarea sigue guardada para continuar.',loop:'Pausé por consultas repetidas sin progreso en esta etapa de edición. Una evaluación no sustituyó la implementación.',runtime:'Esta validación estática no demuestra boot ni pruebas funcionales.',details:'Diagnósticos de validación',uncertain:'La tarea se detuvo; nada sigue en segundo plano.'}
     }[lang];
     const changed=[...new Set((build.arquivos||[]).filter(x=>typeof x==='string').map(safe))].slice(0,30);
-    const editReason=build.motivo==='edit_validation_pending'?e.pending:build.motivo==='read_coverage_loop'?e.loop:reason||(build.estado==='interrompido'?e.uncertain:'');
+    const editReason=build.motivo==='app_limit'?appLimitLine(build,language):build.motivo==='edit_validation_pending'?e.pending:build.motivo==='read_coverage_loop'?e.loop:reason||(build.estado==='interrompido'?e.uncertain:'');
     const diagnostics=[...(build.lint_erros||[]),...(build.lint_avisos||[])].slice(0,8).map(x=>[x.arquivo,x.tipo,x.funcao].filter(Boolean).map(safe).join(' — ')).filter(Boolean);
-    return [`${t.edit}: ${build.estado==='interrompido'?t.paused:t.done}.`,editReason,
+    return [`${t.edit}: ${build.estado==='interrompido'&&build.motivo!=='app_limit'?t.paused:t.done}.`,editReason,
       changed.length?`${e.files}: ${changed.join(', ')}.`:e.none,
       `${t.lint}: ${build.validacao==='aprovado'?t.ok:build.validacao==='pendente'||!build.validacao?t.pending:t.failed}.`,
       diagnostics.length?`${e.details}:\n${diagnostics.map(x=>'• '+x).join('\n')}`:'',e.runtime,questions,t.disclaimer].filter(Boolean).join('\n\n');

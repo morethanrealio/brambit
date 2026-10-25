@@ -1,5 +1,5 @@
 import {createCodingContext,visibleCodeCoverage,codingCompactionCut,DEFAULT_CODING_CONTEXT_CHARS} from './coding-context.mjs';
-import {effectState} from './coding-effects.mjs';
+import {effectState,planCapRefusal} from './coding-effects.mjs';
 import {reviewRequestNeedsClarification,editRequestNeedsClarification,scopeConflict,validScopeChange} from './app-task-scope.mjs';
 import {createAppModelCalls} from './app-model-call.mjs';
 import {creditPauseReason} from './execution-credit-errors.mjs';
@@ -159,6 +159,9 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
           obs:'Somente itens válidos foram registrados; não comprova comportamento em runtime.'};
       }});
     let interruptedReason=null;
+    // A plan-cap refusal before anything was applied in this run ends the task:
+    // every write to this app is refused the same way, so going on only spends calls.
+    let capRefusal=null,appliedThisRun=false;
     const modelCalls=createAppModelCalls({task,persist,provider,onUsage,now,onAdvance:(input,kind)=>wrappedProvider.complete(input,kind)});
     const wrappedProvider={name:provider.name,async complete(input,kind='subagent') {
       if(!modelCalls.recovering)await modelCalls.consumed();
@@ -188,6 +191,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
         const current=await tools.run('listar_arquivos_do_app',{});
         if(current?.ok!==true||(current.alvo_validacao||scope)!==targetIdentity)return {stop:'access_denied',text:'O acesso ao app mudou; não continuei a tarefa.'};
         if(current.revisao&&currentRevision&&current.revisao!==currentRevision){revisionChanged=true;task.report=[];evidence.clear();currentRevision=current.revisao;editingEpoch(current.revisao);}
+        if(capRefusal&&!appliedThisRun)return {stop:'app_limit',text:capRefusal.mensagem||'The plan app limit was reached; nothing was created or changed.'};
         if(await shouldPause?.())return {stop:'new_user_input',text:'Pausei para considerar sua nova mensagem. O progresso está salvo.'};
         if(task.pending?.mutating)return {stop:'uncertain_action',text:'Uma ação anterior ficou sem resultado confirmado. Não a repeti; é preciso conferir o rascunho antes de continuar.'};
         if(lowProgressReads>=3)return {stop:'read_coverage_loop',text:mode==='revisao'?'A leitura repetiu conteúdo já consultado; vou fechar o parecer com os achados disponíveis.':'As consultas repetiram conteúdo sem progresso nesta etapa de edição. Pausei; não substituí a implementação por uma revisão.'};
@@ -222,6 +226,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       async afterTool({call,out,messages}) {
         const sig=digest(executionSignature(call));const effect=effectState(call,out);
         if(effect!=='not_applied')seen.add(sig);task.signatures=[...seen];
+        if(effect==='applied'&&registry.map.has(call.name)&&!READS.has(call.name)&&!INSPECTIONS.has(call.name)&&call.name!=='registrar_parecer_do_app')appliedThisRun=true;
+        capRefusal=planCapRefusal(call,out)||capRefusal;
         // Refused edit: allows ONE re-read with no penalty (cap per epoch).
         if(mode==='edicao'&&effect==='not_applied'&&FILE_WRITES.has(call.name)&&task.editReadState&&(task.editReadState.pardons||0)<PARDONS_AFTER_REJECT)
           task.editReadState.pardonNextRead=true;
@@ -388,6 +394,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
     out.app_build.cobertura=coverage;out.app_build.cobertura_resumo=['access_denied','draft_changed'].includes(result.termination)?[]:coverageTracker.summary();out.app_build.revisao_alterada=revisionChanged;
     out.app_build.consumo_pendente=!!task.modelCall&&!task.modelCall.accounted;
     out.app_build.orcamento={chamadas:task.calls,tokens_contabilizados:task.tokens,limite_chamadas:Number.isFinite(cap.calls)?cap.calls:null,limite_tokens:Number.isFinite(cap.tokens)?cap.tokens:null};
+    if(result.termination==='app_limit')out.app_build.limite={mensagem:capRefusal?.mensagem||'',teto:capRefusal?.teto??null,atuais:capRefusal?.atuais??null};
     if(mode==='edicao'&&result.termination==='completed'&&!out.ok){
       result.termination='edit_validation_pending';out.app_build.motivo='edit_validation_pending';out.app_build.estado='interrompido';
     }
@@ -414,7 +421,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       appendJournal({event:'prova_de_vida',ok:prova?.ok===true,prova:prova?.prova||null,veredito:prova?.veredito||null,at:now()});
     }
     // A completed model turn is not a functional acceptance or a complete review.
-    task.status=result.termination==='completed'?'completed':'paused';task.lastResult=out;task.lastExecutionId=executionId||null;
+    // Over the plan cap nothing can be resumed: the next request starts fresh.
+    task.status=['completed','app_limit'].includes(result.termination)?'completed':'paused';task.lastResult=out;task.lastExecutionId=executionId||null;
     if(!creditPaused&&result.termination!=='execution_error')await modelCalls.consumed();
     await persist();
     return out;
