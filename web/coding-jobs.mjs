@@ -4,6 +4,7 @@ import {productI18n} from './i18n.mjs';
 import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 const ACTIVE=new Set(['queued','running']);
 const REQUEUE=new Set(['execution_window','execution_quantum','workspace_busy']);
+const MEASUREMENT_TRIES=6;
 const copy=x=>JSON.parse(JSON.stringify(x));
 export const codingJobScope=({userId,agentId,threadId})=>JSON.stringify(['coding-job',userId,agentId,threadId]);
 function waiting(job){return Array.isArray(job?.queuedInputs)?job.queuedInputs.length:0;}
@@ -45,9 +46,17 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
   // Account language of the texts below; a failed lookup never blocks the job.
   const languageFor=async userId=>{try{return await languageOf(userId)||LEGACY_TEXT_LANGUAGE;}catch(e){onError(e);return LEGACY_TEXT_LANGUAGE;}};
   const {t}=productI18n();
+  // A failed measurement waits longer after each try and is dropped after a few: it must never
+  // take a worker slot every 2 s for good (a job saved without createdAt once did).
   async function flushMeasurement(record,save){
     if(!onSnapshot||!record?.measurementPending)return;
-    await onSnapshot(copy(record));record.measurementPending=false;await save(record);
+    try{await onSnapshot(copy(record));}catch(e){
+      const failures=(record.measurementFailures||0)+1;
+      if(failures>=MEASUREMENT_TRIES){record.measurementPending=false;delete record.measurementFailures;delete record.measurementRetryAt;}
+      else{record.measurementFailures=failures;record.measurementRetryAt=now()+2000*2**failures;}
+      await save(record);throw e;
+    }
+    record.measurementPending=false;delete record.measurementFailures;delete record.measurementRetryAt;await save(record);
   }
   // gerenciar_tarefa_de_app settles the app task a pause waits on, not the job. The job
   // follows it here: a cancelled task closes the job and lets the requests queued behind it
@@ -68,7 +77,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
   }
   async function withJob(scope,run){return store.withTask(scope,async({record,save})=>{
     const measuredSave=async next=>{
-      if(onSnapshot){next.measurementVersion=(next.measurementVersion||0)+1;next.measurementPending=true;}
+      if(onSnapshot){next.measurementVersion=(next.measurementVersion||0)+1;next.measurementPending=true;delete next.measurementFailures;delete next.measurementRetryAt;}
       await save(next);
       try{await flushMeasurement(next,save)}catch(e){onError(e)}
     };
@@ -147,7 +156,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       const at=now();
       const entries=await store.entries();
       const cancellations=new Set(entries.filter(x=>x.scope.startsWith('control:')&&x.record?.cancel).map(x=>x.scope.slice(8)));
-      const candidates=entries.filter(({scope,record})=>scope.startsWith('["coding-job",')&&record&&((ACTIVE.has(record.state)&&Number(record.nextRunAt||0)<=at)||record.measurementPending||!record.delivered||['completed','cancelled'].includes(record.state)&&waiting(record)>0||record.state==='paused'&&cancellations.has(record.id)||record.state==='cancelled'&&!record.cancellationApplied));
+      const candidates=entries.filter(({scope,record})=>scope.startsWith('["coding-job",')&&record&&((ACTIVE.has(record.state)&&Number(record.nextRunAt||0)<=at)||record.measurementPending&&Number(record.measurementRetryAt||0)<=at||!record.delivered||['completed','cancelled'].includes(record.state)&&waiting(record)>0||record.state==='paused'&&cancellations.has(record.id)||record.state==='cancelled'&&!record.cancellationApplied));
       candidates.sort((a,b)=>{
         const ad=!a.record.delivered&&!ACTIVE.has(a.record.state),bd=!b.record.delivered&&!ACTIVE.has(b.record.state);if(ad!==bd)return ad?-1:1;
         return Number(a.record.lastStartedAt||0)-Number(b.record.lastStartedAt||0)||Number(a.record.createdAt||a.record.updatedAt||0)-Number(b.record.createdAt||b.record.updatedAt||0);

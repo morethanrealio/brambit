@@ -291,3 +291,14 @@ test('advanced stop message without a language keeps the legacy Portuguese; cred
  assert.equal((await run(undefined,Error('network'))).text,'A execução foi interrompida; o estado foi preservado.');
  assert.match((await run('en',new ExecutionCreditError('account_credit_reserved'))).text,/does not mean your/);
 });
+test('a measurement that keeps failing backs off and is dropped instead of taking a worker slot forever',async()=>{
+ const store=memory(),scope=codingJobScope(identity);let at=1000,calls=0;
+ const jobs=createCodingJobs({store,now:()=>at,execute:async()=>({coding_task:{state:'completed'},text:'done'}),deliver:async()=>{},onSnapshot:async()=>{calls++;throw Error('metrics down');}});
+ const settle=async()=>{await jobs.tick();for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));};
+ await jobs.submit(identity,{kind:'advanced'},'req');await jobs.drive(scope);
+ let job=await store.read(scope);assert.equal(job.state,'completed');assert.equal(job.delivered,true);assert.equal(job.measurementPending,true);
+ const before=calls;await settle();await settle();assert.equal(calls,before,'retried before its wait was over');
+ for(let i=0;i<10&&(await store.read(scope)).measurementPending;i++){at=(await store.read(scope)).measurementRetryAt;await settle();}
+ job=await store.read(scope);assert.equal(job.measurementPending,false);assert.equal(calls-before,5);
+ at+=3600_000;await settle();assert.equal(calls-before,5);
+});
