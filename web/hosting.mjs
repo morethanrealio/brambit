@@ -382,6 +382,16 @@ async function newDraftQuotaBlock(ownerUserId, system, app, opts) {
   if (Object.keys(await getAppDraft(ownerUserId, system)).length) return null;
   return appQuotaBlock(ownerUserId, system, opts);
 }
+// The same cap, checked before construir_app starts a background build: the
+// person hears the limit in the same turn instead of a task that pauses on the
+// first refusal. Read-only owner resolution; problems other than the cap are
+// left for the build itself to report.
+export async function newAppQuotaBlock(userId, system, dono, opts = {}) {
+  if (!sysOk(system)) return null;
+  const owner = await resolveOwnerForRead(userId, system, dono);
+  if (owner.error) return null;
+  return newDraftQuotaBlock(owner.ownerUserId, system, owner.app, opts);
+}
 async function ensureDraftSeeded(ownerUserId, system, app) {
   let draft = await getAppDraft(ownerUserId, system);
   if (!Object.keys(draft).length && app) {

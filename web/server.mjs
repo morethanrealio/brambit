@@ -1188,7 +1188,7 @@ import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForT
 import { codingTools } from './coding.mjs';
 import { makeCodarTool, makeConstruirAppTool } from './coding-subagent.mjs';
 import { projectTools } from './projects.mjs';
-import { hostingTools, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
+import { hostingTools, newAppQuotaBlock, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
 import { ctl as appsCtl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
 import { verifyTotp } from './totp.mjs';
 
@@ -4854,7 +4854,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // Session separate from `codar`'s (same engine, different instance): the app
         // work continues across turns without mixing with dev/server work.
         sessionKey: `${userId}:${agent.id}:${thread.id}:app`,
-        taskStore: appTaskStore,
+        taskStore: appTaskStore, newAppCheck: (app, dono) => newAppQuotaBlock(userId, app, dono, { appClient }),
         dispatch:['chat','telegram','whatsapp'].includes(kind)?args=>codingJobs.submit(codingIdentity,{kind:'basic',args,userRequest:message,channel:kind,policy:codingPolicySnapshot(agent)},codingSubmissionId):undefined,
         userRequest: message,
         shouldPause: async () => { const next=await pollNewUserMsgAtSafeBoundary?.(); if(next){appPendingInputs.push(next);return true;}return false; },

@@ -438,7 +438,7 @@ export function makeCodarTool({ buildCodingContext, sessionKey, executionId, onU
 // the closure builds and the sessionKey (`:app`, separate from the `codar` session).
 // This is where the strong model comes in — in a new, clean context. The main
 // turn never switches models at any point.
-export function makeConstruirAppTool({ buildAppContext, sessionKey, executionId, onUsage, onEvent, compact, onAppTarget, taskStore, shouldPause, userRequest, dispatch, language }) {
+export function makeConstruirAppTool({ buildAppContext, sessionKey, executionId, onUsage, onEvent, compact, onAppTarget, taskStore, shouldPause, userRequest, dispatch, language, newAppCheck }) {
   return {
     name: 'construir_app',
     description: [
@@ -478,6 +478,14 @@ export function makeConstruirAppTool({ buildAppContext, sessionKey, executionId,
     run: async ({ objetivo, app, modo = 'revisao', dono, arquivos_revisao }) => {
       if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
       try {
+        // A new app over the plan cap is refused here, in the same turn, never inside a task that
+        // would pause on the refusal. The cap is checked again before writing and before publishing,
+        // so a failed read lets the build go on. app_limit keeps the reply in the model's words: it
+        // follows the port's agente text in the person's language.
+        if(modo==='edicao'&&app&&typeof newAppCheck==='function'){
+          const block=await newAppCheck(String(app).trim(),dono).catch(()=>null);
+          if(block)return {...block,ok:false,app_limit:true};
+        }
         if(dispatch){
           if(!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(String(app||'').trim())||!['revisao','edicao'].includes(modo))return 'ERRO: informe app e modo válidos antes de iniciar.';
           const record=await taskStore?.read?.(JSON.stringify([sessionKey,app,dono||'']));

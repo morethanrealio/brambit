@@ -59,7 +59,9 @@ export function createAppBuildJournal({ language='pt-BR', failedPublication=fals
       if(call.name === 'gerenciar_tarefa_de_app' && typeof out==='string' && out.startsWith('AÇÃO PENDENTE DE CONFIRMAÇÃO')) controlProposal=out;
       if (call.name === 'construir_app') {
         controlProposal=null;jobReceipt=out?.programming_job?out:null;
-        build = [1,2].includes(out?.app_build?.version) ? out.app_build : { estado:'nao_validado' };
+        // Plan cap checked before any task started: nothing to validate, the model explains the limit.
+        build = out?.app_limit === true && out?.ok === false ? null
+          : [1,2].includes(out?.app_build?.version) ? out.app_build : { estado:'nao_validado' };
         // A BLOCKED publication does not disappear because the model went
         // back to touch the draft in the same turn. Without this guard the
         // owner only got the build message and never found out his
