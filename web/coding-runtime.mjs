@@ -1,6 +1,6 @@
 import {ToolRegistry} from '../core-proto/core.mjs';
 import {makeConstruirAppTool,makeCodarTool} from './coding-subagent.mjs';
-import {makeAppTaskControlTool} from './app-task-runner.mjs';
+import {makeAppTaskControlTool,pendingIsKnownNoop} from './app-task-runner.mjs';
 import {createAppBuildJournal} from './app-build-state.mjs';
 import {createCodingApprovals} from './coding-approvals.mjs';
 import {codingPolicySnapshot} from './coding-jobs.mjs';
@@ -97,7 +97,7 @@ async function recoverCodingApprovals(jobs){
     if(!agent||codingPolicySnapshot(agent)!==policy)continue;
     const approvals=createCodingApprovals({store:appTaskStore,scope:JSON.stringify([identity.userId,identity.agentId,identity.threadId])});
     const host=hostingTools(identity.userId,identity.agentId);
-    const tool=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${identity.userId}:${identity.agentId}:${identity.threadId}:app`,authorize:async(app,dono)=>host.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})});
+    const tool=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${identity.userId}:${identity.agentId}:${identity.threadId}:app`,onSettled:()=>jobs.settle?.(identity),authorize:async(app,dono)=>host.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})});
     const result=await approvals.resolve(record.id,true,p=>tool.restoreConfirmation(p.args,p.binding).run());
     if(result?.ok&&result.continuation){
       const queued=await jobs.submit(identity,{kind:'basic',args:result.continuation,userRequest:result.continuation.objetivo,policy,channel:record.context.channel||'chat'},'approval:'+record.id);
@@ -105,13 +105,29 @@ async function recoverCodingApprovals(jobs){
     }
   }
 }
-async function cancelTask(job){
+function taskScope(job){
   const session=`${job.userId}:${job.agentId}:${job.threadId}`;
-  const scope=job.kind==='basic'?JSON.stringify([session+':app',String(job.args?.app||'').trim(),job.args?.dono||''])
+  return job.kind==='basic'?JSON.stringify([session+':app',String(job.args?.app||'').trim(),job.args?.dono||''])
     :JSON.stringify(['advanced',session,JSON.stringify(job.environment)]);
-  await appTaskStore.withTask(scope,async({record,save})=>{
-    const owner=record?.executionOwner||record?.lastExecutionId;
-    if(!record||typeof owner!=='string'||!(owner===job.id||owner.startsWith(job.id+':resume:')))return;
+}
+// The task record is this job's only while one of its runs owns it.
+function ownedBy(record,job){
+  const owner=record?.executionOwner||record?.lastExecutionId;
+  return !!record&&typeof owner==='string'&&(owner===job.id||owner.startsWith(job.id+':resume:'));
+}
+// Where the app task a paused job stopped on stands now (coding-jobs settlePause). Only
+// gerenciar_tarefa_de_app changes it while the job is paused, and only app tasks have it.
+async function taskState(job){
+  if(job.kind!=='basic')return null;
+  const record=await appTaskStore.read(taskScope(job));
+  if(!ownedBy(record,job))return null;
+  if(record.status==='cancelled')return 'cancelled';
+  if(record.status!=='completed'&&(!record.pending?.mutating||pendingIsKnownNoop(record)))return 'resumable';
+  return null;
+}
+async function cancelTask(job){
+  await appTaskStore.withTask(taskScope(job),async({record,save})=>{
+    if(!ownedBy(record,job))return;
     record.status='cancelled';record.cancelledAt=Date.now();
     // Proven unused/read-only state can end here. Unknown dispatched calls and
     // mutations remain visible and block a fresh task from bypassing recovery.
@@ -120,5 +136,5 @@ async function cancelTask(job){
     await save(record);
   });
 }
-return {execute:executeProgrammingJob,recoverApprovals:recoverCodingApprovals,cancelTask};
+return {execute:executeProgrammingJob,recoverApprovals:recoverCodingApprovals,cancelTask,taskState};
 }

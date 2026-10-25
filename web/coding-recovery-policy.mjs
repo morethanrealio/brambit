@@ -4,7 +4,9 @@ export const codingPauseReason = result => result?.coding_task?.reason || result
 const resumable = new Set(['execution_window','execution_quantum','workspace_busy','new_user_input','execution_error',
   'account_credit_exhausted','account_credit_reserved','credit_reservation_unavailable','credit_quote_unavailable',
   'credit_reconciliation_required','credit_control_unavailable','provider_failure','provider_unavailable',
-  'report_partial','report_rejected','report_unavailable','review_partial','edit_validation_pending']);
+  'report_partial','report_rejected','report_unavailable','review_partial','edit_validation_pending',
+  // An uncertain action the person resolved through gerenciar_tarefa_de_app (coding-jobs settlePause).
+  'pending_resolved']);
 // The next step goes straight to the person (chat, Telegram, WhatsApp), so it comes
 // from the catalog in the account language and names the resume phrase that
 // codingControlIntent recognizes in that language.
