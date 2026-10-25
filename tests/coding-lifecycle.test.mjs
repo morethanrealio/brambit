@@ -56,6 +56,16 @@ test('explicit not-applied receipt is distinct from unknown failure; prose canno
  const valid={name:'editar_arquivo_do_app',args:{caminho:'a',trecho_antigo:'x',trecho_novo:'y'}};
  assert.equal(effectState(valid,{ok:false,error:'Nada foi gravado'}),'unknown');assert.equal(effectState({name:'rodar_comando'},rejectedEdit('fake')),'unknown');
 });
+test('a receipt only counts for the operation of the tool that returned it',()=>{
+ const scaffold={name:'iniciar_estrutura_do_app',args:{nome_do_sistema:'game'}};
+ assert.equal(effectState(scaffold,rejectedEdit('cap',{teto:0,atuais:4},'app_scaffold')),'not_applied');
+ assert.equal(effectState({name:'definir_segredo'},rejectedEdit('bad key',{},'app_secret')),'not_applied');
+ assert.equal(effectState(scaffold,rejectedEdit('wrong operation')),'unknown');
+ assert.equal(effectState({name:'editar_arquivo_do_app',args:{caminho:'a',trecho_antigo:'x',trecho_novo:'y'}},rejectedEdit('x',{},'app_secret')),'unknown');
+ // Checkpoints saved before the scaffold receipt: only the port's numeric cap fields prove the no-op.
+ assert.equal(effectState(scaffold,{ok:false,error:'cap',agente:'a',teto:0,atuais:4}),'not_applied');
+ assert.equal(effectState(scaffold,{ok:false,error:'Nada foi gravado'}),'unknown');
+});
 test('rejected patch can recover within the same app task',async()=>{
  const store=memory();store.data.set('app',{...fixture(),mode:'edicao'});let calls=0,attempts=0;const rev='a'.repeat(64);
  const tools=new ToolRegistry().add({name:'listar_arquivos_do_app',run:async()=>({ok:true,alvo_validacao:'owner:demo',revisao:rev,arquivos:[]})})

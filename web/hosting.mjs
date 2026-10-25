@@ -1421,21 +1421,22 @@ export function hostingTools(userId, agentId, opts = {}) {
       },
       async run({ nome_do_sistema, titulo }) {
         const system = String(nome_do_sistema || '').trim().toLowerCase();
-        if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido: use minúsculas, números, hífen ou underscore (até 31 caracteres, começando com letra/número).' };
+        // Every refusal below happens before any draft file is written: the receipt says so.
+        if (!sysOk(system)) return rejectedEdit('Nome do sistema inválido: use minúsculas, números, hífen ou underscore (até 31 caracteres, começando com letra/número).', {}, 'app_scaffold');
         const owner = await rOwner(system, undefined);
-        if (owner.error) return owner;
+        if (owner.error) return rejectedEdit(owner.error, {}, 'app_scaffold');
         lembrarAppAtual(userId, system); // becomes the sequence's current app
         if (owner.app) {
-          return { ok: false, error: `O sistema "${system}" já está publicado. Esta tool é só pra COMEÇAR app novo; num app existente o rascunho já parte do código atual — use ler_arquivo_do_app + editar_arquivo_do_app/escrever_arquivo_do_app.` };
+          return rejectedEdit(`O sistema "${system}" já está publicado. Esta tool é só pra COMEÇAR app novo; num app existente o rascunho já parte do código atual — use ler_arquivo_do_app + editar_arquivo_do_app/escrever_arquivo_do_app.`, {}, 'app_scaffold');
         }
         const existing = await getAppDraft(owner.ownerUserId, system);
         const jaTem = Object.keys(existing);
         if (!jaTem.length) {
           const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
-          if (quota) return quota;
+          if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais }, 'app_scaffold');
         }
         if (jaTem.length) {
-          return { ok: false, error: `Já existe rascunho de "${system}" com ${jaTem.length} arquivo(s) — não vou sobrescrever. Continue com escrever_arquivo_do_app/editar_arquivo_do_app, ou use outro nome se quiser recomeçar do esqueleto.`, arquivos_no_rascunho: jaTem };
+          return rejectedEdit(`Já existe rascunho de "${system}" com ${jaTem.length} arquivo(s) — não vou sobrescrever. Continue com escrever_arquivo_do_app/editar_arquivo_do_app, ou use outro nome se quiser recomeçar do esqueleto.`, { arquivos_no_rascunho: jaTem }, 'app_scaffold');
         }
         const files = scaffoldNodeApp(system, String(titulo || '').trim() || system);
         for (const [rel, txt] of Object.entries(files)) {
@@ -1769,11 +1770,12 @@ export function hostingTools(userId, agentId, opts = {}) {
       },
       async run({ nome_do_sistema, chave, valor }) {
         const system = (nome_do_sistema || '').toLowerCase();
-        if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido.' };
+        // setAppSecret checks these three before touching the vault, so they are proven no-ops.
+        if (!sysOk(system)) return rejectedEdit('Nome do sistema inválido.', {}, 'app_secret');
         const r = await setAppSecret(userId, system, chave, valor);
-        if (r.error === 'chave_invalida') return { ok: false, error: 'Chave inválida: use MAIÚSCULAS, dígitos e _ (ex: OPENAI_API_KEY).' };
-        if (r.error === 'valor_grande') return { ok: false, error: 'Valor muito grande (máx 8 KB).' };
-        if (r.error === 'cofre_indisponivel') return { ok: false, error: 'O cofre não está configurado no servidor. Avise o suporte.' };
+        if (r.error === 'chave_invalida') return rejectedEdit('Chave inválida: use MAIÚSCULAS, dígitos e _ (ex: OPENAI_API_KEY).', {}, 'app_secret');
+        if (r.error === 'valor_grande') return rejectedEdit('Valor muito grande (máx 8 KB).', {}, 'app_secret');
+        if (r.error === 'cofre_indisponivel') return rejectedEdit('O cofre não está configurado no servidor. Avise o suporte.', {}, 'app_secret');
         if (!r.ok) return { ok: false, error: 'Falha ao guardar o segredo.' };
         // If the app already exists, applies it now (recreates the
         // container with the new env).
