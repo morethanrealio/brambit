@@ -2245,6 +2245,11 @@
       "default_name": "Asistente",
       "fallback": "La tarea se interrumpió; revisa el avance en la conversación de la app.",
       "truncated": "… El resultado completo está en la conversación de la app {brand}."
+    },
+    "app_limit": {
+      "installation_one": "Esta instalación permite {count} app por persona y ya hay {current}.",
+      "installation_many": "Esta instalación permite {count} apps por persona y ya hay {current}.",
+      "installation_other": "Esta instalación permite {count} apps por persona y ya hay {current}."
     }
   }
 }
