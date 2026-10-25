@@ -84,12 +84,11 @@ for(const user of ['A','B']){
 }
 // Plan cap (case of 2026-10-24): a new app is refused in the same turn, before any task
 // starts, and the reply stays in the model's words. Inside a task the refusal is a proven
-// no-op, so the task neither pauses as uncertain nor keeps a pending write.
+// no-op: the task closes with the port's explanation, with no pending write and nothing to resume.
 {
- const f=fixture();f.cap(true);let dispatched=0,n=0,refusal;
- const p={name:'f',complete:async({messages})=>{n++;
+ const f=fixture();f.cap(true);let dispatched=0,n=0;
+ const p={name:'f',complete:async()=>{n++;
   if(n===1)return step('iniciar_estrutura_do_app',{nome_do_sistema:'new-app'});
-  if(n===2)refusal=JSON.parse(messages.at(-1).content);
   return end;}};
  const tool=()=>makeConstruirAppTool({taskStore:memory(),sessionKey:'cap',newAppCheck:f.newAppCheck,dispatch:async()=>{dispatched++;return {programming_job:{id:'j'},text:'queued'};},buildAppContext:async()=>({tools:f.tools,provider:p})});
  let out=await tool().run({app:'new-app',modo:'edicao',objetivo:'Create a tic-tac-toe game'});
@@ -97,7 +96,9 @@ for(const user of ['A','B']){
  const journal=createAppBuildJournal();journal.toolResult({name:'construir_app'},out);eq(journal.finish('model words'),'model words');
  await tool().run({app:'demo',modo:'edicao',objetivo:'Change the color'});eq(dispatched,1);
  const store=memory();out=await builder(f,store,p,'cap-task').run({app:'new-app',modo:'edicao',objetivo:'Create a tic-tac-toe game'});
- eq(n,2);eq(refusal.effect,{version:1,state:'not_applied',operation:'app_scaffold'});eq(refusal.teto,0);ok(out.app_build.motivo!=='uncertain_action');eq(f.writes,0);eq(f.external,0);ok(![...store.records.values()].some(r=>r?.pending?.mutating));
+ eq(n,1);eq(out.app_build.motivo,'app_limit');eq(out.app_build.limite.mensagem,'No new apps on this plan.');eq(out.app_build.limite.teto,0);eq(f.writes,0);eq(f.external,0);ok(![...store.records.values()].some(r=>r?.pending?.mutating));
+ ok([...store.records.values()].some(r=>r?.mode==='edicao'&&r.status==='completed'));
+ const reply=createAppBuildJournal({language:'en'});reply.toolResult({name:'construir_app'},out);eq(reply.finish(''),'No new apps on this plan. I did not create or change any files.');
 }
 // Interrupted review cannot silently become an edit; original state and budget preserved.
 {

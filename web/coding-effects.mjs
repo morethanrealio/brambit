@@ -51,3 +51,11 @@ export function effectState(call,out) {
   if(legacyHttpRead(call,out))return 'not_applied';
   return 'unknown';
 }
+// A write refused by the installation's app cap (permissions port): nothing was
+// written, and no write to this app can succeed until a slot is freed or the plan
+// changes. Only the port sets numeric teto/atuais, never the model.
+export function planCapRefusal(call,out) {
+  if(!['iniciar_estrutura_do_app','escrever_arquivo_do_app'].includes(call?.name)||effectState(call,out)!=='not_applied')return null;
+  if(!Number.isFinite(out?.teto)||!Number.isFinite(out?.atuais))return null;
+  return {mensagem:typeof out.error==='string'?out.error.slice(0,400):'',teto:out.teto,atuais:out.atuais};
+}

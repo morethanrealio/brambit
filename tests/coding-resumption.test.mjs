@@ -5,13 +5,13 @@ import {productI18n} from '../web/i18n.mjs';
 import {codingDeliveryKey} from '../web/coding-recovery-policy.mjs';
 const identity={userId:'synthetic',agentId:'agent',threadId:'thread'},scope=codingJobScope(identity);
 const input={kind:'advanced',args:{objetivo:'Original'},policy:'policy'};
-function fixture({reason='account_credit_reserved',creditStatus}={}){
+function fixture({reason='account_credit_reserved',creditStatus,first}={}){
  const records=new Map(),locks=new Map(),deliveries=new Map();let count=0,cancels=0;
  const copy=x=>structuredClone(x);
  const store={read:async key=>copy(records.get(key)||null),entries:async()=>[...records].map(([scope,record])=>({scope,record:copy(record)})),
   withTask:async(key,run)=>{const prior=locks.get(key)||Promise.resolve();let release;locks.set(key,new Promise(r=>release=r));await prior;try{return await run({record:copy(records.get(key)||null),save:async r=>records.set(key,copy(r))});}finally{release();}}};
  const jobs=createCodingJobs({store,creditStatus,cancelTask:async()=>{cancels++;},
-  execute:async job=>{count++;return count===1?{coding_task:{state:'paused',reason,calls:7,tokens:100},text:'Pausa sintética.'}
+  execute:async job=>{count++;return count===1?first||{coding_task:{state:'paused',reason,calls:7,tokens:100},text:'Pausa sintética.'}
    :{coding_task:{state:'completed',reason:'completed',calls:8,tokens:110},text:job.args.objetivo};},
   deliver:async job=>deliveries.set(codingDeliveryKey(job),job.result.text)});
  return {jobs,store,records,deliveries,get count(){return count;},get cancels(){return cancels;}};
@@ -25,6 +25,12 @@ test('paused task holds queued objectives until explicit resume and completion',
  await f.jobs.resume(identity,{policy:'policy',requestId:'resume-1'});await f.jobs.drive(scope);
  assert.equal(f.count,2);assert.equal((await f.jobs.status(identity)).programming_job.state,'queued');
  await f.jobs.drive(scope);assert.equal(f.count,3);assert.equal([...f.deliveries.values()].at(-1),'Next');
+});
+test('an app task refused by the plan cap closes the job and the queue moves on',async()=>{
+ const f=fixture({first:{ok:false,app_build:{version:2,modo:'edicao',estado:'interrompido',motivo:'app_limit'},text:'Plan limit.'}});
+ await f.jobs.submit(identity,input,'first');await f.jobs.submit(identity,{...input,args:{objetivo:'Next'}},'second');
+ await f.jobs.drive(scope);assert.equal([...f.deliveries.values()][0],'Plan limit.');
+ await f.jobs.drive(scope);assert.equal(f.count,2);assert.equal([...f.deliveries.values()].at(-1),'Next');
 });
 test('new request while paused is recorded separately rather than replacing progress',async()=>{
  const f=fixture();const initial=await f.jobs.submit(identity,input,'first');await f.jobs.drive(scope);
