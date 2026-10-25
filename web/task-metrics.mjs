@@ -27,7 +27,8 @@ export function programmingMeasurement(job) {
  const reason=job.result?.coding_task?.reason||job.result?.app_build?.motivo;
  const state=job.state==='cancelled'?'canceled':job.state==='paused'&&['uncertain_action','canceled_pending_reconciliation'].includes(reason)?'uncertain':job.state;
  return {source:'programming',id:job.id,userId:job.userId,agentId:job.agentId,threadId:job.threadId,state,reason,
- startedAt:job.createdAt,updatedAt:job.updatedAt,finishedAt:['completed','canceled'].includes(state)?job.updatedAt:null,
+ // Jobs saved before createdAt existed start at their last update.
+ startedAt:job.createdAt??job.updatedAt,updatedAt:job.updatedAt,finishedAt:['completed','canceled'].includes(state)?job.updatedAt:null,
  attempts:1+(job.resumeCount||0),version:job.measurementVersion||0,
  usageComplete:['completed','canceled'].includes(state)&&!!job.result&&!job.result?.coding_task?.consumptionPending&&!job.result?.app_build?.consumo_pendente};
 }
