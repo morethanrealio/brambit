@@ -53,8 +53,8 @@ The key:
 
 ### A photo with the message
 
-A server call may send one photo for the assistant to look at, in `image`,
-together with `message`:
+A call may send one photo for the assistant to look at, in `image`, together
+with `message`:
 
 ```json
 { "message": "What do you think of this color on me?", "contact": "customer-123",
@@ -63,8 +63,11 @@ together with `message`:
 
 - `image`: a data URL or plain base64 of a JPEG, PNG or WebP, up to 1 MB
   decoded. Brambit reads the type from the bytes, not from the data URL.
-- Only from a server, with the key. A browser call with `image` gets
-  `400 image_needs_key`.
+- From a server, with the key, at any time.
+- From a browser, only as the answer to a photo the assistant asked that
+  contact for. The agent's plugin says when it asked (`photoRequested` hook,
+  once per request). Any other browser call with `image` gets
+  `400 image_not_requested`, and nothing is recorded.
 - Only with `message`, not with `event`.
 - The photo is not stored. The model sees it in that turn only; the history
   keeps the text and the answer.
@@ -141,7 +144,7 @@ Keep a proxy in front when Brambit is reachable from the internet. With
 | 400 | `message_required` | No `message` and no `event` |
 | 400 | `message_or_event` | Both `message` and `event` |
 | 400 | `invalid_event` | `event` outside the rules above |
-| 400 | `image_needs_key` | `image` in a browser call |
+| 400 | `image_not_requested` | `image` in a browser call the assistant did not ask a photo for |
 | 400 | `image_needs_message` | `image` without `message` |
 | 400 | `invalid_image` | `image` is not a JPEG, PNG or WebP in base64 |
 | 401 | `invalid_key` | Wrong or replaced key |

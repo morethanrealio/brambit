@@ -467,6 +467,9 @@ export function retainedByTool(tools) {
 //    (opening, fixed response).
 //   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
 //    rich outputs (public-support-outputs.mjs).
+//   photoRequested(ctx) → {requested: true} when the assistant asked this contact
+//    for a photo and this message is the answer. Say it once per request: a photo
+//    sent without a key (a browser) reaches the model only with it.
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
 //    texts: {written, spoken} in use for this assistant (the owner's edit, else
@@ -530,7 +533,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   // event: a page event instead of the message (normalizeEvent); an invalid one
   // makes the turn empty. imagens: photos the model sees with the message
   // ({mimeType, data}, already checked by the channel); never stored.
-  async function turno({ agentId, canal, endereco, mensagem, event, imagens }) {
+  // imagesOnRequest: they came without a key, so the turn goes on only if the
+  // plugin's photoRequested says yes (else motivo 'photo_not_requested', nothing recorded).
+  async function turno({ agentId, canal, endereco, mensagem, event, imagens, imagesOnRequest = false }) {
     const agente = await store.agente(agentId);
     if (!agente?.ativo) return { text: null, motivo: 'inativo' };
     const ev = event === undefined ? null : normalizeEvent(event);
@@ -580,6 +585,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
         canal, mensagem: msg, event: ev, primeira: !history.length, texts,
         estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
+      if (imagesOnRequest && imagens?.length && (await gancho('photoRequested', ctx))?.requested !== true) {
+        return { text: null, motivo: 'photo_not_requested', ...ident };
+      }
       const antes = await gancho('antesDoModelo', ctx);
       const prontas = normalizarSaidas(antes?.saidas, { canal });
       if (antes?.pular === true && prontas.length) {
