@@ -13,11 +13,13 @@ import { createBuildState } from './app-build-state.mjs';
 const EDITS=new Set(['escrever_arquivo_do_app','editar_arquivo_do_app','iniciar_estrutura_do_app','definir_segredo','listar_segredos','ver_logs_sistema','ver_diff','ver_historico','chamar_sistema']);
 const INSPECTIONS=new Set(['listar_segredos','ver_logs_sistema','ver_diff','ver_historico']);
 const READS=new Set(['listar_arquivos_do_app','ler_arquivo_do_app','buscar_codigo_do_app','validar_rascunho_do_app','recuperar_contexto_de_codigo']);
-// File writes: when one of them is REFUSED (nothing written), re-reading the
-// file is the fix the tool itself asked for, not stubbornness. Forgiveness
-// limited per epoch.
-const FILE_WRITES=new Set(['editar_arquivo_do_app','escrever_arquivo_do_app']);
-const PARDONS_AFTER_REJECT=3;
+// Read streak: queries in a row that bring nothing the task has not already seen.
+// Review closes its report after a short streak. Editing needs to look again at
+// code it already read before changing it, so a streak first earns a note telling
+// the model to act on what it has, and only a long streak with no write attempt
+// pauses the task.
+const REVIEW_LOOP_LIMIT=3,EDIT_NUDGE_AT=3,EDIT_LOOP_LIMIT=8;
+const editNudge=streak=>`You already have this code in context: ${streak} queries in a row brought nothing new. Apply the change now with the code you have, or end and say exactly what is missing. After ${EDIT_LOOP_LIMIT} queries in a row with nothing new and no write attempt, the task pauses.`;
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const copy=x=>JSON.parse(JSON.stringify(x));
 const estimate=x=>Math.ceil(JSON.stringify(x).length/3);
@@ -140,6 +142,11 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       lowProgressReads=task.editReadState.consecutive||0;
     };
     editingEpoch(access.revisao||null);
+    // A new request or an explicit resume starts a new read streak; an automatic
+    // requeue of the same execution keeps it. Without this, a task paused by the
+    // streak stopped again on its first query after the person resumed it.
+    const loopLimit=mode==='edicao'?EDIT_LOOP_LIMIT:REVIEW_LOOP_LIMIT;
+    if(mode==='edicao'&&executionId&&task.lastExecutionId!==executionId&&lowProgressReads){lowProgressReads=0;task.editReadState.consecutive=0;}
     let currentRevision=access.revisao||null,revisionChanged=false;
     const facts=new Set(task.progress),seen=new Set(task.signatures);
     let reportPhase='incremental';
@@ -159,6 +166,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
           obs:'Somente itens válidos foram registrados; não comprova comportamento em runtime.'};
       }});
     let interruptedReason=null;
+    const mutatingTool=name=>registry.map.has(name)&&!READS.has(name)&&!INSPECTIONS.has(name)&&name!=='registrar_parecer_do_app';
     // A plan-cap refusal before anything was applied in this run ends the task:
     // every write to this app is refused the same way, so going on only spends calls.
     let capRefusal=null,appliedThisRun=false;
@@ -194,7 +202,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
         if(capRefusal&&!appliedThisRun)return {stop:'app_limit',text:capRefusal.mensagem||'The plan app limit was reached; nothing was created or changed.'};
         if(await shouldPause?.())return {stop:'new_user_input',text:'Pausei para considerar sua nova mensagem. O progresso está salvo.'};
         if(task.pending?.mutating)return {stop:'uncertain_action',text:'Uma ação anterior ficou sem resultado confirmado. Não a repeti; é preciso conferir o rascunho antes de continuar.'};
-        if(lowProgressReads>=3)return {stop:'read_coverage_loop',text:mode==='revisao'?'A leitura repetiu conteúdo já consultado; vou fechar o parecer com os achados disponíveis.':'As consultas repetiram conteúdo sem progresso nesta etapa de edição. Pausei; não substituí a implementação por uma revisão.'};
+        if(lowProgressReads>=loopLimit)return {stop:'read_coverage_loop',text:mode==='revisao'?'A leitura repetiu conteúdo já consultado; vou fechar o parecer com os achados disponíveis.':'As consultas repetiram conteúdo sem progresso nesta etapa de edição. Pausei; não substituí a implementação por uma revisão.'};
         if(step>=nextQuantum){if(facts.size<=quantumProgress)return {stop:'no_progress',text:'Pausei porque não há progresso suficiente para ampliar esta rodada.'};quantumProgress=facts.size;nextQuantum+=40;}
         if(Number.isFinite(limits.quantumSteps??40)&&step>=(limits.quantumSteps??40))return {stop:'execution_quantum',text:'Progresso salvo; vou liberar o executor para outras tarefas e retomar automaticamente.'};
         if(now()-started>=cap.ms)return {stop:'execution_window',text:'A janela desta execução terminou. O progresso está salvo para retomar; isso não indica falta de créditos.'};
@@ -217,20 +225,20 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       },
       async beforeTool({call,messages}) {
         availableBeforeRead=visibleCodeCoverage(messages);
-        if(lowProgressReads>=3&&call.name!=='registrar_parecer_do_app'){interruptedReason='read_coverage_loop';throw new Error(mode==='revisao'?'Releituras sem progresso; lote interrompido para fechar o parecer.':'Consultas repetidas sem progresso nesta etapa de edição; lote interrompido sem fingir conclusão.');}
+        const sig=digest(executionSignature(call));const mutating=mutatingTool(call.name);
+        if(lowProgressReads>=loopLimit&&call.name!=='registrar_parecer_do_app'&&!(mode==='edicao'&&mutating)){interruptedReason='read_coverage_loop';throw new Error(mode==='revisao'?'Releituras sem progresso; lote interrompido para fechar o parecer.':'Consultas repetidas sem progresso nesta etapa de edição; lote interrompido sem fingir conclusão.');}
         if(task.pending?.mutating){interruptedReason='uncertain_action';throw new Error('Resultado da ação anterior não confirmado; lote interrompido sem executar a próxima ferramenta.');}
-        const sig=digest(executionSignature(call));const mutating=registry.map.has(call.name)&&!READS.has(call.name)&&!INSPECTIONS.has(call.name)&&call.name!=='registrar_parecer_do_app';
         if(mutating&&seen.has(sig)){interruptedReason='duplicate_mutation';throw new Error('Ação idêntica já executada nesta tarefa; confira o resultado antes de repetir.');}
         task.history=copy(messages);task.pending={name:call.name,sig,mutating};await persist();
       },
       async afterTool({call,out,messages}) {
         const sig=digest(executionSignature(call));const effect=effectState(call,out);
         if(effect!=='not_applied')seen.add(sig);task.signatures=[...seen];
-        if(effect==='applied'&&registry.map.has(call.name)&&!READS.has(call.name)&&!INSPECTIONS.has(call.name)&&call.name!=='registrar_parecer_do_app')appliedThisRun=true;
+        if(effect==='applied'&&mutatingTool(call.name))appliedThisRun=true;
         capRefusal=planCapRefusal(call,out)||capRefusal;
-        // Refused edit: allows ONE re-read with no penalty (cap per epoch).
-        if(mode==='edicao'&&effect==='not_applied'&&FILE_WRITES.has(call.name)&&task.editReadState&&(task.editReadState.pardons||0)<PARDONS_AFTER_REJECT)
-          task.editReadState.pardonNextRead=true;
+        // Any write attempt, even a refused one, is the model acting on what it read;
+        // re-reading after a refusal is the fix the tool asked for. The streak restarts.
+        if(mode==='edicao'&&mutatingTool(call.name)){lowProgressReads=0;if(task.editReadState)task.editReadState.consecutive=0;}
         // Registry catches tool exceptions; absence of a success receipt after a
         // mutation is conservatively uncertain, even if the side effect happened.
         if(!(task.pending?.mutating&&effect==='unknown'&&interruptedReason!=='access_denied'))task.pending=null;
@@ -238,6 +246,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
         appendJournal({event:'tool',name:call.name,signature:sig,ok:out?.ok===true,at:now(),revision:out?.revisao||null,arquivo:typeof call.args?.caminho==='string'?call.args.caminho.slice(0,300):null,inicio:Number.isSafeInteger(call.args?.inicio)?call.args.inicio:null,fim:Number.isSafeInteger(out?.fim)?out.fim:null,hash:typeof out?.hash==='string'?out.hash:null,contextRecovered:out?.contexto_recuperado===true,outputChars:JSON.stringify(out??null).length});
         // No payload, credentials or raw source in the operational journal.
         if(out?.ok===true&&READS.has(call.name)) {
+          let nudged=false;
           if(mode==='edicao')editingEpoch(out.revisao||currentRevision);
           const measured=coverageTracker.observe(out);
           const editMeasured=editReads?.observe(out);
@@ -247,12 +256,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
             const noProgress=mode==='edicao'
               ?editMeasured?.chars_solicitados>0&&editMeasured.novos_chars===0&&availability?.novos_chars===0
               :measured.chars_solicitados>0&&measured.novos_chars<128&&measured.novos_chars<measured.chars_solicitados*.1;
-            // The re-read that comes right after a refused edit is
-            // legitimate work (finding the exact text); it does not advance
-            // the anti-loop guard.
-            const pardoned=mode==='edicao'&&task.editReadState?.pardonNextRead===true;
-            lowProgressReads=noProgress?(pardoned?lowProgressReads:lowProgressReads+1):0;
-            if(pardoned){task.editReadState.pardonNextRead=false;if(noProgress)task.editReadState.pardons=(task.editReadState.pardons||0)+1;}
+            lowProgressReads=noProgress?lowProgressReads+1:0;
+            if(mode==='edicao'&&noProgress&&lowProgressReads>=EDIT_NUDGE_AT){out.progress_note=editNudge(lowProgressReads);nudged=true;appendJournal({event:'edit_read_nudge',streak:lowProgressReads,at:now()});}
             if(mode==='edicao'){task.editReadState.coverage=editReads.snapshot();task.editReadState.consecutive=lowProgressReads;if(out.arquivo)task.editReadState.lastRead={arquivo:out.arquivo,hash:out.hash,inicio:out.inicio,fim:out.fim};}
             if(measured.novos_chars>0||(mode==='edicao'&&editMeasured?.novos_chars>0)){
               task.readSamples.push({role:'tool',name:call.name,content:JSON.stringify(out)});
@@ -272,7 +277,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
           for(const ref of refs){if(!ref.hash)continue;const key=digest(ref).slice(0,20);evidence.set(key,ref);ids.push(key);if(measured?.novos_chars>0)facts.add(key);if(mode==='edicao'&&(editMeasured?.novos_chars>0||availability?.novos_chars>0))facts.add(digest(['edit-read',editScope,task.editReadState.revision,key]));}
           // The mutable output object was already serialized by core; add evidence
           // to its stored tool message explicitly so the model can cite it.
-          if(ids.length){out.evidencias=ids;messages.at(-1).content=JSON.stringify(out);task.history=copy(messages);}
+          if(ids.length)out.evidencias=ids;
+          if(ids.length||nudged){messages.at(-1).content=JSON.stringify(out);task.history=copy(messages);}
         }
         if(out?.ok===true&&typeof out.hash==='string')facts.add(digest([out.arquivo||call.args?.caminho,out.hash]));
         if(!READS.has(call.name)&&!INSPECTIONS.has(call.name)&&call.name!=='registrar_parecer_do_app'){task.report=[];evidence.clear();currentRevision=null;}
