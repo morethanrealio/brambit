@@ -71,8 +71,11 @@ export async function incoming(store, user, agent, thread, message, historyLengt
             return { context: '', participant: p, source: null, reply: 'Cancelei os próximos contatos da jornada. O período já terminou; uma mensagem que já estivesse em envio pode ainda chegar.' };
         return { context: '', participant: p, source: null, reply: action === 'pause' ? 'Jornada pausada. Para voltar, diga retomar jornada.' : action === 'less' ? 'Vou chamar só à noite, no horário escolhido.' : action === 'resume' ? 'Jornada retomada, mantendo a data de término combinada.' : action === 'erase' ? 'Jornada encerrada e anotações apagadas como você pediu. Isso não apaga o histórico normal das conversas.' : 'Jornada encerrada. Nenhum novo contato desta jornada será agendado.' };
     }
+    // With the pilot off, the notice only belongs to a message about the journey
+    // (asking for it, changing it, its report). Gluing it before every message
+    // pulled unrelated turns toward the journey, like a finished journey did.
     if (!await store.available())
-        return { context: 'O piloto está desligado. Você pode consultar notas e controlar uma jornada existente por conversa, sem ativar novos contatos.', participant: p, source: null, reply: null };
+        return { context: intent || retryIntent(message) || completionIntent(message) ? 'O piloto está desligado. Você pode consultar notas e controlar uma jornada existente por conversa, sem ativar novos contatos.' : '', participant: p, source: null, reply: null };
     if (retryIntent(message))
         return { context: 'O dono pediu para preparar novamente sua devolutiva. Consulte jornada_consultar; se a jornada está concluída e a geração falhou sem texto pronto, use jornada_refazer_devolutiva para apresentar uma proposta curta e aguarde a confirmação. Não reabra a jornada. Não peça uma frase específica nem substitua a devolutiva por um resumo informal das notas.', participant: p, source: null, reply: null };
     if (completionIntent(message))
