@@ -2188,7 +2188,8 @@
       "credit_reconciliation": "Diga “{command}” para tentar recuperar o resultado e a cobrança já registrados. Uma chamada ainda incerta não será reenviada.",
       "credit_reservation": "O saldo livre não cobre a reserva estimada da próxima chamada. O progresso está salvo; retome quando houver saldo suficiente.",
       "resumable": "O progresso está salvo. Diga “{command}” para continuar a mesma tarefa.",
-      "needs_instruction": "A tarefa precisa de uma instrução que resolva a pendência indicada antes de continuar."
+      "loop": "O progresso está salvo. Diga “{command}” para eu tentar de novo, ou me diga o que mudar e eu sigo por outro caminho.",
+      "needs_instruction": "O progresso está salvo. Para continuar, me diga o que fazer de diferente e eu sigo do ponto salvo."
     },
     "stage": {
       "preparing": "Preparando o ambiente",

@@ -5,6 +5,9 @@ const resumable = new Set(['execution_window','execution_quantum','workspace_bus
   'account_credit_exhausted','account_credit_reserved','credit_reservation_unavailable','credit_quote_unavailable',
   'credit_reconciliation_required','credit_control_unavailable','provider_failure','provider_unavailable',
   'report_partial','report_rejected','report_unavailable','review_partial','edit_validation_pending',
+  // Loop stops: a new execution starts its repetition counters from zero (app-task-runner,
+  // core), so trying again does not stop at once.
+  'read_coverage_loop','no_progress','repeated_calls',
   // An uncertain action the person resolved through gerenciar_tarefa_de_app (coding-jobs settlePause).
   'pending_resolved']);
 // The next step goes straight to the person (chat, Telegram, WhatsApp), so it comes
@@ -19,6 +22,7 @@ export function codingRecovery(result,language=LEGACY_TEXT_LANGUAGE) {
     : reason === 'account_credit_reserved' ? 'credit_reserved'
     : reason === 'credit_reconciliation_required' ? 'credit_reconciliation'
     : reason === 'credit_reservation_unavailable' ? 'credit_reservation'
+    : ['read_coverage_loop','no_progress','repeated_calls'].includes(reason) ? 'loop'
     : canResume ? 'resumable' : 'needs_instruction';
   const {t}=productI18n();
   const nextStep = t(`coding.recovery.${key}`, language, {command: t('coding.resume_command', language)});

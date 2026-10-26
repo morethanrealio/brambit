@@ -2188,7 +2188,8 @@
       "credit_reconciliation": "Say “{command}” to try to recover the result and the charge already recorded. A call that is still uncertain will not be sent again.",
       "credit_reservation": "Your available balance does not cover the estimated reservation for the next call. Your progress is saved; resume when there is enough balance.",
       "resumable": "Your progress is saved. Say “{command}” to continue the same task.",
-      "needs_instruction": "The task needs an instruction that resolves the pending issue above before it can continue."
+      "loop": "Your progress is saved. Say “{command}” to have me try again, or tell me what to change and I will take another route.",
+      "needs_instruction": "Your progress is saved. To continue, tell me what to do differently and I will go on from the saved point."
     },
     "stage": {
       "preparing": "Preparing the environment",
