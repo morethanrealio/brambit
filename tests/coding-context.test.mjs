@@ -35,9 +35,9 @@ test('production failure trace: evicted code can be recovered in three distinct 
 test('ordinary parent core retains its existing policy without a coding context owner',async()=>{
  let n=0,saw=false;const f=fixture();await runAgent({tools:f.tools,provider:{complete:async input=>{n++;if(n===1)return step([read(f,'server.js',0),read(f,'server.js',6000)],n);if(n===2)return step([read(f,'game.js',0),read(f,'game.js',6000),read(f,'game.js',12000)],n);saw=input.messages.some(m=>m.role==='tool'&&m.content.includes('recolhido'));return {stop:'end',text:'done'};}},userInput:'read'});assert.equal(saw,true);
 });
-test('same visible reads still stop a real loop; changing cursor over visible data does not mint progress',async()=>{
- const f=fixture(),store=memory();let n=0;const provider={complete:async()=>{n++;return step([read(f,'server.js',n===1?0:n-2,n===1?6000:3000)],n)}};
- const result=await runAppTask(options(f,store,provider));assert.equal(result.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,0);assert.ok(n<=4);
+test('same visible reads still stop a real loop after the nudges; changing cursor over visible data does not mint progress',async()=>{
+ const f=fixture(),store=memory();let n=0,nudges=0;const provider={complete:async input=>{n++;const last=input.messages.at(-1);if(last?.role==='tool'&&JSON.parse(last.content).progress_note)nudges++;return step([read(f,'server.js',n===1?0:n-2,n===1?6000:3000)],n)}};
+ const result=await runAppTask(options(f,store,provider));assert.equal(result.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,0);assert.equal(n,9,'one new page, then eight repeats');assert.equal(nudges,5,'the model is told to act before the pause');
 });
 test('legacy paused classifier is migrated once without clearing calls, evidence or unknown effects',async()=>{
  const f=fixture(),store=memory();let n=0;

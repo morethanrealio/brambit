@@ -43,11 +43,23 @@ test('already-editing legacy checkpoint needs no new mode change and does not sp
 test('small fresh selector reads count as progress, not the review threshold of 128 chars',async t=>{
  const f=await fixture(t);await f.run(sequenced([batch(query('alpha','a'),query('beta','b'),query('gamma','c')),end]));assert.equal(f.reads,3);const saved=await f.read();assert.equal(saved.editReadState.consecutive,0);assert.equal(saved.status,'paused');assert.equal(saved.lastResult.app_build.motivo,'edit_validation_pending');
 });
-test('different query aliases over identical bytes do not bypass true repetition guard',async t=>{
- const f=await fixture(t);const provider=sequenced([batch(query('alpha','a'),query('id="alpha"','b'),query('alpha">','c'),query('"alpha"','d'),write())]);const out=await f.run(provider);assert.equal(out.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,0);assert.equal(provider.calls,1);assert.equal((await f.read()).editReadState.consecutive,3);assert.equal((await f.read()).journal.filter(x=>x.kind==='app_report').length,0);
+const ALIASES=['id="alpha"','alpha">','"alpha"','div id="alpha','alpha">A','="alpha"','alpha">A<','id="alph'];
+const note=m=>m?.role==='tool'?JSON.parse(m.content).progress_note:undefined;
+test('query aliases over identical bytes count as repetition: a note at the third, the edit still goes through',async t=>{
+ const f=await fixture(t);const provider=sequenced([batch(query('alpha','a'),...ALIASES.slice(0,3).map((x,i)=>query(x,'r'+i)),write())]);const out=await f.run(provider);assert.notEqual(out.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,1);
+ const saved=await f.read();assert.equal(saved.editReadState.consecutive,0,'the write attempt restarts the streak');assert.ok(note(saved.history.findLast(m=>m.toolCallId==='r2')));assert.equal(note(saved.history.findLast(m=>m.toolCallId==='r1')),undefined);
 });
-test('Continue does not reset editing progress/counters or mint any credit budget',async t=>{
- const f=await fixture(t);await f.run(sequenced([batch(query('alpha','a'),query('id="alpha"','b')),end]));const old=await f.read();assert.equal(old.editReadState.consecutive,1);const out=await f.run(sequenced([batch(query('alpha">','c'),query('"alpha"','d'),write())]));assert.equal(out.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,0);const now=await f.read();assert.equal(now.id,old.id);assert.ok(now.calls>old.calls);assert.ok(now.tokens>old.tokens);
+test('eight repeated queries with no write attempt pause the edit, without a report',async t=>{
+ const f=await fixture(t);const provider=sequenced([batch(query('alpha','a'),...ALIASES.map((x,i)=>query(x,'r'+i)),query('alpha"','extra')),end]);const out=await f.run(provider);assert.equal(out.app_build.motivo,'read_coverage_loop');assert.equal(f.writes,0);assert.equal(f.reads,9);const saved=await f.read();assert.equal(saved.editReadState.consecutive,8);assert.equal(saved.journal.filter(x=>x.kind==='app_report').length,0);
+});
+test('an automatic requeue keeps the streak and mints no budget; a new execution starts a new one',async t=>{
+ const f=await fixture(t);await f.run(sequenced([batch(query('alpha','a'),query('id="alpha"','b'))]),{executionId:'job',limits:{quantumSteps:1}});const old=await f.read();assert.equal(old.editReadState.consecutive,1);assert.equal(old.lastResult.app_build.motivo,'execution_quantum');
+ await f.run(sequenced([batch(query('alpha">','c'),query('"alpha"','d')),end]),{executionId:'job'});const now=await f.read();assert.equal(now.editReadState.consecutive,3);assert.equal(now.id,old.id);assert.ok(now.calls>old.calls);assert.ok(now.tokens>old.tokens);
+ await f.run(sequenced([end]),{executionId:'job:resume:1'});assert.equal((await f.read()).editReadState.consecutive,0);
+});
+test('a task paused by the read streak is not paused again by the first query after the person resumes it',async t=>{
+ const f=await fixture(t);await f.run(sequenced([batch(query('alpha','a'),...ALIASES.map((x,i)=>query(x,'r'+i))),end]),{executionId:'job'});assert.equal((await f.read()).lastResult.app_build.motivo,'read_coverage_loop');
+ const out=await f.run(sequenced([batch(query('alpha"','again'),write(),validate()),end]),{executionId:'job:resume:1'});assert.equal(f.writes,1);assert.equal(out.app_build.validacao,'aprovado');
 });
 test('changed draft revision allows necessary reinspection without discarding lifetime evidence/usage',async t=>{
  const f=await fixture(t);await f.run(sequenced([batch(query('alpha','a'),query('id="alpha"','b')),end]));const old=await f.read();f.files['public/index.html']=b64(initialHTML+'\n<!-- changed externally -->');const out=await f.run(sequenced([batch(query('alpha','c'),query('beta','d'),query('gamma','e'),validate()),end]));assert.equal(out.ok,true);assert.equal((await f.read()).editReadState.consecutive,0);assert.equal((await f.read()).id,old.id);

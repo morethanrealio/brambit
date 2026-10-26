@@ -218,7 +218,7 @@ test('the refusals that still hold: nonexistent excerpt and ambiguous excerpt', 
   assert.equal(ambiguo.gravacoes, 0);
 });
 
-// ── 4. Anti-loop guard: re-read after a refusal isn't stubbornness ─────────────────
+// ── 4. Anti-loop guard: re-read after a refused write isn't stubbornness ───────────
 const HTML = '<html>\n<div id="alpha">A</div>\n<div id="beta">B</div>\n<div id="gamma">C</div>\n</html>';
 function runnerFixture() {
   const arquivos = { 'public/index.html': b64(HTML) };
@@ -248,13 +248,6 @@ const edicao = id => chamada('editar_arquivo_do_app', { caminho: 'public/index.h
 const fim = { stop: 'end', text: 'Pronto.', usage: { in: 3, out: 2 } };
 const roteiro = passos => { let n = 0; return { get calls() { return n; }, complete: async () => passos[n++] || fim }; };
 
-test('with no refusal in between, three re-reads with no progress still interrupt the batch', async () => {
-  const f = runnerFixture();
-  const out = await f.run(roteiro([lote(busca('alpha', 'a'), busca('id="alpha"', 'b'), busca('alpha">', 'c'), busca('"alpha"', 'd'))]));
-  assert.equal(out.app_build.motivo, 'read_coverage_loop');
-  assert.equal((await f.read()).editReadState.consecutive, 3);
-});
-
 test('the re-read right after a refused edit does not count as a loop', async () => {
   const f = runnerFixture();
   const out = await f.run(roteiro([lote(
@@ -264,22 +257,6 @@ test('the re-read right after a refused edit does not count as a loop', async ()
   ), fim]));
   assert.equal(f.recusas, 3);
   assert.notEqual(out.app_build.motivo, 'read_coverage_loop');
-  const saved = await f.read();
-  assert.equal(saved.editReadState.consecutive, 0, 'none of the re-reads may have advanced the brake');
-  // The first search brought a new excerpt (real progress), so it didn't even
-  // need forgiveness; the next two repeated the same chunk and were
-  // forgiven for coming right after a refusal.
-  assert.equal(saved.editReadState.pardons, 2);
-});
-
-test('forgiveness has a cap: after three, the brake kicks back in', async () => {
-  const f = runnerFixture();
-  const busca_repetida = ['alpha', 'id="alpha"', 'alpha">', '"alpha"', 'div id="alpha', 'alpha">A', '="alpha"', 'alpha">A<'];
-  const passos = busca_repetida.flatMap((texto, i) => [edicao(`e${i}`), busca(texto, `r${i}`)]);
-  const out = await f.run(roteiro([lote(...passos)]));
-  assert.equal(out.app_build.motivo, 'read_coverage_loop');
-  const saved = await f.read();
-  assert.equal(saved.editReadState.pardons, 3, 'forgiveness stops at the cap');
-  assert.ok(saved.editReadState.consecutive >= 3, 'after the cap, re-reads count again');
-  assert.equal(f.gravacoes, 0);
+  // Every write attempt, even a refused one, restarts the read streak, so it never builds up.
+  assert.equal((await f.read()).editReadState.consecutive, 1, 'only the last re-read counts');
 });
