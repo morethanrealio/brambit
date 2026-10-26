@@ -91,6 +91,24 @@ test('public turn logs one line with the tools of each step, without what the co
   assert.ok(!/5511999990000|COD-DO-CONTATO|cadê/.test(linhas[0]), 'the contact\'s words or tool data reached the log');
 });
 
+test('an older result the turn prunes keeps the tool\'s retained text; a tool without retain gets the generic notice', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, instrucoes: 'Atenda clientes da loja.' });
+  const longo = ({ q }) => `${q}:` + 'x'.repeat(3000);
+  const plugin = { doTurno: () => [
+      { name: 'buscar', publico: true, description: 'x', parameters: { type: 'object', properties: { q: { type: 'string' } } }, run: async (a) => longo(a), retain: (text) => 'ids of ' + text.split(':')[0] },
+      { name: 'listar', publico: true, description: 'x', parameters: { type: 'object', properties: { q: { type: 'string' } } }, run: async (a) => longo(a) },
+    ], vetar: () => null, instrucoes: () => [] };
+  const m = modelo([{ name: 'buscar', args: { q: 'a' } }, { name: 'listar', args: { q: 'b' } }, { name: 'buscar', args: { q: 'c' } }, { name: 'listar', args: { q: 'd' } }]);
+  const a = atendimento(store, m, { ferramentas: plugin });
+  const r = await a.turno({ agentId: ag, canal: 'web', endereco: 'c1', mensagem: 'oi' });
+  assert.equal(r.text, 'resposta 5');
+  const results = m.chamadas[4].messages.filter((x) => x.role === 'tool').map((x) => x.content);
+  assert.equal(results[0], 'ids of a');
+  assert.match(results[1], /^\[resultado de listar recolhido/);
+  assert.equal(results[3], longo({ q: 'd' }));
+});
+
 test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {
   const { store, dono, ag, ag2 } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });
