@@ -382,6 +382,16 @@ async function newDraftQuotaBlock(ownerUserId, system, app, opts) {
   if (Object.keys(await getAppDraft(ownerUserId, system)).length) return null;
   return appQuotaBlock(ownerUserId, system, opts);
 }
+// The same cap, checked before construir_app starts a background build: the
+// person hears the limit in the same turn instead of a task that pauses on the
+// first refusal. Read-only owner resolution; problems other than the cap are
+// left for the build itself to report.
+export async function newAppQuotaBlock(userId, system, dono, opts = {}) {
+  if (!sysOk(system)) return null;
+  const owner = await resolveOwnerForRead(userId, system, dono);
+  if (owner.error) return null;
+  return newDraftQuotaBlock(owner.ownerUserId, system, owner.app, opts);
+}
 async function ensureDraftSeeded(ownerUserId, system, app) {
   let draft = await getAppDraft(ownerUserId, system);
   if (!Object.keys(draft).length && app) {
@@ -406,10 +416,10 @@ function perm() {
   if (!permissoes) throw Error('Permissões não configuradas: chame configurarPermissoes no boot');
   return permissoes;
 }
-async function appQuotaBlock(ownerUserId, system, { appClient = false } = {}) {
+async function appQuotaBlock(ownerUserId, system, { appClient = false, language } = {}) {
   if (system && await getAppRow(ownerUserId, system)) return null; // already exists: it's an edit
   const atuais = (await listAppsForUser(ownerUserId)).length;
-  return perm().bloqueioDeApp({ ownerUserId, atuais, appClient });
+  return perm().bloqueioDeApp({ ownerUserId, atuais, appClient, language });
 }
 
 // Owner's disk quota, in the format ctl.py expects. ONE place only: every
@@ -912,6 +922,8 @@ export function hostingTools(userId, agentId, opts = {}) {
   const emitAppCard = emitAppCardRaw;
   // Conversation coming from the iOS app: see appQuotaBlock.
   const appClient = !!opts.appClient;
+  // The person's language, when a refusal reaches them as is (background app task).
+  const language = opts.language;
   // ── Guardrail: each app is looked after by ONE of the owner's assistants (apps.agent_id) ──
   // If the ACTIVE assistant doesn't own the app (and it's the user's own app,
   // not a collaboration between people), it does NOT act: it hands off to the
@@ -1056,7 +1068,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         // The owner's plan's app cap. Deliberately early: blocks before
         // spending a build/publish on the host. Only catches a NEW app (see
         // appQuotaBlock).
-        const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
+        const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient, language });
         if (quota) return quota;
         // Assembles the files: base = saved draft (written with
         // escrever_arquivo_do_app), with the files passed INLINE in this
@@ -1421,21 +1433,22 @@ export function hostingTools(userId, agentId, opts = {}) {
       },
       async run({ nome_do_sistema, titulo }) {
         const system = String(nome_do_sistema || '').trim().toLowerCase();
-        if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido: use minúsculas, números, hífen ou underscore (até 31 caracteres, começando com letra/número).' };
+        // Every refusal below happens before any draft file is written: the receipt says so.
+        if (!sysOk(system)) return rejectedEdit('Nome do sistema inválido: use minúsculas, números, hífen ou underscore (até 31 caracteres, começando com letra/número).', {}, 'app_scaffold');
         const owner = await rOwner(system, undefined);
-        if (owner.error) return owner;
+        if (owner.error) return rejectedEdit(owner.error, {}, 'app_scaffold');
         lembrarAppAtual(userId, system); // becomes the sequence's current app
         if (owner.app) {
-          return { ok: false, error: `O sistema "${system}" já está publicado. Esta tool é só pra COMEÇAR app novo; num app existente o rascunho já parte do código atual — use ler_arquivo_do_app + editar_arquivo_do_app/escrever_arquivo_do_app.` };
+          return rejectedEdit(`O sistema "${system}" já está publicado. Esta tool é só pra COMEÇAR app novo; num app existente o rascunho já parte do código atual — use ler_arquivo_do_app + editar_arquivo_do_app/escrever_arquivo_do_app.`, {}, 'app_scaffold');
         }
         const existing = await getAppDraft(owner.ownerUserId, system);
         const jaTem = Object.keys(existing);
         if (!jaTem.length) {
-          const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient });
-          if (quota) return quota;
+          const quota = await appQuotaBlock(owner.ownerUserId, system, { appClient, language });
+          if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais }, 'app_scaffold');
         }
         if (jaTem.length) {
-          return { ok: false, error: `Já existe rascunho de "${system}" com ${jaTem.length} arquivo(s) — não vou sobrescrever. Continue com escrever_arquivo_do_app/editar_arquivo_do_app, ou use outro nome se quiser recomeçar do esqueleto.`, arquivos_no_rascunho: jaTem };
+          return rejectedEdit(`Já existe rascunho de "${system}" com ${jaTem.length} arquivo(s) — não vou sobrescrever. Continue com escrever_arquivo_do_app/editar_arquivo_do_app, ou use outro nome se quiser recomeçar do esqueleto.`, { arquivos_no_rascunho: jaTem }, 'app_scaffold');
         }
         const files = scaffoldNodeApp(system, String(titulo || '').trim() || system);
         for (const [rel, txt] of Object.entries(files)) {
@@ -1499,7 +1512,7 @@ export function hostingTools(userId, agentId, opts = {}) {
         // Incremental edit: if there's no draft yet and the app was already
         // published, seeds the draft with the last published code (snapshot)
         // before applying.
-        const quota = await newDraftQuotaBlock(owner.ownerUserId, system, owner.app, { appClient });
+        const quota = await newDraftQuotaBlock(owner.ownerUserId, system, owner.app, { appClient, language });
         if (quota) return rejectedEdit(quota.error, { agente: quota.agente, plano: quota.plano, teto: quota.teto, atuais: quota.atuais });
         const draft = await ensureDraftSeeded(owner.ownerUserId, system, owner.app);
         // Optimistic concurrency: if the agent says which version it READ,
@@ -1769,11 +1782,12 @@ export function hostingTools(userId, agentId, opts = {}) {
       },
       async run({ nome_do_sistema, chave, valor }) {
         const system = (nome_do_sistema || '').toLowerCase();
-        if (!sysOk(system)) return { ok: false, error: 'Nome do sistema inválido.' };
+        // setAppSecret checks these three before touching the vault, so they are proven no-ops.
+        if (!sysOk(system)) return rejectedEdit('Nome do sistema inválido.', {}, 'app_secret');
         const r = await setAppSecret(userId, system, chave, valor);
-        if (r.error === 'chave_invalida') return { ok: false, error: 'Chave inválida: use MAIÚSCULAS, dígitos e _ (ex: OPENAI_API_KEY).' };
-        if (r.error === 'valor_grande') return { ok: false, error: 'Valor muito grande (máx 8 KB).' };
-        if (r.error === 'cofre_indisponivel') return { ok: false, error: 'O cofre não está configurado no servidor. Avise o suporte.' };
+        if (r.error === 'chave_invalida') return rejectedEdit('Chave inválida: use MAIÚSCULAS, dígitos e _ (ex: OPENAI_API_KEY).', {}, 'app_secret');
+        if (r.error === 'valor_grande') return rejectedEdit('Valor muito grande (máx 8 KB).', {}, 'app_secret');
+        if (r.error === 'cofre_indisponivel') return rejectedEdit('O cofre não está configurado no servidor. Avise o suporte.', {}, 'app_secret');
         if (!r.ok) return { ok: false, error: 'Falha ao guardar o segredo.' };
         // If the app already exists, applies it now (recreates the
         // container with the new env).

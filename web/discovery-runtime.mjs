@@ -85,8 +85,12 @@ export async function incoming(store, user, agent, thread, message, historyLengt
         const available = channels ? (channels.length ? ` Canais conectados nesta conta: ${channels.map(channelLabel).join(', ')}. Proponha um deles.` : ' Esta conta não tem canal conectado: peça para conectar o Telegram ou o WhatsApp em Conexões, ou ativar as notificações do aplicativo, antes de propor.') : '';
         return { context: intent === 'accept' ? `O dono pediu explicitamente a jornada de descoberta nesta mensagem. Combine as preferências e use jornada_configurar; nada começa antes da confirmação da proposta.${available}` : '', participant: p, source: null, reply: null };
     }
+    // A journey that is no longer running has nothing to add to an unrelated turn.
+    // Gluing its status before every message made a bare "yes" to an unrelated question read as
+    // a request for the report. Explicit requests are covered above (retry,
+    // completion) and by the jornada_consultar description; the tools stay offered.
     if (p.status !== 'active' || !p.ends_at || new Date(p.ends_at) <= new Date())
-        return { context: `Jornada ${p.status}. Não insista em convite nem peça relatos enquanto inativa. Se o dono perguntar sobre a devolutiva, use jornada_consultar. A entrega final propõe soluções práticas de uso do ${marca().nome} para dores demonstradas nas notas e no histórico de toda a jornada mais 20 dias anteriores ao início. Não substitua o relatório por uma síntese informal das até 40 notas consultadas. Confira o estado e aviso_automatico antes de afirmar que está pronta ou prometer envio. Se o preparo falhou, explique brevemente e ofereça tentar novamente; após pedido do dono use jornada_refazer_devolutiva e aguarde confirmação. Se há relatório pronto, mostre seu texto. Não ative sugestões sem combinar e confirmar.`, participant: p, source: null, reply: null };
+        return { context: '', participant: p, source: null, reply: null };
     const source = { text: message, id: sourceId(thread, message, historyLength), thread };
     await store.observe(user, agent, source.id);
     const notes = await store.notes(user);

@@ -347,16 +347,22 @@
       "running": " ejecutando \"{command}\""
     },
     "cancelar_rotina": {
-      "request": "cancelar definitivamente la rutina {routine}",
-      "done": "Rutina {routine} cancelada."
+      "request": "borrar definitivamente la rutina {routine}",
+      "done": "Rutina {routine} borrada.",
+      "request_pause": "pausar la rutina {routine}",
+      "done_pause": "Rutina {routine} pausada."
     },
     "remover_evento": {
-      "request": "borrar el registro del {date} del tracker \"{tracker}\"",
+      "request": "borrar lo apuntado {when} en el tracker \"{tracker}\"",
+      "when_date": "el {date}",
+      "today": "hoy",
+      "yesterday": "ayer",
+      "day_before_yesterday": "anteayer",
       "done": "Registro borrado del tracker \"{tracker}\"."
     },
     "remover_tracker": {
-      "request": "borrar el tracker \"{tracker}\" con todos sus registros",
-      "done": "Tracker \"{tracker}\" borrado."
+      "request": "dejar de seguir el tracker \"{tracker}\" (el historial se conserva)",
+      "done": "Dejé de seguir el tracker \"{tracker}\"; el historial se conserva."
     },
     "remover_monitor": {
       "request": "dejar de monitorear \"{monitor}\" (el historial se conserva)",
@@ -465,9 +471,31 @@
       "done": "Archivo \"{name}\" subido a tu OneDrive."
     },
     "github_create_issue": {
-      "request": "crear un issue en GitHub{repo}: \"{title}\"",
-      "done": "Issue creado{repo}: \"{title}\".",
+      "request": "crear un issue en GitHub{repo}: \"{title}\"{details}",
+      "done": "Issue creado{repo}: \"{title}\"{details}.",
       "in_repo": " en {repo}"
+    },
+    "github_issue": {
+      "with": " con {list}",
+      "labels": "etiquetas {list}",
+      "assignees": "responsables {list}",
+      "type": "tipo {type}",
+      "fields": "campos {list}",
+      "field": "{name} = {value}",
+      "field_cleared": "{name} borrado",
+      "labels_added": "etiquetas añadidas: {list}",
+      "labels_removed": "etiquetas quitadas: {list}",
+      "assignees_added": "responsables añadidos: {list}",
+      "assignees_removed": "responsables quitados: {list}"
+    },
+    "github_update_issue": {
+      "request": "cambiar el issue {repo}#{number} en GitHub: {changes}",
+      "done": "Issue {repo}#{number} cambiado: {changes}."
+    },
+    "github_add_to_project": {
+      "request": "agregar el issue {repo}#{number} al proyecto \"{project}\" de GitHub{fields}",
+      "done": "Issue {repo}#{number} agregado al proyecto \"{project}\"{fields}.",
+      "with_columns": " con {list}"
     },
     "github_comment_issue": {
       "request": "comentar en el issue {repo}#{number}",
@@ -783,7 +811,8 @@
       "address_mismatch": "él escribió \"{written}\" y este envío va a \"{target}\"",
       "target_none": "Ese mensaje no tiene una confirmación pendiente. No ejecuté ninguna acción. Pide la acción de nuevo.",
       "target_unmatched": "No pude vincular tu respuesta con la confirmación actual. La acción sigue pendiente.",
-      "target_how": "Para confirmar esta acción, responde “adelante” a este mensaje. Para cancelarla, responde “cancela” a este mensaje."
+      "target_how": "Para confirmar esta acción, responde “adelante” a este mensaje. Para cancelarla, responde “cancela” a este mensaje.",
+      "not_done_yet": "Todavía no lo hice: falta tu confirmación."
     },
     "jornada_concluir": {
       "done": "Recorrido concluido. Estoy preparando ideas prácticas con {brand} y te avisaré aquí cuando estén listas."
@@ -799,6 +828,10 @@
       "request_fix": "corregir la nota temporal seleccionada: {text}",
       "text_missing": "(falta texto)",
       "done": "Nota temporal actualizada según la confirmación. El historial normal permanece."
+    },
+    "buttons": {
+      "confirm": "Confirmar",
+      "cancel": "Cancelar"
     }
   },
   "onboarding": {
@@ -1055,6 +1088,10 @@
     "number_elsewhere": "El número de esta instalación no apunta a este asistente. Activarlo aquí guarda la configuración, pero nadie del público llega a él hasta que la instalación apunte el número aquí.",
     "signup_open": "El registro de esta instalación está abierto: cualquiera que abra su dirección puede crear una cuenta. Por eso la atención al público queda apagada, en WhatsApp y en el sitio web, hasta que se cierre el registro (BRAMBIT_SIGNUP=closed en la configuración de la instalación).",
     "active": "<0/> Atender al público con este asistente",
+    "written_text": "Texto escrito",
+    "written_text_help": "Lo que este asistente sigue cuando la persona le escribe. Viene con el texto que trae el asistente; el cambio vale a partir del próximo mensaje.",
+    "spoken_text": "Texto hablado",
+    "spoken_text_help": "Lo que sigue cuando la persona le habla por voz. Viene con el texto que trae el asistente; el cambio vale a partir del próximo mensaje.",
     "instructions": "Instrucciones extra (qué hace, tono, qué no debe hacer). Se suman a las instrucciones que ya trae este asistente, si las hay.",
     "retention": "Guardar conversaciones por (días)",
     "rate_limit": "Mensajes por hora de cada contacto",
@@ -2099,7 +2136,32 @@
     "reason_connection_refused": "el servidor rechazó la conexión",
     "reason_bad_url": "la dirección no es válida",
     "reason_bad_number_id": "el id del número debe tener solo dígitos",
-    "reason_unreachable": "no se pudo contactar el servicio"
+    "reason_unreachable": "no se pudo contactar el servicio",
+    "section_public_support": "Atención al público",
+    "public_support_text_label": "Texto de la instalación",
+    "public_support_text_help": "Reglas que sigue todo asistente que atiende al público en esta instalación, además del texto de cada asistente. El cambio se aplica desde el próximo mensaje, para todos los asistentes."
+  },
+  "text_history": {
+    "history_save": "Guardar",
+    "history_saving": "Guardando…",
+    "history_saved": "Guardado.",
+    "history_reset": "Volver al predeterminado",
+    "history_reset_confirm": "¿Volver al texto predeterminado? El texto actual queda en la lista de versiones.",
+    "history_using_default": "texto predeterminado",
+    "history_unsaved": "sin guardar",
+    "history_count": "{count} de {max} caracteres",
+    "history_too_long": "El texto supera los {max} caracteres.",
+    "history_failed": "No se pudo guardar. Inténtelo de nuevo.",
+    "history_load_failed": "No se pudo cargar este texto.",
+    "history_versions_one": "{count} versión guardada",
+    "history_versions_other": "{count} versiones guardadas",
+    "history_version_default": "predeterminado",
+    "history_version_current": "actual",
+    "history_view": "Ver",
+    "history_hide": "Ocultar",
+    "history_restore": "Restaurar",
+    "history_restore_confirm": "¿Usar de nuevo la versión del {date}? El texto actual queda en la lista de versiones.",
+    "history_none": "Todavía no hay versiones guardadas. Mientras no se guarde ninguna, se usa el texto predeterminado."
   },
   "emails": {
     "confirm_signup": {
@@ -2183,6 +2245,11 @@
       "default_name": "Asistente",
       "fallback": "La tarea se interrumpió; revisa el avance en la conversación de la app.",
       "truncated": "… El resultado completo está en la conversación de la app {brand}."
+    },
+    "app_limit": {
+      "installation_one": "Esta instalación permite {count} app por persona y ya hay {current}.",
+      "installation_many": "Esta instalación permite {count} apps por persona y ya hay {current}.",
+      "installation_other": "Esta instalación permite {count} apps por persona y ya hay {current}."
     }
   }
 }

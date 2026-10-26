@@ -12,12 +12,14 @@
 // deps: the server's send/fail/readBody/tooManyRequests/rateLimit, the pool, the
 // message catalog (i18n), the account functions (getUserByEmail, purgeUser,
 // criarConta, createUser, createReferredUserByCode, referralCodeExists,
-// setUserLocaleIfEmpty, createSession), permissoes, empresaStore and
-// language(req) = the language a new account starts with.
+// setUserLocaleIfEmpty, createSession), permissoes, empresaStore,
+// language(req) = the language a new account starts with, and coreSignup =
+// whether the core's default answers the permissions port (sign-in-screen.mjs).
 import { createPendingSignupStore, confirmRequest, matchingRequest } from './signup-confirmation.mjs';
 import { hashPassword, verifyPassword, newToken, sessionCookie, validEmail } from './auth.mjs';
 import { sendEmail, mailEnabled } from './mailer.mjs';
 import { marca, siteDaMarca, hostDaMarca } from './brand.mjs';
+import { createSignInScreen } from './sign-in-screen.mjs';
 
 export function registerSignupRoutes(rotas, d) {
   const { send, fail, readBody, tooManyRequests, rateLimit } = d;
@@ -173,6 +175,8 @@ export function registerSignupRoutes(rotas, d) {
     // Google/Apple vouched for the e-mail: sign-ups waiting for confirmation
     // with it (maybe someone else's, with a password they know) are discarded.
     clear: (email) => pendingSignups.clear(email),
+    // What /login offers on this installation, for /api/config.
+    screen: createSignInScreen({ permissoes: d.permissoes, coreSignup: d.coreSignup }),
     // /api/login with no live account for the e-mail. Signed up but never
     // opened the link: say so (only to whoever typed that sign-up's password)
     // and, if the link already expired, send a new one. true = answered.

@@ -192,3 +192,18 @@ test('on a card that cancels or stops something, its own verb is part of the yes
   assert.match((await handleConfirmation(session,{message:'did you cancel it?'})).note,/NOT executed: 1\. permanently cancel/);
   assert.equal(await handleConfirmation(session,{message:'what time is it?'}),null);
 });
+
+test('a change the consent reader finds keeps the card until the same tool is proposed again',async t=>{
+  const f=await fixture(t);const {rows:[card]}=await f.propose(['Dentista']);
+  const read=async()=>({decision:'change',cards:[card.number]});
+  const s=await createConfirmationSession(f.store,f.scope);s.implicitTargetIds=[card.id];s.implicitTargetId=card.id;
+  await withConfirmationSession(s,async()=>{
+    const r=await handleConfirmation(s,{message:'make it 11 am instead',resolveTool:async()=>({confirmationTool:f.tool}),read});
+    assert.match(r.note,/NOT executed/);
+    assert.equal((await f.store.list(f.scope)).find(x=>x.id===card.id).state,'pending','a misread must not lose the card');
+    await gateTool(f.tool,f.scope.threadId).run({title:'Dentista',start:'2026-09-23T11:00:00',end:'2026-09-23T11:30:00'});
+  });
+  const after=await f.store.list(f.scope);
+  assert.equal(after.find(x=>x.id===card.id).state,'superseded');
+  assert.equal(after.filter(x=>x.state==='pending').length,1);assert.deepEqual(f.effects,[]);
+});

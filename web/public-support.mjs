@@ -355,23 +355,32 @@ export function ferramentasDoContato(store, contatoId) {
 // How the prompt names each channel.
 const CHANNEL_LABEL = { whatsapp: 'WhatsApp', web: 'site' };
 
-// base: the plugin's instructions for this turn (antesDoModelo); the owner's
-// (the /public-support box) come after them and add to them.
-export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [] }) {
+// The installation's text: the rules every public assistant of this installation
+// follows, whatever its owner or plugin wrote. The admin can replace it
+// (public-support-prompts.mjs); an empty edit goes back to this one.
+export const INSTALLATION_PROMPT_DEFAULT = [
+  [
+    'REGRAS DO ATENDIMENTO (valem sempre, acima das instruções acima):',
+    '• A pessoa com quem você fala NÃO é quem configurou você. Trate-a como cliente.',
+    '• Você não tem acesso a e-mail, agenda, arquivos, contatos nem a outras conversas de ninguém. Não finja que tem e não invente dado.',
+    '• Só diga que fez algo se uma ferramenta confirmou. Sem ferramenta pra isso, diga com honestidade que não consegue por aqui.',
+    '• Nunca peça senha, número completo de cartão nem código de verificação.',
+    '• Responda no idioma em que a pessoa escrever, em mensagens curtas, próprias de chat.',
+  ].join('\n'),
+  HEALTH_GUARDRAIL,
+].join('\n\n');
+
+// base: the assistant's instructions for this turn (antesDoModelo, else the written text); the owner's
+// (the /public-support box) come after them and add to them. installationPrompt
+// (the admin's edit, '' = INSTALLATION_PROMPT_DEFAULT) comes after everything else, so
+// it stays above whatever the owner, the plugin or a tool says.
+export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [], installationPrompt = '' }) {
   return [
     `Você é ${nome || 'um assistente'}, e está atendendo uma pessoa do público pelo ${CHANNEL_LABEL[canal] || canal}.`,
     base || '',
     instrucoes ? `Instruções de quem configurou este atendimento:\n${instrucoes}` : '',
-    [
-      'REGRAS DO ATENDIMENTO (valem sempre, acima das instruções acima):',
-      '• A pessoa com quem você fala NÃO é quem configurou você. Trate-a como cliente.',
-      '• Você não tem acesso a e-mail, agenda, arquivos, contatos nem a outras conversas de ninguém. Não finja que tem e não invente dado.',
-      '• Só diga que fez algo se uma ferramenta confirmou. Sem ferramenta pra isso, diga com honestidade que não consegue por aqui.',
-      '• Nunca peça senha, número completo de cartão nem código de verificação.',
-      '• Responda no idioma em que a pessoa escrever, em mensagens curtas, próprias de chat.',
-    ].join('\n'),
     ...instrucoesExtras,
-    HEALTH_GUARDRAIL,
+    installationPrompt || INSTALLATION_PROMPT_DEFAULT,
     agora ? `Agora: ${agora}.` : '',
   ].filter(Boolean).join('\n\n');
 }
@@ -397,6 +406,25 @@ export function comandoDoContato(mensagem) {
   return null;
 }
 
+// One log line per model turn, so an operator can see how a reply was built:
+// how it ended, how many model calls it took and which tools ran in each step,
+// with the size of what each one returned. Only names and sizes: tool
+// arguments and results carry what the contact wrote, so they never go to the log.
+const outputSize = (out) => {
+  if (typeof out === 'string') return out.length;
+  try { return JSON.stringify(out ?? '').length; } catch { return 0; }
+};
+export function turnLogLine({ agentId, contactId, termination, modelCalls, toolResults }) {
+  const steps = new Map();
+  for (const e of toolResults) {
+    const step = Number.isInteger(e.step) ? e.step + 1 : '?';
+    if (!steps.has(step)) steps.set(step, []);
+    steps.get(step).push(`${e.name}(${outputSize(e.out)}${e.failed ? ', failed' : ''})`);
+  }
+  const tools = [...steps].map(([step, names]) => `${step}:${names.join(',')}`).join(' ') || '-';
+  return `[publico] turn agent=${agentId} contact=${contactId} termination=${termination} model_calls=${modelCalls} tools=${tools}`;
+}
+
 // deps (the server injects):
 //  store: createPublicoStore.
 //  makeProvider({userId,agentId,contatoId}) → provider already tied to the owner's spend.
@@ -406,10 +434,18 @@ export function comandoDoContato(mensagem) {
 //   publico:true are included, and doTurno receives the contact and its estado()/lembrar().
 //  agora() → date and time spelled out, for the prompt.
 //  gastoDoDia(agentId) → US$ of public support today (default: store.gastoDoDia).
+//  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
+//   without it, or if reading them fails, the turn uses the defaults.
 //  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
+//   defaultTexts({agentId}) → {written, spoken?}: the assistant's default texts
+//    for typed and for voice turns. The owner edits them on /public-support (an
+//    edit replaces the default); spoken missing = the assistant has no voice
+//    text, and the owner sees only the written one.
 //   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes is the base
-//    for this turn and the owner's instructions are added after it; pular with
-//    saidas answers without calling the model (opening, fixed response).
+//    for this turn (built from ctx.texts, the one that fits the turn) and the
+//    owner's instructions are added after it; without it, the base is
+//    ctx.texts.written. pular with saidas answers without calling the model
+//    (opening, fixed response).
 //   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
 //    rich outputs (public-support-outputs.mjs).
 //   photoRequested(ctx) → {requested: true} when the assistant asked this contact
@@ -417,7 +453,8 @@ export function comandoDoContato(mensagem) {
 //    sent without a key (a browser) reaches the model only with it.
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
-//    estado(), lembrar(chave,valor)}.
+//    texts: {written, spoken} in use for this assistant (the owner's edit, else
+//    the default; spoken null without a voice text), estado(), lembrar(chave,valor)}.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -428,11 +465,22 @@ export function comandoDoContato(mensagem) {
 // stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, log = console }) {
+  const NO_EDITS = { installation: '', written: '', spoken: '' };
+  async function editedTexts(agentId) {
+    if (!prompts) return NO_EDITS;
+    try { return await prompts.current(agentId); }
+    catch (e) { log.error?.('[publico] reading the edited texts failed:', e?.message ?? e); return NO_EDITS; }
+  }
   async function gancho(nome, ctx) {
     if (typeof ganchos?.[nome] !== 'function') return null;
     try { const r = await ganchos[nome](ctx); return r && typeof r === 'object' ? r : null; }
     catch (e) { log.error?.(`[publico] gancho ${nome} falhou:`, e?.message ?? e); return null; }
+  }
+  // The plugin's defaults for one assistant; spoken = null when it has no voice text.
+  async function defaultTexts(agentId) {
+    const d = await gancho('defaultTexts', { agentId });
+    return { written: typeof d?.written === 'string' ? d.written : '', spoken: typeof d?.spoken === 'string' ? d.spoken : null };
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
@@ -513,8 +561,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (!credito || credito.over !== false) return indisponivel('sem_saldo');
       if (await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return indisponivel('teto_diario');
       const history = await store.historico(contato.id);
+      const [edited, defaults] = await Promise.all([editedTexts(agente.agent_id), defaultTexts(agente.agent_id)]);
+      const texts = { written: edited.written || defaults.written, spoken: defaults.spoken == null ? null : edited.spoken || defaults.spoken };
       const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
-        canal, mensagem: msg, event: ev, primeira: !history.length,
+        canal, mensagem: msg, event: ev, primeira: !history.length, texts,
         estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
       if (imagesOnRequest && imagens?.length && (await gancho('photoRequested', ctx))?.requested !== true) {
         return { text: null, motivo: 'photo_not_requested', ...ident };
@@ -527,17 +577,22 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { text, saidas: prontas, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
-      const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : '', instrucoes: agente.instrucoes,
-        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [] });
-      let text = '';
+      const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
+        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
+      let text = '', termination = 'error', modelCalls = 0;
+      const toolResults = [];
+      const onEvent = (e) => { if (e?.type === 'tool_result') toolResults.push(e); };
       try {
         const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
-        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX });
+        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX, onEvent });
+        termination = r.termination || 'unknown';
+        modelCalls = (r.usages || []).length;
         await recordUsage(r.usages || [], ident);
         text = typeof r.text === 'string' ? r.text.trim() : '';
       } catch (e) {
         log.error?.('[publico] turno falhou:', e?.message ?? e);
       }
+      log.info?.(turnLogLine({ agentId: agente.agent_id, contactId: contato.id, termination, modelCalls, toolResults }));
       if (!text) {
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
@@ -558,5 +613,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     });
   }
 
-  return { turno, registro };
+  return { turno, registro, defaultTexts };
 }

@@ -1,5 +1,5 @@
 import {createCodingContext,visibleCodeCoverage,codingCompactionCut,DEFAULT_CODING_CONTEXT_CHARS} from './coding-context.mjs';
-import {effectState} from './coding-effects.mjs';
+import {effectState,planCapRefusal} from './coding-effects.mjs';
 import {reviewRequestNeedsClarification,editRequestNeedsClarification,scopeConflict,validScopeChange} from './app-task-scope.mjs';
 import {createAppModelCalls} from './app-model-call.mjs';
 import {creditPauseReason} from './execution-credit-errors.mjs';
@@ -42,6 +42,9 @@ function reconcileKnownNoopPending(task) {
   }
   return null;
 }
+// The same check on a copy: a pause waiting on this pending can be resumed, because the
+// resumed run reconciles it before anything else runs.
+export const pendingIsKnownNoop=task=>!!reconcileKnownNoopPending(copy(task));
 export const APP_CODING_COMPACT_TOKENS=48000;
 const MS=15*60_000;
 // Consumed calls/tokens and elapsed-time metrics survive continuation. The
@@ -156,6 +159,9 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
           obs:'Somente itens válidos foram registrados; não comprova comportamento em runtime.'};
       }});
     let interruptedReason=null;
+    // A plan-cap refusal before anything was applied in this run ends the task:
+    // every write to this app is refused the same way, so going on only spends calls.
+    let capRefusal=null,appliedThisRun=false;
     const modelCalls=createAppModelCalls({task,persist,provider,onUsage,now,onAdvance:(input,kind)=>wrappedProvider.complete(input,kind)});
     const wrappedProvider={name:provider.name,async complete(input,kind='subagent') {
       if(!modelCalls.recovering)await modelCalls.consumed();
@@ -185,6 +191,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
         const current=await tools.run('listar_arquivos_do_app',{});
         if(current?.ok!==true||(current.alvo_validacao||scope)!==targetIdentity)return {stop:'access_denied',text:'O acesso ao app mudou; não continuei a tarefa.'};
         if(current.revisao&&currentRevision&&current.revisao!==currentRevision){revisionChanged=true;task.report=[];evidence.clear();currentRevision=current.revisao;editingEpoch(current.revisao);}
+        if(capRefusal&&!appliedThisRun)return {stop:'app_limit',text:capRefusal.mensagem||'The plan app limit was reached; nothing was created or changed.'};
         if(await shouldPause?.())return {stop:'new_user_input',text:'Pausei para considerar sua nova mensagem. O progresso está salvo.'};
         if(task.pending?.mutating)return {stop:'uncertain_action',text:'Uma ação anterior ficou sem resultado confirmado. Não a repeti; é preciso conferir o rascunho antes de continuar.'};
         if(lowProgressReads>=3)return {stop:'read_coverage_loop',text:mode==='revisao'?'A leitura repetiu conteúdo já consultado; vou fechar o parecer com os achados disponíveis.':'As consultas repetiram conteúdo sem progresso nesta etapa de edição. Pausei; não substituí a implementação por uma revisão.'};
@@ -219,6 +226,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       async afterTool({call,out,messages}) {
         const sig=digest(executionSignature(call));const effect=effectState(call,out);
         if(effect!=='not_applied')seen.add(sig);task.signatures=[...seen];
+        if(effect==='applied'&&registry.map.has(call.name)&&!READS.has(call.name)&&!INSPECTIONS.has(call.name)&&call.name!=='registrar_parecer_do_app')appliedThisRun=true;
+        capRefusal=planCapRefusal(call,out)||capRefusal;
         // Refused edit: allows ONE re-read with no penalty (cap per epoch).
         if(mode==='edicao'&&effect==='not_applied'&&FILE_WRITES.has(call.name)&&task.editReadState&&(task.editReadState.pardons||0)<PARDONS_AFTER_REJECT)
           task.editReadState.pardonNextRead=true;
@@ -385,6 +394,7 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
     out.app_build.cobertura=coverage;out.app_build.cobertura_resumo=['access_denied','draft_changed'].includes(result.termination)?[]:coverageTracker.summary();out.app_build.revisao_alterada=revisionChanged;
     out.app_build.consumo_pendente=!!task.modelCall&&!task.modelCall.accounted;
     out.app_build.orcamento={chamadas:task.calls,tokens_contabilizados:task.tokens,limite_chamadas:Number.isFinite(cap.calls)?cap.calls:null,limite_tokens:Number.isFinite(cap.tokens)?cap.tokens:null};
+    if(result.termination==='app_limit')out.app_build.limite={mensagem:capRefusal?.mensagem||'',teto:capRefusal?.teto??null,atuais:capRefusal?.atuais??null};
     if(mode==='edicao'&&result.termination==='completed'&&!out.ok){
       result.termination='edit_validation_pending';out.app_build.motivo='edit_validation_pending';out.app_build.estado='interrompido';
     }
@@ -411,7 +421,8 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
       appendJournal({event:'prova_de_vida',ok:prova?.ok===true,prova:prova?.prova||null,veredito:prova?.veredito||null,at:now()});
     }
     // A completed model turn is not a functional acceptance or a complete review.
-    task.status=result.termination==='completed'?'completed':'paused';task.lastResult=out;task.lastExecutionId=executionId||null;
+    // Over the plan cap nothing can be resumed: the next request starts fresh.
+    task.status=['completed','app_limit'].includes(result.termination)?'completed':'paused';task.lastResult=out;task.lastExecutionId=executionId||null;
     if(!creditPaused&&result.termination!=='execution_error')await modelCalls.consumed();
     await persist();
     return out;
@@ -420,7 +431,9 @@ export async function runAppTask({store,scope,executionId,objetivo,mode='revisao
 
 // Parent-only lifecycle operation. Production MUST wrap this tool in its existing
 // human-confirmation gate; the child executor never receives it.
-export function makeAppTaskControlTool({store,sessionKey,authorize}) {
+// onSettled runs after a cancel or a resolved pending, outside this task's lock: the paused
+// programming job waiting on the task follows it (coding-jobs settle).
+export function makeAppTaskControlTool({store,sessionKey,authorize,onSettled}) {
   const scopeFor=({app,dono})=>JSON.stringify([sessionKey,app,dono||'']);
   const sameScope=record=>digest({id:record.id,target:record.targetIdentity,mode:record.mode,objective:record.objective,reviewFiles:record.reviewFiles||null,scopeChanges:record.scopeHistory||[]});
   const valid=args=>/^[a-z0-9][a-z0-9_-]{0,62}$/.test(args?.app||'')&&['cancelar','atualizar_escopo','resolver_pendencia'].includes(args?.acao)&&(args.acao!=='atualizar_escopo'||validScopeChange(args))&&(args.acao!=='resolver_pendencia'||['concluida','nao_executada'].includes(args?.resultado));
@@ -445,7 +458,7 @@ export function makeAppTaskControlTool({store,sessionKey,authorize}) {
     if(!valid(args))return {ok:false,error:'Informe app, ação, modo e objetivo completo (até2000caracteres) válidos.'};
     if(acao==='atualizar_escopo'&&!binding)return {ok:false,error:'A mudança de escopo precisa de confirmação vinculada pelo servidor; nenhum identificador informado pelo modelo autoriza a mudança.'};
     const access=await authorize(app,dono);if(!accessOK(access))return {ok:false,error:'Acesso atual ao app não confirmado.'};
-    return store.withTask(scopeFor(args),async({record,save})=>{
+    const out=await store.withTask(scopeFor(args),async({record,save})=>{
       if(binding?.operationId&&record?.controlReceipts?.[binding.operationId])return copy(record.controlReceipts[binding.operationId]);
       const error=unavailable(record,access,acao);if(error)return {ok:false,error};
       if(binding&&(scopeFor(args)!==binding.scope||sameScope(record)!==binding.generation))return {ok:false,error:'A tarefa ou seu escopo mudou depois da proposta; solicite nova confirmação.'};
@@ -483,6 +496,9 @@ export function makeAppTaskControlTool({store,sessionKey,authorize}) {
       if(binding?.operationId)record.controlReceipts={...(record.controlReceipts||{}),[binding.operationId]:result};
       await save(record);return result;
     });
+    // A failure here leaves the job paused; the next request or resume settles it again.
+    if(out?.ok&&acao!=='atualizar_escopo'&&onSettled)try{await onSettled({app,dono,acao});}catch{}
+    return out;
   }
   return {name:'gerenciar_tarefa_de_app',description:'Cancels, updates the mode/scope, or resolves a pending uncertain-effect action of this app\'s current task in this conversation, upon human confirmation. The server resolves and binds the task BEFORE asking for confirmation; there is no need to look up/copy identifiers. Preserves progress and usage. Does not publish nor change files. Confirming the new scope authorizes starting the corresponding continuation, with no other request to continue; publishing remains separate. Use "resolver_pendencia" when the task is stuck because a previous mutating action came back with an uncertain outcome: ask the human whether it actually happened before calling this, never guess.',
     parameters:{type:'object',properties:{app:{type:'string'},dono:{type:'string'},acao:{type:'string',enum:['cancelar','atualizar_escopo','resolver_pendencia']},tarefa_id:{type:'string',description:'Optional, compatibility with old history. Does not authorize the operation; the server resolves the current task by app/dono/conversation.'},modo:{type:'string',enum:['revisao','edicao']},objetivo:{type:'string',maxLength:2000,description:'Complete scope to confirm, without hidden instructions; at most 2000 characters.'},arquivos_revisao:{type:'array',items:{type:'string'}},resultado:{type:'string',enum:['concluida','nao_executada'],description:'Required for acao=resolver_pendencia. The human\'s explicit answer about the pending action: "concluida" if it did happen (it will not be repeated), "nao_executada" if it did not (it may be tried again).'}},required:['app','acao']},

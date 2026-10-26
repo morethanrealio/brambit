@@ -2,7 +2,7 @@
 import './config-boot.mjs';
 import {arquivoDoSite,definirPastasDoSite,hostDaMarca,linkDaPagina,marca,marcaNaPagina,siteDaMarca,slugDaMarca,uaBot} from './brand.mjs';
 import { pendingRoutineEdit, routineTestOutcome } from './routine-edit-test.mjs';
-import { proposalPresentation, confirmationTargetsInMessage, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
+import { bindShownCards, handleConfirmation, proposalCard, proposalList, textosConfirmacao, withProposalCard } from './confirmation-flow.mjs';
 import { DRIVE_SEARCH_RULE } from './drive-search.mjs';
 import { createProductCards, PRODUCT_RECOMMENDATION_CONTRACT } from './product-cards.mjs';
 import { createCurationEvidence, retainedCurationToolResult } from './curation-evidence.mjs';
@@ -13,11 +13,13 @@ import { createConfirmationRecovery, migrateCodingConfirmation } from './confirm
 import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
+import { createStopRoutineTool } from './routine-stop.mjs';
+import { presentPendingCards } from './pending-action-claims.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
-import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff } from './channel-confirmation.mjs';
+import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff, chatButtonOptions, chatReply } from './channel-confirmation.mjs';
 import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
 import { avisosTurno, imagensDesligadas } from './turn-notices.mjs';
@@ -945,7 +947,7 @@ const CONNECTOR_DOMAINS = [
   {
     tool: 'github', label: 'GitHub',
     reads: new Set(['github_list_repos', 'github_read_path', 'github_search_repos', 'github_search_issues', 'github_list_issues', 'github_read_issue']),
-    description: 'Queries the user\'s GITHUB to READ/search repositories, files and issues. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). Do NOT use it to CREATE or COMMENT on an issue or to OPEN a pull request (those have their own tools in the main agent). The sub-agent does NOT see the conversation: describe the goal with context.',
+    description: 'Queries the user\'s GITHUB to READ/search repositories, files and issues. Delegates to a sub-agent that has the read tools and returns only the synthesized answer. Use for QUERIES ("acha o repo X", "lê o arquivo Y no repo Z", "quais issues abertas em W", "procura issues sobre bug de login"). Do NOT use it to CREATE, CHANGE or COMMENT on an issue, to put an issue in a PROJECT, or to OPEN a pull request (those have their own tools in the main agent, and github_issue_options lists the labels, types, fields and projects they accept). The sub-agent does NOT see the conversation: describe the goal with context.',
     ex: '"lista as issues abertas do repo octocat/hello-world com número e título"',
   },
   {
@@ -1154,7 +1156,8 @@ import { canvaTools } from './canva.mjs';
 import { compactIfNeeded } from './memory.mjs';
 import { wikiTools, wikiContext, updateUserProfile } from './wiki.mjs';
 import { pruneWikiPageVersions } from './db.mjs';
-import { spacesTools, spaceInviteTool, spacesContext } from './spaces.mjs';
+import { spacesTools, spaceInviteTool, spacesContext, isPrivateSpace } from './spaces.mjs';
+import { turnGate } from './direct-actions.mjs';
 import { skillsTools, skillInstallTool, skillShareTool, skillRunTool, skillsContext, stripStaleSkillReads } from './skills.mjs';
 import { trackersTools, trackersContext } from './trackers.mjs';
 import { checklistTools, CHECKLIST_CONTEXT } from './checklists.mjs';
@@ -1179,13 +1182,13 @@ import { moderateVideoPrompt } from './videomod.mjs';
 import { createRender, getRender, fetchRenderVideo, videoGenEnabled, videoEmRevisao, MAX_VIDEO_SECONDS } from './videogen.mjs';
 import { scanBuffer, avEnabled } from './avscan.mjs';
 import { sniffImagem } from './image-sniff.mjs';
-import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, GATE_TOOLS, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
+import { confirmationTargetMatches, confirmationTargetNotice, addGated, gateTool, takePending, peekPending, confirmsPending, renderConfirmed, hasPending, isReactionConfirmable, restorePending, setOwnerText, setThreadLanguage, deferIncomingWhileConfirmationPending, confirmacaoComRessalva } from './confirm.mjs';
 import { sshTools, livreTools, userHasSshKey, maskSecrets } from './ssh.mjs';
 import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForTurn, runnerBoundAgentId, runnerSetBoundAgent, runnerReadFile } from './runner.mjs';
 import { codingTools } from './coding.mjs';
 import { makeCodarTool, makeConstruirAppTool } from './coding-subagent.mjs';
 import { projectTools } from './projects.mjs';
-import { hostingTools, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
+import { hostingTools, newAppQuotaBlock, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
 import { ctl as appsCtl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
 import { verifyTotp } from './totp.mjs';
 
@@ -1364,7 +1367,7 @@ async function providerTools(userId, opts = {}) {
   let names = [];
   try { names = await listOAuthProviders(userId); } catch { return []; }
   const out = [];
-  if (names.includes('github')) out.push(...scopeGithubTools(githubTools({ token: () => validProviderToken(userId, 'github') }), opts.githubRepos));
+  if (names.includes('github')) out.push(...scopeGithubTools(githubTools({ token: () => validProviderToken(userId, 'github'), scopes: (await getOAuthToken(userId, 'github'))?.scope ?? null }), opts.githubRepos));
   if (names.includes('slack')) out.push(...slackTools({ token: () => validProviderToken(userId, 'slack') }));
   if (names.includes('microsoft')) {
     // `scope` of the token = what Microsoft granted on THIS connection. Whoever connected
@@ -2166,7 +2169,7 @@ const hostsDeLinksDoUsuario=async userId=>hostsDeLinks({marca:[hostDaMarca(),...
 const programmingRuntime=createProgrammingRuntime({confirmationStore,getAgentOwned,getThreadOwned,getUserLocale,hasProviderExecution,withProviderExecution,gasto,DEEPSEEK_AGENT_MODEL,isDeepSeekTurn,withDeepSeek,makeOfficialDeepSeek,GEMINI_COMPARISON_ID,isGeminiComparison,withGeminiComparison,recordUsages,makeHeavyProvider,primaryIsGeminiOverride,makeGeminiPrimary,makePrimaryProvider,hostingTools,APP_SUB_TOOLS,appTaskStore,getProject,userHasSshKey,runnerOnline,runnerBoundAgentId,livreTools,sshTools,codingTools,validProviderToken,hostsDeLinksDoUsuario});
 const codingJobs=createCodingJobs({store:codingJobStore,execute:programmingRuntime.execute,
   onSnapshot:job=>taskMetrics.record(programmingMeasurement(job)),
-  cancelTask:programmingRuntime.cancelTask,creditStatus:userId=>gasto.disponivel(userId),languageOf:async userId=>(await getUserLocale(userId))?.language,
+  cancelTask:programmingRuntime.cancelTask,taskState:programmingRuntime.taskState,creditStatus:userId=>gasto.disponivel(userId),languageOf:async userId=>(await getUserLocale(userId))?.language,
   notify:createCodingNotifier({getAgent:getAgentOwned,getTelegramBot:getTelegramBotForDelivery,getWhatsAppLink:getWhatsAppLinkForUser,waEnabled,sendTelegram:sendTelegramMessage,sendWhatsApp:sendWhatsAppProactive}),
   deliver:async job=>{
     const text=codingJobReceipt(job).text;
@@ -2230,10 +2233,7 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
     const session = !opts.ephemeral && !opts.noTools && !opts.webhook
       ? await createConfirmationSession(confirmationStore, scope, { policy: codingPolicySnapshot(agent) }) : null;
     if (session) {
-      const last = fresh.history?.at(-1);
-      const ids = last?.role === 'assistant' ? confirmationTargetsInMessage(session.pending(), last.content) : [];
-      session.implicitTargetIds = ids;
-      session.implicitTargetId = ids.length === 1 ? ids[0] : null;
+      bindShownCards(session, fresh.history);
       // Language for responses that have no request at all to pull the language from
       // ("no action awaiting confirmation").
       session.language = (await getUserLocale(userId).catch(() => null))?.language || 'pt-BR';
@@ -2271,7 +2271,7 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
         const legacy = createCodingApprovals({store:appTaskStore,scope:JSON.stringify([userId,agent.id,thread.id])});
         const migrated = await migrateCodingConfirmation(session,legacy,resolveTool);
         const resolution = migrated ? proposalList([migrated],textosConfirmacao(migrated.language).recovered) : await handleConfirmation(session, {
-          message,target:opts.confirmationTarget,viaReaction:opts.viaReaction,inputId:opts.confirmationInputId || null,
+          message,target:opts.confirmationTarget,viaReaction:opts.viaReaction,inputId:opts.confirmationInputId || null,button:opts.confirmationButton,
           resolveTool,afterComplete:proposal => confirmationRecovery.continueCoding(scope,proposal),
         });
         if (resolution?.ignore) return null;
@@ -2325,23 +2325,6 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
 // gets ONE extra emergency turn. See usage in the credit.over block below.
 const emergencyTurnCooldown = new Map();
 const EMERGENCY_COOLDOWN_MS = 6 * 3600_000; // 1 emergency turn every 6h per thread
-
-// Narrow exceptions to the 2026-09-28 audit gate, always by arguments,
-// never by the model's text: checking the app's access without changing anything, and
-// going back to a MORE restricted permission mode.
-const PORTAO_SEM_CARTAO = {
-  definir_acesso_sistema: (a) => !a?.acesso,
-  definir_modo_permissao: (a) => ['padrao', 'plano'].includes(a?.modo),
-};
-// A routine has no one to click the card, and these two are how a
-// routine ends itself (window closed, a monitor that found what it was looking for).
-const PORTAO_ROTINA_SE_ENCERRA = new Set(['cancelar_rotina', 'remover_monitor']);
-function portaoDoTurno(tool, { kind, threadId, gateOpts }) {
-  if (!tool || tool.confirmationTool || (!GATE_TOOLS.has(tool.name) && tool.requiresConfirmation !== true)) return tool;
-  if (kind === 'routine' && PORTAO_ROTINA_SE_ENCERRA.has(tool.name)) return tool;
-  const inline = PORTAO_SEM_CARTAO[tool.name];
-  return gateTool(inline ? { ...tool, runWithoutConfirmation: inline } : tool, threadId, gateOpts);
-}
 
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const baseHistory = structuredClone(thread.history || []);
@@ -2745,7 +2728,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const durableProposal=opts.confirmationManaged ? null : await codingApprovals.peek();
   if(durableProposal && !peekPending(thread.id)){
     const host=hostingTools(userId,agent.id);
-    const control=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,
+    const control=makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,onSettled:()=>codingJobs.settle(codingIdentity),
       authorize:async(app,dono)=>host.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})});
     const restored=control.restoreConfirmation(durableProposal.args,durableProposal.binding);
     restorePending(thread.id,{...durableProposal,durableId:durableProposal.id,
@@ -2899,7 +2882,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Sub-agents use their own registries and are left out on purpose.
   {
     const add = registry.add.bind(registry);
-    registry.add = (tool) => add(portaoDoTurno(tool, { kind, threadId: thread.id, gateOpts }));
+    const privateSpace = (args) => isPrivateSpace(userId, args);
+    registry.add = (tool) => add(turnGate(tool, { kind, threadId: thread.id, gateOpts, agentCategory, privateSpace }));
   }
   const confirmationSession = currentConfirmationSession(thread.id);
   if (confirmationSession) confirmationSession.context = { ...confirmationSession.context, googleEmail:gEmail, country:userCountry, timeZone:userTz, agentName:agent.name || null, authorizations:await getConfirmationAuthorizationContext(userId) };
@@ -4029,28 +4013,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       return actionResult({state:'routine_scheduled',id:job.id,target:canal,at,subject:routine.title},msg);
     },
   });
-  // Cancels (deletes) a routine, by title or by code.
-  registry.add({
-    name: 'cancelar_rotina',
-    description: 'Cancels (removes) one of the user\'s recurring routines. Pass the title of the routine (or part of it) they want to stop, OR the `id` (the #xxxx code that appears in listar_rotinas) when the title does not distinguish it. Use it ONLY when they want to STOP a routine FOR GOOD ("para de fazer X todo dia", "cancela a rotina de reuniões"). If they only want to CHANGE/REFORMAT an existing routine (switch channel, time, days, text or format), do NOT cancel it to recreate; use editar_rotina, which changes it in place without leaving the owner without the routine. If the title matches more than one routine, the tool returns the candidates with code and cadence: show them to the owner and call again with `id`.',
-    parameters: {
-      type: 'object',
-      properties: {
-        titulo: { type: 'string', description: 'Title (or part of it) of the routine to cancel.' },
-        id: { type: 'string', description: 'OPTIONAL. Routine code (the #xxxx from listar_rotinas). Use it when two routines have the same or similar titles: it is what identifies it without ambiguity.' },
-      },
-      required: [],
-    },
-    run: async ({ titulo, id }) => {
-      const rows = await listRoutinesForUser(userId);
-      // Failures go out as { ok: false }: plain text is read as success (FRASE_PRONTA_PT).
-      if (!rows.length) return { ok: false, error: 'Você não tem nenhuma rotina pra cancelar.' };
-      const sel = resolveRoutine(rows, { id, titulo, verbo: 'cancelar', tool: 'cancelar_rotina' });
-      if (sel.err) return { ok: false, error: sel.err };
-      await deleteRoutine(sel.row.id, userId);
-      return `Rotina "${sel.row.title}" (#${routineCode(sel.row, rows)}, ${routineCadence(sel.row)}) cancelada. Não vou mais executá-la.`;
-    },
-  });
+  // Stops a routine: pauses it, or deletes it only when the owner asks (routine-stop.mjs).
+  registry.add(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }));
   // Edits a routine that ALREADY EXISTS, in place (without deleting and recreating). Fixes the
   // gap where "reshaping a routine" turned into cancelar_rotina (immediate) +
   // criar_rotina (gated/pending), leaving the owner with no routine at all while the
@@ -4060,11 +4024,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // Only the fields that change are passed.
   addGated(registry, [{
     name: 'editar_rotina',
-    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) happens right away and returns the real receipt; do not ask for a second confirmation. Resuming or changing anything else still waits for confirmation. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same confirmation authorizes applying the edit and only then testing the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
+    description: curationToolHelp + ' ' + emailSearchToolHelp + ' '+ 'CHANGES in place a recurring routine that ALREADY EXISTS (without deleting and recreating it). Use it ALWAYS when the owner wants to CHANGE something in an existing routine: switch the delivery channel (e.g.: "manda no WhatsApp em vez do e-mail"), change the time, the days, rename it, or change the text/format of what the routine does (e.g.: "reformata o resumo pro WhatsApp"). NEVER use cancelar_rotina + criar_rotina for this. A simple PAUSE (ativa:false, with no other change) always happens right away and returns the real receipt. Any other change either applies right away or waits for the owner\'s confirmation; the tool result says which. Never ask for a confirmation in text. Pass ONLY the fields that change; the rest stays as it is. If you do not know the exact title, use listar_rotinas first. When the owner asks to change AND test, use testar_agora=true: the same call applies the edit and only then tests the saved version, with real delivery. An edit alone never triggers a test. Do not call executar_rotina_agora while the edit is pending.',
     parameters: {
       type: 'object',
       properties: {
-        testar_agora: {type:'boolean',description:'Only if the owner also asks for a test now. After confirmation, applies the edit and tests the saved version with real delivery on the configured channel.'},
+        testar_agora: {type:'boolean',description:'Only if the owner also asks for a test now. Applies the edit (after the confirmation, when one is needed) and then tests the saved version with real delivery on the configured channel.'},
         curadoria: curationToolSchema,
         busca_email: emailSearchToolSchema,
         ativa:{type:'boolean',description:'false to PAUSE, true to RESUME the same routine, without deleting history.'},
@@ -4890,7 +4854,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // Session separate from `codar`'s (same engine, different instance): the app
         // work continues across turns without mixing with dev/server work.
         sessionKey: `${userId}:${agent.id}:${thread.id}:app`,
-        taskStore: appTaskStore,
+        taskStore: appTaskStore, newAppCheck: (app, dono) => newAppQuotaBlock(userId, app, dono, { appClient }),
         dispatch:['chat','telegram','whatsapp'].includes(kind)?args=>codingJobs.submit(codingIdentity,{kind:'basic',args,userRequest:message,channel:kind,policy:codingPolicySnapshot(agent)},codingSubmissionId):undefined,
         userRequest: message,
         shouldPause: async () => { const next=await pollNewUserMsgAtSafeBoundary?.(); if(next){appPendingInputs.push(next);return true;}return false; },
@@ -4904,7 +4868,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         },
         onAppTarget: (system) => lembrarAppAtual(userId, system),
       }));
-      addGated(registry,[makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,
+      addGated(registry,[makeAppTaskControlTool({store:appTaskStore,sessionKey:`${userId}:${agent.id}:${thread.id}:app`,onSettled:()=>codingJobs.settle(codingIdentity),
         authorize:async(app,dono)=>await hostAll.find(t=>t.name==='listar_arquivos_do_app')?.run({nome_do_sistema:app,dono})})],thread.id,{codingApprovals,codingApprovalContext:{identity:codingIdentity,policy:codingPolicySnapshot(agent),channel:kind}});
       console.log(`[construir_app] sub assembled (thread=${thread.id}, tools=${hostBuild.length})`);
     }
@@ -6340,7 +6304,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // always useless and always costs the day's delivery. `oferecer_rotina` is removed for the
   // same reason (offering a routine INSIDE a routine is noise). Still standing:
   // `listar_rotinas` (read) and `cancelar_rotina` (a routine with a closed window,
-  // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself).
+  // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself: it pauses).
   if (!noTools && kind === 'routine') {
     const podadas = [];
     for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
@@ -6671,12 +6635,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // offers, a "platform team" persona and invented nicknames are prompt rules:
   // the regex cuts that lived here erased confirmation questions and data the
   // owner asked for (29/09/2026).
-  // Shows the card of the proposal the gate really stored, including details
-  // prepared by financial tools. The confirmation can't approve an LLM
-  // paraphrase that left out the date, recurrence or recipient.
-  const deterministicConfirmation = confirmationSession
-    ? proposalPresentation(confirmationSession.pending().filter(p => confirmationSession.createdIds.has(p.id)))
-    : peekPending(thread.id)?.confirmationText;
+  // Shows the card the gate really stored (an LLM paraphrase can drop the date,
+  // recurrence or recipient) and cuts "done" claims about actions still on a card.
+  const pendingCards = confirmationSession && presentPendingCards(text, confirmationSession, { journal: actionJournal.entries, toolCounts });
+  if (pendingCards) { diag.corte('acao_pendente', text, pendingCards.text); text = pendingCards.text; }
+  const deterministicConfirmation = confirmationSession ? pendingCards.card : peekPending(thread.id)?.confirmationText;
   const diagAntesJournal = text;
   text = actionJournal.finish(text, { termination, authenticatedEmailSources:searchCoverage.emailSourceLinks(), suppressRoutineMemoryReceipts: routineNoNews, proposalShown: Boolean(deterministicConfirmation) });
   if (diag.removidas.length) diag.corte('ja_fiz_sem_prova', diagAntesJournal, text, { removidas: diag.removidas, recibos: actionJournal.entries });
@@ -7638,11 +7601,11 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
         'GENERATING A FILE (.docx, PDF, .md, .txt), THE DEFAULT PATH: when the user asks you to generate/create/assemble/export a document, Word, .doc, .docx or PDF from some content, use gerar_documento. It creates the file and DELIVERS it straight into the chat (a native document on WhatsApp/Telegram, a download link in the app) and keeps a copy in the user\'s private library. It works for ANY user, WITHOUT depending on Google Drive or any connection. Cases: "send me this as a PDF/Word", "make a .doc with this summary", and especially "turn this PDF into an editable document"; in that case you READ the PDF content (it already arrives extracted for you when the user attaches it) and call gerar_documento with format "docx". RULES: NEVER generate an .html/.txt/.md file for the user to "copy and paste by hand"; NEVER mention a file path, folder, /workspace, server or "I will leave the file at such a place" (the file goes attached, period); NEVER say you "cannot generate" the file when this tool is available. About layout: PDF/Word do not keep an identical structure, so you recreate an approximate structure (headings, sections, lists, bold), not a pixel-perfect copy; say that naturally instead of promising total fidelity or tangling yourself up saying you "cannot".',
       );
     }
-    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_comment_issue', 'github_create_pull_request', 'github_propose_changes', 'slack_post_message'].filter((n) => names.has(n));
+    const writeTools = ['gmail_send', 'calendar_create', 'calendar_update', 'calendar_delete', 'drive_upload', 'drive_upload_arquivo', 'enviar_para_drive', 'docs_create', 'drive_export_pdf', 'github_create_issue', 'github_update_issue', 'github_add_to_project', 'github_comment_issue', 'github_create_pull_request', 'github_propose_changes', 'slack_post_message'].filter((n) => names.has(n));
     if (writeTools.length) {
       lines.push(
         '',
-        'WRITE ACTIONS available (' + writeTools.join(', ') + '): the NON-NEGOTIABLE RULE above applies (call the tool with the complete data, it stays pending, and it only runs with the "ok"). What is specific to them: ALWAYS show the details FIRST (recipient and text of the email; title, date/time and guests of the event; name and content of the file; text of the issue/comment/post; repository, branches and title of the pull request). The other connected services remain read-only.',
+        'WRITE ACTIONS available (' + writeTools.join(', ') + '): the NON-NEGOTIABLE RULE above applies (call the tool with the complete data, it stays pending, and it only runs with the "ok"). What is specific to them: ALWAYS show the details FIRST (recipient and text of the email; title, date/time and guests of the event; name and content of the file; text of the issue/comment/post, and every label, assignee, type, field and project of the issue; repository, branches and title of the pull request). The other connected services remain read-only.',
       );
       if (names.has('drive_upload') || names.has('drive_upload_arquivo')) {
         lines.push(
@@ -8388,7 +8351,7 @@ const CATALOGOS_MSGS = serverMessages({ plugins, legacy: carregaCatalogos(textos
 // Sign-up with a password and its e-mail confirmation (signup-routes.mjs).
 const cadastro = registerSignupRoutes(rotas, { pool, send, fail, readBody, tooManyRequests, rateLimit, i18n: CATALOGOS_MSGS.i18n,
   getUserByEmail, purgeUser, criarConta, createUser, createReferredUserByCode, referralCodeExists, setUserLocaleIfEmpty, createSession,
-  permissoes, empresaStore, language: (req) => idiomaDoCookie(req) || idiomaDoHeader(req).language });
+  permissoes, empresaStore, coreSignup: !pecas.permissoes, language: (req) => idiomaDoCookie(req) || idiomaDoHeader(req).language });
 // Saving a data connection (site and app callbacks) and the app's connect flow.
 const connectSave = createConnectSave({ empresaStore, saveGoogleAccount, saveOAuthToken, microsoftAccountEmail });
 const mobileConnect = registerMobileConnect(rotas, { send, fail, readBody, save: connectSave });
@@ -9012,7 +8975,7 @@ async function atenderRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
-    return send(res, 200, { profile: usageProfile, google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), voice: sttEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE });
+    return send(res, 200, { profile: usageProfile, google: googleEnabled(), apple: appleEnabled(), waNumber: waEnabled() ? (process.env.WA_BUSINESS_NUMBER || null) : null, github: providerEnabled('github'), slack: providerEnabled('slack'), nuvemshop: providerEnabled('nuvemshop'), microsoft: providerEnabled('microsoft'), linkedin: providerEnabled('linkedin'), notion: providerEnabled('notion'), canva: providerEnabled('canva'), media: imageEnabled(), voice: sttEnabled(), stripe: gasto.compraNaWeb(), vault: vaultEnabled(), mobile: MOBILE_RELEASE, ...await cadastro.screen() });
   }
 
   // ── Sign-up source (campaign attribution) ──
@@ -10518,7 +10481,7 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/chat') {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
-    const { threadId, message, images, files, voice } = await readBody(req);
+    const { threadId, message, images, files, voice, confirmation } = await readBody(req);
     const imgs = normalizeImages(images);
     const docs = normalizeFiles(files);
     if (!message && !imgs.length && !docs.length) return send(res, 400, { error: 'server.empty_message' });
@@ -10533,8 +10496,8 @@ async function atenderRequest(req, res) {
       // mobileClient comes from the X-Brambs-Mobile: 1 header that the app sends on
       // every call. It's the only way to tell app from site here: both use
       // this same route and the same 'chat' kind. See appClient in runConversationTurn.
-      const { text, attachments } = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient });
-      return send(res, 200, { reply: text, attachments });
+      const result = await runConversationInThread(agent, thread, user.id, msg, { images: imgs, files: docs, appClient: mobileClient, ...chatButtonOptions(confirmation) });
+      return send(res, 200, chatReply(result));
     } catch (e) {
       return fail(res, 500, 'server.failed_talk_model', e);
     }

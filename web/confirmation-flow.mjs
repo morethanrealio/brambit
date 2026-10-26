@@ -4,6 +4,9 @@ import { confirmationFingerprint, validConfirmationReference } from './confirmat
 import { standaloneRefusal } from './turn-claim-guard.mjs';
 import { actionEvidenceFor } from './action-evidence.mjs';
 import { tagIdioma } from './locale.mjs';
+import { frameText } from './confirm-sentences.mjs';
+import { reconsider, secondReading } from './consent-reader.mjs';
+import { buttonSelection } from './confirmation-buttons.mjs';
 
 // Texts the OWNER reads in this flow. They come out in the language recorded in
 // the request itself (row.language, the same one that already picks the card's
@@ -21,6 +24,7 @@ const TEXTOS = {
     whichOne: 'Qual dessas ações você quer confirmar, alterar ou cancelar? Pode indicar pelo nome ou horário.',
     unknown: 'Não consegui identificar a ação. Qual destas você quis dizer?',
     unseen: 'Confira primeiro os detalhes e me diga se posso seguir.',
+    doubleCheck: 'Antes de fazer, preciso confirmar com você, porque isso não dá para desfazer depois:',
     recovered: 'Recuperei este pedido. Confira os detalhes e confirme pelo número.',
     textOnlyOne: 'Essa ação exige confirmação por texto. Responda ao pedido indicando que confirma.',
     textOnlyMany: 'Para essas ações, preciso da sua confirmação por texto.',
@@ -41,6 +45,7 @@ const TEXTOS = {
     whichOne: 'Which of these actions do you want to confirm, change or cancel? You can point to it by name or time.',
     unknown: 'I could not tell which action you meant. Which of these is it?',
     unseen: 'Please check the details first and tell me if I may proceed.',
+    doubleCheck: 'Before I do this, I need to check with you, because it can\'t be undone afterwards:',
     recovered: 'I recovered this request. Check the details and confirm it by its number.',
     textOnlyOne: 'This action needs a written confirmation. Reply to the request saying you confirm.',
     textOnlyMany: 'For these actions I need your confirmation in writing.',
@@ -61,6 +66,7 @@ const TEXTOS = {
     whichOne: '¿Cuál de estas acciones quieres confirmar, cambiar o cancelar? Puedes indicarla por el nombre o la hora.',
     unknown: 'No pude identificar la acción. ¿Cuál de estas quisiste decir?',
     unseen: 'Revisa primero los detalles y dime si puedo seguir.',
+    doubleCheck: 'Antes de hacerlo, necesito confirmarlo contigo, porque esto no se puede deshacer después:',
     recovered: 'Recuperé esta solicitud. Revisa los detalles y confírmala por su número.',
     textOnlyOne: 'Esta acción necesita confirmación por escrito. Responde a la solicitud diciendo que confirmas.',
     textOnlyMany: 'Para estas acciones necesito tu confirmación por escrito.',
@@ -85,24 +91,31 @@ const amendment = text => !text.trim().endsWith('?') && (confirmacaoComRessalva(
 const refusalEnEs = text => /^(?:no[, ]+)?(?:never ?mind|forget it|don'?t|do not|don'?t do (?:it|that)|do not do (?:it|that)|no thanks|no thank you|not now|hold off|no lo hagas|no hace falta|mejor no|olvidalo|cancelalo|dejalo|no gracias|ahora no|todavia no)(?:[, ]+(?:thanks|gracias))?[.! ]*$/.test(folded(String(text).trim()).replace(/[’]/g, "'"));
 const cancellation = text => standaloneRefusal(text) || refusalEnEs(text) || /^(?:por favor[, ]+)?(?:cancele?|cancelar|cancela|cancel|stop|cancela|cancele)(?:\s+(?:esse|este|o|this|the|esta|la|el))?[.! ]*$/i.test(folded(text));
 
-export function proposalCard(row) {
+// Every card states, in the platform's words, that nothing has happened yet:
+// the assistant's own text around it said "done" in 20 of 408 replies sent
+// while a card waited (production, 2026-10-21). Cards sent before this line
+// existed are still matched in the history (legacy).
+const notDoneYet = lang => `${frameText('not_done_yet', {}, lang === 'en' || lang === 'es' ? lang : 'pt-BR')} `;
+function card(row, legacy) {
   const lang = row.language;
   const question = lang === 'en' ? 'May I proceed?' : lang === 'es' ? '¿Puedo seguir?' : 'Posso seguir?';
   const reaction = isReactionConfirmable(row.name) ? ' 👍' : '';
   if (/\?\s*(?:👍)?\s*$/.test(row.confirmationText)) return row.confirmationText;
-  return `${row.confirmationText}\n\n${question}${reaction}`;
+  return `${row.confirmationText}\n\n${legacy ? '' : notDoneYet(lang)}${question}${reaction}`;
 }
+export const proposalCard = row => card(row, false);
 
 // Exact prepared details remain the authority; prose and internal request IDs
 // are not a language the person needs to learn.
-export function proposalPresentation(rows) {
+function presentation(rows, legacy) {
   if (!rows.length) return '';
-  if (rows.length === 1) return proposalCard(rows[0]);
+  if (rows.length === 1) return card(rows[0], legacy);
   const lang = rows[0].language;
   const question = lang === 'en' ? 'May I proceed with these actions?'
     : lang === 'es' ? '¿Puedo realizar estas acciones?' : 'Posso realizar essas ações?';
-  return `${rows.map(r => `• ${r.confirmationText}`).join('\n\n')}\n\n${question}`;
+  return `${rows.map(r => `• ${r.confirmationText}`).join('\n\n')}\n\n${legacy ? '' : notDoneYet(lang)}${question}`;
 }
+export const proposalPresentation = rows => presentation(rows, false);
 // The model copies the card it saw in the history into its own answer, usually
 // with its own closing question ("Posso aplicar?"), and the real card comes right
 // below it (2026-10-08 case: the routine change shown twice). Paragraphs equal to
@@ -122,12 +135,31 @@ export function withProposalCard(text, card) {
 export function confirmationTargetsInMessage(rows, text) {
   const value = String(text || '');
   const candidates = rows.filter(r => r.confirmationText && value.includes(r.confirmationText));
-  if (candidates.length > 1 && value.includes(proposalPresentation(candidates))) return candidates.map(r => r.id);
-  const cards = rows.filter(r => value.includes(proposalCard(r)));
+  if (candidates.length > 1 && [false, true].some(legacy => value.includes(presentation(candidates, legacy)))) return candidates.map(r => r.id);
+  const cards = rows.filter(r => value.includes(card(r, false)) || value.includes(card(r, true)));
   // Identical visible text cannot prove which immutable payload was shown.
   if (new Set(cards.map(proposalCard)).size !== cards.length) return [];
   return cards.map(r => r.id);
 }
+// The cards in the assistant's last message are the ones a reply without a
+// number or a quote is about; the reader also gets that message as context.
+export function bindShownCards(session, history) {
+  const last = history?.at(-1);
+  const ids = last?.role === 'assistant' ? confirmationTargetsInMessage(session.pending(), last.content) : [];
+  session.implicitTargetIds = ids;
+  session.implicitTargetId = ids.length === 1 ? ids[0] : null;
+  session.lastAssistantText = last?.role === 'assistant' && typeof last.content === 'string' ? last.content : '';
+  session.recentTurns = (history || []).slice(-12)
+    .filter(m => ['user', 'assistant'].includes(m?.role) && typeof m.content === 'string' && m.content.trim()).slice(-6);
+  // A side question in between: its answer doesn't show the card again, so "No,
+  // leave it" right after had no card to refer to and the card expired unanswered
+  // (dev test, 2026-10-21). The cards of the latest earlier message that shows
+  // one, within the turns the reader sees, go to the reader only, never to the
+  // rules, and a yes to them doesn't run anything (consent-reader.mjs).
+  session.earlierShownIds = ids.length ? [] : [...session.recentTurns].reverse()
+    .filter(m => m.role === 'assistant').map(m => confirmationTargetsInMessage(session.pending(), m.content)).find(found => found.length) || [];
+}
+
 export function proposalList(rows, prefix, lang) {
   const t = lang ? textosConfirmacao(lang) : txRows(rows);
   if (!rows.length) return {text:t.none,attachments:[],proposalIds:[]};
@@ -514,21 +546,63 @@ async function handleGroup(session, rows, {decision, viaReaction, inputId, resol
   } finally {clearInterval(timer);}
 }
 
-export async function handleConfirmation(session, { message, target, viaReaction = false, inputId = null,
-  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000 } = {}) {
-  const selected = selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []);
+// A refusal or change the reader found goes back to the model as a note instead
+// of a fixed reply: the same message often carries something else ("Actually we
+// won't take him to school. Remind me at 1:50 pm to...", real reply of 2026-09-23),
+// which the fixed "OK, I won't..." dropped. A change keeps the card until the model
+// proposes the same tool again, so a misread leaves the card as it was.
+async function readerDecision(session, selected, inputId) {
+  const rows = selected.rows || [selected.row];
+  const list = rows.map(r => `${r.number}. ${r.label}`).join('; ');
+  if (selected.kind === 'edit') {
+    const row = rows[0];
+    session.replaceOnPropose = new Set([row.id]);
+    return { note: `[SYSTEM: the owner's message may change pending card ${list}. It is still waiting and was NOT executed. If the message asks for that same action with different details, call ${row.name} again with the corrected arguments, starting from ${JSON.stringify(row.args)}; the new card replaces card ${row.number}. If the message is about something else, just answer it and card ${row.number} stays waiting. Never say or imply it was done. Do not repeat this block.]` };
+  }
+  let done;
+  if (rows.length > 1) {
+    done = await session.store.closeMany(session.scope, rows.map(r => r.id), inputId);
+    await session.refresh();
+  } else done = await session.close(rows[0], 'canceled', inputId);
+  if (!done) return replayRows(rows.map(r => session.rows.find(c => c.id === r.id) || r));
+  return { note: `[SYSTEM: canceled at the owner's request, nothing was executed: ${list}. Say so in one short sentence and answer the rest of the message, if there is more. Do not propose it again unless the owner asks. Do not repeat this block.]` };
+}
+
+// A card nobody answered expires and nothing happens, while the person often
+// believes it was done. The next reply that goes through the model says so once,
+// in the conversation the card was in; nothing is sent on its own.
+export async function handleConfirmation(session, options = {}) {
+  const resolution = await resolveConfirmation(session, options);
+  if (resolution?.text !== undefined || resolution?.ignore) return resolution;
+  const expired = await session.store?.takeExpired(session.scope) || [];
+  if (!expired.length) return resolution;
+  const notice = `[SYSTEM: these confirmation cards expired without the owner's answer, so they were NOT done: ${expired.map(r => r.label).join('; ')}. Mention it once, in one short sentence, and offer to do it again; then answer the message as usual. Never say or imply it was done. Do not repeat this block.]`;
+  return { ...resolution, note: [resolution?.note, notice].filter(Boolean).join('\n\n') };
+}
+
+async function resolveConfirmation(session, { message, target, viaReaction = false, inputId = null,
+  resolveTool, afterComplete = async () => {}, heartbeatMs = 30_000, read, consent, button = null } = {}) {
+  const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
+  const said = userSaid(message);
+  const earlierIds = shownIds.length ? [] : session.earlierShownIds || [];
+  const context = { rows: session.rows, said, viaReaction, shownIds, earlierIds, assistantText: session.lastAssistantText || '', recent: session.recentTurns || [] };
+  // A pressed button names its card: none of the readers below get a say.
+  const selected = button ? buttonSelection(session.rows, button, inputId) : await secondReading(await reconsider(
+    selectConfirmation(session.rows, message, target, viaReaction, inputId, session.implicitTargetId, session.implicitTargetIds || []),
+    { ...context, target, read }), { ...context, consent });
   if (selected.kind === 'continue') {
     // A card was on screen and this message was not taken as a decision on it. Without
     // saying so, the model answered "Yes, cancel it" with "the routine is cancelled"
     // while it was still on (dev test of 0.3.0, 2026-10-18).
-    const shownIds = session.implicitTargetIds?.length ? session.implicitTargetIds : session.implicitTargetId ? [session.implicitTargetId] : [];
-    const shown = shownIds.map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
-    const said = userSaid(message);
+    const shown = (shownIds.length ? shownIds : earlierIds).map(id => session.rows.find(r => r.id === id)).filter(r => r?.state === 'pending' && r.presented);
     if (!shown.length || !(naturalApproval(said) || mentionsCards(said, shown))) return null;
     return { note: `[SYSTEM: still waiting for the owner's confirmation and NOT executed: ${shown.map(r => `${r.number}. ${r.label}`).join('; ')}. This message was not taken as a decision on it, so never say or imply it was done. If the owner wants it done, call the same tool again with the same arguments and the confirmation card is shown again; otherwise just answer the message. Do not repeat this block.]` };
   }
   if (selected.kind === 'ignore') return {ignore:true};
   if (selected.kind === 'replay') {
+    // The reply below already says these expired: no later notice for them.
+    const expired = (selected.rows || [selected.row]).filter(r => r.state === 'expired').map(r => r.id);
+    if (expired.length) await session.store?.takeExpired(session.scope, expired);
     if (selected.rows?.length > 1) {
       for (const row of selected.rows) if (row.state === 'completed') await afterComplete(row).catch(() => {});
       return replayRows(selected.rows);
@@ -536,11 +610,13 @@ export async function handleConfirmation(session, { message, target, viaReaction
     if (selected.row.state === 'completed') await afterComplete(selected.row).catch(() => {});
     return terminalConfirmation(selected.row);
   }
+  if (selected.kind === 'doubleCheck') return proposalList(selected.rows, txRows(selected.rows).doubleCheck);
   if (['unknown', 'ambiguous', 'unseen'].includes(selected.kind)) {
     return proposalList(selected.rows, selected.kind === 'unknown'
       ? txRows(selected.rows).unknown
       : selected.kind === 'unseen' ? txRows(selected.rows).unseen : undefined, selected.rows?.length ? undefined : session.language);
   }
+  if (selected.reader && ['cancel', 'edit'].includes(selected.kind)) return readerDecision(session, selected, inputId);
   if (selected.rows?.length > 1) return handleGroup(session,selected.rows,{decision:selected.kind,viaReaction,inputId,resolveTool,afterComplete,heartbeatMs});
   const row = selected.row;
   if (selected.kind === 'inspect') return { note: `O dono está falando sobre o pedido ${row.number}: ${row.label}. Ele continua pendente; uma pergunta não autoriza execução.` };
@@ -551,7 +627,7 @@ export async function handleConfirmation(session, { message, target, viaReaction
     if (selected.kind === 'edit') return { note: `O pedido ${row.number} foi invalidado antes de qualquer execução. O dono pediu uma alteração: ${userSaid(message)}. Proponha novamente a ferramenta ${row.name} com os argumentos corrigidos, a partir destes dados: ${JSON.stringify(row.args)}. Outros pedidos continuam pendentes. Não execute a versão antiga.` };
     return { text: textosConfirmacao(row.language).canceledOne(row.label), attachments: [] };
   }
-  if (viaReaction && !isReactionConfirmable(row.name)) return proposalList([row], textosConfirmacao(row.language).textOnlyOne);
+  if (viaReaction && !button && !isReactionConfirmable(row.name)) return proposalList([row], textosConfirmacao(row.language).textOnlyOne);
   let prepared, adapter;
   try {
     ({prepared,adapter} = await prepareRow(session,row,resolveTool));

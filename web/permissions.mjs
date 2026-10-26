@@ -2,8 +2,10 @@
 // whoever installs it answers (e.g. a plan-based plugin); in the open version
 // the default is no app limit and ctl's fixed disk.
 //
-//  bloqueioDeApp({ownerUserId,atuais,appClient}) → null (may create a NEW app) or
-//    {ok:false,error,agente,...}: error goes to the person, agente to the model.
+//  bloqueioDeApp({ownerUserId,atuais,appClient,language}) → null (may create a NEW
+//    app) or {ok:false,error,agente,...}: error goes to the person, agente to the
+//    model. language = the person's tag when the core shows error to them as is
+//    (a background app task's receipt); absent, the text is the legacy Portuguese.
 //    Only called for a new app; editing an existing app never goes through here.
 //  discoDoAppMb(dono) → MB of disk for the owner's apps (ctl applies it per user).
 //    dono = users row, or null if the read failed.
@@ -19,6 +21,8 @@
 //    out of model training (the button shows and the route accepts). Default:
 //    false, since the open version trains nothing and the button makes no sense.
 import {profile as usageProfile} from './profiles.mjs';
+import {productI18n} from './i18n.mjs';
+import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 export const METODOS_PERMISSOES=['bloqueioDeApp','discoDoAppMb','filaDeEspera','liberadoNoCadastro','entrarNaFila','podeRecusarTreino'];
 export function conferirPermissoes(p){
  const faltam=METODOS_PERMISSOES.filter(m=>typeof p?.[m]!=='function');
@@ -28,9 +32,9 @@ export function conferirPermissoes(p){
 export function createPermissoesSimples({maxApps=null,discoMb=200,cadastroFechado=false,liberados=[]}={}){
  const emailsLiberados=new Set(liberados.filter(Boolean).map(e=>String(e).trim().toLowerCase()));
  return conferirPermissoes({
-  async bloqueioDeApp({atuais}){
+  async bloqueioDeApp({atuais,language}){
    if(maxApps===null||atuais<maxApps)return null;
-   const error=`Esta instalação permite ${maxApps} app${maxApps===1?'':'s'} por pessoa e já há ${atuais}.`;
+   const error=productI18n().t('coding.app_limit.installation',language||LEGACY_TEXT_LANGUAGE,{count:maxApps,current:atuais});
    return {ok:false,error,agente:`Teto de apps atingido (${atuais}/${maxApps}). NÃO tente publicar de novo. Ofereça apagar um app que não é mais usado (apagar_sistema).`,teto:maxApps,atuais};
   },
   discoDoAppMb:()=>discoMb,
@@ -41,15 +45,17 @@ export function createPermissoesSimples({maxApps=null,discoMb=200,cadastroFechad
  });
 }
 // Default of the core, read from the environment. BRAMBIT_SIGNUP=closed closes
-// sign-up: only the owner (ADMIN_EMAIL) creates an account freely, everyone
-// else comes in with the owner's invite code or a company invite. Anything
+// sign-up: only the owner (ADMIN_EMAIL) and the e-mails in BRAMBIT_SIGNUP_ALLOWED
+// create an account freely, everyone else comes in with the owner's invite code
+// or a company invite. Anything
 // else, or unset, keeps sign-up open. Read on every call, so a change in the
 // config file applies without a restart; signup/admin passed in stay fixed.
 // The public-support usage profile (profiles.mjs) always closes sign-up.
 export function createPermissionsFromEnv({signup,admin,profile=usageProfile}={}){
  const atual=()=>{
   const cadastroFechado=profile==='public-support'||String(signup??process.env.BRAMBIT_SIGNUP??'').trim().toLowerCase()==='closed';
-  return createPermissoesSimples({cadastroFechado,liberados:cadastroFechado?[admin??process.env.ADMIN_EMAIL]:[]});
+  const liberados=[admin??process.env.ADMIN_EMAIL,...String(process.env.BRAMBIT_SIGNUP_ALLOWED??'').split(/[\s,;]+/)];
+  return createPermissoesSimples({cadastroFechado,liberados:cadastroFechado?liberados:[]});
  };
  return conferirPermissoes(Object.fromEntries(METODOS_PERMISSOES.map(m=>[m,(...args)=>atual()[m](...args)])));
 }

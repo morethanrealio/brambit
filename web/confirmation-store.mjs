@@ -26,9 +26,18 @@ export const CONFIRMATION_SCHEMA = `
     continuation_ack_at timestamptz,
     continuation_cancelled boolean NOT NULL DEFAULT false,
     migration_key text,
+    expiry_noted_at timestamptz,
     UNIQUE(thread_id,request_no)
   );
   ALTER TABLE mtr_harness.confirmation_requests ADD COLUMN IF NOT EXISTS decision_group uuid;
+  -- Cards that had already expired when this column arrived are never announced.
+  DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='mtr_harness'
+        AND table_name='confirmation_requests' AND column_name='expiry_noted_at') THEN
+      ALTER TABLE mtr_harness.confirmation_requests ADD COLUMN expiry_noted_at timestamptz;
+      UPDATE mtr_harness.confirmation_requests SET expiry_noted_at=now() WHERE state='expired';
+    END IF;
+  END $$;
   CREATE INDEX IF NOT EXISTS confirmation_scope_idx
     ON mtr_harness.confirmation_requests(user_id,agent_id,thread_id,created_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS confirmation_pending_identity_idx
@@ -138,6 +147,19 @@ export function createConfirmationStore(pool, { seal, open, ttlMs = 24 * 3600_00
           VALUES ($4,$1,$2,$3,$5,$6,$7,$8,$9,LEAST(now()+$10*interval '1 millisecond',COALESCE($12::timestamptz,'infinity'::timestamptz)),$11) RETURNING *`,
         [...scopeArgs(s), randomUUID(), numbers[0].n, payload.name, encrypted, fingerprint, existing.rows.length > 0, ttlMs,migrationKey,expiresAt]);
         return decode(rows[0]);
+      });
+    },
+    // Cards that expired after being shown, each handed out once, so the next
+    // reply can say nothing was done. ids limits it to cards a reply already named.
+    async takeExpired(s, ids = null) {
+      return tx(async c => {
+        if (!await owner(c, s, true)) return [];
+        await expire(c, s);
+        const { rows } = await c.query(`UPDATE mtr_harness.confirmation_requests SET expiry_noted_at=now()
+          WHERE user_id=$1 AND agent_id=$2 AND thread_id=$3 AND state='expired' AND presented_at IS NOT NULL
+            AND expiry_noted_at IS NULL AND expires_at>now()-interval '7 days' AND ($4::uuid[] IS NULL OR id=ANY($4::uuid[]))
+          RETURNING *`, [...scopeArgs(s), ids]);
+        return (await Promise.all(rows.map(decode))).sort((a, b) => a.number - b.number);
       });
     },
     async present(s, ids) {

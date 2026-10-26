@@ -56,6 +56,16 @@ test('explicit not-applied receipt is distinct from unknown failure; prose canno
  const valid={name:'editar_arquivo_do_app',args:{caminho:'a',trecho_antigo:'x',trecho_novo:'y'}};
  assert.equal(effectState(valid,{ok:false,error:'Nada foi gravado'}),'unknown');assert.equal(effectState({name:'rodar_comando'},rejectedEdit('fake')),'unknown');
 });
+test('a receipt only counts for the operation of the tool that returned it',()=>{
+ const scaffold={name:'iniciar_estrutura_do_app',args:{nome_do_sistema:'game'}};
+ assert.equal(effectState(scaffold,rejectedEdit('cap',{teto:0,atuais:4},'app_scaffold')),'not_applied');
+ assert.equal(effectState({name:'definir_segredo'},rejectedEdit('bad key',{},'app_secret')),'not_applied');
+ assert.equal(effectState(scaffold,rejectedEdit('wrong operation')),'unknown');
+ assert.equal(effectState({name:'editar_arquivo_do_app',args:{caminho:'a',trecho_antigo:'x',trecho_novo:'y'}},rejectedEdit('x',{},'app_secret')),'unknown');
+ // Checkpoints saved before the scaffold receipt: only the port's numeric cap fields prove the no-op.
+ assert.equal(effectState(scaffold,{ok:false,error:'cap',agente:'a',teto:0,atuais:4}),'not_applied');
+ assert.equal(effectState(scaffold,{ok:false,error:'Nada foi gravado'}),'unknown');
+});
 test('rejected patch can recover within the same app task',async()=>{
  const store=memory();store.data.set('app',{...fixture(),mode:'edicao'});let calls=0,attempts=0;const rev='a'.repeat(64);
  const tools=new ToolRegistry().add({name:'listar_arquivos_do_app',run:async()=>({ok:true,alvo_validacao:'owner:demo',revisao:rev,arquivos:[]})})
@@ -280,4 +290,15 @@ test('advanced stop message without a language keeps the legacy Portuguese; cred
  const run=(language,error)=>runCodingTask({store:memory(),scope:'lang',target:'p',objetivo:'task',language,tools:new ToolRegistry(),authorize:async()=>true,provider:{complete:async()=>{throw error}}});
  assert.equal((await run(undefined,Error('network'))).text,'A execução foi interrompida; o estado foi preservado.');
  assert.match((await run('en',new ExecutionCreditError('account_credit_reserved'))).text,/does not mean your/);
+});
+test('a measurement that keeps failing backs off and is dropped instead of taking a worker slot forever',async()=>{
+ const store=memory(),scope=codingJobScope(identity);let at=1000,calls=0;
+ const jobs=createCodingJobs({store,now:()=>at,execute:async()=>({coding_task:{state:'completed'},text:'done'}),deliver:async()=>{},onSnapshot:async()=>{calls++;throw Error('metrics down');}});
+ const settle=async()=>{await jobs.tick();for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));};
+ await jobs.submit(identity,{kind:'advanced'},'req');await jobs.drive(scope);
+ let job=await store.read(scope);assert.equal(job.state,'completed');assert.equal(job.delivered,true);assert.equal(job.measurementPending,true);
+ const before=calls;await settle();await settle();assert.equal(calls,before,'retried before its wait was over');
+ for(let i=0;i<10&&(await store.read(scope)).measurementPending;i++){at=(await store.read(scope)).measurementRetryAt;await settle();}
+ job=await store.read(scope);assert.equal(job.measurementPending,false);assert.equal(calls-before,5);
+ at+=3600_000;await settle();assert.equal(calls-before,5);
 });

@@ -55,6 +55,16 @@ test('a bare yes confirms only the sole card just shown and leaves the older req
   await f.decide('sim');assert.deepEqual(f.effects,[args(2)]);
   assert.equal((await f.session()).pending().length,1);
 });
+// 2026-10-21 eval: a yes to an action that can't be undone is read a second time.
+// A doubted yes shows the card once more; the next yes runs without a third question.
+test('a doubted yes to an e-mail shows the card once more and the next yes sends it',async t=>{
+  const f=await fixture(t);await f.propose(args(1));
+  const read=[];const consent=async a=>{read.push(a.said);return 'other';};
+  const first=await f.decide('sim',{consent});
+  assert.equal(f.effects.length,0);assert.match(first.text,/não dá para desfazer/);
+  await f.decide('sim, pode enviar',{consent});
+  assert.deepEqual(f.effects,[args(1)]);assert.deepEqual(read,['sim']);
+});
 test('numbered selection executes only that immutable proposal after restart and replays its receipt',async t=>{
   const f=await fixture(t);await f.propose(args(1));const b=await f.propose(args(2));
   await f.decide('confirmo pedido 2');assert.deepEqual(f.effects,[args(2)]);
@@ -111,6 +121,19 @@ test('expired proposals and interrupted claims cannot be executed on recovery',a
   const b=await f.propose(args(2));const claim=await f.store.claim(f.scope,b.id,b.fingerprint);
   assert.ok(claim);await f.db.query("UPDATE mtr_harness.confirmation_requests SET lease_until=now()-interval '1 minute' WHERE id=$1",[b.id]);
   assert.match((await f.decide('confirmo pedido 2')).text,/resultado incerto/);assert.equal(f.effects.length,0);
+});
+// A card nobody answered expires and nothing happens, while the person thought it
+// was done: the next reply says so, once, and not again after a reply that already did.
+test('an expired card is mentioned once, in the next reply that goes through the model',async t=>{
+  const f=await fixture(t);const a=await f.propose(args(1));
+  await f.db.query("UPDATE mtr_harness.confirmation_requests SET expires_at=now()-interval '1 minute' WHERE id=$1",[a.id]);
+  const first=await f.decide('what is on my calendar today?');
+  assert.match(first.note,/NOT done/);assert.ok(first.note.includes(a.label));
+  assert.equal(await f.decide('and tomorrow?'),null);
+  const b=await f.propose(args(2));
+  await f.db.query("UPDATE mtr_harness.confirmation_requests SET expires_at=now()-interval '1 minute' WHERE id=$1",[b.id]);
+  assert.match((await f.decide('confirmo pedido 2')).text,/expirad[oa]/);
+  assert.equal(await f.decide('and tomorrow?'),null);assert.equal(f.effects.length,0);
 });
 test('missing delivery/presentation evidence asks to show the card before executing',async t=>{
   const f=await fixture(t);const s=await f.session();await withConfirmationSession(s,()=>gateTool(f.tool,f.scope.threadId).run(args(1)));
@@ -190,4 +213,13 @@ test('a routine card moves to the chat it was delivered to and a reply there app
   await withConfirmationSession(s,()=>handleConfirmation(s,{message:'pode',target:{channel:'telegram',messageId:'123:8'},resolveTool:async()=>({confirmationTool:f.tool})}));
   assert.deepEqual(f.effects,[args(1)]);
   assert.deepEqual((await f.store.list(chat)).filter(r=>r.state==='pending').map(r=>r.id),[waiting.id]);
+});
+
+test('a button decides only its own card, even one that cannot be undone, and a card it does not name is ignored',async t=>{
+  const f=await fixture(t);
+  const first=await f.propose(args(1));const second=await f.propose(args(2));
+  assert.equal((await f.decide('👍',{viaReaction:true,button:{id:randomUUID(),confirm:true}}))?.ignore,true);
+  await f.decide('👍',{viaReaction:true,button:{id:second.id,confirm:true}});
+  assert.deepEqual(f.effects,[args(2)]);
+  assert.equal((await f.store.list(f.scope)).find(r=>r.id===first.id).state,'pending');
 });

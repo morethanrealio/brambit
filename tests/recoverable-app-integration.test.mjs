@@ -10,6 +10,7 @@ import {makeConstruirAppTool} from '../web/coding-subagent.mjs';
 import {makeAppTaskControlTool} from '../web/app-task-runner.mjs';
 import {appTaskReceipt as detailedReceipt} from '../web/app-review-receipt.mjs';
 import {rejectedEdit} from '../web/coding-effects.mjs';
+import {createAppBuildJournal} from '../web/app-build-state.mjs';
 import { resolverAncora } from '../web/app-anchor.mjs';
 import { pioraSintaxe } from '../web/app-syntax.mjs';
 const appTaskReceipt=(build,lang)=>detailedReceipt(build,lang,{technicalDetails:true});
@@ -20,19 +21,20 @@ const end={stop:'end',text:'Parecer estático registrado.',usage:{in:100,out:10}
 const memory=()=>{const records=new Map();return {records,async withTask(k,fn){return fn({id:k,record:structuredClone(records.get(k)||null),save:async r=>records.set(k,structuredClone(r))});}};};
 function fixture(caller='A'){
  const content={A:{demo:{'public/a.js':b64('function markerA() {}')},other:{'private.txt':b64('OTHER_APP_PRIVATE')}},B:{demo:{'public/a.js':b64('function markerB() {}')}}};
- let allow=true,shared=false,agent='agent',writes=0,external=0;const reads=[];
+ let allow=true,shared=false,agent='agent',writes=0,external=0,cap=false;const reads=[];
  const src=fs.readFileSync('web/hosting.mjs','utf8').replace(/^import[\s\S]*?;\n/gm,'').replace(/^export \{[^\n]+\};?\n/gm,'').replace(/\bexport (?=(?:async )?function|const|let)/g,'');
  const ctx=vm.createContext({Buffer,console,process:{env:{}},Date,Map,Set,URL,zlib,createHash,randomBytes:()=>Buffer.alloc(12),filePage,validateDraft,validationPage,draftRevision,searchAppCode,rejectedEdit,resolverAncora,pioraSintaxe,
  countLines:s=>s.split('\n').length,dominioDosApps,urlDoApp,linkDaPagina,marca,hostingEnabled:()=>true,ctl:async()=>{external++;throw Error('forbidden external');},
  getAppRow:async(u,s)=>content[u]?.[s]?{system:s,agent_id:agent}:null,getAppDraft:async(u,s)=>{reads.push([u,s]);return {...content[u]?.[s]};},getAppSnapshot:async()=>null,
+ capBlock:async({atuais,language})=>cap?{ok:false,error:language==='en'?'No new apps on this plan.':'Wrong language.',agente:'Explain the plan limit.',plano:'starter',teto:0,atuais}:null,
  resolveConnectedUser:async(_,d)=>content[d]?{ok:true,userId:d}:{ok:false},isAppCollaborator:async()=>allow,
  listSharedAppsForCollaborator:async()=>shared&&allow?[{system:'demo',ownerUserId:'B'}]:[],
  listAppDraftSystems:async()=>[],listAppsForUser:async()=>[],listAgents:async()=>[],
  getUserById:async()=>({plan:'pro'}),conferirPermissoes:p=>p,
  ensureUserSubdomain:async()=>{external++;throw Error('forbidden allocation');},putAppDraftFile:async(u,s,p,c)=>{writes++;content[u]??={};content[u][s]??={};content[u][s][p]=c;}});
- vm.runInContext(src+`\nconfigurarPermissoes({bloqueioDeApp:async()=>null,discoDoAppMb:()=>5120});resolveLabel=async()=>({label:'fixture',name:'Fixture'});globalThis.actual=hostingTools(${JSON.stringify(caller)},'agent');`,ctx);
+ vm.runInContext(src+`\nconfigurarPermissoes({bloqueioDeApp:capBlock,discoDoAppMb:()=>5120});resolveLabel=async()=>({label:'fixture',name:'Fixture'});globalThis.actual=hostingTools(${JSON.stringify(caller)},'agent',{language:'en'});`,ctx);
  const tools=new ToolRegistry();for(const t of ctx.actual)tools.add(t);
- return {tools,content,reads,get writes(){return writes;},get external(){return external;},allow:v=>allow=v,shared:v=>shared=v,agent:v=>agent=v};
+ return {tools,content,reads,get writes(){return writes;},get external(){return external;},allow:v=>allow=v,shared:v=>shared=v,agent:v=>agent=v,cap:v=>cap=v,newAppCheck:(app,dono)=>ctx.newAppQuotaBlock(caller,app,dono)};
 }
 function builder(f,store,provider,sessionKey='fixture',shouldPause){return makeConstruirAppTool({taskStore:store,sessionKey,shouldPause,buildAppContext:async()=>({tools:f.tools,provider})});}
 // Actual read-only hosting ACL: explicit collaborators, revocation, other agent.
@@ -79,6 +81,24 @@ for(const user of ['A','B']){
  }};
  const out=await builder(f,store,p).run({app:'demo',modo:'edicao',objetivo:'Corrigir e validar'});
  eq(f.writes,1);ok(out.app_build.motivo!=='uncertain_action');eq(out.app_build.validacao,'aprovado');eq(f.external,0);
+}
+// Plan cap (case of 2026-10-24): a new app is refused in the same turn, before any task
+// starts, and the reply stays in the model's words. Inside a task the refusal is a proven
+// no-op: the task closes with the port's explanation, with no pending write and nothing to resume.
+{
+ const f=fixture();f.cap(true);let dispatched=0,n=0;
+ const p={name:'f',complete:async()=>{n++;
+  if(n===1)return step('iniciar_estrutura_do_app',{nome_do_sistema:'new-app'});
+  return end;}};
+ const tool=()=>makeConstruirAppTool({taskStore:memory(),sessionKey:'cap',newAppCheck:f.newAppCheck,dispatch:async()=>{dispatched++;return {programming_job:{id:'j'},text:'queued'};},buildAppContext:async()=>({tools:f.tools,provider:p})});
+ let out=await tool().run({app:'new-app',modo:'edicao',objetivo:'Create a tic-tac-toe game'});
+ eq(out.app_limit,true);eq(out.teto,0);eq(dispatched,0);eq(n,0);
+ const journal=createAppBuildJournal();journal.toolResult({name:'construir_app'},out);eq(journal.finish('model words'),'model words');
+ await tool().run({app:'demo',modo:'edicao',objetivo:'Change the color'});eq(dispatched,1);
+ const store=memory();out=await builder(f,store,p,'cap-task').run({app:'new-app',modo:'edicao',objetivo:'Create a tic-tac-toe game'});
+ eq(n,1);eq(out.app_build.motivo,'app_limit');eq(out.app_build.limite.mensagem,'No new apps on this plan.');eq(out.app_build.limite.teto,0);eq(f.writes,0);eq(f.external,0);ok(![...store.records.values()].some(r=>r?.pending?.mutating));
+ ok([...store.records.values()].some(r=>r?.mode==='edicao'&&r.status==='completed'));
+ const reply=createAppBuildJournal({language:'en'});reply.toolResult({name:'construir_app'},out);eq(reply.finish(''),'No new apps on this plan. I did not create or change any files.');
 }
 // Interrupted review cannot silently become an edit; original state and budget preserved.
 {

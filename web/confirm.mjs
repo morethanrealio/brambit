@@ -103,6 +103,8 @@ export const GATED_TOOLS = new Set([
   'docs_create',
   'drive_export_pdf',
   'github_create_issue',
+  'github_update_issue',
+  'github_add_to_project',
   'github_comment_issue',
   'github_create_pull_request',
   'github_propose_changes',
@@ -173,6 +175,8 @@ export const IRREVERSIBLE_TOOLS = new Set([
   'apagar_sistema',
   'remover_segredo',
   'github_create_issue',
+  'github_update_issue',
+  'github_add_to_project',
   'github_comment_issue',
   'github_create_pull_request',
   'github_propose_changes',
@@ -366,7 +370,7 @@ export function describeDone(name, args = {}, language = null) {
 // to pt-BR, today's default behavior.
 // Tools with confirmation whose output is a fixed pt-BR success sentence. Their
 // failures must come back as { ok: false }: any other plain text is read as success.
-const FRASE_PRONTA_PT = new Set(['criar_rotina', 'cancelar_rotina']);
+const FRASE_PRONTA_PT = new Set(['criar_rotina']);
 export function renderConfirmed(pend, r) {
   const lang = pend?.language ? tagIdioma(pend.language) : defaultLanguage();
   const feito = () => describeDone(pend.name, pend.args, pend.language);
@@ -555,7 +559,7 @@ export function gateTool(tool, threadId, opts = {}) {
     name: tool.name,
     description:
       tool.description +
-      ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. When called, it normally does NOT execute right away: the system records the request and only executes it after the user explicitly confirms in the next turn. Describe alongside what will be done. (Exception: if the user turned on the "aceitar edições" (accept edits) mode or pre-authorized the command, it runs directly and you get the result right away.)]',
+      ' [IMPORTANT: this is a REAL action that changes the user\'s world. CALLING this tool IS ALREADY the way to propose the action; do NOT ask for permission in text before calling it. Depending on the call, it either runs right away (some actions that only affect the user, the "aceitar edições" (accept edits) mode, a pre-authorized command) or the system records the request and only executes it after the user confirms. The tool result says which one happened: report only that.]',
     parameters: tool.parameters,
     async run(args) {
       // Every gate keeps its own snapshot of the arguments, not just tools with
@@ -583,16 +587,18 @@ export function gateTool(tool, threadId, opts = {}) {
       if (!opts.confirmationPreview && (inlineByMode || inlineByAllow)) {
         return tool.run(args);
       }
-      // Some mutations are strictly risk-reducing and reversible
-      // (today: only PAUSING a routine, without changing anything else). The
-      // tool itself declares this narrow exception; we never infer it from the
-      // name nor from the model's text. It still goes through the preflight
-      // below before executing, to validate and resolve the real target.
-      const inlineByPolicy = typeof tool.runWithoutConfirmation === 'function'
-        && tool.runWithoutConfirmation(args) === true;
+      // Some calls run without a card: pausing a routine, or an action the
+      // owner asked for that only affects them (direct-actions.mjs). The policy
+      // decides by the arguments, never by the model's text, and may be async.
+      // A policy that fails keeps the card. The call still goes through the
+      // preflight below before executing, to validate and resolve the real target.
+      let inlineByPolicy = false;
+      if (!opts.confirmationPreview && typeof tool.runWithoutConfirmation === 'function') {
+        try { inlineByPolicy = (await tool.runWithoutConfirmation(args)) === true; } catch { inlineByPolicy = false; }
+      }
       // The legacy path keeps a single pending action; the persistent session
-      // supports several.
-      if (!opts.confirmationPreview && !currentConfirmationSession(threadId) && pending.has(threadId)) {
+      // supports several. A call that runs without a card never waits on it.
+      if (!opts.confirmationPreview && !inlineByPolicy && !currentConfirmationSession(threadId) && pending.has(threadId)) {
         return 'Já existe uma ação aguardando a confirmação do usuário nesta conversa. Trate uma de cada vez: confirme (ou cancele) a anterior antes de propor outra.';
       }
       const lang = idiomaDoCartao(threadId);
@@ -654,7 +660,17 @@ export function gateTool(tool, threadId, opts = {}) {
         /* continues with the basic label */
       }
       if (recusa) return `NÃO registrei o pedido: ${recusa} Corrija o argumento e chame a tool de novo (não peça confirmação de algo que não foi registrado).`;
-      if (!opts.confirmationPreview && inlineByPolicy) return tool.run(args);
+      if (!opts.confirmationPreview && inlineByPolicy) {
+        // Same bound target the card would have used (e.g. the calendar or the
+        // note as stored now), so running directly never skips that check.
+        if (typeof tool.prepareConfirmation !== 'function') return tool.run(args);
+        let prepared;
+        try {
+          prepared = await tool.prepareConfirmation(JSON.parse(JSON.stringify(args)));
+          if (typeof prepared?.run !== 'function') throw Error('Could not bind the target of the action.');
+        } catch (e) { return `NOT done: ${String(e?.message || 'Could not bind the target of the action.')} Nothing was executed.`; }
+        return prepared.run();
+      }
       // Security binding is NOT best-effort enrichment. Trusted tools may bind
       // their target before the card; failures must never register a runnable action.
       // The bound callback stays server-side; no model-supplied capability/ID grants access.
@@ -714,10 +730,14 @@ export function gateTool(tool, threadId, opts = {}) {
           // target replaces the previous still-pending one, instead of stacking
           // cards that conflict with each other. Only after the new one is
           // recorded: if it fails, nothing disappears.
+          // Same for a card the consent reader saw the owner change in this turn
+          // (confirmation-flow.mjs readerDecision): it stays open until here.
           const alvo = typeof tool.supersedeKey === 'function' ? tool.supersedeKey(confirmedArgs) : null;
-          if (alvo) {
-            for (const old of session.pending()) {
-              if (old.id === saved?.id || old.name !== tool.name || tool.supersedeKey(old.args || {}) !== alvo) continue;
+          const changed = session.replaceOnPropose;
+          for (const old of session.pending()) {
+            if (old.id === saved?.id || old.name !== tool.name) continue;
+            if (changed?.has(old.id) || (alvo && tool.supersedeKey(old.args || {}) === alvo)) {
+              changed?.delete(old.id);
               await session.close(old, 'superseded').catch(() => {});
             }
           }

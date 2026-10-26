@@ -38,7 +38,8 @@ export const GRUPO_TOOL_GROUPS = {
   // (github-repo-scope.mjs). 'github' is the read sub-agent; the writes keep their confirmation.
   github: new Set([
     'github', 'github_list_repos', 'github_read_path', 'github_search_repos', 'github_search_issues',
-    'github_list_issues', 'github_read_issue', 'github_create_issue', 'github_comment_issue',
+    'github_list_issues', 'github_read_issue', 'github_issue_options', 'github_create_issue',
+    'github_update_issue', 'github_add_to_project', 'github_comment_issue',
     'github_create_pull_request', 'github_propose_changes',
   ]),
   // mini-PaaS (publicar/gerir sisteminhas).

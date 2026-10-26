@@ -88,6 +88,30 @@ const proposeArgs = (a, c) => ({
   source: /^\.\/?$/.test(String(a.dir ?? '')) ? c.t('github_propose_changes.of_project') : c.t('github_propose_changes.of_folder', { dir: c.or(a.dir, 'common.unknown') }),
   branch: a.branch ? c.t('github_propose_changes.from_branch', { branch: a.branch }) : c.t('github_propose_changes.current_branch'),
 });
+// What a GitHub issue action will set besides the title: labels, assignees,
+// type and field/column values. Each one goes out in the real call, so the card
+// that authorizes it lists them.
+const ghList = (v) => (Array.isArray(v) ? v : v ? [v] : []).map((x) => String(x ?? '').trim()).filter(Boolean).join(', ');
+const ghFields = (fields, c) => (Array.isArray(fields) ? fields : fields && typeof fields === 'object' ? Object.entries(fields).map(([name, value]) => ({ name, value })) : [])
+  .filter((f) => f && String(f.name ?? '').trim())
+  .map((f) => (String(f.value ?? '').trim() ? c.t('github_issue.field', { name: String(f.name).trim(), value: String(f.value).trim() }) : c.t('github_issue.field_cleared', { name: String(f.name).trim() })))
+  .join(', ');
+const ghIssueParts = (a, c, keys) => keys.flatMap(([arg, key]) => {
+  const v = arg === 'fields' ? ghFields(a.fields, c) : arg === 'type' ? String(a.type ?? '').trim() : ghList(a[arg]);
+  return v ? [c.t(`github_issue.${key}`, arg === 'type' ? { type: v } : { list: v })] : [];
+});
+const ghIssueDetails = (a, c) => {
+  const parts = ghIssueParts(a, c, [['labels', 'labels'], ['assignees', 'assignees'], ['type', 'type'], ['fields', 'fields']]);
+  return c.clause(parts.length, 'github_issue.with', { list: parts.join('; ') });
+};
+const ghUpdateArgs = (a, c) => {
+  const parts = ghIssueParts(a, c, [['add_labels', 'labels_added'], ['remove_labels', 'labels_removed'], ['add_assignees', 'assignees_added'], ['remove_assignees', 'assignees_removed'], ['type', 'type'], ['fields', 'fields']]);
+  return { repo: a.owner ? `${a.owner}/${a.repo ?? ''}` : String(a.repo ?? ''), number: String(a.number ?? ''), changes: parts.length ? parts.join('; ') : c.t('common.unknown') };
+};
+const ghProjectArgs = (a, c) => {
+  const cols = ghFields(a.fields, c);
+  return { repo: a.owner ? `${a.owner}/${a.repo ?? ''}` : String(a.repo ?? ''), number: String(a.number ?? ''), project: c.or(a.project, 'common.unknown'), fields: c.clause(cols, 'github_add_to_project.with_columns', { list: cols }) };
+};
 const inDir = (a, c) => c.clause(a.diretorio, 'common.in_dir', { dir: a.diretorio });
 const pushBranch = (a, c) => c.t(a.branch ? 'git_push.of_branch' : 'git_push.current_branch', { branch: a.branch });
 const runCommand = {
@@ -169,6 +193,14 @@ const onedrive = {
 };
 
 // Same variables in the request and the done sentence.
+const routineRef = (a, c) => (a.id ? `#${String(a.id).replace(/^#/, '')}` : `"${c.q(a.titulo)}"`);
+
+// The day of a tracker entry: empty means today, like the tool.
+const EVENT_DAY_WORDS = { hoje: 'today', ontem: 'yesterday', anteontem: 'day_before_yesterday' };
+const eventDay = (data, c) => {
+  const word = data == null || data === '' ? 'hoje' : String(data).trim().toLowerCase();
+  return EVENT_DAY_WORDS[word] ? c.t(`remover_evento.${EVENT_DAY_WORDS[word]}`) : c.t('remover_evento.when_date', { date: /^\d{4}-\d{2}-\d{2}$/.test(word) ? cardDay(word, c.lang) : String(data) });
+};
 const simple = (tool, vars) => ({
   request: (a, c) => c.t(`${tool}.request`, vars(a, c)),
   done: (a, c) => c.t(`${tool}.done`, vars(a, c)),
@@ -253,9 +285,15 @@ const SENTENCES = {
     host: c.clause(a.host, 'configurar_deploy.to_host', { host: `${a.usuario ? `${a.usuario}@` : ''}${a.host}` }),
     command: c.clause(a.comando, 'configurar_deploy.running', { command: a.comando }),
   })),
-  cancelar_rotina: simple('cancelar_rotina', (a, c) => ({ routine: a.id ? `#${String(a.id).replace(/^#/, '')}` : `"${c.q(a.titulo)}"` })),
+  // Only a permanent delete opens a card; a card opened before it existed pauses.
+  cancelar_rotina: {
+    request: (a, c) => c.t(a.permanently ? 'cancelar_rotina.request' : 'cancelar_rotina.request_pause', { routine: routineRef(a, c) }),
+    done: (a, c) => c.t(a.permanently ? 'cancelar_rotina.done' : 'cancelar_rotina.done_pause', { routine: routineRef(a, c) }),
+  },
+  // The tool also takes the Portuguese words for today/yesterday/the day before
+  // (see resolveEventDate in trackers.mjs); say them in the user's language.
   remover_evento: {
-    request: (a, c) => c.t('remover_evento.request', { date: c.q(a.data, 'common.date_unknown'), tracker: c.q(a.tracker) }),
+    request: (a, c) => c.t('remover_evento.request', { when: eventDay(a.data, c), tracker: c.q(a.tracker) }),
     done: (a, c) => c.t('remover_evento.done', { tracker: c.q(a.tracker) }),
   },
   remover_tracker: simple('remover_tracker', (a, c) => ({ tracker: c.q(a.tracker) })),
@@ -325,8 +363,16 @@ const SENTENCES = {
   onedrive_upload: onedrive,
   onedrive_upload_arquivo: onedrive,
   github_create_issue: {
-    request: (a, c) => c.t('github_create_issue.request', { repo: c.clause(a.repo, 'github_create_issue.in_repo', { repo: a.repo }), title: a.title || '' }),
-    done: (a, c) => c.t('github_create_issue.done', { repo: c.clause(a.repo, 'github_create_issue.in_repo', { repo: a.repo }), title: a.title || '' }),
+    request: (a, c) => c.t('github_create_issue.request', { repo: c.clause(a.repo, 'github_create_issue.in_repo', { repo: a.repo }), title: a.title || '', details: ghIssueDetails(a, c) }),
+    done: (a, c) => c.t('github_create_issue.done', { repo: c.clause(a.repo, 'github_create_issue.in_repo', { repo: a.repo }), title: a.title || '', details: ghIssueDetails(a, c) }),
+  },
+  github_update_issue: {
+    request: (a, c) => c.t('github_update_issue.request', ghUpdateArgs(a, c)),
+    done: (a, c) => c.t('github_update_issue.done', ghUpdateArgs(a, c)),
+  },
+  github_add_to_project: {
+    request: (a, c) => c.t('github_add_to_project.request', ghProjectArgs(a, c)),
+    done: (a, c) => c.t('github_add_to_project.done', ghProjectArgs(a, c)),
   },
   github_comment_issue: {
     request: (a, c) => c.t('github_comment_issue.request', { repo: a.repo || '', number: String(a.number ?? a.issue ?? '') }),

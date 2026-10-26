@@ -11,6 +11,8 @@ import { defaultTimezone } from './locale.mjs';
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
+import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
+import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS } from './public-web.mjs';
 import { publicSupportOn } from './profiles.mjs';
 
@@ -20,7 +22,7 @@ const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Joins the initDb schema list.
-export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); };
+export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
@@ -39,7 +41,8 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
-// (public-support-owner.mjs) and the public web channel (public-web.mjs).
+// (public-support-owner.mjs), the public web channel (public-web.mjs) and the
+// admin's installation text (public-support-admin.mjs).
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
 // it hands to the public would also hand out accounts paid by the owner. null =
@@ -49,6 +52,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
+  const prompts = createPromptStore(pool, { S });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -70,16 +74,17 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setInterval(limpar, limpezaMs).unref?.();
   }
   const atendimento = createAtendimentoPublico({
-    store, makeProvider, ferramentas, ganchos, log, agora: agoraPorExtenso,
+    store, makeProvider, ferramentas, ganchos, prompts, log, agora: agoraPorExtenso,
     saldo: creditStatus,
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
   if (rotas) {
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available });
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available });
+    if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }
   return {
-    store, webStore, limpar,
+    store, webStore, prompts, limpar,
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem }),

@@ -951,7 +951,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('calendar', 'write')) {
     tools.push({
       name: 'calendar_create',
-      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Google Calendar. It goes on the primary calendar, unless you pass `agenda` (name of one of the calendars that showed up in calendar_list). ALWAYS confirm title, date/time and attendees BEFORE creating; do not create without the user\'s explicit ok. Pass `timezone` with the user\'s REAL timezone (IANA, e.g. America/Zurich for someone in Basel, America/Sao_Paulo in Brazil); `start`/`end` must be the local wall-clock time (e.g. 2026-07-09T11:30:00) WITHOUT offset. Do not embed an offset in the ISO nor convert the time yourself.',
+      description: 'For a recurring request, fill in recorrencia and confirm the cadence and the end; never silently replace it with a single event. Creates an event in the user\'s Google Calendar. It goes on the primary calendar, unless you pass `agenda` (name of one of the calendars that showed up in calendar_list). Pass `timezone` with the user\'s REAL timezone (IANA, e.g. America/Zurich for someone in Basel, America/Sao_Paulo in Brazil); `start`/`end` must be the local wall-clock time (e.g. 2026-07-09T11:30:00) WITHOUT offset. Do not embed an offset in the ISO nor convert the time yourself.',
       parameters: { type: 'object', properties: {
         recorrencia: recurrenceSchema,
         title: { type: 'string' },
@@ -1048,7 +1048,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
   if (can('drive', 'write')) {
     tools.push({
       name: 'drive_upload',
-      description: `Creates a text file in the user's Google Drive, always inside the assistant's folder ("${folderName}") at the root. You cannot choose another folder or save it loose at the root (the app only touches its own folder). Confirm name and content first.`,
+      description: `Creates a text file in the user's Google Drive, always inside the assistant's folder ("${folderName}") at the root. You cannot choose another folder or save it loose at the root (the app only touches its own folder).`,
       parameters: { type: 'object', properties: {
         name: { type: 'string', description: 'File name (e.g. notas.txt).' },
         content: { type: 'string', description: 'Text content.' },
@@ -1088,7 +1088,7 @@ export function googleTools({ token, caps = {}, account = '', onUsage = () => {}
     // scope covers the creation.
     tools.push({
       name: 'docs_create',
-      description: 'Creates a NATIVE Google Doc (a Google document, not a .txt) from text, inside the assistant\'s folder in Drive. Use when the user asks to "montar/criar um Google Doc". Accepts simple HTML in the content for layout (headings <h1>, bold <b>, lists <ul>) — pass html=true in that case. Returns the document link. Confirm name and content first.',
+      description: 'Creates a NATIVE Google Doc (a Google document, not a .txt) from text, inside the assistant\'s folder in Drive. Use when the user asks to "montar/criar um Google Doc". Accepts simple HTML in the content for layout (headings <h1>, bold <b>, lists <ul>) — pass html=true in that case. Returns the document link.',
       parameters: { type: 'object', properties: {
         name: { type: 'string', description: 'Document title.' },
         content: { type: 'string', description: 'Content (plain text, or simple HTML if html=true).' },

@@ -1,9 +1,10 @@
 import {randomUUID} from 'node:crypto';
-import { codingRecovery, codingConsumption } from './coding-recovery-policy.mjs';
+import { codingRecovery, codingConsumption, codingPauseReason } from './coding-recovery-policy.mjs';
 import {productI18n} from './i18n.mjs';
 import {LEGACY_TEXT_LANGUAGE} from './locale.mjs';
 const ACTIVE=new Set(['queued','running']);
 const REQUEUE=new Set(['execution_window','execution_quantum','workspace_busy']);
+const MEASUREMENT_TRIES=6;
 const copy=x=>JSON.parse(JSON.stringify(x));
 export const codingJobScope=({userId,agentId,threadId})=>JSON.stringify(['coding-job',userId,agentId,threadId]);
 function waiting(job){return Array.isArray(job?.queuedInputs)?job.queuedInputs.length:0;}
@@ -40,18 +41,43 @@ function confirmedSubmissions(job,at){
   for(const next of job?.queuedInputs||[])if(next.requestId?.startsWith('confirmation:'))entries.push({id:next.requestId,at:next.enqueuedAt});
   return [...new Map(entries.filter(x=>Number(x.at)>at-14*86400_000).map(x=>[x.id,x])).values()];
 }
-export function createCodingJobs({store,execute,deliver,notify,cancelTask=async()=>{},creditStatus,onSnapshot,languageOf=async()=>LEGACY_TEXT_LANGUAGE,now=()=>Date.now(),concurrency=2,onError=()=>{}}){
+export function createCodingJobs({store,execute,deliver,notify,cancelTask=async()=>{},taskState,creditStatus,onSnapshot,languageOf=async()=>LEGACY_TEXT_LANGUAGE,now=()=>Date.now(),concurrency=2,onError=()=>{}}){
   const active=new Set(),activeUsers=new Set();let timer=null,scanning=false,closing=false;const drainWaiters=[];
   // Account language of the texts below; a failed lookup never blocks the job.
   const languageFor=async userId=>{try{return await languageOf(userId)||LEGACY_TEXT_LANGUAGE;}catch(e){onError(e);return LEGACY_TEXT_LANGUAGE;}};
   const {t}=productI18n();
+  // A failed measurement waits longer after each try and is dropped after a few: it must never
+  // take a worker slot every 2 s for good (a job saved without createdAt once did).
   async function flushMeasurement(record,save){
     if(!onSnapshot||!record?.measurementPending)return;
-    await onSnapshot(copy(record));record.measurementPending=false;await save(record);
+    try{await onSnapshot(copy(record));}catch(e){
+      const failures=(record.measurementFailures||0)+1;
+      if(failures>=MEASUREMENT_TRIES){record.measurementPending=false;delete record.measurementFailures;delete record.measurementRetryAt;}
+      else{record.measurementFailures=failures;record.measurementRetryAt=now()+2000*2**failures;}
+      await save(record);throw e;
+    }
+    record.measurementPending=false;delete record.measurementFailures;delete record.measurementRetryAt;await save(record);
+  }
+  // gerenciar_tarefa_de_app settles the app task a pause waits on, not the job. The job
+  // follows it here: a cancelled task closes the job and lets the requests queued behind it
+  // run; an uncertain action the person resolved turns the pause into a resumable one.
+  async function settlePause(job){
+    if(job?.state!=='paused'||!taskState)return false;
+    let state;try{state=await taskState(copy(job));}catch(e){onError(e);return false;}
+    if(state==='cancelled'){
+      job.state='cancelled';job.cancellationApplied=true;
+      job.result={...job.result,ok:false,text:t('coding.job.cancelled',await languageFor(job.userId))};
+    }else if(state==='resumable'&&codingPauseReason(job.result)==='uncertain_action'){
+      const result=copy(job.result);delete result.text;
+      if(result.coding_task?.reason)result.coding_task.reason='pending_resolved';
+      else result.app_build={...result.app_build,motivo:'pending_resolved'};
+      job.result=result;
+    }else return false;
+    job.updatedAt=now();return true;
   }
   async function withJob(scope,run){return store.withTask(scope,async({record,save})=>{
     const measuredSave=async next=>{
-      if(onSnapshot){next.measurementVersion=(next.measurementVersion||0)+1;next.measurementPending=true;}
+      if(onSnapshot){next.measurementVersion=(next.measurementVersion||0)+1;next.measurementPending=true;delete next.measurementFailures;delete next.measurementRetryAt;}
       await save(next);
       try{await flushMeasurement(next,save)}catch(e){onError(e)}
     };
@@ -90,7 +116,8 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
           job.result=cancelled?{...copy(result||{}),ok:false,text:t('coding.job.cancelled',language)}:copy(result||{});
           if(cancelled){job.state='cancelled';job.queuedInputs=[];}
           else if(REQUEUE.has(reason)||closing&&reason==='new_user_input'){job.state='queued';job.nextRunAt=now()+2000;}
-          else job.state=result?.coding_task?.state==='completed'||result?.app_build?.motivo==='completed'?'completed':'paused';
+          // Over the plan cap the job is done: nothing to resume, and the queue moves on.
+          else job.state=result?.coding_task?.state==='completed'||['completed','app_limit'].includes(result?.app_build?.motivo)?'completed':'paused';
         }
         job.updatedAt=now();await save(job);
       }
@@ -109,8 +136,9 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
         }
         job.delivered=true;await save(job);
       }
-      // Follow-ups rotate only after the previous result is committed to history.
-      if(job.state==='completed'&&job.delivered&&waiting(job)){
+      // Follow-ups rotate only after the previous result is committed to history. A stop
+      // clears the queue; a cancelled job that kept it was settled by settlePause.
+      if(['completed','cancelled'].includes(job.state)&&job.delivered&&waiting(job)){
         await archive();
         const [follow,...rest]=job.queuedInputs;
         const submissions=confirmedSubmissions(job,now());
@@ -129,7 +157,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       const at=now();
       const entries=await store.entries();
       const cancellations=new Set(entries.filter(x=>x.scope.startsWith('control:')&&x.record?.cancel).map(x=>x.scope.slice(8)));
-      const candidates=entries.filter(({scope,record})=>scope.startsWith('["coding-job",')&&record&&((ACTIVE.has(record.state)&&Number(record.nextRunAt||0)<=at)||record.measurementPending||!record.delivered||record.state==='completed'&&waiting(record)>0||record.state==='paused'&&cancellations.has(record.id)||record.state==='cancelled'&&!record.cancellationApplied));
+      const candidates=entries.filter(({scope,record})=>scope.startsWith('["coding-job",')&&record&&((ACTIVE.has(record.state)&&Number(record.nextRunAt||0)<=at)||record.measurementPending&&Number(record.measurementRetryAt||0)<=at||!record.delivered||['completed','cancelled'].includes(record.state)&&waiting(record)>0||record.state==='paused'&&cancellations.has(record.id)||record.state==='cancelled'&&!record.cancellationApplied));
       candidates.sort((a,b)=>{
         const ad=!a.record.delivered&&!ACTIVE.has(a.record.state),bd=!b.record.delivered&&!ACTIVE.has(b.record.state);if(ad!==bd)return ad?-1:1;
         return Number(a.record.lastStartedAt||0)-Number(b.record.lastStartedAt||0)||Number(a.record.createdAt||a.record.updatedAt||0)-Number(b.record.createdAt||b.record.updatedAt||0);
@@ -149,6 +177,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       const job=await withJob(scope,async({record,save,archive})=>{
         if(record?.requestId===requestId)return record;
         if(record?.queuedInputs?.some(x=>x.requestId===requestId))return record;
+        if(await settlePause(record))await save(record);
         if(record?.state==='cancelled'&&!record.cancellationApplied)throw Error('O cancelamento anterior ainda está sendo salvo. Aguarde antes de iniciar outra tarefa.');
         const submissions=confirmedSubmissions(record,now());
         if(submissions.some(x=>x.id===requestId)){alreadySubmitted=true;return record;}
@@ -191,6 +220,7 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
       if(!snapshot||snapshot.state!=='paused')return codingJobReceipt(snapshot,language);
       return withJob(scope,async({record,save,archive})=>{
         if(!record||record.id!==snapshot.id||record.state!=='paused')return codingJobReceipt(record,language);
+        if(await settlePause(record)){await save(record);if(record.state!=='paused')return codingJobReceipt(record,language);}
         if(record.policy!==policy)return {ok:false,text:t('coding.job.policy_changed',language)};
         if((await store.read('control:'+record.id))?.cancel)return {ok:false,text:t('coding.job.cancel_already_requested',language)};
         if(requestId&&record.resumeRequests?.some(x=>x.id===requestId))return {...codingJobReceipt(record,language),replay:true};
@@ -204,6 +234,12 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
         await save(record);
         return {...codingJobReceipt(record,language),text:t('coding.job.resumed',language)};
       });
+    },
+    // Called after gerenciar_tarefa_de_app changes this conversation's app task.
+    async settle(identity){
+      const scope=codingJobScope(identity);
+      if((await store.read(scope))?.state!=='paused')return;
+      await withJob(scope,async({record,save})=>{if(await settlePause(record))await save(record);});
     },
     async cancel(identity){
       const scope=codingJobScope(identity),job=await store.read(scope),language=await languageFor(identity.userId);if(!job)return codingJobReceipt(null,language);

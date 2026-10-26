@@ -9,11 +9,13 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
-const { registrarRotasDoDono } = await import('../web/public-support-owner.mjs');
+const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
+const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
 const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
+const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/public-support-prompts.mjs');
+const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/public-support-admin.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -72,6 +74,21 @@ test('public turn: nothing from the agent beyond the name, only the contact\'s t
   assert.ok(m.chamadas[1].messages.some((x) => String(x.content).includes('pedido de 5511999990000')));
   assert.deepEqual(a.usos.map((u) => u.userId), [dono]);
   assert.deepEqual(await store.estado(r.contatoId), { pedido: 'P1' });
+});
+
+test('public turn logs one line with the tools of each step, without what the contact wrote', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, instrucoes: 'Atenda clientes da loja.' });
+  const plugin = { doTurno: ({ contato }) => [
+      { name: 'ver_pedido', publico: true, description: 'x', parameters: { type: 'object', properties: { codigo: { type: 'string' } } }, run: async () => 'pedido de ' + contato.endereco },
+    ], vetar: () => null, instrucoes: () => [] };
+  const m = modelo([{ name: 'ver_pedido', args: { codigo: 'COD-DO-CONTATO' } }]);
+  const linhas = [];
+  const a = atendimento(store, m, { ferramentas: plugin, log: { error() {}, info: (l) => linhas.push(l) } });
+  const r = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511999990000', mensagem: 'cadê meu pedido?' });
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0], `[publico] turn agent=${ag} contact=${r.contatoId} termination=completed model_calls=2 tools=1:ver_pedido(${'pedido de 5511999990000'.length})`);
+  assert.ok(!/5511999990000|COD-DO-CONTATO|cadê/.test(linhas[0]), 'the contact\'s words or tool data reached the log');
 });
 
 test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {
@@ -553,6 +570,107 @@ test('open sign-up keeps public support off on every channel until it is closed'
   assert.equal(avisos.length, 1);
   open = false;
   assert.deepEqual(await estado(), [true, 200, false]);
+});
+
+test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
+  const p = createPromptStore(pool); await p.init(); await p.init();
+  assert.equal(await p.save({ agentId: ag, kind: 'written', content: 'x', userId: outro }), null);
+  assert.equal(await p.versions({ agentId: ag, kind: 'written', userId: outro }), null);
+  assert.equal(await p.save({ agentId: ag, kind: 'installation', content: 'x', userId: dono }), null);
+  for (let i = 1; i <= PROMPT_VERSIONS_KEPT + 3; i++) await p.save({ agentId: ag, kind: 'written', content: 'written ' + i, userId: dono });
+  await p.save({ agentId: ag2, kind: 'spoken', content: 'spoken by Bia', userId: dono });
+  await p.save({ kind: 'installation', content: 'rules', userId: outro });
+  const vs = await p.versions({ agentId: ag, kind: 'written', userId: dono });
+  assert.equal(vs.length, PROMPT_VERSIONS_KEPT); assert.equal(vs[0].content, 'written ' + (PROMPT_VERSIONS_KEPT + 3));
+  assert.deepEqual(await p.current(ag), { installation: 'rules', written: 'written ' + (PROMPT_VERSIONS_KEPT + 3), spoken: '' });
+  assert.equal(await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: outro }), null);
+  assert.equal(await p.restore({ agentId: ag2, kind: 'spoken', versionId: vs.at(-1).id, userId: dono }), null);
+  await p.restore({ agentId: ag, kind: 'written', versionId: vs.at(-1).id, userId: dono });
+  const m = modelo();
+  const a = atendimento(store, m, { prompts: p });
+  await store.configurar(ag, dono, { ativo: true });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.ok(m.chamadas[0].system.endsWith('rules\n\nAgora: segunda, 5 de outubro.'));
+  assert.ok(!m.chamadas[0].system.includes(INSTALLATION_PROMPT_DEFAULT));
+  await p.save({ kind: 'installation', content: '  ', userId: dono });
+  assert.deepEqual(await p.current(ag), { installation: '', written: 'written 4', spoken: '' });
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.ok(m.chamadas[1].system.includes(INSTALLATION_PROMPT_DEFAULT));
+  assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
+  // The plugin's defaults fill what the owner didn't edit; without a voice default there is no spoken text.
+  const seen = [], m2 = modelo();
+  const voice = { [ag]: { written: 'default written', spoken: 'default spoken' }, [ag2]: { written: 'Bia written' } };
+  const b = atendimento(store, m2, { prompts: p, ganchos: { defaultTexts: ({ agentId }) => voice[agentId], antesDoModelo: (ctx) => { seen.push(ctx.texts); } } });
+  await store.configurar(ag2, dono, { ativo: true });
+  await b.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  await b.turno({ agentId: ag2, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
+  assert.deepEqual(seen, [{ written: 'written 4', spoken: 'default spoken' }, { written: 'Bia written', spoken: null }]);
+  assert.ok(m2.chamadas[0].system.includes('\n\nwritten 4\n\n') && m2.chamadas[1].system.includes('\n\nBia written\n\n'));
+});
+
+// The installation's text changes what every public assistant here obeys: only ADMIN_EMAIL reaches it.
+test('installation text on the admin screen: admin only, saving the default stores no edit, old versions restore', async (t) => {
+  const { pool, dono, outro } = await montar(t);
+  const prompts = createPromptStore(pool); await prompts.init();
+  const saved = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = 'boss@example.com';
+  t.after(() => { if (saved === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = saved; });
+  const rotas = createRotas();
+  registerPublicSupportAdmin({ rotas, prompts, defaultText: 'default rules' });
+  const boss = { id: dono, email: 'Boss@example.com' }, stranger = { id: outro, email: 'someone@example.com' };
+  const ask = async (user, method, path, body) => {
+    const req = Readable.from(body === undefined ? [] : [JSON.stringify(body)]); req.method = method;
+    const res = { code: 0, out: '', writeHead(c) { this.code = c; }, end(x) { this.out += x ?? ''; } };
+    const answered = await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => user });
+    return { answered, code: res.code, json: res.out ? JSON.parse(res.out) : null };
+  };
+  for (const [method, path, body] of [['GET', INSTALLATION_PROMPT_PATH], ['POST', INSTALLATION_PROMPT_PATH, { content: 'mine' }], ['POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '1' }]]) {
+    assert.equal((await ask(stranger, method, path, body)).answered, false);
+    assert.equal((await ask(null, method, path, body)).answered, false);
+  }
+  assert.deepEqual(await prompts.current(), { installation: '', written: '', spoken: '' });
+  assert.deepEqual((await ask(boss, 'GET', INSTALLATION_PROMPT_PATH)).json, { content: '', default: 'default rules', max: 40000, versions: [] });
+  assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: 'x'.repeat(40001) })).json.error, 'too_long');
+  const edited = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: 'new rules' })).json;
+  assert.equal(edited.content, 'new rules');
+  const back = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH, { content: ' default rules\n' })).json;
+  assert.deepEqual([back.content, back.versions.length], ['', 2]);
+  const restored = (await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: edited.versions[0].id })).json;
+  assert.equal(restored.content, 'new rules');
+  assert.equal((await prompts.current()).installation, 'new rules');
+  assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '999' })).code, 404);
+});
+
+// An assistant's texts on /public-support: only its owner, and spoken only where the plugin has a voice text.
+test('assistant texts on the owner screen: another account gets 404, the plugin default comes prefilled, no spoken text without voice', async (t) => {
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
+  const prompts = createPromptStore(pool); await prompts.init();
+  const defaults = { [ag]: { written: 'default written', spoken: 'default spoken' }, [ag2]: { written: 'Bia written', spoken: null } };
+  const rotas = createRotas();
+  const send = (res, status, json) => Object.assign(res, { status, json });
+  registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false,
+    agenteDoNumero: () => ag, prompts, defaultTexts: async (id) => defaults[id] ?? { written: '', spoken: null } });
+  const ask = async (who, method, path, body) => {
+    const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
+    const res = { setHeader() {} };
+    await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => ({ id: who }) });
+    return res;
+  };
+  for (const [method, path, body] of [['GET', `${AGENT_TEXTS_PATH}?agent=${ag}`], ['POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'written', content: 'mine' }],
+    ['POST', AGENT_TEXTS_PATH + '/restore', { agentId: ag, kind: 'written', versionId: '1' }]]) {
+    assert.equal((await ask(outro, method, path, body)).status, 404, `${method} ${path}`);
+  }
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag2, kind: 'spoken', content: 'voice' })).status, 404);
+  assert.deepEqual(await prompts.current(ag), { installation: '', written: '', spoken: '' });
+  const both = (await ask(dono, 'GET', `${AGENT_TEXTS_PATH}?agent=${ag}`)).json;
+  assert.deepEqual([both.written.content, both.written.default, both.spoken.default, both.spoken.max], ['', 'default written', 'default spoken', 40000]);
+  assert.equal((await ask(dono, 'GET', `${AGENT_TEXTS_PATH}?agent=${ag2}`)).json.spoken, null);
+  const edited = (await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'spoken', content: 'short answers' })).json;
+  assert.equal(edited.content, 'short answers');
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH, { agentId: ag, kind: 'spoken', content: 'default spoken ' })).json.content, '');
+  assert.equal((await ask(dono, 'POST', AGENT_TEXTS_PATH + '/restore', { agentId: ag, kind: 'spoken', versionId: edited.versions[0].id })).json.content, 'short answers');
+  assert.deepEqual(await prompts.current(ag), { installation: '', written: '', spoken: 'short answers' });
 });
 
 // Isolation is by construction: the module must not start importing whatever reads

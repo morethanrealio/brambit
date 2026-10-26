@@ -377,6 +377,11 @@
      over the normal accent gives 3.3:1 contrast, below the readable minimum; this
      way it's ~4.9:1. */
   .msg-card-btn, .msg a.msg-card-btn { display:block; margin:8px; padding:8px 12px; border-radius:8px; text-align:center; background:#a85c38; color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
+  .msg-confirm { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .msg-confirm-label { width:100%; font-size:12px; opacity:.8; }
+  .msg-confirm-btn { padding:7px 16px; border-radius:8px; border:1px solid #a85c38; background:#a85c38; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  .msg-confirm-btn.cancel { background:transparent; border-color:var(--line); color:inherit; }
+  .msg-confirm-btn:disabled { opacity:.5; cursor:default; }
   .msg audio { margin-top:6px; max-width:250px; display:block; }
   .mediarow { display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--line); }
   .mediarow:first-child { border-top:none; }
@@ -555,6 +560,7 @@
   .footidioma[data-idioma="en"] button[value="en"],
   .footidioma[data-idioma="es"] button[value="es"]{color:var(--accent);font-weight:600;cursor:default;text-decoration:underline;}
 
+  [data-off] { display:none !important; }
   .trust-note { margin:16px 0; padding:14px 16px; background:#f4f7f4; border:1px solid #cdd9cf; border-radius:12px; color:#293c30; font-size:13px; line-height:1.6; }
   .trust-note p { margin:0 0 8px; }
   .trust-note p:last-child { margin-bottom:0; }
@@ -621,15 +627,15 @@
         <input id="auReferrer" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4 digits, e.g. 1234" data-i18n-placeholder="index_page.auth.4_digits_e_g"/>
         <p class="sub" style="margin:6px 2px 0;font-size:12px;" data-i18n="index_page.auth.if_someone_referred_put">If someone referred you, put their 4-digit code here: they earn credits once you start using it. It is not required: you can create your account without a code.</p>
       </div>
-      <label id="termsRow" class="termsrow hidden">
+      <label id="termsRow" class="termsrow hidden" data-needs="terms privacy">
         <input id="auTerms" type="checkbox" />
         <span data-i18n="index_page.auth.i_have_read_agree">I have read and agree to the <a href="/termos" target="_blank">Terms of Use</a> and the <a href="/privacidade" target="_blank">Privacy Policy</a>.</span>
       </label>
-      <aside class="trust-note" id="authTrust" aria-label="Security and privacy" data-i18n-aria-label="index_page.auth.security_privacy">
+      <aside class="trust-note" id="authTrust" data-needs="privacy" aria-label="Security and privacy" data-i18n-aria-label="index_page.auth.security_privacy">
         <p data-i18n="index_page.auth.choose_what_share_can">You choose what to share and can revoke access at any time.</p>
         <details><summary data-i18n="index_page.auth.learn_how_we_protect">Learn how we protect your data</summary>
           <!--encaixe:auth-confianca-->
-          <p data-i18n="index_page.auth.signing_with_google_identifies">Signing in with Google identifies your account. Access to Gmail and other tools is requested separately, when you choose to connect.</p>
+          <p data-i18n="index_page.auth.signing_with_google_identifies" data-needs="google">Signing in with Google identifies your account. Access to Gmail and other tools is requested separately, when you choose to connect.</p>
           <p data-i18n="index_page.auth.read_our_privacy_policy">Read our <a href="/privacidade" target="_blank" rel="noopener">Privacy Policy</a>.</p>
         </details>
       </aside>
@@ -637,10 +643,10 @@
       <a id="googleBtn" class="hidden gbtn" href="api/auth/google/start" data-i18n="index_page.auth.continue_with_google">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.7 29.6 2.7 24 2.7 12.3 2.7 2.7 12.3 2.7 24S12.3 45.3 24 45.3 45.3 35.7 45.3 24c0-1.2-.1-2.4-.3-3.5z"/><path fill="#FF3D00" d="M5.3 14.7l6.6 4.8C13.6 15.4 18.4 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.7 29.6 2.7 24 2.7 16.1 2.7 9.2 7.1 5.3 14.7z"/><path fill="#4CAF50" d="M24 45.3c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.4c-2 1.5-4.7 2.5-7.7 2.5-5.2 0-9.6-3.3-11.2-8l-6.5 5C9.1 41 16 45.3 24 45.3z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.6 5.4c-.5.4 7.4-5.4 7.4-14.8 0-1.2-.1-2.4-.3-3.5z"/></svg> Continue with Google
       </a>
-      <p class="signup-privacy hidden" id="authPrivacy" aria-label="Privacy commitment" data-i18n-aria-label="index_page.auth.privacy_commitment"><span class="signup-privacy-lock" aria-hidden="true">🔒</span><span data-i18n="index_page.auth.data_belongs_brand_doesn">Your data belongs to you. __MARCA__ doesn’t sell your data to anyone. <a href="/privacidade" target="_blank" rel="noopener">Privacy Policy</a></span></p>
+      <p class="signup-privacy hidden" id="authPrivacy" data-needs="privacy" aria-label="Privacy commitment" data-i18n-aria-label="index_page.auth.privacy_commitment"><span class="signup-privacy-lock" aria-hidden="true">🔒</span><span data-i18n="index_page.auth.data_belongs_brand_doesn">Your data belongs to you. __MARCA__ doesn’t sell your data to anyone. <a href="/privacidade" target="_blank" rel="noopener">Privacy Policy</a></span></p>
       <div class="ok hidden" id="authOk"></div>
       <div class="err hidden" id="authErr"></div>
-      <p id="authLegal" class="authlegal hidden" data-i18n="index_page.auth.by_continuing_with_google">By continuing with Google, you agree to the <a href="/termos" target="_blank">Terms of Use</a> and the <a href="/privacidade" target="_blank">Privacy Policy</a>.</p>
+      <p id="authLegal" class="authlegal hidden" data-needs="terms privacy google" data-i18n="index_page.auth.by_continuing_with_google">By continuing with Google, you agree to the <a href="/termos" target="_blank">Terms of Use</a> and the <a href="/privacidade" target="_blank">Privacy Policy</a>.</p>
       <div class="forgotrow" id="forgotRow"><span class="link" id="forgotLink" data-i18n="index_page.auth.i_forgot_my_password">I forgot my password</span></div>
       <!-- Sign-up ↔ login toggle. A full-width button, same size as the main
            one: as a tiny link nobody found it and people ended up creating a
@@ -707,8 +713,8 @@
        <div class="footlinks">
          <!--encaixe:rodape-links-->
          <a href="/suporte" data-i18n="index_page.auth.support">Support</a>
-         <a href="/privacidade" data-i18n="index_page.auth.privacy_policy">Privacy Policy</a>
-         <a href="/termos" data-i18n="index_page.auth.terms_use">Terms of Use</a>
+         <a href="/privacidade" data-i18n="index_page.auth.privacy_policy" data-needs="privacy">Privacy Policy</a>
+         <a href="/termos" data-i18n="index_page.auth.terms_use" data-needs="terms">Terms of Use</a>
        </div>
        <form class="footidioma" method="POST" action="/api/site/idioma" data-idioma="__IDIOMA__" aria-label="Idioma / Language / Idioma" translate="no">
          <button type="submit" name="lang" value="pt-BR" lang="pt-BR">Português</button>
@@ -760,7 +766,7 @@
             <p data-i18n="index_page.wizard_connect.email_access_requested_only">Email access is requested only if you select the option above. This allows reading messages and creating drafts in Google or sending messages with Microsoft. We do not request Drive or OneDrive access at this step.</p>
             <p data-i18n="index_page.wizard_connect.previously_granted_permissions_may">Previously granted permissions may remain active. You can disconnect in Connections and revoke permissions in your Google or Microsoft account. Trying without connecting uses the context you write, or sources you have already connected.</p>
             <!--encaixe:wiz-confianca-->
-            <p data-i18n="index_page.wizard_connect.read_our_privacy_policy">Read our <a href="/privacidade" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+            <p data-i18n="index_page.wizard_connect.read_our_privacy_policy" data-needs="privacy">Read our <a href="/privacidade" target="_blank" rel="noopener">Privacy Policy</a>.</p>
           </details>
         </aside>
         <div class="err hidden" id="wizConnErr" role="alert" style="margin-top:10px;"></div>
@@ -1664,6 +1670,27 @@ function clearLocalNotes() {
   const m = E('msgs');
   if (m) m.querySelectorAll('[data-local="1"]').forEach(el => el.remove());
 }
+// Confirm / Cancel under the cards of a live reply. A press sends the button's
+// text together with the card it belongs to, and the server decides that card
+// only. Not drawn again when the conversation reloads: writing still works.
+function addConfirmationButtons(bubble, confirmations, threadId) {
+  if (!bubble || !confirmations || !confirmations.length) return;
+  confirmations.forEach(c => {
+    const row = document.createElement('div'); row.className = 'msg-confirm';
+    if (confirmations.length > 1 && c.label) { const l = document.createElement('div'); l.className = 'msg-confirm-label'; l.textContent = c.label; row.appendChild(l); }
+    [c.confirm, c.cancel].forEach((b, i) => {
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.className = 'msg-confirm-btn' + (i ? ' cancel' : '');
+      btn.textContent = b.text;
+      btn.addEventListener('click', () => {
+        row.querySelectorAll('button').forEach(x => { x.disabled = true; });
+        sendThread(b.text, [], [], threadId, { confirmation: b.data });
+      });
+      row.appendChild(btn);
+    });
+    bubble.appendChild(row);
+  });
+}
 function showErr(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
 
 // ── Auth ──
@@ -1695,6 +1722,33 @@ E('toggleLink').onclick = () => {
   renderAuthMode();
 };
 renderAuthMode(); // applies the mode coming from the URL already on load
+// Sign-up closed on this installation (/api/config, sign-in-screen.mjs): the
+// screen opens on "Log in" and doesn't offer "Create account", which would only
+// end in "sign-up is closed". /login?mode=sign-up still opens the form, for
+// whoever the admin let in.
+function applySignupClosed() {
+  if (!APP_CFG.signupClosed || loginQuery.get('mode') === 'sign-up') return;
+  signupMode = false;
+  E('toggleTxt').parentElement.classList.add('hidden');
+  E('toggleLink').classList.add('hidden');
+  renderAuthMode();
+}
+// The installation's privacy policy and terms of use (/api/config,
+// sign-in-screen.mjs): their links go there, and what needs one this
+// installation doesn't have (data-needs) is hidden, or the link becomes plain
+// text, instead of leading to a page that doesn't exist.
+function applyLegalLinks() {
+  const has = { privacy: APP_CFG.privacyUrl, terms: APP_CFG.termsUrl, google: APP_CFG.google };
+  document.querySelectorAll('[data-needs]').forEach((el) => {
+    if (el.dataset.needs.split(' ').some((k) => !has[k])) el.setAttribute('data-off', '');
+  });
+  for (const [k, page] of [['privacy', '/privacidade'], ['terms', '/termos']]) {
+    document.querySelectorAll('a[href="' + page + '"]').forEach((a) => {
+      if (has[k]) a.setAttribute('href', has[k]);
+      else if (!a.closest('[data-off]')) a.replaceWith(a.textContent);
+    });
+  }
+}
 
 // ── Forgot / reset password ──
 function showAuthCard(which) { // 'login' | 'forgot' | 'reset' | 'confirmEmail' | 'confirmLink' | 'logged'
@@ -1863,7 +1917,7 @@ E('authBtn').onclick = async () => {
   if (signupMode && !name) return showErr(err, tx('auth.enter_name'));
   if (!email || !pass) return showErr(err, tx('auth.enter_email_password'));
   if (signupMode && pass.length < 12) return showErr(err, tx('auth.password_too_short'));
-  if (signupMode && !E('auTerms').checked) return showErr(err, tx('auth.accept_terms'));
+  if (signupMode && !E('termsRow').hasAttribute('data-off') && !E('auTerms').checked) return showErr(err, tx('auth.accept_terms'));
   E('authOk').classList.add('hidden');
   const btn = E('authBtn'); btn.disabled = true;
   const res = await api(signupMode ? 'api/signup' : 'api/login', signupMode ? { name, email, password: pass, referralCode } : { email, password: pass });
@@ -5128,7 +5182,7 @@ E('imgFile').onchange = async (e) => {
 
 // voice = the text is the transcript of what the person said; the server tells
 // the model so (markVoiceInput), as it does for channel audio.
-async function sendThread(text, images, files, threadId = currentThreadId, { voice = false } = {}) {
+async function sendThread(text, images, files, threadId = currentThreadId, { voice = false, confirmation = null } = {}) {
   E('micBtn').classList.remove('hint');
   if (!threadId) return;
   const epoch = chatViewEpoch;
@@ -5139,7 +5193,8 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
     .concat(files.map(f => ({ type: 'doc', name: f.name })));
   const gen = ++chatGen;
   const pending = chatPending.get(threadId) || new Set(); pending.add(gen); chatPending.set(threadId, pending);
-  if (visible()) { chatSending = true; clearLocalNotes(); addMsg(voice ? '🎤 ' + text : text, 'me', atts); }
+  let mine = null;
+  if (visible()) { chatSending = true; clearLocalNotes(); mine = addMsg(voice ? '🎤 ' + text : text, 'me', atts); }
   const typing = E('typing');
   if (visible()) { typing.textContent = tx('chat.typing'); typing.classList.remove('hidden'); }
   const heartbeatTimer = setTimeout(() => {
@@ -5149,6 +5204,7 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
   }, 60000);
   const payload = { threadId, message: text };
   if (voice) payload.voice = true;
+  if (confirmation) payload.confirmation = confirmation;
   try {
   if (images.length) {
     const packed = await packImages(images);
@@ -5173,7 +5229,9 @@ async function sendThread(text, images, files, threadId = currentThreadId, { voi
       E('typing').classList.add('hidden');
       // A real reply becomes a normal bubble (it's in the history). A server error
       // becomes a local note, which doesn't count toward the poller's baseline.
-      if (res && (res.reply || (res.attachments && res.attachments.length))) { addMsg(res.reply || '', 'bot', res.attachments); markThreadRead(threadId); }
+      // A press on a card that was already decided saves nothing: its bubble goes.
+      if (res && (res.reply || (res.attachments && res.attachments.length))) { addConfirmationButtons(addMsg(res.reply || '', 'bot', res.attachments), res.confirmations, threadId); markThreadRead(threadId); }
+      else if (confirmation && res && !res.error) { if (mine) mine.remove(); }
       else addLocalNote((res && res.error) || tx('chat.reply_failed'));
     }
   } catch {
@@ -5291,6 +5349,8 @@ E('aname').addEventListener('keydown', e => { if (e.key==='Enter') E('create').c
 (async () => {
   const onboardingReturn = {provider:new URLSearchParams(location.search).get('e'), outcome:new URLSearchParams(location.search).get('connection_outcome')};
   APP_CFG = (await api('api/config')) || {};
+  applySignupClosed();
+  applyLegalLinks();
   E('micBtn').classList.toggle('hidden', !(APP_CFG.voice && navigator.mediaDevices && window.MediaRecorder));
   // Sign-up confirmation link (/confirm-email?token=...): the confirm button.
   // Checked before the reset below, which takes any ?token=.

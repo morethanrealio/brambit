@@ -8,12 +8,14 @@
 import { readBody } from './http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
 import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
+import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from './links.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
+export const AGENT_TEXTS_PATH = '/api/public-support/texts';
 
 // What comes from the form becomes store.configurar fields; a missing field stays
 // as is. Returns {erro} if any value is invalid.
@@ -51,7 +53,10 @@ export function camposDaConfig(b = {}) {
 // from the server, agenteDoNumero() = id of the assistant that serves the installation's number,
 // webStore (public-web.mjs) = the website and API channel's settings, available() → false
 // while the installation keeps public support off (the screen then says why).
-export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true }) {
+// prompts (public-support-prompts.mjs) + defaultTexts(agentId) → {written, spoken}
+// (the plugin's texts, public-support.mjs) = the assistant's editable texts.
+export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }) }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -139,4 +144,56 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!dados) return naoAchei(res);
     return send(res, 200, dados, { 'content-disposition': `attachment; filename="contato-${contatoId}.json"` });
   });
+
+  if (prompts) registerAgentTexts();
+
+  // The assistant's written and spoken texts: the plugin's default prefilled, the
+  // owner's edits with their versions. Spoken exists only when the plugin has a
+  // default for it (the assistant answers voice). Written stays off the screen
+  // (null) while there is neither a default nor an edit: the extra instructions
+  // already cover an assistant without a plugin text.
+  function registerAgentTexts() {
+    const notFound = (res) => send(res, 404, { error: 'not_found' });
+    const key = (agentId, kind, user) => ({ agentId, kind, userId: user.id });
+    const fallbackOf = (d, kind) => (kind === 'spoken' ? d.spoken : d.written);
+
+    rota('GET', AGENT_TEXTS_PATH, async ({ res, url, user }) => {
+      const agentId = uuid(url.searchParams.get('agent'));
+      if (!agentId) return notFound(res);
+      const d = await defaultTexts(agentId);
+      const written = await textState(prompts, key(agentId, 'written', user), d.written);
+      if (!written) return notFound(res);
+      const spoken = d.spoken == null ? null : await textState(prompts, key(agentId, 'spoken', user), d.spoken);
+      return send(res, 200, { written: d.written || written.content ? written : null, spoken });
+    });
+
+    // Body { agentId, kind, content? | versionId? }. Resolves the text's default,
+    // or null when that text can't be edited here.
+    const editable = async (b) => {
+      const agentId = uuid(b?.agentId);
+      if (!agentId || !AGENT_PROMPT_KINDS.includes(b.kind)) return null;
+      const fallback = fallbackOf(await defaultTexts(agentId), b.kind);
+      return fallback == null ? null : { agentId, kind: b.kind, fallback };
+    };
+
+    // { content }: '' or the default itself = back to the default.
+    rota('POST', AGENT_TEXTS_PATH, async ({ req, res, user }) => {
+      const b = await readBody(req);
+      const text = await editable(b);
+      if (!text) return notFound(res);
+      if (typeof b.content !== 'string') return send(res, 400, { error: 'bad_request' });
+      if (b.content.trim().length > PROMPT_MAX) return send(res, 400, { error: 'too_long', max: PROMPT_MAX });
+      const k = key(text.agentId, text.kind, user);
+      if (!(await prompts.save({ ...k, content: asEdit(b.content, text.fallback) }))) return notFound(res);
+      return send(res, 200, await textState(prompts, k, text.fallback));
+    });
+
+    rota('POST', AGENT_TEXTS_PATH + '/restore', async ({ req, res, user }) => {
+      const b = await readBody(req);
+      const text = await editable(b);
+      const k = text && key(text.agentId, text.kind, user);
+      if (!k || !(await prompts.restore({ ...k, versionId: b.versionId }))) return notFound(res);
+      return send(res, 200, await textState(prompts, k, text.fallback));
+    });
+  }
 }

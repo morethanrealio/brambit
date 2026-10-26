@@ -18,7 +18,7 @@
 //   feedback (discovery/report-instructions.mts), and chaveDeepSeek() → key for the official
 //   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and
 //   atendimentoPublico → hooks for the public-support script
-//   (public-support.mjs: antesDoModelo, depoisDoModelo, photoRequested), and systemNote({language}) → a
+//   (public-support.mjs: defaultTexts, antesDoModelo, depoisDoModelo, photoRequested), and systemNote({language}) → a
 //   stable note about the installation added to the assistant's instructions
 //   (before the language directive), or null. Runs at the start of boot; the core brings only
 //   what already exists at that time (publicBase, notifyOwner).

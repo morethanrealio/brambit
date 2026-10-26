@@ -70,9 +70,10 @@ function fixture(t, durable = null) {
       unexpected.push(u); throw Error('Rede não permitida no teste');
     }
     const wa = u.startsWith('https://graph.facebook.com/');
-    if (body.type === 'text' || u.endsWith('/sendMessage')) {
+    if (body.type === 'text' || body.type === 'interactive' || u.endsWith('/sendMessage')) {
       const messageId = wa ? `wa-out-${id}-${++outputId}` : ++outputId;
-      const item = { channel: wa ? 'whatsapp' : 'telegram', messageId: wa ? String(messageId) : `${body.chat_id}:${messageId}`, rawId: String(messageId), text: wa ? body.text.body : body.text };
+      const text = !wa ? body.text : body.type === 'interactive' ? body.interactive.body.text : body.text.body;
+      const item = { channel: wa ? 'whatsapp' : 'telegram', messageId: wa ? String(messageId) : `${body.chat_id}:${messageId}`, rawId: String(messageId), text };
       await state.beforeSend?.(item);
       sent.push(item);
       return { ok: true, json: async () => wa ? { messages: [{ id: messageId }] } : { ok: true, result: { message_id: messageId } } };
@@ -501,7 +502,7 @@ test('real server pipeline keeps the app card after journals and binds its recei
   journal.toolResult({ name: 'gerenciar_tarefa_de_app' }, proposal);
   const card = peekPending(thread).confirmationText;
   assert.notEqual(journal.finish(card), card, 'the journal would really produce different wording');
-  const start = serverSource.indexOf('  const deterministicConfirmation = confirmationSession');
+  const start = serverSource.indexOf('  const pendingCards = confirmationSession');
   const end = serverSource.indexOf('  if (selo)', start);
   assert.ok(start >= 0 && end > start);
   const finish = new Function('inventoryCalculation', 'thread', 'peekPending', 'appBuildJournal', 'enforceRoutineEmailContract', 'enforceFreshCheckClaims', 'renderCompletedActions', 'withProposalCard', `const diag = {removidas:[], corte(){}}; const confirmationSession = null; const actionJournal = {entries:[], finish:t=>t}; const termination = null; const routineNoNews = false; const searchCoverage = {emailSourceLinks:()=>new Set(), finishEmail:t=>t}; let text = 'Resumo do modelo'; const userLang = 'pt-BR'; const idiomaResposta = userLang; const toolCounts = {}; const platformChecks = new Set(); ${serverSource.slice(start, end)} return text;`);
