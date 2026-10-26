@@ -466,8 +466,8 @@ test('public web channel: listed origins only, signed contact, key for servers, 
   assert.equal((await pede('POST', msgs(ag), { corpo: { message: 'x'.repeat(70 * 1024) }, headers: SITE })).status, 413);
 });
 
-// A photo from a server reaches the model with the message and is never stored; from a
-// browser (no key) or in a format the model can't read, the call is refused.
+// A photo from a server reaches the model with the message and is never stored; one the
+// assistant did not ask for from a browser (no key), or in a format the model can't read, is refused.
 test('public web channel: a server may send one photo with the message; it reaches the model and is not stored', async (t) => {
   const { pool, store, dono, ag } = await montar(t);
   const webStore = createPublicWebStore(pool);
@@ -496,7 +496,7 @@ test('public web channel: a server may send one photo with the message; it reach
   assert.deepEqual(m.chamadas.at(-1).messages.flatMap((x) => x.images || []), []);
   const chamadas = m.chamadas.length;
   const recusa = async (corpo, headers = key) => { const x = await pede({ contact: 'c1', ...corpo }, headers); return [x.status, x.corpo.error]; };
-  assert.deepEqual(await recusa({ message: 'hi', image: png, contact: undefined }, { origin: 'https://shop.example.com' }), [400, 'image_needs_key']);
+  assert.deepEqual(await recusa({ message: 'hi', image: png, contact: undefined }, { origin: 'https://shop.example.com' }), [400, 'image_not_requested']);
   assert.deepEqual(await recusa({ event: { type: 'photo_taken' }, image: png }), [400, 'image_needs_message']);
   assert.deepEqual(await recusa({ message: 'hi', image: Buffer.from('%PDF-1.7 not a photo').toString('base64') }), [400, 'invalid_image']);
   assert.deepEqual(await recusa({ message: 'hi', image: 'not base64!' }), [400, 'invalid_image']);
@@ -504,6 +504,46 @@ test('public web channel: a server may send one photo with the message; it reach
   // The larger cap is for the photo only: the rest of a call with a key keeps the 64 KB.
   assert.deepEqual(await recusa({ message: 'x'.repeat(70 * 1024), image: png }), [413, 'body_too_large']);
   assert.equal(m.chamadas.length, chamadas, 'a refused call reached the model');
+});
+
+// A browser has no key and anyone can call like one, so its photo reaches the model only as the
+// answer to a photo the assistant asked for (the plugin's photoRequested, once per request).
+test('public web channel: a browser photo reaches the model only when the assistant asked for it', async (t) => {
+  const { pool, store, dono, ag } = await montar(t);
+  const webStore = createPublicWebStore(pool);
+  const m = modelo();
+  let pedidas = 0;
+  const a = atendimento(store, m, { ganchos: { photoRequested: () => (pedidas > 0 && pedidas-- ? { requested: true } : null) } });
+  const rotas = createRotas();
+  registerPublicWebRoutes({ rotas, webStore, turno: a.turno, send: (res, status, corpo) => Object.assign(res, { status, corpo }),
+    fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false });
+  const SITE = { origin: 'https://shop.example.com' };
+  const pede = async (corpo) => {
+    const req = Readable.from([Buffer.from(JSON.stringify(corpo))]); req.method = 'POST'; req.headers = SITE;
+    const res = { setHeader() {}, writeHead(st) { this.status = st; }, end() {} };
+    await rotas.atender(req, res, new URL(`http://x/api/public/messages?agent=${ag}`), {});
+    return res;
+  };
+  await store.configurar(ag, dono, { ativo: true });
+  await webStore.configure(ag, dono, { enabled: true, origins: [SITE.origin] });
+  const { contact } = (await pede({ message: 'which shade suits me?' })).corpo;
+  const historico = async () => (await webStore.history(ag, `browser:${contactFromToken(contact)}`)).map((x) => x.text);
+  // Bigger than a browser's 64 KB of text: a camera frame.
+  const jpeg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), randomBytes(150 * 1024)]).toString('base64');
+  const chamadas = m.chamadas.length, antes = await historico();
+  const semPedido = await pede({ message: '[photo]', contact, image: jpeg });
+  assert.deepEqual([semPedido.status, semPedido.corpo.error], [400, 'image_not_requested']);
+  assert.equal(m.chamadas.length, chamadas, 'a photo nobody asked for reached the model');
+  assert.deepEqual(await historico(), antes, 'the refused call was recorded');
+  pedidas = 1;
+  const r = await pede({ message: '[photo]', contact, image: jpeg });
+  assert.equal(r.status, 200);
+  assert.deepEqual(m.chamadas.at(-1).messages.at(-1).images, [{ mimeType: 'image/jpeg', data: jpeg }]);
+  assert.ok(!JSON.stringify(await webStore.history(ag, `browser:${contactFromToken(contact)}`)).includes(jpeg.slice(0, 40)), 'the photo was stored');
+  // One request, one photo.
+  assert.deepEqual((await pede({ message: '[photo]', contact, image: jpeg })).corpo.error, 'image_not_requested');
+  // Without a photo, the hook is not asked and the turn goes on as always.
+  assert.equal((await pede({ message: 'thanks', contact })).status, 200);
 });
 
 // With the core's sign-up rule, open sign-up keeps public support off on WhatsApp and on the
