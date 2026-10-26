@@ -181,15 +181,22 @@ export function createCodingJobs({store,execute,deliver,notify,cancelTask=async(
         if(record?.state==='cancelled'&&!record.cancellationApplied)throw Error('O cancelamento anterior ainda está sendo salvo. Aguarde antes de iniciar outra tarefa.');
         const submissions=confirmedSubmissions(record,now());
         if(submissions.some(x=>x.id===requestId)){alreadySubmitted=true;return record;}
-        const approvedContinuation=record?.state==='paused'&&!!input.confirmationId;
-        if(record&&!approvedContinuation&&(ACTIVE.has(record.state)||record.state==='paused'||waiting(record)>0)){
+        // A new request replaces a pause already shown to the person instead of waiting
+        // behind it: a pause only moves on by the resume phrase or a cancel, so a request
+        // queued there waited for good. The paused task is reused by the new job and goes
+        // on from its saved point; requests queued before run after it. An action with an
+        // unknown outcome still holds the queue: the task refuses to go on until the person
+        // says whether it happened (gerenciar_tarefa_de_app), and settlePause above lifts it.
+        const awaitsReconciliation=['uncertain_action','canceled_pending_reconciliation'].includes(codingPauseReason(record?.result));
+        const replacesPause=record?.state==='paused'&&(!!input.confirmationId||record.delivered&&!awaitsReconciliation);
+        if(record&&!replacesPause&&(ACTIVE.has(record.state)||record.state==='paused'||waiting(record)>0)){
           const queued=[...(record.queuedInputs||[])];
           if(queued.length>=5)return record;
           queued.push({requestId,input:copy(input),enqueuedAt:now()});record.queuedInputs=queued;record.updatedAt=now();record.confirmedSubmissions=confirmedSubmissions({...record,confirmedSubmissions:submissions},now());acceptedFollow=true;await save(record);return record;
         }
         if(record&&!record.delivered)throw Error('Resultado anterior ainda não foi salvo na conversa.');
         await archive();
-        const next=newJob(identity,input,requestId,now(),approvedContinuation?record.queuedInputs||[]:[]);next.confirmedSubmissions=confirmedSubmissions({...next,confirmedSubmissions:submissions},now());await save(next);return next;
+        const next=newJob(identity,input,requestId,now(),replacesPause?record.queuedInputs||[]:[]);next.confirmedSubmissions=confirmedSubmissions({...next,confirmedSubmissions:submissions},now());await save(next);return next;
       });
       const language=await languageFor(identity.userId);
       if(alreadySubmitted)return {...codingJobReceipt(job,language),ok:true,already_submitted:true,text:t('coding.job.already_submitted',language)};

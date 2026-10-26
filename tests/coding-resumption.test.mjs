@@ -32,11 +32,15 @@ test('an app task refused by the plan cap closes the job and the queue moves on'
  await f.jobs.drive(scope);assert.equal([...f.deliveries.values()][0],'Plan limit.');
  await f.jobs.drive(scope);assert.equal(f.count,2);assert.equal([...f.deliveries.values()].at(-1),'Next');
 });
-test('new request while paused is recorded separately rather than replacing progress',async()=>{
- const f=fixture();const initial=await f.jobs.submit(identity,input,'first');await f.jobs.drive(scope);
- const next=await f.jobs.submit(identity,{...input,args:{objetivo:'New objective'}},'second');
- assert.equal(next.programming_job.id,initial.programming_job.id);assert.equal(next.queued_request,true);
- assert.match(next.text,/pausada/);assert.equal(f.count,1);
+test('a new request replaces a pause already shown and runs before the requests queued behind it',async()=>{
+ const f=fixture();const initial=await f.jobs.submit(identity,input,'first');
+ await f.jobs.submit(identity,{...input,args:{objetivo:'Queued'}},'second');await f.jobs.drive(scope);
+ assert.equal((await f.jobs.status(identity)).programming_job.state,'paused');
+ const next=await f.jobs.submit(identity,{...input,args:{objetivo:'New objective'}},'third');
+ assert.notEqual(next.programming_job.id,initial.programming_job.id);assert.notEqual(next.queued_request,true);
+ assert.equal(next.programming_job.state,'queued');assert.equal(next.programming_job.queued,1);
+ await f.jobs.drive(scope);assert.equal(f.count,2);assert.equal([...f.deliveries.values()].at(-1),'New objective');
+ await f.jobs.drive(scope);assert.equal(f.count,3);assert.equal([...f.deliveries.values()].at(-1),'Queued');
 });
 test('duplicate resume decision cannot create a second generation after another pause',async()=>{
  const f=fixture();await f.jobs.submit(identity,input,'first');await f.jobs.drive(scope);
