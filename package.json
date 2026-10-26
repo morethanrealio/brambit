@@ -34,8 +34,8 @@
     "html-to-text": "10.0.1",
     "i18next": "^26.4.6",
     "imapflow": "^1.7.8",
-    "mailparser": "^3.9.40",
-    "nodemailer": "^10.1.2",
+    "mailparser": "^3.12.4",
+    "nodemailer": "^10.2.1",
     "pdf-parse": "^2.4.5",
     "pg": "^8.23.1",
     "yaml": "^2.9.1"
