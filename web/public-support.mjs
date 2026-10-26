@@ -425,6 +425,24 @@ export function turnLogLine({ agentId, contactId, termination, modelCalls, toolR
   return `[publico] turn agent=${agentId} contact=${contactId} termination=${termination} model_calls=${modelCalls} tools=${tools}`;
 }
 
+// To save context, the core swaps a long, older tool result of the turn for a
+// generic notice. A result the model still needs later in the turn (a product
+// search whose ids it passes to the next tool) can't be swapped for a notice:
+// the model would only be able to search again. A tool can declare
+// retain(text) → a shorter text that keeps what the model still needs, used in
+// place of the notice. A retain that fails, returns nothing or returns a longer
+// text is ignored.
+export function retainedByTool(tools) {
+  return (m) => {
+    const retain = tools.map.get(m?.name)?.retain;
+    if (typeof retain !== 'function' || typeof m.content !== 'string') return null;
+    try {
+      const kept = retain(m.content);
+      return typeof kept === 'string' && kept && kept.length <= m.content.length ? kept : null;
+    } catch { return null; }
+  };
+}
+
 // deps (the server injects):
 //  store: createPublicoStore.
 //  makeProvider({userId,agentId,contatoId}) → provider already tied to the owner's spend.
@@ -432,6 +450,7 @@ export function turnLogLine({ agentId, contactId, termination, modelCalls, toolR
 //  saldo(userId) → {over}. over=true: answers with a neutral message, without calling the model.
 //  ferramentas: tools port (doTurno/vetar/instrucoes); only tools with
 //   publico:true are included, and doTurno receives the contact and its estado()/lembrar().
+//   A tool may also carry retain(text) (see retainedByTool).
 //  agora() → date and time spelled out, for the prompt.
 //  gastoDoDia(agentId) → US$ of public support today (default: store.gastoDoDia).
 //  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
@@ -584,7 +603,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const onEvent = (e) => { if (e?.type === 'tool_result') toolResults.push(e); };
       try {
         const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
-        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX, onEvent });
+        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX, onEvent, retainedToolResult: retainedByTool(tools) });
         termination = r.termination || 'unknown';
         modelCalls = (r.usages || []).length;
         await recordUsage(r.usages || [], ident);
