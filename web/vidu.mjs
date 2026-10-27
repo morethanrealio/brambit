@@ -68,12 +68,29 @@ export async function deletePhoto(vidu, id) {
   await call(vidu, 'DELETE', `/live/v1/avatars/${encodeURIComponent(id)}`).catch((e) => { if (e.status !== 404) throw e; });
 }
 
+// What the face does while it waits (idle_motion). Left out, Vidu picks from
+// its own library, which for a photo can be a single gesture every 10 s: on
+// 2026-10-27 the face kept fixing its hair nonstop. Instead, a few subtle face
+// and head motions, one drawn every 20 s, hands still.
+const IDLE_MOTION = {
+  enabled: true,
+  source: 'custom',
+  recommend: 'random',
+  motions: [
+    { name: 'smile', content: 'Looks at the camera and smiles naturally, the corners of the mouth rising slightly. Hands do not move.', weight: 2 },
+    { name: 'nod', content: 'Looks at the camera and nods once, gently. Hands do not move.', weight: 1 },
+    { name: 'head tilt', content: 'Tilts the head slightly, looks at the camera with curiosity, then straightens it. Hands do not move.', weight: 1 },
+    { name: 'blink', content: 'Blinks in a relaxed way and keeps looking at the camera. Hands do not move.', weight: 1 },
+  ],
+  scheduling: { motion_interval: 20, rest_after_motion: 5 },
+};
+
 // → {id, rtc: {provider, appId, channel, uid, token}}. photoGone: the photo no
 // longer exists at Vidu (it has to be registered again).
 export async function createSession(vidu, { avatarId, model = 'vidu-s1' }) {
   let d;
   try {
-    d = parse(await call(vidu, 'POST', '/live/s_avatar/component', { model, avatar_id: avatarId, managed_rtc: { provider: 'agora' } }));
+    d = parse(await call(vidu, 'POST', '/live/s_avatar/component', { model, avatar_id: avatarId, managed_rtc: { provider: 'agora' }, idle_motion: IDLE_MOTION }));
   } catch (e) {
     e.photoGone = e.status === 404 && /avatar_id/.test(e.body || '');
     throw e;
