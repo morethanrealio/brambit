@@ -38,7 +38,9 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // recordUsages and creditStatus from the server; ferramentas = tools port;
 // ganchos = plugin's atendimentoPublico port (script; see public-support.mjs).
 // Returns what the WhatsApp channel uses: atende() says whether support is on
-// for the number; turno({endereco,mensagem}) → {text,saidas?,userId,agentId}.
+// for the number; turno({endereco,mensagem,imagens?}) → {text,saidas?,motivo?,userId,agentId}.
+// A number has no key, so its photos reach the model only as the answer to the
+// assistant's request (imagesOnRequest; else motivo 'photo_not_requested').
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
@@ -91,7 +93,8 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     store, webStore, prompts, limpar,
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
-      turno: ({ endereco, mensagem }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem }),
+      turno: ({ endereco, mensagem, imagens }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem,
+        ...(imagens?.length ? { imagens, imagesOnRequest: true } : {}) }),
     },
   };
 }

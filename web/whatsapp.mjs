@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { CHANNEL_CTX_END } from './confirm.mjs';
 import { markVoiceInput } from './voice-input.mjs';
 import { notaMidiaSemTexto } from './media-without-text.mjs';
+import { sniffImagem } from './image-sniff.mjs';
 import { startTurnHeartbeat, TURN_HEARTBEAT_TEXT } from './turn-heartbeat.mjs';
 import { splitMessage } from './channel-split.mjs';
 import { markdownParaWa } from './wa-format.mjs';
@@ -560,6 +561,19 @@ async function downloadMedia(mediaId) {
   return { buffer: buf, mime: meta.mime_type || 'application/octet-stream' };
 }
 
+// A photo sent to public support, as the model gets it ({mimeType, data}). Its bytes
+// decide the type, as on the web channel: JPEG, PNG or WebP, at most Meta's own cap
+// for an image. null when it can't be used.
+const PUBLIC_IMAGE_MAX = 5 * 1024 * 1024;
+const PUBLIC_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+async function publicPhoto(mediaId) {
+  try {
+    const { buffer } = await downloadMedia(mediaId);
+    const type = buffer.length <= PUBLIC_IMAGE_MAX ? sniffImagem(buffer)?.mime : null;
+    return PUBLIC_IMAGE_TYPES.has(type) ? { mimeType: type, data: buffer.toString('base64') } : null;
+  } catch (e) { console.error('[whatsapp] public support photo:', e?.code || e?.name || 'error'); return null; }
+}
+
 // Native interactive list: the user taps the name to switch assistants.
 async function sendAgentList(to, agents, header) {
   const rows = agents.slice(0, 10).map((a) => ({
@@ -780,7 +794,10 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
   // without any of the owner's flow (menu, @name, reaction, confirmation, msg reference).
   // Chopped-up messages become a single turn: waits JUNTAR_MS after the last one (at
   // most JUNTAR_MAX_MS since the first), and whatever arrives during a turn waits for
-  // it to finish and joins the next one. One turn per phone number. Phase 1: text only.
+  // it to finish and joins the next one. One turn per phone number. Text, plus the first
+  // photo of the batch (its caption joins the text) when it answers the assistant's
+  // request: the turn asks the plugin's photoRequested, as on the web channel. A photo
+  // it didn't ask for, or one that can't be read, is left out as before (text only).
   const JUNTAR_MS=()=>Number(process.env.WA_PUBLIC_MERGE_MS??1500),JUNTAR_MAX_MS=()=>Number(process.env.WA_PUBLIC_MERGE_MAX_MS??5000);
   const filaPublico=new Map(),esperaPublico=new Map();
   function atenderPublico(msg,from){
@@ -799,10 +816,19 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
       try{
         const mensagem=b.msgs.filter(m=>m.type==='text').map(m=>(m.text?.body||'').trim()).filter(Boolean).join('\n');
         if(mensagem||b.msgs.some(m=>m.type!=='text'&&m.type!=='reaction')){
-          const r=mensagem?await publico.turno({endereco:from,mensagem}):{text:PUBLICO_SO_TEXTO};
+          const photoMsg=b.msgs.find(m=>m.type==='image');
+          const photo=photoMsg?await publicPhoto(photoMsg.image?.id):null;
+          let r=null;
+          if(photo){
+            const withPhoto=[mensagem,(photoMsg.image?.caption||'').trim()].filter(Boolean).join('\n')||notaMidiaSemTexto({images:1});
+            r=await publico.turno({endereco:from,mensagem:withPhoto,imagens:[photo]});
+            if(r?.motivo==='photo_not_requested')r=null;
+          }
+          const fromTurn=!!r||!!mensagem;
+          if(!r)r=mensagem?await publico.turno({endereco:from,mensagem}):{text:PUBLICO_SO_TEXTO};
           const opts={requireReceipt:inboxIds.length>0,reenvio:true};
           const wamids=r?.saidas?.length?await sendSaidas(from,r.saidas,opts):r?.text?await sendText(from,r.text,opts):[];
-          if(mensagem&&r?.motivo!=='sem_saldo')billWa(r?.userId,wamids.length,{agentId:r?.agentId});
+          if(fromTurn&&r?.motivo!=='sem_saldo')billWa(r?.userId,wamids.length,{agentId:r?.agentId});
         }
         if(inboxIds.length)await inbox.complete(inboxIds);
       }catch(e){

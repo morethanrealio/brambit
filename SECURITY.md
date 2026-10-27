@@ -129,8 +129,11 @@ Who receives what:
 - *The owner:* in `/public-support`, the contact's number, the conversation and
   the settings.
 
-On WhatsApp the public assistant reads text only; audio, images and documents
-get a fixed reply asking for text. Brambit does not tell the person they are
+On WhatsApp the public assistant reads text, and one photo only when it answers
+a photo the assistant asked that contact for (the plugin's `photoRequested` hook,
+as on the web channel). The photo goes to the model in that turn and is not
+stored. Any other audio, image or document is left out, and a message with
+nothing else gets a fixed reply asking for text. Brambit does not tell the person they are
 talking to an AI or link a privacy notice. The owner can ask for it in the
 assistant's instructions, or a plugin can send it as a fixed first reply
 (`antesDoModelo` with `pular` when `primeira` is true).
