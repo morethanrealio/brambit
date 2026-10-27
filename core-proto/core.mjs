@@ -658,7 +658,7 @@ export async function runAgent({ provider, tools, system, userInput, images, his
   try {
     const closingInstruction = proposeSplit
       ? 'If the task is unfinished, close with ONE short sentence, in the language of the conversation, proposing to split what is left into smaller parts and asking which smaller part the person wants finished first; do NOT just ask them to say "continue" again, that was already tried and it did not fit.'
-      : 'Se a tarefa ficou pela metade, feche em UMA frase curta: que ela é grande e não coube numa resposta só, e que é só pedir "continua".';
+      : 'If the task is unfinished, close with ONE short sentence, in the language of the conversation: say that it is big and did not fit in one reply, and that the person only needs to ask you to continue.';
     const wrapSystem = `${system}\n\nATENÇÃO: você já usou todas as suas ferramentas neste turno. NÃO chame mais nenhuma ferramenta. Responda AGORA, de forma completa e útil, com base em tudo que você já levantou até aqui. Se ficou faltando confirmar algum item, entregue o que tem e diga com honestidade o que não deu pra confirmar. NÃO fale de bastidor com o usuário: nada de "limite de passos", "teto do turno", "ferramentas esgotadas", nem de negar que travou/sumiu. ${closingInstruction}`;
     const res = await completeProvider({ system: wrapSystem, messages, tools: [] }, maxSteps);
     if (res.usage) usages.push(res.usage);
