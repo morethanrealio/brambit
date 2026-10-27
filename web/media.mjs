@@ -463,8 +463,24 @@ export function audioToWav(inputBuffer) {
   });
 }
 
+// Now and then Gemini's speech model starts writing text instead of speaking
+// (2026-10-24 on dev: 400 "Model tried to generate text, but it should only be
+// used for TTS"; the same sentence then spoke 48 times in a row). One more try
+// covers it before the voice note, the avatar or the voice sample fails.
+const wroteTextInsteadOfSpeech = (error) => /tried to generate text|returned no audio/i.test(String(error?.message || ''));
+
 // Gemini speech: raw PCM s16le mono and its sample rate.
 async function geminiPcm(text, voice) {
+  try {
+    return await geminiPcmOnce(text, voice);
+  } catch (error) {
+    if (!wroteTextInsteadOfSpeech(error)) throw error;
+    console.error('[media tts] Gemini wrote text instead of speech, trying once more');
+    return geminiPcmOnce(text, voice);
+  }
+}
+
+async function geminiPcmOnce(text, voice) {
   const data = await gen(TTS_MODEL, {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
