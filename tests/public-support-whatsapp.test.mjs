@@ -2,7 +2,8 @@
 // public assistant only when the installation turned it on; the number's connection code
 // still works before that; the linked owner never falls into public. Real inbox
 // (local PostgreSQL) and the real handler; the public turn is fake. Chopped-up messages
-// become a single turn, and rich plugin outputs go out as their own messages.
+// become a single turn, and rich plugin outputs go out as their own messages. A photo
+// goes with the turn only as the answer to the assistant's request.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {inboxFixture,uuid} from '../test-support/wa-inbox-fixture.mjs';
@@ -15,6 +16,7 @@ async function until(fn){for(let i=0;i<500;i++){if(await fn())return;await wait(
 Object.assign(process.env,{WA_PHONE_NUMBER_ID:'synthetic-phone',WA_TOKEN:'synthetic',WA_DEBOUNCE_MS:'50',WA_TURN_HEARTBEAT_MS:'0',CHANNEL_RESEND_MS:'0,0',WA_PUBLIC_MERGE_MS:'50',WA_PUBLIC_MERGE_MAX_MS:'2000',WA_DELIVERY_WAIT_MS:'0'});
 const payload=messages=>({entry:[{changes:[{value:{metadata:{phone_number_id:'synthetic-phone'},messages}}]}]});
 const DONO='5511000000001',CLIENTE='5511000000002';
+const JPEG=Buffer.from([0xFF,0xD8,0xFF,0xE0,1,2,3,4,5,6,7,8]);
 let n=0;const msg=(from,text,extra={})=>({id:'publico-'+(++n),from,type:'text',text:{body:text},...extra});
 
 test('WhatsApp: unknown sender goes to public support only when enabled; owner and connection code keep working as before',{timeout:40000,skip:postgresSkipReason()},async t=>{
@@ -23,6 +25,10 @@ test('WhatsApp: unknown sender goes to public support only when enabled; owner a
  const original=globalThis.fetch;const sent=[];t.after(()=>{globalThis.fetch=original;});
  globalThis.fetch=async(url,options)=>{
   assert(String(url).startsWith('https://graph.facebook.com/'),'unexpected network');
+  // Received media: its address, then its bytes (photo-ok is a JPEG, anything else is not an image).
+  if(String(url).includes('/download/'))return {ok:true,arrayBuffer:async()=>Uint8Array.from(String(url).endsWith('/photo-ok')?JPEG:Buffer.from('not an image at all')).buffer};
+  const media=String(url).match(/\/(photo-\w+)$/);
+  if(media)return {ok:true,json:async()=>({url:'https://graph.facebook.com/download/'+media[1],mime_type:'image/jpeg'})};
   const body=JSON.parse(options?.body||'{}');
   if(body.type==='text'){sent.push({to:body.to,text:body.text.body});return {ok:true,json:async()=>({messages:[{id:'out-'+sent.length}]})};}
   if(body.template?.name==='recusado')return {ok:false,status:400,json:async()=>({error:{message:'(#132000) recusado'}})};
@@ -69,6 +75,27 @@ test('WhatsApp: unknown sender goes to public support only when enabled; owner a
   sent.length=0;
   await chegar(msg(CLIENTE,null,{type:'audio',text:undefined,audio:{id:'m1'}}),msg(CLIENTE,null,{type:'reaction',text:undefined,reaction:{emoji:'👍'}}));
   assert.equal(sent.length,1);assert.match(sent[0].text,/só consigo ler mensagens de texto/);assert.deepEqual(turnos,[]);
+ });
+ await t.test('a photo goes with the turn when the assistant asked for it; one it did not ask for, or that is not an image, is left out as before',async()=>{
+  let asked=true;
+  turno=async({mensagem,imagens})=>imagens?(asked?{text:'viu: '+mensagem}:{text:null,motivo:'photo_not_requested'}):{text:'público: '+mensagem};
+  const photo=(id,caption)=>msg(CLIENTE,null,{type:'image',text:undefined,image:{id,...(caption?{caption}:{})}});
+  const reset=()=>{sent.length=0;turnos.length=0;};
+  reset();await chegar(photo('photo-ok'));
+  assert.equal(turnos.length,1);assert.deepEqual(turnos[0].imagens,[{mimeType:'image/jpeg',data:JPEG.toString('base64')}]);
+  assert.match(turnos[0].mensagem,/enviou uma foto/);assert.match(sent[0].text,/^viu: /);
+  reset();await chegar(msg(CLIENTE,'segue'),photo('photo-ok','meu diploma'));
+  assert.deepEqual(turnos.map(x=>x.mensagem),['segue\nmeu diploma']);
+  asked=false;
+  reset();await chegar(msg(CLIENTE,'segue'),photo('photo-ok','meu diploma'));
+  assert.deepEqual(turnos.map(x=>[x.mensagem,!!x.imagens]),[['segue\nmeu diploma',true],['segue',false]]);
+  assert.deepEqual(sent.map(x=>x.text),['público: segue']);
+  reset();await chegar(photo('photo-ok'));
+  assert.equal(turnos.length,1);assert.match(sent[0].text,/só consigo ler mensagens de texto/);
+  asked=true;
+  reset();await chegar(photo('photo-bad'));
+  assert.deepEqual(turnos,[]);assert.match(sent[0].text,/só consigo ler mensagens de texto/);
+  turno=async({mensagem})=>({text:'público: '+mensagem});
  });
  await t.test('plugin outputs: text, image, link button and template, in order; data only as its reserve',async()=>{
   sent.length=0;

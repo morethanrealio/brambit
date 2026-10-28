@@ -564,6 +564,25 @@ test('public web channel: a browser photo reaches the model only when the assist
   assert.equal((await pede({ message: 'thanks', contact })).status, 200);
 });
 
+// A phone number has no key: on WhatsApp, as from a browser, a photo reaches the model only
+// as the answer to the assistant's request.
+test('WhatsApp channel: a photo reaches the model only when the assistant asked for it', async (t) => {
+  const { pool, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true });
+  const m = modelo();
+  let pedidas = 0;
+  const s = criarAtendimentoDoServidor({ pool, makeProvider: m.provider, recordUsages: async () => {}, creditStatus: async () => ({ over: false }),
+    agenteDoNumero: () => ag, limpezaMs: 0, log: { warn() {}, error() {}, log() {} },
+    ganchos: { photoRequested: () => (pedidas > 0 && pedidas-- ? { requested: true } : null) } });
+  const photo = { mimeType: 'image/jpeg', data: Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), randomBytes(64)]).toString('base64') };
+  const turn = () => s.whatsapp.turno({ endereco: '5511000000002', mensagem: 'my diploma', imagens: [photo] });
+  assert.equal((await turn()).motivo, 'photo_not_requested');
+  assert.equal(m.chamadas.length, 0, 'a photo nobody asked for reached the model');
+  pedidas = 1;
+  await turn();
+  assert.deepEqual(m.chamadas.at(-1).messages.at(-1).images, [photo]);
+});
+
 // With the core's sign-up rule, open sign-up keeps public support off on WhatsApp and on the
 // website, and the owner's screen says why; closing sign-up turns it back on, no restart.
 test('open sign-up keeps public support off on every channel until it is closed', async (t) => {

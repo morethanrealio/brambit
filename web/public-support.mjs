@@ -481,7 +481,7 @@ export function retainedByTool(tools) {
 //    rich outputs (public-support-outputs.mjs).
 //   photoRequested(ctx) → {requested: true} when the assistant asked this contact
 //    for a photo and this message is the answer. Say it once per request: a photo
-//    sent without a key (a browser) reaches the model only with it.
+//    sent without a key (a browser, a WhatsApp number) reaches the model only with it.
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
 //    texts: {written, spoken} in use for this assistant (the owner's edit, else
