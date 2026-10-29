@@ -212,8 +212,8 @@ export function inviteEmail({ link, areaName, inviter, language }) {
   return { subject: t('subject'), text: t('body', { link, inviter: inviter || marca().nome }) };
 }
 
-// The owner's routes to set areas up. A member or anyone else gets a 404 for an
-// area that is not theirs; the screen comes later, these are its API.
+// The owner's routes to set areas up, used by the areas card of the owner's
+// screen. A member or anyone else gets a 404 for an area that is not theirs.
 // publicBase() → the installation's address, for the password link. mail = the
 // core's mailer ({ enabled(), send() }); the invite e-mail goes out only when
 // the owner asks for it (sendEmail: true) and e-mail is set up.
@@ -229,7 +229,8 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
   });
   const notFound = (res) => send(res, 404, { error: 'not_found' });
 
-  route('GET', CLIENT_AREAS_PATH, async ({ res, user }) => send(res, 200, { areas: await areas.list(user.id) }));
+  // mail: whether the screen offers to e-mail the invite link.
+  route('GET', CLIENT_AREAS_PATH, async ({ res, user }) => send(res, 200, { areas: await areas.list(user.id), mail: !!mail.enabled() }));
 
   route('POST', CLIENT_AREAS_PATH, async ({ req, res, user }) => {
     const name = String((await readBody(req)).name ?? '').trim();
@@ -268,6 +269,6 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
         emailed = !!(await mail.send({ to: email.toLowerCase(), subject, text, ...remetenteConvite() }))?.ok;
       } catch (e) { log.error?.('[client-areas] invite e-mail failed:', e?.message ?? e); }
     }
-    return send(res, 200, { ok: true, created: r.created, link, emailed });
+    return send(res, 200, { ok: true, created: r.created, link, linkHours: INVITE_LINK_MINUTES / 60, emailed });
   });
 }

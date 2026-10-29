@@ -93,6 +93,16 @@
   .mtable th,.mtable td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line2);}
   .mtable th{font-weight:600;color:var(--mut);font-size:12.5px;}
   .mtable th:first-child,.mtable td:first-child{text-align:left;}
+  .area{border-top:1px solid var(--line2);padding:4px 0 14px;}
+  .area h3{margin-top:14px;}
+  .area-sub{font-size:13px;font-weight:600;color:var(--mut);margin:12px 0 4px;}
+  .area-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:14.5px;}
+  .area-line .btn{padding:4px 10px;font-size:13px;font-weight:500;}
+  .area .inline{flex-wrap:wrap;margin-top:6px;}
+  .area .inline input,.area .inline select{flex:1;min-width:160px;width:auto;}
+  .area .check{font-size:14px;}
+  .area .inline select.role{flex:0 1 150px;min-width:120px;}
+  input[type=email]{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:14.5px;background:#fff;color:var(--txt);}
   .hidden{display:none;}
 </style>
 </head>
@@ -229,6 +239,15 @@
       </div>
     </div>
   </div>
+
+  <div class="card hidden" id="areasCard">
+    <h2 data-i18n="public_service_page.areas">Client areas</h2>
+    <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
+    <div id="areaList"></div>
+    <label for="newArea" data-i18n="public_service_page.area_new">New area (its name)</label>
+    <div class="inline"><input type="text" id="newArea" maxlength="120"/><button class="btn primary" id="createArea" data-i18n="public_service_page.create">Create</button></div>
+    <div id="areasMsg" class="msg"></div>
+  </div>
 </div>
 
 <script type="application/json" data-i18n-texts="public_service_page"></script>
@@ -260,6 +279,7 @@
       // A client area's panel account has only this screen: no app to go back to, no usage of its own.
       if (j.panelAccount) { $('backLink').classList.add('hidden'); $('usageLink').classList.add('hidden'); $('ownerLinks').classList.remove('hidden'); }
       signupOpen = !!j.signupOpen;
+      loadAreas();
       var sel = $('agente'); sel.textContent = '';
       $('semAgente').classList.toggle('hidden', agentes.length > 0);
       if (!agentes.length) return;
@@ -474,6 +494,123 @@
       if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', t('no_contacts')));
       fecharConversa();
     }).catch(function(e){ msg($('convMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
+  // Client areas (client-areas.mjs): the owner groups assistants and lets a client's
+  // people in with a role. Only for someone with assistants of their own; a panel
+  // account gets a 404 here. notice = the last result, kept across redraws.
+  var AREAS = '/api/public-support/areas', areas = [], mailOn = false, notice = null;
+  function ownAgents(){ return agentes.filter(function(a){ return !a.role || a.role === 'owner'; }); }
+  function loadAreas(){
+    if (!ownAgents().length) { $('areasCard').classList.add('hidden'); return Promise.resolve(); }
+    return pedir(AREAS).then(function(j){
+      areas = j.areas || []; mailOn = !!j.mail;
+      $('areasCard').classList.remove('hidden'); drawAreas();
+    }).catch(function(e){
+      if (e.code === 'not_found' || e.message === NO_SESSION) return $('areasCard').classList.add('hidden');
+      $('areasCard').classList.remove('hidden'); msg($('areasMsg'), e.message, 'err');
+    });
+  }
+  function areaError(e){
+    var known = { bad_name: 'area_error_name', bad_request: 'area_error_email', account_closed: 'area_error_closed', not_found: 'area_error_gone' };
+    return known[e.code] ? t(known[e.code]) : e.message;
+  }
+  function option(value, text){ var o = el('option', null, text); o.value = value; return o; }
+  function button(kind, text){ var b = el('button', 'btn', text); b.classList.add(kind); return b; }
+  // Runs one change; on success redraws with after(reply) as the notice, on error
+  // shows it under the area and keeps what was typed.
+  function act(b, call, after){
+    var note = b.closest('.area') ? b.closest('.area').querySelector('.msg') : $('areasMsg');
+    b.disabled = true; msg(note, '');
+    call().then(function(j){ notice = after ? after(j) : null; b.disabled = false; return loadAreas(); }).catch(function(e){
+      b.disabled = false;
+      if (e.message !== NO_SESSION) msg(note, areaError(e), 'err');
+    });
+  }
+  function drawAreas(){
+    var box = $('areaList'), where = {};
+    box.textContent = '';
+    areas.forEach(function(ar){ ar.agents.forEach(function(a){ where[a.agentId] = ar.name; }); });
+    if (!areas.length) box.appendChild(el('div', 'vazio', t('areas_none')));
+    areas.forEach(function(ar){ box.appendChild(drawArea(ar, where)); });
+  }
+  function areaLine(text, label, run){
+    var d = el('div', 'area-line'), b = button('ghost', label);
+    d.appendChild(el('span', null, text)); d.appendChild(b);
+    b.addEventListener('click', function(){ run(b); });
+    return d;
+  }
+  function drawArea(ar, where){
+    var d = el('div', 'area');
+    d.appendChild(el('h3', null, ar.name));
+
+    d.appendChild(el('div', 'area-sub', t('area_assistants')));
+    if (!ar.agents.length) d.appendChild(el('div', 'vazio', t('area_no_assistants')));
+    ar.agents.forEach(function(a){
+      d.appendChild(areaLine(a.name, t('area_take_out'), function(b){
+        if (confirm(t('area_take_out_confirm', { name: a.name, area: ar.name }))) act(b, function(){ return pedir(AREAS + '/agent', { agentId: a.agentId, areaId: null }); });
+      }));
+    });
+    var pick = el('select'), add = button('ghost', t('area_add_assistant')), addRow = el('div', 'inline');
+    pick.setAttribute('aria-label', t('area_pick_assistant'));
+    pick.appendChild(option('', t('area_pick_assistant')));
+    ownAgents().forEach(function(a){
+      if (ar.agents.some(function(x){ return x.agentId === a.agentId; })) return;
+      pick.appendChild(option(a.agentId, where[a.agentId] ? t('area_in_other', { name: a.nome, area: where[a.agentId] }) : a.nome));
+    });
+    add.addEventListener('click', function(){
+      if (pick.value) act(add, function(){ return pedir(AREAS + '/agent', { agentId: pick.value, areaId: ar.id }); });
+    });
+    addRow.appendChild(pick); addRow.appendChild(add);
+    if (pick.options.length > 1) d.appendChild(addRow);
+
+    d.appendChild(el('div', 'area-sub', t('area_people')));
+    if (!ar.members.length) d.appendChild(el('div', 'vazio', t('area_no_people')));
+    ar.members.forEach(function(m){
+      d.appendChild(areaLine(m.email + ' · ' + t('role_' + m.role), t('area_remove'), function(b){
+        if (confirm(t('area_remove_confirm', { email: m.email, area: ar.name }))) act(b, function(){ return pedir(AREAS + '/member', { areaId: ar.id, email: m.email, role: null }); });
+      }));
+    });
+    var email = el('input'), role = el('select', 'role'), invite = button('primary', t('area_invite')), row = el('div', 'inline');
+    email.type = 'email'; email.placeholder = t('area_email'); email.setAttribute('aria-label', t('area_email'));
+    role.setAttribute('aria-label', t('area_role'));
+    role.appendChild(option('admin', t('role_admin'))); role.appendChild(option('viewer', t('role_viewer')));
+    row.appendChild(email); row.appendChild(role); row.appendChild(invite);
+    d.appendChild(row);
+    var byMail = el('input'), mailLabel = el('label', 'check');
+    byMail.type = 'checkbox';
+    mailLabel.appendChild(byMail); mailLabel.appendChild(document.createTextNode(' ' + t('area_send_email')));
+    if (mailOn) d.appendChild(mailLabel);
+    d.appendChild(el('p', 'nota', t('area_invite_help')));
+    invite.addEventListener('click', function(){
+      var who = email.value.trim();
+      if (!who) return msg(d.querySelector('.msg'), t('area_error_email'), 'err');
+      act(invite, function(){ return pedir(AREAS + '/member', { areaId: ar.id, email: who, role: role.value, sendEmail: mailOn && byMail.checked }); }, function(j){
+        if (!j.link) return { areaId: ar.id, text: t('area_joined', { email: who }) };
+        return { areaId: ar.id, link: j.link, text: t(j.emailed ? 'area_link_emailed' : 'area_link', { email: who, hours: j.linkHours }) };
+      });
+    });
+
+    var note = el('div', 'msg');
+    d.appendChild(note);
+    if (notice && notice.areaId === ar.id) {
+      msg(note, notice.text, 'ok');
+      if (notice.link) {
+        var code = el('code', null, notice.link), copy = button('ghost', t('area_copy'));
+        code.setAttribute('translate', 'no');
+        copy.addEventListener('click', function(){
+          navigator.clipboard.writeText(notice.link).then(function(){ copy.textContent = t('area_copied'); }, function(){});
+        });
+        d.appendChild(code);
+        var copyRow = el('div', 'acoes'); copyRow.appendChild(copy); d.appendChild(copyRow);
+      }
+    }
+    return d;
+  }
+  $('createArea').addEventListener('click', function(){
+    var name = $('newArea').value.trim();
+    if (!name) return msg($('areasMsg'), t('area_error_name'), 'err');
+    act(this, function(){ return pedir(AREAS, { name: name }); }, function(){ $('newArea').value = ''; return null; });
   });
 
   // Public-support usage profile (profiles.mjs): this page is the owner's whole
