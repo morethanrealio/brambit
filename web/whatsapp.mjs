@@ -165,6 +165,8 @@ async function sendSaidas(to, saidas, { requireReceipt = false, reenvio = false 
     try {
       if (s.tipo === 'texto') { wamids.push(...await sendText(to, s.texto, { requireReceipt, reenvio })); continue; }
       if (s.tipo === 'data') { if (s.reserva) wamids.push(...await sendText(to, s.reserva, { requireReceipt, reenvio })); continue; }
+      // Reply buttons aren't sent as WhatsApp buttons yet: the text lists the labels.
+      if (s.tipo === 'replies') { wamids.push(...await sendText(to, `${s.texto}\n[${s.replies.map((r) => r.rotulo).join(' | ')}]`, { requireReceipt, reenvio })); continue; }
       const corpo = await corpoDaSaida(s);
       const enviar = () => graph(`${PHONE_ID()}/messages`, { messaging_product: 'whatsapp', to, ...corpo });
       let id;
