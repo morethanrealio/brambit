@@ -148,6 +148,7 @@
       <div class="kpi"><div class="n" id="mReceived">0</div><div class="l" data-i18n="public_service_page.metric_received">Messages received</div></div>
       <div class="kpi"><div class="n" id="mReplies">0</div><div class="l" data-i18n="public_service_page.metric_replies">Replies sent</div></div>
     </div>
+    <div class="kpis hidden" id="mCards"></div>
     <h3 data-i18n="public_service_page.metric_per_day">Conversations per day</h3>
     <div class="bars" id="mBars"></div>
     <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
@@ -408,6 +409,14 @@
       [['mConversations', 'conversations'], ['mNewContacts', 'newContacts'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
       });
+      var cards = $('mCards'); cards.textContent = '';
+      (j.cards || []).forEach(function(c){
+        var k = el('div', 'kpi');
+        k.appendChild(el('div', 'n', typeof c.value === 'number' ? number.format(c.value) : c.value));
+        k.appendChild(el('div', 'l', c.label));
+        cards.appendChild(k);
+      });
+      cards.classList.toggle('hidden', !cards.firstChild);
       var bars = $('mBars'), top = Math.max.apply(null, j.daily.map(function(d){ return d.conversations; }).concat([1]));
       bars.textContent = '';
       j.daily.forEach(function(d){

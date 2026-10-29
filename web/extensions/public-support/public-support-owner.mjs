@@ -65,10 +65,11 @@ export function camposDaConfig(b = {}) {
 // (the plugin's texts, public-support.mjs) = the assistant's editable texts.
 // avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
-// metrics (public-support-metrics.mjs) = the assistant's volume, for every role.
+// metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
+// metricCards({agentId, days, from, to}) → [{label, value}] = the plugin's cards (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, activity = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], activity = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -223,7 +224,9 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const days = Number(url.searchParams.get('days'));
     if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
-    return send(res, 200, await metrics.volume(acc.ownerId, acc.agentId, days));
+    const volume = await metrics.volume(acc.ownerId, acc.agentId, days);
+    const cards = volume.daily.length ? await metricCards({ agentId: acc.agentId, days, from: volume.daily[0].day, to: volume.daily.at(-1).day }) : [];
+    return send(res, 200, { ...volume, cards });
   });
 
   // The access log: the owner reads all of it, an area's admin the area's part; a viewer none.

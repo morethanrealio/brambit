@@ -20,7 +20,7 @@ const { createAccountScope } = await import('../web/account-scope.mjs');
 
 const TZ = 'America/Sao_Paulo';
 
-async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } } } = {}) {
+async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } }, ganchos = null } = {}) {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`CREATE SCHEMA mtr_harness;
     CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE NOT NULL, name text,
@@ -46,7 +46,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const activity = createActivityStore(pool, { log: { error() {} } });
   const model = () => ({ name: 'fake', async complete() { return { stop: 'end', text: 'ok', usage: { in: 1, out: 1 } }; } });
   const turns = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
-    agora: () => 'segunda', log: { error() {} } });
+    agora: () => 'segunda', ganchos, log: { error() {} } });
   const contact = async (agentId, phone) => {
     await store.configurar(agentId, owner, { ativo: true });
     return (await turns.turno({ agentId, canal: 'whatsapp', endereco: phone, mensagem: 'oi' })).contatoId;
@@ -55,7 +55,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const send = (res, status, body, headers = {}) => Object.assign(res, { status, body, headers });
   const fail = (res, st, msg, e) => { throw e; };
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
-    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), activity });
+    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, activity });
   registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
@@ -218,7 +218,13 @@ test('account scope: with no panel account loaded, the core does not look the se
 });
 
 test('metrics: an area\'s volume by channel and day, without page events, only to whoever reaches the assistant', async (t) => {
-  const s = await setup(t);
+  const asked = [];
+  const s = await setup(t, { ganchos: { async metricCards(q) {
+    asked.push(q);
+    if (q.days === 90) throw Error('plugin down');
+    return [{ label: ' Orders ', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
+      { label: '', value: 1 }, { label: 'Object', value: {} }, ...Array.from({ length: 10 }, (_, i) => ({ label: 'n' + i, value: i }))];
+  } } });
   const { ask, db, store, owner, adminA, viewerB, agA, agB } = s;
   await twoClients(s); // one WhatsApp contact each, with one message and its reply
   const web = await store.contato(agA, 'web', 'visitor-1');
@@ -239,9 +245,14 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
   assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 2, received: 2, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
+  assert.deepEqual(month.body.cards.slice(0, 3), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'n0', value: 0 }],
+    'the plugin\'s cards, without the malformed ones');
+  assert.equal(month.body.cards.length, 8);
+  assert.deepEqual(asked[0], { agentId: agA, days: 30, from: month.body.daily[0].day, to: today });
   const quarter = await get(owner, agA, 90);
   assert.deepEqual(quarter.body.total, { conversations: 3, newContacts: 3, received: 3, replies: 2 });
   assert.equal(quarter.body.retentionDays, 90);
+  assert.deepEqual(quarter.body.cards, [], 'a failing plugin leaves only the volume');
 
   assert.equal((await get(viewerB, agA, 30)).status, 404, 'another area');
   assert.equal((await get(viewerB, agB, 7)).body.total.conversations, 1, 'a viewer sees its own');

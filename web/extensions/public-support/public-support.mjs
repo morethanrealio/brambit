@@ -32,6 +32,8 @@ export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
+export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
+export const METRIC_CARDS_WAIT_MS = 5000;
 // The avatar on a website (public-avatar.mjs), off until the owner turns it on.
 export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
 export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
@@ -486,6 +488,12 @@ export function retainedByTool(tools) {
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
 //    texts: {written, spoken} in use for this assistant (the owner's edit, else
 //    the default; spoken null without a voice text), estado(), lembrar(chave,valor)}.
+//   metricCards({agentId, days, from, to}) → [{label, value}]: the plugin's own
+//    numbers for the assistant, shown next to its volume to the owner and the
+//    members of its client area. from/to = the period's first and last day
+//    (YYYY-MM-DD, installation timezone). label is plain text in the language the
+//    plugin writes it; value a number (the page formats it) or short text. Up to
+//    METRIC_CARDS_MAX cards; slower than METRIC_CARDS_WAIT_MS = none this time.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -512,6 +520,21 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   async function defaultTexts(agentId) {
     const d = await gancho('defaultTexts', { agentId });
     return { written: typeof d?.written === 'string' ? d.written : '', spoken: typeof d?.spoken === 'string' ? d.spoken : null };
+  }
+
+  // The plugin's cards for the metrics, only the well-formed ones; a slow hook
+  // does not hold the owner's screen.
+  async function metricCards(q) {
+    if (typeof ganchos?.metricCards !== 'function') return [];
+    let timer;
+    const late = new Promise((r) => { timer = setTimeout(() => r('late'), METRIC_CARDS_WAIT_MS); timer.unref?.(); });
+    const r = await Promise.race([gancho('metricCards', q), late]);
+    clearTimeout(timer);
+    if (r === 'late') { log.error?.('[publico] gancho metricCards took too long'); return []; }
+    const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+    return (Array.isArray(r) ? r : [])
+      .map((c) => ({ label: text(c?.label, 60), value: typeof c?.value === 'number' && Number.isFinite(c.value) ? c.value : text(c?.value, 24) }))
+      .filter((c) => c.label && c.value !== null).slice(0, METRIC_CARDS_MAX);
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
@@ -644,5 +667,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     });
   }
 
-  return { turno, registro, defaultTexts };
+  return { turno, registro, defaultTexts, metricCards };
 }
