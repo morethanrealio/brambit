@@ -193,7 +193,7 @@ function show(state) {
   if (!$('publicSupport').classList.contains('hidden')) $('nav').append(publicSupportLink());
 }
 
-// Public support's installation text (public-support-admin.mjs). The route only
+// Public support's installation text (extensions/public-support/public-support-admin.mjs). The route only
 // exists where public support can run, so a 404 keeps the section hidden.
 const INSTALLATION_TEXT = '/api/admin/public-support/installation-prompt';
 const publicSupportLink = () => el('a', { href: '#section-public-support' }, t('section_public_support'));

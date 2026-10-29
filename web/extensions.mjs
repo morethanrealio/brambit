@@ -22,13 +22,16 @@
 // boot. Read once when the server starts.
 import { readProfile } from './profiles.mjs';
 
-export const EXTENSIONS = {};
+export const EXTENSIONS = {
+  'public-support': { load: () => import('./extensions/public-support/index.mjs'), pluginPorts: ['atendimentoPublico'] },
+};
 
 // Per usage profile: what runs by default, what has to run, what can't.
 export const PROFILE_EXTENSIONS = {
-  complete: { defaults: [], requires: [], forbids: [] },
-  personal: { defaults: [], requires: [], forbids: [] },
-  'public-support': { defaults: [], requires: [], forbids: [] },
+  complete: { defaults: ['public-support'], requires: [], forbids: [] },
+  // Strangers never reach a personal installation.
+  personal: { defaults: [], requires: [], forbids: ['public-support'] },
+  'public-support': { defaults: ['public-support'], requires: ['public-support'], forbids: [] },
 };
 
 export function readExtensions(value = process.env.BRAMBIT_EXTENSIONS, { profile = readProfile(), registry = EXTENSIONS, rules = PROFILE_EXTENSIONS } = {}) {

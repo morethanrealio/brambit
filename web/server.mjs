@@ -1078,7 +1078,6 @@ import { parseRoutineTime, routineTimeLabel, routineSupersedeKey } from './routi
 import { sendEmail, mailEnabled } from './mailer.mjs';
 import { insertMobileError, registerPushTokenDb, unregisterPushTokenDb, listPushTokensForUserDb, removePushTokensDb } from './db.mjs';
 import { createTelegramManager, validateBotToken, sendTelegramMessage, sendTelegramVideo, sendTelegramDocument } from './telegram.mjs';
-import { criarAtendimentoDoServidor, esquemaDoAtendimento, PUBLIC_WEB_PATHS } from './public-support-channel.mjs';
 import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sendWhatsAppTemplate, sendWhatsAppProactive, sendWhatsAppDocument, whatsappWindowOpen as waWindowOpen, WA_TEMPLATE_MAX, setWaHooks } from './whatsapp.mjs';
 
 // Lets proactive sending check WhatsApp's 24h window from our own data
@@ -6810,9 +6809,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   const { text, usage } = await transcribeAudio(buffer, mime, { language: (await getUserLocale(userId).catch(() => null))?.language });
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-const chatProvider = ({ userId, agentId, kind }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind }), coreSignupOpen = pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()); // For the extensions (servidor): the chat model tied to the person's spend; whether the core's sign-up is open (null = a plugin decides). Public service (public-support-channel.mjs): an unknown WhatsApp contact goes to the assistant the installation chose.
-const atendimentoPublico = criarAtendimentoDoServidor({ pool, avatar, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
-  signupOpen: coreSignupOpen, makeProvider: ({ userId, agentId }) => chatProvider({ userId, agentId, kind: 'publico' }) }); guestContacts.register({ whatsapp: atendimentoPublico.whatsapp }, 'public-support');
+const chatProvider = ({ userId, agentId, kind }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind }), coreSignupOpen = pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()); // For the extensions (servidor): the chat model tied to the person's spend; whether the core's sign-up is open (null = a plugin decides).
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Telegram channel: runs one bot per user (their BotFather token). Injects the
 // deps to avoid a circular import. The pollers start up at boot (listEnabledTelegramBots).
@@ -8166,7 +8163,7 @@ function tooManyRequests(req, res, bucket, max, windowMs) {
 // Nuvemshop) have NO browser Origin and are authenticated by HMAC signature,
 // so they're exempt.
 function isWebhookPath(pathname) {
-  return semCsrfDosPlugins.has(pathname) || PUBLIC_WEB_PATHS.has(pathname) // plugins' webhooks/unsubscribe (semCsrf); public web channel (no cookie, origin checked per agent in public-web.mjs)
+  return semCsrfDosPlugins.has(pathname) // plugins' and extensions' webhooks, unsubscribe and public web channel (semCsrf)
     || pathname === '/api/wa/webhook'
     || pathname === '/api/slack/events'
     || pathname.startsWith('/api/webhook/')
@@ -11814,7 +11811,7 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-initDb(esquemaDoAtendimento, avatarSchema, cadastro.esquema, ...plugins.map((p) => p.esquema).filter(Boolean))
+initDb(avatarSchema, cadastro.esquema, ...plugins.map((p) => p.esquema).filter(Boolean))
   .then(async () => {
     await discoveryStore.init();
     await onboardingStore.init();

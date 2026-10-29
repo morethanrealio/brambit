@@ -5,11 +5,11 @@
 // Every route requires a session. The owner is checked in the store's SQL (agents.user_id), and
 // a contact or assistant from another account responds with 404, same as an id that doesn't exist.
 // The ones that change state are POST and go through the server's global CSRF.
-import { readBody } from './http-body.mjs';
+import { readBody } from '../../http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
 import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
-import { LINK_SITES_MAX, normalizeSite } from './links.mjs';
+import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);

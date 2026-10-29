@@ -21,9 +21,9 @@
 // not stored: the history keeps the text only.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
-import { indiceCego } from './vault.mjs';
+import { indiceCego } from '../../vault.mjs';
 import { chaveDoContato, normalizeEvent } from './public-support.mjs';
-import { sniffImagem } from './image-sniff.mjs';
+import { sniffImagem } from '../../image-sniff.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);

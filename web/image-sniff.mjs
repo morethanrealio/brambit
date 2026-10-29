@@ -3,7 +3,7 @@
 // to pass. For a biometric photo this matters twice (what goes into the bucket
 // and what the video worker will read), so here the content has the final say.
 // Returns { mime, ext } or null when it's not an image in a format we accept.
-// Used by the owner's chat uploads (server.mjs) and the public web channel (public-web.mjs).
+// Used by the owner's chat uploads (server.mjs) and the public web channel (extensions/public-support/public-web.mjs).
 export function sniffImagem(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
   if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return { mime: 'image/jpeg', ext: 'jpg' };

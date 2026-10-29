@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Page text check (docs/i18n.md, "Pages"). Fails when a page in web/public:
+// Page text check (docs/i18n.md, "Pages"). Fails when a page in web/public or in
+// an extension's public folder (web/extensions/<name>/public):
 //  - marks a key (data-i18n, data-i18n-<attribute>) or an area (data-i18n-texts)
 //    that English does not have;
 //  - has a catalog text, in any language, that names a child tag the element
@@ -25,6 +26,7 @@ import { extraiTextos } from '../web/site-i18n.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PAGES_DIR = path.join(ROOT, 'web', 'public');
+const EXTENSIONS_DIR = path.join(ROOT, 'web', 'extensions');
 const LEGACY = 'test-support/legacy-page-texts.json';
 
 // Marked text blanked: what the old mechanism still finds is the unmarked text.
@@ -90,7 +92,20 @@ export function checkPage(name, html, { i18n, legacy = [] }) {
   return errors;
 }
 
-const pages = () => fs.readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html')).sort();
+// Page name (file name, the key in the legacy list) → its folder.
+function pageDirs() {
+  const dirs = [PAGES_DIR];
+  if (fs.existsSync(EXTENSIONS_DIR)) for (const e of fs.readdirSync(EXTENSIONS_DIR).sort()) dirs.push(path.join(EXTENSIONS_DIR, e, 'public'));
+  const out = new Map();
+  for (const dir of dirs.filter((d) => fs.existsSync(d))) {
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.html'))) {
+      if (out.has(f)) throw new Error(`two pages named ${f}: ${out.get(f)} and ${dir}`);
+      out.set(f, dir);
+    }
+  }
+  return out;
+}
+const pages = () => [...pageDirs().keys()].sort();
 const count = (list) => Object.values(list).reduce((n, texts) => n + texts.length, 0);
 
 function legacyAt(sha) {
@@ -99,7 +114,8 @@ function legacyAt(sha) {
 }
 
 export function run({ baseSha, write = false, log = console.log, error = console.error } = {}) {
-  const read = (f) => fs.readFileSync(path.join(PAGES_DIR, f), 'utf8');
+  const dirs = pageDirs();
+  const read = (f) => fs.readFileSync(path.join(dirs.get(f), f), 'utf8');
   if (write) {
     const list = Object.fromEntries(pages().map((f) => [f, unmarkedTexts(read(f))]).filter(([, texts]) => texts.length));
     fs.writeFileSync(path.join(ROOT, LEGACY), JSON.stringify(list, null, 1) + '\n');

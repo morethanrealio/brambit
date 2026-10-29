@@ -6,7 +6,7 @@
 export const APP_PAGES = new Set(['/chats', '/new', '/assistants', '/memory', '/skills-and-apps', '/connections',
   '/contacts', '/files', '/credits', '/settings']);
 
-// The owner's screen for the assistants that answer the public (web/public/public-support.html).
+// The owner's screen for the assistants that answer the public (web/extensions/public-support/public/public-support.html).
 export const PUBLIC_SUPPORT_PAGE = '/public-support';
 
 const MOVED = new Map([

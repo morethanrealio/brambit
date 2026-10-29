@@ -7,7 +7,7 @@
 // login message. The choice belongs to the installation, not to each user, because the
 // number is a single one: if any owner could turn it on, every stranger would go to
 // their assistant.
-import { defaultTimezone } from './locale.mjs';
+import { defaultTimezone } from '../../locale.mjs';
 import { randomUUID } from 'node:crypto';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
@@ -15,7 +15,7 @@ import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
 import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
 import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
-import { publicSupportOn } from './profiles.mjs';
+import { publicSupportOn } from '../../profiles.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 

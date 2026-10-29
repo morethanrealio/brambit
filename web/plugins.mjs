@@ -16,12 +16,13 @@
 //   observes the before/after of the turn's verification filters, and
 //   briefDaJornada() → text that replaces the default brief of the journey
 //   feedback (discovery/report-instructions.mts), and chaveDeepSeek() → key for the official
-//   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and
-//   atendimentoPublico → hooks for the public-support script
-//   (public-support.mjs: defaultTexts, antesDoModelo, depoisDoModelo, photoRequested), and systemNote({language}) → a
+//   DeepSeek API of the selectable model (without the port, it comes from DEEPSEEK_API_KEY), and systemNote({language}) → a
 //   stable note about the installation added to the assistant's instructions
 //   (before the language directive), or null. Runs at the start of boot; the core brings only
-//   what already exists at that time (publicBase, notifyOwner).
+//   what already exists at that time (publicBase, notifyOwner). Extensions open more ports
+//   (extensions.mjs, pluginPorts), e.g. atendimentoPublico → hooks for the public-support
+//   script (extensions/public-support/public-support.mjs: defaultTexts, antesDoModelo,
+//   depoisDoModelo, photoRequested).
 //  ligar(servidor): routes (routes.mjs), subscriptions and tasks (events.mjs) and
 //   published media (public-media.mjs). Runs with the server mounted; the server
 //   brings the ports and the HTTP and sending helpers the plugin uses, and what
@@ -58,7 +59,7 @@ import {leitorDePagina} from './app-slots.mjs';
 import {conferirCsp} from './csp.mjs';
 import {useLocalePlugins} from './i18n.mjs';
 
-export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','atendimentoPublico','systemNote'];
+export const PORTAS_DE_PLUGIN=['permissoes','contaPagadora','gasto','ferramentas','contaPagamento','ganchosDaEmpresa','premiacaoDoConvite','assuntosConversados','diagnosticoDosFiltros','briefDaJornada','chaveDeepSeek','systemNote'];
 const CAMPOS=['nome','esquema','portas','ligar','semCsrf','publico','siteTextos','textosServidor','fontesMensagens','app','locales','csp'];
 
 export function conferirPlugin(p){

@@ -15,7 +15,7 @@
 // 'avatar'), so a server that dies mid-session loses at most a minute of it.
 // Logs carry the session's length and why it ended, never what was said.
 //
-// A visitor of a website talks to the face the same way (public-avatar.mjs):
+// A visitor of a website talks to the face the same way (extensions/public-support/public-avatar.mjs):
 // its sessions pass their own key, where the reply comes from, what to check
 // every minute and the kind they are billed as, and the owner pays them.
 import { randomUUID } from 'node:crypto';
@@ -176,7 +176,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
     // usedToday: the owner's talk time in the last 24 h, in ms. Throws
     // {code: 'daily'} when it is all used, {code: 'busy'} when the installation
     // has its most sessions open, or the group its groupMax.
-    // A visitor's session (public-avatar.mjs) also passes: key, one session per
+    // A visitor's session (extensions/public-support/public-avatar.mjs) also passes: key, one session per
     // key; reply(s) → the latest {id, content} to say; canSpend(s) → true, or
     // why it ends; kinds, how its talk time and speech are billed; left, its
     // talk time in ms instead of the daily one; onEnd(s, reason); meta, its own.

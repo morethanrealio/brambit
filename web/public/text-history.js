@@ -1,4 +1,4 @@
-// One editable text with its saved versions (public-support-prompts.mjs), used
+// One editable text with its saved versions (extensions/public-support/public-support-prompts.mjs), used
 // by the admin settings and the public-support screens. The box opens with the
 // current text, or with the default when nothing was edited; saving the default
 // itself, or the back-to-default button, stores "no edit".

@@ -3,9 +3,9 @@
 // public-support.mjs, edits and history in public-support-prompts.mjs). Only the
 // administrator (ADMIN_EMAIL) reaches these routes; anyone else gets a 404, and
 // so does everyone when public support is off for the installation.
-import { readBody } from './http-body.mjs';
-import { SEGUE } from './routes.mjs';
-import { adminUser } from './admin-user.mjs';
+import { readBody } from '../../http-body.mjs';
+import { SEGUE } from '../../routes.mjs';
+import { adminUser } from '../../admin-user.mjs';
 import { INSTALLATION_PROMPT_DEFAULT } from './public-support.mjs';
 import { PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 

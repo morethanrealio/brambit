@@ -12,10 +12,10 @@
 //
 // Contact = (assistant, channel, address). The address (phone) is encrypted via the
 // vault and the lookup is by blind index; without the vault, public mode doesn't turn on.
-import { defaultTimezone } from './locale.mjs';
-import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
-import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
-import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
+import { defaultTimezone } from '../../locale.mjs';
+import { runAgent as runAgentPadrao, ToolRegistry } from '../../../core-proto/core.mjs';
+import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
+import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];

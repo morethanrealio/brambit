@@ -29,7 +29,11 @@ Brambit is a generic engine. Anything that only serves one deployment (a brand,
 a client, billing rules, analytics) goes in a plugin, not in the core: see
 "Plugins" in the README and the format in `web/plugins.mjs`. The core asks the
 deployment through *ports* and has a default for each one, so it runs with no
-plugin at all. `test-support/core-guard.mjs` fails CI if the core imports or
+plugin at all. Optional parts that ship with Brambit are *extensions*: each lives
+in `web/extensions/<name>/`, is a plugin object registered in
+`web/extensions.mjs`, and an installation turns it on or off with
+`BRAMBIT_EXTENSIONS` (the usage profile sets the default). Public support is
+the first one. Their tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
 cites a cloud file listed in `cloud.txt`.
 
 ## Checks CI runs on every pull request

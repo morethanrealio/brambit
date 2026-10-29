@@ -1,7 +1,7 @@
 // Routes port: a distribution plugs in its own HTTP routes without server.mjs
 // knowing each one. A plugin might add e.g. payment webhooks (Stripe, Apple,
 // Asaas) and admin or metrics dashboards. In the core, only the public-service
-// owner view (public-support-owner.mjs).
+// owner view (extensions/public-support/public-support-owner.mjs).
 //  registrar: EXACT path (method + pathname).
 //  usar: free handler, for a prefixed route, one with several paths or that
 //   accepts any method. Returns SEGUE when the request isn't its own.
