@@ -78,6 +78,21 @@
   .th-version-head button{padding:3px 10px;font-size:12.5px;font-weight:500;}
   .th-full{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin:8px 0 0;max-height:320px;overflow:auto;font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;}
   .th-none{color:var(--mut);font-size:13px;}
+  .metric-head{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .metric-head h2{margin:0;}
+  .metric-head select{width:auto;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0 4px;}
+  .kpi{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:#fff;}
+  .kpi .n{font-size:24px;font-weight:700;line-height:1.2;}
+  .kpi .l{font-size:12.5px;color:var(--mut);}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid var(--line);margin-top:8px;}
+  .bars .bar{flex:1;background:var(--accent2);border-radius:3px 3px 0 0;min-height:1px;}
+  .bars .bar.none{background:var(--line2);}
+  .axis{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:3px;}
+  .mtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;}
+  .mtable th,.mtable td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line2);}
+  .mtable th{font-weight:600;color:var(--mut);font-size:12.5px;}
+  .mtable th:first-child,.mtable td:first-child{text-align:left;}
   .hidden{display:none;}
 </style>
 </head>
@@ -107,11 +122,39 @@
     </div>
   </div>
 
+  <div class="card hidden" id="metricsCard">
+    <div class="metric-head">
+      <h2 id="metricsTitle" data-i18n="public_service_page.metrics">Activity</h2>
+      <select id="metricDays" aria-labelledby="metricsTitle">
+        <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
+        <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
+        <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
+      </select>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="n" id="mConversations">0</div><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div></div>
+      <div class="kpi"><div class="n" id="mNewContacts">0</div><div class="l" data-i18n="public_service_page.metric_new_contacts">New contacts</div></div>
+      <div class="kpi"><div class="n" id="mReceived">0</div><div class="l" data-i18n="public_service_page.metric_received">Messages received</div></div>
+      <div class="kpi"><div class="n" id="mReplies">0</div><div class="l" data-i18n="public_service_page.metric_replies">Replies sent</div></div>
+    </div>
+    <h3 data-i18n="public_service_page.metric_per_day">Conversations per day</h3>
+    <div class="bars" id="mBars"></div>
+    <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
+    <table class="mtable">
+      <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_conversations">Conversations</th>
+        <th data-i18n="public_service_page.metric_new_contacts">New contacts</th><th data-i18n="public_service_page.metric_received">Messages received</th>
+        <th data-i18n="public_service_page.metric_replies">Replies sent</th></tr></thead>
+      <tbody id="mChannels"></tbody>
+    </table>
+    <p class="nota espaco hidden" id="mRetention"></p>
+    <div id="metricsMsg" class="msg"></div>
+  </div>
+
   <div class="card hidden" id="cfgCard">
     <h2 data-i18n="public_service_page.settings">Settings</h2>
     <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
     <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
-    <label class="check" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
+    <label class="check" id="activeLabel" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
     <div id="writtenTextBlock" class="hidden">
       <label id="writtenTextLabel" data-i18n="public_service_page.written_text">Written text</label>
       <p class="nota" data-i18n="public_service_page.written_text_help">What this assistant follows when someone types to it. It comes filled in with the text this assistant came with; a change applies from the next message.</p>
@@ -124,7 +167,7 @@
     </div>
     <label for="instrucoes" data-i18n="public_service_page.instructions">Extra instructions (what it does, tone, what it must not do). They add to the instructions that already come with this assistant, if any.</label>
     <textarea id="instrucoes" maxlength="20000"></textarea>
-    <div class="row">
+    <div class="row" id="ownerLimits">
       <div><label for="retencao" data-i18n="public_service_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
       <div><label for="limite" data-i18n="public_service_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
       <div><label for="limiteAgente" data-i18n="public_service_page.agent_rate_limit">Messages per hour, all contacts together</label><input type="number" id="limiteAgente" min="1" max="100000"/></div>
@@ -132,6 +175,7 @@
     </div>
     <label for="linkSites" data-i18n="public_service_page.link_sites">Sites the assistant may send people to (one per line, only the domain, e.g. shop.example.com; its subdomains count too; empty = any site)</label>
     <textarea id="linkSites" spellcheck="false"></textarea>
+    <div id="ownerWeb">
     <h3 data-i18n="public_service_page.web_title">Website and API</h3>
     <p class="nota" data-i18n="public_service_page.web_lead">A chat on your website, or your own server, can talk to this assistant in the same public mode. Those conversations show up in the contacts list below.</p>
     <label class="check" data-i18n="public_service_page.web_enabled"><input type="checkbox" id="webAtivo"/> Answer from websites and the API</label>
@@ -152,13 +196,16 @@
         <div><label for="avatarSessions" data-i18n="public_service_page.avatar_max_sessions">Visitors talking at the same time</label><input type="number" id="avatarSessions" min="1" max="100"/></div>
       </div>
     </div>
-    <div class="acoes"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
+    </div>
+    <div class="acoes" id="saveActions"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
     <div id="cfgMsg" class="msg"></div>
+    <div id="ownerKey">
     <label data-i18n="public_service_page.web_key">Server key</label>
     <p class="nota" id="webChaveEstado"></p>
     <code id="webChaveNova" class="hidden" translate="no"></code>
     <div class="acoes"><button class="btn ghost" id="webChave" data-i18n="public_service_page.web_key_new">Generate key</button></div>
     <div id="webChaveMsg" class="msg"></div>
+    </div>
   </div>
 
   <div class="grid hidden" id="atendGrid">
@@ -205,14 +252,14 @@
   }
   function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
-  var avatarAvailable = false;
+  var avatarAvailable = false, signupOpen = false;
   function carregarAgentes(manter){
     return pedir('/api/publico/agentes').then(function(j){
       agentes = j.agentes || [];
       avatarAvailable = !!j.avatarAvailable;
       // A client area's panel account has only this screen: no app to go back to, no usage of its own.
       if (j.panelAccount) { $('backLink').classList.add('hidden'); $('usageLink').classList.add('hidden'); $('ownerLinks').classList.remove('hidden'); }
-      $('avisoCadastro').classList.toggle('hidden', !j.signupOpen);
+      signupOpen = !!j.signupOpen;
       var sel = $('agente'); sel.textContent = '';
       $('semAgente').classList.toggle('hidden', agentes.length > 0);
       if (!agentes.length) return;
@@ -221,12 +268,21 @@
       sel.value = inicial; escolherAgente(inicial);
     });
   }
+  function isOwner(){ return !agenteAtual.role || agenteAtual.role === 'owner'; }
+  function canEdit(){ return isOwner() || agenteAtual.role === 'admin'; }
   function escolherAgente(id){
     agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
     if (!agenteAtual) return;
-    $('cfgCard').classList.remove('hidden'); $('atendGrid').classList.remove('hidden');
+    $('metricsCard').classList.remove('hidden'); $('cfgCard').classList.remove('hidden'); $('atendGrid').classList.remove('hidden');
+    // A client area's member (client-areas.mjs) sees what its role allows: an admin edits the
+    // instructions, texts and link sites; a viewer only reads. The rest is the owner's.
+    var owner = isOwner(), editor = canEdit();
+    ['activeLabel', 'ownerLimits', 'ownerWeb', 'ownerKey'].forEach(function(id){ $(id).classList.toggle('hidden', !owner); });
+    ['instrucoes', 'linkSites'].forEach(function(id){ $(id).readOnly = !editor; });
+    ['saveActions', 'bloquear', 'exportar', 'apagar'].forEach(function(id){ $(id).classList.toggle('hidden', !editor); });
+    $('avisoCadastro').classList.toggle('hidden', !owner || !signupOpen);
     var aviso = $('avisoNumero');
-    aviso.classList.toggle('hidden', agenteAtual.doNumero);
+    aviso.classList.toggle('hidden', !owner || agenteAtual.doNumero);
     $('ativo').checked = !!agenteAtual.ativo;
     $('instrucoes').value = agenteAtual.instrucoes || '';
     $('retencao').value = agenteAtual.retencaoDias;
@@ -247,7 +303,7 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('webChaveMsg'), '');
-    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos();
+    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics();
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
 
@@ -264,7 +320,7 @@
         var state = j[k[0]];
         if (!state) return;
         $(k[1] + 'Block').classList.remove('hidden');
-        window.textHistory($(k[1]), { rows: 12, labelledBy: k[1] + 'Label', api: {
+        window.textHistory($(k[1]), { rows: 12, labelledBy: k[1] + 'Label', readOnly: !canEdit(), api: {
           load: function(){ return Promise.resolve(state); },
           save: function(content){ return pedir(TEXTS, { agentId: id, kind: k[0], content: content }); },
           restore: function(versionId){ return pedir(TEXTS + '/restore', { agentId: id, kind: k[0], versionId: versionId }); }
@@ -278,14 +334,15 @@
   $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
 
   $('salvar').addEventListener('click', function(){
-    var b = this, teto = $('teto').value.trim();
-    var corpo = { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
+    var b = this, teto = $('teto').value.trim(), sites = $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    // A client area's admin sends only what its role changes (the server refuses the rest).
+    var corpo = !isOwner() ? { agentId: agenteAtual.agentId, instrucoes: $('instrucoes').value, linkSites: sites } : { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
       retencaoDias: parseInt($('retencao').value, 10), limitePorHora: parseInt($('limite').value, 10),
       agentHourlyLimit: parseInt($('limiteAgente').value, 10), tetoDiarioUsd: teto === '' ? null : Number(teto),
-      linkSites: $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
+      linkSites: sites,
       webEnabled: $('webAtivo').checked, webOrigins: $('webOrigens').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
       webKeyIps: $('webChaveIps').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean) };
-    if (avatarAvailable) Object.assign(corpo, { avatarEnabled: $('avatarEnabled').checked, avatarDailyMinutes: parseInt($('avatarDaily').value, 10),
+    if (avatarAvailable && isOwner()) Object.assign(corpo, { avatarEnabled: $('avatarEnabled').checked, avatarDailyMinutes: parseInt($('avatarDaily').value, 10),
       avatarVisitorMinutes: parseInt($('avatarVisitor').value, 10), avatarMaxSessions: parseInt($('avatarSessions').value, 10) });
     b.disabled = true; msg($('cfgMsg'), t('saving'));
     pedir('/api/publico/configurar', corpo).then(function(){
@@ -305,6 +362,43 @@
       msg($('webChaveMsg'), t('web_key_shown'), 'ok');
     }).catch(function(e){ msg($('webChaveMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
   });
+
+  // The assistant's volume (public-support-metrics.mjs): totals, one bar per day, and by channel.
+  var METRICS = '/api/public-support/metrics', metricsFor = null;
+  function loadMetrics(){
+    var id = agenteAtual.agentId, days = $('metricDays').value, key = metricsFor = id + ':' + days;
+    var number = new Intl.NumberFormat(document.documentElement.lang);
+    msg($('metricsMsg'), '');
+    pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days).then(function(j){
+      if (metricsFor !== key) return;
+      [['mConversations', 'conversations'], ['mNewContacts', 'newContacts'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
+        $(p[0]).textContent = number.format(j.total[p[1]]);
+      });
+      var bars = $('mBars'), top = Math.max.apply(null, j.daily.map(function(d){ return d.conversations; }).concat([1]));
+      bars.textContent = '';
+      j.daily.forEach(function(d){
+        var b = el('div', 'bar' + (d.conversations ? '' : ' none'));
+        b.style.height = (d.conversations / top * 100) + '%';
+        b.title = t('metric_day_tip', { day: dayLabel(d.day), count: d.conversations });
+        bars.appendChild(b);
+      });
+      $('mFirst').textContent = j.daily.length ? dayLabel(j.daily[0].day) : '';
+      $('mLast').textContent = j.daily.length ? dayLabel(j.daily[j.daily.length - 1].day) : '';
+      var rows = $('mChannels'); rows.textContent = '';
+      Object.keys(j.channels).forEach(function(c){
+        var v = j.channels[c], tr = el('tr');
+        var name = el('td', null, c === 'web' ? t('metric_channel_web') : c === 'whatsapp' ? 'WhatsApp' : c);
+        if (c === 'whatsapp') name.setAttribute('translate', 'no');
+        tr.appendChild(name);
+        ['conversations', 'newContacts', 'received', 'replies'].forEach(function(k){ tr.appendChild(el('td', null, number.format(v[k]))); });
+        rows.appendChild(tr);
+      });
+      $('mRetention').textContent = j.retentionDays < j.days ? t('metric_retention', { days: j.retentionDays }) : '';
+      $('mRetention').classList.toggle('hidden', !(j.retentionDays < j.days));
+    }).catch(function(e){ if (metricsFor === key && e.message !== NO_SESSION) msg($('metricsMsg'), e.message, 'err'); });
+  }
+  function dayLabel(day){ try { return new Date(day + 'T12:00:00Z').toLocaleDateString(document.documentElement.lang, { day:'2-digit', month:'2-digit', timeZone:'UTC' }); } catch(e){ return day; } }
+  $('metricDays').addEventListener('change', function(){ if (agenteAtual) loadMetrics(); });
 
   function carregarContatos(){
     var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;

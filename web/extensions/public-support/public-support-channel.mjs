@@ -16,6 +16,7 @@ import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
 import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
 import { publicSupportOn } from '../../profiles.mjs';
+import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
@@ -90,7 +91,8 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   if (rotas) {
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas });
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas,
+      metrics: createMetricsStore(pool, { S }) });
     registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log });
     accountScope?.register(panelScope(areas));
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });

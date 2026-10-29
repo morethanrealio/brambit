@@ -1166,7 +1166,21 @@
     "new_assistant": "Novo assistente (o nome dele)",
     "create": "Criar",
     "enter_name": "Digite o nome do assistente.",
-    "created": "{name} criado. Configure logo abaixo."
+    "created": "{name} criado. Configure logo abaixo.",
+    "metrics": "Atividade",
+    "metric_days_7": "Últimos 7 dias",
+    "metric_days_30": "Últimos 30 dias",
+    "metric_days_90": "Últimos 90 dias",
+    "metric_conversations": "Conversas",
+    "metric_new_contacts": "Contatos novos",
+    "metric_received": "Mensagens recebidas",
+    "metric_replies": "Respostas enviadas",
+    "metric_per_day": "Conversas por dia",
+    "metric_channel": "Canal",
+    "metric_channel_web": "Site e API",
+    "metric_day_tip_one": "{day}: {count} conversa",
+    "metric_day_tip_other": "{day}: {count} conversas",
+    "metric_retention": "As conversas ficam guardadas por {days} dias, então os dias antes disso aparecem vazios."
   },
   "index_page": {
     "auth": {

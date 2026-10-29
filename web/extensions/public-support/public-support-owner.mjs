@@ -13,6 +13,7 @@ import { webFieldsFromBody } from './public-web.mjs';
 import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
+import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -63,8 +64,9 @@ export function camposDaConfig(b = {}) {
 // (the plugin's texts, public-support.mjs) = the assistant's editable texts.
 // avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
+// metrics (public-support-metrics.mjs) = the assistant's volume, for every role.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -201,6 +203,14 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const dados = await store.exportar(contatoId);
     if (!dados) return naoAchei(res);
     return send(res, 200, dados, { 'content-disposition': `attachment; filename="contato-${contatoId}.json"` });
+  });
+
+  if (metrics) rota('GET', METRICS_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    const days = Number(url.searchParams.get('days'));
+    if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
+    return send(res, 200, await metrics.volume(acc.ownerId, acc.agentId, days));
   });
 
   if (prompts) registerAgentTexts();

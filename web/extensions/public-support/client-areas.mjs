@@ -25,6 +25,7 @@ import { mailEnabled as coreMailEnabled, sendEmail as coreSendEmail } from '../.
 import { remetenteConvite } from '../../company-invite-email.mjs';
 import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
 import { AGENT_TEXTS_PATH } from './public-support-owner.mjs';
+import { METRICS_PATH } from './public-support-metrics.mjs';
 
 export const CLIENT_ROLES = ['admin', 'viewer'];
 export const AREA_NAME_MAX = 120;
@@ -202,7 +203,7 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
 // which only an owner uses.
 export const panelScope = (areas) => ({
   name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
-  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/'),
+  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH,
 });
 
 // The invite e-mail, in the inviter's language (the invitee has none yet).
