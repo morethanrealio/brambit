@@ -44,7 +44,7 @@ import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution}
 import {createEventos,criadorDeConta} from './events.mjs';
 import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
 import {createMidiaPublica} from './public-media.mjs';
-import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
+import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {loadExtensions,extensionPorts} from './extensions.mjs';import {createGuestContacts} from './guest-contacts.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
 import {createContaPagadoraSimples} from './paying-account.mjs';
 import {createFerramentasSimples} from './tools.mjs';
@@ -52,10 +52,10 @@ import {createContaPagamentoSimples} from './payment-account.mjs';
 import {createGastoSimples} from './simple-spend.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
-// Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS
-// (e.g. a hosted deployment's own plugins). Each port without a plugin uses the core default.
-const plugins=await carregarPlugins();
-const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
+// Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS (e.g. a hosted
+// deployment's own plugins), after the enabled extensions (extensions.mjs). Each port without a plugin uses the core default.
+const plugins=await carregarPlugins(undefined,await loadExtensions());
+const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner},extensionPorts()), guestContacts=createGuestContacts(); // guest-contacts.mjs: WhatsApp numbers without an account.
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
 const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissions.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
@@ -6810,9 +6810,9 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   const { text, usage } = await transcribeAudio(buffer, mime, { language: (await getUserLocale(userId).catch(() => null))?.language });
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-// Public service (public-support-channel.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
+const chatProvider = ({ userId, agentId, kind }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind }), coreSignupOpen = pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()); // For the extensions (servidor): the chat model tied to the person's spend; whether the core's sign-up is open (null = a plugin decides). Public service (public-support-channel.mjs): an unknown WhatsApp contact goes to the assistant the installation chose.
 const atendimentoPublico = criarAtendimentoDoServidor({ pool, avatar, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
-  signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
+  signupOpen: coreSignupOpen, makeProvider: ({ userId, agentId }) => chatProvider({ userId, agentId, kind: 'publico' }) }); guestContacts.register({ whatsapp: atendimentoPublico.whatsapp }, 'public-support');
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Telegram channel: runs one bot per user (their BotFather token). Injects the
 // deps to avoid a circular import. The pollers start up at boot (listEnabledTelegramBots).
@@ -6846,7 +6846,7 @@ const telegramMgr = createTelegramManager({
 // agent uses one fixed "WhatsApp" thread (isolated history; shared user memory).
 const heldWhatsApp = createWhatsAppHeldDelivery(pool, { persist: (row, text) => persistProactiveToThread({ channel: 'whatsapp', ...row }, text) });
 const waHandler = createWhatsAppHandler({
-  inbox:waInbox, heldDelivery: heldWhatsApp, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
+  inbox:waInbox, heldDelivery: heldWhatsApp, avisoCanal: avisoCanal('WhatsApp'), publico: guestContacts.whatsapp,
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
     // pollNewUserMsg = channel for the message that arrives mid-turn (see whatsapp.mjs).
@@ -11628,7 +11628,7 @@ async function atenderRequest(req, res) {
 
 // Plugins hook in here, not together with the ports further up, because they need
 // things declared partway through the file (jobs, flags, /metrics access check).
-const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification,
+const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification, pool, recordUsages, ferramentas, avatar, clientIp, guestContacts, chatProvider, signupOpen: coreSignupOpen, ports: pecas,
   runAgentMessageDraft, agentForLifecycleChannel, deliverLifecycle, deliverRoutine, persistProactiveToThread, firstNameOf, makePrimaryProvider,
   runConversationInThread, normalizeFiles, normalizeImages, codingJobs, PUBLIC, PUBLIC_BASE, SECURITY_HEADERS, buildCsp, safeStrEq,
   metricsAuthGuard, metricsAuthOk, metricsChallenge, metricsSessKey, verifyMetricsSession,

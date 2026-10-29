@@ -24,7 +24,10 @@
 //   what already exists at that time (publicBase, notifyOwner).
 //  ligar(servidor): routes (routes.mjs), subscriptions and tasks (events.mjs) and
 //   published media (public-media.mjs). Runs with the server mounted; the server
-//   brings the ports and the HTTP and sending helpers the plugin uses.
+//   brings the ports and the HTTP and sending helpers the plugin uses, and what
+//   the extensions (extensions.mjs) need: pool, recordUsages, ferramentas, avatar,
+//   clientIp, guestContacts (guest-contacts.mjs), chatProvider({userId, agentId,
+//   kind}) tied to the person's spend, signupOpen and ports (every port's piece).
 //   In the public-support usage profile (profiles.mjs) only the /api/ routes
 //   registered with rotas.registrar answer.
 //  semCsrf: EXACT paths that arrive without a browser Origin (webhook with
@@ -78,14 +81,15 @@ export function arquivoDosPlugins(env=process.env){
 
 // file exists = the list has to load; an error inside it brings down the boot. With
 // BRAMBIT_PLUGINS, the file has to exist: a requested list not found doesn't come up
-// silently without the plugins.
-export async function carregarPlugins(arquivo=arquivoDosPlugins()){
- if(!fs.existsSync(arquivo)){
-  if(process.env.BRAMBIT_PLUGINS&&arquivo.href===arquivoDosPlugins().href)throw Error('BRAMBIT_PLUGINS aponta pra um arquivo que não existe: '+process.env.BRAMBIT_PLUGINS);
-  return [];
- }
- const lista=(await import(arquivo.href)).default;
- if(!Array.isArray(lista))throw Error(`${fileURLToPath(arquivo)} precisa exportar uma lista de plugins`);
+// silently without the plugins. extensions (extensions.mjs, already loaded) go
+// first in the list returned.
+export async function carregarPlugins(arquivo=arquivoDosPlugins(),extensions=[]){
+ let lista=[];
+ if(fs.existsSync(arquivo)){
+  lista=(await import(arquivo.href)).default;
+  if(!Array.isArray(lista))throw Error(`${fileURLToPath(arquivo)} precisa exportar uma lista de plugins`);
+ }else if(process.env.BRAMBIT_PLUGINS&&arquivo.href===arquivoDosPlugins().href)throw Error('BRAMBIT_PLUGINS aponta pra um arquivo que não existe: '+process.env.BRAMBIT_PLUGINS);
+ lista=[...extensions,...lista];
  const nomes=new Set();
  for(const p of lista){
   conferirPlugin(p);
@@ -96,12 +100,13 @@ export async function carregarPlugins(arquivo=arquivoDosPlugins()){
  return lista;
 }
 
-export function juntarPortas(plugins,nucleo){
+// extraPorts: the ports the extensions open (extensions.mjs, extensionPorts).
+export function juntarPortas(plugins,nucleo,extraPorts=[]){
  const pecas={};
  for(const p of plugins){
   const r=p.portas?.(nucleo)||{};
   for(const [k,v] of Object.entries(r)){
-   if(!PORTAS_DE_PLUGIN.includes(k))throw Error(`Plugin ${p.nome}: porta desconhecida ${k}`);
+   if(!PORTAS_DE_PLUGIN.includes(k)&&!extraPorts.includes(k))throw Error(`Plugin ${p.nome}: porta desconhecida ${k}`);
    if(k in pecas)throw Error(`Porta ${k} pedida por dois plugins`);
    pecas[k]=v;
   }
