@@ -33,7 +33,7 @@
     "@napi-rs/canvas": "^1.0.11",
     "html-to-text": "10.0.1",
     "i18next": "^26.4.6",
-    "imapflow": "^1.7.8",
+    "imapflow": "^2.9.0",
     "mailparser": "^3.12.4",
     "nodemailer": "^10.2.1",
     "pdf-parse": "^2.4.5",
