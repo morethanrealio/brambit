@@ -13,6 +13,12 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    # TypeScript 7 drops the JavaScript compiler API that two tests use
+    # (tests/confirmation-tools.test.mjs, tests/quality-batch4.test.mjs).
+    # Remove this once they move to the new API.
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
