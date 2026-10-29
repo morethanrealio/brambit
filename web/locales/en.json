@@ -2278,6 +2278,10 @@
       "greeting_name": "Hi {name},",
       "greeting": "Hi,",
       "body": "{greeting}\n\nWe received a request to reset the password of your {brand} account. To create a new password, just open the link below (valid for 10 minutes):\n\n{link}\n\nIf you didn't ask for this, you can ignore this email; your password stays the same.\n\n{brand}"
+    },
+    "client_area_invite": {
+      "subject": "{inviter} invited you to {area} on {brand}",
+      "body": "Hi,\n\n{inviter} invited you to the {area} area on {brand}, where you follow and adjust the assistants that serve your customers.\n\nTo create your password and sign in, open the link below (valid for 3 days, works once):\n\n{link}\n\nIf you don't recognize this invite, you can ignore this email.\n\n{brand}"
     }
   },
   "coding": {

@@ -86,7 +86,7 @@
   <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
   <a class="back" id="backLink" href="/chats" data-i18n="public_service_page.back">back to the app</a>
   <nav id="ownerLinks" class="hidden">
-    <a href="/usage" data-i18n="public_service_page.usage_link">Usage</a>
+    <a href="/usage" id="usageLink" data-i18n="public_service_page.usage_link">Usage</a>
     <a href="/admin/settings" id="settingsLink" class="hidden" data-i18n="public_service_page.settings_link">Installation settings</a>
     <a href="/login" id="signOut" data-i18n="public_service_page.sign_out">Sign out</a>
   </nav>
@@ -210,6 +210,8 @@
     return pedir('/api/publico/agentes').then(function(j){
       agentes = j.agentes || [];
       avatarAvailable = !!j.avatarAvailable;
+      // A client area's panel account has only this screen: no app to go back to, no usage of its own.
+      if (j.panelAccount) { $('backLink').classList.add('hidden'); $('usageLink').classList.add('hidden'); $('ownerLinks').classList.remove('hidden'); }
       $('avisoCadastro').classList.toggle('hidden', !j.signupOpen);
       var sel = $('agente'); sel.textContent = '';
       $('semAgente').classList.toggle('hidden', agentes.length > 0);

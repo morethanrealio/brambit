@@ -2278,6 +2278,10 @@
       "greeting_name": "Hola {name},",
       "greeting": "Hola,",
       "body": "{greeting}\n\nRecibimos un pedido para restablecer la contraseña de tu cuenta en {brand}. Para crear una contraseña nueva, solo abre el enlace de abajo (vale por 10 minutos):\n\n{link}\n\nSi no fuiste tú quien lo pidió, puedes ignorar este correo; tu contraseña sigue siendo la misma.\n\n{brand}"
+    },
+    "client_area_invite": {
+      "subject": "{inviter} te invitó a {area} en {brand}",
+      "body": "Hola:\n\n{inviter} te invitó al área {area} en {brand}, donde sigues y ajustas los asistentes que atienden a tus clientes.\n\nPara crear tu contraseña y entrar, abre el enlace de abajo (vale 3 días y funciona una vez):\n\n{link}\n\nSi no reconoces esta invitación, puedes ignorar este correo.\n\n{brand}"
     }
   },
   "coding": {

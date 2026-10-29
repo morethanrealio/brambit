@@ -42,7 +42,7 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';import {createAccountScope} from './account-scope.mjs';
 import {createMidiaPublica} from './public-media.mjs';
 import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {loadExtensions,extensionPorts} from './extensions.mjs';import {createGuestContacts} from './guest-contacts.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
@@ -55,7 +55,7 @@ import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
 // Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS (e.g. a hosted
 // deployment's own plugins), after the enabled extensions (extensions.mjs). Each port without a plugin uses the core default.
 const plugins=await carregarPlugins(undefined,await loadExtensions());
-const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner},extensionPorts()), guestContacts=createGuestContacts(); // guest-contacts.mjs: WhatsApp numbers without an account.
+const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner},extensionPorts()), guestContacts=createGuestContacts(), accountScope=createAccountScope(); // guest-contacts.mjs: WhatsApp numbers without an account; account-scope.mjs: accounts an extension holds to its part of the app.
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
 const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissions.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
@@ -8423,9 +8423,8 @@ async function atenderRequest(req, res) {
   if (!csrfOk(req, url.pathname)) return send(res, 403, { error: 'server.unauthorized_origin' });
 
   // Resolves the logged-in user from the session (cookie). null if not logged in.
-  async function currentUser() {
-    try { return await getUserBySession(readSid(req)); } catch { return null; }
-  }
+  async function currentUser() { try { return await getUserBySession(readSid(req)); } catch { return null; } }
+  const held = await accountScope.check(req.method, url.pathname, currentUser); if (held) { res.writeHead(held.status, held.location ? { location: held.location } : {}); return res.end(held.location ? undefined : 'not found'); } // an extension holds this account to its part of the app (account-scope.mjs)
 
   // PAGE language. Order: footer selector choice (cookie) > saved preference of
   // whoever's logged in > browser's Accept-Language. An explicit choice beats a
@@ -11625,7 +11624,7 @@ async function atenderRequest(req, res) {
 
 // Plugins hook in here, not together with the ports further up, because they need
 // things declared partway through the file (jobs, flags, /metrics access check).
-const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification, pool, recordUsages, ferramentas, avatar, clientIp, guestContacts, chatProvider, signupOpen: coreSignupOpen, ports: pecas,
+const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification, pool, recordUsages, ferramentas, avatar, clientIp, guestContacts, accountScope, chatProvider, signupOpen: coreSignupOpen, ports: pecas,
   runAgentMessageDraft, agentForLifecycleChannel, deliverLifecycle, deliverRoutine, persistProactiveToThread, firstNameOf, makePrimaryProvider,
   runConversationInThread, normalizeFiles, normalizeImages, codingJobs, PUBLIC, PUBLIC_BASE, SECURITY_HEADERS, buildCsp, safeStrEq,
   metricsAuthGuard, metricsAuthOk, metricsChallenge, metricsSessKey, verifyMetricsSession,

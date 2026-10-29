@@ -16,7 +16,7 @@ import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
 import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
 import { publicSupportOn } from '../../profiles.mjs';
-import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes } from './client-areas.mjs';
+import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -49,13 +49,15 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // admin's installation text (public-support-admin.mjs) and the owner's client areas
 // (client-areas.mjs), which also open the owner's view to an area's members. avatar = what
 // registerAvatar returns, for the face on the web channel (public-avatar.mjs).
+// accountScope (account-scope.mjs) holds the panel accounts a client area
+// invites to this screen; publicBase() → the address their password link uses.
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
 // it hands to the public would also hand out accounts paid by the owner. null =
 // a plugin decides sign-up, and with it whether that is safe.
 // enabled=false (the personal usage profile, profiles.mjs) keeps it off too.
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
-  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null }) {
+  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '' }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
   const prompts = createPromptStore(pool, { S });
@@ -89,7 +91,8 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas });
-    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests });
+    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log });
+    accountScope?.register(panelScope(areas));
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }

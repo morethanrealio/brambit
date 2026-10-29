@@ -11,11 +11,26 @@
 // still run on the owner's account (agents.user_id); an area only decides who
 // reaches the owner's screen. One check (agentAccess, contactAccess) answers that for every route
 // (public-support-owner.mjs); the owner filter in each query stays as a second lock.
+//
+// Inviting an e-mail with no account creates a panel account: it is held to this
+// screen (account-scope.mjs), so it never chats, creates assistants or spends,
+// and it is not a product sign-up (no conta_criada event, so no plan or welcome
+// from a plugin). The owner gets a one-time link to set the password and passes
+// it on; with e-mail set up, the server can send it too.
 import { readBody } from '../../http-body.mjs';
+import { hashPassword, newToken, validEmail } from '../../auth.mjs';
+import { marca } from '../../brand.mjs';
+import { productI18n } from '../../i18n.mjs';
+import { mailEnabled as coreMailEnabled, sendEmail as coreSendEmail } from '../../mailer.mjs';
+import { remetenteConvite } from '../../company-invite-email.mjs';
+import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
+import { AGENT_TEXTS_PATH } from './public-support-owner.mjs';
 
 export const CLIENT_ROLES = ['admin', 'viewer'];
 export const AREA_NAME_MAX = 120;
 export const CLIENT_AREAS_PATH = '/api/public-support/areas';
+// How long the link to set a panel account's password lasts.
+export const INVITE_LINK_MINUTES = 72 * 60;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -38,6 +53,10 @@ export const clientAreaSchema = (S) => `
  CREATE TABLE IF NOT EXISTS ${S}.client_area_agents (
    agent_id uuid PRIMARY KEY REFERENCES ${S}.agents(id) ON DELETE CASCADE,
    area_id uuid NOT NULL REFERENCES ${S}.client_areas(id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ${S}.client_area_panel_accounts (
+   user_id uuid PRIMARY KEY REFERENCES ${S}.users(id) ON DELETE CASCADE,
+   invited_by uuid REFERENCES ${S}.users(id) ON DELETE SET NULL,
+   created_at timestamptz NOT NULL DEFAULT now());
 `;
 
 export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
@@ -49,9 +68,23 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
      LEFT JOIN ${S}.client_areas ar ON ar.id = x.area_id AND ar.owner_user_id = a.user_id
      LEFT JOIN ${S}.client_area_members m ON m.area_id = ar.id AND m.user_id = $1`;
   const asAccess = (r) => (r && r.role ? { ownerId: r.owner_id, role: r.role, agentId: r.agent_id, areaId: r.area_id, areaName: r.area_name } : null);
+  // Panel accounts, kept in memory: the core asks on every request of a signed-in
+  // account (account-scope.mjs). Only this store writes the table.
+  const panel = new Set();
+  let loaded = false;
+  let loading = null;
+  const loadPanel = () => (loading ||= pool.query(`SELECT user_id FROM ${S}.client_area_panel_accounts`, []).then(({ rows }) => {
+    for (const r of rows) panel.add(r.user_id);
+    loaded = true;
+  }, (e) => { loading = null; throw e; }));
 
   return {
     init: () => pool.query(clientAreaSchema(S)),
+
+    // What the core's account scope reads. Until the list loads, every signed-in
+    // account is checked, so nobody slips through at boot.
+    panelActive: () => !loaded || panel.size > 0,
+    async isPanelAccount(userId) { await loadPanel(); return panel.has(userId); },
 
     // → { ownerId, role: owner|admin|viewer, agentId, areaId, areaName } or null.
     async agentAccess(userId, agentId) {
@@ -112,27 +145,79 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
       return rowCount > 0;
     },
 
-    // An account that already exists joins the area (role) or leaves it (role null).
-    // → 'ok' | 'no_area' | 'no_account'.
+    // An account joins the area (role) or leaves it (role null). An e-mail with no
+    // account joins as a new panel account. → { status: 'ok' | 'no_area' |
+    // 'no_account' | 'account_closed', userId, created }.
     async setMember(ownerId, areaId, email, role) {
-      if (!(await pool.query(`SELECT 1 FROM ${S}.client_areas WHERE id = $1 AND owner_user_id = $2`, [areaId, ownerId])).rows[0]) return 'no_area';
-      const user = (await pool.query(`SELECT id FROM ${S}.users WHERE lower(email) = lower($1)`, [email])).rows[0];
-      if (!user) return 'no_account';
+      await loadPanel();
+      const area = (await pool.query(`SELECT name FROM ${S}.client_areas WHERE id = $1 AND owner_user_id = $2`, [areaId, ownerId])).rows[0];
+      if (!area) return { status: 'no_area' };
+      let user = (await pool.query(`SELECT id, deleted_at FROM ${S}.users WHERE lower(email) = lower($1)`, [email])).rows[0];
+      if (user?.deleted_at) return { status: 'account_closed' };
       if (role == null) {
+        if (!user) return { status: 'no_account' };
         await pool.query(`DELETE FROM ${S}.client_area_members WHERE area_id = $1 AND user_id = $2`, [areaId, user.id]);
-      } else {
-        await pool.query(
+        return { status: 'ok', userId: user.id, created: false };
+      }
+      const created = !user;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        if (created) {
+          const em = email.toLowerCase();
+          user = (await client.query(`INSERT INTO ${S}.users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+            [em.split('@')[0], em, hashPassword(newToken())])).rows[0];
+          await client.query(`INSERT INTO ${S}.client_area_panel_accounts (user_id, invited_by) VALUES ($1, $2)`, [user.id, ownerId]);
+        }
+        await client.query(
           `INSERT INTO ${S}.client_area_members (area_id, user_id, role) VALUES ($1, $2, $3)
            ON CONFLICT (area_id, user_id) DO UPDATE SET role = EXCLUDED.role`, [areaId, user.id, role]);
-      }
-      return 'ok';
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally { client.release(); }
+      if (created) panel.add(user.id);
+      return { status: 'ok', userId: user.id, created, areaName: area.name };
+    },
+
+    // A one-time token to set the password (core's /reset page), only for a panel
+    // account that never set one; null otherwise, so the owner can't take over
+    // an account its person already uses.
+    async inviteToken(userId, minutes = INVITE_LINK_MINUTES) {
+      await loadPanel();
+      if (!panel.has(userId)) return null;
+      const used = (await pool.query(`SELECT 1 FROM ${S}.password_resets WHERE user_id = $1 AND used_at IS NOT NULL LIMIT 1`, [userId])).rows[0];
+      if (used) return null;
+      const token = newToken();
+      await pool.query(`INSERT INTO ${S}.password_resets (token, user_id, expires_at) VALUES ($1, $2, now() + ($3 || ' minutes')::interval)`,
+        [token, userId, String(minutes)]);
+      return token;
     },
   };
 }
 
+// What the core's account scope (account-scope.mjs) holds a panel account to:
+// the owner's screen and its routes, as a member. Not the areas' own routes,
+// which only an owner uses.
+export const panelScope = (areas) => ({
+  name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
+  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/'),
+});
+
+// The invite e-mail, in the inviter's language (the invitee has none yet).
+export function inviteEmail({ link, areaName, inviter, language }) {
+  const t = (k, vars = {}) => productI18n().t(`emails.client_area_invite.${k}`, language, { brand: marca().nome, area: areaName, ...vars });
+  return { subject: t('subject'), text: t('body', { link, inviter: inviter || marca().nome }) };
+}
+
 // The owner's routes to set areas up. A member or anyone else gets a 404 for an
 // area that is not theirs; the screen comes later, these are its API.
-export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests }) {
+// publicBase() → the installation's address, for the password link. mail = the
+// core's mailer ({ enabled(), send() }); the invite e-mail goes out only when
+// the owner asks for it (sendEmail: true) and e-mail is set up.
+export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase = () => '',
+  mail = { enabled: coreMailEnabled, send: coreSendEmail }, log = console }) {
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
     const user = await ctx.currentUser?.();
@@ -160,16 +245,28 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     return (await areas.setAgentArea(user.id, agentId, areaId)) ? send(res, 200, { ok: true }) : notFound(res);
   });
 
-  // { areaId, email, role: admin|viewer|null }
+  // { areaId, email, role: admin|viewer|null, sendEmail? }. An e-mail with no
+  // account becomes a panel account; while it has no password, every invite
+  // returns a fresh link to set one (link) and, if asked, e-mails it (emailed).
   route('POST', CLIENT_AREAS_PATH + '/member', async ({ req, res, user }) => {
     const b = await readBody(req);
     const areaId = uuid(b.areaId);
     const email = typeof b.email === 'string' ? b.email.trim() : '';
     if (!areaId) return notFound(res);
-    if (!email || (b.role !== null && !CLIENT_ROLES.includes(b.role))) return send(res, 400, { error: 'bad_request' });
+    if (!validEmail(email) || (b.role !== null && !CLIENT_ROLES.includes(b.role))) return send(res, 400, { error: 'bad_request' });
     const r = await areas.setMember(user.id, areaId, email, b.role);
-    if (r === 'no_area') return notFound(res);
-    if (r === 'no_account') return send(res, 400, { error: 'no_account' });
-    return send(res, 200, { ok: true });
+    if (r.status === 'no_area') return notFound(res);
+    if (r.status !== 'ok') return send(res, 400, { error: r.status });
+    const token = b.role !== null && (await areas.inviteToken(r.userId));
+    if (!token) return send(res, 200, { ok: true, created: r.created });
+    const link = `${String(publicBase() || '').replace(/\/+$/, '')}/reset?token=${token}`;
+    let emailed = false;
+    if (b.sendEmail === true && mail.enabled()) {
+      try {
+        const { subject, text } = inviteEmail({ link, areaName: r.areaName, inviter: user.name, language: res.idiomaResposta });
+        emailed = !!(await mail.send({ to: email.toLowerCase(), subject, text, ...remetenteConvite() }))?.ok;
+      } catch (e) { log.error?.('[client-areas] invite e-mail failed:', e?.message ?? e); }
+    }
+    return send(res, 200, { ok: true, created: r.created, link, emailed });
   });
 }

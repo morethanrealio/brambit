@@ -2278,6 +2278,10 @@
       "greeting_name": "Oi {name},",
       "greeting": "Oi,",
       "body": "{greeting}\n\nRecebemos um pedido para redefinir a senha da sua conta no {brand}. Para criar uma senha nova, é só abrir o link abaixo (vale por 10 minutos):\n\n{link}\n\nSe não foi você que pediu, pode ignorar este e-mail, sua senha continua a mesma.\n\n{brand}"
+    },
+    "client_area_invite": {
+      "subject": "{inviter} convidou você para {area} no {brand}",
+      "body": "Oi,\n\n{inviter} convidou você para a área {area} no {brand}, onde você acompanha e ajusta os assistentes que atendem os seus clientes.\n\nPara criar sua senha e entrar, abra o link abaixo (vale 3 dias e funciona uma vez):\n\n{link}\n\nSe você não reconhece este convite, pode ignorar este e-mail.\n\n{brand}"
     }
   },
   "coding": {

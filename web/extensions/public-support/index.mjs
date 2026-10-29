@@ -17,9 +17,9 @@ export default {
   // The owner's screen and the script a website embeds.
   publico: [path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')],
   ligar(servidor) {
-    const { pool, avatar, recordUsages, getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ports, signupOpen, chatProvider, guestContacts } = servidor;
+    const { pool, avatar, recordUsages, getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ports, signupOpen, chatProvider, guestContacts, accountScope, PUBLIC_BASE } = servidor;
     const atendimento = criarAtendimentoDoServidor({ pool, avatar, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp,
-      ganchos: ports.atendimentoPublico, signupOpen, makeProvider: ({ userId, agentId }) => chatProvider({ userId, agentId, kind: 'publico' }) });
+      ganchos: ports.atendimentoPublico, signupOpen, accountScope, publicBase: PUBLIC_BASE, makeProvider: ({ userId, agentId }) => chatProvider({ userId, agentId, kind: 'publico' }) });
     guestContacts.register({ whatsapp: atendimento.whatsapp }, 'public-support');
   },
 };

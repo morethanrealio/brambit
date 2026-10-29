@@ -27,7 +27,7 @@
 //   published media (public-media.mjs). Runs with the server mounted; the server
 //   brings the ports and the HTTP and sending helpers the plugin uses, and what
 //   the extensions (extensions.mjs) need: pool, recordUsages, ferramentas, avatar,
-//   clientIp, guestContacts (guest-contacts.mjs), chatProvider({userId, agentId,
+//   clientIp, guestContacts (guest-contacts.mjs), accountScope (account-scope.mjs), chatProvider({userId, agentId,
 //   kind}) tied to the person's spend, signupOpen and ports (every port's piece).
 //   In the public-support usage profile (profiles.mjs) only the /api/ routes
 //   registered with rotas.registrar answer.

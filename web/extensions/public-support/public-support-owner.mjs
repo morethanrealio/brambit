@@ -112,7 +112,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
           linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName });
       }
     }
-    return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable });
+    // panelAccount: the person has only this screen (client-areas.mjs), so it offers no way back to the app.
+    return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable, panelAccount: !!(await areas?.isPanelAccount(user.id)) });
   });
 
   rota('POST', '/api/publico/configurar', async ({ req, res, user }) => {
