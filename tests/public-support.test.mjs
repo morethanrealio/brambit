@@ -13,7 +13,7 @@ const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAUL
 const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
-const { criarAtendimentoDoServidor } = await import('../web/extensions/public-support/public-support-channel.mjs');
+const { criarAtendimentoDoServidor, esquemaDoAtendimento } = await import('../web/extensions/public-support/public-support-channel.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
 
@@ -587,6 +587,7 @@ test('WhatsApp channel: a photo reaches the model only when the assistant asked 
 // website, and the owner's screen says why; closing sign-up turns it back on, no restart.
 test('open sign-up keeps public support off on every channel until it is closed', async (t) => {
   const { pool, store, dono, ag } = await montar(t);
+  await esquemaDoAtendimento({ pool, S: 'mtr_harness' });
   await store.configurar(ag, dono, { ativo: true });
   await createPublicWebStore(pool).configure(ag, dono, { enabled: true, origins: ['https://shop.example.com'] });
   let open = true;

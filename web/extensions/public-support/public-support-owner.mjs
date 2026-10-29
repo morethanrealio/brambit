@@ -2,9 +2,12 @@
 // public mode, viewing contacts and conversations (read-only), blocking,
 // exporting and deleting a contact. The screen is web/public/public-support.html (/public-support).
 //
-// Every route requires a session. The owner is checked in the store's SQL (agents.user_id), and
-// a contact or assistant from another account responds with 404, same as an id that doesn't exist.
-// The ones that change state are POST and go through the server's global CSRF.
+// Every route requires a session. Who reaches an assistant is decided once, by access():
+// its owner, or a member of the client area it is in (client-areas.mjs), with that member's
+// role. The store is then called with the owner's id, so the owner check in its SQL
+// (agents.user_id) stays as a second lock. A contact or assistant nobody let you into
+// responds with 404, same as an id that doesn't exist; one you see but your role can't
+// change responds with 403. The ones that change state are POST and go through the server's global CSRF.
 import { readBody } from '../../http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
 import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
@@ -16,6 +19,9 @@ const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
 export const AGENT_TEXTS_PATH = '/api/public-support/texts';
+// What a client area's admin may send to /api/publico/configurar; anything else is the owner's.
+const CLIENT_ADMIN_FIELDS = new Set(['agentId', 'instrucoes', 'linkSites']);
+const canEdit = (role) => role === 'owner' || role === 'admin';
 
 // What comes from the form becomes store.configurar fields; a missing field stays
 // as is. Returns {erro} if any value is invalid.
@@ -56,8 +62,9 @@ export function camposDaConfig(b = {}) {
 // prompts (public-support-prompts.mjs) + defaultTexts(agentId) → {written, spoken}
 // (the plugin's texts, public-support.mjs) = the assistant's editable texts.
 // avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
+// areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -68,29 +75,59 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     catch (e) { return fail(res, 500, 'Falha no atendimento ao público.', e); }
   });
   const naoAchei = (res) => send(res, 404, { error: 'Não encontrado.' });
-  // Contact from the request, only if it belongs to the owner.
-  const contatoDoPedido = async (user, id) => { const c = uuid(id); return c && (await store.contatoDoDono(user.id, c)) ? c : null; };
+  const forbidden = (res) => send(res, 403, { error: 'forbidden' });
+  // → { ownerId, role } of the assistant or contact in the request, or null (= 404).
+  const agentAccess = async (user, id) => {
+    const agentId = uuid(id);
+    if (!agentId) return null;
+    return areas ? areas.agentAccess(user.id, agentId) : { ownerId: user.id, role: 'owner', agentId };
+  };
+  const contatoDoPedido = async (user, id) => {
+    const c = uuid(id);
+    const acc = c && (areas ? await areas.contactAccess(user.id, c) : { ownerId: user.id, role: 'owner' });
+    return acc && (await store.contatoDoDono(acc.ownerId, c)) ? { ...acc, contatoId: c } : null;
+  };
 
   rota('GET', '/api/publico/agentes', async ({ res, user }) => {
     const doNumero = agenteDoNumero();
+    const areaOf = areas ? await areas.areaOfAgents(user.id) : new Map();
     const agentes = (await store.agentesDoDono(user.id)).map((a) => ({
       agentId: a.agent_id, nome: a.nome, configurado: a.configurado, ativo: a.ativo, instrucoes: a.instrucoes,
       retencaoDias: a.retencao_dias, limitePorHora: a.limite_por_hora, tetoDiarioUsd: a.teto_diario_usd, agentHourlyLimit: a.agent_hourly_limit,
       linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero,
       webEnabled: a.web_enabled, webOrigins: a.web_origins, webHasKey: a.web_has_key, webKeyIps: a.web_key_ips,
       ...(avatar ? avatar.view(a) : {}),
+      role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null }),
     }));
     // The face is set in the assistant's settings; this screen only says whether it is ready.
     const avatarAvailable = !!avatar?.available();
     if (avatarAvailable) for (const a of agentes) a.avatarFace = await avatar.face(a.agentId, user.id);
+    // A member sees what their role uses: no spend, limits or website channel settings.
+    const asMember = areas ? await areas.memberAgents(user.id) : [];
+    for (const ownerId of new Set(asMember.map((m) => m.ownerId))) {
+      const ofOwner = new Map(asMember.filter((m) => m.ownerId === ownerId).map((m) => [m.agentId, m]));
+      for (const a of await store.agentesDoDono(ownerId)) {
+        const m = ofOwner.get(a.agent_id);
+        if (m) agentes.push({ agentId: a.agent_id, nome: a.nome, configurado: a.configurado, ativo: a.ativo, instrucoes: a.instrucoes,
+          linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName });
+      }
+    }
     return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable });
   });
 
   rota('POST', '/api/publico/configurar', async ({ req, res, user }) => {
     const b = await readBody(req);
-    const agentId = uuid(b.agentId);
-    if (!agentId) return naoAchei(res);
+    const acc = await agentAccess(user, b.agentId);
+    if (!acc) return naoAchei(res);
+    const agentId = acc.agentId;
+    if (acc.role !== 'owner' && (acc.role !== 'admin' || Object.keys(b).some((k) => !CLIENT_ADMIN_FIELDS.has(k)))) return forbidden(res);
     const { campos, erro } = camposDaConfig(b);
+    if (acc.role !== 'owner') {
+      if (erro) return send(res, 400, { error: erro });
+      const r = await store.configurar(agentId, acc.ownerId, campos);
+      if (!r) return naoAchei(res);
+      return send(res, 200, { ok: true, agentId: r.agent_id, instrucoes: r.instrucoes, linkSites: r.link_sites });
+    }
     const web = webFieldsFromBody(b);
     const face = avatar ? avatar.fields(b) : { campos: {} };
     if (erro || web.erro || face.erro) return send(res, 400, { error: erro || web.erro || face.erro });
@@ -109,31 +146,35 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
 
   // New server key for the website and API channel. It is shown only in this reply.
   rota('POST', '/api/publico/web-key', async ({ req, res, user }) => {
-    const agentId = uuid((await readBody(req)).agentId);
-    const key = agentId && (await webStore.newKey(agentId, user.id));
+    const acc = await agentAccess(user, (await readBody(req)).agentId);
+    if (!acc) return naoAchei(res);
+    if (acc.role !== 'owner') return forbidden(res);
+    const key = await webStore.newKey(acc.agentId, user.id);
     if (!key) return naoAchei(res);
     return send(res, 200, { ok: true, key });
   });
 
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
-    const agentId = uuid(url.searchParams.get('agente'));
-    if (!agentId) return naoAchei(res);
+    const acc = await agentAccess(user, url.searchParams.get('agente'));
+    if (!acc) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
-    return send(res, 200, { contatos: await store.contatosDoDono(user.id, agentId, { antes: quando }) });
+    return send(res, 200, { contatos: await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando }) });
   });
 
   rota('GET', '/api/publico/conversa', async ({ res, url, user }) => {
-    const contatoId = await contatoDoPedido(user, url.searchParams.get('contato'));
-    if (!contatoId) return naoAchei(res);
+    const c = await contatoDoPedido(user, url.searchParams.get('contato'));
+    if (!c) return naoAchei(res);
     const antes = Number(url.searchParams.get('antes'));
-    return send(res, 200, { mensagens: await store.conversaDoDono(user.id, contatoId, { antes: Number.isSafeInteger(antes) && antes > 0 ? antes : null }) });
+    return send(res, 200, { mensagens: await store.conversaDoDono(c.ownerId, c.contatoId, { antes: Number.isSafeInteger(antes) && antes > 0 ? antes : null }) });
   });
 
   rota('POST', '/api/publico/bloquear', async ({ req, res, user }) => {
     const b = await readBody(req);
-    const contatoId = await contatoDoPedido(user, b.contatoId);
-    if (!contatoId) return naoAchei(res);
+    const c = await contatoDoPedido(user, b.contatoId);
+    if (!c) return naoAchei(res);
+    if (!canEdit(c.role)) return forbidden(res);
+    const { contatoId } = c;
     if (typeof b.bloqueado !== 'boolean') return send(res, 400, { error: 'bloqueado precisa ser verdadeiro ou falso.' });
     await store.bloquear(contatoId, b.bloqueado);
     if (b.bloqueado) avatar?.contactClosed(contatoId);
@@ -141,8 +182,10 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   });
 
   rota('POST', '/api/publico/apagar', async ({ req, res, user }) => {
-    const contatoId = await contatoDoPedido(user, (await readBody(req)).contatoId);
-    if (!contatoId) return naoAchei(res);
+    const c = await contatoDoPedido(user, (await readBody(req)).contatoId);
+    if (!c) return naoAchei(res);
+    if (!canEdit(c.role)) return forbidden(res);
+    const { contatoId } = c;
     await store.apagarContato(contatoId);
     avatar?.contactClosed(contatoId);
     return send(res, 200, { ok: true });
@@ -150,8 +193,10 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
 
   // Data subject access request (LGPD): the owner downloads everything that exists about the contact.
   rota('GET', '/api/publico/exportar', async ({ res, url, user }) => {
-    const contatoId = await contatoDoPedido(user, url.searchParams.get('contato'));
-    if (!contatoId) return naoAchei(res);
+    const c = await contatoDoPedido(user, url.searchParams.get('contato'));
+    if (!c) return naoAchei(res);
+    if (!canEdit(c.role)) return forbidden(res);
+    const { contatoId } = c;
     const dados = await store.exportar(contatoId);
     if (!dados) return naoAchei(res);
     return send(res, 200, dados, { 'content-disposition': `attachment; filename="contato-${contatoId}.json"` });
@@ -166,44 +211,49 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // already cover an assistant without a plugin text.
   function registerAgentTexts() {
     const notFound = (res) => send(res, 404, { error: 'not_found' });
-    const key = (agentId, kind, user) => ({ agentId, kind, userId: user.id });
+    const key = (agentId, kind, acc) => ({ agentId, kind, userId: acc.ownerId });
     const fallbackOf = (d, kind) => (kind === 'spoken' ? d.spoken : d.written);
 
     rota('GET', AGENT_TEXTS_PATH, async ({ res, url, user }) => {
-      const agentId = uuid(url.searchParams.get('agent'));
-      if (!agentId) return notFound(res);
+      const acc = await agentAccess(user, url.searchParams.get('agent'));
+      if (!acc) return notFound(res);
+      const { agentId } = acc;
       const d = await defaultTexts(agentId);
-      const written = await textState(prompts, key(agentId, 'written', user), d.written);
+      const written = await textState(prompts, key(agentId, 'written', acc), d.written);
       if (!written) return notFound(res);
-      const spoken = d.spoken == null ? null : await textState(prompts, key(agentId, 'spoken', user), d.spoken);
+      const spoken = d.spoken == null ? null : await textState(prompts, key(agentId, 'spoken', acc), d.spoken);
       return send(res, 200, { written: d.written || written.content ? written : null, spoken });
     });
 
-    // Body { agentId, kind, content? | versionId? }. Resolves the text's default,
-    // or null when that text can't be edited here.
-    const editable = async (b) => {
-      const agentId = uuid(b?.agentId);
-      if (!agentId || !AGENT_PROMPT_KINDS.includes(b.kind)) return null;
-      const fallback = fallbackOf(await defaultTexts(agentId), b.kind);
-      return fallback == null ? null : { agentId, kind: b.kind, fallback };
+    // Body { agentId, kind, content? | versionId? }. Resolves who may edit and the
+    // text's default: null = 404 (no access, or that text can't be edited here),
+    // { forbidden } = a role that only reads.
+    const editable = async (b, user) => {
+      const acc = await agentAccess(user, b?.agentId);
+      if (!acc || !AGENT_PROMPT_KINDS.includes(b.kind)) return null;
+      if (!canEdit(acc.role)) return { forbidden: true };
+      const fallback = fallbackOf(await defaultTexts(acc.agentId), b.kind);
+      return fallback == null ? null : { agentId: acc.agentId, kind: b.kind, fallback, acc };
     };
 
     // { content }: '' or the default itself = back to the default.
     rota('POST', AGENT_TEXTS_PATH, async ({ req, res, user }) => {
       const b = await readBody(req);
-      const text = await editable(b);
+      const text = await editable(b, user);
       if (!text) return notFound(res);
+      if (text.forbidden) return forbidden(res);
       if (typeof b.content !== 'string') return send(res, 400, { error: 'bad_request' });
       if (b.content.trim().length > PROMPT_MAX) return send(res, 400, { error: 'too_long', max: PROMPT_MAX });
-      const k = key(text.agentId, text.kind, user);
+      const k = key(text.agentId, text.kind, text.acc);
       if (!(await prompts.save({ ...k, content: asEdit(b.content, text.fallback) }))) return notFound(res);
       return send(res, 200, await textState(prompts, k, text.fallback));
     });
 
     rota('POST', AGENT_TEXTS_PATH + '/restore', async ({ req, res, user }) => {
       const b = await readBody(req);
-      const text = await editable(b);
-      const k = text && key(text.agentId, text.kind, user);
+      const text = await editable(b, user);
+      if (text?.forbidden) return forbidden(res);
+      const k = text && key(text.agentId, text.kind, text.acc);
       if (!k || !(await prompts.restore({ ...k, versionId: b.versionId }))) return notFound(res);
       return send(res, 200, await textState(prompts, k, text.fallback));
     });

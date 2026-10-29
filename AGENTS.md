@@ -33,7 +33,10 @@ plugin at all. Optional parts that ship with Brambit are *extensions*: each live
 in `web/extensions/<name>/`, is a plugin object registered in
 `web/extensions.mjs`, and an installation turns it on or off with
 `BRAMBIT_EXTENSIONS` (the usage profile sets the default). Public support is
-the first one. Their tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
+the first one: its owner screen is also open to members of a client area
+(`client-areas.mjs`), so every route in `public-support-owner.mjs` resolves the
+assistant or contact through `agentAccess()` or `contatoDoPedido()` and calls the
+store with the owner's id. Extension tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
 cites a cloud file listed in `cloud.txt`.
 
 ## Checks CI runs on every pull request

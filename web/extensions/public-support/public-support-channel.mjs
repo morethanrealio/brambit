@@ -16,6 +16,7 @@ import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
 import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
 import { publicSupportOn } from '../../profiles.mjs';
+import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes } from './client-areas.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -23,7 +24,7 @@ const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Joins the initDb schema list.
-export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); };
+export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); await pool.query(clientAreaSchema(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
@@ -44,8 +45,9 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // Retention (deleting what's past retencao_dias) runs on its own every
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
-// (public-support-owner.mjs), the public web channel (public-web.mjs) and the
-// admin's installation text (public-support-admin.mjs). avatar = what
+// (public-support-owner.mjs), the public web channel (public-web.mjs), the
+// admin's installation text (public-support-admin.mjs) and the owner's client areas
+// (client-areas.mjs), which also open the owner's view to an area's members. avatar = what
 // registerAvatar returns, for the face on the web channel (public-avatar.mjs).
 // signupOpen() → true when anyone can create an account here (the core's
 // BRAMBIT_SIGNUP). Public support then stays off on every channel: the address
@@ -57,6 +59,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
   const prompts = createPromptStore(pool, { S });
+  const areas = createClientAreaStore(pool, { S });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -85,12 +88,13 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   if (rotas) {
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null });
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas });
+    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }
   return {
-    store, webStore, prompts, limpar,
+    store, webStore, prompts, areas, limpar,
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem, imagens }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem,
