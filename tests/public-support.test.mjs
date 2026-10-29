@@ -201,6 +201,28 @@ test('a button label is cut at the limit of the channel it goes out on: 20 on Wh
   assert.equal(await turno('web'), rotulo);
 });
 
+test('reply buttons: up to 3 with distinct labels cut at the channel\'s limit; the text version lists them; a broken one is dropped', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, linkSites: ['shop.example'] });
+  const saidas = [
+    { tipo: 'replies', texto: 'Rose lipstick, see evil.example', imagem: 'https://shop.example/l.jpg', replies: [
+      { rotulo: 'Buy now', texto: 'Buy now: Rose lipstick [product_id: 7]' }, { rotulo: 'Buy now', texto: 'twice' },
+      { rotulo: 'Add to the shopping bag', texto: 'Add to bag: Rose lipstick [product_id: 7] https://evil.example/x' },
+      { rotulo: '', texto: 'no label' }, { rotulo: 'Long', texto: 'x'.repeat(300) }, { rotulo: 'Fourth', texto: 'fourth' }] },
+    { tipo: 'replies', texto: 'No buttons', replies: [] },
+    { tipo: 'replies', texto: 'Bad photo', imagem: 'http://shop.example/l.jpg', replies: [{ rotulo: 'Ok', texto: 'ok' }] },
+  ];
+  const a = atendimento(store, modelo(), { ganchos: { depoisDoModelo: () => ({ saidas }) } });
+  const r = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'oi' });
+  assert.deepEqual(r.saidas, [{ tipo: 'replies', texto: 'Rose lipstick, see', imagem: 'https://shop.example/l.jpg', replies: [
+    { rotulo: 'Buy now', texto: 'Buy now: Rose lipstick [product_id: 7]' },
+    { rotulo: 'Add to the shopping', texto: 'Add to bag: Rose lipstick [product_id: 7]' },
+    { rotulo: 'Long', texto: 'x'.repeat(256) }] }]);
+  assert.equal(r.text, 'Rose lipstick, see\n[Buy now | Add to the shopping | Long]');
+  const web = await a.turno({ agentId: ag, canal: 'web', endereco: '9', mensagem: 'oi' });
+  assert.equal(web.saidas[0].replies[1].rotulo, 'Add to the shopping bag');
+});
+
 // A message can try to talk the assistant into sending people to another site.
 test('sites the assistant may send people to: other sites\' buttons and addresses leave the answer', async (t) => {
   const { store, dono, ag } = await montar(t);
