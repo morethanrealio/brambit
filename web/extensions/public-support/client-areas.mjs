@@ -26,6 +26,7 @@ import { remetenteConvite } from '../../company-invite-email.mjs';
 import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
 import { AGENT_TEXTS_PATH } from './public-support-owner.mjs';
 import { METRICS_PATH } from './public-support-metrics.mjs';
+import { ACTIVITY_PATH } from './client-area-activity.mjs';
 
 export const CLIENT_ROLES = ['admin', 'viewer'];
 export const AREA_NAME_MAX = 120;
@@ -203,7 +204,7 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
 // which only an owner uses.
 export const panelScope = (areas) => ({
   name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
-  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH,
+  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH || path === ACTIVITY_PATH,
 });
 
 // The invite e-mail, in the inviter's language (the invitee has none yet).
@@ -216,9 +217,10 @@ export function inviteEmail({ link, areaName, inviter, language }) {
 // screen. A member or anyone else gets a 404 for an area that is not theirs.
 // publicBase() → the installation's address, for the password link. mail = the
 // core's mailer ({ enabled(), send() }); the invite e-mail goes out only when
-// the owner asks for it (sendEmail: true) and e-mail is set up.
+// the owner asks for it (sendEmail: true) and e-mail is set up. activity
+// (client-area-activity.mjs) = the access log, where each change is recorded.
 export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase = () => '',
-  mail = { enabled: coreMailEnabled, send: coreSendEmail }, log = console }) {
+  mail = { enabled: coreMailEnabled, send: coreSendEmail }, log = console, activity = null }) {
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
     const user = await ctx.currentUser?.();
@@ -228,6 +230,8 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     catch (e) { return fail(res, 500, 'client_areas_failed', e); }
   });
   const notFound = (res) => send(res, 404, { error: 'not_found' });
+  const record = (user, action, areaId, { agentId = null, detail = null } = {}) =>
+    activity?.record({ ownerId: user.id, actorId: user.id, agentId, areaId, action, detail });
 
   // mail: whether the screen offers to e-mail the invite link.
   route('GET', CLIENT_AREAS_PATH, async ({ res, user }) => send(res, 200, { areas: await areas.list(user.id), mail: !!mail.enabled() }));
@@ -235,7 +239,9 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
   route('POST', CLIENT_AREAS_PATH, async ({ req, res, user }) => {
     const name = String((await readBody(req)).name ?? '').trim();
     if (!name || name.length > AREA_NAME_MAX) return send(res, 400, { error: 'bad_name', max: AREA_NAME_MAX });
-    return send(res, 200, await areas.create(user.id, name));
+    const area = await areas.create(user.id, name);
+    await record(user, 'area_created', area.id);
+    return send(res, 200, area);
   });
 
   // { agentId, areaId | null }
@@ -244,7 +250,10 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     const agentId = uuid(b.agentId);
     const areaId = b.areaId === null ? null : uuid(b.areaId);
     if (!agentId || (b.areaId !== null && !areaId)) return notFound(res);
-    return (await areas.setAgentArea(user.id, agentId, areaId)) ? send(res, 200, { ok: true }) : notFound(res);
+    const was = areaId ? null : (await areas.agentAccess(user.id, agentId))?.areaId;
+    if (!(await areas.setAgentArea(user.id, agentId, areaId))) return notFound(res);
+    if (areaId || was) await record(user, areaId ? 'assistant_added' : 'assistant_removed', areaId || was, { agentId });
+    return send(res, 200, { ok: true });
   });
 
   // { areaId, email, role: admin|viewer|null, sendEmail? }. An e-mail with no
@@ -259,6 +268,8 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     const r = await areas.setMember(user.id, areaId, email, b.role);
     if (r.status === 'no_area') return notFound(res);
     if (r.status !== 'ok') return send(res, 400, { error: r.status });
+    await record(user, b.role === null ? 'member_removed' : 'member_invited', areaId,
+      { detail: b.role === null ? { email: email.toLowerCase() } : { email: email.toLowerCase(), role: b.role } });
     const token = b.role !== null && (await areas.inviteToken(r.userId));
     if (!token) return send(res, 200, { ok: true, created: r.created });
     const link = `${String(publicBase() || '').replace(/\/+$/, '')}/reset?token=${token}`;

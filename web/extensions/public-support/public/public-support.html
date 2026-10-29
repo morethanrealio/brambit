@@ -93,6 +93,7 @@
   .mtable th,.mtable td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line2);}
   .mtable th{font-weight:600;color:var(--mut);font-size:12.5px;}
   .mtable th:first-child,.mtable td:first-child{text-align:left;}
+  .mtable.log th,.mtable.log td{text-align:left;vertical-align:top;}
   .area{border-top:1px solid var(--line2);padding:4px 0 14px;}
   .area h3{margin-top:14px;}
   .area-sub{font-size:13px;font-weight:600;color:var(--mut);margin:12px 0 4px;}
@@ -240,6 +241,19 @@
     </div>
   </div>
 
+  <div class="card hidden" id="activityCard">
+    <h2 data-i18n="public_service_page.activity">Access log</h2>
+    <p class="nota" data-i18n="public_service_page.activity_lead">Who opened conversations, handled contacts or changed the assistants, and when. It never keeps what a conversation or a text says.</p>
+    <table class="mtable log">
+      <thead><tr><th data-i18n="public_service_page.activity_when">When</th><th data-i18n="public_service_page.activity_who">Who</th>
+        <th data-i18n="public_service_page.activity_what">What</th><th data-i18n="public_service_page.assistant">Assistant</th></tr></thead>
+      <tbody id="activityRows"></tbody>
+    </table>
+    <div id="activityNone" class="vazio espaco hidden" data-i18n="public_service_page.activity_none">Nothing recorded yet.</div>
+    <div class="acoes"><button class="btn ghost hidden" id="activityMore" data-i18n="public_service_page.load_more">Load more</button></div>
+    <div id="activityMsg" class="msg"></div>
+  </div>
+
   <div class="card hidden" id="areasCard">
     <h2 data-i18n="public_service_page.areas">Client areas</h2>
     <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
@@ -323,7 +337,7 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('webChaveMsg'), '');
-    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics();
+    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
 
@@ -419,6 +433,38 @@
   }
   function dayLabel(day){ try { return new Date(day + 'T12:00:00Z').toLocaleDateString(document.documentElement.lang, { day:'2-digit', month:'2-digit', timeZone:'UTC' }); } catch(e){ return day; } }
   $('metricDays').addEventListener('change', function(){ if (agenteAtual) loadMetrics(); });
+
+  // The access log (client-area-activity.mjs): the owner reads all of it, an area's admin
+  // the area's part, a viewer none. before = the last line shown, to load older ones.
+  var ACTIVITY = '/api/public-support/activity', ACTIVITY_PAGE = 50, activityFor = null, activityLast = null;
+  function loadActivity(more){
+    var id = agenteAtual.agentId;
+    if (!more) { activityFor = id; activityLast = null; $('activityRows').textContent = ''; msg($('activityMsg'), ''); }
+    $('activityCard').classList.toggle('hidden', !canEdit());
+    if (!canEdit()) return;
+    pedir(ACTIVITY + '?agent=' + encodeURIComponent(id) + (activityLast ? '&before=' + activityLast : '')).then(function(j){
+      if (activityFor !== id) return;
+      var lines = j.lines || [];
+      lines.forEach(function(l){ $('activityRows').appendChild(activityRow(l)); });
+      if (lines.length) activityLast = lines[lines.length - 1].id;
+      $('activityNone').classList.toggle('hidden', $('activityRows').children.length > 0);
+      $('activityMore').classList.toggle('hidden', lines.length < ACTIVITY_PAGE);
+    }).catch(function(e){ if (activityFor === id && e.message !== NO_SESSION) msg($('activityMsg'), e.message, 'err'); });
+  }
+  function activityText(l){
+    var d = l.detail || {}, v = { area: l.area || '', email: d.email || '' };
+    if (d.kind) v.kind = t('activity_kind_' + d.kind);
+    return t(l.action === 'member_invited' ? 'activity_member_invited_' + d.role : 'activity_' + l.action, v);
+  }
+  function activityRow(l){
+    var tr = el('tr');
+    tr.appendChild(el('td', null, quando(l.at)));
+    tr.appendChild(el('td', null, l.actor || t('activity_removed_account')));
+    tr.appendChild(el('td', null, activityText(l)));
+    tr.appendChild(el('td', null, l.agent || ''));
+    return tr;
+  }
+  $('activityMore').addEventListener('click', function(){ loadActivity(true); });
 
   function carregarContatos(){
     var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;

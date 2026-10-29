@@ -36,7 +36,8 @@ in `web/extensions/<name>/`, is a plugin object registered in
 the first one: its owner screen is also open to members of a client area
 (`client-areas.mjs`), so every route in `public-support-owner.mjs` resolves the
 assistant or contact through `agentAccess()` or `contatoDoPedido()` and calls the
-store with the owner's id. The owner can invite an email with no account: that
+store with the owner's id, and a route that opens, exports, deletes or changes
+something records it in the access log (`client-area-activity.mjs`). The owner can invite an email with no account: that
 creates a *panel account*, which `web/account-scope.mjs` holds to the routes the
 extension registers (owner pages redirect to `/public-support`, any other API is
 404); a new extension route a panel member needs must be added to

@@ -14,6 +14,7 @@ const { createPublicWebStore } = await import('../web/extensions/public-support/
 const { createPromptStore } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { createClientAreaStore, registerClientAreaRoutes, panelScope, CLIENT_AREAS_PATH } = await import('../web/extensions/public-support/client-areas.mjs');
 const { createMetricsStore, METRICS_PATH } = await import('../web/extensions/public-support/public-support-metrics.mjs');
+const { activitySchema, createActivityStore, ACTIVITY_PATH } = await import('../web/extensions/public-support/client-area-activity.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createAccountScope } = await import('../web/account-scope.mjs');
 
@@ -41,6 +42,8 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const store = createPublicoStore(pool); await store.init();
   const prompts = createPromptStore(pool); await prompts.init();
   const areas = createClientAreaStore(pool); await areas.init(); await areas.init();
+  await db.exec(activitySchema('mtr_harness'));
+  const activity = createActivityStore(pool, { log: { error() {} } });
   const model = () => ({ name: 'fake', async complete() { return { stop: 'end', text: 'ok', usage: { in: 1, out: 1 } }; } });
   const turns = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
     agora: () => 'segunda', log: { error() {} } });
@@ -52,8 +55,8 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const send = (res, status, body, headers = {}) => Object.assign(res, { status, body, headers });
   const fail = (res, st, msg, e) => { throw e; };
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
-    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }) });
-  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, log: { error() {} } });
+    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), activity });
+  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
     const res = { setHeader() {} };
@@ -243,4 +246,34 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.equal((await get(viewerB, agA, 30)).status, 404, 'another area');
   assert.equal((await get(viewerB, agB, 7)).body.total.conversations, 1, 'a viewer sees its own');
   assert.equal((await get(adminA, agA, 8)).status, 400);
+});
+
+test('access log: the owner sees every line, an area\'s admin only its area\'s, a viewer none; never what was said', async (t) => {
+  const s = await setup(t);
+  const { ask, owner, adminA, viewerB, agA, agB } = s;
+  const { contactA } = await twoClients(s);
+  await ask(owner, 'GET', `/api/publico/conversa?contato=${contactA}`);
+  await ask(owner, 'GET', `/api/publico/conversa?contato=${contactA}&antes=999999`);
+  await ask(adminA, 'GET', `/api/publico/exportar?contato=${contactA}`);
+  await ask(adminA, 'POST', AGENT_TEXTS_PATH, { agentId: agA, kind: 'written', content: 'a secret greeting' });
+
+  const log = async (who, agentId) => ask(who, 'GET', `${ACTIVITY_PATH}?agent=${agentId}`);
+  const all = (await log(owner, agB)).body.lines;
+  assert.deepEqual(all.map((l) => [l.action, l.actor, l.area]), [
+    ['text_changed', 'admin@a.test', 'Client A'], ['contact_exported', 'admin@a.test', 'Client A'],
+    ['conversation_opened', 'owner@x.test', 'Client A'],
+    ['member_invited', 'owner@x.test', 'Client B'], ['member_invited', 'owner@x.test', 'Client A'],
+    ['assistant_added', 'owner@x.test', 'Client B'], ['assistant_added', 'owner@x.test', 'Client A'],
+    ['area_created', 'owner@x.test', 'Client B'], ['area_created', 'owner@x.test', 'Client A'],
+  ], 'a paged read is not a new opening');
+  assert.deepEqual(all[0].detail, { kind: 'written' });
+  assert.deepEqual(all.find((l) => l.area === 'Client B' && l.action === 'member_invited').detail, { email: 'viewer@b.test', role: 'viewer' });
+  assert.equal(JSON.stringify(all).includes('secret') || JSON.stringify(all).includes('oi'), false, 'no text or message in the log');
+
+  const mine = (await log(adminA, agA)).body.lines;
+  assert.ok(mine.length > 0);
+  assert.deepEqual([...new Set(mine.map((l) => l.area))], ['Client A']);
+  assert.equal((await log(adminA, agB)).status, 404);
+  assert.equal((await log(viewerB, agB)).status, 403);
+  assert.equal((await log(s.stranger, agA)).status, 404);
 });

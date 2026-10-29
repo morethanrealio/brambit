@@ -14,6 +14,7 @@ import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
+import { ACTIVITY_PATH } from './client-area-activity.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -65,8 +66,9 @@ export function camposDaConfig(b = {}) {
 // avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role.
+// activity (client-area-activity.mjs) = the access log; each route below records its action there.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, activity = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -89,6 +91,9 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const acc = c && (areas ? await areas.contactAccess(user.id, c) : { ownerId: user.id, role: 'owner' });
     return acc && (await store.contatoDoDono(acc.ownerId, c)) ? { ...acc, contatoId: c } : null;
   };
+  // acc = what agentAccess or contatoDoPedido resolved.
+  const record = (user, acc, action, detail = null) => activity?.record({ ownerId: acc.ownerId, actorId: user.id,
+    agentId: acc.agentId ?? null, areaId: acc.areaId ?? null, action, detail });
 
   rota('GET', '/api/publico/agentes', async ({ res, user }) => {
     const doNumero = agenteDoNumero();
@@ -129,6 +134,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       if (erro) return send(res, 400, { error: erro });
       const r = await store.configurar(agentId, acc.ownerId, campos);
       if (!r) return naoAchei(res);
+      await record(user, acc, 'settings_changed');
       return send(res, 200, { ok: true, agentId: r.agent_id, instrucoes: r.instrucoes, linkSites: r.link_sites });
     }
     const web = webFieldsFromBody(b);
@@ -142,6 +148,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (avatar && !v) return naoAchei(res);
     // Sessions the new settings no longer allow end now.
     if (avatar) avatar.agentChanged(agentId).catch((e) => console.error('[publico] avatar:', e?.message ?? e));
+    await record(user, acc, 'settings_changed');
     return send(res, 200, { ...(v ? avatar.view(v) : {}), ok: true, agentId: r.agent_id, ativo: r.ativo, instrucoes: r.instrucoes, retencaoDias: r.retencao_dias,
       limitePorHora: r.limite_por_hora, tetoDiarioUsd: r.teto_diario_usd, agentHourlyLimit: r.agent_hourly_limit, linkSites: r.link_sites,
       webEnabled: w.web_enabled, webOrigins: w.web_origins, webHasKey: w.web_has_key, webKeyIps: w.web_key_ips });
@@ -154,6 +161,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (acc.role !== 'owner') return forbidden(res);
     const key = await webStore.newKey(acc.agentId, user.id);
     if (!key) return naoAchei(res);
+    await record(user, acc, 'web_key_created');
     return send(res, 200, { ok: true, key });
   });
 
@@ -169,6 +177,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const c = await contatoDoPedido(user, url.searchParams.get('contato'));
     if (!c) return naoAchei(res);
     const antes = Number(url.searchParams.get('antes'));
+    // Opening it is the first page; paging back through it is the same opening.
+    if (!url.searchParams.has('antes')) await record(user, c, 'conversation_opened');
     return send(res, 200, { mensagens: await store.conversaDoDono(c.ownerId, c.contatoId, { antes: Number.isSafeInteger(antes) && antes > 0 ? antes : null }) });
   });
 
@@ -181,6 +191,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (typeof b.bloqueado !== 'boolean') return send(res, 400, { error: 'bloqueado precisa ser verdadeiro ou falso.' });
     await store.bloquear(contatoId, b.bloqueado);
     if (b.bloqueado) avatar?.contactClosed(contatoId);
+    await record(user, c, b.bloqueado ? 'contact_blocked' : 'contact_unblocked');
     return send(res, 200, { ok: true, bloqueado: b.bloqueado });
   });
 
@@ -191,6 +202,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const { contatoId } = c;
     await store.apagarContato(contatoId);
     avatar?.contactClosed(contatoId);
+    await record(user, c, 'contact_deleted');
     return send(res, 200, { ok: true });
   });
 
@@ -202,6 +214,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const { contatoId } = c;
     const dados = await store.exportar(contatoId);
     if (!dados) return naoAchei(res);
+    await record(user, c, 'contact_exported');
     return send(res, 200, dados, { 'content-disposition': `attachment; filename="contato-${contatoId}.json"` });
   });
 
@@ -211,6 +224,17 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const days = Number(url.searchParams.get('days'));
     if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
     return send(res, 200, await metrics.volume(acc.ownerId, acc.agentId, days));
+  });
+
+  // The access log: the owner reads all of it, an area's admin the area's part; a viewer none.
+  if (activity) rota('GET', ACTIVITY_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    if (acc.role !== 'owner' && !acc.areaId) return naoAchei(res);
+    const before = Number(url.searchParams.get('before'));
+    return send(res, 200, { lines: await activity.list({ ownerId: acc.ownerId, areaId: acc.role === 'owner' ? null : acc.areaId,
+      before: Number.isSafeInteger(before) && before > 0 ? before : null }) });
   });
 
   if (prompts) registerAgentTexts();
@@ -257,6 +281,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       if (b.content.trim().length > PROMPT_MAX) return send(res, 400, { error: 'too_long', max: PROMPT_MAX });
       const k = key(text.agentId, text.kind, text.acc);
       if (!(await prompts.save({ ...k, content: asEdit(b.content, text.fallback) }))) return notFound(res);
+      await record(user, text.acc, 'text_changed', { kind: text.kind });
       return send(res, 200, await textState(prompts, k, text.fallback));
     });
 
@@ -266,6 +291,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       if (text?.forbidden) return forbidden(res);
       const k = text && key(text.agentId, text.kind, text.acc);
       if (!k || !(await prompts.restore({ ...k, versionId: b.versionId }))) return notFound(res);
+      await record(user, text.acc, 'text_restored', { kind: text.kind });
       return send(res, 200, await textState(prompts, k, text.fallback));
     });
   }

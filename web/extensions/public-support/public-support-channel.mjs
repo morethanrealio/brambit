@@ -18,6 +18,7 @@ import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } fr
 import { publicSupportOn } from '../../profiles.mjs';
 import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
+import { activitySchema, createActivityStore } from './client-area-activity.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -25,7 +26,7 @@ const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Joins the initDb schema list.
-export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); await pool.query(clientAreaSchema(S)); };
+export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); await pool.query(clientAreaSchema(S)); await pool.query(activitySchema(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
@@ -63,6 +64,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const webStore = createPublicWebStore(pool, { S });
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
+  const activity = createActivityStore(pool, { S, log });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -92,8 +94,8 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas,
-      metrics: createMetricsStore(pool, { S }) });
-    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log });
+      metrics: createMetricsStore(pool, { S }), activity });
+    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
