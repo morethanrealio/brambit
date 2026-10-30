@@ -160,14 +160,14 @@ test('no owner balance: neutral response without calling the model; turns from t
   assert.equal(max, 1);
 });
 
-test('plugin hooks: script without the model, turn instructions plus the owner\'s, rich and data outputs; a broken hook doesn\'t crash the turn', async (t) => {
+test('plugin hooks: script without the model, turn instructions plus the owner\'s, rich and data outputs, the model reads its own text back; a broken hook doesn\'t crash the turn', async (t) => {
   const { store, dono, ag } = await montar(t);
   await store.configurar(ag, dono, { ativo: true, instrucoes: 'do dono' });
   const vistos = [];
   const ganchos = {
     async antesDoModelo(ctx) {
       vistos.push({ primeira: ctx.primeira, endereco: ctx.contato.endereco });
-      if (ctx.primeira) { await ctx.lembrar('termos', 'avisado'); return { pular: true, saidas: [{ tipo: 'texto', texto: 'Bem-vinda!' }, { tipo: 'imagem', url: 'http://inseguro/x.jpg' }] }; }
+      if (ctx.primeira) { await ctx.lembrar('termos', 'avisado'); return { pular: true, saidas: [{ tipo: 'texto', texto: 'Bem-vinda!' }, { tipo: 'imagem', url: 'http://inseguro/x.jpg' }], modelText: '[P]Bem-vinda!' }; }
       return { instrucoes: 'roteiro da loja' };
     },
     depoisDoModelo: ({ texto }) => ({ saidas: [{ tipo: 'botao', texto, rotulo: 'Ver', url: 'https://loja.example/p' }, { tipo: 'desconhecido' },
@@ -181,11 +181,14 @@ test('plugin hooks: script without the model, turn instructions plus the owner\'
   assert.deepEqual(await store.estado(r1.contatoId), { termos: 'avisado' });
   const r2 = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'tem blusa?' });
   assert.match(m.chamadas[0].system, /roteiro da loja[\s\S]*do dono/);
-  assert.deepEqual(m.chamadas[0].messages.slice(0, 2).map((x) => x.content), ['oi', 'Bem-vinda!']);
+  assert.deepEqual(m.chamadas[0].messages.slice(0, 2).map((x) => x.content), ['oi', '[P]Bem-vinda!']);
   assert.deepEqual(r2.saidas, [{ tipo: 'botao', texto: 'resposta 1', rotulo: 'Ver', url: 'https://loja.example/p' },
     { tipo: 'data', nome: 'produto', data: { id: 7, tons: ['a'] }, reserva: 'Batom' }]);
   assert.equal(r2.text, 'resposta 1\n[Ver: https://loja.example/p]\n\nBatom');
-  assert.deepEqual(vistos, [{ primeira: true, endereco: '9' }, { primeira: false, endereco: '9' }]);
+  // The model reads what it wrote, not the text version of the button the person got.
+  await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'e saia?' });
+  assert.deepEqual(m.chamadas[1].messages.slice(0, 4).map((x) => x.content), ['oi', '[P]Bem-vinda!', 'tem blusa?', 'resposta 1']);
+  assert.deepEqual(vistos, [{ primeira: true, endereco: '9' }, { primeira: false, endereco: '9' }, { primeira: false, endereco: '9' }]);
   const quebrado = atendimento(store, modelo(), { ganchos: { antesDoModelo() { throw Error('x'); }, depoisDoModelo: async () => 'lixo' } });
   const r3 = await quebrado.turno({ agentId: ag, canal: 'whatsapp', endereco: '10', mensagem: 'oi' });
   assert.equal(r3.text, 'resposta 1'); assert.equal(r3.saidas, undefined);
@@ -199,6 +202,28 @@ test('a button label is cut at the limit of the channel it goes out on: 20 on Wh
   const turno = async (canal) => (await a.turno({ agentId: ag, canal, endereco: '9', mensagem: 'oi' })).saidas[0].rotulo;
   assert.equal(await turno('whatsapp'), 'Start the skin analy');
   assert.equal(await turno('web'), rotulo);
+});
+
+test('reply buttons: up to 3 with distinct labels cut at the channel\'s limit; the text version lists them; a broken one is dropped', async (t) => {
+  const { store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, linkSites: ['shop.example'] });
+  const saidas = [
+    { tipo: 'replies', texto: 'Rose lipstick, see evil.example', imagem: 'https://shop.example/l.jpg', replies: [
+      { rotulo: 'Buy now', texto: 'Buy now: Rose lipstick [product_id: 7]' }, { rotulo: 'Buy now', texto: 'twice' },
+      { rotulo: 'Add to the shopping bag', texto: 'Add to bag: Rose lipstick [product_id: 7] https://evil.example/x' },
+      { rotulo: '', texto: 'no label' }, { rotulo: 'Long', texto: 'x'.repeat(300) }, { rotulo: 'Fourth', texto: 'fourth' }] },
+    { tipo: 'replies', texto: 'No buttons', replies: [] },
+    { tipo: 'replies', texto: 'Bad photo', imagem: 'http://shop.example/l.jpg', replies: [{ rotulo: 'Ok', texto: 'ok' }] },
+  ];
+  const a = atendimento(store, modelo(), { ganchos: { depoisDoModelo: () => ({ saidas }) } });
+  const r = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '9', mensagem: 'oi' });
+  assert.deepEqual(r.saidas, [{ tipo: 'replies', texto: 'Rose lipstick, see', imagem: 'https://shop.example/l.jpg', replies: [
+    { rotulo: 'Buy now', texto: 'Buy now: Rose lipstick [product_id: 7]' },
+    { rotulo: 'Add to the shopping', texto: 'Add to bag: Rose lipstick [product_id: 7]' },
+    { rotulo: 'Long', texto: 'x'.repeat(256) }] }]);
+  assert.equal(r.text, 'Rose lipstick, see\n[Buy now | Add to the shopping | Long]');
+  const web = await a.turno({ agentId: ag, canal: 'web', endereco: '9', mensagem: 'oi' });
+  assert.equal(web.saidas[0].replies[1].rotulo, 'Add to the shopping bag');
 });
 
 // A message can try to talk the assistant into sending people to another site.

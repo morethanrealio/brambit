@@ -78,6 +78,7 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS web_key_ips text[] NOT NULL DEFAULT '{}';
  ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS outputs jsonb;
  ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS event jsonb;
+ ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS model_content text;
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS agent_hourly_limit integer NOT NULL DEFAULT ${AGENT_HOURLY_LIMIT} CHECK (agent_hourly_limit BETWEEN 1 AND ${AGENT_HOURLY_LIMIT_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS link_sites text[] NOT NULL DEFAULT '{}';
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_enabled boolean NOT NULL DEFAULT false;
@@ -312,9 +313,11 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return total;
     },
 
+    // The model reads its past answers as it wrote them (model_content), not their
+    // text version: a history of text versions teaches it to answer in that format.
     async historico(contatoId, limite = HISTORICO_MAX) {
       const { rows } = await pool.query(
-        `SELECT role, content FROM (SELECT id, role, content FROM ${S}.public_messages
+        `SELECT role, content FROM (SELECT id, role, coalesce(model_content, content) AS content FROM ${S}.public_messages
            WHERE contact_id = $1 ORDER BY id DESC LIMIT $2) t ORDER BY id`, [contatoId, limite]);
       return rows.map((r) => ({ role: r.role, content: r.content }));
     },
@@ -322,8 +325,10 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     registrar(contatoId, mensagens) {
       return transacao(async (c) => {
         for (const m of mensagens) {
-          await c.query(`INSERT INTO ${S}.public_messages (contact_id, role, content, outputs, event) VALUES ($1, $2, $3, $4, $5)`,
-            [contatoId, m.role, texto(m.content, 20000), m.outputs?.length ? JSON.stringify(m.outputs) : null, m.event ? JSON.stringify(m.event) : null]);
+          const content = texto(m.content, 20000), modelContent = texto(m.modelContent, 20000);
+          await c.query(`INSERT INTO ${S}.public_messages (contact_id, role, content, outputs, event, model_content) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [contatoId, m.role, content, m.outputs?.length ? JSON.stringify(m.outputs) : null, m.event ? JSON.stringify(m.event) : null,
+              modelContent && modelContent !== content ? modelContent : null]);
         }
         await c.query(`UPDATE ${S}.public_contacts SET ultima_em = now() WHERE id = $1`, [contatoId]);
       });
@@ -474,13 +479,15 @@ export function retainedByTool(tools) {
 //    for typed and for voice turns. The owner edits them on /public-support (an
 //    edit replaces the default); spoken missing = the assistant has no voice
 //    text, and the owner sees only the written one.
-//   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?}. instrucoes is the base
+//   antesDoModelo(ctx) → {instrucoes?, saidas?, pular?, modelText?}. instrucoes is the base
 //    for this turn (built from ctx.texts, the one that fits the turn) and the
 //    owner's instructions are added after it; without it, the base is
 //    ctx.texts.written. pular with saidas answers without calling the model
-//    (opening, fixed response).
+//    (opening, fixed response); modelText is that answer as the model would have
+//    written it, which the model reads in later turns instead of the text version.
 //   depoisDoModelo({...ctx, texto}) → {saidas?}: replaces the model's text with
-//    rich outputs (public-support-outputs.mjs).
+//    rich outputs (public-support-outputs.mjs). The model reads its own text in
+//    later turns; the person, the channel and the owner get the outputs.
 //   photoRequested(ctx) → {requested: true} when the assistant asked this contact
 //    for a photo and this message is the answer. Say it once per request: a photo
 //    sent without a key (a browser, a WhatsApp number) reaches the model only with it.
@@ -627,7 +634,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const prontas = normalizarSaidas(antes?.saidas, { canal });
       if (antes?.pular === true && prontas.length) {
         const text = textoDasSaidas(prontas);
-        await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas }]);
+        const modelContent = typeof antes.modelText === 'string' ? antes.modelText : undefined;
+        await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas, modelContent }]);
         return { text, saidas: prontas, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
@@ -656,13 +664,15 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       // message that talks the model into it can't send people to another site.
       const sites = agente.link_sites || [];
       const saidas = sites.length ? keepLinksToSites(doPlugin, sites) : doPlugin;
+      const written = sites.length ? withoutLinksOutside(text, sites) : text;
+      const modelContent = doPlugin.length ? written : undefined;
       if (doPlugin.length) text = textoDasSaidas(saidas);
-      else if (sites.length) text = withoutLinksOutside(text, sites);
+      else text = written;
       if (!text) {
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
-      await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas }]);
+      await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }]);
       return { text, ...(saidas.length ? { saidas } : {}), ...ident };
     });
   }

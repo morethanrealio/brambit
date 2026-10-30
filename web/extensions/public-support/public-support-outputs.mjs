@@ -7,13 +7,17 @@
 //  {tipo:'imagem', url, legenda?}            https url
 //  {tipo:'botao', texto, rotulo, url, imagem?}  button that opens a link (https url);
 //                                            image (https) goes at the top of the message
+//  {tipo:'replies', texto, replies:[{rotulo, texto}], imagem?}
+//                                            up to 3 reply buttons (distinct labels);
+//                                            a tap comes back as a message with that
+//                                            reply's texto, as if the person typed it
 //  {tipo:'template', nome, idioma?, componentes?}  channel's approved template
 //  {tipo:'data', nome, data}                 structured data for a page that
 //                                            renders it itself (a product card, a
 //                                            command for a widget); `nome` says what
 //                                            it is, `data` is a plain JSON object
 //
-// Image, button, template and data accept `reserva`: text the channel sends instead
+// Image, buttons, template and data accept `reserva`: text the channel sends instead
 // when it can't deliver that output (e.g. Meta rejects the template; WhatsApp
 // has no use for data, so it sends the reserve or nothing).
 //
@@ -30,9 +34,11 @@ export const ROTULO_MAX = 40;       // a link button's label on a channel withou
 const ROTULO_MAX_DO_CANAL = { whatsapp: 20 }; // WhatsApp link button accepts up to 20
 export const COMPONENTES_MAX = 20000; // chars of the JSON of a template's components
 export const DATA_MAX = 8000;         // chars of the JSON of a data output
+export const REPLIES_MAX = 3;         // reply buttons in one output (WhatsApp's limit)
+export const REPLY_TEXT_MAX = 256;    // what a tap sends (WhatsApp's reply id limit)
 const NOME = /^[a-z][a-z0-9_.-]{0,63}$/;
 
-const corte = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
+const corte = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max).trim();
 const https = (v) => {
   try { const u = new URL(String(v)); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; }
   catch { return null; }
@@ -57,6 +63,17 @@ function normalizarTipo(s, rotuloMax) {
     const imagem = s.imagem === undefined ? null : https(s.imagem);
     if (s.imagem !== undefined && !imagem) return null;
     return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url, ...(imagem ? { imagem } : {}) } : null;
+  }
+  if (s.tipo === 'replies') {
+    const texto = corte(s.texto, LEGENDA_MAX);
+    const imagem = s.imagem === undefined ? null : https(s.imagem);
+    if (!texto || (s.imagem !== undefined && !imagem) || !Array.isArray(s.replies)) return null;
+    const replies = [];
+    for (const r of s.replies) {
+      const rotulo = corte(r?.rotulo, rotuloMax), resposta = corte(r?.texto, REPLY_TEXT_MAX);
+      if (rotulo && resposta && !replies.some((x) => x.rotulo === rotulo)) replies.push({ rotulo, texto: resposta });
+    }
+    return replies.length ? { tipo: 'replies', texto, replies: replies.slice(0, REPLIES_MAX), ...(imagem ? { imagem } : {}) } : null;
   }
   if (s.tipo === 'template') {
     const nome = String(s.nome ?? '');
@@ -91,6 +108,7 @@ export function textoDasSaidas(saidas) {
     if (s.tipo === 'texto') return s.texto;
     if (s.tipo === 'imagem') return s.legenda ? `[imagem] ${s.legenda}` : '[imagem]';
     if (s.tipo === 'botao') return `${s.texto}\n[${s.rotulo}: ${s.url}]`;
+    if (s.tipo === 'replies') return `${s.texto}\n[${s.replies.map((r) => r.rotulo).join(' | ')}]`;
     if (s.tipo === 'data') return s.reserva || `[data: ${s.nome}]`;
     return `[mensagem pronta: ${s.nome}]`;
   }).join('\n\n');
@@ -110,6 +128,10 @@ export function keepLinksToSites(saidas, sites) {
       const texto = limpa(s.texto);
       if (!hostInSites(s.url, sites)) return texto ? { tipo: 'texto', texto } : null;
       r.texto = texto || s.rotulo;
+    }
+    if (s.tipo === 'replies') {
+      r.texto = limpa(s.texto) || s.replies[0].rotulo;
+      r.replies = s.replies.map((x) => ({ ...x, texto: limpa(x.texto) || x.rotulo }));
     }
     return r;
   }).filter(Boolean);
