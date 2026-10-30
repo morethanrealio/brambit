@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/extensions/public-support/public-support.mjs');
+const { createPublicoStore, createAtendimentoPublico, comAgora, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/extensions/public-support/public-support.mjs');
 const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
@@ -499,7 +499,7 @@ test('public web channel: listed origins only, signed contact, key for servers, 
   const ev = await pede('POST', msgs(ag), { corpo: { event: { type: 'color_picked', data: { sku: 'A1' } }, contact: r1.corpo.contact }, headers: SITE });
   assert.equal(ev.status, 200);
   assert.deepEqual(eventos.at(-1), { type: 'color_picked', data: { sku: 'A1' } });
-  assert.equal(m.chamadas.at(-1).messages.at(-1).content, '[event: color_picked] {"sku":"A1"}');
+  assert.equal(m.chamadas.at(-1).messages.at(-1).content, comAgora('[event: color_picked] {"sku":"A1"}', 'segunda, 5 de outubro'));
   for (const corpo of [{ event: { type: 'Not valid' } }, { event: { type: 'ok', data: 'x' } }, { event: { type: 'ok', data: { x: 'y'.repeat(3000) } } }, { message: 'hi', event: { type: 'ok' } }]) {
     assert.equal((await pede('POST', msgs(ag), { corpo: { ...corpo, contact: r1.corpo.contact }, headers: SITE })).status, 400, JSON.stringify(corpo).slice(0, 60));
   }
@@ -678,12 +678,16 @@ test('editable texts: only the owner reads and edits an assistant\'s, the newest
   const a = atendimento(store, m, { prompts: p });
   await store.configurar(ag, dono, { ativo: true });
   await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
-  assert.ok(m.chamadas[0].system.endsWith('rules\n\nAgora: segunda, 5 de outubro.'));
+  // The time goes at the end of the message, not in the system: a clock in the system breaks the provider's prompt cache.
+  assert.ok(m.chamadas[0].system.endsWith('rules'));
+  assert.equal(m.chamadas[0].messages.at(-1).content, 'hi\n\n(Contexto do sistema: agora é segunda, 5 de outubro.)');
   assert.ok(!m.chamadas[0].system.includes(INSTALLATION_PROMPT_DEFAULT));
   await p.save({ kind: 'installation', content: '  ', userId: dono });
   assert.deepEqual(await p.current(ag), { installation: '', written: 'written 4', spoken: '' });
   await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '1', mensagem: 'hi' });
   assert.ok(m.chamadas[1].system.includes(INSTALLATION_PROMPT_DEFAULT));
+  // The history keeps what the person wrote, without the time, so the next turn starts with the same prompt.
+  assert.equal(m.chamadas[1].messages[0].content, 'hi');
   assert.deepEqual(await p.current(ag2), { installation: '', written: '', spoken: 'spoken by Bia' });
   // The plugin's defaults fill what the owner didn't edit; without a voice default there is no spoken text.
   const seen = [], m2 = modelo();
