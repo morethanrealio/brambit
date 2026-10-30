@@ -67,7 +67,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '', clientAreas = clientAreasOn() }) {
   const store = createPublicoStore(pool, { S });
   const events = createEventsStore(pool, { S, log });
-  const webStore = createPublicWebStore(pool, { S, measure: (outputs, ident) => measureLinks(events, publicBase(), ident, outputs) });
+  const webStore = createPublicWebStore(pool, { S, measure: (outputs, ident) => measureLinks(events, publicBase(), ident, outputs, { keepUrl: true }) });
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });

@@ -9,7 +9,8 @@
 // conversation alone is erased (store.apagarConversa).
 //
 // Measured links: a link button the person gets points to this server
-// (CLICK_PATH?l=<id>) instead of the site. The id is random and the address it
+// (CLICK_PATH?l=<id>) instead of the site (the web chat gets it in clickUrl, next
+// to the real url). The id is random and the address it
 // leads to is kept here, so the route never sends anyone to an address it did
 // not store. A click records the event and redirects. The conversation keeps
 // the real address: the owner reading it doesn't open the measured one.
@@ -160,14 +161,18 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
 // A turn's link buttons pointing to CLICK_PATH, for the copy that goes to the
 // person (the conversation keeps the real addresses). Only with an https base,
 // since a channel takes only https buttons; a link that fails to store keeps its address.
-export async function measureLinks(events, base, { agentId, contactId }, saidas) {
+// keepUrl (web chat): the button keeps its real url and gets the measured one in
+// clickUrl, because the page decides how to show a link (color, opening inside the
+// chat) by its address; it opens clickUrl. Other channels get the measured url.
+export async function measureLinks(events, base, { agentId, contactId }, saidas, { keepUrl = false } = {}) {
   const root = String(base ?? '').replace(/\/+$/, '');
   if (!events || !contactId || !/^https:\/\/[^\s?#]+$/.test(root) || !Array.isArray(saidas) || !saidas.some((s) => s?.tipo === 'botao')) return saidas;
   const out = [];
   for (const s of saidas) {
     if (s?.tipo !== 'botao') { out.push(s); continue; }
     const id = await events.linkId({ agentId, contactId, url: s.url, ref: s.ref ?? '' }).catch(() => null);
-    out.push(id ? { ...s, url: `${root}${CLICK_PATH}?l=${id}` } : s);
+    const measured = id && `${root}${CLICK_PATH}?l=${id}`;
+    out.push(!measured ? s : keepUrl ? { ...s, clickUrl: measured } : { ...s, url: measured });
   }
   return out;
 }

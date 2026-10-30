@@ -88,16 +88,21 @@ test('link buttons go out measured: the click is recorded once, previews and HEA
   const ganchos = { antesDoModelo: async () => ({ pular: true, saidas: [{ tipo: 'texto', texto: 'oi' }, { tipo: 'botao', texto: 'Veja', rotulo: 'Ver', url: shop, ref: 'product:9' }] }) };
   const a = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
     ganchos, events, linkBase: () => 'https://bot.example/', log: { error() {}, info() {} } });
+  // The web chat keeps the real url (the page styles a link by its address) and opens clickUrl.
   const r1 = await a.turno({ agentId: ag, canal: 'web', endereco: 'api:ana', mensagem: 'oi' });
   const r2 = await a.turno({ agentId: ag, canal: 'web', endereco: 'api:ana', mensagem: 'de novo' });
-  const link = r1.saidas[1].url;
+  const link = r1.saidas[1].clickUrl;
   assert.match(link, /^https:\/\/bot\.example\/go\?l=[A-Za-z0-9_-]{16}$/);
-  assert.equal(r2.saidas[1].url, link, 'the same link keeps its id');
-  assert.ok(r1.text.includes(link) && !r1.text.includes(shop));
+  assert.equal(r1.saidas[1].url, shop);
+  assert.equal(r2.saidas[1].clickUrl, link, 'the same link keeps its id');
+  const wa = await a.turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000002', mensagem: 'oi' });
+  assert.match(wa.saidas[1].url, /^https:\/\/bot\.example\/go\?l=/);
+  assert.ok(wa.text.includes(wa.saidas[1].url) && !wa.text.includes(shop) && !('clickUrl' in wa.saidas[1]));
   const stored = (await db.query(`SELECT outputs FROM mtr_harness.public_messages WHERE role = 'assistant' ORDER BY id LIMIT 1`)).rows[0].outputs;
   assert.equal(stored[1].url, shop);
-  const webStore = createPublicWebStore({ query: (s, v) => db.query(s, v) }, { measure: (o, ident) => measureLinks(events, 'https://bot.example', ident, o) });
-  assert.equal((await webStore.history(ag, 'api:ana')).find((m) => m.outputs)?.outputs[1].url, link);
+  const webStore = createPublicWebStore({ query: (s, v) => db.query(s, v) }, { measure: (o, ident) => measureLinks(events, 'https://bot.example', ident, o, { keepUrl: true }) });
+  const old = (await webStore.history(ag, 'api:ana')).find((m) => m.outputs)?.outputs[1];
+  assert.deepEqual([old.url, old.clickUrl], [shop, link]);
 
   const rotas = createRotas();
   registerClickRoute({ rotas, events, send: (res, status, body) => { res.statusCode = status; res.body = body; }, log: { error() {} } });

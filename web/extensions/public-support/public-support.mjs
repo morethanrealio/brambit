@@ -617,7 +617,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
       const contato = await store.contato(agentId, canal, endereco);
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
-      const measured = (saidas) => measureLinks(events, linkBase(), { agentId: agente.agent_id, contactId: contato.id }, saidas)
+      const measured = (saidas) => measureLinks(events, linkBase(), { agentId: agente.agent_id, contactId: contato.id }, saidas, { keepUrl: canal === 'web' })
         .catch((e) => { log.error?.('[publico] measuring links failed:', e?.message ?? e); return saidas; });
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
       const comando = ev ? null : comandoDoContato(msg);

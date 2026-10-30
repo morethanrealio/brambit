@@ -8,7 +8,9 @@
 //  {tipo:'botao', texto, rotulo, url, imagem?, ref?}  button that opens a link (https url);
 //                                            image (https) goes at the top of the message;
 //                                            ref names the link in its click event
-//                                            (public-support-events.mjs), e.g. 'product:123'
+//                                            (public-support-events.mjs), e.g. 'product:123';
+//                                            the web chat also gets clickUrl, the measured
+//                                            address to open (url stays the real one)
 //  {tipo:'replies', texto, replies:[{rotulo, texto}], imagem?}
 //                                            up to 3 reply buttons (distinct labels);
 //                                            a tap comes back as a message with that
