@@ -15,6 +15,7 @@ import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-supp
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
+import { EVENTS_PATH, eventsCsv } from './public-support-events.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -68,8 +69,9 @@ export function camposDaConfig(b = {}) {
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
 // metricCards({agentId, days, from, to}) → [{label, value}] = the plugin's cards (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
+// events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], activity = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], activity = null, events = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -227,6 +229,19 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const volume = await metrics.volume(acc.ownerId, acc.agentId, days);
     const cards = volume.daily.length ? await metricCards({ agentId: acc.agentId, days, from: volume.daily[0].day, to: volume.daily.at(-1).day }) : [];
     return send(res, 200, { ...volume, cards });
+  });
+
+  // The period's events as a spreadsheet, for everyone who sees the metrics.
+  if (events && metrics) rota('GET', EVENTS_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    const days = Number(url.searchParams.get('days'));
+    if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
+    const rows = await events.list(acc.ownerId, acc.agentId, days);
+    if (!rows) return naoAchei(res);
+    await record(user, acc, 'events_exported', { days, rows: rows.length });
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="events-${acc.agentId}-${days}d.csv"` });
+    return res.end('\ufeff' + eventsCsv(rows));
   });
 
   // The access log: the owner reads all of it, an area's admin the area's part; a viewer none.

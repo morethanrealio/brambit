@@ -17,6 +17,7 @@ import { randomBytes } from 'node:crypto';
 import { defaultTimezone } from '../../locale.mjs';
 
 export const CLICK_PATH = '/go';
+export const EVENTS_PATH = '/api/public-support/events.csv';
 export const LINK_CLICK = 'link_click';
 export const EVENT_KIND = /^[a-z][a-z0-9_.-]{0,63}$/;
 export const EVENT_REF_MAX = 200;
@@ -132,12 +133,17 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       return steps.map((_, i) => r?.[`n${i}`] ?? 0);
     },
 
-    // Every event of the period, oldest first, with the contact's channel.
-    async list(agentId, { from, to }) {
+    // The owner's assistant's events of the last `days` days (today included),
+    // oldest first: local time, contact, channel, kind, ref. Null when the
+    // assistant is not ownerId's (agents.user_id).
+    async list(ownerId, agentId, days) {
+      const own = await pool.query(`SELECT 1 FROM ${S}.agents WHERE id = $1 AND user_id = $2`, [agentId, ownerId]);
+      if (!own.rows.length) return null;
       const { rows } = await pool.query(
-        `SELECT e.at, e.contact_id, c.canal AS channel, e.kind, e.ref FROM ${S}.public_support_events e
-           JOIN ${S}.public_contacts c ON c.id = e.contact_id
-          WHERE e.agent_id = $1 AND ${period(2).replace(/\bat\b/g, 'e.at')} ORDER BY e.at, e.id LIMIT ${EVENTS_EXPORT_MAX}`, [agentId, from, to, timezone]);
+        `SELECT to_char(e.at AT TIME ZONE $3, 'YYYY-MM-DD HH24:MI:SS') AS at, e.contact_id, c.canal AS channel, e.kind, e.ref
+           FROM ${S}.public_support_events e JOIN ${S}.public_contacts c ON c.id = e.contact_id
+          WHERE e.agent_id = $1 AND e.at >= (((now() AT TIME ZONE $2)::date - ($3::int - 1))::timestamp AT TIME ZONE $2)
+          ORDER BY e.at, e.id LIMIT ${EVENTS_EXPORT_MAX}`, [agentId, timezone, days]);
       return rows;
     },
 
@@ -187,3 +193,5 @@ export const csvCell = (v) => {
   const s = String(v ?? '');
   return `"${(/^[=+\-@\t\r]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
 };
+export const eventsCsv = (rows) => [['at', 'contact_id', 'channel', 'event', 'ref'], ...rows.map((r) => [r.at, r.contact_id, r.channel, r.kind, r.ref])]
+  .map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';

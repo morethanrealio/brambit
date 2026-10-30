@@ -81,6 +81,7 @@
   .metric-head{display:flex;justify-content:space-between;align-items:center;gap:12px;}
   .metric-head h2{margin:0;}
   .metric-head select{width:auto;}
+  .metric-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0 4px;}
   .kpi{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:#fff;}
   .kpi .n{font-size:24px;font-weight:700;line-height:1.2;}
@@ -148,11 +149,14 @@
   <div class="card hidden" id="metricsCard" data-tab-panel="home">
     <div class="metric-head">
       <h2 id="metricsTitle" data-i18n="public_service_page.metrics">Activity</h2>
-      <select id="metricDays" aria-labelledby="metricsTitle">
-        <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
-        <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
-        <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
-      </select>
+      <div class="metric-tools">
+        <a class="btn ghost" id="eventsCsv" href="#" download data-i18n="public_service_page.metric_events_csv">Download events (CSV)</a>
+        <select id="metricDays" aria-labelledby="metricsTitle">
+          <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
+          <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
+          <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
+        </select>
+      </div>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="n" id="mConversations">0</div><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div></div>
@@ -439,6 +443,7 @@
   var METRICS = '/api/public-support/metrics', metricsFor = null;
   function loadMetrics(){
     var id = agenteAtual.agentId, days = $('metricDays').value, key = metricsFor = id + ':' + days;
+    $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&days=' + days;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days).then(function(j){

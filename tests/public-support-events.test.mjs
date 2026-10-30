@@ -117,3 +117,34 @@ test('link buttons go out measured: the click is recorded once, previews and HEA
   assert.equal((await hit('GET', 'AAAAAAAAAAAAAAAA')).statusCode, 404);
   assert.equal((await hit('GET', '../etc')).statusCode, 404);
 });
+
+test('the events spreadsheet: the owner downloads it, another account gets 404, a formula in a ref goes out as text', async (t) => {
+  const { db, store, events, ag } = await setup(t);
+  const { createRotas } = await import('../web/routes.mjs');
+  const { registrarRotasDoDono } = await import('../web/extensions/public-support/public-support-owner.mjs');
+  const { createPublicWebStore } = await import('../web/extensions/public-support/public-web.mjs');
+  const { EVENTS_PATH } = await import('../web/extensions/public-support/public-support-events.mjs');
+  const owner = (await db.query('SELECT user_id FROM mtr_harness.agents WHERE id = $1', [ag])).rows[0].user_id, other = randomUUID();
+  await db.query('INSERT INTO mtr_harness.users VALUES ($1)', [other]);
+  const c = (await store.contato(ag, 'whatsapp', '5511000000001')).id;
+  await events.record({ agentId: ag, contactId: c, kind: 'bag_add', ref: '=HYPERLINK("x")' });
+  const done = [];
+  const rotas = createRotas();
+  registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore({ query: (s, v) => db.query(s, v) }), send: (res, status, json) => Object.assign(res, { status, json }),
+    fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false, agenteDoNumero: () => ag,
+    metrics: {}, events, activity: { record: async (a) => { done.push([a.action, a.detail]); } } });
+  const ask = async (who, days = 7) => {
+    const res = { headers: {}, setHeader() {}, writeHead(s, h) { this.status = s; this.headers = h; }, end(b) { this.body = b; } };
+    await rotas.atender({ method: 'GET' }, res, new URL(`http://x${EVENTS_PATH}?agent=${ag}&days=${days}`), { currentUser: async () => ({ id: who }) });
+    return res;
+  };
+  assert.equal((await ask(other)).status, 404);
+  assert.equal((await ask(owner, 5)).status, 400);
+  const csv = await ask(owner);
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers['content-disposition'], /^attachment; filename="events-[0-9a-f-]+-7d\.csv"$/);
+  const lines = csv.body.replace(/^﻿/, '').trim().split('\r\n');
+  assert.equal(lines[0], '"at","contact_id","channel","event","ref"');
+  assert.match(lines[1], new RegExp(`^"[0-9: -]+","${c}","whatsapp","bag_add","'=HYPERLINK\\(""x""\\)"$`));
+  assert.deepEqual(done, [['events_exported', { days: 7, rows: 1 }]]);
+});
