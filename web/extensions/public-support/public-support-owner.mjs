@@ -16,6 +16,7 @@ import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv } from './public-support-events.mjs';
+import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -67,7 +68,7 @@ export function camposDaConfig(b = {}) {
 // avatar (public-avatar.mjs) = the face on the web channel, when the server has avatars.
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
-// metricCards({agentId, days, from, to}) → [{label, value}] = the plugin's cards (public-support.mjs).
+// metricCards({agentId, days, from, to, language}) → the plugin's cards (public-support.mjs); language = the page's (?lang).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
@@ -227,7 +228,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const days = Number(url.searchParams.get('days'));
     if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
     const volume = await metrics.volume(acc.ownerId, acc.agentId, days);
-    const cards = volume.daily.length ? await metricCards({ agentId: acc.agentId, days, from: volume.daily[0].day, to: volume.daily.at(-1).day }) : [];
+    const language = normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
+    const cards = volume.daily.length ? await metricCards({ agentId: acc.agentId, days, from: volume.daily[0].day, to: volume.daily.at(-1).day, language }) : [];
     return send(res, 200, { ...volume, cards });
   });
 

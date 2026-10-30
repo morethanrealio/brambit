@@ -17,7 +17,7 @@ import { runAgent as runAgentPadrao, ToolRegistry } from '../../../core-proto/co
 import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
 import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
-import { eventsSchema, measureLinks } from './public-support-events.mjs';
+import { eventsSchema, measureLinks, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -518,11 +518,14 @@ export function retainedByTool(tools) {
 //    the default; spoken null without a voice text), estado(), lembrar(chave,valor),
 //    track(kind, ref?): records an event of this contact (kind like 'bag_add', ref
 //    like 'product:123'); never throws, a failed write only goes to the log}.
-//   metricCards({agentId, days, from, to, events}) → [{label, value}]: the plugin's own
+//   metricCards({agentId, days, from, to, language, events}) → cards: the plugin's own
 //    numbers for the assistant, shown next to its volume to the owner and the
 //    members of its client area. from/to = the period's first and last day
-//    (YYYY-MM-DD, installation timezone). label is plain text in the language the
-//    plugin writes it; value a number (the page formats it) or short text. Up to
+//    (YYYY-MM-DD, installation timezone); language = the page's ('pt-BR', 'en' or
+//    'es'), for the labels. A card is {label, value, detail?}: value a number (the
+//    page formats it) or short text, detail a short line under it (e.g. '3 people');
+//    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
+//    shows across the row, each with its share of the step before. Up to
 //    METRIC_CARDS_MAX cards; slower than METRIC_CARDS_WAIT_MS = none this time.
 //    events = this assistant's events in the period: count({kind, ref?|refPrefix?})
 //    → {times, people}; funnel([step, ...]) → people per step, each step done
@@ -567,9 +570,18 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     clearTimeout(timer);
     if (r === 'late') { log.error?.('[publico] gancho metricCards took too long'); return []; }
     const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
-    return (Array.isArray(r) ? r : [])
-      .map((c) => ({ label: text(c?.label, 60), value: typeof c?.value === 'number' && Number.isFinite(c.value) ? c.value : text(c?.value, 24) }))
-      .filter((c) => c.label && c.value !== null).slice(0, METRIC_CARDS_MAX);
+    const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const card = (c) => {
+      const label = text(c?.label, 60);
+      if (!label) return null;
+      if (Array.isArray(c.steps)) {
+        const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value) }));
+        return steps.length >= 2 && steps.length <= FUNNEL_STEPS_MAX && steps.every((s) => s.label && s.value !== null) ? { label, steps } : null;
+      }
+      const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
+      return value === null ? null : { label, value, ...(detail ? { detail } : {}) };
+    };
+    return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)

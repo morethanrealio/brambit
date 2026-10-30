@@ -1186,6 +1186,7 @@
     "metric_day_tip_other": "{day}: {count} conversaciones",
     "metric_retention": "Las conversaciones se guardan {days} días, así que los días anteriores aparecen vacíos.",
     "metric_events_csv": "Descargar eventos (hoja de cálculo)",
+    "metric_funnel_rate": "{rate} del paso anterior",
     "areas": "Áreas de clientes",
     "areas_lead": "Pon asistentes en un área y da acceso a las personas de un cliente. El admin edita las instrucciones, los textos y los sitios de los enlaces y se ocupa de los contactos; quien solo ve únicamente lee. Lo demás sigue contigo.",
     "areas_none": "Todavía no tienes áreas.",

@@ -226,6 +226,8 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
     asked.push(q);
     if (q.days === 90) throw Error('plugin down');
     return [{ label: ' Orders ', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
+      { label: 'Bag', value: 3, detail: ' 1 person ' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+      { label: 'One step', steps: [{ label: 'Click', value: 4 }] }, { label: 'Text step', steps: [{ label: 'a', value: '4' }, { label: 'b', value: 2 }] },
       { label: '', value: 1 }, { label: 'Object', value: {} }, ...Array.from({ length: 10 }, (_, i) => ({ label: 'n' + i, value: i }))];
   } } });
   const { ask, db, store, owner, adminA, viewerB, agA, agB } = s;
@@ -248,11 +250,14 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
   assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 2, received: 2, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
-  assert.deepEqual(month.body.cards.slice(0, 3), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'n0', value: 0 }],
-    'the plugin\'s cards, without the malformed ones');
+  assert.deepEqual(month.body.cards.slice(0, 5), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
+    { label: 'Bag', value: 3, detail: '1 person' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    { label: 'n0', value: 0 }], 'the plugin\'s cards and funnels, without the malformed ones');
   assert.equal(month.body.cards.length, 8);
   const { events, ...range } = asked[0];
-  assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today });
+  assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today, language: 'en' });
+  await ask(adminA, 'GET', `${METRICS_PATH}?agent=${agA}&days=30&lang=pt-br`);
+  assert.equal(asked.at(-1).language, 'pt-BR', 'the cards come in the page\'s language');
   assert.deepEqual(await events.count({ kind: 'bag_add' }), { times: 0, people: 0 });
   const quarter = await get(owner, agA, 90);
   assert.deepEqual(quarter.body.total, { conversations: 3, newContacts: 3, received: 3, replies: 2 });

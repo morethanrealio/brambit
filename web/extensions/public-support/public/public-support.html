@@ -86,6 +86,15 @@
   .kpi{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:#fff;}
   .kpi .n{font-size:24px;font-weight:700;line-height:1.2;}
   .kpi .l{font-size:12.5px;color:var(--mut);}
+  .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
+  .kpis.plugin{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .funnel{margin:12px 0 4px;}
+  .funnel > .l{font-size:13.5px;font-weight:600;color:inherit;}
+  .funnel .steps{display:flex;align-items:stretch;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .funnel .step{flex:1 1 140px;}
+  .funnel .to{align-self:center;color:var(--mut);font-size:18px;}
+  .funnel .rate{font-size:12px;color:var(--mut);margin-top:2px;}
+  @media (max-width:640px){.kpis.plugin{grid-template-columns:repeat(2,minmax(0,1fr));}.funnel .to{display:none;}}
   .bars{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid var(--line);margin-top:8px;}
   .bars .bar{flex:1;background:var(--accent2);border-radius:3px 3px 0 0;min-height:1px;}
   .bars .bar.none{background:var(--line2);}
@@ -164,7 +173,8 @@
       <div class="kpi"><div class="n" id="mReceived">0</div><div class="l" data-i18n="public_service_page.metric_received">Messages received</div></div>
       <div class="kpi"><div class="n" id="mReplies">0</div><div class="l" data-i18n="public_service_page.metric_replies">Replies sent</div></div>
     </div>
-    <div class="kpis hidden" id="mCards"></div>
+    <div class="kpis plugin hidden" id="mCards"></div>
+    <div id="mFunnels"></div>
     <h3 data-i18n="public_service_page.metric_per_day">Conversations per day</h3>
     <div class="bars" id="mBars"></div>
     <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
@@ -444,18 +454,37 @@
   function loadMetrics(){
     var id = agenteAtual.agentId, days = $('metricDays').value, key = metricsFor = id + ':' + days;
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&days=' + days;
-    var number = new Intl.NumberFormat(document.documentElement.lang);
+    var number = new Intl.NumberFormat(document.documentElement.lang), percent = new Intl.NumberFormat(document.documentElement.lang, { style: 'percent' });
     msg($('metricsMsg'), '');
-    pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days).then(function(j){
+    pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mConversations', 'conversations'], ['mNewContacts', 'newContacts'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
       });
-      var cards = $('mCards'); cards.textContent = '';
+      // The plugin's cards: plain ones in the grid, funnels each across a row.
+      var cards = $('mCards'), funnels = $('mFunnels'); cards.textContent = ''; funnels.textContent = '';
+      var shown = function(v){ return typeof v === 'number' ? number.format(v) : v; };
       (j.cards || []).forEach(function(c){
         var k = el('div', 'kpi');
-        k.appendChild(el('div', 'n', typeof c.value === 'number' ? number.format(c.value) : c.value));
+        if (c.steps) {
+          k.className = 'kpi funnel';
+          k.appendChild(el('div', 'l', c.label));
+          var row = el('div', 'steps');
+          c.steps.forEach(function(s, i){
+            if (i) row.appendChild(el('div', 'to', '→'));
+            var step = el('div', 'step');
+            step.appendChild(el('div', 'n', shown(s.value)));
+            step.appendChild(el('div', 'l', s.label));
+            var before = c.steps[i - 1];
+            if (before && before.value > 0) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
+            row.appendChild(step);
+          });
+          k.appendChild(row);
+          return funnels.appendChild(k);
+        }
+        k.appendChild(el('div', 'n', shown(c.value)));
         k.appendChild(el('div', 'l', c.label));
+        if (c.detail) k.appendChild(el('div', 'd', c.detail));
         cards.appendChild(k);
       });
       cards.classList.toggle('hidden', !cards.firstChild);
