@@ -44,5 +44,11 @@ export function createAccountScope() {
       for (const s of live) if (await s.holds(user.id)) return heldVerdict(s, method, pathname);
       return null;
     },
+    // → the page a held account lives on, or null for any other account. The sign-in
+    // screen sends a held account there instead of opening the owner's app in place.
+    async homeFor(userId) {
+      for (const s of scopes) if (s.active() && await s.holds(userId)) return s.home;
+      return null;
+    },
   };
 }

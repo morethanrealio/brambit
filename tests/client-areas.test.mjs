@@ -203,6 +203,9 @@ test('invite: a new e-mail becomes a panel account with a one-time password link
   ]) assert.deepEqual(await scope.check(method, path, as(invited)), verdict, `${method} ${path}`);
   assert.equal(await scope.check('POST', '/api/chat', as(stranger)), null, 'a full account is not held');
   assert.equal(await scope.check('POST', '/api/chat', as(null)), null);
+  // Where the sign-in screen sends each account (server.mjs /api/login → home).
+  assert.equal(await scope.homeFor(invited), '/public-support');
+  assert.equal(await scope.homeFor(stranger), null);
 });
 
 test('account scope: with no panel account loaded, the core does not look the session up', async (t) => {

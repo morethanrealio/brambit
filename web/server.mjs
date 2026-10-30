@@ -8505,7 +8505,7 @@ async function atenderRequest(req, res) {
       const wa = await getWhatsAppLinkForUser(user.id);
       return send(res, 200, {
         ...(mobileClient ? { token } : {}),
-        name: user.name, agents, connected: await connectedServices(user.id),
+        name: user.name, agents, home: await accountScope.homeFor(user.id), connected: await connectedServices(user.id),
         providers: await listOAuthProviders(user.id),
         microsoftServices: await microsoftServicesFor(user.id),
         credits: await getCreditStatus(user.id),
