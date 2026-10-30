@@ -19,6 +19,7 @@ import { publicSupportOn } from '../../profiles.mjs';
 import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 import { activitySchema, createActivityStore } from './client-area-activity.mjs';
+import { createEventsStore } from './public-support-events.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -69,6 +70,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });
+  const events = createEventsStore(pool, { S, log });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -83,6 +85,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     try {
       const r = await store.limparVencidos();
       if (r.mensagens || r.anotacoes || r.contatos) log.log?.(`[publico] retenção: ${r.contatos} contato(s), ${r.mensagens} mensagem(ns), ${r.anotacoes} anotação(ões) apagadas`);
+      if (r.events || r.links) log.log?.(`[publico] retention: ${r.events} event(s), ${r.links} link(s) deleted`);
     } catch (e) { log.error?.('[publico] retenção falhou:', e?.message ?? e); }
   };
   if (limpezaMs > 0) {
@@ -90,7 +93,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setInterval(limpar, limpezaMs).unref?.();
   }
   const atendimento = createAtendimentoPublico({
-    store, makeProvider, ferramentas, ganchos, prompts, log, agora: agoraPorExtenso,
+    store, makeProvider, ferramentas, ganchos, prompts, events, log, agora: agoraPorExtenso,
     saldo: creditStatus,
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
@@ -105,7 +108,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }
   return {
-    store, webStore, prompts, areas, limpar,
+    store, webStore, prompts, areas, events, limpar,
     whatsapp: {
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem, imagens }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem,

@@ -323,7 +323,7 @@ test('retention deletes what is past the deadline; export returns everything for
   await db.query(`UPDATE mtr_harness.public_contact_state SET atualizado_em = now() - interval '31 days'`);
   const sumido = await store.contato(ag, 'whatsapp', '5511000000002');
   await db.query(`UPDATE mtr_harness.public_contacts SET ultima_em = now() - interval '31 days' WHERE id = $1`, [sumido.id]);
-  assert.deepEqual(await store.limparVencidos(), { contatos: 1, mensagens: 1, anotacoes: 1 });
+  assert.deepEqual(await store.limparVencidos(), { contatos: 1, mensagens: 1, anotacoes: 1, events: 0, links: 0 });
   assert.equal(await store.exportar(sumido.id), null);
   const depois = await store.exportar(r1.contatoId);
   assert.deepEqual(depois.mensagens.filter((x) => x.role === 'user').map((x) => x.content), ['nova']);
@@ -762,8 +762,8 @@ test('assistant texts on the owner screen: another account gets 404, the plugin 
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {
+test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs, the events and the locale rules', () => {
   const src = fs.readFileSync(new URL('../web/extensions/public-support/public-support.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../../../core-proto/core.mjs', '../../health-guardrail.mjs', '../../locale.mjs', '../../vault.mjs', './public-support-outputs.mjs']);
+  assert.deepEqual(imports, ['../../../core-proto/core.mjs', '../../health-guardrail.mjs', '../../locale.mjs', '../../vault.mjs', './public-support-events.mjs', './public-support-outputs.mjs']);
 });

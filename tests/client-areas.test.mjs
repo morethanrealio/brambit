@@ -251,7 +251,9 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.deepEqual(month.body.cards.slice(0, 3), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'n0', value: 0 }],
     'the plugin\'s cards, without the malformed ones');
   assert.equal(month.body.cards.length, 8);
-  assert.deepEqual(asked[0], { agentId: agA, days: 30, from: month.body.daily[0].day, to: today });
+  const { events, ...range } = asked[0];
+  assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today });
+  assert.deepEqual(await events.count({ kind: 'bag_add' }), { times: 0, people: 0 });
   const quarter = await get(owner, agA, 90);
   assert.deepEqual(quarter.body.total, { conversations: 3, newContacts: 3, received: 3, replies: 2 });
   assert.equal(quarter.body.retentionDays, 90);

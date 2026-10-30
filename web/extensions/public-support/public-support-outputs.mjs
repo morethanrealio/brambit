@@ -5,8 +5,10 @@
 // Types:
 //  {tipo:'texto', texto}
 //  {tipo:'imagem', url, legenda?}            https url
-//  {tipo:'botao', texto, rotulo, url, imagem?}  button that opens a link (https url);
-//                                            image (https) goes at the top of the message
+//  {tipo:'botao', texto, rotulo, url, imagem?, ref?}  button that opens a link (https url);
+//                                            image (https) goes at the top of the message;
+//                                            ref names the link in its click event
+//                                            (public-support-events.mjs), e.g. 'product:123'
 //  {tipo:'replies', texto, replies:[{rotulo, texto}], imagem?}
 //                                            up to 3 reply buttons (distinct labels);
 //                                            a tap comes back as a message with that
@@ -24,6 +26,7 @@
 // What comes from the plugin passes through here before going out: an unknown type, a url that
 // isn't https or an empty field drop just that output.
 import { hostInSites, withoutLinksOutside } from '../../links.mjs';
+import { EVENT_REF_MAX } from './public-support-events.mjs';
 
 export { withoutLinksOutside };
 
@@ -62,7 +65,8 @@ function normalizarTipo(s, rotuloMax) {
     const url = https(s.url), texto = corte(s.texto, LEGENDA_MAX), rotulo = corte(s.rotulo, rotuloMax);
     const imagem = s.imagem === undefined ? null : https(s.imagem);
     if (s.imagem !== undefined && !imagem) return null;
-    return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url, ...(imagem ? { imagem } : {}) } : null;
+    const ref = corte(String(s.ref ?? '').replace(/[\u0000-\u001f]/g, ''), EVENT_REF_MAX);
+    return url && texto && rotulo ? { tipo: 'botao', texto, rotulo, url, ...(imagem ? { imagem } : {}), ...(ref ? { ref } : {}) } : null;
   }
   if (s.tipo === 'replies') {
     const texto = corte(s.texto, LEGENDA_MAX);
