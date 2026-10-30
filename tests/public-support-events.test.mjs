@@ -48,7 +48,7 @@ test('the plugin records events in the turn; cards count them and follow people 
     ganchos, events, log: { error() {}, info() {} } });
   const say = (who, msg) => a.turno({ agentId: ag, canal: 'web', endereco: who, mensagem: msg });
   await say('ana', 'scan_click');
-  await say('ana', 'scan_result shown=product:1 shown=product:2');
+  const { contatoId: ana } = await say('ana', 'scan_result shown=product:1 shown=product:2');
   await say('bia', 'scan_click scan_result tap=product:1 tap=checkout');
   await say('caio', 'shown=product:3');
   await say('caio', 'scan_result');   // result without a click: not in the funnel
@@ -57,6 +57,10 @@ test('the plugin records events in the turn; cards count them and follow people 
   assert.deepEqual(cards, [{ label: 'shown', value: '3/2' }, { label: 'funnel', value: '2>2>1' }, { label: 'either', value: '4/3' }]);
   await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: ['shown', 'Bad-Kind'] }), /bad kind/);
   await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: [] }), /bad kind/);
+  // One contact: only hers, with no period.
+  const hers = events.forCards(ag, { contactId: ana });
+  assert.deepEqual(await hers.count({ kind: 'shown' }), { times: 2, people: 1 });
+  assert.deepEqual(await hers.funnel([{ kind: 'scan_click' }, { kind: 'scan_result' }, { kind: 'tap' }]), [1, 1, 0]);
   // Another period sees nothing.
   assert.deepEqual(await events.count(ag, { from: '2020-01-01', to: '2020-01-31' }, { kind: 'shown' }), { times: 0, people: 0 });
 });

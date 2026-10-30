@@ -258,6 +258,13 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today, language: 'en' });
   await ask(adminA, 'GET', `${METRICS_PATH}?agent=${agA}&days=30&lang=pt-br`);
   assert.equal(asked.at(-1).language, 'pt-BR', 'the cards come in the page\'s language');
+  // One conversation's cards: for whoever can open it, with its assistant and contact.
+  const conversation = (who) => ask(who, 'GET', `${METRICS_PATH}?contact=${web.id}&lang=es`);
+  assert.equal((await conversation(adminA)).body.cards.length, 8);
+  assert.equal((await conversation(viewerB)).status, 404, 'another area\'s conversation');
+  assert.equal((await conversation(owner)).status, 200);
+  const { agentId, contactId, language, from } = asked.at(-1);
+  assert.deepEqual({ agentId, contactId, language, from }, { agentId: agA, contactId: web.id, language: 'es', from: undefined });
   assert.deepEqual(await events.count({ kind: 'bag_add' }), { times: 0, people: 0 });
   const quarter = await get(owner, agA, 90);
   assert.deepEqual(quarter.body.total, { conversations: 3, newContacts: 3, received: 3, replies: 2 });

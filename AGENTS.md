@@ -43,7 +43,7 @@ extension registers (owner pages redirect to `/public-support`, any other API is
 404); a new extension route a panel member needs must be added to
 `panelScope()`. Its metrics come from `public_support_events`: a plugin records with
 `ctx.track(kind, ref)` and returns cards from the `metricCards` hook (`{label, value, detail?}` or a funnel
-`{label, steps}`, in the `language` it gets); a count or funnel step may take a list of kinds. Link buttons are measured through `/go` (`measureLinks`); on the
+`{label, steps}`, in the `language` it gets); a count or funnel step may take a list of kinds; with `contactId` (`?contact=` on the metrics route) the cards are one conversation's, shown under it. Link buttons are measured through `/go` (`measureLinks`); on the
 web the button keeps its real `url` and the measured one goes in `clickUrl`, because the chat picks the button's
 style and in-chat modal by the url's domain. Extension tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
 cites a cloud file listed in `cloud.txt`.

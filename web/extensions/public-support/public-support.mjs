@@ -263,11 +263,12 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return rows;
     },
 
+    // → the contact's assistant id when the contact is userId's, else null.
     async contatoDoDono(userId, contatoId) {
       const { rows } = await pool.query(
-        `SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+        `SELECT c.agent_id FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
           WHERE c.id = $1 AND a.user_id = $2`, [contatoId, userId]);
-      return !!rows[0];
+      return rows[0]?.agent_id ?? null;
     },
 
     // An owner's assistant's contacts, from newest to oldest.
@@ -518,7 +519,7 @@ export function retainedByTool(tools) {
 //    the default; spoken null without a voice text), estado(), lembrar(chave,valor),
 //    track(kind, ref?): records an event of this contact (kind like 'bag_add', ref
 //    like 'product:123'); never throws, a failed write only goes to the log}.
-//   metricCards({agentId, days, from, to, language, events}) → cards: the plugin's own
+//   metricCards({agentId, contactId?, days, from, to, language, events}) → cards: the plugin's own
 //    numbers for the assistant, shown next to its volume to the owner and the
 //    members of its client area. from/to = the period's first and last day
 //    (YYYY-MM-DD, installation timezone); language = the page's ('pt-BR', 'en' or
@@ -530,6 +531,9 @@ export function retainedByTool(tools) {
 //    events = this assistant's events in the period: count({kind, ref?|refPrefix?})
 //    → {times, people}; funnel([step, ...]) → people per step, each step done
 //    after the one before (link clicks are kind 'link_click', ref = the button's ref).
+//    With contactId (one conversation, under it on the owner's screen) there is no
+//    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
+//    and the page shows them as done or not.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -566,7 +570,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     if (typeof ganchos?.metricCards !== 'function') return [];
     let timer;
     const late = new Promise((r) => { timer = setTimeout(() => r('late'), METRIC_CARDS_WAIT_MS); timer.unref?.(); });
-    const r = await Promise.race([gancho('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to }) : noEvents }), late]);
+    const r = await Promise.race([gancho('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId }) : noEvents }), late]);
     clearTimeout(timer);
     if (r === 'late') { log.error?.('[publico] gancho metricCards took too long'); return []; }
     const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);

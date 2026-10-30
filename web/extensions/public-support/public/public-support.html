@@ -89,6 +89,7 @@
   .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
   .kpis.plugin{grid-template-columns:repeat(3,minmax(0,1fr));}
   .funnel{margin:12px 0 4px;}
+  .funnel .n.undone{color:var(--mut);font-weight:500;}
   .funnel > .l{font-size:13.5px;font-weight:600;color:inherit;}
   .funnel .steps{display:flex;align-items:stretch;gap:6px;margin-top:8px;flex-wrap:wrap;}
   .funnel .step{flex:1 1 140px;}
@@ -264,6 +265,11 @@
       <div id="convBox" class="hidden">
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
         <div id="conversa" class="conversa"></div>
+        <div id="convMetrics" class="hidden">
+          <h3 data-i18n="public_service_page.metric_conversation">In this conversation</h3>
+          <div class="kpis plugin" id="cCards"></div>
+          <div id="cFunnels"></div>
+        </div>
         <div class="acoes">
           <button class="btn ghost" id="bloquear"></button>
           <a class="btn ghost" id="exportar" href="#" download data-i18n="public_service_page.export">Export data</a>
@@ -451,43 +457,56 @@
 
   // The assistant's volume (public-support-metrics.mjs): totals, one bar per day, and by channel.
   var METRICS = '/api/public-support/metrics', metricsFor = null;
+  // The plugin's cards: plain ones in the grid, funnels each across a row. For one
+  // conversation (oneContact) a funnel step is done or not, with no share.
+  function drawCards(list, cards, funnels, oneContact){
+    var lang = document.documentElement.lang, number = new Intl.NumberFormat(lang), percent = new Intl.NumberFormat(lang, { style: 'percent' });
+    var shown = function(v){ return typeof v === 'number' ? number.format(v) : v; };
+    cards.textContent = ''; funnels.textContent = '';
+    (list || []).forEach(function(c){
+      var k = el('div', 'kpi');
+      if (c.steps) {
+        k.className = 'kpi funnel';
+        k.appendChild(el('div', 'l', c.label));
+        var row = el('div', 'steps');
+        c.steps.forEach(function(s, i){
+          if (i) row.appendChild(el('div', 'to', '→'));
+          var step = el('div', 'step'), before = c.steps[i - 1];
+          step.appendChild(oneContact ? el('div', 'n' + (s.value > 0 ? '' : ' undone'), t(s.value > 0 ? 'metric_step_done' : 'metric_step_not_done')) : el('div', 'n', shown(s.value)));
+          step.appendChild(el('div', 'l', s.label));
+          if (!oneContact && before && before.value > 0) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
+          row.appendChild(step);
+        });
+        k.appendChild(row);
+        return funnels.appendChild(k);
+      }
+      k.appendChild(el('div', 'n', shown(c.value)));
+      k.appendChild(el('div', 'l', c.label));
+      if (c.detail) k.appendChild(el('div', 'd', c.detail));
+      cards.appendChild(k);
+    });
+    cards.classList.toggle('hidden', !cards.firstChild);
+  }
+  // One conversation's cards, under it; nothing when the plugin has none.
+  function loadContactMetrics(c){
+    $('convMetrics').classList.add('hidden');
+    pedir(METRICS + '?contact=' + encodeURIComponent(c.id) + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
+      if (contatoAtual !== c || !(j.cards || []).length) return;
+      drawCards(j.cards, $('cCards'), $('cFunnels'), true);
+      $('convMetrics').classList.remove('hidden');
+    }).catch(function(){});
+  }
   function loadMetrics(){
     var id = agenteAtual.agentId, days = $('metricDays').value, key = metricsFor = id + ':' + days;
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&days=' + days;
-    var number = new Intl.NumberFormat(document.documentElement.lang), percent = new Intl.NumberFormat(document.documentElement.lang, { style: 'percent' });
+    var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mConversations', 'conversations'], ['mNewContacts', 'newContacts'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
       });
-      // The plugin's cards: plain ones in the grid, funnels each across a row.
-      var cards = $('mCards'), funnels = $('mFunnels'); cards.textContent = ''; funnels.textContent = '';
-      var shown = function(v){ return typeof v === 'number' ? number.format(v) : v; };
-      (j.cards || []).forEach(function(c){
-        var k = el('div', 'kpi');
-        if (c.steps) {
-          k.className = 'kpi funnel';
-          k.appendChild(el('div', 'l', c.label));
-          var row = el('div', 'steps');
-          c.steps.forEach(function(s, i){
-            if (i) row.appendChild(el('div', 'to', '→'));
-            var step = el('div', 'step');
-            step.appendChild(el('div', 'n', shown(s.value)));
-            step.appendChild(el('div', 'l', s.label));
-            var before = c.steps[i - 1];
-            if (before && before.value > 0) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
-            row.appendChild(step);
-          });
-          k.appendChild(row);
-          return funnels.appendChild(k);
-        }
-        k.appendChild(el('div', 'n', shown(c.value)));
-        k.appendChild(el('div', 'l', c.label));
-        if (c.detail) k.appendChild(el('div', 'd', c.detail));
-        cards.appendChild(k);
-      });
-      cards.classList.toggle('hidden', !cards.firstChild);
+      drawCards(j.cards, $('mCards'), $('mFunnels'), false);
       var bars = $('mBars'), top = Math.max.apply(null, j.daily.map(function(d){ return d.conversations; }).concat([1]));
       bars.textContent = '';
       j.daily.forEach(function(d){
@@ -578,6 +597,7 @@
     $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');
     $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
     carregarMensagens(true);
+    loadContactMetrics(c);
   }
   function carregarMensagens(primeira){
     var c = contatoAtual;

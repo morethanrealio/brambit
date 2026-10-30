@@ -71,6 +71,13 @@ function match(step, n) {
 export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultTimezone(), log = console } = {}) {
   // from/to = first and last day (YYYY-MM-DD) in the installation's timezone.
   const period = (n) => `at >= ($${n}::date::timestamp AT TIME ZONE $${n + 2}) AND at < (($${n + 1}::date + 1)::timestamp AT TIME ZONE $${n + 2})`;
+  // range = {from, to} and/or {contactId}: the period, one contact, or both. → [sql, params], numbered from `n`.
+  const scope = ({ from, to, contactId } = {}, n) => {
+    const parts = [], params = [];
+    if (contactId) { parts.push(`contact_id = $${n}`); params.push(contactId); }
+    if (from && to) { parts.push(period(n + params.length)); params.push(from, to, timezone); }
+    return [parts.join(' AND ') || 'true', params];
+  };
 
   return {
     // A plugin's event. Never throws: a failed write only goes to the log, the
@@ -113,23 +120,25 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
     },
 
     // How many times and how many people, in the period.
-    async count(agentId, { from, to }, step) {
-      const [where, params] = match(step, 5);
+    async count(agentId, range, step) {
+      const [inScope, scoped] = scope(range, 2);
+      const [where, params] = match(step, 2 + scoped.length);
       const { rows: [r] } = await pool.query(
         `SELECT count(*)::int AS times, count(DISTINCT contact_id)::int AS people FROM ${S}.public_support_events
-          WHERE agent_id = $1 AND ${period(2)} AND ${where}`, [agentId, from, to, timezone, ...params]);
+          WHERE agent_id = $1 AND ${inScope} AND ${where}`, [agentId, ...scoped, ...params]);
       return { times: r?.times ?? 0, people: r?.people ?? 0 };
     },
 
     // People who did each step in order, in the period: [step 1, step 2 after
     // step 1, step 3 after step 2, ...].
-    async funnel(agentId, { from, to }, steps) {
+    async funnel(agentId, range, steps) {
       if (!Array.isArray(steps) || !steps.length || steps.length > FUNNEL_STEPS_MAX) throw Error('events: 1 to ' + FUNNEL_STEPS_MAX + ' steps');
-      const params = [agentId, from, to, timezone];
+      const [inScope, scoped] = scope(range, 2);
+      const params = [agentId, ...scoped];
       const ctes = steps.map((s, i) => {
         const [where, p] = match(s, params.length + 1);
         params.push(...p);
-        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${period(2).replace(/\bat\b/g, 'e.at')} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}`;
+        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${inScope.replace(/\b(at|contact_id)\b/g, 'e.$1')} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}`;
         return i === 0
           ? `s0 AS (SELECT e.contact_id, min(e.at) AS t ${base} GROUP BY e.contact_id)`
           : `s${i} AS (SELECT e.contact_id, min(e.at) AS t ${base.replace('WHERE', `JOIN s${i - 1} p ON p.contact_id = e.contact_id AND e.at >= p.t WHERE`)} GROUP BY e.contact_id)`;
@@ -152,7 +161,8 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       return rows;
     },
 
-    // What metricCards gets: the queries above tied to one assistant and period.
+    // What metricCards gets: the queries above tied to one assistant and its
+    // period, or to one of its contacts.
     forCards(agentId, range) {
       return {
         count: (step) => this.count(agentId, range, step),
