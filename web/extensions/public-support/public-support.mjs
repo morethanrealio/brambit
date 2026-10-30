@@ -17,7 +17,7 @@ import { runAgent as runAgentPadrao, ToolRegistry } from '../../../core-proto/co
 import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
 import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
-import { eventsSchema } from './public-support-events.mjs';
+import { eventsSchema, measureLinks } from './public-support-events.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -490,6 +490,9 @@ export function retainedByTool(tools) {
 //  events: createEventsStore (public-support-events.mjs), optional: what the plugin
 //   records with track() and what its metricCards count. Without it, track does nothing
 //   and the counts are zero.
+//  linkBase() → the installation's https address: with events, the link buttons the
+//   person gets go through its click route (measureLinks); the conversation keeps
+//   the real addresses. Empty = links go out as they are.
 //  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
 //   without it, or if reading them fails, the turn uses the defaults.
 //  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
@@ -534,7 +537,7 @@ export function retainedByTool(tools) {
 // stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', log = console }) {
   const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0) };
   const trackFor = (agentId, contactId) => async (kind, ref) => (events ? events.record({ agentId, contactId, kind, ref }) : false);
   const NO_EDITS = { installation: '', written: '', spoken: '' };
@@ -614,6 +617,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
       const contato = await store.contato(agentId, canal, endereco);
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
+      const measured = (saidas) => measureLinks(events, linkBase(), { agentId: agente.agent_id, contactId: contato.id }, saidas)
+        .catch((e) => { log.error?.('[publico] measuring links failed:', e?.message ?? e); return saidas; });
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
       const comando = ev ? null : comandoDoContato(msg);
       // Blocked by the owner: silence and nothing recorded. The delete request still
@@ -663,7 +668,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         const text = textoDasSaidas(prontas);
         const modelContent = typeof antes.modelText === 'string' ? antes.modelText : undefined;
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas, modelContent }]);
-        return { text, saidas: prontas, motivo: 'roteiro', ...ident };
+        const out = await measured(prontas);
+        return { text: out === prontas ? text : textoDasSaidas(out), saidas: out, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
@@ -700,7 +706,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
       await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }]);
-      return { text, ...(saidas.length ? { saidas } : {}), ...ident };
+      const out = await measured(saidas);
+      return { text: out === saidas ? text : textoDasSaidas(out), ...(out.length ? { saidas: out } : {}), ...ident };
     });
   }
 

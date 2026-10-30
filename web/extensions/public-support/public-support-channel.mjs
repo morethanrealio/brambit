@@ -19,7 +19,7 @@ import { publicSupportOn } from '../../profiles.mjs';
 import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 import { activitySchema, createActivityStore } from './client-area-activity.mjs';
-import { createEventsStore } from './public-support-events.mjs';
+import { createEventsStore, measureLinks, registerClickRoute } from './public-support-events.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -66,11 +66,11 @@ export const clientAreasOn = (value = process.env.BRAMBIT_CLIENT_AREAS) => Strin
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
   rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '', clientAreas = clientAreasOn() }) {
   const store = createPublicoStore(pool, { S });
-  const webStore = createPublicWebStore(pool, { S });
+  const events = createEventsStore(pool, { S, log });
+  const webStore = createPublicWebStore(pool, { S, measure: (outputs, ident) => measureLinks(events, publicBase(), ident, outputs) });
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });
-  const events = createEventsStore(pool, { S, log });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -93,7 +93,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setInterval(limpar, limpezaMs).unref?.();
   }
   const atendimento = createAtendimentoPublico({
-    store, makeProvider, ferramentas, ganchos, prompts, events, log, agora: agoraPorExtenso,
+    store, makeProvider, ferramentas, ganchos, prompts, events, linkBase: publicBase, log, agora: agoraPorExtenso,
     saldo: creditStatus,
     recordUsage: (usages, { userId, agentId }) => recordUsages(usages, { userId, agentId, threadId: null, turnId: randomUUID(), kind: 'publico' }),
   });
@@ -104,6 +104,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
       metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, activity });
     if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
+    registerClickRoute({ rotas, events, send, log });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });
   }

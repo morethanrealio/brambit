@@ -77,3 +77,43 @@ test('events go with the conversation, the contact and retention, and are in the
   const r = await store.limparVencidos();
   assert.deepEqual([r.events, r.links, await left(c3)], [1, 1, [0, 0]]);
 });
+
+test('link buttons go out measured: the click is recorded once, previews and HEAD are not, the conversation keeps the real address', async (t) => {
+  const { db, store, events, ag } = await setup(t);
+  const { createRotas } = await import('../web/routes.mjs');
+  const { registerClickRoute, CLICK_PATH } = await import('../web/extensions/public-support/public-support-events.mjs');
+  const { createPublicWebStore } = await import('../web/extensions/public-support/public-web.mjs');
+  const { measureLinks } = await import('../web/extensions/public-support/public-support-events.mjs');
+  const shop = 'https://shop.example/p/9?utm=x';
+  const ganchos = { antesDoModelo: async () => ({ pular: true, saidas: [{ tipo: 'texto', texto: 'oi' }, { tipo: 'botao', texto: 'Veja', rotulo: 'Ver', url: shop, ref: 'product:9' }] }) };
+  const a = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
+    ganchos, events, linkBase: () => 'https://bot.example/', log: { error() {}, info() {} } });
+  const r1 = await a.turno({ agentId: ag, canal: 'web', endereco: 'api:ana', mensagem: 'oi' });
+  const r2 = await a.turno({ agentId: ag, canal: 'web', endereco: 'api:ana', mensagem: 'de novo' });
+  const link = r1.saidas[1].url;
+  assert.match(link, /^https:\/\/bot\.example\/go\?l=[A-Za-z0-9_-]{16}$/);
+  assert.equal(r2.saidas[1].url, link, 'the same link keeps its id');
+  assert.ok(r1.text.includes(link) && !r1.text.includes(shop));
+  const stored = (await db.query(`SELECT outputs FROM mtr_harness.public_messages WHERE role = 'assistant' ORDER BY id LIMIT 1`)).rows[0].outputs;
+  assert.equal(stored[1].url, shop);
+  const webStore = createPublicWebStore({ query: (s, v) => db.query(s, v) }, { measure: (o, ident) => measureLinks(events, 'https://bot.example', ident, o) });
+  assert.equal((await webStore.history(ag, 'api:ana')).find((m) => m.outputs)?.outputs[1].url, link);
+
+  const rotas = createRotas();
+  registerClickRoute({ rotas, events, send: (res, status, body) => { res.statusCode = status; res.body = body; }, log: { error() {} } });
+  const hit = async (method, l, ua = 'Mozilla/5.0') => {
+    const res = { headers: {}, setHeader(k, v) { this.headers[k.toLowerCase()] = v; }, writeHead(s, h) { this.statusCode = s; for (const [k, v] of Object.entries(h)) this.setHeader(k, v); }, end() {} };
+    await rotas.atender({ method, headers: { 'user-agent': ua } }, res, new URL(`https://bot.example${CLICK_PATH}?l=${l}`));
+    return res;
+  };
+  const clicks = async () => (await db.query(`SELECT contact_id, ref FROM mtr_harness.public_support_events WHERE kind = 'link_click'`)).rows;
+  assert.equal((await hit('GET', link.split('l=')[1], 'WhatsApp/2.23.20.0 A')).headers.location, shop);
+  assert.equal((await hit('HEAD', link.split('l=')[1])).statusCode, 302);
+  assert.equal((await clicks()).length, 0, 'preview and HEAD are not clicks');
+  const go = await hit('GET', link.split('l=')[1]);
+  assert.deepEqual([go.statusCode, go.headers.location, go.headers['referrer-policy']], [302, shop, 'no-referrer']);
+  await hit('GET', link.split('l=')[1]);
+  assert.deepEqual(await clicks(), [{ contact_id: r1.contatoId, ref: 'product:9' }], 'a second tap right away is the same click');
+  assert.equal((await hit('GET', 'AAAAAAAAAAAAAAAA')).statusCode, 404);
+  assert.equal((await hit('GET', '../etc')).statusCode, 404);
+});

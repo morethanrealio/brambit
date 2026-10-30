@@ -151,6 +151,37 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
   };
 }
 
+// A turn's link buttons pointing to CLICK_PATH, for the copy that goes to the
+// person (the conversation keeps the real addresses). Only with an https base,
+// since a channel takes only https buttons; a link that fails to store keeps its address.
+export async function measureLinks(events, base, { agentId, contactId }, saidas) {
+  const root = String(base ?? '').replace(/\/+$/, '');
+  if (!events || !contactId || !/^https:\/\/[^\s?#]+$/.test(root) || !Array.isArray(saidas) || !saidas.some((s) => s?.tipo === 'botao')) return saidas;
+  const out = [];
+  for (const s of saidas) {
+    if (s?.tipo !== 'botao') { out.push(s); continue; }
+    const id = await events.linkId({ agentId, contactId, url: s.url, ref: s.ref ?? '' }).catch(() => null);
+    out.push(id ? { ...s, url: `${root}${CLICK_PATH}?l=${id}` } : s);
+  }
+  return out;
+}
+
+// The click route: records the click (not a link preview's fetch nor a HEAD) and
+// sends the person on. An unknown id is a 404, never a guess of where to go.
+export function registerClickRoute({ rotas, events, send, log = console }) {
+  const handle = async (req, res, url) => {
+    let to = null;
+    try { to = await events.click(url.searchParams.get('l'), { record: req.method === 'GET' && !isPreview(req.headers['user-agent']) }); }
+    catch (e) { log.error?.('[events] click lookup failed:', e?.message ?? e); }
+    res.setHeader('Cache-Control', 'no-store');
+    if (!to) return send(res, 404, { error: 'not_found' });
+    res.writeHead(302, { Location: to, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    res.end();
+  };
+  rotas.registrar('GET', CLICK_PATH, handle);
+  rotas.registrar('HEAD', CLICK_PATH, handle);
+}
+
 // A cell of the spreadsheet: quoted, and a value a spreadsheet would run as a formula starts with '.
 export const csvCell = (v) => {
   const s = String(v ?? '');
