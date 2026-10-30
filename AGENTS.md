@@ -34,7 +34,7 @@ in `web/extensions/<name>/`, is a plugin object registered in
 `web/extensions.mjs`, and an installation turns it on or off with
 `BRAMBIT_EXTENSIONS` (the usage profile sets the default). Public support is
 the first one: its owner screen is also open to members of a client area
-(`client-areas.mjs`), so every route in `public-support-owner.mjs` resolves the
+(`client-areas.mjs`, off unless `BRAMBIT_CLIENT_AREAS=on`), so every route in `public-support-owner.mjs` resolves the
 assistant or contact through `agentAccess()` or `contatoDoPedido()` and calls the
 store with the owner's id, and a route that opens, exports, deletes or changes
 something records it in the access log (`client-area-activity.mjs`). The owner can invite an email with no account: that

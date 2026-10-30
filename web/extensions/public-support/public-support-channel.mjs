@@ -58,8 +58,12 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // it hands to the public would also hand out accounts paid by the owner. null =
 // a plugin decides sign-up, and with it whether that is safe.
 // enabled=false (the personal usage profile, profiles.mjs) keeps it off too.
+// clientAreas=false (the default, without BRAMBIT_CLIENT_AREAS=on): no areas, so
+// the screen is the owner's alone; a panel account an area invited stays held to
+// it (account-scope.mjs) but reaches no assistant.
+export const clientAreasOn = (value = process.env.BRAMBIT_CLIENT_AREAS) => String(value ?? '').trim().toLowerCase() === 'on';
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
-  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '' }) {
+  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '', clientAreas = clientAreasOn() }) {
   const store = createPublicoStore(pool, { S });
   const webStore = createPublicWebStore(pool, { S });
   const prompts = createPromptStore(pool, { S });
@@ -93,9 +97,9 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   if (rotas) {
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
-    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas,
+    registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas: clientAreas ? areas : null,
       metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, activity });
-    registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
+    if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
     if (enabled) registerPublicSupportAdmin({ rotas, prompts });

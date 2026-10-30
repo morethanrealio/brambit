@@ -13,7 +13,7 @@ const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAUL
 const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
-const { criarAtendimentoDoServidor, esquemaDoAtendimento } = await import('../web/extensions/public-support/public-support-channel.mjs');
+const { criarAtendimentoDoServidor, esquemaDoAtendimento, clientAreasOn } = await import('../web/extensions/public-support/public-support-channel.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
 
@@ -633,6 +633,30 @@ test('open sign-up keeps public support off on every channel until it is closed'
   assert.equal(avisos.length, 1);
   open = false;
   assert.deepEqual(await estado(), [true, 200, false]);
+});
+
+// Client areas are off unless the installation turns them on (BRAMBIT_CLIENT_AREAS=on):
+// off, an area's member reaches none of its assistants and the areas card has no route.
+test('client areas stay off until the installation turns them on', async (t) => {
+  const { db, pool, store, dono, outro, ag } = await montar(t);
+  await esquemaDoAtendimento({ pool, S: 'mtr_harness' });
+  await store.configurar(ag, dono, { ativo: true });
+  const [{ id: area }] = (await db.query(`INSERT INTO mtr_harness.client_areas (owner_user_id, name) VALUES ($1, 'A') RETURNING id`, [dono])).rows;
+  await db.query('INSERT INTO mtr_harness.client_area_agents VALUES ($1, $2)', [ag, area]);
+  await db.query(`INSERT INTO mtr_harness.client_area_members (area_id, user_id, role) VALUES ($1, $2, 'admin')`, [area, outro]);
+  assert.equal(clientAreasOn(undefined), false);
+  assert.equal(clientAreasOn(' ON '), true);
+  const reach = async (clientAreas) => {
+    const rotas = createRotas();
+    criarAtendimentoDoServidor({ pool, makeProvider: modelo().provider, recordUsages: async () => {}, creditStatus: async () => ({ over: false }),
+      agenteDoNumero: () => ag, limpezaMs: 0, log: { warn() {}, error() {}, log() {} }, clientAreas,
+      rotas, send: (res, status, corpo) => Object.assign(res, { status, corpo }), fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false });
+    const res = { setHeader() {} }, req = Readable.from([]); req.method = 'GET'; req.headers = {};
+    await rotas.atender(req, res, new URL('http://x/api/publico/agentes'), { currentUser: async () => ({ id: outro }) });
+    return [rotas.registrada('GET', '/api/public-support/areas'), res.corpo.agentes.map((a) => a.agentId)];
+  };
+  assert.deepEqual(await reach(undefined), [false, []]);
+  assert.deepEqual(await reach(true), [true, [ag]]);
 });
 
 test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
