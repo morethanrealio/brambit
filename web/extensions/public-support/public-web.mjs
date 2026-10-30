@@ -21,9 +21,9 @@
 // not stored: the history keeps the text only.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
-import { indiceCego } from './vault.mjs';
+import { indiceCego } from '../../vault.mjs';
 import { chaveDoContato, normalizeEvent } from './public-support.mjs';
-import { sniffImagem } from './image-sniff.mjs';
+import { sniffImagem } from '../../image-sniff.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);
@@ -147,7 +147,9 @@ export function webFieldsFromBody(b = {}) {
   return { campos: c };
 }
 
-export function createPublicWebStore(pool, { S = 'mtr_harness' } = {}) {
+// measure(outputs, {agentId, contactId}) → the outputs the person gets (the
+// measured links of public-support-events.mjs); the history shows them too.
+export function createPublicWebStore(pool, { S = 'mtr_harness', measure = async (outputs) => outputs } = {}) {
   return {
     async config(agentId) {
       const { rows } = await pool.query(
@@ -180,14 +182,18 @@ export function createPublicWebStore(pool, { S = 'mtr_harness' } = {}) {
     // The contact's own conversation, WITHOUT creating the contact.
     async history(agentId, address, limit = WEB_HISTORY_MAX) {
       const { rows } = await pool.query(
-        `SELECT role, content, outputs, event, criado_em FROM (
-           SELECT m.id, m.role, m.content, m.outputs, m.event, m.criado_em FROM ${S}.public_messages m
+        `SELECT role, content, outputs, event, criado_em, contact_id FROM (
+           SELECT m.id, m.role, m.content, m.outputs, m.event, m.criado_em, m.contact_id FROM ${S}.public_messages m
              JOIN ${S}.public_contacts c ON c.id = m.contact_id
             WHERE c.agent_id = $1 AND c.canal = 'web' AND c.chave = $2
             ORDER BY m.id DESC LIMIT $3) t ORDER BY id`,
         [agentId, chaveDoContato('web', address), limit]);
-      return rows.map((r) => ({ role: r.role, text: r.content, ...(r.outputs ? { outputs: r.outputs } : {}),
-        ...(r.event ? { event: r.event } : {}), at: r.criado_em }));
+      const out = [];
+      for (const r of rows) {
+        const outputs = r.outputs ? await measure(r.outputs, { agentId, contactId: r.contact_id }).catch(() => r.outputs) : null;
+        out.push({ role: r.role, text: r.content, ...(outputs ? { outputs } : {}), ...(r.event ? { event: r.event } : {}), at: r.criado_em });
+      }
+      return out;
     },
   };
 }

@@ -8,7 +8,7 @@
 //    belong here. Optional field grupo: the tool group (server's
 //    GRUPO_TOOL_GROUPS, e.g. 'produtos') it joins in a multi-person channel assistant.
 //    Optional field retain(text) → a shorter version of a result, kept when public
-//    support prunes an older result of the turn (retainedByTool in public-support.mjs).
+//    support prunes an older result of the turn (retainedByTool in extensions/public-support/public-support.mjs).
 //  vetar({nome,mensagem}) → null (may run) or the error text that goes back to
 //    the model instead of running. Runs outside the model, before each call;
 //    mensagem is the turn's CURRENT human text.

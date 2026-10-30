@@ -11,9 +11,9 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico } = await import('../web/public-support.mjs');
-const { createPublicWebStore, registerPublicWebRoutes } = await import('../web/public-web.mjs');
-const { createPublicAvatarStore, registerPublicAvatar } = await import('../web/public-avatar.mjs');
+const { createPublicoStore, createAtendimentoPublico } = await import('../web/extensions/public-support/public-support.mjs');
+const { createPublicWebStore, registerPublicWebRoutes } = await import('../web/extensions/public-support/public-web.mjs');
+const { createPublicAvatarStore, registerPublicAvatar } = await import('../web/extensions/public-support/public-avatar.mjs');
 const { createAvatarLive } = await import('../web/avatar-live.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 

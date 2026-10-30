@@ -42,9 +42,9 @@ import { onboardingSources } from './onboarding-connections.mjs';
 import {createIncrementalUsageCollector} from './incremental-usage.mjs';
 import {providerAttempt,wrapProvider,withProviderExecution,hasProviderExecution} from '../core-proto/provider-attempt.mjs';
 import {createEventos,criadorDeConta} from './events.mjs';
-import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';
+import {createRotas} from './routes.mjs';import {routeAllowed,redirectFor,ownerFeaturesOn,profile as usageProfile} from './profiles.mjs';import {registerScreenTexts} from './screen-texts.mjs';import {registerOnboardingIntro} from './onboarding-intro.mjs';import {registerConfigAdmin} from './config-admin.mjs';import {APP_PAGES,movedPagePath} from './page-paths.mjs';import {registerAvatar,avatarSchema,avatarCsp} from './avatar.mjs';import {createAccountScope} from './account-scope.mjs';
 import {createMidiaPublica} from './public-media.mjs';
-import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {criarCsp} from './csp.mjs';
+import {carregarPlugins,juntarPortas,caminhosSemCsrf,pastasDoSite,textosDoSite,textosDoServidor,leitorDoApp,cspDosPlugins} from './plugins.mjs';import {loadExtensions,extensionPorts} from './extensions.mjs';import {createGuestContacts} from './guest-contacts.mjs';import {criarCsp} from './csp.mjs';
 import {createPermissionsFromEnv} from './permissions.mjs';import {prepararResposta} from './cookie-local.mjs';
 import {createContaPagadoraSimples} from './paying-account.mjs';
 import {createFerramentasSimples} from './tools.mjs';
@@ -52,10 +52,10 @@ import {createContaPagamentoSimples} from './payment-account.mjs';
 import {createGastoSimples} from './simple-spend.mjs';
 import {createCreditSpend} from './credit-spend.mjs';
 import {pendingUsageWrites,configurarContaPagadora,pool} from './db.mjs';
-// Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS
-// (e.g. a hosted deployment's own plugins). Each port without a plugin uses the core default.
-const plugins=await carregarPlugins();
-const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner});
+// Plugins (plugins.mjs): whoever installs lists theirs in web/plugins/ativos.mjs or in BRAMBIT_PLUGINS (e.g. a hosted
+// deployment's own plugins), after the enabled extensions (extensions.mjs). Each port without a plugin uses the core default.
+const plugins=await carregarPlugins(undefined,await loadExtensions());
+const pecas=juntarPortas(plugins,{publicBase:()=>PUBLIC_BASE(),notifyOwner},extensionPorts()), guestContacts=createGuestContacts(), accountScope=createAccountScope(); // guest-contacts.mjs: WhatsApp numbers without an account; account-scope.mjs: accounts an extension holds to its part of the app.
 const semCsrfDosPlugins=caminhosSemCsrf(plugins);
 const permissoes=pecas.permissoes??createPermissionsFromEnv(); // Port 2 (permissions.mjs): apps, disk and sign-up queue (BRAMBIT_SIGNUP).
 configurarPermissoes(permissoes);
@@ -1078,7 +1078,6 @@ import { parseRoutineTime, routineTimeLabel, routineSupersedeKey } from './routi
 import { sendEmail, mailEnabled } from './mailer.mjs';
 import { insertMobileError, registerPushTokenDb, unregisterPushTokenDb, listPushTokensForUserDb, removePushTokensDb } from './db.mjs';
 import { createTelegramManager, validateBotToken, sendTelegramMessage, sendTelegramVideo, sendTelegramDocument } from './telegram.mjs';
-import { criarAtendimentoDoServidor, esquemaDoAtendimento, PUBLIC_WEB_PATHS } from './public-support-channel.mjs';
 import { createWhatsAppHandler, waEnabled, verifyChallenge, verifySignature, sendWhatsAppTemplate, sendWhatsAppProactive, sendWhatsAppDocument, whatsappWindowOpen as waWindowOpen, WA_TEMPLATE_MAX, setWaHooks } from './whatsapp.mjs';
 
 // Lets proactive sending check WhatsApp's 24h window from our own data
@@ -6810,9 +6809,7 @@ const transcreverDoCanal = async (buffer, mime, userId) => {
   const { text, usage } = await transcribeAudio(buffer, mime, { language: (await getUserLocale(userId).catch(() => null))?.language });
   await recordUsages([usage], { userId, turnId: randomUUID(), kind: 'stt' }); return text;
 };
-// Public service (public-support-channel.mjs): an unknown contact on WhatsApp goes to the assistant the installation chose; the owner sees it at /public-support.
-const atendimentoPublico = criarAtendimentoDoServidor({ pool, avatar, recordUsages, creditStatus: getCreditStatus, ferramentas, rotas, send, fail, tooManyRequests, clientIp, ganchos: pecas.atendimentoPublico,
-  signupOpen: pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()), makeProvider: ({ userId, agentId }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind: 'publico' }) });
+const chatProvider = ({ userId, agentId, kind }) => gasto.vincular({ provider: configurado('chat', PRIMARY_MAX_OUT) || makePrimaryProvider(), userId, agentId, threadId: null, kind }), coreSignupOpen = pecas.permissoes ? null : async () => !(await permissoes.filaDeEspera()); // For the extensions (servidor): the chat model tied to the person's spend; whether the core's sign-up is open (null = a plugin decides).
 const avisoCanal = avisoNaThread({ idiomaDe: getUserLocale, getOrCreateThreadByTitle, withThreadLock, appendAssistantToThread });
 // Telegram channel: runs one bot per user (their BotFather token). Injects the
 // deps to avoid a circular import. The pollers start up at boot (listEnabledTelegramBots).
@@ -6846,7 +6843,7 @@ const telegramMgr = createTelegramManager({
 // agent uses one fixed "WhatsApp" thread (isolated history; shared user memory).
 const heldWhatsApp = createWhatsAppHeldDelivery(pool, { persist: (row, text) => persistProactiveToThread({ channel: 'whatsapp', ...row }, text) });
 const waHandler = createWhatsAppHandler({
-  inbox:waInbox, heldDelivery: heldWhatsApp, avisoCanal: avisoCanal('WhatsApp'), publico: atendimentoPublico.whatsapp,
+  inbox:waInbox, heldDelivery: heldWhatsApp, avisoCanal: avisoCanal('WhatsApp'), publico: guestContacts.whatsapp,
   runConversation: async (agent, userId, message, images, files, extra = {}) => {
     const thread = await getOrCreateThreadByTitle({ agentId: agent.id, userId, title: 'WhatsApp' });
     // pollNewUserMsg = channel for the message that arrives mid-turn (see whatsapp.mjs).
@@ -8166,7 +8163,7 @@ function tooManyRequests(req, res, bucket, max, windowMs) {
 // Nuvemshop) have NO browser Origin and are authenticated by HMAC signature,
 // so they're exempt.
 function isWebhookPath(pathname) {
-  return semCsrfDosPlugins.has(pathname) || PUBLIC_WEB_PATHS.has(pathname) // plugins' webhooks/unsubscribe (semCsrf); public web channel (no cookie, origin checked per agent in public-web.mjs)
+  return semCsrfDosPlugins.has(pathname) // plugins' and extensions' webhooks, unsubscribe and public web channel (semCsrf)
     || pathname === '/api/wa/webhook'
     || pathname === '/api/slack/events'
     || pathname.startsWith('/api/webhook/')
@@ -8426,9 +8423,8 @@ async function atenderRequest(req, res) {
   if (!csrfOk(req, url.pathname)) return send(res, 403, { error: 'server.unauthorized_origin' });
 
   // Resolves the logged-in user from the session (cookie). null if not logged in.
-  async function currentUser() {
-    try { return await getUserBySession(readSid(req)); } catch { return null; }
-  }
+  async function currentUser() { try { return await getUserBySession(readSid(req)); } catch { return null; } }
+  const held = await accountScope.check(req.method, url.pathname, currentUser); if (held) { res.writeHead(held.status, held.location ? { location: held.location } : {}); return res.end(held.location ? undefined : 'not found'); } // an extension holds this account to its part of the app (account-scope.mjs)
 
   // PAGE language. Order: footer selector choice (cookie) > saved preference of
   // whoever's logged in > browser's Accept-Language. An explicit choice beats a
@@ -8509,7 +8505,7 @@ async function atenderRequest(req, res) {
       const wa = await getWhatsAppLinkForUser(user.id);
       return send(res, 200, {
         ...(mobileClient ? { token } : {}),
-        name: user.name, agents, connected: await connectedServices(user.id),
+        name: user.name, agents, home: await accountScope.homeFor(user.id), connected: await connectedServices(user.id),
         providers: await listOAuthProviders(user.id),
         microsoftServices: await microsoftServicesFor(user.id),
         credits: await getCreditStatus(user.id),
@@ -11628,7 +11624,7 @@ async function atenderRequest(req, res) {
 
 // Plugins hook in here, not together with the ports further up, because they need
 // things declared partway through the file (jobs, flags, /metrics access check).
-const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification,
+const servidor = { rotas, eventos, midiaPublica, send, fail, tooManyRequests, sendHtml, sendPush, getCreditStatus, deliverAsaasReceiptNotification, pool, recordUsages, ferramentas, avatar, clientIp, guestContacts, accountScope, chatProvider, signupOpen: coreSignupOpen, ports: pecas,
   runAgentMessageDraft, agentForLifecycleChannel, deliverLifecycle, deliverRoutine, persistProactiveToThread, firstNameOf, makePrimaryProvider,
   runConversationInThread, normalizeFiles, normalizeImages, codingJobs, PUBLIC, PUBLIC_BASE, SECURITY_HEADERS, buildCsp, safeStrEq,
   metricsAuthGuard, metricsAuthOk, metricsChallenge, metricsSessKey, verifyMetricsSession,
@@ -11814,7 +11810,7 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-initDb(esquemaDoAtendimento, avatarSchema, cadastro.esquema, ...plugins.map((p) => p.esquema).filter(Boolean))
+initDb(avatarSchema, cadastro.esquema, ...plugins.map((p) => p.esquema).filter(Boolean))
   .then(async () => {
     await discoveryStore.init();
     await onboardingStore.init();

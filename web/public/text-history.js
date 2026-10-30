@@ -1,14 +1,14 @@
-// One editable text with its saved versions (public-support-prompts.mjs), used
+// One editable text with its saved versions (extensions/public-support/public-support-prompts.mjs), used
 // by the admin settings and the public-support screens. The box opens with the
 // current text, or with the default when nothing was edited; saving the default
 // itself, or the back-to-default button, stores "no edit".
 //
-// textHistory(mount, { api, rows, labelledBy }) where api = { load(), save(content),
+// textHistory(mount, { api, rows, labelledBy, readOnly }) where api = { load(), save(content),
 // restore(versionId) }, each resolving to the server's text state
 // { content, default, max, versions: [{ id, content, createdAt }] } or throwing
 // an Error whose `code` is the server's error. Texts come from the page's
 // text_history area (data-i18n-texts). Everything is put on the page as text,
-// never as HTML.
+// never as HTML. readOnly: the text and its versions to read, nothing to save or restore.
 (function () {
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -35,6 +35,7 @@
     box.rows = opts.rows || 14;
     box.spellcheck = false;
     if (opts.labelledBy) box.setAttribute('aria-labelledby', opts.labelledBy);
+    box.readOnly = !!opts.readOnly;
     var count = el('span', 'th-count');
     var tag = el('span', 'th-tag');
     var result = el('span', 'th-result');
@@ -77,7 +78,7 @@
           view.textContent = full.hidden ? t('history_view') : t('history_hide');
         });
         head.append(view);
-        if (i > 0) head.append(button('ghost', t('history_restore'), function () {
+        if (i > 0 && !opts.readOnly) head.append(button('ghost', t('history_restore'), function () {
           if (confirm(t('history_restore_confirm', { date: when(v.createdAt) }))) send(function () { return opts.api.restore(v.id); });
         }));
         row.append(head, full);
@@ -87,7 +88,7 @@
 
     // The box only goes on the page once there is a text to show and save.
     function show(next) {
-      if (!state) mount.replaceChildren(box, meta, actions, versions);
+      if (!state) { if (opts.readOnly) mount.replaceChildren(box, meta, versions); else mount.replaceChildren(box, meta, actions, versions); }
       state = next;
       box.maxLength = state.max;
       box.value = state.content || state.default;

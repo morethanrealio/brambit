@@ -39,7 +39,6 @@ tests/image-context.test.mjs
 tests/infinity-connector.test.mjs
 tests/inventory-calculation.test.mjs
 tests/message-draft.test.mjs
-tests/public-support.test.mjs
 tests/quality-batch4.test.mjs
 tests/quality-fixes.test.mjs
 tests/recoverable-app-integration.test.mjs

@@ -24,7 +24,7 @@ export const publicSupportOn = profile !== 'personal';
 export const ownerFeaturesOn = profile !== 'public-support';
 
 const PUBLIC_SUPPORT = [PUBLIC_SUPPORT_PAGE, `${PUBLIC_SUPPORT_PAGE}.html`, '/api/publico/', '/api/public/'];
-const startsWithAny = (pathname, list) => list.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p));
+export const startsWithAny = (pathname, list) => list.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p));
 
 // What the owner still uses in public-support, besides the routes registered
 // through rotas.registrar (screen texts, settings, sign-up, the public channels
@@ -37,7 +37,7 @@ const PUBLIC_SUPPORT_API = new Set([
 // Registered routes that belong to the owner's app (phone app, first-run chat).
 const PUBLIC_SUPPORT_REGISTERED_OFF = ['/api/mobile/', '/api/onboard/'];
 // Pages of the owner's app.
-const OWNER_PAGES = [...APP_PAGES, '/runner', '/runner.html', '/runner/', '/extension', '/app-return.html'];
+export const OWNER_PAGES = [...APP_PAGES, '/runner', '/runner.html', '/runner/', '/extension', '/app-return.html'];
 
 // false = the request answers 404. registered: the path is an exact route of
 // rotas.registrar (rotas.registrada).

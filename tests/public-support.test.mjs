@@ -9,13 +9,13 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/public-support.mjs');
-const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/public-support-owner.mjs');
+const { createPublicoStore, createAtendimentoPublico, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/extensions/public-support/public-support.mjs');
+const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
-const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/public-web.mjs');
-const { criarAtendimentoDoServidor } = await import('../web/public-support-channel.mjs');
-const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/public-support-prompts.mjs');
-const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/public-support-admin.mjs');
+const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
+const { criarAtendimentoDoServidor, esquemaDoAtendimento, clientAreasOn } = await import('../web/extensions/public-support/public-support-channel.mjs');
+const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
+const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -323,7 +323,7 @@ test('retention deletes what is past the deadline; export returns everything for
   await db.query(`UPDATE mtr_harness.public_contact_state SET atualizado_em = now() - interval '31 days'`);
   const sumido = await store.contato(ag, 'whatsapp', '5511000000002');
   await db.query(`UPDATE mtr_harness.public_contacts SET ultima_em = now() - interval '31 days' WHERE id = $1`, [sumido.id]);
-  assert.deepEqual(await store.limparVencidos(), { contatos: 1, mensagens: 1, anotacoes: 1 });
+  assert.deepEqual(await store.limparVencidos(), { contatos: 1, mensagens: 1, anotacoes: 1, events: 0, links: 0 });
   assert.equal(await store.exportar(sumido.id), null);
   const depois = await store.exportar(r1.contatoId);
   assert.deepEqual(depois.mensagens.filter((x) => x.role === 'user').map((x) => x.content), ['nova']);
@@ -612,6 +612,7 @@ test('WhatsApp channel: a photo reaches the model only when the assistant asked 
 // website, and the owner's screen says why; closing sign-up turns it back on, no restart.
 test('open sign-up keeps public support off on every channel until it is closed', async (t) => {
   const { pool, store, dono, ag } = await montar(t);
+  await esquemaDoAtendimento({ pool, S: 'mtr_harness' });
   await store.configurar(ag, dono, { ativo: true });
   await createPublicWebStore(pool).configure(ag, dono, { enabled: true, origins: ['https://shop.example.com'] });
   let open = true;
@@ -632,6 +633,30 @@ test('open sign-up keeps public support off on every channel until it is closed'
   assert.equal(avisos.length, 1);
   open = false;
   assert.deepEqual(await estado(), [true, 200, false]);
+});
+
+// Client areas are off unless the installation turns them on (BRAMBIT_CLIENT_AREAS=on):
+// off, an area's member reaches none of its assistants and the areas card has no route.
+test('client areas stay off until the installation turns them on', async (t) => {
+  const { db, pool, store, dono, outro, ag } = await montar(t);
+  await esquemaDoAtendimento({ pool, S: 'mtr_harness' });
+  await store.configurar(ag, dono, { ativo: true });
+  const [{ id: area }] = (await db.query(`INSERT INTO mtr_harness.client_areas (owner_user_id, name) VALUES ($1, 'A') RETURNING id`, [dono])).rows;
+  await db.query('INSERT INTO mtr_harness.client_area_agents VALUES ($1, $2)', [ag, area]);
+  await db.query(`INSERT INTO mtr_harness.client_area_members (area_id, user_id, role) VALUES ($1, $2, 'admin')`, [area, outro]);
+  assert.equal(clientAreasOn(undefined), false);
+  assert.equal(clientAreasOn(' ON '), true);
+  const reach = async (clientAreas) => {
+    const rotas = createRotas();
+    criarAtendimentoDoServidor({ pool, makeProvider: modelo().provider, recordUsages: async () => {}, creditStatus: async () => ({ over: false }),
+      agenteDoNumero: () => ag, limpezaMs: 0, log: { warn() {}, error() {}, log() {} }, clientAreas,
+      rotas, send: (res, status, corpo) => Object.assign(res, { status, corpo }), fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false });
+    const res = { setHeader() {} }, req = Readable.from([]); req.method = 'GET'; req.headers = {};
+    await rotas.atender(req, res, new URL('http://x/api/publico/agentes'), { currentUser: async () => ({ id: outro }) });
+    return [rotas.registrada('GET', '/api/public-support/areas'), res.corpo.agentes.map((a) => a.agentId)];
+  };
+  assert.deepEqual(await reach(undefined), [false, []]);
+  assert.deepEqual(await reach(true), [true, [ag]]);
 });
 
 test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
@@ -737,8 +762,8 @@ test('assistant texts on the owner screen: another account gets 404, the plugin 
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs and the locale rules', () => {
-  const src = fs.readFileSync(new URL('../web/public-support.mjs', import.meta.url), 'utf8');
+test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs, the events and the locale rules', () => {
+  const src = fs.readFileSync(new URL('../web/extensions/public-support/public-support.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../core-proto/core.mjs', './health-guardrail.mjs', './locale.mjs', './public-support-outputs.mjs', './vault.mjs']);
+  assert.deepEqual(imports, ['../../../core-proto/core.mjs', '../../health-guardrail.mjs', '../../locale.mjs', '../../vault.mjs', './public-support-events.mjs', './public-support-outputs.mjs']);
 });

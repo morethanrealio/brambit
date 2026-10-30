@@ -92,10 +92,10 @@ async function migrate(conn) {
 }
 
 // The migrations depend on the tables initDb creates when the server boots (the
-// core's and those of the plugins in web/plugins/ativos.mjs, if it exists, as at boot).
+// core's and those of the enabled extensions and of the plugins in web/plugins/ativos.mjs, if it exists, as at boot).
 function initDb(env) {
   execFileSync(process.execPath, ['--input-type=module', '-e',
-    "const m=await import('./web/db.mjs');const p=await import('./web/plugins.mjs');const l=await p.carregarPlugins();await m.initDb(...l.map((x)=>x.esquema).filter(Boolean));process.exit(0)"], { cwd: root, env, stdio: ['ignore', 'ignore', 'inherit'] });
+    "const m=await import('./web/db.mjs');const p=await import('./web/plugins.mjs');const e=await import('./web/extensions.mjs');const l=await p.carregarPlugins(undefined,await e.loadExtensions());await m.initDb(...l.map((x)=>x.esquema).filter(Boolean));process.exit(0)"], { cwd: root, env, stdio: ['ignore', 'ignore', 'inherit'] });
 }
 
 // Schema, boot tables and migrations: everything the server expects to find ready.

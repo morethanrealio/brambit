@@ -562,7 +562,7 @@ function semLinksMontados(text, broken) {
   });
 }
 
-// Public support's "sites the assistant may send people to" (public-support.mjs). An
+// Public support's "sites the assistant may send people to" (extensions/public-support/public-support.mjs). An
 // entry is a domain and covers its subdomains: shop.example also lets
 // www.shop.example and checkout.shop.example through.
 export const LINK_SITES_MAX = 20;

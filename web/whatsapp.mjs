@@ -132,7 +132,7 @@ async function sendText(to, text, { requireReceipt = false, tracking, reenvio = 
   return wamids;
 }
 
-// Rich outputs from public-facing support (public-support-outputs.mjs, already normalized),
+// Rich outputs from public-facing support (extensions/public-support/public-support-outputs.mjs, already normalized),
 // one Meta message per output, in order. Text goes through sendText (split into
 // bubbles), and so does a data output's reserve (data alone is skipped); image, link button (cta_url) and approved template go out directly, with
 // images uploaded beforehand as JPEG/PNG (wa-image.mjs). An output with an image that
@@ -791,7 +791,7 @@ export function createWhatsAppHandler({ runConversation, reactionConfirm, loadAg
     return pumpPromise;
   }
 
-  // Unknown on a number with public support (public-support-channel.mjs): the one who
+  // Unknown on a number with public support (extensions/public-support/public-support-channel.mjs): the one who
   // replies is the public assistant, outside the pump (the turn calls the model) and
   // without any of the owner's flow (menu, @name, reaction, confirmation, msg reference).
   // Chopped-up messages become a single turn: waits JUNTAR_MS after the last one (at

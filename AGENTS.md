@@ -29,7 +29,23 @@ Brambit is a generic engine. Anything that only serves one deployment (a brand,
 a client, billing rules, analytics) goes in a plugin, not in the core: see
 "Plugins" in the README and the format in `web/plugins.mjs`. The core asks the
 deployment through *ports* and has a default for each one, so it runs with no
-plugin at all. `test-support/core-guard.mjs` fails CI if the core imports or
+plugin at all. Optional parts that ship with Brambit are *extensions*: each lives
+in `web/extensions/<name>/`, is a plugin object registered in
+`web/extensions.mjs`, and an installation turns it on or off with
+`BRAMBIT_EXTENSIONS` (the usage profile sets the default). Public support is
+the first one: its owner screen is also open to members of a client area
+(`client-areas.mjs`, off unless `BRAMBIT_CLIENT_AREAS=on`), so every route in `public-support-owner.mjs` resolves the
+assistant or contact through `agentAccess()` or `contatoDoPedido()` and calls the
+store with the owner's id, and a route that opens, exports, deletes or changes
+something records it in the access log (`client-area-activity.mjs`). The owner can invite an email with no account: that
+creates a *panel account*, which `web/account-scope.mjs` holds to the routes the
+extension registers (owner pages redirect to `/public-support`, any other API is
+404); a new extension route a panel member needs must be added to
+`panelScope()`. Its metrics come from `public_support_events`: a plugin records with
+`ctx.track(kind, ref)` and returns cards from the `metricCards` hook (`{label, value, detail?}` or a funnel
+`{label, steps}`, in the `language` it gets); a count or funnel step may take a list of kinds; with `contactId` (`?contact=` on the metrics route) the cards are one conversation's, shown under it. Link buttons are measured through `/go` (`measureLinks`); on the
+web the button keeps its real `url` and the measured one goes in `clickUrl`, because the chat picks the button's
+style and in-chat modal by the url's domain. Extension tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
 cites a cloud file listed in `cloud.txt`.
 
 ## Checks CI runs on every pull request

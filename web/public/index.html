@@ -1988,6 +1988,8 @@ E('authBtn').onclick = async () => {
   let comecou = signupMode;
   try { if (!signupMode && localStorage.getItem(SIGNUP_MARK) === email.toLowerCase()) { comecou = true; localStorage.removeItem(SIGNUP_MARK); } } catch (e) {}
   if (comecou) marcarCadastro('email');
+  // An account an extension holds (account-scope.mjs) lives on its own page, not in the owner's app.
+  if (res.home) { location.replace(res.home); return; }
   if (APP_CFG.profile === 'public-support') { location.replace('/public-support'); return; }
   if (comecou && !(res.agents || []).length) { wizClear(); openWizard((res.name || '').split(' ')[0]); return; }
   enterHome(res.name, res.agents || [], res.connected, res.telegramBots || [], res.whatsapp, res.emailSend, res.providers, res.apps, res.ext, res.runner);

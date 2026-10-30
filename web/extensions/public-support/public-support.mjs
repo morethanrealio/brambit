@@ -12,11 +12,12 @@
 //
 // Contact = (assistant, channel, address). The address (phone) is encrypted via the
 // vault and the lookup is by blind index; without the vault, public mode doesn't turn on.
-import { defaultTimezone } from './locale.mjs';
-import { runAgent as runAgentPadrao, ToolRegistry } from '../core-proto/core.mjs';
-import { encMaybe, decMaybe, indiceCego } from './vault.mjs';
-import { HEALTH_GUARDRAIL } from './health-guardrail.mjs';
+import { defaultTimezone } from '../../locale.mjs';
+import { runAgent as runAgentPadrao, ToolRegistry } from '../../../core-proto/core.mjs';
+import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
+import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
+import { eventsSchema, measureLinks, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -32,6 +33,8 @@ export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
+export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
+export const METRIC_CARDS_WAIT_MS = 5000;
 // The avatar on a website (public-avatar.mjs), off until the owner turns it on.
 export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
 export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
@@ -83,7 +86,7 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_daily_minutes integer NOT NULL DEFAULT ${AVATAR_DAILY_MINUTES} CHECK (avatar_daily_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_visitor_minutes integer NOT NULL DEFAULT ${AVATAR_VISITOR_MINUTES} CHECK (avatar_visitor_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_max_sessions integer NOT NULL DEFAULT ${AVATAR_MAX_SESSIONS} CHECK (avatar_max_sessions BETWEEN 1 AND ${AVATAR_SESSIONS_MAX});
-`;
+${eventsSchema(S)}`;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
 
@@ -219,18 +222,26 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         `SELECT role, content, criado_em FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id`, [contatoId]);
       const { rows: notas } = await pool.query(
         `SELECT chave, valor, atualizado_em FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
+      const { rows: events } = await pool.query(
+        `SELECT kind, ref, at FROM ${S}.public_support_events WHERE contact_id = $1 ORDER BY id`, [contatoId]);
+      const { rows: links } = await pool.query(
+        `SELECT url, ref, created_at FROM ${S}.public_support_links WHERE contact_id = $1 ORDER BY created_at`, [contatoId]);
       return {
         contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em, bloqueadoEm: c.bloqueado_em },
         anotacoes: notas.map((n) => ({ chave: n.chave, valor: n.valor, atualizadoEm: n.atualizado_em })),
         mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em })),
+        events: events.map((e) => ({ kind: e.kind, ref: e.ref, at: e.at })),
+        links: links.map((l) => ({ url: l.url, ref: l.ref, createdAt: l.created_at })),
       };
     },
 
-    // Deletes messages and notes and keeps the contact (the block survives).
+    // Deletes messages, notes, events and links and keeps the contact (the block survives).
     async apagarConversa(contatoId) {
       await transacao(async (c) => {
         await c.query(`DELETE FROM ${S}.public_messages WHERE contact_id = $1`, [contatoId]);
         await c.query(`DELETE FROM ${S}.public_contact_state WHERE contact_id = $1`, [contatoId]);
+        await c.query(`DELETE FROM ${S}.public_support_events WHERE contact_id = $1`, [contatoId]);
+        await c.query(`DELETE FROM ${S}.public_support_links WHERE contact_id = $1`, [contatoId]);
       });
     },
 
@@ -252,11 +263,12 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return rows;
     },
 
+    // → the contact's assistant id when the contact is userId's, else null.
     async contatoDoDono(userId, contatoId) {
       const { rows } = await pool.query(
-        `SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+        `SELECT c.agent_id FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
           WHERE c.id = $1 AND a.user_id = $2`, [contatoId, userId]);
-      return !!rows[0];
+      return rows[0]?.agent_id ?? null;
     },
 
     // An owner's assistant's contacts, from newest to oldest.
@@ -295,7 +307,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     // A blocked contact stays: without the row, the block would disappear and they'd go back to being served.
     // In batches, so as not to hold up the database. Runs until empty.
     async limparVencidos() {
-      const total = { mensagens: 0, anotacoes: 0, contatos: 0 };
+      const total = { mensagens: 0, anotacoes: 0, contatos: 0, events: 0, links: 0 };
       const lote = async (sql) => { let n = 0, r; do { r = await pool.query(sql, []); n += r.rowCount ?? r.affectedRows ?? 0; } while ((r.rowCount ?? r.affectedRows) === LIMPEZA_LOTE); return n; };
       total.contatos = await lote(`DELETE FROM ${S}.public_contacts WHERE id IN (
         SELECT c.id FROM ${S}.public_contacts c JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
@@ -308,6 +320,12 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         SELECT s.contact_id, s.chave FROM ${S}.public_contact_state s JOIN ${S}.public_contacts c ON c.id = s.contact_id
           JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
          WHERE s.atualizado_em < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+      total.events = await lote(`DELETE FROM ${S}.public_support_events WHERE id IN (
+        SELECT e.id FROM ${S}.public_support_events e JOIN ${S}.public_agents p ON p.agent_id = e.agent_id
+         WHERE e.at < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
+      total.links = await lote(`DELETE FROM ${S}.public_support_links WHERE id IN (
+        SELECT l.id FROM ${S}.public_support_links l JOIN ${S}.public_agents p ON p.agent_id = l.agent_id
+         WHERE l.created_at < now() - p.retencao_dias * interval '1 day' LIMIT ${LIMPEZA_LOTE})`);
       return total;
     },
 
@@ -466,10 +484,16 @@ export function retainedByTool(tools) {
 //  recordUsage(usages,{userId,agentId,contatoId}) → records the turn's usage.
 //  saldo(userId) → {over}. over=true: answers with a neutral message, without calling the model.
 //  ferramentas: tools port (doTurno/vetar/instrucoes); only tools with
-//   publico:true are included, and doTurno receives the contact and its estado()/lembrar().
+//   publico:true are included, and doTurno receives the contact and its estado()/lembrar()/track().
 //   A tool may also carry retain(text) (see retainedByTool).
 //  agora() → date and time spelled out, for the prompt.
 //  gastoDoDia(agentId) → US$ of public support today (default: store.gastoDoDia).
+//  events: createEventsStore (public-support-events.mjs), optional: what the plugin
+//   records with track() and what its metricCards count. Without it, track does nothing
+//   and the counts are zero.
+//  linkBase() → the installation's https address: with events, the link buttons the
+//   person gets go through its click route (measureLinks); the conversation keeps
+//   the real addresses. Empty = links go out as they are.
 //  prompts: the editable texts (createPromptStore in public-support-prompts.mjs);
 //   without it, or if reading them fails, the turn uses the defaults.
 //  ganchos: plugin's atendimentoPublico port (whoever's support script), optional:
@@ -492,7 +516,24 @@ export function retainedByTool(tools) {
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
 //    event ({type,data} on a page-event turn, else null), primeira (empty history),
 //    texts: {written, spoken} in use for this assistant (the owner's edit, else
-//    the default; spoken null without a voice text), estado(), lembrar(chave,valor)}.
+//    the default; spoken null without a voice text), estado(), lembrar(chave,valor),
+//    track(kind, ref?): records an event of this contact (kind like 'bag_add', ref
+//    like 'product:123'); never throws, a failed write only goes to the log}.
+//   metricCards({agentId, contactId?, days, from, to, language, events}) → cards: the plugin's own
+//    numbers for the assistant, shown next to its volume to the owner and the
+//    members of its client area. from/to = the period's first and last day
+//    (YYYY-MM-DD, installation timezone); language = the page's ('pt-BR', 'en' or
+//    'es'), for the labels. A card is {label, value, detail?}: value a number (the
+//    page formats it) or short text, detail a short line under it (e.g. '3 people');
+//    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
+//    shows across the row, each with its share of the step before. Up to
+//    METRIC_CARDS_MAX cards; slower than METRIC_CARDS_WAIT_MS = none this time.
+//    events = this assistant's events in the period: count({kind, ref?|refPrefix?})
+//    → {times, people}; funnel([step, ...]) → people per step, each step done
+//    after the one before (link clicks are kind 'link_click', ref = the button's ref).
+//    With contactId (one conversation, under it on the owner's screen) there is no
+//    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
+//    and the page shows them as done or not.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -503,7 +544,9 @@ export function retainedByTool(tools) {
 // stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', log = console }) {
+  const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0) };
+  const trackFor = (agentId, contactId) => async (kind, ref) => (events ? events.record({ agentId, contactId, kind, ref }) : false);
   const NO_EDITS = { installation: '', written: '', spoken: '' };
   async function editedTexts(agentId) {
     if (!prompts) return NO_EDITS;
@@ -519,6 +562,30 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   async function defaultTexts(agentId) {
     const d = await gancho('defaultTexts', { agentId });
     return { written: typeof d?.written === 'string' ? d.written : '', spoken: typeof d?.spoken === 'string' ? d.spoken : null };
+  }
+
+  // The plugin's cards for the metrics, only the well-formed ones; a slow hook
+  // does not hold the owner's screen.
+  async function metricCards(q) {
+    if (typeof ganchos?.metricCards !== 'function') return [];
+    let timer;
+    const late = new Promise((r) => { timer = setTimeout(() => r('late'), METRIC_CARDS_WAIT_MS); timer.unref?.(); });
+    const r = await Promise.race([gancho('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId }) : noEvents }), late]);
+    clearTimeout(timer);
+    if (r === 'late') { log.error?.('[publico] gancho metricCards took too long'); return []; }
+    const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+    const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const card = (c) => {
+      const label = text(c?.label, 60);
+      if (!label) return null;
+      if (Array.isArray(c.steps)) {
+        const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value) }));
+        return steps.length >= 2 && steps.length <= FUNNEL_STEPS_MAX && steps.every((s) => s.label && s.value !== null) ? { label, steps } : null;
+      }
+      const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
+      return value === null ? null : { label, value, ...(detail ? { detail } : {}) };
+    };
+    return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
@@ -538,7 +605,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     // estado/lembrar already tied to this contact: the plugin's tool stores what it needs
     // for the next turn (e.g. the list it showed) without being able to read another contact.
     const doPlugin = (ferramentas?.doTurno({ userId: agente.user_id, agentId: agente.agent_id, contato: { ...contato },
-      estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) }) || [])
+      estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor),
+      track: trackFor(agente.agent_id, contato.id) }) || [])
       .filter((t) => t?.publico === true && !reg.map.has(t.name));
     for (const t of doPlugin) {
       reg.add({ ...t, run: async (args) => {
@@ -565,6 +633,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
       const contato = await store.contato(agentId, canal, endereco);
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
+      const measured = (saidas) => measureLinks(events, linkBase(), { agentId: agente.agent_id, contactId: contato.id }, saidas, { keepUrl: canal === 'web' })
+        .catch((e) => { log.error?.('[publico] measuring links failed:', e?.message ?? e); return saidas; });
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
       const comando = ev ? null : comandoDoContato(msg);
       // Blocked by the owner: silence and nothing recorded. The delete request still
@@ -603,7 +673,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const texts = { written: edited.written || defaults.written, spoken: defaults.spoken == null ? null : edited.spoken || defaults.spoken };
       const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
         canal, mensagem: msg, event: ev, primeira: !history.length, texts,
-        estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor) };
+        estado: () => store.estado(contato.id), lembrar: (chave, valor) => store.lembrar(contato.id, chave, valor),
+        track: trackFor(agente.agent_id, contato.id) };
       if (imagesOnRequest && imagens?.length && (await gancho('photoRequested', ctx))?.requested !== true) {
         return { text: null, motivo: 'photo_not_requested', ...ident };
       }
@@ -613,7 +684,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         const text = textoDasSaidas(prontas);
         const modelContent = typeof antes.modelText === 'string' ? antes.modelText : undefined;
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas, modelContent }]);
-        return { text, saidas: prontas, motivo: 'roteiro', ...ident };
+        const out = await measured(prontas);
+        return { text: out === prontas ? text : textoDasSaidas(out), saidas: out, motivo: 'roteiro', ...ident };
       }
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
@@ -650,9 +722,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
       await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }]);
-      return { text, ...(saidas.length ? { saidas } : {}), ...ident };
+      const out = await measured(saidas);
+      return { text: out === saidas ? text : textoDasSaidas(out), ...(out.length ? { saidas: out } : {}), ...ident };
     });
   }
 
-  return { turno, registro, defaultTexts };
+  return { turno, registro, defaultTexts, metricCards };
 }

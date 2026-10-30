@@ -20,9 +20,9 @@
 // the session id, which only whoever opened it gets.
 import { readSmallJson, createWebCaller } from './public-web.mjs';
 import { chaveDoContato, DAILY_CAP_DEFAULT_USD, AVATAR_MINUTES_MAX, AVATAR_SESSIONS_MAX } from './public-support.mjs';
-import { LIVE_MODEL } from './avatar-live.mjs';
-import { photoAge, EXPIRES_AFTER } from './avatar-photos.mjs';
-import { defaultTimezone } from './locale.mjs';
+import { LIVE_MODEL } from '../../avatar-live.mjs';
+import { photoAge, EXPIRES_AFTER } from '../../avatar-photos.mjs';
+import { defaultTimezone } from '../../locale.mjs';
 
 export const PUBLIC_AVATAR_PATH = '/api/public/avatar';
 export const PUBLIC_AVATAR_PATHS = new Set([PUBLIC_AVATAR_PATH, `${PUBLIC_AVATAR_PATH}/hush`, `${PUBLIC_AVATAR_PATH}/end`]);
