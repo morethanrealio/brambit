@@ -104,7 +104,11 @@
   .area .check{font-size:14px;}
   .area .inline select.role{flex:0 1 150px;min-width:120px;}
   input[type=email]{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:14.5px;background:#fff;color:var(--txt);}
-  .hidden{display:none;}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:0 0 18px;}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:9px 14px;font:inherit;font-size:14.5px;color:var(--mut);cursor:pointer;}
+  .tabs button:hover{color:var(--txt);}
+  .tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+  .hidden,.off{display:none;}
 </style>
 </head>
 <body>
@@ -133,7 +137,15 @@
     </div>
   </div>
 
-  <div class="card hidden" id="metricsCard">
+  <div class="tabs hidden" id="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="home" data-i18n="public_service_page.tab_home">Home</button>
+    <button type="button" role="tab" data-tab="prompt" data-i18n="public_service_page.tab_prompt">Prompt</button>
+    <button type="button" role="tab" data-tab="conversations" data-i18n="public_service_page.tab_conversations">Conversations</button>
+    <button type="button" role="tab" data-tab="activity" data-i18n="public_service_page.activity">Access log</button>
+    <button type="button" role="tab" data-tab="settings" data-i18n="public_service_page.tab_settings">Settings</button>
+  </div>
+
+  <div class="card hidden" id="metricsCard" data-tab-panel="home">
     <div class="metric-head">
       <h2 id="metricsTitle" data-i18n="public_service_page.metrics">Activity</h2>
       <select id="metricDays" aria-labelledby="metricsTitle">
@@ -162,11 +174,8 @@
     <div id="metricsMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="cfgCard">
-    <h2 data-i18n="public_service_page.settings">Settings</h2>
-    <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
-    <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
-    <label class="check" id="activeLabel" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
+  <div class="card hidden" id="promptCard" data-tab-panel="prompt">
+    <h2 data-i18n="public_service_page.tab_prompt">Prompt</h2>
     <div id="writtenTextBlock" class="hidden">
       <label id="writtenTextLabel" data-i18n="public_service_page.written_text">Written text</label>
       <p class="nota" data-i18n="public_service_page.written_text_help">What this assistant follows when someone types to it. It comes filled in with the text this assistant came with; a change applies from the next message.</p>
@@ -179,17 +188,26 @@
     </div>
     <label for="instrucoes" data-i18n="public_service_page.instructions">Extra instructions (what it does, tone, what it must not do). They add to the instructions that already come with this assistant, if any.</label>
     <textarea id="instrucoes" maxlength="20000"></textarea>
+    <label for="linkSites" data-i18n="public_service_page.link_sites">Sites the assistant may send people to (one per line, only the domain, e.g. shop.example.com; its subdomains count too; empty = any site)</label>
+    <textarea id="linkSites" spellcheck="false"></textarea>
+    <div class="acoes" id="promptActions"><button class="btn primary" id="salvarPrompt" data-i18n="public_service_page.save">Save</button></div>
+    <div id="promptMsg" class="msg"></div>
+  </div>
+
+  <div class="card hidden" id="cfgCard" data-tab-panel="settings">
+    <h2 data-i18n="public_service_page.settings">Settings</h2>
+    <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
+    <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
+    <label class="check" id="activeLabel" data-i18n="public_service_page.active"><input type="checkbox" id="ativo"/> Serve the public with this assistant</label>
     <div class="row" id="ownerLimits">
       <div><label for="retencao" data-i18n="public_service_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
       <div><label for="limite" data-i18n="public_service_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
       <div><label for="limiteAgente" data-i18n="public_service_page.agent_rate_limit">Messages per hour, all contacts together</label><input type="number" id="limiteAgente" min="1" max="100000"/></div>
       <div><label for="teto" data-i18n="public_service_page.daily_cap">Daily spending cap (US$, empty = US$10)</label><input type="number" id="teto" min="0" step="0.01"/></div>
     </div>
-    <label for="linkSites" data-i18n="public_service_page.link_sites">Sites the assistant may send people to (one per line, only the domain, e.g. shop.example.com; its subdomains count too; empty = any site)</label>
-    <textarea id="linkSites" spellcheck="false"></textarea>
     <div id="ownerWeb">
     <h3 data-i18n="public_service_page.web_title">Website and API</h3>
-    <p class="nota" data-i18n="public_service_page.web_lead">A chat on your website, or your own server, can talk to this assistant in the same public mode. Those conversations show up in the contacts list below.</p>
+    <p class="nota" data-i18n="public_service_page.web_lead">A chat on your website, or your own server, can talk to this assistant in the same public mode. Those conversations show up in the Conversations tab.</p>
     <label class="check" data-i18n="public_service_page.web_enabled"><input type="checkbox" id="webAtivo"/> Answer from websites and the API</label>
     <label for="webOrigens" data-i18n="public_service_page.web_origins">Websites allowed to open the chat (one per line, only the domain, e.g. https://shop.example.com)</label>
     <textarea id="webOrigens" spellcheck="false"></textarea>
@@ -209,7 +227,7 @@
       </div>
     </div>
     </div>
-    <div class="acoes" id="saveActions"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
+    <div class="acoes"><button class="btn primary" id="salvar" data-i18n="public_service_page.save">Save</button></div>
     <div id="cfgMsg" class="msg"></div>
     <div id="ownerKey">
     <label data-i18n="public_service_page.web_key">Server key</label>
@@ -220,7 +238,7 @@
     </div>
   </div>
 
-  <div class="grid hidden" id="atendGrid">
+  <div class="grid hidden" id="atendGrid" data-tab-panel="conversations">
     <div class="card">
       <h2 data-i18n="public_service_page.contacts">Contacts</h2>
       <div id="contatos" class="contatos"></div>
@@ -242,7 +260,7 @@
     </div>
   </div>
 
-  <div class="card hidden" id="activityCard">
+  <div class="card hidden" id="activityCard" data-tab-panel="activity">
     <h2 data-i18n="public_service_page.activity">Access log</h2>
     <p class="nota" data-i18n="public_service_page.activity_lead">Who opened conversations, handled contacts or changed the assistants, and when. It never keeps what a conversation or a text says.</p>
     <table class="mtable log">
@@ -255,7 +273,7 @@
     <div id="activityMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="areasCard">
+  <div class="card hidden" id="areasCard" data-tab-panel="settings">
     <h2 data-i18n="public_service_page.areas">Client areas</h2>
     <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
     <div id="areaList"></div>
@@ -308,16 +326,15 @@
   function escolherAgente(id){
     agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
     if (!agenteAtual) return;
-    $('metricsCard').classList.remove('hidden'); $('cfgCard').classList.remove('hidden'); $('atendGrid').classList.remove('hidden');
-    // A client area's member (client-areas.mjs) sees what its role allows: an admin edits the
-    // instructions, texts and link sites; a viewer only reads. The rest is the owner's.
-    var owner = isOwner(), editor = canEdit();
-    ['activeLabel', 'ownerLimits', 'ownerWeb', 'ownerKey'].forEach(function(id){ $(id).classList.toggle('hidden', !owner); });
+    ['tabs', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid'].forEach(function(id){ $(id).classList.remove('hidden'); });
+    // A client area's member (client-areas.mjs) sees what its role allows (showTab): an admin
+    // edits the prompt and handles the contacts; a viewer only reads. Settings are the owner's.
+    var editor = canEdit();
     ['instrucoes', 'linkSites'].forEach(function(id){ $(id).readOnly = !editor; });
-    ['saveActions', 'bloquear', 'exportar', 'apagar'].forEach(function(id){ $(id).classList.toggle('hidden', !editor); });
-    $('avisoCadastro').classList.toggle('hidden', !owner || !signupOpen);
-    var aviso = $('avisoNumero');
-    aviso.classList.toggle('hidden', !owner || agenteAtual.doNumero);
+    ['promptActions', 'bloquear', 'exportar', 'apagar'].forEach(function(id){ $(id).classList.toggle('hidden', !editor); });
+    $('avisoCadastro').classList.toggle('hidden', !signupOpen);
+    $('avisoNumero').classList.toggle('hidden', !!agenteAtual.doNumero);
+    showTab(location.hash.slice(1));
     $('ativo').checked = !!agenteAtual.ativo;
     $('instrucoes').value = agenteAtual.instrucoes || '';
     $('retencao').value = agenteAtual.retencaoDias;
@@ -337,7 +354,7 @@
     $('webEndereco').textContent = location.origin + '/api/public/messages?agent=' + agenteAtual.agentId;
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
-    msg($('cfgMsg'), ''); msg($('webChaveMsg'), '');
+    msg($('cfgMsg'), ''); msg($('promptMsg'), ''); msg($('webChaveMsg'), '');
     fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
@@ -368,8 +385,26 @@
   }
   $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
 
-  $('salvar').addEventListener('click', function(){
-    var b = this, teto = $('teto').value.trim(), sites = $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+  // The tabs each role sees (the server refuses the rest anyway). The open tab lives in
+  // the address (#prompt), so a reload keeps it; home has none.
+  var TABS = { owner: ['home', 'prompt', 'conversations', 'activity', 'settings'], admin: ['home', 'prompt', 'conversations', 'activity'], viewer: ['home', 'prompt', 'conversations'] };
+  function showTab(name){
+    var allowed = TABS[isOwner() ? 'owner' : agenteAtual.role] || TABS.viewer;
+    if (allowed.indexOf(name) < 0) name = 'home';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function(b){
+      b.classList.toggle('hidden', allowed.indexOf(b.dataset.tab) < 0);
+      b.setAttribute('aria-selected', String(b.dataset.tab === name));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tab-panel]'), function(p){ p.classList.toggle('off', p.dataset.tabPanel !== name); });
+    var hash = name === 'home' ? '' : name;
+    if (location.hash.slice(1) !== hash) history.replaceState(null, '', hash ? '#' + hash : location.pathname + location.search);
+  }
+  $('tabs').addEventListener('click', function(ev){ var b = ev.target.closest('[data-tab]'); if (b && agenteAtual) showTab(b.dataset.tab); });
+  window.addEventListener('hashchange', function(){ if (agenteAtual) showTab(location.hash.slice(1)); });
+
+  // Both tabs save the same way; note = the message under the button pressed.
+  function salvar(b, note){
+    var id = agenteAtual.agentId, teto = $('teto').value.trim(), sites = $('linkSites').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
     // A client area's admin sends only what its role changes (the server refuses the rest).
     var corpo = !isOwner() ? { agentId: agenteAtual.agentId, instrucoes: $('instrucoes').value, linkSites: sites } : { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
       retencaoDias: parseInt($('retencao').value, 10), limitePorHora: parseInt($('limite').value, 10),
@@ -379,11 +414,13 @@
       webKeyIps: $('webChaveIps').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean) };
     if (avatarAvailable && isOwner()) Object.assign(corpo, { avatarEnabled: $('avatarEnabled').checked, avatarDailyMinutes: parseInt($('avatarDaily').value, 10),
       avatarVisitorMinutes: parseInt($('avatarVisitor').value, 10), avatarMaxSessions: parseInt($('avatarSessions').value, 10) });
-    b.disabled = true; msg($('cfgMsg'), t('saving'));
+    b.disabled = true; msg(note, t('saving'));
     pedir('/api/publico/configurar', corpo).then(function(){
-      msg($('cfgMsg'), t('saved'), 'ok'); return carregarAgentes(agenteAtual.agentId);
-    }).catch(function(e){ msg($('cfgMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
-  });
+      return carregarAgentes(id).then(function(){ msg(note, t('saved'), 'ok'); });
+    }).catch(function(e){ msg(note, e.message, 'err'); }).then(function(){ b.disabled = false; });
+  }
+  $('salvar').addEventListener('click', function(){ salvar(this, $('cfgMsg')); });
+  $('salvarPrompt').addEventListener('click', function(){ salvar(this, $('promptMsg')); });
 
   $('webChave').addEventListener('click', function(){
     var b = this, a = agenteAtual;
