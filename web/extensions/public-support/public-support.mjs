@@ -409,15 +409,23 @@ export const INSTALLATION_PROMPT_DEFAULT = [
 // (the /public-support box) come after them and add to them. installationPrompt
 // (the admin's edit, '' = INSTALLATION_PROMPT_DEFAULT) comes after everything else, so
 // it stays above whatever the owner, the plugin or a tool says.
-export function promptPublico({ nome, base, instrucoes, canal, agora, instrucoesExtras = [], installationPrompt = '' }) {
+// No date or time here: the provider caches the prompt by its exact start, and a clock
+// that changes every minute in the system threw away the cache of the tools and the
+// history on every turn. "Now" goes at the end of the person's message (comAgora).
+export function promptPublico({ nome, base, instrucoes, canal, instrucoesExtras = [], installationPrompt = '' }) {
   return [
     `Você é ${nome || 'um assistente'}, e está atendendo uma pessoa do público pelo ${CHANNEL_LABEL[canal] || canal}.`,
     base || '',
     instrucoes ? `Instruções de quem configurou este atendimento:\n${instrucoes}` : '',
     ...instrucoesExtras,
     installationPrompt || INSTALLATION_PROMPT_DEFAULT,
-    agora ? `Agora: ${agora}.` : '',
   ].filter(Boolean).join('\n\n');
+}
+
+// The message the model reads this turn: the person's, with the time at the end. Only
+// for this turn; the history keeps what the person wrote.
+export function comAgora(mensagem, agora) {
+  return agora ? `${mensagem}\n\n(Contexto do sistema: agora é ${agora}.)` : mensagem;
 }
 
 export const RESPOSTA_INDISPONIVEL = 'No momento não consigo responder por aqui. Tente de novo mais tarde, por favor.';
@@ -689,13 +697,13 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       }
       const tools = registro(agente, contato, msg);
       const system = promptPublico({ nome: agente.nome, base: typeof antes?.instrucoes === 'string' ? antes.instrucoes : texts.written, instrucoes: agente.instrucoes,
-        canal, agora: agora(), instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
+        canal, instrucoesExtras: ferramentas?.instrucoes(new Set(tools.map.keys())) || [], installationPrompt: edited.installation });
       let text = '', termination = 'error', modelCalls = 0;
       const toolResults = [];
       const onEvent = (e) => { if (e?.type === 'tool_result') toolResults.push(e); };
       try {
         const images = !ev && Array.isArray(imagens) && imagens.length ? imagens : undefined;
-        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: msg, images, history, maxSteps: PASSOS_MAX, onEvent, retainedToolResult: retainedByTool(tools) });
+        const r = await runAgent({ provider: makeProvider(ident), tools, system, userInput: comAgora(msg, agora()), images, history, maxSteps: PASSOS_MAX, onEvent, retainedToolResult: retainedByTool(tools) });
         termination = r.termination || 'unknown';
         modelCalls = (r.usages || []).length;
         await recordUsage(r.usages || [], ident);
