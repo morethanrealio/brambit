@@ -150,9 +150,9 @@
 
   <div class="tabs hidden" id="tabs" role="tablist">
     <button type="button" role="tab" data-tab="home" data-i18n="public_service_page.tab_home">Home</button>
-    <button type="button" role="tab" data-tab="prompt" data-i18n="public_service_page.tab_prompt">Prompt</button>
     <button type="button" role="tab" data-tab="conversations" data-i18n="public_service_page.tab_conversations">Conversations</button>
     <button type="button" role="tab" data-tab="activity" data-i18n="public_service_page.activity">Access log</button>
+    <button type="button" role="tab" data-tab="prompt" data-i18n="public_service_page.tab_prompt">Prompt</button>
     <button type="button" role="tab" data-tab="settings" data-i18n="public_service_page.tab_settings">Settings</button>
   </div>
 
@@ -407,7 +407,7 @@
 
   // The tabs each role sees (the server refuses the rest anyway). The open tab lives in
   // the address (#prompt), so a reload keeps it; home has none.
-  var TABS = { owner: ['home', 'prompt', 'conversations', 'activity', 'settings'], admin: ['home', 'prompt', 'conversations', 'activity'], viewer: ['home', 'prompt', 'conversations'] };
+  var TABS = { owner: ['home', 'conversations', 'activity', 'prompt', 'settings'], admin: ['home', 'conversations', 'activity', 'prompt'], viewer: ['home', 'conversations', 'prompt'] };
   function showTab(name){
     var allowed = TABS[isOwner() ? 'owner' : agenteAtual.role] || TABS.viewer;
     if (allowed.indexOf(name) < 0) name = 'home';
