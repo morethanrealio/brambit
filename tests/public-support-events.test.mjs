@@ -39,20 +39,24 @@ test('the plugin records events in the turn; cards count them and follow people 
   const ganchos = { antesDoModelo: async (ctx) => { for (const s of ctx.mensagem.split(' ')) if (s !== '-') await ctx.track(...s.split('=')); return null; },
     metricCards: async ({ events: e }) => {
       const shown = await e.count({ kind: 'shown', refPrefix: 'product:' });
+      const either = await e.count({ kind: ['shown', 'tap'], refPrefix: 'product:' });
       const [a, b, c] = await e.funnel([{ kind: 'scan_click' }, { kind: 'scan_result' }, { kind: 'shown' }]);
-      return [{ label: 'shown', value: `${shown.times}/${shown.people}` }, { label: 'funnel', value: `${a}>${b}>${c}` }];
+      return [{ label: 'shown', value: `${shown.times}/${shown.people}` }, { label: 'funnel', value: `${a}>${b}>${c}` },
+        { label: 'either', value: `${either.times}/${either.people}` }];
     } };
   const a = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
     ganchos, events, log: { error() {}, info() {} } });
   const say = (who, msg) => a.turno({ agentId: ag, canal: 'web', endereco: who, mensagem: msg });
   await say('ana', 'scan_click');
   await say('ana', 'scan_result shown=product:1 shown=product:2');
-  await say('bia', 'scan_click scan_result');
+  await say('bia', 'scan_click scan_result tap=product:1 tap=checkout');
   await say('caio', 'shown=product:3');
   await say('caio', 'scan_result');   // result without a click: not in the funnel
   await say('dani', 'Bad-Kind=x');   // ignored, the turn goes on
   const cards = await a.metricCards({ agentId: ag, days: 7, from: today(), to: today() });
-  assert.deepEqual(cards, [{ label: 'shown', value: '3/2' }, { label: 'funnel', value: '2>2>1' }]);
+  assert.deepEqual(cards, [{ label: 'shown', value: '3/2' }, { label: 'funnel', value: '2>2>1' }, { label: 'either', value: '4/3' }]);
+  await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: ['shown', 'Bad-Kind'] }), /bad kind/);
+  await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: [] }), /bad kind/);
   // Another period sees nothing.
   assert.deepEqual(await events.count(ag, { from: '2020-01-01', to: '2020-01-31' }, { kind: 'shown' }), { times: 0, people: 0 });
 });

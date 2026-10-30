@@ -24,6 +24,7 @@ export const EVENT_KIND = /^[a-z][a-z0-9_.-]{0,63}$/;
 export const EVENT_REF_MAX = 200;
 export const LINK_URL_MAX = 2000;
 export const FUNNEL_STEPS_MAX = 5;
+const KINDS_PER_STEP_MAX = 5;
 export const EVENTS_EXPORT_MAX = 50000;
 const CLICK_REPEAT_MS = 5000;      // a second tap on the same link this soon is the same click
 const CLICKS_PER_LINK_HOUR = 20;   // past this, a link's clicks stop counting for the hour
@@ -55,13 +56,16 @@ const cleanRef = (v) => String(v ?? '').replace(/[\u0000-\u001f]/g, '').trim().s
 export const isPreview = (userAgent) => PREVIEW.test(String(userAgent ?? ''));
 
 // A step of a funnel or a count: {kind, ref?} matches that ref, {kind, refPrefix?}
-// any ref that starts with it. → [sql, params] for a WHERE, numbered from `n`.
+// any ref that starts with it. kind may be a list, any of them: a tap on a product
+// card and a click on its link are both a click. → [sql, params] for a WHERE,
+// numbered from `n`.
 function match(step, n) {
-  const kind = String(step?.kind ?? '');
-  if (!EVENT_KIND.test(kind)) throw Error('events: bad kind');
-  if (step.ref !== undefined) return [`kind = $${n} AND ref = $${n + 1}`, [kind, cleanRef(step.ref)]];
-  if (step.refPrefix !== undefined) return [`kind = $${n} AND left(ref, length($${n + 1})) = $${n + 1}`, [kind, cleanRef(step.refPrefix)]];
-  return [`kind = $${n}`, [kind]];
+  const kinds = [step?.kind].flat().map((k) => String(k ?? ''));
+  if (!kinds.length || kinds.length > KINDS_PER_STEP_MAX || !kinds.every((k) => EVENT_KIND.test(k))) throw Error('events: bad kind');
+  const [kind, value] = kinds.length === 1 ? [`kind = $${n}`, kinds[0]] : [`kind = ANY($${n}::text[])`, kinds];
+  if (step.ref !== undefined) return [`${kind} AND ref = $${n + 1}`, [value, cleanRef(step.ref)]];
+  if (step.refPrefix !== undefined) return [`${kind} AND left(ref, length($${n + 1})) = $${n + 1}`, [value, cleanRef(step.refPrefix)]];
+  return [kind, [value]];
 }
 
 export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultTimezone(), log = console } = {}) {
