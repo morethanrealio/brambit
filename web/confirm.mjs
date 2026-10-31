@@ -619,6 +619,16 @@ export function gateTool(tool, threadId, opts = {}) {
         if (normalized?.erro) return `NÃO registrei o pedido: ${String(normalized.erro)} Nenhuma ação foi executada.`;
         args = normalized?.args || normalized || cloned;
       }
+      // Required parameters are validated BEFORE any pending action is created.
+      // A call missing a required field (e.g. falar_com_agente with no objetivo)
+      // used to become a confirmation card, and the field was only checked inside
+      // run() after the user confirmed. Report that nothing was registered so the
+      // model fixes the call in the same turn, instead of confirming "(no objective)".
+      if (!opts.confirmationPreview && !opts.restoreDescriptor && Array.isArray(tool.parameters?.required)) {
+        const isBlank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+        const missing = tool.parameters.required.filter(k => isBlank(args?.[k]));
+        if (missing.length) return `NÃO registrei o pedido: ${missing.length > 1 ? 'faltam os parâmetros obrigatórios' : 'falta o parâmetro obrigatório'} ${missing.map(k => `"${k}"`).join(', ')}. Corrija e chame a tool de novo (não peça confirmação de algo que não foi registrado). Nenhuma ação foi executada.`;
+      }
       const restored = opts.restoreDescriptor && typeof tool.restoreConfirmation === 'function'
         ? await tool.restoreConfirmation(args, opts.restoreDescriptor) : null;
       // Dynamically-named tool has no sentence in describe(): it describes the
