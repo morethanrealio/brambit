@@ -19,7 +19,6 @@ const {withConfirmationReceipt}=await import('../web/channel-confirmation.mjs');
 const {gateTool}=await import('../web/confirm.mjs');
 const {codingPolicySnapshot,codingControlIntent}=await import('../web/coding-jobs.mjs');
 const {migrateCodingConfirmation}=await import('../web/confirmation-recovery.mjs');
-const {handleRoutinePause,routinePauseIntent}=await import('../web/routine-control.mjs');
 const source=readFileSync(new URL('../web/server.mjs',import.meta.url),'utf8');
 const start=source.indexOf('async function runConversationInThread('),end=source.indexOf('// Cooldown for the no-credit emergency turn',start);
 assert.ok(start>0&&end>start);
@@ -29,7 +28,7 @@ async function fixture(t) {
   const state={agent:{id:f.scope.agentId},thread:{id:f.scope.threadId,agent_id:f.scope.agentId,history:[]},effects:[],modelTurns:0,cancelled:0,resumes:[]};
   const tool={name:'editar_rotina',run:async args=>{state.effects.push(args);return {ok:true};}};
   const deps={...sessions,...flow,withConfirmationReceipt,codingPolicySnapshot,codingControlIntent,jevEnabled:()=>false,jevCodingControl:async()=>null,migrateCodingConfirmation,
-    handleRoutinePause,routinePauseIntent,getCreditStatus:async()=>({over:true}),listRoutinesForUser:denied,updateRoutine:denied,
+    getCreditStatus:async()=>({over:true}),listRoutinesForUser:denied,updateRoutine:denied,
     confirmationStore:f.store,confirmationRecovery:{continueCoding:async()=>{}},
     withThreadLock:async(_id,run)=>run(), getUserLocale:async()=>({language:'pt-BR'}), getThreadOwned:async()=>structuredClone(state.thread),getAgentOwned:async()=>state.agent,
     saveThreadTurn:async(_id,_agent,data)=>{state.thread.history=data.history;},

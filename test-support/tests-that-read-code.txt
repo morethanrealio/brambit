@@ -45,7 +45,6 @@ tests/recoverable-app-integration.test.mjs
 tests/reminder-channel.test.mjs
 tests/reminder-reconciliation.test.mjs
 tests/revision-aware-build-loop.test.mjs
-tests/routine-control.test.mjs
 tests/routine-delivery.test.mjs
 tests/routine-email-contract.test.mjs
 tests/routine-execution.test.mjs
