@@ -127,7 +127,7 @@ test('separate contacts: one contact\'s history and notes don\'t reach another, 
   assert.ok(JSON.stringify(m2.chamadas[1].messages).includes('M-ANA'));
 });
 
-test('the phone number is not stored in the clear in the database; only the owner turns support on', async (t) => {
+test('the phone number and the notes are not stored in the clear in the database; only the owner turns support on', async (t) => {
   const { db, store, dono, outro, ag } = await montar(t);
   assert.equal(await store.configurar(ag, outro, { ativo: true }), null);
   assert.equal(await store.agente(ag), null);
@@ -137,6 +137,13 @@ test('the phone number is not stored in the clear in the database; only the owne
   assert.ok(!JSON.stringify(rows).includes('987654321'));
   assert.equal((await store.contato(ag, 'whatsapp', '5511987654321')).endereco, '5511987654321');
   assert.equal((await db.query('SELECT count(*)::int n FROM mtr_harness.public_contacts')).rows[0].n, 1);
+  const c = await store.contato(ag, 'whatsapp', '5511987654321');
+  await store.lembrar(c.id, 'email', 'ana.nota@example.com');
+  assert.ok(!JSON.stringify((await db.query('SELECT * FROM mtr_harness.public_contact_state')).rows).includes('ana.nota'));
+  // A note saved in plain text before the encryption still reads.
+  await db.query(`INSERT INTO mtr_harness.public_contact_state (contact_id, chave, valor) VALUES ($1, 'old', 'v1: plain text')`, [c.id]);
+  assert.deepEqual(await store.estado(c.id), { old: 'v1: plain text', email: 'ana.nota@example.com' });
+  assert.equal((await store.exportar(c.id)).anotacoes.find((n) => n.chave === 'email').valor, 'ana.nota@example.com');
   // Turned off by the owner: does not respond at all (the channel follows today's flow).
   await store.configurar(ag, outro, { ativo: false });
   assert.equal((await store.agente(ag)).ativo, true);

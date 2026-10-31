@@ -13,6 +13,7 @@ export const ACTIVITY_ACTIONS = [
   'conversation_opened', 'contact_exported', 'contact_blocked', 'contact_unblocked', 'contact_deleted',
   'settings_changed', 'web_key_created', 'text_changed', 'text_restored',
   'area_created', 'assistant_added', 'assistant_removed', 'member_invited', 'member_removed', 'events_exported',
+  'profiles_exported',
 ];
 
 // After clientAreaSchema: a line points to an area.

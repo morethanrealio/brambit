@@ -45,6 +45,12 @@
   .ct.sel{border-color:var(--accent2);background:#fbf2e9;}
   .ct .end{font-weight:600;font-size:14.5px;}
   .ct .meta{font-size:12.5px;color:var(--mut);}
+  .ct .prof{font-size:12.5px;margin-top:2px;}
+  .pfilter{margin-bottom:12px;}
+  .pfilter .inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .pfilter select{flex:1;min-width:140px;width:auto;}
+  .ficha{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:14px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;}
+  .ficha .k{color:var(--mut);}
   .tag{display:inline-block;font-size:11.5px;border-radius:6px;padding:0 6px;margin-left:6px;background:var(--line2);color:var(--mut);}
   .tag.blq{background:#f6dcd2;color:var(--err);}
   .conversa{max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
@@ -256,6 +262,14 @@
   <div class="grid hidden" id="atendGrid" data-tab-panel="conversations">
     <div class="card">
       <h2 data-i18n="public_service_page.contacts">Contacts</h2>
+      <div id="profileFilter" class="pfilter hidden">
+        <label id="pfLabel" for="pfField" data-i18n="public_service_page.profile_filter">Filter by profile</label>
+        <div class="inline">
+          <select id="pfField"></select>
+          <select id="pfValue" class="hidden" aria-labelledby="pfLabel"></select>
+          <a class="btn ghost hidden" id="profilesCsv" href="#" download data-i18n="public_service_page.profile_download">Download spreadsheet (CSV)</a>
+        </div>
+      </div>
       <div id="contatos" class="contatos"></div>
       <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="public_service_page.load_more">Load more</button></div>
     </div>
@@ -263,6 +277,10 @@
       <h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2>
       <div id="convVazia" class="vazio" data-i18n="public_service_page.pick_contact">Pick a contact to see the conversation.</div>
       <div id="convBox" class="hidden">
+        <div id="convProfile" class="hidden">
+          <h3 data-i18n="public_service_page.profile">Profile</h3>
+          <div class="ficha" id="ficha"></div>
+        </div>
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
         <div id="conversa" class="conversa"></div>
         <div id="convMetrics" class="hidden">
@@ -375,7 +393,7 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('promptMsg'), ''); msg($('webChaveMsg'), '');
-    fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
+    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
 
@@ -487,6 +505,15 @@
     });
     cards.classList.toggle('hidden', !cards.firstChild);
   }
+  var profileNumber = new Intl.NumberFormat(document.documentElement.lang || undefined);
+  function profileValue(f){ return typeof f.value === 'number' ? profileNumber.format(f.value) : [].concat(f.value).join(', '); }
+  // The person's profile above the conversation; hidden when the plugin gives none.
+  function drawProfile(c){
+    var box = $('ficha'), fields = c.profile || [];
+    box.textContent = '';
+    fields.forEach(function(f){ box.appendChild(el('div', 'k', f.label)); box.appendChild(el('div', null, profileValue(f))); });
+    $('convProfile').classList.toggle('hidden', !fields.length);
+  }
   // One conversation's cards, under it; nothing when the plugin has none.
   function loadContactMetrics(c){
     $('convMetrics').classList.add('hidden');
@@ -565,14 +592,50 @@
   }
   $('activityMore').addEventListener('click', function(){ loadActivity(true); });
 
+  // The profile filter: the fields and values the contacts have; the list and the
+  // spreadsheet follow what is picked. Hidden while the plugin gives no profile.
+  var PROFILES = '/api/public-support/profiles', profileFields = [];
+  function option(value, text){ var o = el('option', null, text); o.value = value; return o; }
+  function profileQuery(){
+    var f = $('pfField').value;
+    return f ? '&field=' + encodeURIComponent(f) + '&value=' + encodeURIComponent($('pfValue').value) : '';
+  }
+  function updateProfilesCsv(){
+    $('profilesCsv').href = '/api/public-support/profiles.csv?agent=' + encodeURIComponent(agenteAtual.agentId)
+      + '&lang=' + encodeURIComponent(document.documentElement.lang) + profileQuery();
+  }
+  function loadProfileFields(){
+    var id = agenteAtual.agentId;
+    profileFields = []; $('pfField').textContent = ''; $('pfValue').textContent = '';
+    $('pfValue').classList.add('hidden'); $('profileFilter').classList.add('hidden');
+    pedir(PROFILES + '?agent=' + encodeURIComponent(id) + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
+      if (agenteAtual.agentId !== id || $('pfField').value) return;
+      profileFields = j.fields || [];
+      $('pfField').appendChild(option('', t('profile_filter_all')));
+      profileFields.forEach(function(f){ $('pfField').appendChild(option(f.label, f.label)); });
+      $('profilesCsv').classList.toggle('hidden', !canEdit());
+      $('profileFilter').classList.toggle('hidden', !profileFields.length);
+      updateProfilesCsv();
+    }).catch(function(){});
+  }
+  function reloadContacts(){ fecharConversa(); contatos = []; $('contatos').textContent = ''; updateProfilesCsv(); carregarContatos(); }
+  $('pfField').addEventListener('change', function(){
+    var label = $('pfField').value, field = profileFields.filter(function(f){ return f.label === label; })[0];
+    $('pfValue').textContent = '';
+    (field ? field.values : []).forEach(function(v){ $('pfValue').appendChild(option(v.value, v.value + ' (' + profileNumber.format(v.count) + ')')); });
+    $('pfValue').classList.toggle('hidden', !field);
+    reloadContacts();
+  });
+  $('pfValue').addEventListener('change', reloadContacts);
+
   function carregarContatos(){
     var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;
-    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + (antes ? '&antes=' + encodeURIComponent(antes) : '');
+    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + '&lang=' + encodeURIComponent(document.documentElement.lang) + profileQuery() + (antes ? '&antes=' + encodeURIComponent(antes) : '');
     return pedir(q).then(function(j){
       var novos = j.contatos || []; contatos = contatos.concat(novos);
       novos.forEach(desenharContato);
       $('maisContatos').classList.toggle('hidden', novos.length < 100);
-      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', t('no_contacts')));
+      if (!contatos.length) $('contatos').appendChild(el('div', 'vazio', t(profileQuery() ? 'profile_filter_none' : 'no_contacts')));
     }).catch(function(e){ $('contatos').appendChild(el('div', 'msg err', e.message)); });
   }
   $('maisContatos').addEventListener('click', carregarContatos);
@@ -583,6 +646,8 @@
     else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
     d.appendChild(who);
     d.appendChild(el('div', 'meta', t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens })));
+    // The plugin's profile of the person, in one line under the contact.
+    if ((c.profile || []).length) d.appendChild(el('div', 'prof', c.profile.map(function(f){ return profileValue(f); }).join(' · ')));
     d.addEventListener('click', function(){ abrirConversa(c); });
     $('contatos').appendChild(d);
   }
@@ -597,6 +662,7 @@
     $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');
     $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
     carregarMensagens(true);
+    drawProfile(c);
     loadContactMetrics(c);
   }
   function carregarMensagens(primeira){

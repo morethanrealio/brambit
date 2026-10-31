@@ -9,7 +9,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
 const { createPublicoStore, createAtendimentoPublico } = await import('../web/extensions/public-support/public-support.mjs');
-const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
+const { registrarRotasDoDono, AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createPublicWebStore } = await import('../web/extensions/public-support/public-web.mjs');
 const { createPromptStore } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { createClientAreaStore, registerClientAreaRoutes, panelScope, CLIENT_AREAS_PATH } = await import('../web/extensions/public-support/client-areas.mjs');
@@ -55,11 +55,11 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const send = (res, status, body, headers = {}) => Object.assign(res, { status, body, headers });
   const fail = (res, st, msg, e) => { throw e; };
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
-    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, activity });
+    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles, activity });
   registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
-    const res = { setHeader() {} };
+    const res = { setHeader() {}, writeHead(status, headers) { Object.assign(this, { status, headers }); }, end(body) { this.body = body; } };
     await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => who && { id: who } });
     return res;
   };
@@ -274,6 +274,65 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.equal((await get(viewerB, agA, 30)).status, 404, 'another area');
   assert.equal((await get(viewerB, agB, 7)).body.total.conversations, 1, 'a viewer sees its own');
   assert.equal((await get(adminA, agA, 8)).status, 400);
+});
+
+test('profile: the plugin reads each contact\'s notes into fields on the contact list; its technical notes and malformed fields stay out', async (t) => {
+  const asked = [];
+  let down = false;
+  const s = await setup(t, { ganchos: { async contactProfiles(q) {
+    asked.push(q);
+    if (down) throw Error('plugin down');
+    return Object.fromEntries(q.contacts.map((c) => [c.id, [{ label: ' Customer ', value: c.notes.kind === 'pro' ? 'Professional' : 'Home' },
+      { label: 'Skin', value: c.notes.skin }, { label: 'Visits', value: 3 }, { label: '', value: 'x' }, { label: 'Object', value: {} }]]));
+  } } });
+  const { ask, store, owner, adminA, viewerB, agA, agB } = s;
+  const { contactA, contactB } = await twoClients(s);
+  await store.lembrar(contactA, 'kind', 'pro');
+  await store.lembrar(contactA, 'skin', 'oily');
+  await store.lembrar(contactA, 'search_1', 'internal');
+
+  const list = await ask(adminA, 'GET', `/api/publico/contatos?agente=${agA}&lang=pt-br`);
+  assert.deepEqual(list.body.contatos[0].profile, [{ label: 'Customer', value: 'Professional' }, { label: 'Skin', value: 'oily' }, { label: 'Visits', value: 3 }]);
+  assert.ok(!JSON.stringify(list.body).includes('internal'), 'the notes themselves never reach the screen');
+  assert.deepEqual(asked.at(-1), { agentId: agA, language: 'pt-BR', contacts: [{ id: contactA, notes: { kind: 'pro', search_1: 'internal', skin: 'oily' } }] });
+  assert.deepEqual((await ask(viewerB, 'GET', `/api/publico/contatos?agente=${agB}`)).body.contatos.map((c) => [c.id, c.profile]),
+    [[contactB, [{ label: 'Customer', value: 'Home' }, { label: 'Visits', value: 3 }]]], 'a field without a value is left out');
+  assert.equal((await ask(viewerB, 'GET', `/api/publico/contatos?agente=${agA}`)).status, 404);
+  down = true;
+  const without = await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}`);
+  assert.deepEqual(without.body.contatos.map((c) => [c.id, c.profile]), [[contactA, []]], 'a broken plugin leaves the list as it was');
+});
+
+test('profile filter and spreadsheet: a field\'s value, or one item of a list, picks the contacts; only who can edit downloads them, and it is logged', async (t) => {
+  const s = await setup(t, { ganchos: { async contactProfiles(q) {
+    return Object.fromEntries(q.contacts.map((c) => [c.id, [{ label: 'Skin', value: c.notes.skin }, { label: 'Concerns', value: c.notes.concerns?.split(',') }]]));
+  } } });
+  const { ask, store, db, areas, adminA, viewerB, agA, agB } = s;
+  const { contactA } = await twoClients(s);
+  const second = await s.contact(agA, '5511000000003');
+  const third = await s.contact(agA, '5511000000004');
+  await store.lembrar(contactA, 'skin', 'oily'); await store.lembrar(contactA, 'concerns', 'spots,acne');
+  await store.lembrar(second, 'skin', 'dry'); await store.lembrar(second, 'concerns', 'acne');
+  const ids = async (who, q) => (await ask(who, 'GET', `/api/publico/contatos?agente=${agA}${q}`)).body.contatos.map((c) => c.id);
+
+  assert.deepEqual(await ids(adminA, ''), [third, second, contactA]);
+  assert.deepEqual(await ids(adminA, '&field=Skin&value=oily'), [contactA]);
+  assert.deepEqual(await ids(adminA, '&field=Concerns&value=acne'), [second, contactA]);
+  assert.deepEqual(await ids(adminA, '&field=Concerns&value=acne&antes=' + encodeURIComponent((await store.contatosDoDono(s.owner, agA)).find((c) => c.id === second).ultimaEm.toISOString())), [contactA]);
+  assert.deepEqual((await ask(adminA, 'GET', `${PROFILES_PATH}?agent=${agA}`)).body.fields, [
+    { label: 'Skin', values: [{ value: 'dry', count: 1 }, { value: 'oily', count: 1 }] },
+    { label: 'Concerns', values: [{ value: 'acne', count: 2 }, { value: 'spots', count: 1 }] }]);
+
+  const csv = await ask(adminA, 'GET', `${PROFILES_CSV_PATH}?agent=${agA}&field=Concerns&value=acne`);
+  assert.equal(csv.status, 200);
+  assert.deepEqual(csv.body.replace(/^\ufeff/, '').trim().split('\r\n').map((l) => l.split('","').at(0) + '|' + l.split('","').slice(-2).join('|')), [
+    '"contact|Skin|Concerns"', '"5511000000003|dry|acne"', '"5511000000001|oily|spots, acne"']);
+  assert.deepEqual((await db.query(`SELECT action, detail FROM mtr_harness.public_support_activity WHERE action = 'profiles_exported'`)).rows,
+    [{ action: 'profiles_exported', detail: { rows: 2, filtered: true } }]);
+  assert.equal((await ask(viewerB, 'GET', `${PROFILES_CSV_PATH}?agent=${agB}`)).status, 403, 'a viewer reads the list but downloads nothing');
+  assert.equal((await ask(viewerB, 'GET', `${PROFILES_PATH}?agent=${agB}`)).status, 200);
+  assert.equal((await ask(viewerB, 'GET', `${PROFILES_PATH}?agent=${agA}`)).status, 404);
+  assert.ok([PROFILES_PATH, PROFILES_CSV_PATH].every((p) => panelScope(areas).api('GET', p)), 'a panel account reaches both');
 });
 
 test('access log: the owner sees every line, an area\'s admin only its area\'s, a viewer none; never what was said', async (t) => {
