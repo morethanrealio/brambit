@@ -69,10 +69,11 @@ export function camposDaConfig(b = {}) {
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
 // metricCards({agentId, contactId?, days, from, to, language}) → the plugin's cards (public-support.mjs); language = the page's (?lang).
+// contactProfiles({agentId, language, contacts: [{id, notes}]}) → the plugin's profile of each contact (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], activity = null, events = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], contactProfiles = async () => ({}), activity = null, events = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -175,7 +176,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
-    return send(res, 200, { contatos: await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando }) });
+    const contatos = await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando });
+    // Each person's profile, as the plugin reads their notes (in the page's language).
+    const language = normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
+    const notes = await store.notesOf(contatos.map((c) => c.id));
+    const profiles = await contactProfiles({ agentId: acc.agentId, language, contacts: contatos.map((c) => ({ id: c.id, notes: notes[c.id] })) });
+    return send(res, 200, { contatos: contatos.map((c) => ({ ...c, profile: profiles[c.id] || [] })) });
   });
 
   rota('GET', '/api/publico/conversa', async ({ res, url, user }) => {

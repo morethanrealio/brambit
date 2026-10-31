@@ -45,6 +45,9 @@
   .ct.sel{border-color:var(--accent2);background:#fbf2e9;}
   .ct .end{font-weight:600;font-size:14.5px;}
   .ct .meta{font-size:12.5px;color:var(--mut);}
+  .ct .prof{font-size:12.5px;margin-top:2px;}
+  .ficha{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:14px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;}
+  .ficha .k{color:var(--mut);}
   .tag{display:inline-block;font-size:11.5px;border-radius:6px;padding:0 6px;margin-left:6px;background:var(--line2);color:var(--mut);}
   .tag.blq{background:#f6dcd2;color:var(--err);}
   .conversa{max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
@@ -263,6 +266,10 @@
       <h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2>
       <div id="convVazia" class="vazio" data-i18n="public_service_page.pick_contact">Pick a contact to see the conversation.</div>
       <div id="convBox" class="hidden">
+        <div id="convProfile" class="hidden">
+          <h3 data-i18n="public_service_page.profile">Profile</h3>
+          <div class="ficha" id="ficha"></div>
+        </div>
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
         <div id="conversa" class="conversa"></div>
         <div id="convMetrics" class="hidden">
@@ -487,6 +494,15 @@
     });
     cards.classList.toggle('hidden', !cards.firstChild);
   }
+  var profileNumber = new Intl.NumberFormat(document.documentElement.lang || undefined);
+  function profileValue(f){ return typeof f.value === 'number' ? profileNumber.format(f.value) : f.value; }
+  // The person's profile above the conversation; hidden when the plugin gives none.
+  function drawProfile(c){
+    var box = $('ficha'), fields = c.profile || [];
+    box.textContent = '';
+    fields.forEach(function(f){ box.appendChild(el('div', 'k', f.label)); box.appendChild(el('div', null, profileValue(f))); });
+    $('convProfile').classList.toggle('hidden', !fields.length);
+  }
   // One conversation's cards, under it; nothing when the plugin has none.
   function loadContactMetrics(c){
     $('convMetrics').classList.add('hidden');
@@ -567,7 +583,7 @@
 
   function carregarContatos(){
     var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;
-    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + (antes ? '&antes=' + encodeURIComponent(antes) : '');
+    var q = '/api/publico/contatos?agente=' + encodeURIComponent(agenteAtual.agentId) + '&lang=' + encodeURIComponent(document.documentElement.lang) + (antes ? '&antes=' + encodeURIComponent(antes) : '');
     return pedir(q).then(function(j){
       var novos = j.contatos || []; contatos = contatos.concat(novos);
       novos.forEach(desenharContato);
@@ -583,6 +599,8 @@
     else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
     d.appendChild(who);
     d.appendChild(el('div', 'meta', t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens })));
+    // The plugin's profile of the person, in one line under the contact.
+    if ((c.profile || []).length) d.appendChild(el('div', 'prof', c.profile.map(function(f){ return profileValue(f); }).join(' · ')));
     d.addEventListener('click', function(){ abrirConversa(c); });
     $('contatos').appendChild(d);
   }
@@ -597,6 +615,7 @@
     $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');
     $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
     carregarMensagens(true);
+    drawProfile(c);
     loadContactMetrics(c);
   }
   function carregarMensagens(primeira){

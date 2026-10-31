@@ -35,6 +35,7 @@ export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
 export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
+export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
 // The avatar on a website (public-avatar.mjs), off until the owner turns it on.
 export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
 export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
@@ -350,6 +351,17 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       });
     },
 
+    // Several contacts' notes at once ({contactId: {key: value}}), for the plugin's
+    // profile of each one on the owner's screen.
+    async notesOf(contactIds) {
+      if (!contactIds.length) return {};
+      const { rows } = await pool.query(
+        `SELECT contact_id, chave, valor FROM ${S}.public_contact_state WHERE contact_id = ANY($1::uuid[]) ORDER BY chave`, [contactIds]);
+      const out = Object.fromEntries(contactIds.map((id) => [id, {}]));
+      for (const r of rows) out[r.contact_id][r.chave] = r.valor;
+      return out;
+    },
+
     async estado(contatoId) {
       const { rows } = await pool.query(
         `SELECT chave, valor FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
@@ -542,6 +554,12 @@ export function retainedByTool(tools) {
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
+//   contactProfiles({agentId, language, contacts: [{id, notes}]}) → {[contactId]: [{label, value}]}:
+//    what the owner's screen shows about each person (kind of customer, skin
+//    type...), built from that contact's notes. The plugin decides which notes are
+//    profile and how they read, so its technical notes stay hidden. value is short
+//    text or a number; up to PROFILE_FIELDS_MAX fields per contact; slower than
+//    METRIC_CARDS_WAIT_MS = no profile this time.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -572,17 +590,22 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     return { written: typeof d?.written === 'string' ? d.written : '', spoken: typeof d?.spoken === 'string' ? d.spoken : null };
   }
 
-  // The plugin's cards for the metrics, only the well-formed ones; a slow hook
-  // does not hold the owner's screen.
-  async function metricCards(q) {
-    if (typeof ganchos?.metricCards !== 'function') return [];
+  // A hook the owner's screen waits for: a slow one does not hold it (null, as if it failed).
+  async function screenHook(name, ctx) {
     let timer;
     const late = new Promise((r) => { timer = setTimeout(() => r('late'), METRIC_CARDS_WAIT_MS); timer.unref?.(); });
-    const r = await Promise.race([gancho('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId }) : noEvents }), late]);
+    const r = await Promise.race([gancho(name, ctx), late]);
     clearTimeout(timer);
-    if (r === 'late') { log.error?.('[publico] gancho metricCards took too long'); return []; }
-    const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
-    const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    if (r === 'late') { log.error?.(`[publico] gancho ${name} took too long`); return null; }
+    return r;
+  }
+  const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  // The plugin's cards for the metrics, only the well-formed ones.
+  async function metricCards(q) {
+    if (typeof ganchos?.metricCards !== 'function') return [];
+    const r = await screenHook('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId }) : noEvents });
     const card = (c) => {
       const label = text(c?.label, 60);
       if (!label) return null;
@@ -594,6 +617,21 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       return value === null ? null : { label, value, ...(detail ? { detail } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
+  }
+
+  // The plugin's profile of each contact ({contactId: [{label, value}]}): only the
+  // well-formed fields of the contacts asked about; {} without the hook.
+  async function contactProfiles({ agentId, language, contacts }) {
+    if (typeof ganchos?.contactProfiles !== 'function' || !contacts.length) return {};
+    const r = await screenHook('contactProfiles', { agentId, language, contacts });
+    const out = {};
+    for (const { id } of contacts) {
+      const fields = (Array.isArray(r?.[id]) ? r[id] : [])
+        .map((f) => ({ label: text(f?.label, 40), value: number(f?.value) ?? text(f?.value, 60) }))
+        .filter((f) => f.label && f.value !== null).slice(0, PROFILE_FIELDS_MAX);
+      if (fields.length) out[id] = fields;
+    }
+    return out;
   }
 
   const filas = new Map(); // contact (assistant+channel+address) → turn in progress (1 per contact)
@@ -735,5 +773,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     });
   }
 
-  return { turno, registro, defaultTexts, metricCards };
+  return { turno, registro, defaultTexts, metricCards, contactProfiles };
 }

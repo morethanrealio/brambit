@@ -55,7 +55,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const send = (res, status, body, headers = {}) => Object.assign(res, { status, body, headers });
   const fail = (res, st, msg, e) => { throw e; };
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
-    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, activity });
+    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles, activity });
   registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
@@ -274,6 +274,33 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.equal((await get(viewerB, agA, 30)).status, 404, 'another area');
   assert.equal((await get(viewerB, agB, 7)).body.total.conversations, 1, 'a viewer sees its own');
   assert.equal((await get(adminA, agA, 8)).status, 400);
+});
+
+test('profile: the plugin reads each contact\'s notes into fields on the contact list; its technical notes and malformed fields stay out', async (t) => {
+  const asked = [];
+  let down = false;
+  const s = await setup(t, { ganchos: { async contactProfiles(q) {
+    asked.push(q);
+    if (down) throw Error('plugin down');
+    return Object.fromEntries(q.contacts.map((c) => [c.id, [{ label: ' Customer ', value: c.notes.kind === 'pro' ? 'Professional' : 'Home' },
+      { label: 'Skin', value: c.notes.skin }, { label: 'Visits', value: 3 }, { label: '', value: 'x' }, { label: 'Object', value: {} }]]));
+  } } });
+  const { ask, store, owner, adminA, viewerB, agA, agB } = s;
+  const { contactA, contactB } = await twoClients(s);
+  await store.lembrar(contactA, 'kind', 'pro');
+  await store.lembrar(contactA, 'skin', 'oily');
+  await store.lembrar(contactA, 'search_1', 'internal');
+
+  const list = await ask(adminA, 'GET', `/api/publico/contatos?agente=${agA}&lang=pt-br`);
+  assert.deepEqual(list.body.contatos[0].profile, [{ label: 'Customer', value: 'Professional' }, { label: 'Skin', value: 'oily' }, { label: 'Visits', value: 3 }]);
+  assert.ok(!JSON.stringify(list.body).includes('internal'), 'the notes themselves never reach the screen');
+  assert.deepEqual(asked.at(-1), { agentId: agA, language: 'pt-BR', contacts: [{ id: contactA, notes: { kind: 'pro', search_1: 'internal', skin: 'oily' } }] });
+  assert.deepEqual((await ask(viewerB, 'GET', `/api/publico/contatos?agente=${agB}`)).body.contatos.map((c) => [c.id, c.profile]),
+    [[contactB, [{ label: 'Customer', value: 'Home' }, { label: 'Visits', value: 3 }]]], 'a field without a value is left out');
+  assert.equal((await ask(viewerB, 'GET', `/api/publico/contatos?agente=${agA}`)).status, 404);
+  down = true;
+  const without = await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}`);
+  assert.deepEqual(without.body.contatos.map((c) => [c.id, c.profile]), [[contactA, []]], 'a broken plugin leaves the list as it was');
 });
 
 test('access log: the owner sees every line, an area\'s admin only its area\'s, a viewer none; never what was said', async (t) => {

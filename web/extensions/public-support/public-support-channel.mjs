@@ -101,7 +101,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas: clientAreas ? areas : null,
-      metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, activity, events });
+      metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, contactProfiles: atendimento.contactProfiles, activity, events });
     if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerClickRoute({ rotas, events, send, log });

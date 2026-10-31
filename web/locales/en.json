@@ -1188,6 +1188,7 @@
     "metric_events_csv": "Download events (CSV)",
     "metric_funnel_rate": "{rate} of the step before",
     "metric_conversation": "In this conversation",
+    "profile": "Profile",
     "metric_step_done": "Done",
     "metric_step_not_done": "Not done",
     "areas": "Client areas",

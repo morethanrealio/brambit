@@ -1188,6 +1188,7 @@
     "metric_events_csv": "Baixar eventos (planilha)",
     "metric_funnel_rate": "{rate} da etapa anterior",
     "metric_conversation": "Nesta conversa",
+    "profile": "Perfil",
     "metric_step_done": "Feito",
     "metric_step_not_done": "Não feito",
     "areas": "Áreas de clientes",
