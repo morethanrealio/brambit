@@ -63,7 +63,13 @@ export function createRoutineExecutor(store,{heartbeatMs=30_000,log=console}={})
    if(closing)throw Error('Shutdown before start');
    await prepare();await step('generating');
    heartbeat=setInterval(()=>{store.phase(r,job.token,job.phase).then(ok=>{if(!ok)job.lost=true;}).catch(()=>{job.lost=true;});},heartbeatMs);heartbeat.unref?.();
-   const text=await run(r);const typed=text?.type==='flight-monitor-v1'||text?.type==='curation-v1';const body=typed?text.text:text;
+   const text=await run(r);const typed=text?.type==='flight-monitor-v1'||text?.type==='curation-v1';
+   // Accept a plain string, a typed object (flight-monitor/curation), OR a generic
+   // envelope {text, contentStatus} (a salvaged/cut routine run): read its text as
+   // the body so contentStatus is honoured and delivery still gets a string. A
+   // generic object with no string `text` is still malformed and must throw.
+   const body=text!=null&&typeof text==='object'?text.text:text;
+   if(text!=null&&typeof text==='object'&&!typed&&typeof body!=='string')throw Error('Invalid routine result');
    if(body!=null&&typeof body!=='string')throw Error('Invalid routine result');
    const declaredContent=['complete','partial','failed'].includes(text?.contentStatus)
     ? text.contentStatus

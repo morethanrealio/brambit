@@ -133,7 +133,7 @@ import { SEARCH_PAGINATION_RULE } from './search-pagination.mjs';
 import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './image-context.mjs';
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
-import { routineExecutionFrame, routineFinalText, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
+import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';
 import { createEmailResearchSession } from './email-research-session.mjs';
@@ -6796,7 +6796,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       data: { kind: 'chat', threadId: thread.id, agentId: agent.id },
     }).catch(() => {});
   }
-  return { text, attachments, deviceAction, ...(curationResult ? {curation:{
+  return { text, attachments, deviceAction, termination, language: idiomaResposta, ...(curationResult ? {curation:{
     urls:curationResult.urls.filter(url=>text.includes(url)),coverageSatisfied:curationResult.coverageSatisfied,executionStatus:curationResult.executionStatus,
     audit:curationResult.audit,
   }} : {}) };
@@ -6955,7 +6955,7 @@ async function runRoutine(r, { agendada = false } = {}) {
   };
   return result.templateText !== undefined
     ? {type:'flight-monitor-v1',text:result.text,templateText:result.templateText,...(result.deliver===false?{deliver:false}:{})}
-    : result.text;
+    : routineCutResult(result.text, result.termination, result.language);
 }
 
 // Writes a proactive message (routine/broadcast) into the thread that this
@@ -10834,7 +10834,7 @@ async function atenderRequest(req, res) {
     if (!r) return send(res, 404, { error: 'server.routine_not_found' });
     try {
       const {text,delivery}=await executeRoutineNow(r);
-      return send(res, 200, { ok: true, preview: ['flight-monitor-v1','curation-v1'].includes(text?.type) ? text.text : text, delivered: delivery ? delivery.status==='accepted' : mailEnabled(), ...(delivery?{delivery}:{}) });
+      return send(res, 200, { ok: true, preview: text?.text ?? text, delivered: delivery ? delivery.status==='accepted' : mailEnabled(), ...(delivery?{delivery}:{}) });
     } catch (e) { if(e.code==='ROUTINE_BUSY')return send(res,409,{error:e.message}); return fail(res, 500, 'server.could_not_complete_routine', e); }
   }
 
