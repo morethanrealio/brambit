@@ -57,3 +57,23 @@ export function routineFinalText(text, { kind, completed = false, failed = false
   })[tagIdioma(language)] || 'Não pude confirmar que não há novidades: esta execução não tem uma verificação bem-sucedida ou encontrou erro/limite.';
   return ''; // The mandatory coverage notice is applied afterward, including here.
 }
+
+// A routine turn the loop had to salvage (loop_break / step limit / truncated
+// output) did not finish cleanly: with no clean finish the model tends to echo a
+// previous delivery, and the text can be stale or incomplete (RSI 2026-10-27: a
+// cut delivered the previous week's shopping list as this week's review, recorded
+// as complete). On a cut we keep the greeting and the result the model produced,
+// append a plain honest note at the end, and return an envelope the executor
+// records as 'partial' (never 'complete'), so a cut is never passed off as a
+// finished run. `termination` is null on a clean finish (nothing changes).
+const ROUTINE_CUT_NOTE_PT = 'Tive um problema nesta execução. Se a resposta estiver incompleta me avisa que eu faço uma dupla checagem.';
+const ROUTINE_CUT_NOTE = {
+  en: 'I had a problem in this run. If the answer looks incomplete, let me know and I will double-check it.',
+  es: 'Tuve un problema en esta ejecución. Si la respuesta parece incompleta, avísame y hago una doble verificación.',
+};
+export function routineCutResult(text, termination, language) {
+  if (!termination) return text;
+  const note = ROUTINE_CUT_NOTE[tagIdioma(language)] || ROUTINE_CUT_NOTE_PT;
+  const body = String(text ?? '').trim();
+  return { text: body ? `${body}\n\n${note}` : note, contentStatus: 'partial' };
+}
