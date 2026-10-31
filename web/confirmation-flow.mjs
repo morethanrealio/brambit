@@ -542,7 +542,7 @@ async function handleGroup(session, rows, {decision, viaReaction, inputId, resol
       } finally {active.delete(row.id);}
     }
     await session.refresh();
-    return {text:replies.join('\n\n'),attachments};
+    return {text:replies.join('\n\n'),attachments,executed:true};
   } finally {clearInterval(timer);}
 }
 
@@ -653,7 +653,7 @@ async function resolveConfirmation(session, { message, target, viaReaction = fal
     // The SQL receipt is already final. A continuation queue failure must not
     // relabel that effect as uncertain; the durable recovery will retry enqueue.
     await afterComplete(session.rows.find(r => r.id === row.id)).catch(() => {});
-    return { text, attachments };
+    return { text, attachments, executed: true };
   } catch {
     const text = textosConfirmacao(row.language).uncertain(row.label);
     await session.store.finish(session.scope, claim, { text }, 'uncertain').catch(() => {});
