@@ -216,6 +216,16 @@ export class ToolRegistry {
   async run(name, args) {
     const t = this.map.get(name);
     if (!t) return `ERRO: tool desconhecida "${name}"`;
+    // A call missing a required parameter must not run degraded: the model gets
+    // an instructive error naming the missing field so it corrects on the next
+    // step, instead of calling with empty args until the repetition guard cuts
+    // the turn (RSI 2026-10-27: ler_espaco called with no `espaco` ran degraded,
+    // the model repeated the empty call and the turn was cut at loop_break).
+    if (Array.isArray(t.parameters?.required)) {
+      const isBlank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+      const missing = t.parameters.required.filter(k => isBlank(args?.[k]));
+      if (missing.length) return `ERRO: ${missing.length > 1 ? 'faltam os parâmetros obrigatórios' : 'falta o parâmetro obrigatório'} ${missing.map(k => `"${k}"`).join(', ')} para "${name}". Preencha e chame de novo, ou diga que não consegue; não repita a chamada igual. Nenhuma ação foi executada.`;
+    }
     try { return await t.run(args ?? {}); }
     catch (e) {
       if(e?.constructor?.name==='ExecutionCreditError' && e.creditStop) return {creditStop:e.creditStop,text:e.creditStopText,unavailable:true};
