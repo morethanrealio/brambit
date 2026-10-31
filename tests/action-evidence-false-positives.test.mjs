@@ -106,3 +106,25 @@ test('a proven memory save keeps the model words and adds no receipt', () => {
   // Without the save, "anotei" is still removed.
   cut('Anotei que seu aniversário é 12/03.');
 });
+
+// A failed editar_lista whose retry succeeds in the same turn must not leave the
+// "A ação não foi concluída" receipt next to the success. The failure receipt's
+// subject is the list id (args.lista) and the success receipt's is the list
+// name, so they only join by the list id both now carry (RSI 2026-10-30).
+test('a list edit failure redone successfully in the same turn is suppressed', () => {
+  const listFail = j => j.toolResult({ name:'editar_lista', args:{ lista:'list-9f3a' } }, JSON.stringify({ ok:false }));
+  const listOk = j => j.toolResult({ name:'editar_lista', args:{ lista:'list-9f3a' } },
+    JSON.stringify({ ok:true, lista:{ id:'list-9f3a', nome:'Compras', versao:2, itens:[] } }));
+  const j = createActionJournal();
+  listFail(j); listOk(j);
+  const out = j.finish('Pronto, atualizei a lista.');
+  assert.doesNotMatch(out, /não foi concluída/i);
+  assert.doesNotMatch(out, /list-9f3a/);
+  // Not over-suppressed: a failure on one list is not hidden by a success on a
+  // different list (different id), so the match stays scoped to the same list.
+  const g = createActionJournal();
+  listFail(g);
+  g.toolResult({ name:'editar_lista', args:{ lista:'list-other' } },
+    JSON.stringify({ ok:true, lista:{ id:'list-other', nome:'Mercado', versao:1, itens:[] } }));
+  assert.match(g.finish(''), /não foi concluída/i);
+});

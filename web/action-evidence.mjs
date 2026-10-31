@@ -185,7 +185,8 @@ function receipt(name, args, out) {
     id:d?.id,target:d?.canal,at:d?.quando_legivel || d?.quando,inFlight:d?.inFlight===true,
     ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
   if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
-    state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',id:d?.lista?.id};
+    state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',
+    id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined)};
   const connector = connectorActionReceipt(name, args, d);
   // The confirmation gate refused the call before registering anything (a
   // preflight error such as a repository the assistant may not use): there is
@@ -451,9 +452,16 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // later in the turn is the redo, so that failure does not show either.
       const recreated = (e, i) => e.tool === 'editar_lembrete' && e.code === 'NOT_FOUND'
         && entries.slice(i + 1).some(l => l.tool === 'criar_lembrete' && l.state === 'scheduled');
+      // A failed list edit whose retry succeeds later in the turn is suppressed.
+      // The failure receipt's subject is the list id (args.lista) while the
+      // success receipt's is the list name, so subject matching never joined the
+      // two and the "A ação não foi concluída" line leaked next to the success.
+      // Both receipts now carry the list id, so match list redos by id.
+      const redoneLater = (e, i) => entries.slice(i + 1).some(l => l.family === e.family
+        && !['unknown','failed','pending'].includes(l.state)
+        && ((e.family === 'list' && e.id && l.id === e.id) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
       const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
-        && !(e.state === 'failed' && (recreated(e, i) || subjectKey(e) && entries.slice(i + 1).some(l => l.family === e.family
-          && subjectKey(l) === subjectKey(e) && !['unknown','failed','pending'].includes(l.state)))));
+        && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i))));
       // Only the server enables this after validating the routine's exact
       // protocol. A coverage/error notice appended after validation prevents
       // silence. The evidence stays in entries for persistence and metrics.
