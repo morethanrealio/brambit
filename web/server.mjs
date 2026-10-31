@@ -12,8 +12,9 @@ import { readBody, readRaw } from './http-body.mjs';
 import { createConfirmationRecovery, migrateCodingConfirmation } from './confirmation-recovery.mjs';
 import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
-import { handleRoutinePause, routinePauseIntent } from './routine-control.mjs';
 import { createStopRoutineTool } from './routine-stop.mjs';
+import { createRoutineSelect } from './routine-select.mjs';
+import { routineManagementIntent, routineManagementSystemNote } from './routine-credit-turn.mjs';
 import { presentPendingCards } from './pending-action-claims.mjs';
 import { createScheduledDelivery } from './scheduled-delivery.mjs';
 import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-delivery.mjs';
@@ -2246,23 +2247,10 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
       return wrapped;
     };
     const proceed = async () => {
-      // Stopping a routine without credit: the model doesn't even run, so the fixed control is the
-      // only way for the owner to stop a routine (case from 2026-09-25). With credit, the
-      // model decides (2026-09-28 eval: the rule paused "training routine A and B" and
-      // a conditional request; 24/28 vs 28/28 for the model alone).
-      // Citations/reactions and simple refusals still keep the confirmation flow going.
-      if (human && !opts.viaReaction && opts.confirmationTarget === undefined && agent.category !== 'grupo'
-        && routinePauseIntent(message,{hasPendingProposals:!!session?.pending().length,language:session?.language ?? 'pt-BR'})
-        && (await getCreditStatus(userId)).over) {
-        const control = await handleRoutinePause({message,userId,agent,language:session?.language,hasPendingProposals:!!session?.pending().length,
-          listRoutines:listRoutinesForUser,updateRoutine});
-        if (control) {
-          await saveThreadTurn(thread.id,agent.id,{baseHistory:fresh.history || [],
-            history:[...(fresh.history || []),{role:'user',content:message},{role:'assistant',content:control.text}],
-            summary:fresh.summary || '',userMsg:message,assistantMsg:control.text});
-          return finalize(control);
-        }
-      }
+      // Stopping a routine without credit is handled inside the turn now (the
+      // no-credit routine-management turn in runConversationTurn): over credit the
+      // model runs a single restricted turn with cancelar_rotina, replacing the old
+      // closed-grammar control. With credit the model decides as usual.
       let confirmationNote = null;
       if (human && session) {
         const resolveTool = proposal => runConversationTurn(agent, fresh, userId, proposal.source?.ownerText || '', {
@@ -2325,6 +2313,8 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
 // gets ONE extra emergency turn. See usage in the credit.over block below.
 const emergencyTurnCooldown = new Map();
 const EMERGENCY_COOLDOWN_MS = 6 * 3600_000; // 1 emergency turn every 6h per thread
+const routineMgmtTurnCooldown = new Map();
+const ROUTINE_MGMT_COOLDOWN_MS = 10 * 60_000; // 1 no-credit routine-management turn every 10 min per thread
 
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const baseHistory = structuredClone(thread.history || []);
@@ -2654,6 +2644,47 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         }
       } catch (e) {
         console.error('[emergência sem créditos] failed, falling back to the standard notice:', e?.message ?? e);
+      }
+    }
+    // ── No-credit routine-management turn ──
+    // Over credit the model never runs, so stopping a routine from chat used to go
+    // through a closed-grammar rule that only paused and missed phrasings like "para
+    // esse lembrete" (retired routine-control.mjs). We mirror the emergency turn: on a
+    // routine-management intent, run ONE short turn with only cancelar_rotina, at our
+    // cost (noBill), a low step cap and a per-thread cooldown. The model interprets the
+    // request, so pause, delete and loose phrasings now work with no balance. Pause runs
+    // right away; a permanent delete goes through the confirmation card, which is honored
+    // for free on the next turn by the already-confirmed-action path above.
+    const lastRoutineMgmt = routineMgmtTurnCooldown.get(thread.id) || 0;
+    if (kind !== 'routine' && kind !== 'cockpit' && !webhook && !viaReaction && agent.category !== 'grupo'
+      && Date.now() - lastRoutineMgmt > ROUTINE_MGMT_COOLDOWN_MS && routineManagementIntent(message)) {
+      routineMgmtTurnCooldown.set(thread.id, Date.now());
+      try {
+        const { routineCode, routineCadence, resolveRoutine } = createRoutineSelect({ userTz });
+        const mgmt = new ToolRegistry();
+        mgmt.add(gateTool(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }), thread.id));
+        const mgmtSystem = comIdioma(`${agent.system_prompt || ''}\n\n${routineManagementSystemNote(userLang)}`, userLang);
+        const r = await runAgent({
+          provider: (()=>{const p=makePrimaryProvider('robusto');return (p.forBillingPhase?p:wrapProvider(p)).forBillingPhase({kind:'routine_management',noBill:true});})(),
+          tools: mgmt, system: mgmtSystem, userInput: message,
+          history: thread.history || [], maxSteps: 6,
+        });
+        if (r?.text && r.text.trim()) {
+          const notaCreditos = `\n\n${semSaldo.notaEmergencia}`;
+          const mgmtReply = [r.text.trim() + notaCreditos, pendingCreditNotice, blockedAttachmentNotice].filter(Boolean).join('\n\n');
+          const history = [
+            ...(thread.history || []),
+            { role: 'user', content: message },
+            { role: 'assistant', content: mgmtReply },
+          ];
+          const title = (!thread.title || !thread.title.trim()) ? deriveTitle(message) : undefined;
+          await saveThreadTurn(thread.id, agent.id, { baseHistory,
+            history, summary: thread.summary || '', userMsg: message, assistantMsg: mgmtReply, title,
+          });
+          return { text: mgmtReply, attachments: [] };
+        }
+      } catch (e) {
+        console.error('[rotina sem créditos] management turn failed, falling back to the standard notice:', e?.message ?? e);
       }
     }
     // Persists the turn to the history (user's msg + this notice). Without this the
@@ -3869,45 +3900,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // one (a user's suggestion, 2026-08-30). That's why every routine gets a short, stable
   // CODE (uuid prefix, extended only on collision), which shows up in
   // listar_rotinas and which cancelar_rotina/editar_rotina accept as `id`.
-  const routineCode = (r, rows) => {
-    const id = String(r?.id || '');
-    let n = 4;
-    while (n < id.length && rows.filter((o) => String(o.id || '').slice(0, n) === id.slice(0, n)).length > 1) n += 2;
-    return id.slice(0, n);
-  };
-  const routineDiasLabel = (d) => routineDaysLabel(d);
-  const routineCadence = (r) => {
-    // The window end shows up in both modes: it's what the owner needs to see to know
-    // the routine has a deadline (so they don't go cancel it by hand thinking it's eternal).
-    const ate = r.repeat_until
-      ? ` até ${new Date(r.repeat_until).toLocaleString('pt-BR', { timeZone: userTz, dateStyle: 'short', timeStyle: 'short' })}`
-      : '';
-    if (r.repeat_every_min) return `a cada ${intervalLabel(r.repeat_every_min)}${ate}`;
-    return `${routineDiasLabel(r.days)} às ${routineTimeLabel(r.hour, r.minute)}${ate}`;
-  };
-  // Resolves WHICH routine the call means: by code (`id`, exact/prefix) or by
-  // title (contains). Returns { row } or { err } with an ACTIONABLE output: on
-  // ambiguity it lists the candidates with code + cadence + channel, so the owner
-  // can choose even when the titles are identical.
-  const resolveRoutine = (rows, { id, titulo, verbo, tool }) => {
-    const code = String(id || '').trim().toLowerCase().replace(/^#/, '');
-    if (code) {
-      const hits = rows.filter((r) => String(r.id || '').toLowerCase().startsWith(code));
-      if (!hits.length) return { err: `Não achei rotina com o código "${id}". Use listar_rotinas pra ver os códigos atuais.` };
-      if (hits.length > 1) return { err: `O código "${id}" bate com mais de uma rotina. Use o código inteiro que aparece no listar_rotinas.` };
-      return { row: hits[0] };
-    }
-    const q = String(titulo || '').trim().toLowerCase();
-    if (!q) return { err: `Me diga qual rotina ${verbo}: o título, ou o código (#) que aparece no listar_rotinas.` };
-    const matches = rows.filter((r) => String(r.title || '').toLowerCase().includes(q));
-    if (!matches.length) return { err: `Não achei rotina com "${titulo}". Use listar_rotinas pra ver os títulos.` };
-    if (matches.length === 1) return { row: matches[0] };
-    const opts = matches.map((m) => {
-      const canal = m.channel && m.channel !== 'none' ? `, entrega no ${m.channel}` : '';
-      return `• #${routineCode(m, rows)} — "${m.title}" (${routineCadence(m)}${canal})`;
-    }).join('\n');
-    return { err: `Achei mais de uma rotina com "${titulo}":\n${opts}\nPergunte pro dono qual é, descrevendo pela CADÊNCIA/canal (os títulos podem ser idênticos; ele não precisa ver o código). Quando ele escolher, chame ${tool} de novo passando \`id\` com o código dela.` };
-  };
+  const { routineCode, routineCadence, resolveRoutine } = createRoutineSelect({ userTz });
   // Lists the owner's routines (for them to review/adjust/cancel).
   registry.add({
     name: 'listar_rotinas',
