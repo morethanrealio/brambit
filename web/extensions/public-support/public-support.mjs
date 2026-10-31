@@ -94,7 +94,7 @@ const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0,
 // A note may hold personal data (a name, an e-mail), so it is stored like the
 // contact's address: encrypted with the vault key. A note saved in plain text
 // before that still reads as it is, even one that happens to start like a ciphertext.
-const lerNota = (v) => { try { return decMaybe(v); } catch { return v; } };
+const readNote = (v) => { try { return decMaybe(v); } catch { return v; } };
 
 // A page event: something the person did on a page that is not a typed message
 // (picked a color, opened the camera). It takes the place of the message in the
@@ -234,7 +234,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         `SELECT url, ref, created_at FROM ${S}.public_support_links WHERE contact_id = $1 ORDER BY created_at`, [contatoId]);
       return {
         contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em, bloqueadoEm: c.bloqueado_em },
-        anotacoes: notas.map((n) => ({ chave: n.chave, valor: lerNota(n.valor), atualizadoEm: n.atualizado_em })),
+        anotacoes: notas.map((n) => ({ chave: n.chave, valor: readNote(n.valor), atualizadoEm: n.atualizado_em })),
         mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em })),
         events: events.map((e) => ({ kind: e.kind, ref: e.ref, at: e.at })),
         links: links.map((l) => ({ url: l.url, ref: l.ref, createdAt: l.created_at })),
@@ -363,14 +363,14 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       const { rows } = await pool.query(
         `SELECT contact_id, chave, valor FROM ${S}.public_contact_state WHERE contact_id = ANY($1::uuid[]) ORDER BY chave`, [contactIds]);
       const out = Object.fromEntries(contactIds.map((id) => [id, {}]));
-      for (const r of rows) out[r.contact_id][r.chave] = lerNota(r.valor);
+      for (const r of rows) out[r.contact_id][r.chave] = readNote(r.valor);
       return out;
     },
 
     async estado(contatoId) {
       const { rows } = await pool.query(
         `SELECT chave, valor FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
-      return Object.fromEntries(rows.map((r) => [r.chave, lerNota(r.valor)]));
+      return Object.fromEntries(rows.map((r) => [r.chave, readNote(r.valor)]));
     },
 
     async lembrar(contatoId, chave, valor) {
