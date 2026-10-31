@@ -21,6 +21,7 @@ import { createWhatsAppHeldDelivery, isListishText } from './whatsapp-held-deliv
 import { createReminderExecutor } from './reminder-execution.mjs';
 import { reminderHistoryText } from './reminder-history.mjs';
 import { withConfirmationReceipt, createReactionConfirmationHandler, createRoutineConfirmationHandoff, chatButtonOptions, chatReply } from './channel-confirmation.mjs';
+import { settleConfirmedTurn } from './confirmation-continuation.mjs';
 import { voiceReplyDelivered, markVoiceInput, voiceInputForDisplay } from './voice-input.mjs';
 import { createConfirmationSession, withConfirmationSession, currentConfirmationSession } from './confirmation-session.mjs';
 import { avisosTurno, imagensDesligadas } from './turn-notices.mjs';
@@ -2263,10 +2264,8 @@ async function runConversationInThread(agent, thread, userId, message, opts = {}
         });
         if (resolution?.ignore) return null;
         if (resolution?.text) {
-          await saveThreadTurn(thread.id, agent.id, { baseHistory:fresh.history || [],
-            history:[...(fresh.history || []), {role:'user',content:message}, {role:'assistant',content:resolution.text}],
-            summary:fresh.summary || '',userMsg:message,assistantMsg:resolution.text });
-          return finalize(resolution);
+          return finalize(await settleConfirmedTurn({ resolution, agent, thread:fresh, userId, message, opts,
+            runTurn:runConversationTurn, saveTurn:saveThreadTurn, creditStatus:getCreditStatus }));
         }
         confirmationNote = resolution?.note || null;
       }

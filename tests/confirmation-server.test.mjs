@@ -19,16 +19,17 @@ const {withConfirmationReceipt}=await import('../web/channel-confirmation.mjs');
 const {gateTool}=await import('../web/confirm.mjs');
 const {codingPolicySnapshot,codingControlIntent}=await import('../web/coding-jobs.mjs');
 const {migrateCodingConfirmation}=await import('../web/confirmation-recovery.mjs');
+const {settleConfirmedTurn}=await import('../web/confirmation-continuation.mjs');
 const source=readFileSync(new URL('../web/server.mjs',import.meta.url),'utf8');
 const start=source.indexOf('async function runConversationInThread('),end=source.indexOf('// Cooldown for the no-credit emergency turn',start);
 assert.ok(start>0&&end>start);
 
 async function fixture(t) {
   const f=await confirmationFixture();t.after(()=>f.db.close());
-  const state={agent:{id:f.scope.agentId},thread:{id:f.scope.threadId,agent_id:f.scope.agentId,history:[]},effects:[],modelTurns:0,cancelled:0,resumes:[]};
+  const state={agent:{id:f.scope.agentId},thread:{id:f.scope.threadId,agent_id:f.scope.agentId,history:[]},effects:[],modelTurns:0,cancelled:0,resumes:[],creditOver:true};
   const tool={name:'editar_rotina',run:async args=>{state.effects.push(args);return {ok:true};}};
-  const deps={...sessions,...flow,withConfirmationReceipt,codingPolicySnapshot,codingControlIntent,jevEnabled:()=>false,jevCodingControl:async()=>null,migrateCodingConfirmation,
-    getCreditStatus:async()=>({over:true}),listRoutinesForUser:denied,updateRoutine:denied,
+  const deps={...sessions,...flow,withConfirmationReceipt,codingPolicySnapshot,codingControlIntent,jevEnabled:()=>false,jevCodingControl:async()=>null,migrateCodingConfirmation,settleConfirmedTurn,
+    getCreditStatus:async()=>({over:state.creditOver}),listRoutinesForUser:denied,updateRoutine:denied,
     confirmationStore:f.store,confirmationRecovery:{continueCoding:async()=>{}},
     withThreadLock:async(_id,run)=>run(), getUserLocale:async()=>({language:'pt-BR'}), getThreadOwned:async()=>structuredClone(state.thread),getAgentOwned:async()=>state.agent,
     saveThreadTurn:async(_id,_agent,data)=>{state.thread.history=data.history;},
@@ -73,6 +74,28 @@ test('real server wrapper persists separate cards, resolves exact request withou
   await f.turn('confirmo pedido 2');assert.equal(f.state.effects.length,1);
   await f.turn('cancela pedido 1');assert.equal((await f.store.list(f.scope)).filter(r=>r.state==='pending').length,0);
   assert.equal(f.state.cancelled,0);assert.equal(f.state.modelTurns,1);
+});
+
+// Item 3 of the plan (2026-10-31): a confirmed action used to end the turn at
+// the receipt, so a step promised for right after it never ran. With credit, a
+// successful execution now runs ONE continuation model turn and the owner gets
+// the deterministic receipt followed by that step's reply. With no credit the
+// continuation is skipped (the extra turn is not spent out of budget).
+test('a confirmed action with credit runs a continuation turn and keeps the receipt; no credit skips it',async t=>{
+  const f=await fixture(t);
+  f.state.creditOver=false;
+  await f.turn('propor:rotina-A');assert.equal(f.state.modelTurns,1);
+  const done=await f.turn('pode');
+  assert.deepEqual(f.state.effects,[{id:'rotina-A',hora:9}],'the action executed');
+  assert.equal(f.state.modelTurns,2,'exactly one continuation turn ran');
+  assert.match(done.text,/Resposta comum\./,'the continuation reply is appended');
+  assert.ok(done.text.length>'Resposta comum.'.length,'the deterministic receipt is kept before it');
+  // Same flow with no credit: execute but do not spend a continuation turn.
+  f.state.creditOver=true;
+  await f.turn('propor:rotina-B');assert.equal(f.state.modelTurns,3);
+  await f.turn('pode');
+  assert.deepEqual(f.state.effects,[{id:'rotina-A',hora:9},{id:'rotina-B',hora:9}],'the action still executed');
+  assert.equal(f.state.modelTurns,3,'no continuation turn without credit');
 });
 
 // Bug 2026-10 (Nate/Jorge reports): WhatsApp and Telegram used to skip the eager
