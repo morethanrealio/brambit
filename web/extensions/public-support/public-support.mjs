@@ -362,7 +362,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       const { rows } = await pool.query(
         `SELECT contact_id, chave, valor FROM ${S}.public_contact_state WHERE contact_id = ANY($1::uuid[]) ORDER BY chave`, [contactIds]);
       const out = Object.fromEntries(contactIds.map((id) => [id, {}]));
-      for (const r of rows) out[r.contact_id][r.chave] = r.valor;
+      for (const r of rows) out[r.contact_id][r.chave] = lerNota(r.valor);
       return out;
     },
 

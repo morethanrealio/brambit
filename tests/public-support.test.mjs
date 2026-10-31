@@ -141,8 +141,8 @@ test('the phone number and the notes are not stored in the clear in the database
   await store.lembrar(c.id, 'email', 'ana.nota@example.com');
   assert.ok(!JSON.stringify((await db.query('SELECT * FROM mtr_harness.public_contact_state')).rows).includes('ana.nota'));
   // A note saved in plain text before the encryption still reads.
-  await db.query(`INSERT INTO mtr_harness.public_contact_state (contact_id, chave, valor) VALUES ($1, 'antiga', 'v1: texto puro')`, [c.id]);
-  assert.deepEqual(await store.estado(c.id), { antiga: 'v1: texto puro', email: 'ana.nota@example.com' });
+  await db.query(`INSERT INTO mtr_harness.public_contact_state (contact_id, chave, valor) VALUES ($1, 'old', 'v1: plain text')`, [c.id]);
+  assert.deepEqual(await store.estado(c.id), { old: 'v1: plain text', email: 'ana.nota@example.com' });
   assert.equal((await store.exportar(c.id)).anotacoes.find((n) => n.chave === 'email').valor, 'ana.nota@example.com');
   // Turned off by the owner: does not respond at all (the channel follows today's flow).
   await store.configurar(ag, outro, { ativo: false });
