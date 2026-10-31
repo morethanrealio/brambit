@@ -1246,7 +1246,12 @@
     "activity_assistant_removed": "Took the assistant out of {area}",
     "activity_member_invited_admin": "Invited {email} to {area} as admin",
     "activity_member_invited_viewer": "Invited {email} to {area} to view only",
-    "activity_member_removed": "Removed {email} from {area}"
+    "activity_member_removed": "Removed {email} from {area}",
+    "profile_filter": "Filter by profile",
+    "profile_filter_all": "Everyone",
+    "profile_download": "Download spreadsheet (CSV)",
+    "profile_filter_none": "No one matches this filter.",
+    "activity_profiles_exported": "Downloaded the profile spreadsheet"
   },
   "index_page": {
     "auth": {

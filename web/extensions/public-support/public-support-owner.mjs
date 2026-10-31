@@ -10,12 +10,12 @@
 // change responds with 403. The ones that change state are POST and go through the server's global CSRF.
 import { readBody } from '../../http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
-import { AGENT_HOURLY_LIMIT_MAX } from './public-support.mjs';
+import { AGENT_HOURLY_LIMIT_MAX, CONTATOS_POR_PAGINA } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
-import { EVENTS_PATH, eventsCsv } from './public-support-events.mjs';
+import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,9 +23,35 @@ const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
 export const AGENT_TEXTS_PATH = '/api/public-support/texts';
+// The profile fields and values the assistant's contacts have (the filter's options),
+// and the contacts' profiles as a spreadsheet.
+export const PROFILES_PATH = '/api/public-support/profiles';
+export const PROFILES_CSV_PATH = '/api/public-support/profiles.csv';
+// Contacts a filter or the spreadsheet goes through, newest first; older ones stay out.
+export const PROFILE_SCAN_MAX = 5000;
+const PROFILE_VALUES_MAX = 50; // a field's values offered in the filter, most common first
 // What a client area's admin may send to /api/publico/configurar; anything else is the owner's.
 const CLIENT_ADMIN_FIELDS = new Set(['agentId', 'instrucoes', 'linkSites']);
 const canEdit = (role) => role === 'owner' || role === 'admin';
+// A profile field's values as texts: one, or each item when the field is a list.
+const fieldValues = (f) => (Array.isArray(f.value) ? f.value : [String(f.value)]);
+// ?field=&value= → which contacts the filter keeps, or null without a filter.
+const profileFilter = (url) => {
+  const field = url.searchParams.get('field');
+  if (!field) return null;
+  const value = url.searchParams.get('value') ?? '';
+  return (c) => c.profile.some((f) => f.label === field && fieldValues(f).includes(value));
+};
+const profilesCsv = (contatos) => {
+  const labels = [...new Set(contatos.flatMap((c) => c.profile.map((f) => f.label)))];
+  const head = ['contact', 'channel', 'first_contact', 'last_message', 'messages', ...labels];
+  const row = (c) => {
+    const by = new Map(c.profile.map((f) => [f.label, fieldValues(f).join(', ')]));
+    return [c.endereco, c.canal, iso(c.criadoEm), iso(c.ultimaEm), c.mensagens, ...labels.map((l) => by.get(l) ?? '')];
+  };
+  return [head, ...contatos.map(row)].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';
+};
+const iso = (d) => (d ? new Date(d).toISOString() : '');
 
 // What comes from the form becomes store.configurar fields; a missing field stays
 // as is. Returns {erro} if any value is invalid.
@@ -100,6 +126,25 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // acc = what agentAccess or contatoDoPedido resolved.
   const record = (user, acc, action, detail = null) => activity?.record({ ownerId: acc.ownerId, actorId: user.id,
     agentId: acc.agentId ?? null, areaId: acc.areaId ?? null, action, detail });
+  // Contacts with each one's profile, as the plugin reads their notes (in the page's language).
+  const withProfiles = async (acc, language, contatos) => {
+    const notes = await store.notesOf(contatos.map((c) => c.id));
+    const profiles = await contactProfiles({ agentId: acc.agentId, language, contacts: contatos.map((c) => ({ id: c.id, notes: notes[c.id] })) });
+    return contatos.map((c) => ({ ...c, profile: profiles[c.id] || [] }));
+  };
+  // The assistant's contacts from the newest (or from before `antes`), page by page,
+  // with their profiles: those `keep` takes, up to `max`, out of at most PROFILE_SCAN_MAX.
+  const scanProfiles = async (acc, language, { antes = null, keep = () => true, max = Infinity } = {}) => {
+    const out = [];
+    for (let seen = 0, cursor = antes; out.length < max && seen < PROFILE_SCAN_MAX;) {
+      const page = await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: cursor });
+      for (const c of await withProfiles(acc, language, page)) if (keep(c) && out.length < max) out.push(c);
+      if (page.length < CONTATOS_POR_PAGINA) break;
+      seen += page.length; cursor = new Date(page.at(-1).ultimaEm).toISOString();
+    }
+    return out;
+  };
+  const pageLanguage = (url) => normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
 
   rota('GET', '/api/publico/agentes', async ({ res, user }) => {
     const doNumero = agenteDoNumero();
@@ -176,12 +221,39 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
-    const contatos = await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando });
-    // Each person's profile, as the plugin reads their notes (in the page's language).
-    const language = normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
-    const notes = await store.notesOf(contatos.map((c) => c.id));
-    const profiles = await contactProfiles({ agentId: acc.agentId, language, contacts: contatos.map((c) => ({ id: c.id, notes: notes[c.id] })) });
-    return send(res, 200, { contatos: contatos.map((c) => ({ ...c, profile: profiles[c.id] || [] })) });
+    const language = pageLanguage(url), keep = profileFilter(url);
+    // With a profile filter, a page is the next contacts it keeps.
+    const contatos = keep ? await scanProfiles(acc, language, { antes: quando, keep, max: CONTATOS_POR_PAGINA })
+      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando }));
+    return send(res, 200, { contatos });
+  });
+
+  // The filter's options: each profile field the contacts have, with its values, most common first.
+  rota('GET', PROFILES_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    const fields = new Map();
+    for (const c of await scanProfiles(acc, pageLanguage(url))) {
+      for (const f of c.profile) {
+        const counts = fields.get(f.label) ?? fields.set(f.label, new Map()).get(f.label);
+        for (const v of fieldValues(f)) counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+    }
+    return send(res, 200, { fields: [...fields].map(([label, counts]) => ({ label,
+      values: [...counts].sort((a, b) => b[1] - a[1]).slice(0, PROFILE_VALUES_MAX).map(([value, count]) => ({ value, count })) })) });
+  });
+
+  // The contacts' profiles as a spreadsheet (only those the filter keeps, when there is one):
+  // personal data, so only for who can edit, and it goes in the access log.
+  rota('GET', PROFILES_CSV_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    const keep = profileFilter(url);
+    const contatos = await scanProfiles(acc, pageLanguage(url), keep ? { keep } : {});
+    await record(user, acc, 'profiles_exported', { rows: contatos.length, filtered: !!keep });
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="profiles-${acc.agentId}.csv"` });
+    return res.end('\ufeff' + profilesCsv(contatos));
   });
 
   rota('GET', '/api/publico/conversa', async ({ res, url, user }) => {

@@ -1246,7 +1246,12 @@
     "activity_assistant_removed": "Quitó el asistente de {area}",
     "activity_member_invited_admin": "Invitó a {email} a {area} como admin",
     "activity_member_invited_viewer": "Invitó a {email} a {area} solo para ver",
-    "activity_member_removed": "Quitó a {email} de {area}"
+    "activity_member_removed": "Quitó a {email} de {area}",
+    "profile_filter": "Filtrar por perfil",
+    "profile_filter_all": "Todos",
+    "profile_download": "Descargar hoja de cálculo (CSV)",
+    "profile_filter_none": "Nadie coincide con este filtro.",
+    "activity_profiles_exported": "Descargó la hoja de perfiles"
   },
   "index_page": {
     "auth": {

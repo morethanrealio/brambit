@@ -1246,7 +1246,12 @@
     "activity_assistant_removed": "Tirou o assistente de {area}",
     "activity_member_invited_admin": "Convidou {email} para {area} como admin",
     "activity_member_invited_viewer": "Convidou {email} para {area} só para ver",
-    "activity_member_removed": "Removeu {email} de {area}"
+    "activity_member_removed": "Removeu {email} de {area}",
+    "profile_filter": "Filtrar pelo perfil",
+    "profile_filter_all": "Todos",
+    "profile_download": "Baixar planilha (CSV)",
+    "profile_filter_none": "Ninguém com esse filtro.",
+    "activity_profiles_exported": "Baixou a planilha de perfis"
   },
   "index_page": {
     "auth": {

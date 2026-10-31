@@ -36,6 +36,7 @@ export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's dat
 export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
+export const PROFILE_LIST_MAX = 10;   // items in one profile field that is a list (skin concerns...)
 // The avatar on a website (public-avatar.mjs), off until the owner turns it on.
 export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
 export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
@@ -562,7 +563,8 @@ export function retainedByTool(tools) {
 //    what the owner's screen shows about each person (kind of customer, skin
 //    type...), built from that contact's notes. The plugin decides which notes are
 //    profile and how they read, so its technical notes stay hidden. value is short
-//    text or a number; up to PROFILE_FIELDS_MAX fields per contact; slower than
+//    text, a number or a list of up to PROFILE_LIST_MAX short texts (the owner can
+//    filter by any one of them); up to PROFILE_FIELDS_MAX fields per contact; slower than
 //    METRIC_CARDS_WAIT_MS = no profile this time.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
@@ -623,6 +625,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
   }
 
+  const list = (v) => {
+    const items = Array.isArray(v) ? [...new Set(v.map((x) => text(x, 60)).filter(Boolean))].slice(0, PROFILE_LIST_MAX) : [];
+    return items.length ? items : null;
+  };
   // The plugin's profile of each contact ({contactId: [{label, value}]}): only the
   // well-formed fields of the contacts asked about; {} without the hook.
   async function contactProfiles({ agentId, language, contacts }) {
@@ -631,7 +637,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     const out = {};
     for (const { id } of contacts) {
       const fields = (Array.isArray(r?.[id]) ? r[id] : [])
-        .map((f) => ({ label: text(f?.label, 40), value: number(f?.value) ?? text(f?.value, 60) }))
+        .map((f) => ({ label: text(f?.label, 40), value: number(f?.value) ?? text(f?.value, 60) ?? list(f?.value) }))
         .filter((f) => f.label && f.value !== null).slice(0, PROFILE_FIELDS_MAX);
       if (fields.length) out[id] = fields;
     }
