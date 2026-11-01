@@ -4586,7 +4586,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             ...r.avisos,
             'Responda em uma frase curta dizendo o que mudou (não cole o conteúdo da planilha).',
           ].filter(Boolean);
-          return linhas.join('\n');
+          // Typed receipt: the file was saved (r.asset.key), so the model's
+          // confirmation survives the honesty filter instead of collapsing to
+          // "não consegui confirmar". A failure above returns plain text (no receipt).
+          return actionResult({ state: 'saved', id: r.asset.key, subject: r.asset.caption }, linhas.join('\n'));
         } catch (e) {
           return `ERRO ao editar a planilha: ${e?.message ?? e}. Nada foi gravado: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.`;
         }
