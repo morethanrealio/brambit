@@ -13,6 +13,7 @@ import { createConfirmationRecovery, migrateCodingConfirmation } from './confirm
 import { confirmationFingerprint } from './confirmation-store.mjs';
 import { routineConfirmationSnapshot } from './confirmation-bindings.mjs';
 import { createStopRoutineTool } from './routine-stop.mjs';
+import { createNoCreditEditRoutineTool } from './routine-edit-no-credit.mjs';
 import { createRoutineSelect } from './routine-select.mjs';
 import { routineManagementIntent, routineManagementSystemNote } from './routine-credit-turn.mjs';
 import { presentPendingCards } from './pending-action-claims.mjs';
@@ -2661,6 +2662,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const { routineCode, routineCadence, resolveRoutine } = createRoutineSelect({ userTz });
         const mgmt = new ToolRegistry();
         mgmt.add(gateTool(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }), thread.id));
+        mgmt.add(gateTool(createNoCreditEditRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, resolveRoutine, routineCadence }), thread.id));
         const mgmtSystem = comIdioma(`${agent.system_prompt || ''}\n\n${routineManagementSystemNote(userLang)}`, userLang);
         const r = await runAgent({
           provider: (()=>{const p=makePrimaryProvider('robusto');return (p.forBillingPhase?p:wrapProvider(p)).forBillingPhase({kind:'routine_management',noBill:true});})(),
