@@ -64,7 +64,8 @@ const connectorWords = {
 // which the receipt then corrects. Reminders keep the receipt: it is what replaces
 // a wrong time written by the model.
 const quietOnSuccess = e => (e.family === 'memory' && ['saved','already_saved'].includes(e.state))
-  || (e.family === 'routine_run' && e.state === 'routine_complete') || e.state === 'accepted';
+  || (e.family === 'routine_run' && e.state === 'routine_complete') || e.state === 'accepted'
+  || (e.family === 'sheet' && e.state === 'saved');
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const RECIPIENT = /(?<!\p{L})(?:para|pra|pro|to)\s+(?:(?:o|a)\s+)?(\p{Lu}[\p{L}'-]*)/gu;
 const fold = s => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -75,6 +76,7 @@ export function renderAction(e, language = 'pt-BR') {
   const lang=languageKey(language),w = words[lang];
   if (e.family === 'tracker') return renderTracker(e, lang);
   if (e.family === 'list' && e.state === 'saved') return lang==='en' ? `List "${clean(e.subject)}" saved.` : lang==='es' ? `Lista "${clean(e.subject)}" guardada.` : `Lista "${clean(e.subject)}" salva.`;
+  if (e.family === 'sheet' && e.state === 'saved') return lang==='en' ? `Spreadsheet "${clean(e.subject)}" edited and delivered.` : lang==='es' ? `Planilla "${clean(e.subject)}" editada y enviada.` : `Planilha "${clean(e.subject)}" editada e enviada.`;
   if (e.family === 'reminder' && e.state === 'deleted') return (lang==='en' ? 'Reminder canceled.' : lang==='es' ? 'Recordatorio cancelado.' : 'Lembrete cancelado.') + (e.inFlight ? (lang==='en'?' A delivery already started and may still arrive.':lang==='es'?' Un envío ya empezó y todavía puede llegar.':' Um envio já havia começado e ainda pode chegar.') : '');
   if (e.family === 'reminder' && e.state === 'updated') return (lang==='en'?'Next reminder rescheduled; the remaining cadence is unchanged.':lang==='es'?'Próximo aviso reprogramado; la cadencia restante no cambia.':'Próximo aviso remarcado; a cadência dos demais foi preservada.') + ` ${w.at}: ${clean(e.at)}. ${w.target}: ${clean(e.target)}.`;
   if (e.family === 'routine_run' && e.detail && ['routine_blocked','unknown'].includes(e.state)) return e.detail;
@@ -187,6 +189,17 @@ function receipt(name, args, out) {
   if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
     state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',
     id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined)};
+  // A spreadsheet edit (editar_planilha) only vouches for itself when the
+  // sub-agent actually saved the new file: the tool wraps that success in an
+  // action_evidence envelope (state 'saved' + the saved asset id). A failure,
+  // ambiguity or truncation guard returns plain text and gets no receipt, so
+  // the model still may not claim the edit happened.
+  if (name === 'editar_planilha') {
+    const e = d?.action_evidence;
+    return e?.version === 1 && e.state === 'saved' && validId(e.id)
+      ? { family:'sheet', tool:name, state:'saved', subject:clean(e.subject), id:clean(e.id) }
+      : null;
+  }
   const connector = connectorActionReceipt(name, args, d);
   // The confirmation gate refused the call before registering anything (a
   // preflight error such as a repository the assistant may not use): there is
@@ -349,6 +362,10 @@ function sentences(line) {
   return out;
 }
 const foldText = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+// Spreadsheet-edit context, only ever consulted when a successful editar_planilha
+// receipt exists in the turn (sheetDone). On any other turn this is never
+// reached, so it does not widen the claim classifier for normal replies.
+const SHEET_CONTEXT = /\b(?:planilhas?|planillas?|spreadsheets?|xlsx|abas?|biblioteca|library|versao|versoes|version|versions)\b/;
 const RECORD_WORD = /\b(?:anotei|registrei|regist[r]?amos|agendei|guardei|salvei|memorizei|criei|(?:anotad|registrad|agendad|programad|guardad|salv)[oa]s?|noted|saved|stored|scheduled|registered)\b/;
 const SEND_WORD = /\b(?:enviei|enviamos|mandei|encaminhei|enviad[oa]s?|sent)\b/;
 function claimFamily(line, authenticatedEmailSources, toolText = []) {
@@ -497,6 +514,9 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
         shownLists.add(e.id); return true;
       }),language);
       let droppedClaim = false;
+      // A spreadsheet edit that really ran this turn (a saved sheet receipt).
+      // Gates the guard below, so a turn with no edit sees no change at all.
+      const sheetDone = shown.find(e => e.family === 'sheet' && e.state === 'saved');
       const emit = es => {
         if(!es.length)return w.unknown;
         for(const e of es)used.add(e.ref);
@@ -581,6 +601,11 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
               || (claim.loose && ['memory','list','tracker','reminder'].includes(e.family)) || (f === 'reminder' && e.tool === 'enviar_mensagem')));
           if (allUsed(es)) { afterReceipt = true; return ''; }
           if (es.length) return speak(es, part);
+          // The edit truly happened this turn: a confirmation that names the
+          // spreadsheet (or its archived previous version) is true, so keep the
+          // model's own words instead of cutting the reply to "I could not
+          // confirm". Gated on the receipt, so no untouched turn is affected.
+          if (sheetDone && SHEET_CONTEXT.test(foldText(part))) { used.add(sheetDone.ref); afterReceipt = true; return part; }
           onDroppedClaim?.(part, f); // TEMPORARY: diagnosticoDosFiltros port
           afterReceipt = false;
           return emitOrDrop(es);
