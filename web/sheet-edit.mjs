@@ -61,18 +61,40 @@ export function isSheetAsset(a) {
   return SHEET_EXT_RE.test(String(a.caption || ''));
 }
 
+// Logical spreadsheet a version belongs to. There is no version-group column in
+// the database: versioning lives only in the caption, where an archived version is
+// `base_yyyymmddhhmmss.ext` (versionedCaption) or `base_v<id>.ext` on the dateless
+// fallback. Stripping those trailing stamps (even repeated, from doubly-stamped files
+// the old bug produced) groups every version of the same spreadsheet under one family.
+export function baseFamily(caption) {
+  const raw = String(caption || 'planilha.xlsx');
+  const m = raw.match(SHEET_EXT_RE);
+  const ext = m ? m[0] : '';
+  let base = ext ? raw.slice(0, -ext.length) : raw;
+  let prev;
+  do { prev = base; base = base.replace(/_(?:\d{14}|v[A-Za-z0-9-]+)$/, ''); } while (base !== prev);
+  return (base + ext).toLowerCase();
+}
+
 // Picks WHICH asset to edit. Without an explicit id, the newest spreadsheet:
 // older ones are version history (decided 09/09/2026).
 // `assets` comes from listMediaAssets, already ordered by created_at DESC.
 export function pickSheetAsset(assets, { id = null } = {}) {
-  const list = Array.isArray(assets) ? assets : [];
+  const all = Array.isArray(assets) ? assets : [];
+  const sheets = all.filter(isSheetAsset);
   if (id != null && String(id).trim() !== '') {
-    const found = list.find((a) => String(a.id) === String(id));
+    const found = all.find((a) => String(a.id) === String(id));
     if (!found) return { error: 'Não achei esse arquivo na biblioteca.' };
     if (!isSheetAsset(found)) return { error: `O arquivo ${id} ("${found.caption || 'sem nome'}") não é uma planilha .xlsx.` };
-    return { asset: found };
+    // Resolve the id to the CURRENT version of its spreadsheet. The id names one
+    // immutable asset, but "edit this spreadsheet" means the newest version of its
+    // family — never an already-archived copy, which would edit stale content and
+    // promote it over the real current version (data loss). `sheets` is ordered
+    // created_at DESC, so the first family match is the current version.
+    const fam = baseFamily(found.caption);
+    return { asset: sheets.find((a) => baseFamily(a.caption) === fam) || found };
   }
-  const found = list.find(isSheetAsset);
+  const found = sheets[0];
   if (!found) return { error: 'Não achei nenhuma planilha na biblioteca deste usuário. Gere a planilha primeiro (gerar_documento com formato xlsx) e depois edite.' };
   return { asset: found };
 }
@@ -418,9 +440,15 @@ export async function editSpreadsheet({ userId, objetivo, id = null, deps }) {
 }
 
 async function editOnce({ userId, objetivo, id, deps }) {
-  const assets = id != null && String(id).trim() !== ''
-    ? [await deps.getAsset(userId, id)].filter(Boolean)
-    : await deps.listAssets(userId, { limit: 40 });
+  const hasId = id != null && String(id).trim() !== '';
+  // Always load the library so an id can be resolved to the CURRENT version of its
+  // spreadsheet (pickSheetAsset), not to an archived copy. If the id is older than the
+  // recent window, fetch that single asset too, so editing an old-but-only version still works.
+  let assets = await deps.listAssets(userId, { limit: 40 });
+  if (hasId && !assets.some((a) => String(a?.id) === String(id))) {
+    const one = await deps.getAsset(userId, id);
+    if (one) assets = [...assets, one];
+  }
   const pick = pickSheetAsset(assets, { id });
   if (pick.error) return { ok: false, error: pick.error };
   const asset = pick.asset;
@@ -604,7 +632,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
 }
 
 export default {
-  editSpreadsheet, pickSheetAsset, versionedCaption, hasCutMarker, describeDelta,
+  editSpreadsheet, pickSheetAsset, baseFamily, versionedCaption, hasCutMarker, describeDelta,
   detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia, SENTINELA_CLARIFICACAO,
 };
