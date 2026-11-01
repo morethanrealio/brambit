@@ -9,7 +9,7 @@
 // preserved under a history name, and serialization of overlapping edits.
 
 const {
-  editSpreadsheet, pickSheetAsset, versionedCaption, hasCutMarker,
+  editSpreadsheet, pickSheetAsset, baseFamily, versionedCaption, hasCutMarker,
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
 } = await import('../web/sheet-edit.mjs');
@@ -33,13 +33,35 @@ const assets = [
 ];
 t('picks the most recent spreadsheet', pickSheetAsset(assets).asset.id === 9);
 t('skips attachment that is not a spreadsheet', pickSheetAsset([assets[1], assets[2]]).asset.id === 7);
-t('explicit id respected', pickSheetAsset(assets, { id: 7 }).asset.id === 7);
+// id 7 and id 9 are the same spreadsheet (same caption); the id of the older one
+// resolves to the current version (id 9), never editing an archived copy.
+t('id of an older same-name version resolves to the current one', pickSheetAsset(assets, { id: 7 }).asset.id === 9);
 t('nonexistent id errors', !!pickSheetAsset(assets, { id: 99 }).error);
 t('non-spreadsheet id errors', !!pickSheetAsset(assets, { id: 8 }).error);
 t('library without spreadsheet errors', !!pickSheetAsset([assets[1]]).error);
 t('empty list errors', !!pickSheetAsset([]).error && !!pickSheetAsset(null).error);
 t('detects spreadsheet by extension without mime', isSheetAsset({ caption: 'x.xlsx' }));
 t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
+
+// ── 2b) Version family: an id must resolve to the CURRENT version, not an archived copy ──
+// The library has no version-group column; versions are told apart only by the caption
+// (an archived one is `base_yyyymmddhhmmss.ext`). baseFamily groups them.
+t('family strips the version stamp', baseFamily('Fontes_20260909170405.xlsx') === 'fontes.xlsx');
+t('family strips a doubly-stamped name', baseFamily('Fontes_20260909170405_20261101120000.xlsx') === 'fontes.xlsx');
+t('family strips the dateless _v fallback', baseFamily('a_v7.xlsx') === 'a.xlsx');
+t('family keeps a non-stamp suffix', baseFamily('Report_final.xlsx') === 'report_final.xlsx');
+t('canonical caption is its own family', baseFamily('Fontes.xlsx') === 'fontes.xlsx');
+{
+  // Canonical "Fontes.xlsx" (newest) plus its archived version and an unrelated sheet.
+  const lib = [
+    { id: 20, caption: 'Fontes.xlsx', mime: XLSX_MIME, s3_key: 'u/20', created_at: '2026-10-02T10:00:00Z' },
+    { id: 19, caption: 'Vendas.xlsx', mime: XLSX_MIME, s3_key: 'u/19', created_at: '2026-10-01T10:00:00Z' },
+    { id: 18, caption: 'Fontes_20260909170405.xlsx', mime: XLSX_MIME, s3_key: 'u/18', created_at: '2026-09-09T17:04:05Z' },
+  ];
+  t('id of an archived version resolves to the current one', pickSheetAsset(lib, { id: 18 }).asset.id === 20);
+  t('id of a distinct spreadsheet stays in its own family', pickSheetAsset(lib, { id: 19 }).asset.id === 19);
+  t('id of the current version resolves to itself', pickSheetAsset(lib, { id: 20 }).asset.id === 20);
+}
 
 // ── 3) Archived version name ──
 t('archived version uses yyyymmddhhmmss',
@@ -172,6 +194,23 @@ function mkFake(over = {}) {
   t('just one attempt', r.tentativas === 1);
   t('without a cell reader, delivers with a caveat about unavailable verification', r.avisos.some((a) => a.includes('conferência das células não está disponível')));
   t('sub-agent summary comes back', r.resumo.includes('4 linhas'));
+}
+
+// ── 6b) Editing by the id of an ARCHIVED version edits the CURRENT one (no data loss) ──
+{
+  const { state, deps } = mkFake();
+  // Make id 1 an older archived version and add the current canonical (id 5, newer).
+  state.lib = [
+    { id: 5, caption: 'Matriz.xlsx', mime: XLSX_MIME, s3_key: 'u/5', created_at: '2026-10-02T10:00:00Z' },
+    { id: 1, caption: 'Matriz_20260909170000.xlsx', mime: XLSX_MIME, s3_key: 'u/1', created_at: '2026-09-09T17:00:00Z' },
+  ];
+  state.files['u/5'] = Buffer.from(JSON.stringify({ rows: 80, sheets: 2 })); // current has more content
+  state.files['u/1'] = Buffer.from(JSON.stringify({ rows: 50, sheets: 2 })); // stale archived copy
+  const r = await editSpreadsheet({ userId: 'user-a', objetivo: 'acrescente 4 linhas', id: '1', deps });
+  t('edit by archived id succeeds', r.ok === true);
+  t('edited the CURRENT version, not the archived one', r.before.rows === 80 && r.after.rows === 84);
+  t('the archived bytes were left untouched', JSON.parse(state.files['u/1'].toString()).rows === 50);
+  t('a single new asset was saved with the canonical name', state.saved.length === 1 && state.saved[0].caption === 'Matriz.xlsx');
 }
 
 // ── 7) Atomicity: failure at any step does NOT generate an asset and does NOT rename ──
