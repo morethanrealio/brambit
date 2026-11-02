@@ -29,6 +29,9 @@ const unit = value => {
   const aliases={un:'un',unidade:'un',unidades:'un',litro:'L',litros:'L',l:'L',quilo:'kg',quilos:'kg',quilograma:'kg',quilogramas:'kg',kg:'kg',grama:'g',gramas:'g',g:'g',ml:'ml',mililitro:'ml',mililitros:'ml'};
   return Object.hasOwn(aliases,key(label)) ? aliases[key(label)] : label;
 };
+// A blank unit means "not provided": the model may send unidade:"" (the schema allows it).
+// Treating it as absent keeps it from throwing in unit() and dropping the whole atomic edit.
+const unitOmitted = value => value === undefined || (typeof value === 'string' && value.trim() === '');
 const view = r => ({ id: r.id, nome: r.title, versao: r.revision, itens: r.items,
   pendentes: r.items.filter(i => !i.concluido).length, total: r.items.length,
   ...(r.finalizada_em ? { finalizada_em: new Date(r.finalizada_em).toISOString() } : {}) });
@@ -105,7 +108,7 @@ export function createChecklistStore(pool) {
         } else for (const op of operacoes) {
           if (!op || typeof op !== 'object' || !['adicionar','atualizar','remover'].includes(op.tipo)) throw Error('Operação de item inválida. Nada foi alterado.');
           if (op.tipo === 'adicionar') {
-            const nome = text(op.nome, 'Nome do item'), unidade = op.unidade === undefined ? 'un' : unit(op.unidade);
+            const nome = text(op.nome, 'Nome do item'), unidade = unitOmitted(op.unidade) ? 'un' : unit(op.unidade);
             const quantidade = op.quantidade === undefined ? 1 : quantity(op.quantidade);
             // Repetir um item significa manter a quantidade; nunca somar implicitamente.
             const exists = items.find(i => key(i.nome) === key(nome) && key(i.unidade) === key(unidade));
@@ -119,7 +122,7 @@ export function createChecklistStore(pool) {
             else {
               if (op.nome !== undefined) item.nome = text(op.nome, 'Nome do item');
               if (op.quantidade !== undefined) item.quantidade = quantity(op.quantidade);
-              if (op.unidade !== undefined) item.unidade = unit(op.unidade);
+              if (!unitOmitted(op.unidade)) item.unidade = unit(op.unidade);
               if (op.concluido !== undefined) {
                 if (typeof op.concluido !== 'boolean') throw Error('Estado do item inválido.');
                 item.concluido = op.concluido;

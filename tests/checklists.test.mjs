@@ -110,3 +110,30 @@ test('finalizing closes the list and the next purchase with the same name is a n
   const f1 = await ed(velha.id,2,{acao:'finalizar'});
   assert.equal(f1.sem_alteracao,true);
 });
+
+test('a blank unit falls back to the default instead of dropping the whole atomic edit', async t => {
+  // Prod 2026-10-26 (rsi): an operation with unidade:"" made unit() throw, the wrap
+  // returned NOT_SAVED and EVERY operation in the atomic edit was lost.
+  const db = new PGlite(); t.after(() => db.close());
+  await db.exec('CREATE SCHEMA mtr_harness; CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY);');
+  const user = randomUUID();
+  await db.query('INSERT INTO mtr_harness.users VALUES($1)',[user]);
+  const query = (sql, values) => values ? db.query(sql,values) : db.exec(sql);
+  let tail = Promise.resolve();
+  const pool = { query, async connect() { const previous=tail; let release; tail=new Promise(r=>{release=r}); await previous; return {query,release}; } };
+  const store = createChecklistStore(pool); await store.init();
+  const lista = (await store.create(user,'Mercado')).lista;
+  const ed = (versao, operacoes) => store.edit(user,{lista:lista.id,versao,operacoes,requestKey:randomUUID()});
+  // adicionar with unidade:"" (and with only whitespace) must save, defaulting to "un",
+  // and must NOT drop the sibling operation in the same call.
+  const added = await ed(0,[{tipo:'adicionar',nome:'Leite',unidade:''},{tipo:'adicionar',nome:'Pão',unidade:'   '}]);
+  assert.equal(added.ok,true);
+  assert.equal(added.lista.total,2);
+  assert.equal(added.lista.itens.every(i=>i.unidade==='un'),true);
+  // atualizar with a blank unidade means "no change to the unit", not an error.
+  const milk = added.lista.itens.find(i=>i.nome==='Leite');
+  const updated = await ed(1,[{tipo:'atualizar',id:milk.id,quantidade:2,unidade:''}]);
+  assert.equal(updated.ok,true);
+  assert.equal(updated.lista.itens.find(i=>i.id===milk.id).unidade,'un');
+  assert.equal(updated.lista.itens.find(i=>i.id===milk.id).quantidade,2);
+});
