@@ -666,6 +666,19 @@ test('client areas stay off until the installation turns them on', async (t) => 
   assert.deepEqual(await reach(true), [true, [ag]]);
 });
 
+// Whoever writes to a number set up for public support is looking for the brand, not for
+// Brambit: while support is off they get the neutral reply. Only an installation with no
+// public support (no assistant chosen, not the public-support profile) sends the login message.
+test('a stranger only gets the login message where the installation has no public support', async (t) => {
+  const { pool, ag } = await montar(t);
+  const reply = (opts) => criarAtendimentoDoServidor({ pool, makeProvider: modelo().provider, recordUsages: async () => {}, creditStatus: async () => ({ over: false }),
+    limpezaMs: 0, agenteDoNumero: () => null, enabled: true, publicOnly: false, ...opts }).whatsapp.unavailableReply();
+  assert.equal(reply({ agenteDoNumero: () => ag }), RESPOSTA_INDISPONIVEL);
+  assert.equal(reply({ publicOnly: true }), RESPOSTA_INDISPONIVEL);
+  assert.equal(reply({}), null);
+  assert.equal(reply({ agenteDoNumero: () => ag, enabled: false }), null);
+});
+
 test('editable texts: only the owner reads and edits an assistant\'s, the newest is current, old versions are pruned and restorable', async (t) => {
   const { pool, store, dono, outro, ag, ag2 } = await montar(t);
   const p = createPromptStore(pool); await p.init(); await p.init();

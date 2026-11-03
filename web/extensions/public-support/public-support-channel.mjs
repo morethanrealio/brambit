@@ -9,13 +9,13 @@
 // their assistant.
 import { defaultTimezone } from '../../locale.mjs';
 import { randomUUID } from 'node:crypto';
-import { createPublicoStore, createAtendimentoPublico, esquemaPublico } from './public-support.mjs';
+import { createPublicoStore, createAtendimentoPublico, esquemaPublico, RESPOSTA_INDISPONIVEL } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
 import { promptSchema, createPromptStore } from './public-support-prompts.mjs';
 import { registerPublicSupportAdmin } from './public-support-admin.mjs';
 import { createPublicWebStore, registerPublicWebRoutes, PUBLIC_WEB_PATHS as WEB_PATHS } from './public-web.mjs';
 import { createPublicAvatarStore, registerPublicAvatar, PUBLIC_AVATAR_PATHS } from './public-avatar.mjs';
-import { publicSupportOn } from '../../profiles.mjs';
+import { publicSupportOn, ownerFeaturesOn } from '../../profiles.mjs';
 import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 import { activitySchema, createActivityStore } from './client-area-activity.mjs';
@@ -64,7 +64,7 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // it (account-scope.mjs) but reaches no assistant.
 export const clientAreasOn = (value = process.env.BRAMBIT_CLIENT_AREAS) => String(value ?? '').trim().toLowerCase() === 'on';
 export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages, creditStatus, ferramentas, ganchos = null, agenteDoNumero = () => agentePublicoDoNumero(), log = console, limpezaMs = LIMPEZA_MS,
-  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '', clientAreas = clientAreasOn() }) {
+  rotas, send, fail, tooManyRequests, clientIp, signupOpen = null, enabled = publicSupportOn, avatar = null, accountScope = null, publicBase = () => '', clientAreas = clientAreasOn(), publicOnly = !ownerFeaturesOn }) {
   const store = createPublicoStore(pool, { S });
   const events = createEventsStore(pool, { S, log });
   const webStore = createPublicWebStore(pool, { S, measure: (outputs, ident) => measureLinks(events, publicBase(), ident, outputs, { keepUrl: true }) });
@@ -114,6 +114,9 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
       async atende() { const id = agenteDoNumero(); return !!id && (await available()) && !!(await store.agente(id))?.ativo; },
       turno: ({ endereco, mensagem, imagens }) => atendimento.turno({ agentId: agenteDoNumero(), canal: 'whatsapp', endereco, mensagem,
         ...(imagens?.length ? { imagens, imagesOnRequest: true } : {}) }),
+      // Whoever writes here is looking for the brand behind the number, not for
+      // Brambit, so they never get the login message while support is off.
+      unavailableReply: () => (enabled && (agenteDoNumero() || publicOnly) ? RESPOSTA_INDISPONIVEL : null),
     },
   };
 }
