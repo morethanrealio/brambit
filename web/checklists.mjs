@@ -142,7 +142,7 @@ export function createChecklistStore(pool) {
   };
 }
 
-export const CHECKLIST_CONTEXT = `LISTAS PESSOAIS: para compras/checklists simples, use consultar_listas/criar_lista/editar_lista. Quando a pessoa encerrar a lista ("finalizar", "fechar a lista", "terminei a lista"), chame editar_lista com acao="finalizar" antes de mostrar a lista final. Lista finalizada fica guardada, mas não recebe itens: se depois a pessoa mandar itens para "a lista de compras" sem dizer que é a antiga, é uma compra nova, então crie outra lista (pode ser o mesmo nome). Só reabra (acao="reabrir") se ela pedir para continuar a antiga. Consulte o banco antes de afirmar conteúdo, vazio ou alteração; memória da conversa não é o estado atual. Se a lista já mora em app, planilha, espaço ou memória, leia essa fonte e continue nela; não inicie uma cópia vazia nem migre silenciosamente. Dois alvos possíveis: pergunte qual. Preserve quantidades e unidades; "peguei/já tenho" dá baixa, "faltam dois" define quantidade pendente conforme o contexto. Não some unidades diferentes. Só diga que salvou após ok:true. Responda brevemente com a mudança; não despeje todos os itens a cada compra. Ids e versões são internos. Nunca peça ao usuário para escolher uma tecnologia de armazenamento.`;
+export const CHECKLIST_CONTEXT = `LISTAS PESSOAIS: toda lista de compras/checklist mora na tabela de listas (consultar_listas/criar_lista/editar_lista); esse é o único lugar de uma lista. Nunca crie nem mantenha uma lista em memória, em espaço ou como texto numa página, e não use anotação para guardar lista. Único caso de lista fora da tabela: a pessoa pedir explicitamente um arquivo de planilha/Excel para ter a lista nele. Se consultar_listas apontar que a lista existe em memória ou espaço (campo fonte_em_memoria), migre-a para a tabela: crie com criar_lista, copie os itens com editar_lista e remova a cópia antiga; nunca deixe as duas. Quando a pessoa encerrar a lista ("finalizar", "fechar a lista", "terminei a lista"), chame editar_lista com acao="finalizar" antes de mostrar a lista final. Lista finalizada fica guardada, mas não recebe itens: se depois a pessoa mandar itens para "a lista de compras" sem dizer que é a antiga, é uma compra nova, então crie outra lista (pode ser o mesmo nome). Só reabra (acao="reabrir") se ela pedir para continuar a antiga. Consulte o banco antes de afirmar conteúdo, vazio ou alteração; memória da conversa não é o estado atual. Preserve quantidades e unidades; "peguei/já tenho" dá baixa, "faltam dois" define quantidade pendente conforme o contexto. Não some unidades diferentes. Só diga que salvou após ok:true. Responda brevemente com a mudança; não despeje todos os itens a cada compra. Ids e versões são internos. Nunca peça ao usuário para escolher uma tecnologia de armazenamento.`;
 
 export function checklistTools({ store, userId, requestId, findExisting = async () => null }) {
   const wrap = fn => async args => {
@@ -150,16 +150,26 @@ export function checklistTools({ store, userId, requestId, findExisting = async 
     catch (e) { return JSON.stringify(error('NOT_SAVED', e.message)); }
   };
   return [
-    { name: 'consultar_listas', description: 'Queries the personal lists and their persistent state. Without lista, returns names/ids; with EXACT name or id, returns items, quantities and current version. A list not found does not mean an empty list: check the old source indicated in memory before creating another. Finalized lists appear separately (finalizadas_recentes) and only receive items if reopened on request.',
-      parameters: { type: 'object', properties: { lista: { type: 'string' } } }, run: wrap(({ lista }) => store.list(userId, lista)) },
-    { name: 'criar_lista', description: 'Creates a simple personal list, only when requested and there is no existing source. For a list that already exists in an app/spreadsheet/memory, continue in the original source. Never creates an app nor deletes items from an existing list. A finalized list does not count as existing: the next shopping trip gets a new list, even with the same name.',
+    { name: 'consultar_listas', description: 'Queries the personal lists and their persistent state (the table is the home of every list). Without lista, returns names/ids; with EXACT name or id, returns items, quantities and current version. If the list is not in the table but a page in memory or a space has that name, the result reports it in fonte_em_memoria: migrate it to the table, do not read it as the live state. A list not found does not mean an empty list. Finalized lists appear separately (finalizadas_recentes) and only receive items if reopened on request.',
+      parameters: { type: 'object', properties: { lista: { type: 'string' } } },
+      run: wrap(async ({ lista }) => {
+        const res = await store.list(userId, lista);
+        if (lista && res.code === 'NOT_FOUND') {
+          const fonte = await findExisting(lista);
+          if (fonte && (fonte.tipo === 'memoria' || fonte.tipo === 'espaco')) {
+            return { ...res, fonte_em_memoria: fonte, acao_sugerida: 'migrar_para_tabela',
+              instrucao: `Esta lista existe fora da tabela (${fonte.tipo}). O lugar da lista é a tabela: crie com criar_lista, copie os itens com editar_lista e depois remova a cópia antiga. Não mantenha as duas.` };
+          }
+          if (fonte) return { ...res, fonte_externa: fonte };
+        }
+        return res;
+      }) },
+    { name: 'criar_lista', description: 'Creates a personal list in the lists table, the home of every list. Use it for any list request, even when a similar list exists in memory or a space (migrate that content here afterwards with editar_lista). The only list that lives elsewhere is one the person explicitly asks to keep as a spreadsheet/Excel file. Never creates an app nor deletes items from an existing list. A finalized list does not count as existing: the next shopping trip gets a new list, even with the same name.',
       parameters: { type: 'object', properties: { nome: { type: 'string' } }, required: ['nome'] },
       run: wrap(async ({ nome }) => {
         text(nome, 'Nome da lista');
         const existing = await store.list(userId, nome);
         if (existing.ok) return existing;
-        const collision = await findExisting(nome);
-        if (collision) return error('EXISTING_SOURCE', 'Há uma fonte existente. Consulte-a antes de criar uma lista separada.', { fonte: collision });
         return store.create(userId, nome);
       }) },
     { name: 'editar_lista', description: 'Atomically changes ONE list read in consultar_listas. Pass exact id/name, version and changes. adicionar does not add to or duplicate an already existing item. atualizar uses the item id and the TOTAL quantity (not an increment); concluido=true checks it off and false reopens it. For a partial purchase, adjust the remaining quantity. zerar affects only the explicitly chosen list; desfazer restores your last change. finalizar closes the list when the person says they are done (it leaves the active lists and the name becomes free for the next one); reabrir only on request. Never guess the target, never confirm success without ok:true.',
