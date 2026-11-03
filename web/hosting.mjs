@@ -1480,6 +1480,10 @@ export function hostingTools(userId, agentId, opts = {}) {
         },
         required: ['caminho', 'conteudo'],
       },
+      // Validates its own args and returns a typed not_applied receipt the
+      // builder's self-correction loop reads, so it opts out of the registry's
+      // required-param guard (which would return an opaque string instead).
+      validatesArgs: true,
       async run({ nome_do_sistema, caminho, conteudo, hash_esperado, confirmo_arquivo_grande, dono }) {
         const rel = String(caminho || '').replace(/^\/+/, '').trim();
         if (!rel) return rejectedEdit('Informe o caminho do arquivo (ex: server.js, public/index.html).');
@@ -1572,6 +1576,10 @@ export function hostingTools(userId, agentId, opts = {}) {
         },
         required: ['caminho'],
       },
+      // Validates its own args and returns a typed not_applied receipt the
+      // builder's self-correction loop reads, so it opts out of the registry's
+      // required-param guard (which would return an opaque string instead).
+      validatesArgs: true,
       async run({ nome_do_sistema, caminho, trecho_antigo, trecho_novo, edicoes, dono }) {
         const rel = String(caminho || '').replace(/^\/+/, '').trim();
         if (!rel) return rejectedEdit('Informe o caminho do arquivo (ex: server.js, public/app.js).');
