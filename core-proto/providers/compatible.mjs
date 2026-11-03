@@ -29,6 +29,8 @@ import {validarChamadas,mensagemProtocolo,comRetentativa} from './rules.mjs';
 //   retryVazio          'completo' | 'simples' | false: redoes an empty response
 //   erroSemUrl          message when the address wasn't configured
 //   semProntidao        doesn't report readiness to the credit layer (own server)
+//   devolverRaciocinio  sends the model's reasoning_content back with its own tool-call
+//                       batch on the next step (Moonshot K3 requires it in the tool loop)
 //
 // Common rules (rules.mjs), the same for everyone: malformed call (broken JSON,
 // missing/duplicate id) refuses the whole batch without executing anything; a name outside the
@@ -44,16 +46,16 @@ export function makeCompativel({
   stream,contarEntrada,
   limparTexto=s=>s||'',usoSemCache=false,cortePorTeto=true,
   ferramentaEmTexto=false,reamostrarResiduo=0,residuoGlmLanca=false,vazioSemUsoLanca=false,retryVazio=false,
-  erroSemUrl,semProntidao=false,
+  erroSemUrl,semProntidao=false,devolverRaciocinio=false,
 }){
-  const chamar=body=>stream?chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream})
+  const chamar=body=>stream?chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream,devolverRaciocinio})
     :chamarJson(body,{provedor,url,chave,contarEntrada,semProntidao});
   const lerUso=data=>usoDe(data,model,provedor,usoSemCache);
   return wrapProvider({
     name:`${provedor}:${model}`,
     async complete({system,messages,tools}){
       if(!url&&erroSemUrl)throw new Error(erroSemUrl);
-      const omsgs=mensagens(system,messages,visao);
+      const omsgs=mensagens(system,messages,visao,devolverRaciocinio);
       const body={model,messages:omsgs,...campos(!!tools?.length)};
       if(tools?.length){
         let ts=tools;
@@ -71,13 +73,21 @@ export function makeCompativel({
         return {stop:STOP.END,usage,text:mensagemProtocolo(e.code),protocolError:{code:e.code,retryable:true}};
       }
       async function interpretar(data){
-        const lote=(toolCalls,text)=>({stop:STOP.TOOL,toolCalls:conferir(toolCalls),text:text||undefined,usage});
-        const pendente=data?.creditReconciliationPending===true;
         const msg=data.choices?.[0]?.message??{};
+        // The reasoning travels on the batch's first call (meta, like Gemini's
+        // thoughtSignature), only for the calls of THIS response, never for a retry's.
+        const raciocinio=devolverRaciocinio&&typeof msg.reasoning_content==='string'&&msg.reasoning_content?msg.reasoning_content:'';
+        const lote=(toolCalls,text)=>{
+          const calls=conferir(toolCalls);
+          if(raciocinio&&toolCalls===originais&&calls.length)calls[0].meta={...calls[0].meta,reasoningContent:raciocinio};
+          return {stop:STOP.TOOL,toolCalls:calls,text:text||undefined,usage};
+        };
+        const pendente=data?.creditReconciliationPending===true;
         const finish=data.choices?.[0]?.finish_reason;
         if(cortePorTeto&&finish==='length')return {stop:STOP.END,usage,protocolError:{code:'output_truncated',retryable:true},text:''};
 
         let toolCalls=estruturadas(msg);
+        const originais=toolCalls;
         let text=limparTexto(msg.content);
         if(ferramentaEmTexto==='sempre'||(ferramentaEmTexto==='comTools'&&tools?.length))
           ({toolCalls,text}=recuperar(toolCalls,text,provedor));
@@ -170,13 +180,14 @@ export function makeCompativel({
 }
 
 // Msg[] -> formato OpenAI Chat Completions.
-function mensagens(system,messages,visao){
+function mensagens(system,messages,visao,devolverRaciocinio=false){
   const omsgs=[];
   if(system)omsgs.push({role:'system',content:system});
   for(const m of messages){
     if(m.role==='tool')omsgs.push({role:'tool',tool_call_id:m.toolCallId,content:m.content});
     else if(m.role==='assistant'&&m.toolCalls?.length)omsgs.push({
       role:'assistant',content:m.content||null,
+      ...(devolverRaciocinio&&m.toolCalls[0].meta?.reasoningContent?{reasoning_content:m.toolCalls[0].meta.reasoningContent}:{}),
       tool_calls:m.toolCalls.map(c=>({id:c.id,type:'function',function:{name:c.name,arguments:JSON.stringify(c.args)}})),
     });
     else if(visao&&m.images?.length){
@@ -267,7 +278,7 @@ function chamarJson(body,cfg){
 // Streaming with an INACTIVITY timeout (not total request time): the timer rearms
 // with every chunk received, so a legitimately long reply is never cut, only a hung
 // connection.
-function chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream}){
+function chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream,devolverRaciocinio}){
   const streamBody={...body,stream:true,stream_options:{include_usage:true}};
   return comRetentativa(()=>tentativa(streamBody,{provedor,chave,contarEntrada,semProntidao},async wire=>{
     const ctrl=new AbortController();let watchdog;
@@ -279,18 +290,18 @@ function chamarStream(body,{provedor,url,chave,contarEntrada,semProntidao,stream
         if(stream.diagnosticoRecusa){const diagnostic=await stream.diagnosticoRecusa(res);console.error(`[${provedor} rejection]`,JSON.stringify({status:res.status,model:body.model,...diagnostic}));}
         throw recusa(provedor,res.status);
       }
-      return await lerStream(res.body,arm);
+      return await lerStream(res.body,arm,devolverRaciocinio);
     }catch(error){if(ctrl.signal.aborted&&ctrl.signal.reason?.code==='PROVIDER_IDLE_TIMEOUT')throw ctrl.signal.reason;throw error;}finally{clearTimeout(watchdog);}
   }));
 }
 
 // Consumes the SSE and rebuilds the non-stream format (choices[0].message + usage), so
 // the rest of the engine doesn't depend on the transport. `onChunk` rearms the watchdog.
-async function lerStream(body,onChunk){
+async function lerStream(body,onChunk,guardarRaciocinio=false){
   const reader=body.getReader();
   const decoder=new TextDecoder();
   let buf='',content='',finish=null,usage=null;
-  let chunks=0,events=0,doneMarker=false,reasoningChars=0,responseId=null;
+  let chunks=0,events=0,doneMarker=false,reasoningChars=0,responseId=null,reasoning='';
   const unknownDeltaKeys=new Set();
   const toolAcc={}; // index -> { id, name, args (string acumulada) }
   for(;;){
@@ -315,7 +326,7 @@ async function lerStream(body,onChunk){
       if(ch.finish_reason)finish=ch.finish_reason;
       const d=ch.delta||{};
       if(d.content)content+=d.content;
-      if(typeof d.reasoning_content==='string')reasoningChars+=d.reasoning_content.length;
+      if(typeof d.reasoning_content==='string'){reasoningChars+=d.reasoning_content.length;if(guardarRaciocinio)reasoning+=d.reasoning_content;}
       for(const key of Object.keys(d))if(!['role','content','reasoning_content','tool_calls'].includes(key)&&unknownDeltaKeys.size<20)unknownDeltaKeys.add(key);
       if(d.tool_calls)for(const tc of d.tool_calls){
         const i=tc.index??0;
@@ -331,10 +342,11 @@ async function lerStream(body,onChunk){
     function:{name:toolAcc[i].name,arguments:toolAcc[i].args},
   }));
   return {
-    choices:[{message:{content,tool_calls:tool_calls.length?tool_calls:undefined},finish_reason:finish}],
+    choices:[{message:{content,tool_calls:tool_calls.length?tool_calls:undefined,...(reasoning?{reasoning_content:reasoning}:{})},finish_reason:finish}],
     usage:usage||{},
     // Metadata only: enough to diagnose protocol drift without storing
-    // raw SSE frames or reasoning text in checkpoint/log.
+    // raw SSE frames in checkpoint/log. Reasoning text only comes back (in the
+    // message) for a provider that must send it back to the model (devolverRaciocinio).
     _streamMeta:{chunks,events,done:doneMarker,reasoningChars,unknownDeltaKeys:[...unknownDeltaKeys],responseId},
   };
 }

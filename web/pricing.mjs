@@ -61,6 +61,12 @@ const PRICES = {
   // K3 provider is Together. The exact id comes via env (KIMI_MODEL).
   'moonshotai/kimi-k3': { in: 3.00, cachedIn: 0.30, out: 15.0 },
   'moonshotai/Kimi-K3': { in: 3.00, cachedIn: 0.30, out: 15.0 },
+  // Moonshot's own API (KIMI_PROVIDER=moonshot), official price table read on
+  // 2026-11-03. The 5-minute cache write (the default TTL) costs the same as input,
+  // so uncached input at `in` already covers it.
+  'kimi-k3.1-pro': { in: 2.00, cachedIn: 0.20, out: 10.0 },
+  'kimi-k3.1-pro-highspeed': { in: 4.00, cachedIn: 0.20, out: 20.0 },
+  'kimi-k3': { in: 3.00, cachedIn: 0.30, out: 15.0 },
   // ── DeepSeek V4 Pro — legacy/selectable model for routes that still use
   // DEEPSEEK_MODEL. Coding and spreadsheets use V4.1 Flash in another entry above.
   // ⚠️ The price below is for the provider IN USE, not the model: the same id is served by
