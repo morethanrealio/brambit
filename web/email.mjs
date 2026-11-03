@@ -31,6 +31,7 @@
 //   EMAIL_SMTP_HOST=smtp.gmail.com   EMAIL_SMTP_PORT=465
 //   EMAIL_POLL_MS=30000
 // Without EMAIL_ADDRESS/EMAIL_APP_PASSWORD the channel stays inert (doesn't connect).
+import { suppressHardBounces } from './email-bounce.mjs';
 
 export function emailEnabled() {
   return !!(process.env.EMAIL_ADDRESS && process.env.EMAIL_APP_PASSWORD);
@@ -287,7 +288,7 @@ async function sendReply({ to, subject, agentName, text, inReplyTo, references }
 }
 
 // Handles an already-parsed email (mailparser). deps = { runConversation,
-// getUserByEmail, listAgents, emailSeen, markEmailSeen }. Returns the outcome
+// getUserByEmail, listAgents, emailSeen, markEmailSeen, suppressions? }. Returns the outcome
 // for the queue:
 //   'skipped' = discarded on purpose (don't retry)
 //   'defer'   = deferred without spending an attempt (rate-limit)
@@ -301,6 +302,9 @@ async function handleEmail(parsed, deps, out = {}) {
   const messageId = parsed.messageId || '';
   if (!fromAddr) return 'skipped';
 
+  const auth = passesEmailAuth(parsed, fromAddr);
+  // Our own mail hit a dead address: suppress the recipient (email-bounce.mjs).
+  if (await suppressHardBounces(parsed, { fromAddr, auth, suppressions: deps.suppressions })) return 'skipped';
   if (isAutoOrLoop(parsed, fromAddr)) { console.log('[email] ignored (auto/loop):', fromAddr); return 'skipped'; }
   if (messageId && await deps.emailSeen(messageId)) return 'skipped'; // dedup
   if (!addressedToAssistantDomain(parsed)) {
@@ -330,7 +334,6 @@ async function handleEmail(parsed, deps, out = {}) {
   // Anti-spoofing: the From is forgeable, so only trust it if DKIM/DMARC
   // authenticate the sender. An email pretending to be from a registered user,
   // but that fails authentication, is discarded (doesn't trigger their assistant).
-  const auth = passesEmailAuth(parsed, fromAddr);
   if (!auth.ok) {
     console.warn('[email] REJECTED due to authentication (possible From spoofing):', fromAddr, '—', auth.reason);
     if (messageId) await deps.markEmailSeen(messageId, user.id);
@@ -462,7 +465,8 @@ async function drainQueue(deps) {
   for (const row of rows) {
     const out = {};
     try {
-      const parsed = await simpleParser(row.source);
+      // keepDeliveryStatus: a bounce's status part stays separate (email-bounce.mjs).
+      const parsed = await simpleParser(row.source, { keepDeliveryStatus: true });
       const outcome = await handleEmail(parsed, deps, out);
       if (outcome === 'defer') { await deps.unclaimEmail(row.id); continue; }
       await deps.settleEmail(row.id, outcome === 'done' ? 'done' : 'skipped', null, out.userId);
