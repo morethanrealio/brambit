@@ -24,7 +24,7 @@ import { productI18n } from '../../i18n.mjs';
 import { mailEnabled as coreMailEnabled, sendEmail as coreSendEmail } from '../../mailer.mjs';
 import { remetenteConvite } from '../../company-invite-email.mjs';
 import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
-import { AGENT_TEXTS_PATH } from './public-support-owner.mjs';
+import { AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } from './public-support-owner.mjs';
 import { METRICS_PATH } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH } from './public-support-events.mjs';
@@ -205,7 +205,8 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
 // which only an owner uses.
 export const panelScope = (areas) => ({
   name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
-  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH || path === EVENTS_PATH || path === ACTIVITY_PATH,
+  api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH || path === EVENTS_PATH || path === ACTIVITY_PATH
+    || path === PROFILES_PATH || path === PROFILES_CSV_PATH,
 });
 
 // The invite e-mail, in the inviter's language (the invitee has none yet).
