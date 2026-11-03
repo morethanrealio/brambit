@@ -14,7 +14,7 @@ test('existing agent dropdown in Chromium: select, save, reload, unavailable sel
  const start=source.indexOf('  function fillModelField(');const fill=source.slice(start,source.indexOf('\n  }',start)+4);
  const serverSource=readFileSync('web/server.mjs','utf8');
  const a=serverSource.indexOf('function assignableAgentModels(');const assign=serverSource.slice(a,serverSource.indexOf('\n}',a)+2);
- const ctx=vm.createContext({marca:()=>({nome:'Brambit'}),GEMINI_COMPARISON_ID:'gemini37flash',GEMINI_COMPARISON_MODEL:'gemini-3.7-flash',geminiEnabled:()=>true,DEEPSEEK_AGENT_MODEL:'deepseek41flash',deepseekFlash:{ready:true},kimiAvailable:()=>true});vm.runInContext(assign,ctx);
+ const ctx=vm.createContext({marca:()=>({nome:'Brambit'}),GEMINI_COMPARISON_ID:'gemini37flash',GEMINI_COMPARISON_MODEL:'gemini-3.7-flash',geminiEnabled:()=>true,DEEPSEEK_AGENT_MODEL:'deepseek41flash',deepseekFlash:{ready:true},kimiAvailable:()=>true,kimiVersion:()=>'3'});vm.runInContext(assign,ctx);
  let current='auto', saved=0;
  const server=createServer(async(req,res)=>{
   res.setHeader('Content-Type','application/json');
