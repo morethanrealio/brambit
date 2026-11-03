@@ -54,10 +54,20 @@ test('grocery and parts lists: isolation, continuity, partial purchase, repetiti
   assert.deepEqual((await createChecklistStore(pool).list(user,mercado.id)).lista,restored.lista);
   assert.equal((await store.edit(user,original)).repetido,true);
   assert.deepEqual((await store.list(user,mercado.id)).lista,restored.lista);
-  const tools=checklistTools({store,userId:user,requestId:'synthetic-turn',findExisting:async()=>({tipo:'app',nome:'Controle antigo'})});
+  const tools=checklistTools({store,userId:user,requestId:'synthetic-turn',findExisting:async()=>({tipo:'memoria',nome:'Controle antigo',slug:'controle-antigo'})});
   const create=tools.find(x=>x.name==='criar_lista');
-  assert.equal(JSON.parse(await create.run({nome:'Controle antigo'})).code,'EXISTING_SOURCE');
+  // Every list belongs in the table: even with a matching source in memory, creating goes to the table
+  // (copying the old content over is the model's job). No more EXISTING_SOURCE refusal.
+  assert.equal(JSON.parse(await create.run({nome:'Controle antigo'})).criada,true);
   assert.equal(JSON.parse(await create.run({nome:'Mercado'})).lista.total,3);
+  // The search tool covers the table AND memory: a name only in memory is reported for migration.
+  const consult=tools.find(x=>x.name==='consultar_listas');
+  const onlyMemory=JSON.parse(await consult.run({lista:'Lista que mora na memória'}));
+  assert.equal(onlyMemory.ok,false);
+  assert.equal(onlyMemory.fonte_em_memoria.tipo,'memoria');
+  assert.equal(onlyMemory.acao_sugerida,'migrar_para_tabela');
+  // A list already in the table is returned as the live state, not a migration suggestion.
+  assert.equal(JSON.parse(await consult.run({lista:'Mercado'})).fonte_em_memoria,undefined);
   const edit=tools.find(x=>x.name==='editar_lista');
   const args={lista:mercado.id,versao:6,acao:'itens',operacoes:[{tipo:'atualizar',id:item.id,concluido:true}]};
   assert.equal(JSON.parse(await edit.run(args)).lista.pendentes,1);
