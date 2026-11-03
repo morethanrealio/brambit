@@ -167,7 +167,7 @@ import { makeOpenAI, openaiEnabled } from '../core-proto/providers/openai.mjs';
 import { loadModels, modelFor } from '../core-proto/models.mjs';import { startModelsWatch } from './models-live.mjs';import { liveEmail, liveWhatsApp, liveCalendarWatch, liveAwsRole, liveDeepSeekFlash } from './live-services.mjs';
 import { makeDeepInfra, deepinfraEnabled } from '../core-proto/providers/deepinfra.mjs';
 import { makeTogether, togetherEnabled, TOGETHER_FLASH_MODEL, isTogetherFlashModel, togetherFlashModel } from '../core-proto/providers/together.mjs';
-import { kimiAvailable, makeKimi } from './kimi.mjs';
+import { kimiAvailable, makeKimi, kimiVersion } from './kimi.mjs';
 import { STOP } from '../core-proto/provider.mjs';
 import { webSearchTool, openLinkTool, serpapiEnabled, lensSearchByUrl, shoppingSearch, createSearchBudget, SEARCH_LIMIT_MSG } from './websearch.mjs';
 import { fontesEConferencia, conferirLinks, linksMontados, materialDoDono, hostsNossos as hostsDeLinks, resolveGroundingUri } from './links.mjs';
@@ -676,7 +676,7 @@ function assignableAgentModels(current = 'auto') {
   if (deepseekFlash.ready || current === DEEPSEEK_AGENT_MODEL) out.push({ id: DEEPSEEK_AGENT_MODEL, label: 'DeepSeek V4.1 Flash', desc: 'Modelo fixo deste assistente, com tarifa econômica de créditos. API oficial e busca Tavily, sem troca automática para Gemini.' });
   if (geminiEnabled() || current === GEMINI_COMPARISON_ID) out.push({ id: GEMINI_COMPARISON_ID, label: 'Gemini 3.7 Flash', desc: 'Modelo fixo para texto e imagens, com tarifa normal. Busca Tavily, sem troca automática de modelo. Tarefas auxiliares mantêm seus modelos.' });
   if (kimiAvailable()) {
-    out.push({ id: 'kimi3', label: 'Kimi 3', desc: 'Modelo avançado de raciocínio (Moonshot Kimi K3), fixo pra este assistente e fora do roteamento. Consome bem mais crédito por conversa.' });
+    out.push({ id: 'kimi3', label: `Kimi ${kimiVersion()}`, desc: `Modelo avançado de raciocínio (Moonshot Kimi K${kimiVersion()}), fixo pra este assistente e fora do roteamento. Consome bem mais crédito por conversa.` });
   }
   // DeepSeek V4 Pro LEFT the dropdown on 2026-08-31: it became the product's DEFAULT
   // model, so offering it as an "alternative choice" would be offering the same thing

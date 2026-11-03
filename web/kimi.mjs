@@ -20,6 +20,8 @@ export function kimiProviderName() {
   return PROVIDERS[name] ? name : 'together';
 }
 export const kimiModel = () => process.env.KIMI_MODEL || PROVIDERS[kimiProviderName()].model;
+// Version shown in the model picker, read from the id being served.
+export const kimiVersion = () => (/k3[.-]1/i.test(kimiModel()) ? '3.1' : '3');
 
 export function kimiAvailable() {
   if (!/^(1|true|on|sim)$/i.test(String(process.env.KIMI_ENABLED || ''))) return false;
