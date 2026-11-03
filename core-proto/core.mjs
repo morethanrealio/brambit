@@ -221,7 +221,11 @@ export class ToolRegistry {
     // step, instead of calling with empty args until the repetition guard cuts
     // the turn (RSI 2026-10-27: ler_espaco called with no `espaco` ran degraded,
     // the model repeated the empty call and the turn was cut at loop_break).
-    if (Array.isArray(t.parameters?.required)) {
+    // A tool that validates its own args (validatesArgs) is skipped: it returns a
+    // TYPED recoverable receipt the caller relies on (e.g. the app builder's
+    // self-correction loop reads editar_arquivo_do_app's not_applied effect to
+    // retry with a path in the same turn; a plain string would break that loop).
+    if (!t.validatesArgs && Array.isArray(t.parameters?.required)) {
       const isBlank = v => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
       const missing = t.parameters.required.filter(k => isBlank(args?.[k]));
       if (missing.length) return `ERRO: ${missing.length > 1 ? 'faltam os parâmetros obrigatórios' : 'falta o parâmetro obrigatório'} ${missing.map(k => `"${k}"`).join(', ')} para "${name}". Preencha e chame de novo, ou diga que não consegue; não repita a chamada igual. Nenhuma ação foi executada.`;
