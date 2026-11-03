@@ -129,7 +129,7 @@ for(let i=0;i<40;i++)await Promise.resolve();await scheduler.tick();eq(deliverie
 const preA=server.indexOf('  let curationHistory = null;'),preB=server.indexOf('  // Approved typed monitor:',preA);let stored=0;
 const preflight=new AsyncFunction('kind','opts','userId','curationStore','normalizeCurationConfig','thread','agent','message','saveThreadTurn','createCurationEvidence','const baseHistory=structuredClone(thread.history||[]);'+server.slice(preA,preB));
 const stopped=await preflight('routine',{curationConfig:cfg,routineId:uuid(21)},uuid(2),{history:async()=>{throw Error('offline');}},normalizeCurationConfig,{id:uuid(41),history:[]},{id:uuid(31)},'synthetic',async()=>stored++,createCurationEvidence);eq(stored,1);eq(stopped.curation.urls,[]);eq(stopped.curation.executionStatus,'failed');ok(stopped.text.includes('Não iniciei novas buscas'));
-ok(server.includes("preview: ['flight-monitor-v1','curation-v1'].includes(text?.type) ? text.text : text"));
+ok(server.includes("preview: text?.text ?? text"));
 ok(server.includes('text = curationResult ? text : searchCoverage.finish(text, idiomaResposta,'));
 ok(server.includes('audit:curationResult.audit'));
 const exclusionConfig={...cfg,excludeUrls:[url(1)+'?utm_source=old']};
