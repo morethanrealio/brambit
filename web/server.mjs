@@ -1176,6 +1176,7 @@ import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, t
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
+import { playableOnIos } from './playable-audio.mjs';
 import { generateDocument, SUPPORTED_FORMATS, extractDocumentText } from './docgen.mjs';
 import { moderateVideoPrompt } from './videomod.mjs';
 import { createRender, getRender, fetchRenderVideo, videoGenEnabled, videoEmRevisao, MAX_VIDEO_SECONDS } from './videogen.mjs';
@@ -11239,7 +11240,8 @@ async function atenderRequest(req, res) {
       return send(res, 403, { error: 'server.no_access_media' });
     }
     try {
-      const m = await fetchMedia(key);
+      // format=m4a: the mobile app's player can't open Ogg/WebM (playable-audio.mjs).
+      const m = url.searchParams.get('format') === 'm4a' ? await playableOnIos(key, await fetchMedia(key)) : await fetchMedia(key);
       if (!m) return send(res, 404, { error: 'server.media_not_found' });
       // Defense in depth: the upload's mime comes from the client. When the byte goes
       // out to ANOTHER person (published path), only real media is allowed through
@@ -11252,9 +11254,8 @@ async function atenderRequest(req, res) {
         }
       }
       const total = m.buffer.length;
-      // HTTP Range support: Safari (and <audio>/<video> on iOS) REQUIRES a
-      // 206 response with Accept-Ranges to play media; without it the player errors out and
-      // doesn't play (reference voice bug: audio/mp4 audio from Safari wouldn't play).
+      // HTTP Range: Safari and iOS players REQUIRE a 206 with Accept-Ranges, or they
+      // don't play (reference voice bug: audio/mp4 from Safari wouldn't play).
       const rangeH = req.headers['range'];
       let status = 200, start = 0, end = total - 1;
       if (rangeH) {
@@ -11272,8 +11273,7 @@ async function atenderRequest(req, res) {
       const chunk = status === 206 ? m.buffer.subarray(start, end + 1) : m.buffer;
       const headers = {
         'content-type': m.contentType,
-        // Only media published to the feed can be cached by a shared proxy.
-        // Everything else stays 'private' so it doesn't leak via an intermediate cache.
+        // Only published media may sit in a shared proxy; the rest stays 'private'.
         'cache-control': published && !mine ? 'public, max-age=86400' : 'private, max-age=86400',
         'accept-ranges': 'bytes',
         'content-length': String(chunk.length),
