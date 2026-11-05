@@ -43,6 +43,11 @@ export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
 export const AVATAR_MAX_SESSIONS = 2;       // an assistant's visitor sessions open at once
 export const AVATAR_MINUTES_MAX = 1440;
 export const AVATAR_SESSIONS_MAX = 100;
+// Conversations: with conversation_idle_minutes set, a message after that long
+// without messages starts the contact's next conversation (1, 2, 3...). Same
+// contact and notes; the model and the web chat read only the current conversation;
+// the owner sees every message, with the conversation number. Unset = one conversation.
+export const CONVERSATION_IDLE_MAX = 43200; // 30 days
 
 export const esquemaPublico = (S) => `
  CREATE TABLE IF NOT EXISTS ${S}.public_agents (
@@ -88,6 +93,8 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_daily_minutes integer NOT NULL DEFAULT ${AVATAR_DAILY_MINUTES} CHECK (avatar_daily_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_visitor_minutes integer NOT NULL DEFAULT ${AVATAR_VISITOR_MINUTES} CHECK (avatar_visitor_minutes BETWEEN 1 AND ${AVATAR_MINUTES_MAX});
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_max_sessions integer NOT NULL DEFAULT ${AVATAR_MAX_SESSIONS} CHECK (avatar_max_sessions BETWEEN 1 AND ${AVATAR_SESSIONS_MAX});
+ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS conversation_idle_minutes integer CHECK (conversation_idle_minutes BETWEEN 1 AND ${CONVERSATION_IDLE_MAX});
+ ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS conversation integer NOT NULL DEFAULT 1;
 ${eventsSchema(S)}`;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
@@ -114,7 +121,7 @@ export const eventText = (e) => `[event: ${e.type}]${Object.keys(e.data).length 
 export const chaveDoContato = (canal, endereco) => indiceCego(`${canal}:${endereco}`, 'contato-publico');
 // teto_diario_usd null = the owner never set one: DAILY_CAP_DEFAULT_USD applies.
 const capColumn = (p = '') => `coalesce(${p}teto_diario_usd, ${DAILY_CAP_DEFAULT_USD})::float AS teto_diario_usd`;
-const COLUNAS_AGENTE = `agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, agent_hourly_limit, link_sites, ${capColumn()}`;
+const COLUNAS_AGENTE = `agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, agent_hourly_limit, link_sites, conversation_idle_minutes, ${capColumn()}`;
 
 // timezone: the "day" of the spend cap starts at midnight of this timezone.
 export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTimezone() } = {}) {
@@ -130,11 +137,12 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     // Only the agent's owner configures: the UPDATE/INSERT checks agents.user_id.
     // A missing field stays as is; tetoDiarioUsd: null goes back to the default cap.
     // linkSites: the sites the assistant may send people to (empty = any).
-    async configurar(agentId, userId, { ativo, instrucoes, retencaoDias, limitePorHora, tetoDiarioUsd, agentHourlyLimit, linkSites } = {}) {
+    // conversationIdleMinutes: null = one conversation per contact (see CONVERSATION_IDLE_MAX).
+    async configurar(agentId, userId, { ativo, instrucoes, retencaoDias, limitePorHora, tetoDiarioUsd, agentHourlyLimit, linkSites, conversationIdleMinutes } = {}) {
       const { rows } = await pool.query(
-        `INSERT INTO ${S}.public_agents (agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd, agent_hourly_limit, link_sites)
+        `INSERT INTO ${S}.public_agents (agent_id, user_id, ativo, instrucoes, retencao_dias, limite_por_hora, teto_diario_usd, agent_hourly_limit, link_sites, conversation_idle_minutes)
          SELECT a.id, a.user_id, coalesce($3, false), coalesce($4, ''), coalesce($5, 90), coalesce($6, ${LIMITE_POR_HORA}), $7::numeric,
-                coalesce($9, ${AGENT_HOURLY_LIMIT}), coalesce($10::text[], '{}')
+                coalesce($9, ${AGENT_HOURLY_LIMIT}), coalesce($10::text[], '{}'), $11::integer
            FROM ${S}.agents a WHERE a.id = $1 AND a.user_id = $2
          ON CONFLICT (agent_id) DO UPDATE SET
            ativo = coalesce($3, ${S}.public_agents.ativo),
@@ -144,11 +152,13 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
            teto_diario_usd = CASE WHEN $8 THEN $7::numeric ELSE ${S}.public_agents.teto_diario_usd END,
            agent_hourly_limit = coalesce($9, ${S}.public_agents.agent_hourly_limit),
            link_sites = coalesce($10::text[], ${S}.public_agents.link_sites),
+           conversation_idle_minutes = CASE WHEN $12 THEN $11::integer ELSE ${S}.public_agents.conversation_idle_minutes END,
            atualizado_em = now()
          WHERE ${S}.public_agents.user_id = $2
          RETURNING ${COLUNAS_AGENTE}`,
         [agentId, userId, ativo ?? null, instrucoes == null ? null : texto(instrucoes, 20000), retencaoDias ?? null,
-          limitePorHora ?? null, tetoDiarioUsd ?? null, tetoDiarioUsd !== undefined, agentHourlyLimit ?? null, linkSites ?? null]);
+          limitePorHora ?? null, tetoDiarioUsd ?? null, tetoDiarioUsd !== undefined, agentHourlyLimit ?? null, linkSites ?? null,
+          conversationIdleMinutes ?? null, conversationIdleMinutes !== undefined]);
       return rows[0] || null;
     },
 
@@ -156,7 +166,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     async agente(agentId) {
       const { rows } = await pool.query(
         `SELECT p.agent_id, p.user_id, p.ativo, p.instrucoes, p.retencao_dias, p.limite_por_hora,
-                p.agent_hourly_limit, p.link_sites, ${capColumn('p.')}, a.name AS nome
+                p.agent_hourly_limit, p.link_sites, p.conversation_idle_minutes, ${capColumn('p.')}, a.name AS nome
            FROM ${S}.public_agents p JOIN ${S}.agents a ON a.id = p.agent_id AND a.user_id = p.user_id
           WHERE p.agent_id = $1 AND a.archived_at IS NULL`, [agentId]);
       return rows[0] || null;
@@ -225,7 +235,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         `SELECT id, agent_id, canal, endereco, criado_em, ultima_em, parado_em, bloqueado_em FROM ${S}.public_contacts WHERE id = $1`, [contatoId]);
       if (!c) return null;
       const { rows: msgs } = await pool.query(
-        `SELECT role, content, criado_em FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id`, [contatoId]);
+        `SELECT role, content, criado_em, conversation FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id`, [contatoId]);
       const { rows: notas } = await pool.query(
         `SELECT chave, valor, atualizado_em FROM ${S}.public_contact_state WHERE contact_id = $1 ORDER BY chave`, [contatoId]);
       const { rows: events } = await pool.query(
@@ -235,7 +245,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return {
         contato: { id: c.id, agentId: c.agent_id, canal: c.canal, endereco: decMaybe(c.endereco), criadoEm: c.criado_em, ultimaEm: c.ultima_em, paradoEm: c.parado_em, bloqueadoEm: c.bloqueado_em },
         anotacoes: notas.map((n) => ({ chave: n.chave, valor: readNote(n.valor), atualizadoEm: n.atualizado_em })),
-        mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em })),
+        mensagens: msgs.map((m) => ({ role: m.role, content: m.content, criadoEm: m.criado_em, conversation: m.conversation })),
         events: events.map((e) => ({ kind: e.kind, ref: e.ref, at: e.at })),
         links: links.map((l) => ({ url: l.url, ref: l.ref, createdAt: l.created_at })),
       };
@@ -263,6 +273,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
                 coalesce(p.web_key_ips, '{}') AS web_key_ips, coalesce(p.link_sites, '{}') AS link_sites,
                 coalesce(p.avatar_enabled, false) AS avatar_enabled, coalesce(p.avatar_daily_minutes, ${AVATAR_DAILY_MINUTES}) AS avatar_daily_minutes,
                 coalesce(p.avatar_visitor_minutes, ${AVATAR_VISITOR_MINUTES}) AS avatar_visitor_minutes, coalesce(p.avatar_max_sessions, ${AVATAR_MAX_SESSIONS}) AS avatar_max_sessions,
+                p.conversation_idle_minutes,
                 (SELECT count(*)::int FROM ${S}.public_contacts c WHERE c.agent_id = a.id) AS contatos
            FROM ${S}.agents a LEFT JOIN ${S}.public_agents p ON p.agent_id = a.id AND p.user_id = a.user_id
           WHERE a.user_id = $1 AND a.archived_at IS NULL ORDER BY a.name`, [userId]);
@@ -282,24 +293,25 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
         `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
-                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens
+                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens,
+                (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations
            FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
           WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
           ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA)]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
-        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens }));
+        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations }));
     },
 
     // An owner's contact's conversation, in order; antes = id of the oldest message already seen.
     async conversaDoDono(userId, contatoId, { antes = null, limite = CONVERSA_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
-        `SELECT id, role, content, criado_em FROM (
-           SELECT m.id, m.role, m.content, m.criado_em FROM ${S}.public_messages m
+        `SELECT id, role, content, criado_em, conversation FROM (
+           SELECT m.id, m.role, m.content, m.criado_em, m.conversation FROM ${S}.public_messages m
              JOIN ${S}.public_contacts c ON c.id = m.contact_id JOIN ${S}.agents a ON a.id = c.agent_id
             WHERE m.contact_id = $1 AND a.user_id = $2 AND ($3::bigint IS NULL OR m.id < $3)
             ORDER BY m.id DESC LIMIT $4) t ORDER BY id`,
         [contatoId, userId, antes, Math.min(Math.max(1, limite | 0), CONVERSA_POR_PAGINA)]);
-      return rows.map((r) => ({ id: Number(r.id), role: r.role, content: r.content, criadoEm: r.criado_em }));
+      return rows.map((r) => ({ id: Number(r.id), role: r.role, content: r.content, criadoEm: r.criado_em, conversation: r.conversation }));
     },
 
     // LGPD: deletes the contact, the messages and the notes (cascade).
@@ -337,20 +349,33 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
 
     // The model reads its past answers as it wrote them (model_content), not their
     // text version: a history of text versions teaches it to answer in that format.
-    async historico(contatoId, limite = HISTORICO_MAX) {
+    // conversation: only that conversation's messages (null = all).
+    async historico(contatoId, limite = HISTORICO_MAX, conversation = null) {
       const { rows } = await pool.query(
         `SELECT role, content FROM (SELECT id, role, coalesce(model_content, content) AS content FROM ${S}.public_messages
-           WHERE contact_id = $1 ORDER BY id DESC LIMIT $2) t ORDER BY id`, [contatoId, limite]);
+           WHERE contact_id = $1 AND ($3::integer IS NULL OR conversation = $3) ORDER BY id DESC LIMIT $2) t ORDER BY id`, [contatoId, limite, conversation]);
       return rows.map((r) => ({ role: r.role, content: r.content }));
     },
 
-    registrar(contatoId, mensagens) {
+    // The conversation a message arriving now belongs to: the last message's, or the
+    // next one when the last message is idleMinutes old or older; 1 for a new contact.
+    async currentConversation(contatoId, idleMinutes = null) {
+      const { rows } = await pool.query(
+        `SELECT conversation, ($2::integer IS NOT NULL AND criado_em <= now() - $2::integer * interval '1 minute') AS idle
+           FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id DESC LIMIT 1`, [contatoId, idleMinutes]);
+      if (!rows.length) return 1;
+      return rows[0].conversation + (rows[0].idle ? 1 : 0);
+    },
+
+    // conversation: the turn's (currentConversation); without it, the last message's.
+    registrar(contatoId, mensagens, conversation = null) {
       return transacao(async (c) => {
         for (const m of mensagens) {
           const content = texto(m.content, 20000), modelContent = texto(m.modelContent, 20000);
-          await c.query(`INSERT INTO ${S}.public_messages (contact_id, role, content, outputs, event, model_content) VALUES ($1, $2, $3, $4, $5, $6)`,
+          await c.query(`INSERT INTO ${S}.public_messages (contact_id, role, content, outputs, event, model_content, conversation)
+             VALUES ($1, $2, $3, $4, $5, $6, coalesce($7::integer, (SELECT conversation FROM ${S}.public_messages WHERE contact_id = $1 ORDER BY id DESC LIMIT 1), 1))`,
             [contatoId, m.role, content, m.outputs?.length ? JSON.stringify(m.outputs) : null, m.event ? JSON.stringify(m.event) : null,
-              modelContent && modelContent !== content ? modelContent : null]);
+              modelContent && modelContent !== content ? modelContent : null, conversation]);
         }
         await c.query(`UPDATE ${S}.public_contacts SET ultima_em = now() WHERE id = $1`, [contatoId]);
       });
@@ -539,7 +564,8 @@ export function retainedByTool(tools) {
 //    for a photo and this message is the answer. Say it once per request: a photo
 //    sent without a key (a browser, a WhatsApp number) reaches the model only with it.
 //   ctx = {agente:{agentId,nome}, contato:{id,canal,endereco}, canal, mensagem,
-//    event ({type,data} on a page-event turn, else null), primeira (empty history),
+//    event ({type,data} on a page-event turn, else null), primeira (empty history: a new
+//    contact or a new conversation),
 //    texts: {written, spoken} in use for this assistant (the owner's edit, else
 //    the default; spoken null without a voice text), estado(), lembrar(chave,valor),
 //    track(kind, ref?): records an event of this contact (kind like 'bag_add', ref
@@ -717,14 +743,15 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (await store.agentMessagesLastHour(agente.agent_id, agente.agent_hourly_limit) >= agente.agent_hourly_limit) {
         return { text: RESPOSTA_INDISPONIVEL, motivo: 'agent_hourly_limit', ...ident };
       }
+      const conversation = await store.currentConversation(contato.id, agente.conversation_idle_minutes ?? null);
       const indisponivel = async (motivo) => {
-        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
+        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }], conversation);
         return { text: RESPOSTA_INDISPONIVEL, motivo, ...ident };
       };
       const credito = await saldo(agente.user_id);
       if (!credito || credito.over !== false) return indisponivel('sem_saldo');
       if (await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return indisponivel('teto_diario');
-      const history = await store.historico(contato.id);
+      const history = await store.historico(contato.id, HISTORICO_MAX, conversation);
       const [edited, defaults] = await Promise.all([editedTexts(agente.agent_id), defaultTexts(agente.agent_id)]);
       const texts = { written: edited.written || defaults.written, spoken: defaults.spoken == null ? null : edited.spoken || defaults.spoken };
       const ctx = { agente: { agentId: agente.agent_id, nome: agente.nome }, contato: { id: contato.id, canal: contato.canal, endereco: contato.endereco },
@@ -739,7 +766,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (antes?.pular === true && prontas.length) {
         const text = textoDasSaidas(prontas);
         const modelContent = typeof antes.modelText === 'string' ? antes.modelText : undefined;
-        await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas, modelContent }]);
+        await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: prontas, modelContent }], conversation);
         const out = await measured(prontas);
         return { text: out === prontas ? text : textoDasSaidas(out), saidas: out, motivo: 'roteiro', ...ident };
       }
@@ -761,7 +788,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       }
       log.info?.(turnLogLine({ agentId: agente.agent_id, contactId: contato.id, termination, modelCalls, toolResults }));
       if (!text) {
-        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
+        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }], conversation);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
       const doPlugin = normalizarSaidas((await gancho('depoisDoModelo', { ...ctx, texto: text }))?.saidas, { canal });
@@ -774,10 +801,10 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (doPlugin.length) text = textoDasSaidas(saidas);
       else text = written;
       if (!text) {
-        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }]);
+        await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }], conversation);
         return { text: RESPOSTA_INDISPONIVEL, ...ident };
       }
-      await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }]);
+      await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }], conversation);
       const out = await measured(saidas);
       return { text: out === saidas ? text : textoDasSaidas(out), ...(out.length ? { saidas: out } : {}), ...ident };
     });

@@ -179,13 +179,20 @@ export function createPublicWebStore(pool, { S = 'mtr_harness', measure = async 
       return rowCount ? key : null;
     },
 
-    // The contact's own conversation, WITHOUT creating the contact.
+    // The contact's own current conversation, WITHOUT creating the contact. Past
+    // conversation_idle_minutes since the last message, the next message starts a
+    // new conversation (public-support.mjs), so there is nothing to show.
     async history(agentId, address, limit = WEB_HISTORY_MAX) {
       const { rows } = await pool.query(
-        `SELECT role, content, outputs, event, criado_em, contact_id FROM (
+        `WITH k AS (SELECT c.id, p.conversation_idle_minutes AS idle FROM ${S}.public_contacts c
+                     JOIN ${S}.public_agents p ON p.agent_id = c.agent_id
+                    WHERE c.agent_id = $1 AND c.canal = 'web' AND c.chave = $2),
+              last AS (SELECT m.conversation, m.criado_em FROM ${S}.public_messages m JOIN k ON k.id = m.contact_id ORDER BY m.id DESC LIMIT 1)
+         SELECT role, content, outputs, event, criado_em, contact_id FROM (
            SELECT m.id, m.role, m.content, m.outputs, m.event, m.criado_em, m.contact_id FROM ${S}.public_messages m
-             JOIN ${S}.public_contacts c ON c.id = m.contact_id
-            WHERE c.agent_id = $1 AND c.canal = 'web' AND c.chave = $2
+             JOIN k ON k.id = m.contact_id CROSS JOIN last
+            WHERE m.conversation = last.conversation
+              AND (k.idle IS NULL OR last.criado_em > now() - k.idle * interval '1 minute')
             ORDER BY m.id DESC LIMIT $3) t ORDER BY id`,
         [agentId, chaveDoContato('web', address), limit]);
       const out = [];

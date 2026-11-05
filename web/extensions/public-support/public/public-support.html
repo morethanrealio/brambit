@@ -59,6 +59,7 @@
   .bolha.assistant{align-self:flex-end;background:#f3e4d8;}
   .bolha .hora{display:block;font-size:11.5px;color:var(--mut2);margin-top:3px;}
   .vazio{color:var(--mut);font-size:14px;}
+  .divider{align-self:stretch;text-align:center;font-size:12px;color:var(--mut2);border-top:1px solid var(--line);padding-top:4px;margin-top:6px;}
   .espaco{margin-top:8px;}
   .acoes.topo{margin-top:0;margin-bottom:10px;}
   .card h3{font-size:15px;margin:22px 0 4px;}
@@ -224,6 +225,7 @@
       <div><label for="retencao" data-i18n="public_service_page.retention">Keep conversations for (days)</label><input type="number" id="retencao" min="1" max="3650"/></div>
       <div><label for="limite" data-i18n="public_service_page.rate_limit">Messages per hour from each contact</label><input type="number" id="limite" min="1" max="600"/></div>
       <div><label for="limiteAgente" data-i18n="public_service_page.agent_rate_limit">Messages per hour, all contacts together</label><input type="number" id="limiteAgente" min="1" max="100000"/></div>
+      <div><label for="conversationIdle" data-i18n="public_service_page.conversation_idle">New conversation after (minutes without messages, empty = never)</label><input type="number" id="conversationIdle" min="1" max="43200"/></div>
       <div><label for="teto" data-i18n="public_service_page.daily_cap">Daily spending cap (US$, empty = US$10)</label><input type="number" id="teto" min="0" step="0.01"/></div>
     </div>
     <div id="ownerWeb">
@@ -329,7 +331,7 @@
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   var t = window.pageText, NO_SESSION = 'no-session';
-  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null, textsFor = null;
+  var agentes = [], agenteAtual = null, contatos = [], contatoAtual = null, maisAntiga = null, topConversation = null, textsFor = null;
   function msg(el, t, cls){ el.textContent = t || ''; el.className = 'msg' + (cls ? ' ' + cls : ''); }
   function quando(d){ try { return new Date(d).toLocaleString(document.documentElement.lang, { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e){ return ''; } }
   function pedir(caminho, corpo){
@@ -378,6 +380,7 @@
     $('retencao').value = agenteAtual.retencaoDias;
     $('limite').value = agenteAtual.limitePorHora;
     $('limiteAgente').value = agenteAtual.agentHourlyLimit;
+    $('conversationIdle').value = agenteAtual.conversationIdleMinutes == null ? '' : agenteAtual.conversationIdleMinutes;
     $('teto').value = agenteAtual.tetoDiarioUsd == null ? '' : agenteAtual.tetoDiarioUsd;
     $('webAtivo').checked = !!agenteAtual.webEnabled;
     $('linkSites').value = (agenteAtual.linkSites || []).join('\n');
@@ -447,6 +450,7 @@
     var corpo = !isOwner() ? { agentId: agenteAtual.agentId, instrucoes: $('instrucoes').value, linkSites: sites } : { agentId: agenteAtual.agentId, ativo: $('ativo').checked, instrucoes: $('instrucoes').value,
       retencaoDias: parseInt($('retencao').value, 10), limitePorHora: parseInt($('limite').value, 10),
       agentHourlyLimit: parseInt($('limiteAgente').value, 10), tetoDiarioUsd: teto === '' ? null : Number(teto),
+      conversationIdleMinutes: $('conversationIdle').value.trim() === '' ? null : parseInt($('conversationIdle').value, 10),
       linkSites: sites,
       webEnabled: $('webAtivo').checked, webOrigins: $('webOrigens').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean),
       webKeyIps: $('webChaveIps').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean) };
@@ -645,7 +649,9 @@
     if (c.bloqueadoEm) who.appendChild(el('span', 'tag blq', t('blocked_tag')));
     else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
     d.appendChild(who);
-    d.appendChild(el('div', 'meta', t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens })));
+    var meta = t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens });
+    if (c.conversations > 1) meta += ' · ' + t('conversation_count', { count: c.conversations });
+    d.appendChild(el('div', 'meta', meta));
     // The plugin's profile of the person, in one line under the contact.
     if ((c.profile || []).length) d.appendChild(el('div', 'prof', c.profile.map(function(f){ return profileValue(f); }).join(' · ')));
     d.addEventListener('click', function(){ abrirConversa(c); });
@@ -654,7 +660,7 @@
 
   function fecharConversa(){ contatoAtual = null; $('convBox').classList.add('hidden'); $('convVazia').classList.remove('hidden'); $('convTitulo').textContent = t('conversation'); }
   function abrirConversa(c){
-    contatoAtual = c; maisAntiga = null;
+    contatoAtual = c; maisAntiga = null; topConversation = null;
     Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
     $('convTitulo').textContent = c.endereco;
     $('convVazia').classList.add('hidden'); $('convBox').classList.remove('hidden');
@@ -672,11 +678,16 @@
       if (contatoAtual !== c) return;
       var ms = j.mensagens || [], box = $('conversa'), topo = box.firstChild;
       if (ms.length) maisAntiga = ms[0].id;
-      ms.forEach(function(m){
+      // A line where the contact's next conversation starts, also between this page and the one below it.
+      var divider = function(m){ box.insertBefore(el('div', 'divider', t('conversation_number', { n: m.conversation })), topo); };
+      ms.forEach(function(m, i){
+        if (i > 0 && ms[i - 1].conversation !== m.conversation) divider(m);
         var b = el('div', 'bolha ' + (m.role === 'user' ? 'user' : 'assistant'), m.content);
         b.appendChild(el('span', 'hora', quando(m.criadoEm)));
         box.insertBefore(b, topo);
       });
+      if (ms.length && topConversation !== null && ms[ms.length - 1].conversation !== topConversation) divider({ conversation: topConversation });
+      if (ms.length) topConversation = ms[0].conversation;
       if (primeira && !ms.length) box.appendChild(el('div', 'vazio', t('no_messages')));
       $('anteriores').classList.toggle('hidden', ms.length < 100);
       if (primeira) box.scrollTop = box.scrollHeight;
