@@ -1,6 +1,7 @@
 // Volume of an assistant's public support, for its owner and the members of its
-// client area (client-areas.mjs): conversations, new contacts, messages received
-// and answered, by channel and by day. No cost: the owner pays for it, and a
+// client area (client-areas.mjs): people who wrote, the conversations they had
+// (a contact's messages are split into conversations by conversation_idle_minutes,
+// public-support.mjs), messages received and answered, by channel and by day. No cost: the owner pays for it, and a
 // client sees only how much it is used.
 //
 // It counts what is still stored, so a period longer than the assistant's
@@ -12,7 +13,7 @@ import { CANAIS_PUBLICOS } from './public-support.mjs';
 export const METRICS_PATH = '/api/public-support/metrics';
 export const METRIC_DAYS = [7, 30, 90];
 
-const zero = () => ({ conversations: 0, newContacts: 0, received: 0, replies: 0 });
+const zero = () => ({ people: 0, conversations: 0, received: 0, replies: 0 });
 
 export function createMetricsStore(pool, { S = 'mtr_harness', timezone = defaultTimezone() } = {}) {
   return {
@@ -24,26 +25,28 @@ export function createMetricsStore(pool, { S = 'mtr_harness', timezone = default
       const since = `(${firstDay}) AT TIME ZONE $4`;
       const mine = `JOIN ${S}.agents a ON a.id = c.agent_id WHERE c.agent_id = $1 AND a.user_id = $2`;
       const params = [agentId, ownerId, days, timezone];
-      const [byDay, byChannel, newContacts, retention] = await Promise.all([
+      const [byDay, byChannel, retention] = await Promise.all([
         // A contact is in a single channel, so the per-channel counts add up.
         pool.query(`SELECT to_char(m.criado_em AT TIME ZONE $4, 'YYYY-MM-DD') AS day, c.canal AS channel,
-                           count(DISTINCT m.contact_id) FILTER (WHERE m.role = 'user')::int AS conversations,
+                           count(DISTINCT (m.contact_id, m.conversation)) FILTER (WHERE m.role = 'user')::int AS conversations,
                            count(*) FILTER (WHERE m.role = 'user' AND m.event IS NULL)::int AS received,
                            count(*) FILTER (WHERE m.role = 'assistant')::int AS replies
                       FROM ${S}.public_messages m JOIN ${S}.public_contacts c ON c.id = m.contact_id ${mine} AND m.criado_em >= ${since}
                      GROUP BY 1, 2`, params),
-        pool.query(`SELECT c.canal AS channel, count(DISTINCT m.contact_id)::int AS conversations
+        pool.query(`SELECT c.canal AS channel, count(DISTINCT m.contact_id)::int AS people,
+                           count(DISTINCT (m.contact_id, m.conversation))::int AS conversations
                       FROM ${S}.public_messages m JOIN ${S}.public_contacts c ON c.id = m.contact_id ${mine} AND m.criado_em >= ${since} AND m.role = 'user'
                      GROUP BY 1`, params),
-        pool.query(`SELECT c.canal AS channel, count(*)::int AS n FROM ${S}.public_contacts c ${mine} AND c.criado_em >= ${since} GROUP BY 1`, params),
         pool.query(`SELECT p.retencao_dias AS days, to_char(${firstDay}, 'YYYY-MM-DD') AS first_day
                       FROM ${S}.agents a LEFT JOIN ${S}.public_agents p ON p.agent_id = a.id WHERE a.id = $1 AND a.user_id = $2`, params),
       ]);
       const total = zero();
       const channels = Object.fromEntries(CANAIS_PUBLICOS.map((c) => [c, zero()]));
       const channel = (name) => (channels[name] ||= zero());
-      for (const r of byChannel.rows) { channel(r.channel).conversations = r.conversations; total.conversations += r.conversations; }
-      for (const r of newContacts.rows) { channel(r.channel).newContacts = r.n; total.newContacts += r.n; }
+      for (const r of byChannel.rows) {
+        Object.assign(channel(r.channel), { people: r.people, conversations: r.conversations });
+        total.people += r.people; total.conversations += r.conversations;
+      }
       const perDay = new Map();
       for (const r of byDay.rows) {
         const d = perDay.get(r.day) || { conversations: 0, received: 0, replies: 0 };

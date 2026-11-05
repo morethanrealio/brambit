@@ -235,6 +235,7 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const web = await store.contato(agA, 'web', 'visitor-1');
   await store.registrar(web.id, [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'ok' },
     { role: 'user', content: '[event: click]', event: { type: 'click', data: {} } }]);
+  await store.registrar(web.id, [{ role: 'user', content: 'back again' }], 2); // same person, a second conversation
   const old = await store.contato(agA, 'whatsapp', '5511000000009');
   await store.registrar(old.id, [{ role: 'user', content: 'old' }]);
   await db.query(`UPDATE mtr_harness.public_contacts SET criado_em = now() - interval '40 days' WHERE id = $1`, [old.id]);
@@ -243,12 +244,12 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const get = (who, agentId, days) => ask(who, 'GET', `${METRICS_PATH}?agent=${agentId}&days=${days}`);
   const month = await get(adminA, agA, 30);
   assert.equal(month.status, 200);
-  assert.deepEqual(month.body.total, { conversations: 2, newContacts: 2, received: 2, replies: 2 });
-  assert.deepEqual(month.body.channels, { whatsapp: { conversations: 1, newContacts: 1, received: 1, replies: 1 },
-    web: { conversations: 1, newContacts: 1, received: 1, replies: 1 } });
+  assert.deepEqual(month.body.total, { people: 2, conversations: 3, received: 3, replies: 2 });
+  assert.deepEqual(month.body.channels, { whatsapp: { people: 1, conversations: 1, received: 1, replies: 1 },
+    web: { people: 1, conversations: 2, received: 2, replies: 1 } });
   assert.equal(month.body.daily.length, 30);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
-  assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 2, received: 2, replies: 2 });
+  assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 3, received: 3, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
   assert.deepEqual(month.body.cards.slice(0, 5), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
     { label: 'Bag', value: 3, detail: '1 person' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
@@ -267,7 +268,7 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.deepEqual({ agentId, contactId, language, from }, { agentId: agA, contactId: web.id, language: 'es', from: undefined });
   assert.deepEqual(await events.count({ kind: 'bag_add' }), { times: 0, people: 0 });
   const quarter = await get(owner, agA, 90);
-  assert.deepEqual(quarter.body.total, { conversations: 3, newContacts: 3, received: 3, replies: 2 });
+  assert.deepEqual(quarter.body.total, { people: 3, conversations: 4, received: 4, replies: 2 });
   assert.equal(quarter.body.retentionDays, 90);
   assert.deepEqual(quarter.body.cards, [], 'a failing plugin leaves only the volume');
 
