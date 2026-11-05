@@ -176,8 +176,9 @@
       </div>
     </div>
     <div class="kpis">
+      <div class="kpi"><div class="n" id="mPeople">0</div><div class="l" data-i18n="public_service_page.metric_people">People</div></div>
       <div class="kpi"><div class="n" id="mConversations">0</div><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div></div>
-      <div class="kpi"><div class="n" id="mNewContacts">0</div><div class="l" data-i18n="public_service_page.metric_new_contacts">New contacts</div></div>
+      <div class="kpi"><div class="n" id="mPerPerson">0</div><div class="l" data-i18n="public_service_page.metric_per_person">Conversations per person</div></div>
       <div class="kpi"><div class="n" id="mReceived">0</div><div class="l" data-i18n="public_service_page.metric_received">Messages received</div></div>
       <div class="kpi"><div class="n" id="mReplies">0</div><div class="l" data-i18n="public_service_page.metric_replies">Replies sent</div></div>
     </div>
@@ -187,8 +188,8 @@
     <div class="bars" id="mBars"></div>
     <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
     <table class="mtable">
-      <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_conversations">Conversations</th>
-        <th data-i18n="public_service_page.metric_new_contacts">New contacts</th><th data-i18n="public_service_page.metric_received">Messages received</th>
+      <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_people">People</th>
+        <th data-i18n="public_service_page.metric_conversations">Conversations</th><th data-i18n="public_service_page.metric_received">Messages received</th>
         <th data-i18n="public_service_page.metric_replies">Replies sent</th></tr></thead>
       <tbody id="mChannels"></tbody>
     </table>
@@ -534,9 +535,11 @@
     msg($('metricsMsg'), '');
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
-      [['mConversations', 'conversations'], ['mNewContacts', 'newContacts'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
+      [['mPeople', 'people'], ['mConversations', 'conversations'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
       });
+      $('mPerPerson').textContent = new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
+        .format(j.total.people ? j.total.conversations / j.total.people : 0);
       drawCards(j.cards, $('mCards'), $('mFunnels'), false);
       var bars = $('mBars'), top = Math.max.apply(null, j.daily.map(function(d){ return d.conversations; }).concat([1]));
       bars.textContent = '';
@@ -554,7 +557,7 @@
         var name = el('td', null, c === 'web' ? t('metric_channel_web') : c === 'whatsapp' ? 'WhatsApp' : c);
         if (c === 'whatsapp') name.setAttribute('translate', 'no');
         tr.appendChild(name);
-        ['conversations', 'newContacts', 'received', 'replies'].forEach(function(k){ tr.appendChild(el('td', null, number.format(v[k]))); });
+        ['people', 'conversations', 'received', 'replies'].forEach(function(k){ tr.appendChild(el('td', null, number.format(v[k]))); });
         rows.appendChild(tr);
       });
       $('mRetention').textContent = j.retentionDays < j.days ? t('metric_retention', { days: j.retentionDays }) : '';
