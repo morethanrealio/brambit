@@ -109,6 +109,38 @@ test('an older result the turn prunes keeps the tool\'s retained text; a tool wi
   assert.equal(results[3], longo({ q: 'd' }));
 });
 
+test('conversation_idle_minutes: after that long idle, the same contact starts its next conversation; the model and the web chat read only it, the owner reads all', async (t) => {
+  const { db, pool, store, dono, ag } = await montar(t);
+  await store.configurar(ag, dono, { ativo: true, conversationIdleMinutes: 10 });
+  const webStore = createPublicWebStore(pool);
+  const m = modelo([{ name: 'lembrar_do_contato', args: { chave: 'pele', valor: 'oleosa' } }]);
+  const a = atendimento(store, m);
+  const turn = (mensagem) => a.turno({ agentId: ag, canal: 'web', endereco: 'api:c1', mensagem });
+  const r = await turn('FIRST-VISIT');
+  await turn('still here');
+  assert.ok(JSON.stringify(m.chamadas.at(-1).messages).includes('FIRST-VISIT'));
+  await db.query(`UPDATE mtr_harness.public_messages SET criado_em = criado_em - interval '10 minutes'`);
+  assert.deepEqual(await webStore.history(ag, 'api:c1'), []);
+
+  m.chamadas.length = 0;
+  const r2 = await turn('back again');
+  assert.equal(r2.contatoId, r.contatoId);
+  assert.ok(!JSON.stringify(m.chamadas[0].messages).includes('FIRST-VISIT'), 'the old conversation reached the model');
+  assert.deepEqual(await store.estado(r.contatoId), { pele: 'oleosa' });
+  await turn('one more');
+  assert.ok(JSON.stringify(m.chamadas.at(-1).messages).includes('back again'));
+  assert.deepEqual((await webStore.history(ag, 'api:c1')).map((x) => x.text).filter((x) => !x.startsWith('resposta')), ['back again', 'one more']);
+  assert.deepEqual((await store.conversaDoDono(dono, r.contatoId)).map((x) => x.conversation), [1, 1, 1, 1, 2, 2, 2, 2]);
+  assert.equal((await store.contatosDoDono(dono, ag))[0].conversations, 2);
+
+  // Turned off: the conversation goes on, however long the pause.
+  await store.configurar(ag, dono, { conversationIdleMinutes: null });
+  await db.query(`UPDATE mtr_harness.public_messages SET criado_em = criado_em - interval '1 day'`);
+  await turn('after a day');
+  assert.equal(await store.currentConversation(r.contatoId), 2);
+  assert.equal((await webStore.history(ag, 'api:c1')).length, 6);
+});
+
 test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {
   const { store, dono, ag, ag2 } = await montar(t);
   await store.configurar(ag, dono, { ativo: true });

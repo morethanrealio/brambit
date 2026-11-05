@@ -10,7 +10,7 @@
 // change responds with 403. The ones that change state are POST and go through the server's global CSRF.
 import { readBody } from '../../http-body.mjs';
 import { webFieldsFromBody } from './public-web.mjs';
-import { AGENT_HOURLY_LIMIT_MAX, CONTATOS_POR_PAGINA } from './public-support.mjs';
+import { AGENT_HOURLY_LIMIT_MAX, CONTATOS_POR_PAGINA, CONVERSATION_IDLE_MAX } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
 import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
@@ -44,10 +44,10 @@ const profileFilter = (url) => {
 };
 const profilesCsv = (contatos) => {
   const labels = [...new Set(contatos.flatMap((c) => c.profile.map((f) => f.label)))];
-  const head = ['contact', 'channel', 'first_contact', 'last_message', 'messages', ...labels];
+  const head = ['contact', 'channel', 'first_contact', 'last_message', 'messages', 'conversations', ...labels];
   const row = (c) => {
     const by = new Map(c.profile.map((f) => [f.label, fieldValues(f).join(', ')]));
-    return [c.endereco, c.canal, iso(c.criadoEm), iso(c.ultimaEm), c.mensagens, ...labels.map((l) => by.get(l) ?? '')];
+    return [c.endereco, c.canal, iso(c.criadoEm), iso(c.ultimaEm), c.mensagens, c.conversations, ...labels.map((l) => by.get(l) ?? '')];
   };
   return [head, ...contatos.map(row)].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';
 };
@@ -75,6 +75,10 @@ export function camposDaConfig(b = {}) {
   if (b.agentHourlyLimit !== undefined) {
     c.agentHourlyLimit = inteiro(b.agentHourlyLimit, 1, AGENT_HOURLY_LIMIT_MAX);
     if (c.agentHourlyLimit === undefined) return { erro: 'server.public_agent_hourly_limit_invalid' };
+  }
+  if (b.conversationIdleMinutes !== undefined) {
+    c.conversationIdleMinutes = b.conversationIdleMinutes === null ? null : inteiro(b.conversationIdleMinutes, 1, CONVERSATION_IDLE_MAX);
+    if (c.conversationIdleMinutes === undefined) return { erro: 'server.public_conversation_idle_invalid' };
   }
   if (b.linkSites !== undefined) {
     if (!Array.isArray(b.linkSites) || b.linkSites.length > LINK_SITES_MAX) return { erro: 'server.public_link_sites_too_many' };
@@ -152,7 +156,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const agentes = (await store.agentesDoDono(user.id)).map((a) => ({
       agentId: a.agent_id, nome: a.nome, configurado: a.configurado, ativo: a.ativo, instrucoes: a.instrucoes,
       retencaoDias: a.retencao_dias, limitePorHora: a.limite_por_hora, tetoDiarioUsd: a.teto_diario_usd, agentHourlyLimit: a.agent_hourly_limit,
-      linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero,
+      linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, conversationIdleMinutes: a.conversation_idle_minutes,
       webEnabled: a.web_enabled, webOrigins: a.web_origins, webHasKey: a.web_has_key, webKeyIps: a.web_key_ips,
       ...(avatar ? avatar.view(a) : {}),
       role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null }),
@@ -202,6 +206,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     await record(user, acc, 'settings_changed');
     return send(res, 200, { ...(v ? avatar.view(v) : {}), ok: true, agentId: r.agent_id, ativo: r.ativo, instrucoes: r.instrucoes, retencaoDias: r.retencao_dias,
       limitePorHora: r.limite_por_hora, tetoDiarioUsd: r.teto_diario_usd, agentHourlyLimit: r.agent_hourly_limit, linkSites: r.link_sites,
+      conversationIdleMinutes: r.conversation_idle_minutes,
       webEnabled: w.web_enabled, webOrigins: w.web_origins, webHasKey: w.web_has_key, webKeyIps: w.web_key_ips });
   });
 
