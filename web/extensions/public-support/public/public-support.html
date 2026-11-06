@@ -272,6 +272,7 @@
           <select id="pfValue" class="hidden" aria-labelledby="pfLabel"></select>
           <a class="btn ghost hidden" id="profilesCsv" href="#" download data-i18n="public_service_page.profile_download">Download spreadsheet (CSV)</a>
         </div>
+        <label id="pfNamedBox" class="hidden"><input type="checkbox" id="pfNamed"> <span data-i18n="public_service_page.profile_named_only">Only identified contacts</span></label>
       </div>
       <div id="contatos" class="contatos"></div>
       <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="public_service_page.load_more">Load more</button></div>
@@ -604,8 +605,8 @@
   var PROFILES = '/api/public-support/profiles', profileFields = [];
   function option(value, text){ var o = el('option', null, text); o.value = value; return o; }
   function profileQuery(){
-    var f = $('pfField').value;
-    return f ? '&field=' + encodeURIComponent(f) + '&value=' + encodeURIComponent($('pfValue').value) : '';
+    var f = $('pfField').value, named = $('pfNamed').checked ? '&named=1' : '';
+    return (f ? '&field=' + encodeURIComponent(f) + '&value=' + encodeURIComponent($('pfValue').value) : '') + named;
   }
   function updateProfilesCsv(){
     $('profilesCsv').href = '/api/public-support/profiles.csv?agent=' + encodeURIComponent(agenteAtual.agentId)
@@ -615,13 +616,16 @@
     var id = agenteAtual.agentId;
     profileFields = []; $('pfField').textContent = ''; $('pfValue').textContent = '';
     $('pfValue').classList.add('hidden'); $('profileFilter').classList.add('hidden');
+    $('pfNamed').checked = false; $('pfNamedBox').classList.add('hidden');
     pedir(PROFILES + '?agent=' + encodeURIComponent(id) + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
-      if (agenteAtual.agentId !== id || $('pfField').value) return;
+      if (agenteAtual.agentId !== id || $('pfField').value || $('pfNamed').checked) return;
       profileFields = j.fields || [];
       $('pfField').appendChild(option('', t('profile_filter_all')));
       profileFields.forEach(function(f){ $('pfField').appendChild(option(f.label, f.label)); });
       $('profilesCsv').classList.toggle('hidden', !canEdit());
-      $('profileFilter').classList.toggle('hidden', !profileFields.length);
+      $('pfLabel').classList.toggle('hidden', !profileFields.length); $('pfField').classList.toggle('hidden', !profileFields.length);
+      $('pfNamedBox').classList.toggle('hidden', !j.named);
+      $('profileFilter').classList.toggle('hidden', !profileFields.length && !j.named);
       updateProfilesCsv();
     }).catch(function(){});
   }
@@ -634,6 +638,7 @@
     reloadContacts();
   });
   $('pfValue').addEventListener('change', reloadContacts);
+  $('pfNamed').addEventListener('change', reloadContacts);
 
   function carregarContatos(){
     var antes = contatos.length ? contatos[contatos.length - 1].ultimaEm : null;
@@ -648,7 +653,9 @@
   $('maisContatos').addEventListener('click', carregarContatos);
   function desenharContato(c){
     var d = el('div', 'ct'); d.dataset.id = c.id;
-    var who = el('div', 'end', c.endereco);
+    // The plugin's name for the person when it knows them; the channel address otherwise.
+    var who = el('div', 'end', c.name || c.endereco);
+    if (c.name) who.title = c.endereco;
     if (c.bloqueadoEm) who.appendChild(el('span', 'tag blq', t('blocked_tag')));
     else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
     d.appendChild(who);
@@ -665,7 +672,7 @@
   function abrirConversa(c){
     contatoAtual = c; maisAntiga = null; topConversation = null;
     Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
-    $('convTitulo').textContent = c.endereco;
+    $('convTitulo').textContent = c.name || c.endereco;
     $('convVazia').classList.add('hidden'); $('convBox').classList.remove('hidden');
     $('conversa').textContent = ''; msg($('convMsg'), '');
     $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');

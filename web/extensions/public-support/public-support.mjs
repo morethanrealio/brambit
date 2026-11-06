@@ -37,6 +37,7 @@ export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's
 export const METRIC_CARDS_WAIT_MS = 5000;
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
 export const PROFILE_LIST_MAX = 10;   // items in one profile field that is a list (skin concerns...)
+export const CONTACT_NAME_MAX = 80;   // the name a plugin gives a contact, on the owner's screen
 // The avatar on a website (public-avatar.mjs), off until the owner turns it on.
 export const AVATAR_DAILY_MINUTES = 20;     // an assistant's talk time with visitors per day
 export const AVATAR_VISITOR_MINUTES = 5;    // a visitor's talk time per 24 h
@@ -592,6 +593,10 @@ export function retainedByTool(tools) {
 //    text, a number or a list of up to PROFILE_LIST_MAX short texts (the owner can
 //    filter by any one of them); up to PROFILE_FIELDS_MAX fields per contact; slower than
 //    METRIC_CARDS_WAIT_MS = no profile this time.
+//   contactNames({agentId, contacts: [{id, notes}]}) → {[contactId]: text}: the name the
+//    owner's screen shows for a person the plugin knows (an email they gave, a name), in
+//    place of the channel address; up to CONTACT_NAME_MAX characters. The owner can list
+//    only the named ones. Slower than METRIC_CARDS_WAIT_MS = no names this time.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With
@@ -666,6 +671,19 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         .map((f) => ({ label: text(f?.label, 40), value: number(f?.value) ?? text(f?.value, 60) ?? list(f?.value) }))
         .filter((f) => f.label && f.value !== null).slice(0, PROFILE_FIELDS_MAX);
       if (fields.length) out[id] = fields;
+    }
+    return out;
+  }
+
+  // The plugin's name for each contact ({contactId: text}): only the contacts asked
+  // about with a non-empty text; {} without the hook.
+  async function contactNames({ agentId, contacts }) {
+    if (typeof ganchos?.contactNames !== 'function' || !contacts.length) return {};
+    const r = await screenHook('contactNames', { agentId, contacts });
+    const out = {};
+    for (const { id } of contacts) {
+      const name = text(r?.[id], CONTACT_NAME_MAX);
+      if (name) out[id] = name;
     }
     return out;
   }
@@ -810,5 +828,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     });
   }
 
-  return { turno, registro, defaultTexts, metricCards, contactProfiles };
+  return { turno, registro, defaultTexts, metricCards, contactProfiles, contactNames };
 }

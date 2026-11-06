@@ -1257,6 +1257,7 @@
     "profile_filter_all": "Todos",
     "profile_download": "Baixar planilha (CSV)",
     "profile_filter_none": "Ninguém com esse filtro.",
+    "profile_named_only": "Só contatos identificados",
     "activity_profiles_exported": "Baixou a planilha de perfis"
   },
   "index_page": {

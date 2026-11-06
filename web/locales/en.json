@@ -1257,6 +1257,7 @@
     "profile_filter_all": "Everyone",
     "profile_download": "Download spreadsheet (CSV)",
     "profile_filter_none": "No one matches this filter.",
+    "profile_named_only": "Only identified contacts",
     "activity_profiles_exported": "Downloaded the profile spreadsheet"
   },
   "index_page": {
