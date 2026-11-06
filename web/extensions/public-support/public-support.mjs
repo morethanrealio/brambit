@@ -31,10 +31,18 @@ export const AGENT_HOURLY_LIMIT_MAX = 100000;
 export const DAILY_CAP_DEFAULT_USD = 10;    // daily cap of an assistant whose owner never set one
 export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
+// The contact list shows each contact's last message up to this many characters, then "...".
+export const LAST_MESSAGE_MAX = 100;
+const preview = (text) => {
+  const chars = [...String(text ?? '').replace(/\s+/g, ' ').trim()];
+  return chars.length > LAST_MESSAGE_MAX ? chars.slice(0, LAST_MESSAGE_MAX).join('').trimEnd() + '...' : chars.join('');
+};
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
-export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
+export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
+export const RANKING_ROWS_MAX = 20;   // rows of a ranking card
+export const RANKING_COLUMNS_MAX = 4; // its columns, the name included
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
 export const PROFILE_LIST_MAX = 10;   // items in one profile field that is a list (skin concerns...)
 export const CONTACT_NAME_MAX = 80;   // the name a plugin gives a contact, on the owner's screen
@@ -289,18 +297,22 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return rows[0]?.agent_id ?? null;
     },
 
-    // An owner's assistant's contacts, from newest to oldest.
-    // antes = ultima_em of the last one on the previous page.
+    // An owner's assistant's contacts, from newest to oldest, each with its last message
+    // (lastMessage, cut at LAST_MESSAGE_MAX chars). antes = ultima_em of the last one on the previous page.
     async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
         `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
                 (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens,
-                (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations
+                (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations,
+                last.role AS last_role, last.content AS last_content
            FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+           LEFT JOIN LATERAL (SELECT m.role, left(m.content, $5) AS content FROM ${S}.public_messages m
+                               WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) last ON true
           WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
-          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA)]);
+          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
-        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations }));
+        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations,
+        ...(r.last_role ? { lastMessage: { role: r.last_role, text: preview(r.last_content) } } : {}) }));
     },
 
     // An owner's contact's conversation, in order; antes = id of the oldest message already seen.
@@ -576,13 +588,19 @@ export function retainedByTool(tools) {
 //    members of its client area. from/to = the period's first and last day
 //    (YYYY-MM-DD, installation timezone); language = the page's ('pt-BR', 'en' or
 //    'es'), for the labels. A card is {label, value, detail?}: value a number (the
-//    page formats it) or short text, detail a short line under it (e.g. '3 people');
+//    page formats it) or short text, detail a short line under it (e.g. '3 people'),
+//    top: true to show it in the dashboard's first row, next to the volume;
 //    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
-//    shows across the row, each with its share of the step before. Up to
+//    shows across the row, each with its share of the step before;
+//    or a ranking {label, detail?, columns: [name header, number headers...], rows:
+//    [{label, values: [numbers]}]}: a table in the given order, 2 to RANKING_COLUMNS_MAX
+//    columns, up to RANKING_ROWS_MAX rows, the first number drawn as a bar. Up to
 //    METRIC_CARDS_MAX cards; slower than METRIC_CARDS_WAIT_MS = none this time.
 //    events = this assistant's events in the period: count({kind, ref?|refPrefix?})
 //    → {times, people}; funnel([step, ...]) → people per step, each step done
-//    after the one before (link clicks are kind 'link_click', ref = the button's ref).
+//    after the one before; top(step, limit?) → {rows: [{ref, times, people}], refs}: the
+//    step's refs, most frequent first, and how many different ones (link clicks are
+//    kind 'link_click', ref = the button's ref). A step's kind and ref may be lists.
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
@@ -608,7 +626,7 @@ export function retainedByTool(tools) {
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
 export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', log = console }) {
-  const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0) };
+  const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0), top: async () => ({ rows: [], refs: 0 }) };
   const trackFor = (agentId, contactId) => async (kind, ref) => (events ? events.record({ agentId, contactId, kind, ref }) : false);
   const NO_EDITS = { installation: '', written: '', spoken: '' };
   async function editedTexts(agentId) {
@@ -650,8 +668,16 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value) }));
         return steps.length >= 2 && steps.length <= FUNNEL_STEPS_MAX && steps.every((s) => s.label && s.value !== null) ? { label, steps } : null;
       }
+      if (Array.isArray(c.rows)) {
+        const columns = Array.isArray(c.columns) ? c.columns.map((h) => text(h, 30)) : [];
+        if (columns.length < 2 || columns.length > RANKING_COLUMNS_MAX || !columns.every(Boolean)) return null;
+        const rows = c.rows.slice(0, RANKING_ROWS_MAX).map((w) => ({ label: text(w?.label, 80), values: Array.isArray(w?.values) ? w.values.map(number) : [] }));
+        if (!rows.every((w) => w.label && w.values.length === columns.length - 1 && w.values.every((v) => v !== null))) return null;
+        const detail = text(c.detail, 80);
+        return { label, ...(detail ? { detail } : {}), columns, rows };
+      }
       const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
-      return value === null ? null : { label, value, ...(detail ? { detail } : {}) };
+      return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
   }

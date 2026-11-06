@@ -28,6 +28,7 @@ import { AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } from './public-sup
 import { METRICS_PATH } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH } from './public-support-events.mjs';
+import { listThemes } from './client-area-themes.mjs';
 
 export const CLIENT_ROLES = ['admin', 'viewer'];
 export const AREA_NAME_MAX = 120;
@@ -46,6 +47,7 @@ export const clientAreaSchema = (S) => `
    owner_user_id uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
    name text NOT NULL,
    created_at timestamptz NOT NULL DEFAULT now());
+ ALTER TABLE ${S}.client_areas ADD COLUMN IF NOT EXISTS theme text;
  CREATE TABLE IF NOT EXISTS ${S}.client_area_members (
    area_id uuid NOT NULL REFERENCES ${S}.client_areas(id) ON DELETE CASCADE,
    user_id uuid NOT NULL REFERENCES ${S}.users(id) ON DELETE CASCADE,
@@ -64,13 +66,13 @@ export const clientAreaSchema = (S) => `
 
 export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
   // An assistant's owner and the area it is in, joined to the person asking.
-  const ACCESS = `SELECT a.id AS agent_id, a.user_id AS owner_id, ar.id AS area_id, ar.name AS area_name,
+  const ACCESS = `SELECT a.id AS agent_id, a.user_id AS owner_id, ar.id AS area_id, ar.name AS area_name, ar.theme AS area_theme,
         CASE WHEN a.user_id = $1 THEN 'owner' ELSE m.role END AS role
      FROM ${S}.agents a
      LEFT JOIN ${S}.client_area_agents x ON x.agent_id = a.id
      LEFT JOIN ${S}.client_areas ar ON ar.id = x.area_id AND ar.owner_user_id = a.user_id
      LEFT JOIN ${S}.client_area_members m ON m.area_id = ar.id AND m.user_id = $1`;
-  const asAccess = (r) => (r && r.role ? { ownerId: r.owner_id, role: r.role, agentId: r.agent_id, areaId: r.area_id, areaName: r.area_name } : null);
+  const asAccess = (r) => (r && r.role ? { ownerId: r.owner_id, role: r.role, agentId: r.agent_id, areaId: r.area_id, areaName: r.area_name, areaTheme: r.area_theme ?? null } : null);
   // Panel accounts, kept in memory: the core asks on every request of a signed-in
   // account (account-scope.mjs). Only this store writes the table.
   const panel = new Set();
@@ -89,7 +91,7 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
     panelActive: () => !loaded || panel.size > 0,
     async isPanelAccount(userId) { await loadPanel(); return panel.has(userId); },
 
-    // → { ownerId, role: owner|admin|viewer, agentId, areaId, areaName } or null.
+    // → { ownerId, role: owner|admin|viewer, agentId, areaId, areaName, areaTheme } or null.
     async agentAccess(userId, agentId) {
       const { rows } = await pool.query(`${ACCESS} WHERE a.id = $2`, [userId, agentId]);
       return asAccess(rows[0]);
@@ -106,17 +108,17 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
       return rows.map(asAccess);
     },
 
-    // The area of each of an owner's assistants: agentId → { areaId, areaName }.
+    // The area of each of an owner's assistants: agentId → { areaId, areaName, areaTheme }.
     async areaOfAgents(ownerId) {
       const { rows } = await pool.query(
-        `SELECT x.agent_id, ar.id, ar.name FROM ${S}.client_area_agents x
+        `SELECT x.agent_id, ar.id, ar.name, ar.theme FROM ${S}.client_area_agents x
            JOIN ${S}.client_areas ar ON ar.id = x.area_id AND ar.owner_user_id = $1`, [ownerId]);
-      return new Map(rows.map((r) => [r.agent_id, { areaId: r.id, areaName: r.name }]));
+      return new Map(rows.map((r) => [r.agent_id, { areaId: r.id, areaName: r.name, areaTheme: r.theme }]));
     },
 
     async list(ownerId) {
       const { rows } = await pool.query(
-        `SELECT ar.id, ar.name, ar.created_at,
+        `SELECT ar.id, ar.name, ar.theme, ar.created_at,
                 coalesce((SELECT json_agg(json_build_object('agentId', x.agent_id, 'name', a.name) ORDER BY a.name)
                             FROM ${S}.client_area_agents x JOIN ${S}.agents a ON a.id = x.agent_id AND a.user_id = ar.owner_user_id
                            WHERE x.area_id = ar.id), '[]') AS agents,
@@ -124,13 +126,19 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
                             FROM ${S}.client_area_members m JOIN ${S}.users u ON u.id = m.user_id
                            WHERE m.area_id = ar.id), '[]') AS members
            FROM ${S}.client_areas ar WHERE ar.owner_user_id = $1 ORDER BY ar.name`, [ownerId]);
-      return rows.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, agents: r.agents, members: r.members }));
+      return rows.map((r) => ({ id: r.id, name: r.name, theme: r.theme, createdAt: r.created_at, agents: r.agents, members: r.members }));
     },
 
     async create(ownerId, name) {
       const { rows } = await pool.query(
         `INSERT INTO ${S}.client_areas (owner_user_id, name) VALUES ($1, $2) RETURNING id, name`, [ownerId, name]);
       return rows[0];
+    },
+
+    // theme null = the default look. → false when the area is not the owner's.
+    async setTheme(ownerId, areaId, theme) {
+      const { rowCount } = await pool.query(`UPDATE ${S}.client_areas SET theme = $3 WHERE id = $1 AND owner_user_id = $2`, [areaId, ownerId, theme]);
+      return rowCount > 0;
     },
 
     // areaId null = the assistant leaves its area. Only the owner's assistant, only into the owner's area.
@@ -221,8 +229,9 @@ export function inviteEmail({ link, areaName, inviter, language }) {
 // core's mailer ({ enabled(), send() }); the invite e-mail goes out only when
 // the owner asks for it (sendEmail: true) and e-mail is set up. activity
 // (client-area-activity.mjs) = the access log, where each change is recorded.
+// themes() → the theme ids an area may take (client-area-themes.mjs).
 export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase = () => '',
-  mail = { enabled: coreMailEnabled, send: coreSendEmail }, log = console, activity = null }) {
+  mail = { enabled: coreMailEnabled, send: coreSendEmail }, log = console, activity = null, themes = listThemes }) {
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
     const user = await ctx.currentUser?.();
@@ -235,8 +244,8 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
   const record = (user, action, areaId, { agentId = null, detail = null } = {}) =>
     activity?.record({ ownerId: user.id, actorId: user.id, agentId, areaId, action, detail });
 
-  // mail: whether the screen offers to e-mail the invite link.
-  route('GET', CLIENT_AREAS_PATH, async ({ res, user }) => send(res, 200, { areas: await areas.list(user.id), mail: !!mail.enabled() }));
+  // mail: whether the screen offers to e-mail the invite link; themes: the looks an area may take.
+  route('GET', CLIENT_AREAS_PATH, async ({ res, user }) => send(res, 200, { areas: await areas.list(user.id), mail: !!mail.enabled(), themes: themes() }));
 
   route('POST', CLIENT_AREAS_PATH, async ({ req, res, user }) => {
     const name = String((await readBody(req)).name ?? '').trim();
@@ -244,6 +253,17 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     const area = await areas.create(user.id, name);
     await record(user, 'area_created', area.id);
     return send(res, 200, area);
+  });
+
+  // { areaId, theme | null }: the look the area's people see; only a theme found now.
+  route('POST', CLIENT_AREAS_PATH + '/theme', async ({ req, res, user }) => {
+    const b = await readBody(req);
+    const areaId = uuid(b.areaId);
+    if (!areaId) return notFound(res);
+    if (b.theme !== null && !themes().includes(b.theme)) return send(res, 400, { error: 'bad_theme' });
+    if (!(await areas.setTheme(user.id, areaId, b.theme))) return notFound(res);
+    await record(user, 'theme_changed', areaId, { detail: { theme: b.theme } });
+    return send(res, 200, { ok: true });
   });
 
   // { agentId, areaId | null }

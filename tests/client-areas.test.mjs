@@ -5,22 +5,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico } = await import('../web/extensions/public-support/public-support.mjs');
+const { createPublicoStore, createAtendimentoPublico, METRIC_CARDS_MAX } = await import('../web/extensions/public-support/public-support.mjs');
 const { registrarRotasDoDono, AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createPublicWebStore } = await import('../web/extensions/public-support/public-web.mjs');
 const { createPromptStore } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { createClientAreaStore, registerClientAreaRoutes, panelScope, CLIENT_AREAS_PATH } = await import('../web/extensions/public-support/client-areas.mjs');
 const { createMetricsStore, METRICS_PATH } = await import('../web/extensions/public-support/public-support-metrics.mjs');
 const { activitySchema, createActivityStore, ACTIVITY_PATH } = await import('../web/extensions/public-support/client-area-activity.mjs');
+const { listThemes } = await import('../web/extensions/public-support/client-area-themes.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createAccountScope } = await import('../web/account-scope.mjs');
 
 const TZ = 'America/Sao_Paulo';
 
-async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } }, ganchos = null } = {}) {
+async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } }, ganchos = null, themes = () => ['client-a'] } = {}) {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`CREATE SCHEMA mtr_harness;
     CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE NOT NULL, name text,
@@ -57,7 +61,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
     prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles,
     contactNames: turns.contactNames, activity });
-  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
+  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} }, themes });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
     const res = { setHeader() {}, writeHead(status, headers) { Object.assign(this, { status, headers }); }, end(body) { this.body = body; } };
@@ -226,9 +230,11 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const s = await setup(t, { ganchos: { async metricCards(q) {
     asked.push(q);
     if (q.days === 90) throw Error('plugin down');
-    return [{ label: ' Orders ', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
-      { label: 'Bag', value: 3, detail: ' 1 person ' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    return [{ label: ' Orders ', value: 12, top: 'yes' }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
+      { label: 'Bag', value: 3, detail: ' 1 person ', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
       { label: 'One step', steps: [{ label: 'Click', value: 4 }] }, { label: 'Text step', steps: [{ label: 'a', value: '4' }, { label: 'b', value: 2 }] },
+      { label: 'Top', detail: '9 in all', columns: ['Product', 'Shown'], rows: [{ label: 'Gel', values: [5] }, { label: 'Toner', values: [2] }] },
+      { label: 'Short row', columns: ['Product', 'Shown', 'Clicks'], rows: [{ label: 'Gel', values: [5] }] },
       { label: '', value: 1 }, { label: 'Object', value: {} }, ...Array.from({ length: 10 }, (_, i) => ({ label: 'n' + i, value: i }))];
   } } });
   const { ask, db, store, owner, adminA, viewerB, agA, agB } = s;
@@ -252,17 +258,18 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
   assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 3, received: 3, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
-  assert.deepEqual(month.body.cards.slice(0, 5), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
-    { label: 'Bag', value: 3, detail: '1 person' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+  assert.deepEqual(month.body.cards.slice(0, 6), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
+    { label: 'Bag', value: 3, detail: '1 person', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    { label: 'Top', detail: '9 in all', columns: ['Product', 'Shown'], rows: [{ label: 'Gel', values: [5] }, { label: 'Toner', values: [2] }] },
     { label: 'n0', value: 0 }], 'the plugin\'s cards and funnels, without the malformed ones');
-  assert.equal(month.body.cards.length, 8);
+  assert.equal(month.body.cards.length, METRIC_CARDS_MAX);
   const { events, ...range } = asked[0];
   assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today, language: 'en' });
   await ask(adminA, 'GET', `${METRICS_PATH}?agent=${agA}&days=30&lang=pt-br`);
   assert.equal(asked.at(-1).language, 'pt-BR', 'the cards come in the page\'s language');
   // One conversation's cards: for whoever can open it, with its assistant and contact.
   const conversation = (who) => ask(who, 'GET', `${METRICS_PATH}?contact=${web.id}&lang=es`);
-  assert.equal((await conversation(adminA)).body.cards.length, 8);
+  assert.equal((await conversation(adminA)).body.cards.length, METRIC_CARDS_MAX);
   assert.equal((await conversation(viewerB)).status, 404, 'another area\'s conversation');
   assert.equal((await conversation(owner)).status, 200);
   const { agentId, contactId, language, from } = asked.at(-1);
@@ -387,4 +394,31 @@ test('access log: the owner sees every line, an area\'s admin only its area\'s, 
   assert.equal((await log(adminA, agB)).status, 404);
   assert.equal((await log(viewerB, agB)).status, 403);
   assert.equal((await log(s.stranger, agA)).status, 404);
+});
+
+test('themes: the owner gives an area one of the themes found; its people get it with the assistant, nobody else can set it', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'themes-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'themes'));
+  for (const n of ['client-a.css', 'Bad.css', '..css', 'notes.txt']) fs.writeFileSync(path.join(dir, 'themes', n), '');
+  assert.deepEqual(listThemes([dir, path.join(dir, 'missing')]), ['client-a']);
+
+  const s = await setup(t);
+  const { ask, owner, adminA, viewerB } = s;
+  const { a } = await twoClients(s);
+  const setTheme = (who, areaId, theme) => ask(who, 'POST', CLIENT_AREAS_PATH + '/theme', { areaId, theme });
+  assert.deepEqual((await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.themes, ['client-a']);
+  assert.equal((await setTheme(owner, a.id, '../x')).status, 400, 'only a theme found now');
+  assert.equal((await setTheme(adminA, a.id, 'client-a')).status, 404, 'a member cannot change the look');
+  assert.equal((await setTheme(s.stranger, a.id, 'client-a')).status, 404);
+  assert.equal((await setTheme(owner, a.id, 'client-a')).status, 200);
+
+  assert.deepEqual((await ask(adminA, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), ['client-a']);
+  assert.deepEqual((await ask(viewerB, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), [null], 'another area keeps the default');
+  assert.deepEqual((await ask(owner, 'GET', '/api/publico/agentes')).body.agentes.map((x) => [x.nome, x.areaTheme]), [['A', 'client-a'], ['B', null], ['Own', null]]);
+  assert.equal((await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.areas.find((x) => x.id === a.id).theme, 'client-a');
+
+  assert.equal((await setTheme(owner, a.id, null)).status, 200);
+  assert.deepEqual((await ask(adminA, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), [null]);
+  const lines = (await ask(owner, 'GET', `${ACTIVITY_PATH}?agent=${s.agA}`)).body.lines.filter((l) => l.action === 'theme_changed');
+  assert.deepEqual(lines.map((l) => [l.area, l.detail]), [['Client A', { theme: null }], ['Client A', { theme: 'client-a' }]]);
 });

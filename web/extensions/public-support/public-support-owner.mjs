@@ -104,7 +104,8 @@ export function camposDaConfig(b = {}) {
 // contactProfiles({agentId, language, contacts: [{id, notes}]}) → the plugin's profile of each contact (public-support.mjs).
 // contactNames({agentId, contacts: [{id, notes}]}) → the plugin's name for each contact it knows (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
-// events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet.
+// events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet
+// and as the metrics' click count.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
   prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
@@ -164,7 +165,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, conversationIdleMinutes: a.conversation_idle_minutes,
       webEnabled: a.web_enabled, webOrigins: a.web_origins, webHasKey: a.web_has_key, webKeyIps: a.web_key_ips,
       ...(avatar ? avatar.view(a) : {}),
-      role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null }),
+      role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null, areaTheme: null }),
     }));
     // The face is set in the assistant's settings; this screen only says whether it is ready.
     const avatarAvailable = !!avatar?.available();
@@ -176,7 +177,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       for (const a of await store.agentesDoDono(ownerId)) {
         const m = ofOwner.get(a.agent_id);
         if (m) agentes.push({ agentId: a.agent_id, nome: a.nome, configurado: a.configurado, ativo: a.ativo, instrucoes: a.instrucoes,
-          linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName });
+          linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName, areaTheme: m.areaTheme });
       }
     }
     // panelAccount: the person has only this screen (client-areas.mjs), so it offers no way back to the app.
@@ -226,6 +227,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return send(res, 200, { ok: true, key });
   });
 
+  // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones).
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agente'));
     if (!acc) return naoAchei(res);
@@ -234,7 +236,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const language = pageLanguage(url), keep = profileFilter(url);
     // With a profile filter, a page is the next contacts it keeps.
     const contatos = keep ? await scanProfiles(acc, language, { antes: quando, keep, max: CONTATOS_POR_PAGINA })
-      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando }));
+      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined }));
     return send(res, 200, { contatos });
   });
 
@@ -327,8 +329,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const days = Number(url.searchParams.get('days'));
     if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
     const volume = await metrics.volume(acc.ownerId, acc.agentId, days);
-    const cards = volume.daily.length ? await metricCards({ agentId: acc.agentId, days, from: volume.daily[0].day, to: volume.daily.at(-1).day, language }) : [];
-    return send(res, 200, { ...volume, cards });
+    if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null });
+    const from = volume.daily[0].day, to = volume.daily.at(-1).day;
+    // clicks = the link buttons pressed in the period (/go), null without events.
+    const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language }),
+      events ? events.count(acc.agentId, { from, to }, { kind: 'link_click' }) : null]);
+    return send(res, 200, { ...volume, cards, clicks });
   });
 
   // The period's events as a spreadsheet, for everyone who sees the metrics.
