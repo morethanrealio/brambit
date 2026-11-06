@@ -132,7 +132,9 @@
   @media (max-width:640px){.kpis.plugin{grid-template-columns:repeat(2,minmax(0,1fr));}.funnel .to{display:none;}}
   .ranking > .l{font-size:13.5px;font-weight:600;color:inherit;}
   .ranking > .d{font-size:13px;margin-top:4px;}
-  .mtable.rank{margin-top:10px;}
+  .rank-wrap{overflow-x:auto;margin-top:10px;}
+  .mtable.rank{margin-top:0;}
+  @media (max-width:640px){.mtable.rank{font-size:13px;}.mtable.rank th{font-size:11px;letter-spacing:0;}.mtable.rank th,.mtable.rank td{padding:5px 4px;}.mtable.rank td:first-child,.mtable.rank th:first-child{width:1.5em;padding-right:4px;}}
   .mtable.rank td:first-child,.mtable.rank th:first-child{width:2.5em;color:var(--mut);text-align:right;padding-right:10px;}
   .mtable.rank td.name,.mtable.rank th.name{text-align:left;}
   .mtable.rank .share{height:5px;border-radius:3px;background:var(--accent2);margin-top:4px;min-width:2px;}
@@ -621,7 +623,8 @@
           body.appendChild(tr);
         });
         table.appendChild(body);
-        k.appendChild(table);
+        var wrap = el('div', 'rank-wrap'); wrap.appendChild(table);
+        k.appendChild(wrap);
         return funnels.appendChild(k);
       }
       k.appendChild(el('div', 'n', shown(c.value)));
