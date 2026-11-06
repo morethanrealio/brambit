@@ -33,8 +33,10 @@ export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
-export const METRIC_CARDS_MAX = 8;    // a plugin's cards next to an assistant's volume
+export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
+export const RANKING_ROWS_MAX = 20;   // rows of a ranking card
+export const RANKING_COLUMNS_MAX = 4; // its columns, the name included
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
 export const PROFILE_LIST_MAX = 10;   // items in one profile field that is a list (skin concerns...)
 export const CONTACT_NAME_MAX = 80;   // the name a plugin gives a contact, on the owner's screen
@@ -579,11 +581,16 @@ export function retainedByTool(tools) {
 //    page formats it) or short text, detail a short line under it (e.g. '3 people'),
 //    top: true to show it in the dashboard's first row, next to the volume;
 //    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
-//    shows across the row, each with its share of the step before. Up to
+//    shows across the row, each with its share of the step before;
+//    or a ranking {label, detail?, columns: [name header, number headers...], rows:
+//    [{label, values: [numbers]}]}: a table in the given order, 2 to RANKING_COLUMNS_MAX
+//    columns, up to RANKING_ROWS_MAX rows, the first number drawn as a bar. Up to
 //    METRIC_CARDS_MAX cards; slower than METRIC_CARDS_WAIT_MS = none this time.
 //    events = this assistant's events in the period: count({kind, ref?|refPrefix?})
 //    → {times, people}; funnel([step, ...]) → people per step, each step done
-//    after the one before (link clicks are kind 'link_click', ref = the button's ref).
+//    after the one before; top(step, limit?) → {rows: [{ref, times, people}], refs}: the
+//    step's refs, most frequent first, and how many different ones (link clicks are
+//    kind 'link_click', ref = the button's ref). A step's kind and ref may be lists.
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
@@ -609,7 +616,7 @@ export function retainedByTool(tools) {
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
 export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', log = console }) {
-  const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0) };
+  const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0), top: async () => ({ rows: [], refs: 0 }) };
   const trackFor = (agentId, contactId) => async (kind, ref) => (events ? events.record({ agentId, contactId, kind, ref }) : false);
   const NO_EDITS = { installation: '', written: '', spoken: '' };
   async function editedTexts(agentId) {
@@ -650,6 +657,14 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       if (Array.isArray(c.steps)) {
         const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value) }));
         return steps.length >= 2 && steps.length <= FUNNEL_STEPS_MAX && steps.every((s) => s.label && s.value !== null) ? { label, steps } : null;
+      }
+      if (Array.isArray(c.rows)) {
+        const columns = Array.isArray(c.columns) ? c.columns.map((h) => text(h, 30)) : [];
+        if (columns.length < 2 || columns.length > RANKING_COLUMNS_MAX || !columns.every(Boolean)) return null;
+        const rows = c.rows.slice(0, RANKING_ROWS_MAX).map((w) => ({ label: text(w?.label, 80), values: Array.isArray(w?.values) ? w.values.map(number) : [] }));
+        if (!rows.every((w) => w.label && w.values.length === columns.length - 1 && w.values.every((v) => v !== null))) return null;
+        const detail = text(c.detail, 80);
+        return { label, ...(detail ? { detail } : {}), columns, rows };
       }
       const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
       return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}) };

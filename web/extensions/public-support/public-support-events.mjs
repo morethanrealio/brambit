@@ -25,6 +25,7 @@ export const EVENT_REF_MAX = 200;
 export const LINK_URL_MAX = 2000;
 export const FUNNEL_STEPS_MAX = 5;
 const KINDS_PER_STEP_MAX = 5;
+export const TOP_REFS_MAX = 50;    // refs a top() call returns, or a step lists, at most
 export const EVENTS_EXPORT_MAX = 50000;
 const CLICK_REPEAT_MS = 5000;      // a second tap on the same link this soon is the same click
 const CLICKS_PER_LINK_HOUR = 20;   // past this, a link's clicks stop counting for the hour
@@ -63,6 +64,10 @@ function match(step, n) {
   const kinds = [step?.kind].flat().map((k) => String(k ?? ''));
   if (!kinds.length || kinds.length > KINDS_PER_STEP_MAX || !kinds.every((k) => EVENT_KIND.test(k))) throw Error('events: bad kind');
   const [kind, value] = kinds.length === 1 ? [`kind = $${n}`, kinds[0]] : [`kind = ANY($${n}::text[])`, kinds];
+  if (Array.isArray(step.ref)) {
+    if (!step.ref.length || step.ref.length > TOP_REFS_MAX) throw Error('events: 1 to ' + TOP_REFS_MAX + ' refs');
+    return [`${kind} AND ref = ANY($${n + 1}::text[])`, [value, step.ref.map(cleanRef)]];
+  }
   if (step.ref !== undefined) return [`${kind} AND ref = $${n + 1}`, [value, cleanRef(step.ref)]];
   if (step.refPrefix !== undefined) return [`${kind} AND left(ref, length($${n + 1})) = $${n + 1}`, [value, cleanRef(step.refPrefix)]];
   return [kind, [value]];
@@ -129,6 +134,20 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       return { times: r?.times ?? 0, people: r?.people ?? 0 };
     },
 
+    // The step's refs, most frequent first: {rows: [{ref, times, people}] (at most
+    // `limit`), refs: how many different refs in all}. Events with no ref don't count.
+    async top(agentId, range, step, limit = 10) {
+      const n = Math.min(Math.max(Math.trunc(Number(limit)) || 10, 1), TOP_REFS_MAX);
+      const [inScope, scoped] = scope(range, 2);
+      const [where, params] = match(step, 2 + scoped.length);
+      const { rows } = await pool.query(
+        `SELECT ref, count(*)::int AS times, count(DISTINCT contact_id)::int AS people, count(*) OVER ()::int AS refs
+           FROM ${S}.public_support_events
+          WHERE agent_id = $1 AND ${inScope} AND ${where} AND ref <> ''
+          GROUP BY ref ORDER BY times DESC, ref LIMIT ${n}`, [agentId, ...scoped, ...params]);
+      return { rows: rows.map(({ ref, times, people }) => ({ ref, times, people })), refs: rows[0]?.refs ?? 0 };
+    },
+
     // People who did each step in order, in the period: [step 1, step 2 after
     // step 1, step 3 after step 2, ...].
     async funnel(agentId, range, steps) {
@@ -167,6 +186,7 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       return {
         count: (step) => this.count(agentId, range, step),
         funnel: (steps) => this.funnel(agentId, range, steps),
+        top: (step, limit) => this.top(agentId, range, step, limit),
       };
     },
   };

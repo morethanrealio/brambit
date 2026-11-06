@@ -11,7 +11,7 @@ import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico } = await import('../web/extensions/public-support/public-support.mjs');
+const { createPublicoStore, createAtendimentoPublico, METRIC_CARDS_MAX } = await import('../web/extensions/public-support/public-support.mjs');
 const { registrarRotasDoDono, AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createPublicWebStore } = await import('../web/extensions/public-support/public-web.mjs');
 const { createPromptStore } = await import('../web/extensions/public-support/public-support-prompts.mjs');
@@ -233,6 +233,8 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
     return [{ label: ' Orders ', value: 12, top: 'yes' }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
       { label: 'Bag', value: 3, detail: ' 1 person ', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
       { label: 'One step', steps: [{ label: 'Click', value: 4 }] }, { label: 'Text step', steps: [{ label: 'a', value: '4' }, { label: 'b', value: 2 }] },
+      { label: 'Top', detail: '9 in all', columns: ['Product', 'Shown'], rows: [{ label: 'Gel', values: [5] }, { label: 'Toner', values: [2] }] },
+      { label: 'Short row', columns: ['Product', 'Shown', 'Clicks'], rows: [{ label: 'Gel', values: [5] }] },
       { label: '', value: 1 }, { label: 'Object', value: {} }, ...Array.from({ length: 10 }, (_, i) => ({ label: 'n' + i, value: i }))];
   } } });
   const { ask, db, store, owner, adminA, viewerB, agA, agB } = s;
@@ -256,17 +258,18 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
   assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 3, received: 3, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
-  assert.deepEqual(month.body.cards.slice(0, 5), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
+  assert.deepEqual(month.body.cards.slice(0, 6), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
     { label: 'Bag', value: 3, detail: '1 person', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    { label: 'Top', detail: '9 in all', columns: ['Product', 'Shown'], rows: [{ label: 'Gel', values: [5] }, { label: 'Toner', values: [2] }] },
     { label: 'n0', value: 0 }], 'the plugin\'s cards and funnels, without the malformed ones');
-  assert.equal(month.body.cards.length, 8);
+  assert.equal(month.body.cards.length, METRIC_CARDS_MAX);
   const { events, ...range } = asked[0];
   assert.deepEqual(range, { agentId: agA, days: 30, from: month.body.daily[0].day, to: today, language: 'en' });
   await ask(adminA, 'GET', `${METRICS_PATH}?agent=${agA}&days=30&lang=pt-br`);
   assert.equal(asked.at(-1).language, 'pt-BR', 'the cards come in the page\'s language');
   // One conversation's cards: for whoever can open it, with its assistant and contact.
   const conversation = (who) => ask(who, 'GET', `${METRICS_PATH}?contact=${web.id}&lang=es`);
-  assert.equal((await conversation(adminA)).body.cards.length, 8);
+  assert.equal((await conversation(adminA)).body.cards.length, METRIC_CARDS_MAX);
   assert.equal((await conversation(viewerB)).status, 404, 'another area\'s conversation');
   assert.equal((await conversation(owner)).status, 200);
   const { agentId, contactId, language, from } = asked.at(-1);

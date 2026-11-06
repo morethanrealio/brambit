@@ -130,6 +130,12 @@
   .funnel .to{align-self:center;color:var(--mut);font-size:18px;}
   .funnel .rate{font-size:12px;color:var(--mut);margin-top:2px;}
   @media (max-width:640px){.kpis.plugin{grid-template-columns:repeat(2,minmax(0,1fr));}.funnel .to{display:none;}}
+  .ranking > .l{font-size:13.5px;font-weight:600;color:inherit;}
+  .ranking > .d{font-size:13px;margin-top:4px;}
+  .mtable.rank{margin-top:10px;}
+  .mtable.rank td:first-child,.mtable.rank th:first-child{width:2.5em;color:var(--mut);text-align:right;padding-right:10px;}
+  .mtable.rank td.name,.mtable.rank th.name{text-align:left;}
+  .mtable.rank .share{height:5px;border-radius:3px;background:var(--accent2);margin-top:4px;min-width:2px;}
   .chart{position:relative;}
   .bars{display:flex;align-items:flex-end;gap:2px;height:160px;border-bottom:1px solid var(--line);margin-top:8px;}
   .bars .bar{flex:1;background:var(--accent2);border-radius:3px 3px 0 0;min-height:1px;}
@@ -593,6 +599,29 @@
           row.appendChild(step);
         });
         k.appendChild(row);
+        return funnels.appendChild(k);
+      }
+      if (c.rows) {
+        // A ranking: position, name with a bar for its first number, then the numbers.
+        k.className = 'kpi ranking';
+        k.appendChild(el('div', 'l', c.label));
+        if (c.detail) k.appendChild(el('div', 'd', c.detail));
+        var table = el('table', 'mtable rank'), head = el('tr'), body = el('tbody'), most = 0;
+        c.rows.forEach(function(r){ most = Math.max(most, r.values[0]); });
+        head.appendChild(el('th', null, '#'));
+        c.columns.forEach(function(h, i){ head.appendChild(el('th', i ? null : 'name', h)); });
+        var thead = el('thead'); thead.appendChild(head); table.appendChild(thead);
+        c.rows.forEach(function(r, i){
+          var tr = el('tr'), name = el('td', 'name', r.label), bar = el('div', 'share');
+          bar.style.width = (most > 0 ? Math.round(r.values[0] / most * 100) : 0) + '%';
+          name.appendChild(bar);
+          tr.appendChild(el('td', null, String(i + 1)));
+          tr.appendChild(name);
+          r.values.forEach(function(v){ tr.appendChild(el('td', null, number.format(v))); });
+          body.appendChild(tr);
+        });
+        table.appendChild(body);
+        k.appendChild(table);
         return funnels.appendChild(k);
       }
       k.appendChild(el('div', 'n', shown(c.value)));

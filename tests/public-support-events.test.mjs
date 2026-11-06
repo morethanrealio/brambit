@@ -41,8 +41,10 @@ test('the plugin records events in the turn; cards count them and follow people 
       const shown = await e.count({ kind: 'shown', refPrefix: 'product:' });
       const either = await e.count({ kind: ['shown', 'tap'], refPrefix: 'product:' });
       const [a, b, c] = await e.funnel([{ kind: 'scan_click' }, { kind: 'scan_result' }, { kind: 'shown' }]);
+      const top = await e.top({ kind: ['shown', 'tap'], refPrefix: 'product:' }, 2);
       return [{ label: 'shown', value: `${shown.times}/${shown.people}` }, { label: 'funnel', value: `${a}>${b}>${c}` },
-        { label: 'either', value: `${either.times}/${either.people}` }];
+        { label: 'either', value: `${either.times}/${either.people}` },
+        { label: 'top', value: top.rows.map((r) => `${r.ref.slice(8)}=${r.times}/${r.people}`).join(' ') + ` of ${top.refs}` }];
     } };
   const a = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
     ganchos, events, log: { error() {}, info() {} } });
@@ -54,7 +56,9 @@ test('the plugin records events in the turn; cards count them and follow people 
   await say('caio', 'scan_result');   // result without a click: not in the funnel
   await say('dani', 'Bad-Kind=x');   // ignored, the turn goes on
   const cards = await a.metricCards({ agentId: ag, days: 7, from: today(), to: today() });
-  assert.deepEqual(cards, [{ label: 'shown', value: '3/2' }, { label: 'funnel', value: '2>2>1' }, { label: 'either', value: '4/3' }]);
+  assert.deepEqual(cards, [{ label: 'shown', value: '3/2' }, { label: 'funnel', value: '2>2>1' }, { label: 'either', value: '4/3' },
+    { label: 'top', value: '1=2/2 2=1/1 of 3' }]);
+  assert.deepEqual(await events.count(ag, { from: today(), to: today() }, { kind: 'tap', ref: ['product:1', 'checkout'] }), { times: 2, people: 1 });
   await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: ['shown', 'Bad-Kind'] }), /bad kind/);
   await assert.rejects(events.count(ag, { from: today(), to: today() }, { kind: [] }), /bad kind/);
   // One contact: only hers, with no period.
