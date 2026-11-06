@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
-const { createPublicoStore, createAtendimentoPublico, comAgora, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE } = await import('../web/extensions/public-support/public-support.mjs');
+const { createPublicoStore, createAtendimentoPublico, comAgora, INSTALLATION_PROMPT_DEFAULT, RESPOSTA_INDISPONIVEL, RESPOSTA_PARADO, RESPOSTA_VOLTOU, RESPOSTA_APAGADO, RESPOSTA_LIMITE, LAST_MESSAGE_MAX } = await import('../web/extensions/public-support/public-support.mjs');
 const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensions/public-support/public-support-owner.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
@@ -139,6 +139,10 @@ test('conversation_idle_minutes: after that long idle, the same contact starts i
   await turn('after a day');
   assert.equal(await store.currentConversation(r.contatoId), 2);
   assert.equal((await webStore.history(ag, 'api:c1')).length, 6);
+
+  // The contact list shows the last message, cut at LAST_MESSAGE_MAX chars.
+  await store.registrar(r.contatoId, [{ role: 'user', content: 'é'.repeat(LAST_MESSAGE_MAX + 50) }]);
+  assert.deepEqual((await store.contatosDoDono(dono, ag))[0].lastMessage, { role: 'user', text: 'é'.repeat(LAST_MESSAGE_MAX) + '...' });
 });
 
 test('separate contacts: one contact\'s history and notes don\'t reach another, nor across assistants', async (t) => {

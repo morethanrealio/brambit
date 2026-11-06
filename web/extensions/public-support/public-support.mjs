@@ -31,6 +31,12 @@ export const AGENT_HOURLY_LIMIT_MAX = 100000;
 export const DAILY_CAP_DEFAULT_USD = 10;    // daily cap of an assistant whose owner never set one
 export const LIMPEZA_LOTE = 5000;
 export const CONTATOS_POR_PAGINA = 100;
+// The contact list shows each contact's last message up to this many characters, then "...".
+export const LAST_MESSAGE_MAX = 100;
+const preview = (text) => {
+  const chars = [...String(text ?? '').replace(/\s+/g, ' ').trim()];
+  return chars.length > LAST_MESSAGE_MAX ? chars.slice(0, LAST_MESSAGE_MAX).join('').trimEnd() + '...' : chars.join('');
+};
 export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
 export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
@@ -291,18 +297,22 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
       return rows[0]?.agent_id ?? null;
     },
 
-    // An owner's assistant's contacts, from newest to oldest.
-    // antes = ultima_em of the last one on the previous page.
+    // An owner's assistant's contacts, from newest to oldest, each with its last message
+    // (lastMessage, cut at LAST_MESSAGE_MAX chars). antes = ultima_em of the last one on the previous page.
     async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
       const { rows } = await pool.query(
         `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
                 (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens,
-                (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations
+                (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations,
+                last.role AS last_role, last.content AS last_content
            FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+           LEFT JOIN LATERAL (SELECT m.role, left(m.content, $5) AS content FROM ${S}.public_messages m
+                               WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) last ON true
           WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
-          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA)]);
+          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
-        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations }));
+        paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations,
+        ...(r.last_role ? { lastMessage: { role: r.last_role, text: preview(r.last_content) } } : {}) }));
     },
 
     // An owner's contact's conversation, in order; antes = id of the oldest message already seen.

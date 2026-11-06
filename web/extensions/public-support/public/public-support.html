@@ -58,13 +58,26 @@
   .warn{background:var(--soft);border:1px solid var(--warn-line);border-radius:var(--radius-md);padding:11px 13px;color:var(--warn-txt);font-size:13.5px;margin:0 0 6px;}
   .grid{display:grid;grid-template-columns:minmax(240px,1fr) 2fr;gap:18px;}
   @media (max-width:760px){.grid{grid-template-columns:1fr;}}
-  .contatos{max-height:560px;overflow:auto;}
+  .contatos{max-height:max(360px,calc(100vh - 230px));overflow:auto;}
   .ct{padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid transparent;}
   .ct:hover{background:var(--line2);}
   .ct.sel{border-color:var(--accent2);background:var(--soft);}
-  .ct .end{font-weight:600;font-size:14.5px;}
-  .ct .meta{font-size:12.5px;color:var(--mut);}
-  .ct .prof{font-size:12.5px;margin-top:2px;}
+  .ct + .ct{margin-top:2px;}
+  .ct .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .ct .end{font-weight:600;font-size:14.5px;min-width:0;overflow-wrap:anywhere;}
+  .ct .when{flex:none;font-size:12px;color:var(--mut2);white-space:nowrap;}
+  .ct .last{font-size:13px;color:var(--mut);margin-top:2px;overflow-wrap:anywhere;}
+  .ct .last .from{color:var(--mut2);}
+  .ct .meta{font-size:12px;color:var(--mut2);margin-top:2px;}
+  .conv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;}
+  .conv-head h2{margin:0;overflow-wrap:anywhere;}
+  .conv-sub{font-size:13px;color:var(--mut);margin-top:2px;}
+  .conv-toggle{flex:none;display:inline-flex;align-items:center;gap:6px;}
+  .conv-toggle svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .15s;}
+  .conv-toggle[aria-expanded="true"] svg{transform:rotate(180deg);}
+  .conv-info{border:1px solid var(--line);border-radius:var(--radius-md);padding:4px 12px 12px;margin-bottom:12px;}
+  .conv-info h3{margin-top:10px;}
+  .conv-info .ficha{border:0;padding:0;margin:6px 0 0;}
   .pfilter{margin-bottom:12px;}
   .pfilter .inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .pfilter select{flex:1;min-width:140px;width:auto;}
@@ -72,7 +85,7 @@
   .ficha .k{color:var(--mut);}
   .tag{display:inline-block;font-size:11.5px;border-radius:6px;padding:0 6px;margin-left:6px;background:var(--line2);color:var(--mut);}
   .tag.blq{background:var(--err-soft);color:var(--err);}
-  .conversa{max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
+  .conversa{max-height:max(340px,calc(100vh - 330px));overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
   .bolha{max-width:82%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;font-size:14.5px;}
   .bolha.user{align-self:flex-start;background:var(--field);border:1px solid var(--line);}
   .bolha.assistant{align-self:flex-end;background:var(--bubble);}
@@ -333,20 +346,25 @@
       <div class="acoes"><button class="btn ghost hidden" id="maisContatos" data-i18n="public_service_page.load_more">Load more</button></div>
     </div>
     <div class="card">
-      <h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2>
+      <div class="conv-head">
+        <div><h2 id="convTitulo" data-i18n="public_service_page.conversation">Conversation</h2><div class="conv-sub" id="convSub"></div></div>
+        <button type="button" class="btn ghost conv-toggle hidden" id="convInfoBtn" aria-controls="convInfo" aria-expanded="false"><span data-i18n="public_service_page.conversation_info">Profile and metrics</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      </div>
       <div id="convVazia" class="vazio" data-i18n="public_service_page.pick_contact">Pick a contact to see the conversation.</div>
       <div id="convBox" class="hidden">
-        <div id="convProfile" class="hidden">
-          <h3 data-i18n="public_service_page.profile">Profile</h3>
-          <div class="ficha" id="ficha"></div>
+        <div id="convInfo" class="conv-info hidden">
+          <div id="convProfile" class="hidden">
+            <h3 data-i18n="public_service_page.profile">Profile</h3>
+            <div class="ficha" id="ficha"></div>
+          </div>
+          <div id="convMetrics" class="hidden">
+            <h3 data-i18n="public_service_page.metric_conversation">In this conversation</h3>
+            <div class="kpis plugin" id="cCards"></div>
+            <div id="cFunnels"></div>
+          </div>
         </div>
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
         <div id="conversa" class="conversa"></div>
-        <div id="convMetrics" class="hidden">
-          <h3 data-i18n="public_service_page.metric_conversation">In this conversation</h3>
-          <div class="kpis plugin" id="cCards"></div>
-          <div id="cFunnels"></div>
-        </div>
         <div class="acoes">
           <button class="btn ghost" id="bloquear"></button>
           <a class="btn ghost" id="exportar" href="#" download data-i18n="public_service_page.export">Export data</a>
@@ -647,14 +665,30 @@
     box.textContent = '';
     fields.forEach(function(f){ box.appendChild(el('div', 'k', f.label)); box.appendChild(el('div', null, profileValue(f))); });
     $('convProfile').classList.toggle('hidden', !fields.length);
+    showConvInfo();
   }
+  // Profile and metrics sit in a panel above the conversation that the button opens and
+  // closes (closed at first, so the messages come first); the choice is kept for the next
+  // conversations. No button when both are empty.
+  var INFO_KEY = 'publicSupport.conversationInfo';
+  function infoOpen(){ try { return localStorage.getItem(INFO_KEY) === 'open'; } catch(e){ return false; } }
+  function showConvInfo(){
+    var any = !$('convProfile').classList.contains('hidden') || !$('convMetrics').classList.contains('hidden'), open = any && infoOpen();
+    $('convInfoBtn').classList.toggle('hidden', !any);
+    $('convInfoBtn').setAttribute('aria-expanded', String(open));
+    $('convInfo').classList.toggle('hidden', !open);
+  }
+  $('convInfoBtn').addEventListener('click', function(){
+    try { localStorage.setItem(INFO_KEY, infoOpen() ? 'closed' : 'open'); } catch(e){}
+    showConvInfo();
+  });
   // One conversation's cards, under it; nothing when the plugin has none.
   function loadContactMetrics(c){
-    $('convMetrics').classList.add('hidden');
+    $('convMetrics').classList.add('hidden'); showConvInfo();
     pedir(METRICS + '?contact=' + encodeURIComponent(c.id) + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (contatoAtual !== c || !(j.cards || []).length) return;
       drawCards(j.cards, $('cCards'), $('cFunnels'), true);
-      $('convMetrics').classList.remove('hidden');
+      $('convMetrics').classList.remove('hidden'); showConvInfo();
     }).catch(function(){});
   }
   function loadMetrics(){
@@ -731,7 +765,7 @@
       if (latestFor !== id) return;
       var rows = $('mLatest'); rows.textContent = '';
       (j.contatos || []).forEach(function(c){
-        var tr = el('tr'), who = el('td', null, c.name || c.endereco), channel = el('td', null, c.canal === 'web' ? t('metric_channel_web') : c.canal === 'whatsapp' ? 'WhatsApp' : c.canal);
+        var tr = el('tr'), who = el('td', null, c.name || c.endereco), channel = el('td', null, channelName(c));
         if (c.name) who.title = c.endereco;
         if (c.canal === 'whatsapp') channel.setAttribute('translate', 'no');
         [who, channel, el('td', null, profileNumber.format(c.mensagens)), el('td', null, quando(c.ultimaEm))].forEach(function(td){ tr.appendChild(td); });
@@ -832,26 +866,41 @@
   function desenharContato(c){
     var d = el('div', 'ct'); d.dataset.id = c.id;
     // The plugin's name for the person when it knows them; the channel address otherwise.
-    var who = el('div', 'end', c.name || c.endereco);
+    var top = el('div', 'top'), who = el('div', 'end', c.name || c.endereco);
     if (c.name) who.title = c.endereco;
     if (c.bloqueadoEm) who.appendChild(el('span', 'tag blq', t('blocked_tag')));
     else if (c.paradoEm) who.appendChild(el('span', 'tag', t('stopped_tag')));
-    d.appendChild(who);
-    var meta = t('contact_meta', { when: quando(c.ultimaEm), count: c.mensagens });
+    top.appendChild(who); top.appendChild(el('div', 'when', quando(c.ultimaEm)));
+    d.appendChild(top);
+    // The last message, sent or received, already cut by the server.
+    if (c.lastMessage) {
+      var last = el('div', 'last');
+      if (c.lastMessage.role === 'assistant') last.appendChild(el('span', 'from', t('last_from_assistant') + ' '));
+      last.appendChild(document.createTextNode(c.lastMessage.text));
+      d.appendChild(last);
+    }
+    var meta = t('message_count', { count: c.mensagens });
     if (c.conversations > 1) meta += ' · ' + t('conversation_count', { count: c.conversations });
     d.appendChild(el('div', 'meta', meta));
-    // The plugin's profile of the person, in one line under the contact.
-    if ((c.profile || []).length) d.appendChild(el('div', 'prof', c.profile.map(function(f){ return profileValue(f); }).join(' · ')));
     d.addEventListener('click', function(){ abrirConversa(c); });
     $('contatos').appendChild(d);
   }
 
-  function fecharConversa(){ contatoAtual = null; $('convBox').classList.add('hidden'); $('convVazia').classList.remove('hidden'); $('convTitulo').textContent = t('conversation'); }
+  function fecharConversa(){
+    contatoAtual = null; $('convBox').classList.add('hidden'); $('convVazia').classList.remove('hidden');
+    $('convTitulo').textContent = t('conversation'); $('convSub').textContent = ''; $('convInfoBtn').classList.add('hidden');
+  }
+  // On a phone the conversation is under the list: bring it into view, again once the
+  // messages are in (before that the page may be too short to scroll that far).
+  function bringConversation(){ if (window.matchMedia('(max-width:760px)').matches) $('convTitulo').scrollIntoView({ block: 'start' }); }
+  function channelName(c){ return c.canal === 'web' ? t('metric_channel_web') : c.canal === 'whatsapp' ? 'WhatsApp' : c.canal; }
   function abrirConversa(c){
     contatoAtual = c; maisAntiga = null; topConversation = null;
     Array.prototype.forEach.call(document.querySelectorAll('.ct'), function(x){ x.classList.toggle('sel', x.dataset.id === c.id); });
     $('convTitulo').textContent = c.name || c.endereco;
+    $('convSub').textContent = (c.name ? c.endereco + ' · ' : '') + channelName(c);
     $('convVazia').classList.add('hidden'); $('convBox').classList.remove('hidden');
+    bringConversation();
     $('conversa').textContent = ''; msg($('convMsg'), '');
     $('bloquear').textContent = c.bloqueadoEm ? t('unblock') : t('block');
     $('exportar').href = '/api/publico/exportar?contato=' + encodeURIComponent(c.id);
@@ -878,7 +927,7 @@
       if (ms.length) topConversation = ms[0].conversation;
       if (primeira && !ms.length) box.appendChild(el('div', 'vazio', t('no_messages')));
       $('anteriores').classList.toggle('hidden', ms.length < 100);
-      if (primeira) box.scrollTop = box.scrollHeight;
+      if (primeira) { box.scrollTop = box.scrollHeight; bringConversation(); }
     }).catch(function(e){ msg($('convMsg'), e.message, 'err'); });
   }
   $('anteriores').addEventListener('click', function(){ carregarMensagens(false); });
