@@ -104,12 +104,20 @@
   .th-version-head button{padding:3px 10px;font-size:12.5px;font-weight:500;}
   .th-full{white-space:pre-wrap;background:var(--field);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 11px;margin:8px 0 0;max-height:320px;overflow:auto;font:12.5px var(--font-mono);}
   .th-none{color:var(--mut);font-size:13px;}
+  .view-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px;}
+  .view-head h1{margin:0;}
   .metric-head{display:flex;justify-content:space-between;align-items:center;gap:12px;}
   .metric-head h2{margin:0;}
-  .metric-head select{width:auto;}
   .metric-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  .metric-tools select{width:auto;}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0 4px;}
-  .kpi{border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
+  .kpi{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
+  .kpi > .l{order:-1;}
+  .kpis.top{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:0 0 18px;}
+  .kpis.top .kpi,#mFunnels .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
+  .kpis.top .kpi .n{font-size:30px;margin-top:4px;}
+  .kpi .pair{display:flex;gap:22px;}
+  #mFunnels .kpi{margin:0 0 18px;}
   .kpi .n{font-family:var(--font-num);font-size:24px;font-weight:700;line-height:1.2;}
   .kpi .l{font-size:12.5px;color:var(--mut);}
   .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
@@ -122,8 +130,15 @@
   .funnel .to{align-self:center;color:var(--mut);font-size:18px;}
   .funnel .rate{font-size:12px;color:var(--mut);margin-top:2px;}
   @media (max-width:640px){.kpis.plugin{grid-template-columns:repeat(2,minmax(0,1fr));}.funnel .to{display:none;}}
-  .bars{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid var(--line);margin-top:8px;}
+  .chart{position:relative;}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:160px;border-bottom:1px solid var(--line);margin-top:8px;}
   .bars .bar{flex:1;background:var(--accent2);border-radius:3px 3px 0 0;min-height:1px;}
+  .bars .bar.on{filter:brightness(.85);}
+  .tip{position:absolute;transform:translate(-50%,-100%);background:var(--txt);color:var(--card);font-size:12.5px;line-height:1.4;padding:6px 10px;border-radius:8px;white-space:nowrap;pointer-events:none;z-index:2;}
+  .mtable.latest tbody tr{cursor:pointer;}
+  .mtable.latest tbody tr:hover td{background:var(--soft);}
+  .mtable.latest td:first-child{font-weight:600;}
+  @media (max-width:640px){.mtable.latest th:nth-child(2),.mtable.latest td:nth-child(2){display:none;}}
   .bars .bar.none{background:var(--line2);}
   .axis{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:3px;}
   .mtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;}
@@ -174,42 +189,56 @@
 </aside>
 
 <main class="main"><div class="in">
-  <h1 id="viewTitle" data-i18n="public_service_page.title">Public service</h1>
+  <div class="view-head">
+    <h1 id="viewTitle" data-i18n="public_service_page.title">Public service</h1>
+    <div class="metric-tools hidden" id="dashTools" data-view-panel="dashboard">
+      <a class="btn ghost" id="eventsCsv" href="#" download data-i18n="public_service_page.metric_events_csv">Download events (CSV)</a>
+      <select id="metricDays" data-i18n-aria-label="public_service_page.metric_period" aria-label="Period">
+        <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
+        <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
+        <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
+      </select>
+    </div>
+  </div>
 
   <div class="card hidden" id="crmCard" data-view-panel="crm"><p class="nota" data-i18n="public_service_page.crm_soon">Your contacts' profiles in one place: by region, linked to your company's CRM and to broadcast lists. Coming soon.</p></div>
   <div class="card hidden" id="whatsappCard" data-view-panel="whatsapp"><p class="nota" data-i18n="public_service_page.whatsapp_soon">Campaigns and message templates for WhatsApp. Coming soon.</p></div>
 
-  <div class="card hidden" id="metricsCard" data-view-panel="dashboard">
-    <div class="metric-head">
-      <h2 id="metricsTitle" data-i18n="public_service_page.metrics">Activity</h2>
-      <div class="metric-tools">
-        <a class="btn ghost" id="eventsCsv" href="#" download data-i18n="public_service_page.metric_events_csv">Download events (CSV)</a>
-        <select id="metricDays" aria-labelledby="metricsTitle">
-          <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
-          <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
-          <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
-        </select>
-      </div>
+  <div class="hidden" id="metricsCard" data-view-panel="dashboard">
+    <div class="kpis top" id="mTop">
+      <div class="kpi"><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div><div class="n" id="mConversations">0</div><div class="d" id="mPerPerson"></div></div>
+      <div class="kpi"><div class="l" data-i18n="public_service_page.metric_people">People</div><div class="n" id="mPeople">0</div></div>
+      <div class="kpi"><div class="l" data-i18n="public_service_page.metric_messages">Messages</div>
+        <div class="pair"><div><div class="n" id="mReceived">0</div><div class="d" data-i18n="public_service_page.metric_received_short">received</div></div>
+          <div><div class="n" id="mReplies">0</div><div class="d" data-i18n="public_service_page.metric_sent_short">sent</div></div></div></div>
+      <div class="kpi hidden" id="mClicksBox"><div class="l" data-i18n="public_service_page.metric_clicks">Button clicks</div><div class="n" id="mClicks">0</div><div class="d" id="mClickPeople"></div></div>
     </div>
-    <div class="kpis">
-      <div class="kpi"><div class="n" id="mPeople">0</div><div class="l" data-i18n="public_service_page.metric_people">People</div></div>
-      <div class="kpi"><div class="n" id="mConversations">0</div><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div></div>
-      <div class="kpi"><div class="n" id="mPerPerson">0</div><div class="l" data-i18n="public_service_page.metric_per_person">Conversations per person</div></div>
-      <div class="kpi"><div class="n" id="mReceived">0</div><div class="l" data-i18n="public_service_page.metric_received">Messages received</div></div>
-      <div class="kpi"><div class="n" id="mReplies">0</div><div class="l" data-i18n="public_service_page.metric_replies">Replies sent</div></div>
-    </div>
-    <div class="kpis plugin hidden" id="mCards"></div>
     <div id="mFunnels"></div>
-    <h3 data-i18n="public_service_page.metric_per_day">Conversations per day</h3>
-    <div class="bars" id="mBars"></div>
-    <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
-    <table class="mtable">
-      <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_people">People</th>
-        <th data-i18n="public_service_page.metric_conversations">Conversations</th><th data-i18n="public_service_page.metric_received">Messages received</th>
-        <th data-i18n="public_service_page.metric_replies">Replies sent</th></tr></thead>
-      <tbody id="mChannels"></tbody>
-    </table>
-    <p class="nota espaco hidden" id="mRetention"></p>
+    <div class="card">
+      <h2 data-i18n="public_service_page.metric_per_day">Conversations per day</h2>
+      <div class="chart"><div class="bars" id="mBars"></div><div class="tip hidden" id="mTip" role="status"></div></div>
+      <div class="axis"><span id="mFirst"></span><span id="mLast"></span></div>
+    </div>
+    <div class="card">
+      <div class="metric-head"><h2 data-i18n="public_service_page.metric_latest">Latest conversations</h2>
+        <button type="button" class="btn ghost" id="seeAll" data-i18n="public_service_page.metric_see_all">See all</button></div>
+      <table class="mtable log latest">
+        <thead><tr><th data-i18n="public_service_page.metric_person">Person</th><th data-i18n="public_service_page.metric_channel">Channel</th>
+          <th data-i18n="public_service_page.metric_messages">Messages</th><th data-i18n="public_service_page.metric_last">Last message</th></tr></thead>
+        <tbody id="mLatest"></tbody>
+      </table>
+    </div>
+    <div class="card" id="mMore">
+      <h2 data-i18n="public_service_page.metric_more">More numbers</h2>
+      <div class="kpis plugin hidden" id="mCards"></div>
+      <table class="mtable">
+        <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_people">People</th>
+          <th data-i18n="public_service_page.metric_conversations">Conversations</th><th data-i18n="public_service_page.metric_received">Messages received</th>
+          <th data-i18n="public_service_page.metric_replies">Replies sent</th></tr></thead>
+        <tbody id="mChannels"></tbody>
+      </table>
+      <p class="nota espaco hidden" id="mRetention"></p>
+    </div>
     <div id="metricsMsg" class="msg"></div>
   </div>
 
@@ -407,7 +436,7 @@
     agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
     if (!agenteAtual) return;
     applyTheme(agenteAtual.areaTheme);
-    ['menu', 'menuFoot', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid', 'crmCard', 'whatsappCard', 'agentLead'].forEach(function(id){ $(id).classList.remove('hidden'); });
+    ['menu', 'menuFoot', 'dashTools', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid', 'crmCard', 'whatsappCard', 'agentLead'].forEach(function(id){ $(id).classList.remove('hidden'); });
     // A client area's member (client-areas.mjs) sees what its role allows (showView): an admin
     // edits the prompt and handles the contacts; a viewer only reads. Settings are the owner's
     // (an admin sees only the access log there).
@@ -541,12 +570,14 @@
 
   // The assistant's volume (public-support-metrics.mjs): totals, one bar per day, and by channel.
   var METRICS = '/api/public-support/metrics', metricsFor = null;
-  // The plugin's cards: plain ones in the grid, funnels each across a row. For one
-  // conversation (oneContact) a funnel step is done or not, with no share.
-  function drawCards(list, cards, funnels, oneContact){
+  // The plugin's cards: plain ones in the grid (those marked top in the dashboard's first
+  // row, when it is given), funnels each across a row. For one conversation (oneContact)
+  // a funnel step is done or not, with no share.
+  function drawCards(list, cards, funnels, oneContact, top){
     var lang = document.documentElement.lang, number = new Intl.NumberFormat(lang), percent = new Intl.NumberFormat(lang, { style: 'percent' });
     var shown = function(v){ return typeof v === 'number' ? number.format(v) : v; };
     cards.textContent = ''; funnels.textContent = '';
+    if (top) Array.prototype.forEach.call(top.querySelectorAll('.plugin-card'), function(k){ k.remove(); });
     (list || []).forEach(function(c){
       var k = el('div', 'kpi');
       if (c.steps) {
@@ -567,7 +598,8 @@
       k.appendChild(el('div', 'n', shown(c.value)));
       k.appendChild(el('div', 'l', c.label));
       if (c.detail) k.appendChild(el('div', 'd', c.detail));
-      cards.appendChild(k);
+      if (top && c.top) { k.classList.add('plugin-card'); top.appendChild(k); }
+      else cards.appendChild(k);
     });
     cards.classList.toggle('hidden', !cards.firstChild);
   }
@@ -594,22 +626,19 @@
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&days=' + days;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
+    loadLatest();
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mPeople', 'people'], ['mConversations', 'conversations'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
       });
-      $('mPerPerson').textContent = new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
-        .format(j.total.people ? j.total.conversations / j.total.people : 0);
-      drawCards(j.cards, $('mCards'), $('mFunnels'), false);
-      var bars = $('mBars'), top = Math.max.apply(null, j.daily.map(function(d){ return d.conversations; }).concat([1]));
-      bars.textContent = '';
-      j.daily.forEach(function(d){
-        var b = el('div', 'bar' + (d.conversations ? '' : ' none'));
-        b.style.height = (d.conversations / top * 100) + '%';
-        b.title = t('metric_day_tip', { day: dayLabel(d.day), count: d.conversations });
-        bars.appendChild(b);
-      });
+      $('mPerPerson').textContent = j.total.people ? t('metric_per_person_detail', { value: new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
+        .format(j.total.conversations / j.total.people) }) : '';
+      // Link buttons pressed; only where the installation records events.
+      $('mClicksBox').classList.toggle('hidden', !j.clicks);
+      if (j.clicks) { $('mClicks').textContent = number.format(j.clicks.times); $('mClickPeople').textContent = t('metric_people_count', { count: j.clicks.people }); }
+      drawCards(j.cards, $('mCards'), $('mFunnels'), false, $('mTop'));
+      drawBars(j.daily, number);
       $('mFirst').textContent = j.daily.length ? dayLabel(j.daily[0].day) : '';
       $('mLast').textContent = j.daily.length ? dayLabel(j.daily[j.daily.length - 1].day) : '';
       var rows = $('mChannels'); rows.textContent = '';
@@ -625,6 +654,58 @@
       $('mRetention').classList.toggle('hidden', !(j.retentionDays < j.days));
     }).catch(function(e){ if (metricsFor === key && e.message !== NO_SESSION) msg($('metricsMsg'), e.message, 'err'); });
   }
+  // One bar per day; hovering or tapping one shows its numbers above it.
+  function drawBars(daily, number){
+    var bars = $('mBars'), top = Math.max.apply(null, daily.map(function(d){ return d.conversations; }).concat([1]));
+    bars.textContent = ''; $('mTip').classList.add('hidden');
+    daily.forEach(function(d){
+      var b = el('div', 'bar' + (d.conversations ? '' : ' none'));
+      b.style.height = (d.conversations / top * 100) + '%';
+      b.dataset.tip = t('metric_day_tip', { day: dayLabel(d.day), count: d.conversations }) + '\n'
+        + t('metric_day_messages', { received: number.format(d.received), sent: number.format(d.replies) });
+      bars.appendChild(b);
+    });
+  }
+  function showTip(b){
+    var tip = $('mTip'), on = $('mBars').querySelector('.bar.on');
+    if (on === b) return;
+    if (on) on.classList.remove('on');
+    if (!b) return tip.classList.add('hidden');
+    b.classList.add('on');
+    tip.textContent = ''; b.dataset.tip.split('\n').forEach(function(line){ tip.appendChild(el('div', null, line)); });
+    var box = b.parentNode.parentNode.getBoundingClientRect(), r = b.getBoundingClientRect();
+    tip.classList.remove('hidden');
+    var half = tip.offsetWidth / 2, x = r.left + r.width / 2 - box.left;
+    tip.style.left = Math.min(Math.max(x, half), box.width - half) + 'px';
+    tip.style.top = (r.top - box.top - 6) + 'px';
+  }
+  // The day under the pointer at any height, so a short bar is as easy to reach as a tall one.
+  function tipAt(ev){
+    var bars = $('mBars').children, r = $('mBars').getBoundingClientRect();
+    if (bars.length) showTip(bars[Math.min(bars.length - 1, Math.max(0, Math.floor((ev.clientX - r.left) / r.width * bars.length)))]);
+  }
+  $('mBars').addEventListener('pointermove', tipAt);
+  $('mBars').addEventListener('pointerdown', tipAt);
+  $('mBars').addEventListener('pointerleave', function(ev){ if (ev.pointerType === 'mouse') showTip(null); });
+  // The newest contacts, each with its latest conversation; a row opens it under Conversations.
+  var latestFor = null;
+  function loadLatest(){
+    var id = latestFor = agenteAtual.agentId;
+    pedir('/api/publico/contatos?agente=' + encodeURIComponent(id) + '&lang=' + encodeURIComponent(document.documentElement.lang) + '&limit=20').then(function(j){
+      if (latestFor !== id) return;
+      var rows = $('mLatest'); rows.textContent = '';
+      (j.contatos || []).forEach(function(c){
+        var tr = el('tr'), who = el('td', null, c.name || c.endereco), channel = el('td', null, c.canal === 'web' ? t('metric_channel_web') : c.canal === 'whatsapp' ? 'WhatsApp' : c.canal);
+        if (c.name) who.title = c.endereco;
+        if (c.canal === 'whatsapp') channel.setAttribute('translate', 'no');
+        [who, channel, el('td', null, profileNumber.format(c.mensagens)), el('td', null, quando(c.ultimaEm))].forEach(function(td){ tr.appendChild(td); });
+        tr.addEventListener('click', function(){ showView('conversations', true); abrirConversa(c); });
+        rows.appendChild(tr);
+      });
+      if (!rows.firstChild) { var none = el('tr'), td = el('td', 'vazio', t('no_contacts')); td.colSpan = 4; none.appendChild(td); rows.appendChild(none); }
+    }).catch(function(){});
+  }
+  $('seeAll').addEventListener('click', function(){ showView('conversations', true); });
   function dayLabel(day){ try { return new Date(day + 'T12:00:00Z').toLocaleDateString(document.documentElement.lang, { day:'2-digit', month:'2-digit', timeZone:'UTC' }); } catch(e){ return day; } }
   $('metricDays').addEventListener('change', function(){ setAddress({ days: this.value === '30' ? null : this.value }); if (agenteAtual) loadMetrics(); });
 

@@ -230,8 +230,8 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const s = await setup(t, { ganchos: { async metricCards(q) {
     asked.push(q);
     if (q.days === 90) throw Error('plugin down');
-    return [{ label: ' Orders ', value: 12 }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
-      { label: 'Bag', value: 3, detail: ' 1 person ' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    return [{ label: ' Orders ', value: 12, top: 'yes' }, { label: 'Top product', value: 'Sunscreen' }, { label: 'NaN', value: NaN },
+      { label: 'Bag', value: 3, detail: ' 1 person ', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
       { label: 'One step', steps: [{ label: 'Click', value: 4 }] }, { label: 'Text step', steps: [{ label: 'a', value: '4' }, { label: 'b', value: 2 }] },
       { label: '', value: 1 }, { label: 'Object', value: {} }, ...Array.from({ length: 10 }, (_, i) => ({ label: 'n' + i, value: i }))];
   } } });
@@ -257,7 +257,7 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   assert.deepEqual(month.body.daily.at(-1), { day: today, conversations: 3, received: 3, replies: 2 });
   assert.equal(month.body.daily.slice(0, -1).reduce((n, d) => n + d.conversations, 0), 0);
   assert.deepEqual(month.body.cards.slice(0, 5), [{ label: 'Orders', value: 12 }, { label: 'Top product', value: 'Sunscreen' },
-    { label: 'Bag', value: 3, detail: '1 person' }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
+    { label: 'Bag', value: 3, detail: '1 person', top: true }, { label: 'Scan', steps: [{ label: 'Click', value: 4 }, { label: 'Result', value: 2 }] },
     { label: 'n0', value: 0 }], 'the plugin\'s cards and funnels, without the malformed ones');
   assert.equal(month.body.cards.length, 8);
   const { events, ...range } = asked[0];
