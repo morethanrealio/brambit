@@ -14,15 +14,28 @@
   .booting{visibility:hidden;}
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.6 var(--font);}
-  .top{border-bottom:1px solid var(--line);padding:18px 20px;}
-  .top .in{max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
-  .top .brandlogo{height:26px;width:auto;display:block;}
-  .top a.back,.top nav a{color:var(--mut);text-decoration:none;font-size:14px;}
-  .top nav{display:flex;gap:16px;}
+  /* The panel: a menu on the left (the views and, at its foot, settings and the account), the open view on the right. */
+  .shell{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh;}
+  .side{position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:18px;padding:22px 14px;background:var(--card);border-right:1px solid var(--line);}
+  .side .brandlogo{height:26px;width:auto;display:block;margin:0 10px;align-self:flex-start;}
+  .side .pick{padding:0 4px;}
+  .side .pick label{margin-top:0;}
+  .side .pick select{font-size:14px;padding:7px 9px;}
+  .side .pick .vazio{font-size:13px;margin-top:6px;}
+  .nav{display:flex;flex-direction:column;gap:2px;}
+  .nav button,.nav a{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-radius:var(--radius-sm);padding:8px 10px;font:inherit;font-size:14.5px;color:var(--mut);text-align:left;text-decoration:none;cursor:pointer;}
+  .nav button:hover,.nav a:hover{background:var(--line2);color:var(--txt);}
+  .nav button[aria-current=page]{background:var(--soft);color:var(--accent);font-weight:600;}
+  .nav svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .nav .soon{margin-left:auto;font-style:normal;font-size:11px;font-weight:500;border-radius:999px;padding:0 7px;background:var(--line2);color:var(--mut);}
+  .side .foot{margin-top:auto;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line2);padding-top:12px;}
+  .main{min-width:0;padding:30px 32px 60px;}
+  .main .in{max-width:1180px;margin:0 auto;}
+  @media (max-width:760px){.shell{grid-template-columns:1fr;grid-template-rows:auto 1fr;}.side{position:static;height:auto;gap:12px;border-right:0;border-bottom:1px solid var(--line);}
+    .nav{flex-direction:row;flex-wrap:wrap;}.nav button,.nav a{width:auto;}.side .foot{margin-top:0;flex-direction:row;flex-wrap:wrap;}.main{padding:22px 16px 48px;}}
   .inline{display:flex;gap:8px;}
-  .wrap{max-width:980px;margin:0 auto;padding:32px 20px 60px;}
-  h1{font-size:28px;line-height:1.2;margin:0 0 6px;}
-  .lead{color:var(--mut);margin:0 0 22px;max-width:680px;}
+  h1{font-size:28px;line-height:1.2;margin:0 0 18px;}
+  .lead{color:var(--mut);margin:-8px 0 18px;max-width:680px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:0 0 18px;}
   .card h2{font-size:16px;margin:0 0 12px;}
   label{display:block;font-size:13.5px;color:var(--mut);margin:12px 0 4px;}
@@ -128,48 +141,45 @@
   .area .check{font-size:14px;}
   .area .inline select.role{flex:0 1 150px;min-width:120px;}
   input[type=email]{width:100%;border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px;font:inherit;font-size:14.5px;background:var(--field);color:var(--txt);}
-  .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:0 0 18px;}
-  .tabs button{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:9px 14px;font:inherit;font-size:14.5px;color:var(--mut);cursor:pointer;}
-  .tabs button:hover{color:var(--txt);}
-  .tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
-  .hidden,.off{display:none;}
+  .hidden,.off{display:none !important;}
 </style>
 </head>
 <body class="booting">
-<div class="top"><div class="in">
+<div class="shell">
+<aside class="side">
   <img class="brandlogo" src="/__LOGO__" alt="__MARCA__"/>
-  <a class="back" id="backLink" href="/chats" data-i18n="public_service_page.back">back to the app</a>
-  <nav id="ownerLinks" class="hidden">
-    <a href="/usage" id="usageLink" data-i18n="public_service_page.usage_link">Usage</a>
-    <a href="/admin/settings" id="settingsLink" class="hidden" data-i18n="public_service_page.settings_link">Installation settings</a>
-    <a href="/login" id="signOut" data-i18n="public_service_page.sign_out">Sign out</a>
-  </nav>
-</div></div>
-
-<div class="wrap">
-  <h1 data-i18n="public_service_page.title">Public service</h1>
-  <p class="lead" data-i18n="public_service_page.lead">One of your assistants answers whoever writes to this installation's WhatsApp number without having an account. In this mode it only uses its instructions and the conversation with each contact: it does not see your memory, your e-mails, your calendar or your files.</p>
-
-  <div class="card">
+  <div class="pick">
     <label for="agente" data-i18n="public_service_page.assistant">Assistant</label>
     <select id="agente"></select>
-    <div id="semAgente" class="vazio espaco hidden" data-i18n="public_service_page.no_assistants">You do not have any assistants yet.</div>
-    <div id="newAssistant" class="hidden">
-      <label for="newName" data-i18n="public_service_page.new_assistant">New assistant (its name)</label>
-      <div class="inline"><input type="text" id="newName" maxlength="60"/><button class="btn primary" id="createAssistant" data-i18n="public_service_page.create">Create</button></div>
-      <div id="newMsg" class="msg"></div>
+    <div id="semAgente" class="vazio hidden" data-i18n="public_service_page.no_assistants">You do not have any assistants yet.</div>
+  </div>
+  <nav class="nav hidden" id="menu" data-i18n-aria-label="public_service_page.nav_label" aria-label="Menu">
+    <button type="button" data-view="dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg><span data-i18n="public_service_page.nav_dashboard">Dashboard</span></button>
+    <button type="button" data-view="conversations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span data-i18n="public_service_page.nav_conversations">Conversations</span></button>
+    <button type="button" data-view="agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg><span data-i18n="public_service_page.nav_agent">Agent</span></button>
+    <button type="button" data-view="crm"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3c2 .8 3.5 2.8 3.5 5.7"/></svg><span data-i18n="public_service_page.nav_crm">CRM</span><em class="soon" data-i18n="public_service_page.nav_soon">soon</em></button>
+    <button type="button" data-view="whatsapp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 3 10.5l7 2.5 2.5 7zM10 13l4.5-4.5"/></svg><span translate="no">WhatsApp</span><em class="soon" data-i18n="public_service_page.nav_soon">soon</em></button>
+  </nav>
+  <div class="foot">
+    <nav class="nav hidden" id="menuFoot" data-i18n-aria-label="public_service_page.nav_label" aria-label="Menu">
+      <button type="button" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h4M12 12h8M4 18h12"/><circle cx="17" cy="6" r="2.2"/><circle cx="10" cy="12" r="2.2"/><circle cx="19" cy="18" r="2.2"/></svg><span data-i18n="public_service_page.nav_settings">Settings</span></button>
+    </nav>
+    <div class="nav hidden" id="ownerLinks">
+      <a href="/usage" id="usageLink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 17v-6M11 17V5M16 17V9"/></svg><span data-i18n="public_service_page.usage_link">Usage</span></a>
+      <a href="/admin/settings" id="settingsLink" class="hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg><span data-i18n="public_service_page.settings_link">Installation settings</span></a>
+      <a href="/login" id="signOut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/></svg><span data-i18n="public_service_page.sign_out">Sign out</span></a>
     </div>
+    <div class="nav"><a href="/chats" id="backLink"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span data-i18n="public_service_page.back">back to the app</span></a></div>
   </div>
+</aside>
 
-  <div class="tabs hidden" id="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="home" data-i18n="public_service_page.tab_home">Home</button>
-    <button type="button" role="tab" data-tab="conversations" data-i18n="public_service_page.tab_conversations">Conversations</button>
-    <button type="button" role="tab" data-tab="activity" data-i18n="public_service_page.activity">Access log</button>
-    <button type="button" role="tab" data-tab="prompt" data-i18n="public_service_page.tab_prompt">Prompt</button>
-    <button type="button" role="tab" data-tab="settings" data-i18n="public_service_page.tab_settings">Settings</button>
-  </div>
+<main class="main"><div class="in">
+  <h1 id="viewTitle" data-i18n="public_service_page.title">Public service</h1>
 
-  <div class="card hidden" id="metricsCard" data-tab-panel="home">
+  <div class="card hidden" id="crmCard" data-view-panel="crm"><p class="nota" data-i18n="public_service_page.crm_soon">Your contacts' profiles in one place: by region, linked to your company's CRM and to broadcast lists. Coming soon.</p></div>
+  <div class="card hidden" id="whatsappCard" data-view-panel="whatsapp"><p class="nota" data-i18n="public_service_page.whatsapp_soon">Campaigns and message templates for WhatsApp. Coming soon.</p></div>
+
+  <div class="card hidden" id="metricsCard" data-view-panel="dashboard">
     <div class="metric-head">
       <h2 id="metricsTitle" data-i18n="public_service_page.metrics">Activity</h2>
       <div class="metric-tools">
@@ -203,7 +213,8 @@
     <div id="metricsMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="promptCard" data-tab-panel="prompt">
+  <p class="lead hidden" id="agentLead" data-view-panel="agent" data-i18n="public_service_page.lead">One of your assistants answers whoever writes to this installation's WhatsApp number without having an account. In this mode it only uses its instructions and the conversation with each contact: it does not see your memory, your e-mails, your calendar or your files.</p>
+  <div class="card hidden" id="promptCard" data-view-panel="agent">
     <h2 data-i18n="public_service_page.tab_prompt">Prompt</h2>
     <div id="writtenTextBlock" class="hidden">
       <label id="writtenTextLabel" data-i18n="public_service_page.written_text">Written text</label>
@@ -223,7 +234,7 @@
     <div id="promptMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="cfgCard" data-tab-panel="settings">
+  <div class="card hidden" id="cfgCard" data-view-panel="settings" data-owner-only>
     <h2 data-i18n="public_service_page.settings">Settings</h2>
     <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
     <div id="avisoNumero" class="warn hidden" data-i18n="public_service_page.number_elsewhere">This installation's number does not point to this assistant. Turning it on here saves the settings, but no one from the public reaches it until the installation points the number here.</div>
@@ -268,7 +279,7 @@
     </div>
   </div>
 
-  <div class="grid hidden" id="atendGrid" data-tab-panel="conversations">
+  <div class="grid hidden" id="atendGrid" data-view-panel="conversations">
     <div class="card">
       <h2 data-i18n="public_service_page.contacts">Contacts</h2>
       <div id="profileFilter" class="pfilter hidden">
@@ -308,7 +319,16 @@
     </div>
   </div>
 
-  <div class="card hidden" id="activityCard" data-tab-panel="activity">
+  <div class="card hidden" id="areasCard" data-view-panel="settings" data-owner-only>
+    <h2 data-i18n="public_service_page.areas">Client areas</h2>
+    <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
+    <div id="areaList"></div>
+    <label for="newArea" data-i18n="public_service_page.area_new">New area (its name)</label>
+    <div class="inline"><input type="text" id="newArea" maxlength="120"/><button class="btn primary" id="createArea" data-i18n="public_service_page.create">Create</button></div>
+    <div id="areasMsg" class="msg"></div>
+  </div>
+
+  <div class="card hidden" id="activityCard" data-view-panel="settings">
     <h2 data-i18n="public_service_page.activity">Access log</h2>
     <p class="nota" data-i18n="public_service_page.activity_lead">Who opened conversations, handled contacts or changed the assistants, and when. It never keeps what a conversation or a text says.</p>
     <table class="mtable log">
@@ -321,14 +341,12 @@
     <div id="activityMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="areasCard" data-tab-panel="settings">
-    <h2 data-i18n="public_service_page.areas">Client areas</h2>
-    <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
-    <div id="areaList"></div>
-    <label for="newArea" data-i18n="public_service_page.area_new">New area (its name)</label>
-    <div class="inline"><input type="text" id="newArea" maxlength="120"/><button class="btn primary" id="createArea" data-i18n="public_service_page.create">Create</button></div>
-    <div id="areasMsg" class="msg"></div>
+  <div class="card hidden" id="newAssistant" data-view-panel="settings" data-owner-only>
+    <label for="newName" data-i18n="public_service_page.new_assistant">New assistant (its name)</label>
+    <div class="inline"><input type="text" id="newName" maxlength="60"/><button class="btn primary" id="createAssistant" data-i18n="public_service_page.create">Create</button></div>
+    <div id="newMsg" class="msg"></div>
   </div>
+</div></main>
 </div>
 
 <script type="application/json" data-i18n-texts="public_service_page"></script>
@@ -389,15 +407,16 @@
     agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
     if (!agenteAtual) return;
     applyTheme(agenteAtual.areaTheme);
-    ['tabs', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid'].forEach(function(id){ $(id).classList.remove('hidden'); });
-    // A client area's member (client-areas.mjs) sees what its role allows (showTab): an admin
-    // edits the prompt and handles the contacts; a viewer only reads. Settings are the owner's.
+    ['menu', 'menuFoot', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid', 'crmCard', 'whatsappCard', 'agentLead'].forEach(function(id){ $(id).classList.remove('hidden'); });
+    // A client area's member (client-areas.mjs) sees what its role allows (showView): an admin
+    // edits the prompt and handles the contacts; a viewer only reads. Settings are the owner's
+    // (an admin sees only the access log there).
     var editor = canEdit();
     ['instrucoes', 'linkSites'].forEach(function(id){ $(id).readOnly = !editor; });
     ['promptActions', 'bloquear', 'exportar', 'apagar'].forEach(function(id){ $(id).classList.toggle('hidden', !editor); });
     $('avisoCadastro').classList.toggle('hidden', !signupOpen);
     $('avisoNumero').classList.toggle('hidden', !!agenteAtual.doNumero);
-    showTab(location.hash.slice(1));
+    showView(addressView());
     $('ativo').checked = !!agenteAtual.ativo;
     $('instrucoes').value = agenteAtual.instrucoes || '';
     $('retencao').value = agenteAtual.retencaoDias;
@@ -449,22 +468,42 @@
   }
   $('agente').addEventListener('change', function(){ escolherAgente(this.value); });
 
-  // The tabs each role sees (the server refuses the rest anyway). The open tab lives in
-  // the address (#prompt), so a reload keeps it; home has none.
-  var TABS = { owner: ['home', 'conversations', 'activity', 'prompt', 'settings'], admin: ['home', 'conversations', 'activity', 'prompt'], viewer: ['home', 'conversations', 'prompt'] };
-  function showTab(name){
-    var allowed = TABS[isOwner() ? 'owner' : agenteAtual.role] || TABS.viewer;
-    if (allowed.indexOf(name) < 0) name = 'home';
-    Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function(b){
-      b.classList.toggle('hidden', allowed.indexOf(b.dataset.tab) < 0);
-      b.setAttribute('aria-selected', String(b.dataset.tab === name));
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-tab-panel]'), function(p){ p.classList.toggle('off', p.dataset.tabPanel !== name); });
-    var hash = name === 'home' ? '' : name;
-    if (location.hash.slice(1) !== hash) history.replaceState(null, '', hash ? '#' + hash : location.pathname + location.search);
+  // The views each role sees in the menu (the server refuses the rest anyway); inside
+  // settings, the owner's own parts carry data-owner-only. The open view and the metrics
+  // period live in the address (?view=agent&days=7), so a reload or a shared link keeps
+  // them; the dashboard and 30 days are the defaults and leave no trace.
+  var VIEWS = { owner: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp', 'settings'], admin: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp', 'settings'], viewer: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp'] };
+  // The tabs' old #names, from links made before the menu.
+  var OLD_TABS = { home: 'dashboard', conversations: 'conversations', prompt: 'agent', activity: 'settings', settings: 'settings' };
+  function setAddress(changes, push){
+    var q = new URLSearchParams(location.search);
+    Object.keys(changes).forEach(function(k){ if (changes[k] == null) q.delete(k); else q.set(k, changes[k]); });
+    var s = q.toString(), url = location.pathname + (s ? '?' + s : '');
+    if (url !== location.pathname + location.search + location.hash) history[push ? 'pushState' : 'replaceState'](null, '', url);
   }
-  $('tabs').addEventListener('click', function(ev){ var b = ev.target.closest('[data-tab]'); if (b && agenteAtual) showTab(b.dataset.tab); });
-  window.addEventListener('hashchange', function(){ if (agenteAtual) showTab(location.hash.slice(1)); });
+  function addressView(){ return new URLSearchParams(location.search).get('view') || OLD_TABS[location.hash.slice(1)] || 'dashboard'; }
+  function addressDays(){ var d = new URLSearchParams(location.search).get('days'); return ['7', '30', '90'].indexOf(d) < 0 ? '30' : d; }
+  function showView(name, push){
+    var allowed = VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer;
+    if (allowed.indexOf(name) < 0) name = 'dashboard';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function(b){
+      b.classList.toggle('hidden', allowed.indexOf(b.dataset.view) < 0);
+      if (b.dataset.view === name) { b.setAttribute('aria-current', 'page'); $('viewTitle').textContent = b.querySelector('span').textContent; }
+      else b.removeAttribute('aria-current');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-view-panel]'), function(p){
+      p.classList.toggle('off', p.dataset.viewPanel !== name || (p.hasAttribute('data-owner-only') && !isOwner()));
+    });
+    setAddress({ view: name === 'dashboard' ? null : name }, push);
+    if (push) window.scrollTo(0, 0);
+  }
+  document.querySelector('.side').addEventListener('click', function(ev){ var b = ev.target.closest('[data-view]'); if (b && agenteAtual) showView(b.dataset.view, true); });
+  window.addEventListener('popstate', function(){
+    if (!agenteAtual) return;
+    showView(addressView());
+    if ($('metricDays').value !== addressDays()) { $('metricDays').value = addressDays(); loadMetrics(); }
+  });
+  $('metricDays').value = addressDays();
 
   // Both tabs save the same way; note = the message under the button pressed.
   function salvar(b, note){
@@ -587,7 +626,7 @@
     }).catch(function(e){ if (metricsFor === key && e.message !== NO_SESSION) msg($('metricsMsg'), e.message, 'err'); });
   }
   function dayLabel(day){ try { return new Date(day + 'T12:00:00Z').toLocaleDateString(document.documentElement.lang, { day:'2-digit', month:'2-digit', timeZone:'UTC' }); } catch(e){ return day; } }
-  $('metricDays').addEventListener('change', function(){ if (agenteAtual) loadMetrics(); });
+  $('metricDays').addEventListener('change', function(){ setAddress({ days: this.value === '30' ? null : this.value }); if (agenteAtual) loadMetrics(); });
 
   // The access log (client-area-activity.mjs): the owner reads all of it, an area's admin
   // the area's part, a viewer none. before = the last line shown, to load older ones.
