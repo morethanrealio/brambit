@@ -13,7 +13,7 @@ import { webFieldsFromBody } from './public-web.mjs';
 import { AGENT_HOURLY_LIMIT_MAX, CONTATOS_POR_PAGINA, CONVERSATION_IDLE_MAX } from './public-support.mjs';
 import { AGENT_PROMPT_KINDS, PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 import { LINK_SITES_MAX, normalizeSite } from '../../links.mjs';
-import { METRICS_PATH, METRIC_DAYS } from './public-support-metrics.mjs';
+import { METRICS_PATH, METRIC_DAYS, METRIC_RANGE_MAX, metricRange, todayIn } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
@@ -316,6 +316,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return send(res, 200, dados, { 'content-disposition': `attachment; filename="contato-${contatoId}.json"` });
   });
 
+  // ?days= one of METRIC_DAYS, or ?from=&to= (metricRange).
+  const badPeriod = (res) => send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS, maxDays: METRIC_RANGE_MAX });
   if (metrics) rota('GET', METRICS_PATH, async ({ res, url, user }) => {
     const language = normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
     // ?contact: one conversation's cards, whoever can open it sees them.
@@ -326,11 +328,11 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     }
     const acc = await agentAccess(user, url.searchParams.get('agent'));
     if (!acc) return naoAchei(res);
-    const days = Number(url.searchParams.get('days'));
-    if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
-    const volume = await metrics.volume(acc.ownerId, acc.agentId, days);
+    const range = metricRange(url.searchParams, todayIn());
+    if (!range) return badPeriod(res);
+    const volume = await metrics.volume(acc.ownerId, acc.agentId, range);
     if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null });
-    const from = volume.daily[0].day, to = volume.daily.at(-1).day;
+    const { from, to, days } = range;
     // clicks = the link buttons pressed in the period (/go), null without events.
     const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language }),
       events ? events.count(acc.agentId, { from, to }, { kind: 'link_click' }) : null]);
@@ -341,12 +343,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   if (events && metrics) rota('GET', EVENTS_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
     if (!acc) return naoAchei(res);
-    const days = Number(url.searchParams.get('days'));
-    if (!METRIC_DAYS.includes(days)) return send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS });
-    const rows = await events.list(acc.ownerId, acc.agentId, days);
+    const range = metricRange(url.searchParams, todayIn());
+    if (!range) return badPeriod(res);
+    const rows = await events.list(acc.ownerId, acc.agentId, range);
     if (!rows) return naoAchei(res);
-    await record(user, acc, 'events_exported', { days, rows: rows.length });
-    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="events-${acc.agentId}-${days}d.csv"` });
+    await record(user, acc, 'events_exported', { from: range.from, to: range.to, rows: rows.length });
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="events-${acc.agentId}-${range.from}-${range.to}.csv"` });
     return res.end('\ufeff' + eventsCsv(rows));
   });
 
