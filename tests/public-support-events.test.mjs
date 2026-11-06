@@ -129,6 +129,21 @@ test('link buttons go out measured: the click is recorded once, previews and HEA
   assert.deepEqual(await clicks(), [{ contact_id: r1.contatoId, ref: 'product:9' }], 'a second tap right away is the same click');
   assert.equal((await hit('GET', 'AAAAAAAAAAAAAAAA')).statusCode, 404);
   assert.equal((await hit('GET', '../etc')).statusCode, 404);
+
+  // A store whose app takes every address of its site: the person leaves by script, so the browser keeps the page.
+  const inBrowser = createRotas();
+  registerClickRoute({ rotas: inBrowser, events, send: () => {}, log: { error() {} }, inBrowser: ['shop.example'] });
+  const open = async (method, ua = 'Mozilla/5.0') => {
+    const res = { headers: {}, setHeader(k, v) { this.headers[k.toLowerCase()] = v; }, writeHead(s, h) { this.statusCode = s; for (const [k, v] of Object.entries(h)) this.setHeader(k, v); }, end(b) { this.body = b; } };
+    await inBrowser.atender({ method, headers: { 'user-agent': ua } }, res, new URL(`https://bot.example${CLICK_PATH}?${link.split('?')[1]}`));
+    return res;
+  };
+  const page = await open('GET');
+  const nonce = page.headers['content-security-policy'].match(/'nonce-([^']+)'/)[1];
+  assert.equal(page.statusCode, 200);
+  assert.ok(page.body.includes(`<script nonce="${nonce}">location.replace(${JSON.stringify(shop)});</script>`));
+  assert.equal(page.headers['referrer-policy'], 'no-referrer');
+  assert.deepEqual([(await open('HEAD')).statusCode, (await open('GET', 'WhatsApp/2.23.20.0 A')).statusCode], [302, 302], 'a HEAD and a preview keep the redirect');
 });
 
 test('the events spreadsheet: the owner downloads it, another account gets 404, a formula in a ref goes out as text', async (t) => {
