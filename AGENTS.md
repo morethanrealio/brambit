@@ -37,7 +37,7 @@ the first one: its owner screen is also open to members of a client area
 (`client-areas.mjs`, off unless `BRAMBIT_CLIENT_AREAS=on`), so every route in `public-support-owner.mjs` resolves the
 assistant or contact through `agentAccess()` or `contatoDoPedido()` and calls the
 store with the owner's id, and a route that opens, exports, deletes or changes
-something records it in the access log (`client-area-activity.mjs`). The owner can invite an email with no account: that
+something records it in the access log (`client-area-activity.mjs`, read only by the owner; a member opening the panel is logged once per sign-in, from `session_started_at` on the user). The owner can invite an email with no account: that
 creates a *panel account*, which `web/account-scope.mjs` holds to the routes the
 extension registers (owner pages redirect to `/public-support`, any other API is
 404); a new extension route a panel member needs must be added to

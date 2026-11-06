@@ -387,9 +387,9 @@
     <div id="areasMsg" class="msg"></div>
   </div>
 
-  <div class="card hidden" id="activityCard" data-view-panel="settings">
+  <div class="card hidden" id="activityCard" data-view-panel="settings" data-owner-only>
     <h2 data-i18n="public_service_page.activity">Access log</h2>
-    <p class="nota" data-i18n="public_service_page.activity_lead">Who opened conversations, handled contacts or changed the assistants, and when. It never keeps what a conversation or a text says.</p>
+    <p class="nota" data-i18n="public_service_page.activity_lead">Who signed in, opened conversations, handled contacts or changed the assistants, and when. It never keeps what a conversation or a text says.</p>
     <table class="mtable log">
       <thead><tr><th data-i18n="public_service_page.activity_when">When</th><th data-i18n="public_service_page.activity_who">Who</th>
         <th data-i18n="public_service_page.activity_what">What</th><th data-i18n="public_service_page.assistant">Assistant</th></tr></thead>
@@ -818,14 +818,14 @@
     });
   });
 
-  // The access log (client-area-activity.mjs): the owner reads all of it, an area's admin
-  // the area's part, a viewer none. before = the last line shown, to load older ones.
+  // The access log (client-area-activity.mjs): only the owner of the assistants reads it.
+  // before = the last line shown, to load older ones.
   var ACTIVITY = '/api/public-support/activity', ACTIVITY_PAGE = 50, activityFor = null, activityLast = null;
   function loadActivity(more){
     var id = agenteAtual.agentId;
     if (!more) { activityFor = id; activityLast = null; $('activityRows').textContent = ''; msg($('activityMsg'), ''); }
-    $('activityCard').classList.toggle('hidden', !canEdit());
-    if (!canEdit()) return;
+    $('activityCard').classList.toggle('hidden', !isOwner());
+    if (!isOwner()) return;
     pedir(ACTIVITY + '?agent=' + encodeURIComponent(id) + (activityLast ? '&before=' + activityLast : '')).then(function(j){
       if (activityFor !== id) return;
       var lines = j.lines || [];

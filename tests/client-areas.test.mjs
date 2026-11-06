@@ -65,7 +65,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
     const res = { setHeader() {}, writeHead(status, headers) { Object.assign(this, { status, headers }); }, end(body) { this.body = body; } };
-    await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => who && { id: who } });
+    await rotas.atender(req, res, new URL('http://x' + path), { currentUser: async () => who && (typeof who === 'object' ? who : { id: who }) });
     return res;
   };
   return { db, store, prompts, areas, ask, contact, owner, adminA, viewerB, stranger, agA, agB, agOwn, agStranger };
@@ -373,7 +373,7 @@ test('contact names: the plugin names a contact from its notes; the list shows i
   assert.equal((await ask(owner, 'GET', `${PROFILES_PATH}?agent=${agA}`)).body.named, 0);
 });
 
-test('access log: the owner sees every line, an area\'s admin only its area\'s, a viewer none; never what was said', async (t) => {
+test('access log: only the owner reads it, a member\'s sign-in is one line per session; never what was said', async (t) => {
   const s = await setup(t);
   const { ask, owner, adminA, viewerB, agA, agB } = s;
   const { contactA } = await twoClients(s);
@@ -381,23 +381,29 @@ test('access log: the owner sees every line, an area\'s admin only its area\'s, 
   await ask(owner, 'GET', `/api/publico/conversa?contato=${contactA}&antes=999999`);
   await ask(adminA, 'GET', `/api/publico/exportar?contato=${contactA}`);
   await ask(adminA, 'POST', AGENT_TEXTS_PATH, { agentId: agA, kind: 'written', content: 'a secret greeting' });
+  const firstSession = new Date(Date.now() - 60_000).toISOString();
+  for (let i = 0; i < 2; i++) await ask({ id: adminA, session_started_at: firstSession }, 'GET', '/api/publico/agentes');
+  await ask(owner, 'GET', '/api/publico/agentes');
 
   const log = async (who, agentId) => ask(who, 'GET', `${ACTIVITY_PATH}?agent=${agentId}`);
   const all = (await log(owner, agB)).body.lines;
   assert.deepEqual(all.map((l) => [l.action, l.actor, l.area]), [
+    ['panel_signed_in', 'admin@a.test', 'Client A'],
     ['text_changed', 'admin@a.test', 'Client A'], ['contact_exported', 'admin@a.test', 'Client A'],
     ['conversation_opened', 'owner@x.test', 'Client A'],
     ['member_invited', 'owner@x.test', 'Client B'], ['member_invited', 'owner@x.test', 'Client A'],
     ['assistant_added', 'owner@x.test', 'Client B'], ['assistant_added', 'owner@x.test', 'Client A'],
     ['area_created', 'owner@x.test', 'Client B'], ['area_created', 'owner@x.test', 'Client A'],
-  ], 'a paged read is not a new opening');
-  assert.deepEqual(all[0].detail, { kind: 'written' });
+  ], 'a paged read is not a new opening, a second load in the same session is not a new sign-in, the owner\'s own is not logged');
+  assert.deepEqual(all[1].detail, { kind: 'written' });
   assert.deepEqual(all.find((l) => l.area === 'Client B' && l.action === 'member_invited').detail, { email: 'viewer@b.test', role: 'viewer' });
   assert.equal(JSON.stringify(all).includes('secret') || JSON.stringify(all).includes('oi'), false, 'no text or message in the log');
 
-  const mine = (await log(adminA, agA)).body.lines;
-  assert.ok(mine.length > 0);
-  assert.deepEqual([...new Set(mine.map((l) => l.area))], ['Client A']);
+  await new Promise((r) => setTimeout(r, 5));
+  await ask({ id: adminA, session_started_at: new Date().toISOString() }, 'GET', '/api/publico/agentes');
+  assert.equal((await log(owner, agA)).body.lines.filter((l) => l.action === 'panel_signed_in').length, 2, 'a new session is a new line');
+
+  assert.equal((await log(adminA, agA)).status, 403);
   assert.equal((await log(adminA, agB)).status, 404);
   assert.equal((await log(viewerB, agB)).status, 403);
   assert.equal((await log(s.stranger, agA)).status, 404);
