@@ -174,9 +174,10 @@ test('the events spreadsheet: the owner downloads it, another account gets 404, 
   assert.equal((await ask(owner, 5)).status, 400);
   const csv = await ask(owner);
   assert.equal(csv.status, 200);
-  assert.match(csv.headers['content-disposition'], /^attachment; filename="events-[0-9a-f-]+-7d\.csv"$/);
+  assert.match(csv.headers['content-disposition'], /^attachment; filename="events-[0-9a-f-]+-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/);
   const lines = csv.body.replace(/^﻿/, '').trim().split('\r\n');
   assert.equal(lines[0], '"at","contact_id","channel","event","ref"');
   assert.match(lines[1], new RegExp(`^"[0-9: -]+","${c}","whatsapp","bag_add","'=HYPERLINK\\(""x""\\)"$`));
-  assert.deepEqual(done, [['events_exported', { days: 7, rows: 1 }]]);
+  assert.deepEqual(done.map(([a, d]) => [a, d.rows]), [['events_exported', 1]]);
+  assert.equal((await ask(owner, '7&from=2020-01-01&to=2020-01-31')).body.replace(/^﻿/, '').trim().split('\r\n').length, 1, 'picked dates: only that period');
 });

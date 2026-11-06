@@ -39,7 +39,7 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:0 0 18px;}
   .card h2{font-size:16px;margin:0 0 12px;}
   label{display:block;font-size:13.5px;color:var(--mut);margin:12px 0 4px;}
-  input[type=number],input[type=text],select,textarea{width:100%;border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px;font:inherit;font-size:14.5px;background:var(--field);color:var(--txt);}
+  input[type=number],input[type=text],input[type=date],select,textarea{width:100%;border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px;font:inherit;font-size:14.5px;background:var(--field);color:var(--txt);}
   textarea{min-height:140px;resize:vertical;}
   .row{display:flex;gap:14px;flex-wrap:wrap;}
   .row>div{flex:1;min-width:160px;}
@@ -122,7 +122,7 @@
   .metric-head{display:flex;justify-content:space-between;align-items:center;gap:12px;}
   .metric-head h2{margin:0;}
   .metric-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
-  .metric-tools select{width:auto;}
+  .metric-tools select,.metric-tools input[type=date]{width:auto;}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0 4px;}
   .kpi{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
   .kpi > .l{order:-1;}
@@ -218,7 +218,10 @@
         <option value="7" data-i18n="public_service_page.metric_days_7">Last 7 days</option>
         <option value="30" data-i18n="public_service_page.metric_days_30" selected>Last 30 days</option>
         <option value="90" data-i18n="public_service_page.metric_days_90">Last 90 days</option>
+        <option value="custom" data-i18n="public_service_page.metric_days_custom">Pick the dates</option>
       </select>
+      <input type="date" id="metricFrom" class="hidden" data-i18n-aria-label="public_service_page.metric_from" aria-label="First day"/>
+      <input type="date" id="metricTo" class="hidden" data-i18n-aria-label="public_service_page.metric_to" aria-label="Last day"/>
     </div>
   </div>
 
@@ -526,8 +529,9 @@
 
   // The views each role sees in the menu (the server refuses the rest anyway); inside
   // settings, the owner's own parts carry data-owner-only. The open view and the metrics
-  // period live in the address (?view=agent&days=7), so a reload or a shared link keeps
-  // them; the dashboard and 30 days are the defaults and leave no trace.
+  // period live in the address (?view=agent&days=7, or &from=2026-10-01&to=2026-10-31 for
+  // picked dates), so a reload or a shared link keeps them; the dashboard and 30 days are
+  // the defaults and leave no trace.
   var VIEWS = { owner: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp', 'settings'], admin: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp', 'settings'], viewer: ['dashboard', 'conversations', 'agent', 'crm', 'whatsapp'] };
   // The tabs' old #names, from links made before the menu.
   var OLD_TABS = { home: 'dashboard', conversations: 'conversations', prompt: 'agent', activity: 'settings', settings: 'settings' };
@@ -538,7 +542,23 @@
     if (url !== location.pathname + location.search + location.hash) history[push ? 'pushState' : 'replaceState'](null, '', url);
   }
   function addressView(){ return new URLSearchParams(location.search).get('view') || OLD_TABS[location.hash.slice(1)] || 'dashboard'; }
-  function addressDays(){ var d = new URLSearchParams(location.search).get('days'); return ['7', '30', '90'].indexOf(d) < 0 ? '30' : d; }
+  var DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function addressPeriod(){
+    var q = new URLSearchParams(location.search), from = q.get('from'), to = q.get('to'), d = q.get('days');
+    if (DAY_RE.test(from || '') && DAY_RE.test(to || '') && from <= to) return { from: from, to: to };
+    return { days: ['7', '30', '90'].indexOf(d) < 0 ? '30' : d };
+  }
+  // The period as the server's query (?days= or ?from=&to=), from the address.
+  function periodQuery(p){ return p.days ? 'days=' + p.days : 'from=' + p.from + '&to=' + p.to; }
+  function localDay(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // Shows the address's period in the controls; the date fields only for picked dates.
+  function showPeriod(p){
+    $('metricDays').value = p.days || 'custom';
+    if (p.from) { $('metricFrom').value = p.from; $('metricTo').value = p.to; }
+    var today = localDay(new Date());
+    $('metricFrom').max = $('metricTo').value || today; $('metricTo').max = today; $('metricTo').min = $('metricFrom').value;
+    $('metricFrom').classList.toggle('hidden', !p.from); $('metricTo').classList.toggle('hidden', !p.from);
+  }
   function showView(name, push){
     var allowed = VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer;
     if (allowed.indexOf(name) < 0) name = 'dashboard';
@@ -557,9 +577,10 @@
   window.addEventListener('popstate', function(){
     if (!agenteAtual) return;
     showView(addressView());
-    if ($('metricDays').value !== addressDays()) { $('metricDays').value = addressDays(); loadMetrics(); }
+    var p = addressPeriod();
+    if (periodQuery(p) !== String(metricsFor).split('|')[1]) { showPeriod(p); loadMetrics(); }
   });
-  $('metricDays').value = addressDays();
+  showPeriod(addressPeriod());
 
   // Both tabs save the same way; note = the message under the button pressed.
   function salvar(b, note){
@@ -692,12 +713,12 @@
     }).catch(function(){});
   }
   function loadMetrics(){
-    var id = agenteAtual.agentId, days = $('metricDays').value, key = metricsFor = id + ':' + days;
-    $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&days=' + days;
+    var id = agenteAtual.agentId, period = periodQuery(addressPeriod()), key = metricsFor = id + '|' + period;
+    $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&' + period;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
     loadLatest();
-    pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&days=' + days + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
+    pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&' + period + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mPeople', 'people'], ['mConversations', 'conversations'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
         $(p[0]).textContent = number.format(j.total[p[1]]);
@@ -720,8 +741,8 @@
         ['people', 'conversations', 'received', 'replies'].forEach(function(k){ tr.appendChild(el('td', null, number.format(v[k]))); });
         rows.appendChild(tr);
       });
-      $('mRetention').textContent = j.retentionDays < j.days ? t('metric_retention', { days: j.retentionDays }) : '';
-      $('mRetention').classList.toggle('hidden', !(j.retentionDays < j.days));
+      $('mRetention').textContent = j.partial ? t('metric_retention', { days: j.retentionDays }) : '';
+      $('mRetention').classList.toggle('hidden', !j.partial);
     }).catch(function(e){ if (metricsFor === key && e.message !== NO_SESSION) msg($('metricsMsg'), e.message, 'err'); });
   }
   // One bar per day; hovering or tapping one shows its numbers above it.
@@ -777,7 +798,25 @@
   }
   $('seeAll').addEventListener('click', function(){ showView('conversations', true); });
   function dayLabel(day){ try { return new Date(day + 'T12:00:00Z').toLocaleDateString(document.documentElement.lang, { day:'2-digit', month:'2-digit', timeZone:'UTC' }); } catch(e){ return day; } }
-  $('metricDays').addEventListener('change', function(){ setAddress({ days: this.value === '30' ? null : this.value }); if (agenteAtual) loadMetrics(); });
+  // Picking dates starts from the last 30 days; the fields keep the first day before the last.
+  $('metricDays').addEventListener('change', function(){
+    if (this.value === 'custom') {
+      var to = new Date(), from = new Date(); from.setDate(from.getDate() - 29);
+      if (!$('metricFrom').value || !$('metricTo').value) { $('metricFrom').value = localDay(from); $('metricTo').value = localDay(to); }
+      setAddress({ days: null, from: $('metricFrom').value, to: $('metricTo').value });
+    } else setAddress({ days: this.value === '30' ? null : this.value, from: null, to: null });
+    showPeriod(addressPeriod());
+    if (agenteAtual) loadMetrics();
+  });
+  ['metricFrom', 'metricTo'].forEach(function(f){
+    $(f).addEventListener('change', function(){
+      var from = $('metricFrom').value, to = $('metricTo').value;
+      if (!DAY_RE.test(from) || !DAY_RE.test(to) || from > to) return;
+      setAddress({ days: null, from: from, to: to });
+      showPeriod(addressPeriod());
+      if (agenteAtual) loadMetrics();
+    });
+  });
 
   // The access log (client-area-activity.mjs): the owner reads all of it, an area's admin
   // the area's part, a viewer none. before = the last line shown, to load older ones.
