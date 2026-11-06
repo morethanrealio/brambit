@@ -191,15 +191,48 @@ export async function measureLinks(events, base, { agentId, contactId }, saidas,
   return out;
 }
 
+// Hosts whose links leave the click route by script instead of a redirect
+// (BRAMBIT_CLICK_IN_BROWSER, comma-separated). A store whose phone app claims every
+// address of its site (iOS universal links, Android app links) takes a redirected
+// tap into the app, even for a page the app does not have; a navigation the page
+// starts by itself keeps the person in the browser. Links to other hosts (an app
+// the person should open, like WhatsApp) keep the redirect.
+export const clickInBrowserHosts = (value = process.env.BRAMBIT_CLICK_IN_BROWSER) =>
+  String(value ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+
+const hostOf = (to) => { try { return new URL(to).hostname.toLowerCase(); } catch { return ''; } };
+const htmlAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// The page that sends the person on by script, with a link if scripts are off.
+// Its own CSP: only this script runs, nothing loads, it cannot be framed.
+function sendByScript(res, to) {
+  const nonce = randomBytes(16).toString('base64');
+  // JSON.stringify keeps the address a string; escaping < keeps it from closing the script.
+  const target = JSON.stringify(to).replace(/</g, '\\u003c');
+  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<meta name="robots" content="noindex"><title>…</title></head><body>`
+    + `<script nonce="${nonce}">location.replace(${target});</script>`
+    + `<p style="font-family:sans-serif;text-align:center;margin-top:40vh"><a href="${htmlAttr(to)}">→</a></p></body></html>`;
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+  });
+  res.end(body);
+}
+
 // The click route: records the click (not a link preview's fetch nor a HEAD) and
 // sends the person on. An unknown id is a 404, never a guess of where to go.
-export function registerClickRoute({ rotas, events, send, log = console }) {
+// inBrowser: hosts left by script (clickInBrowserHosts); a preview and a HEAD get the redirect.
+export function registerClickRoute({ rotas, events, send, log = console, inBrowser = clickInBrowserHosts() }) {
   const handle = async (req, res, url) => {
     let to = null;
-    try { to = await events.click(url.searchParams.get('l'), { record: req.method === 'GET' && !isPreview(req.headers['user-agent']) }); }
+    const preview = isPreview(req.headers['user-agent']);
+    try { to = await events.click(url.searchParams.get('l'), { record: req.method === 'GET' && !preview }); }
     catch (e) { log.error?.('[events] click lookup failed:', e?.message ?? e); }
     res.setHeader('Cache-Control', 'no-store');
     if (!to) return send(res, 404, { error: 'not_found' });
+    if (req.method === 'GET' && !preview && inBrowser.includes(hostOf(to))) return sendByScript(res, to);
     res.writeHead(302, { Location: to, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
     res.end();
   };
