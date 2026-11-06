@@ -164,7 +164,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, conversationIdleMinutes: a.conversation_idle_minutes,
       webEnabled: a.web_enabled, webOrigins: a.web_origins, webHasKey: a.web_has_key, webKeyIps: a.web_key_ips,
       ...(avatar ? avatar.view(a) : {}),
-      role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null }),
+      role: 'owner', ...(areaOf.get(a.agent_id) || { areaId: null, areaName: null, areaTheme: null }),
     }));
     // The face is set in the assistant's settings; this screen only says whether it is ready.
     const avatarAvailable = !!avatar?.available();
@@ -176,7 +176,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       for (const a of await store.agentesDoDono(ownerId)) {
         const m = ofOwner.get(a.agent_id);
         if (m) agentes.push({ agentId: a.agent_id, nome: a.nome, configurado: a.configurado, ativo: a.ativo, instrucoes: a.instrucoes,
-          linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName });
+          linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName, areaTheme: m.areaTheme });
       }
     }
     // panelAccount: the person has only this screen (client-areas.mjs), so it offers no way back to the app.

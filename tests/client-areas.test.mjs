@@ -5,6 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 
 process.env.VAULT_KEY = randomBytes(32).toString('base64');
@@ -15,12 +18,13 @@ const { createPromptStore } = await import('../web/extensions/public-support/pub
 const { createClientAreaStore, registerClientAreaRoutes, panelScope, CLIENT_AREAS_PATH } = await import('../web/extensions/public-support/client-areas.mjs');
 const { createMetricsStore, METRICS_PATH } = await import('../web/extensions/public-support/public-support-metrics.mjs');
 const { activitySchema, createActivityStore, ACTIVITY_PATH } = await import('../web/extensions/public-support/client-area-activity.mjs');
+const { listThemes } = await import('../web/extensions/public-support/client-area-themes.mjs');
 const { createRotas } = await import('../web/routes.mjs');
 const { createAccountScope } = await import('../web/account-scope.mjs');
 
 const TZ = 'America/Sao_Paulo';
 
-async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } }, ganchos = null } = {}) {
+async function setup(t, { mail = { enabled: () => false, send: async () => { throw new Error('no e-mail in tests'); } }, ganchos = null, themes = () => ['client-a'] } = {}) {
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`CREATE SCHEMA mtr_harness;
     CREATE TABLE mtr_harness.users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text UNIQUE NOT NULL, name text,
@@ -57,7 +61,7 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
     prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles,
     contactNames: turns.contactNames, activity });
-  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
+  registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} }, themes });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
     const res = { setHeader() {}, writeHead(status, headers) { Object.assign(this, { status, headers }); }, end(body) { this.body = body; } };
@@ -387,4 +391,31 @@ test('access log: the owner sees every line, an area\'s admin only its area\'s, 
   assert.equal((await log(adminA, agB)).status, 404);
   assert.equal((await log(viewerB, agB)).status, 403);
   assert.equal((await log(s.stranger, agA)).status, 404);
+});
+
+test('themes: the owner gives an area one of the themes found; its people get it with the assistant, nobody else can set it', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'themes-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'themes'));
+  for (const n of ['client-a.css', 'Bad.css', '..css', 'notes.txt']) fs.writeFileSync(path.join(dir, 'themes', n), '');
+  assert.deepEqual(listThemes([dir, path.join(dir, 'missing')]), ['client-a']);
+
+  const s = await setup(t);
+  const { ask, owner, adminA, viewerB } = s;
+  const { a } = await twoClients(s);
+  const setTheme = (who, areaId, theme) => ask(who, 'POST', CLIENT_AREAS_PATH + '/theme', { areaId, theme });
+  assert.deepEqual((await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.themes, ['client-a']);
+  assert.equal((await setTheme(owner, a.id, '../x')).status, 400, 'only a theme found now');
+  assert.equal((await setTheme(adminA, a.id, 'client-a')).status, 404, 'a member cannot change the look');
+  assert.equal((await setTheme(s.stranger, a.id, 'client-a')).status, 404);
+  assert.equal((await setTheme(owner, a.id, 'client-a')).status, 200);
+
+  assert.deepEqual((await ask(adminA, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), ['client-a']);
+  assert.deepEqual((await ask(viewerB, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), [null], 'another area keeps the default');
+  assert.deepEqual((await ask(owner, 'GET', '/api/publico/agentes')).body.agentes.map((x) => [x.nome, x.areaTheme]), [['A', 'client-a'], ['B', null], ['Own', null]]);
+  assert.equal((await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.areas.find((x) => x.id === a.id).theme, 'client-a');
+
+  assert.equal((await setTheme(owner, a.id, null)).status, 200);
+  assert.deepEqual((await ask(adminA, 'GET', '/api/publico/agentes')).body.agentes.map((x) => x.areaTheme), [null]);
+  const lines = (await ask(owner, 'GET', `${ACTIVITY_PATH}?agent=${s.agA}`)).body.lines.filter((l) => l.action === 'theme_changed');
+  assert.deepEqual(lines.map((l) => [l.area, l.detail]), [['Client A', { theme: null }], ['Client A', { theme: 'client-a' }]]);
 });

@@ -57,6 +57,8 @@ export function marcaNaPagina(html, extra = {}) {
 // exists in this installation, so as not to send anyone to a 404.
 let pastasDoSite = [];
 export const definirPastasDoSite = (p) => (pastasDoSite = p);
+// Every site folder, in lookup order: the brand's, then the plugins' and web/public.
+export const siteFolders = () => [...atual.publico, ...pastasDoSite];
 // "host/name" if the page exists; null if not.
 export const linkDaPagina = (nome) => (arquivoDoSite('/' + nome, pastasDoSite) ? `${hostDaMarca()}/${nome}` : null);
 // Page reader (link preview, search, image): identifies itself as a bot.
