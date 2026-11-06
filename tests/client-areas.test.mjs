@@ -55,7 +55,8 @@ async function setup(t, { mail = { enabled: () => false, send: async () => { thr
   const send = (res, status, body, headers = {}) => Object.assign(res, { status, body, headers });
   const fail = (res, st, msg, e) => { throw e; };
   registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail, tooManyRequests: () => false, agenteDoNumero: () => null,
-    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles, activity });
+    prompts, defaultTexts: async () => ({ written: 'default', spoken: null }), areas, metrics: createMetricsStore(pool, { timezone: TZ }), metricCards: turns.metricCards, contactProfiles: turns.contactProfiles,
+    contactNames: turns.contactNames, activity });
   registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests: () => false, publicBase: () => 'https://panel.example/', mail, activity, log: { error() {} } });
   const ask = async (who, method, path, body) => {
     const req = Readable.from(body ? [JSON.stringify(body)] : []); req.method = method;
@@ -334,6 +335,28 @@ test('profile filter and spreadsheet: a field\'s value, or one item of a list, p
   assert.equal((await ask(viewerB, 'GET', `${PROFILES_PATH}?agent=${agB}`)).status, 200);
   assert.equal((await ask(viewerB, 'GET', `${PROFILES_PATH}?agent=${agA}`)).status, 404);
   assert.ok([PROFILES_PATH, PROFILES_CSV_PATH].every((p) => panelScope(areas).api('GET', p)), 'a panel account reaches both');
+});
+
+test('contact names: the plugin names a contact from its notes; the list shows it, filters by it and puts it in the spreadsheet', async (t) => {
+  let down = false;
+  const s = await setup(t, { ganchos: { async contactNames(q) {
+    if (down) throw Error('plugin down');
+    return Object.fromEntries(q.contacts.map((c) => [c.id, c.notes.email]));
+  } } });
+  const { ask, store, owner, adminA, agA } = s;
+  const { contactA } = await twoClients(s);
+  const second = await s.contact(agA, '5511000000003');
+  await store.lembrar(contactA, 'email', 'person@example.com');
+  const list = async (q = '') => (await ask(adminA, 'GET', `/api/publico/contatos?agente=${agA}${q}`)).body.contatos.map((c) => [c.id, c.name ?? null]);
+
+  assert.deepEqual(await list(), [[second, null], [contactA, 'person@example.com']]);
+  assert.deepEqual(await list('&named=1'), [[contactA, 'person@example.com']]);
+  assert.equal((await ask(adminA, 'GET', `${PROFILES_PATH}?agent=${agA}`)).body.named, 1);
+  const csv = (await ask(adminA, 'GET', `${PROFILES_CSV_PATH}?agent=${agA}&named=1`)).body.replace(/^﻿/, '').trim().split('\r\n');
+  assert.deepEqual(csv.map((l) => l.split(',').slice(0, 2).join('|')), ['"contact"|"name"', '"5511000000001"|"person@example.com"']);
+  down = true;
+  assert.deepEqual(await list(), [[second, null], [contactA, null]], 'a broken plugin leaves the list as it was');
+  assert.equal((await ask(owner, 'GET', `${PROFILES_PATH}?agent=${agA}`)).body.named, 0);
 });
 
 test('access log: the owner sees every line, an area\'s admin only its area\'s, a viewer none; never what was said', async (t) => {

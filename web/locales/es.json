@@ -1257,6 +1257,7 @@
     "profile_filter_all": "Todos",
     "profile_download": "Descargar hoja de cálculo (CSV)",
     "profile_filter_none": "Nadie coincide con este filtro.",
+    "profile_named_only": "Solo contactos identificados",
     "activity_profiles_exported": "Descargó la hoja de perfiles"
   },
   "index_page": {

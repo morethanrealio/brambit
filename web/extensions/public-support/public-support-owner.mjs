@@ -35,19 +35,21 @@ const CLIENT_ADMIN_FIELDS = new Set(['agentId', 'instrucoes', 'linkSites']);
 const canEdit = (role) => role === 'owner' || role === 'admin';
 // A profile field's values as texts: one, or each item when the field is a list.
 const fieldValues = (f) => (Array.isArray(f.value) ? f.value : [String(f.value)]);
-// ?field=&value= → which contacts the filter keeps, or null without a filter.
+// ?field=&value= and ?named=1 (only the contacts the plugin names) → which contacts
+// the filter keeps, or null without a filter.
 const profileFilter = (url) => {
   const field = url.searchParams.get('field');
-  if (!field) return null;
+  const named = url.searchParams.get('named') === '1';
+  if (!field && !named) return null;
   const value = url.searchParams.get('value') ?? '';
-  return (c) => c.profile.some((f) => f.label === field && fieldValues(f).includes(value));
+  return (c) => (!named || !!c.name) && (!field || c.profile.some((f) => f.label === field && fieldValues(f).includes(value)));
 };
 const profilesCsv = (contatos) => {
   const labels = [...new Set(contatos.flatMap((c) => c.profile.map((f) => f.label)))];
-  const head = ['contact', 'channel', 'first_contact', 'last_message', 'messages', 'conversations', ...labels];
+  const head = ['contact', 'name', 'channel', 'first_contact', 'last_message', 'messages', 'conversations', ...labels];
   const row = (c) => {
     const by = new Map(c.profile.map((f) => [f.label, fieldValues(f).join(', ')]));
-    return [c.endereco, c.canal, iso(c.criadoEm), iso(c.ultimaEm), c.mensagens, c.conversations, ...labels.map((l) => by.get(l) ?? '')];
+    return [c.endereco, c.name ?? '', c.canal, iso(c.criadoEm), iso(c.ultimaEm), c.mensagens, c.conversations, ...labels.map((l) => by.get(l) ?? '')];
   };
   return [head, ...contatos.map(row)].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';
 };
@@ -100,10 +102,11 @@ export function camposDaConfig(b = {}) {
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
 // metricCards({agentId, contactId?, days, from, to, language}) → the plugin's cards (public-support.mjs); language = the page's (?lang).
 // contactProfiles({agentId, language, contacts: [{id, notes}]}) → the plugin's profile of each contact (public-support.mjs).
+// contactNames({agentId, contacts: [{id, notes}]}) → the plugin's name for each contact it knows (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], contactProfiles = async () => ({}), activity = null, events = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -130,11 +133,13 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // acc = what agentAccess or contatoDoPedido resolved.
   const record = (user, acc, action, detail = null) => activity?.record({ ownerId: acc.ownerId, actorId: user.id,
     agentId: acc.agentId ?? null, areaId: acc.areaId ?? null, action, detail });
-  // Contacts with each one's profile, as the plugin reads their notes (in the page's language).
+  // Contacts with each one's profile and name, as the plugin reads their notes (in the page's language).
   const withProfiles = async (acc, language, contatos) => {
     const notes = await store.notesOf(contatos.map((c) => c.id));
-    const profiles = await contactProfiles({ agentId: acc.agentId, language, contacts: contatos.map((c) => ({ id: c.id, notes: notes[c.id] })) });
-    return contatos.map((c) => ({ ...c, profile: profiles[c.id] || [] }));
+    const contacts = contatos.map((c) => ({ id: c.id, notes: notes[c.id] }));
+    const [profiles, names] = await Promise.all([contactProfiles({ agentId: acc.agentId, language, contacts }),
+      contactNames({ agentId: acc.agentId, contacts })]);
+    return contatos.map((c) => ({ ...c, profile: profiles[c.id] || [], ...(names[c.id] ? { name: names[c.id] } : {}) }));
   };
   // The assistant's contacts from the newest (or from before `antes`), page by page,
   // with their profiles: those `keep` takes, up to `max`, out of at most PROFILE_SCAN_MAX.
@@ -233,18 +238,21 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return send(res, 200, { contatos });
   });
 
-  // The filter's options: each profile field the contacts have, with its values, most common first.
+  // The filter's options: each profile field the contacts have, with its values, most common
+  // first, and how many contacts the plugin names (the "named only" box shows when any).
   rota('GET', PROFILES_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
     if (!acc) return naoAchei(res);
     const fields = new Map();
+    let named = 0;
     for (const c of await scanProfiles(acc, pageLanguage(url))) {
+      if (c.name) named++;
       for (const f of c.profile) {
         const counts = fields.get(f.label) ?? fields.set(f.label, new Map()).get(f.label);
         for (const v of fieldValues(f)) counts.set(v, (counts.get(v) ?? 0) + 1);
       }
     }
-    return send(res, 200, { fields: [...fields].map(([label, counts]) => ({ label,
+    return send(res, 200, { named, fields: [...fields].map(([label, counts]) => ({ label,
       values: [...counts].sort((a, b) => b[1] - a[1]).slice(0, PROFILE_VALUES_MAX).map(([value, count]) => ({ value, count })) })) });
   });
 
