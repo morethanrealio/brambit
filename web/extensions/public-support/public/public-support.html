@@ -608,10 +608,11 @@
         k.className = 'kpi ranking';
         k.appendChild(el('div', 'l', c.label));
         if (c.detail) k.appendChild(el('div', 'd', c.detail));
-        var table = el('table', 'mtable rank'), head = el('tr'), body = el('tbody'), most = 0;
+        var table = el('table'), head = el('tr'), body = el('tbody'), most = 0;
         c.rows.forEach(function(r){ most = Math.max(most, r.values[0]); });
         head.appendChild(el('th', null, '#'));
         c.columns.forEach(function(h, i){ head.appendChild(el('th', i ? null : 'name', h)); });
+        table.className = 'mtable rank';
         var thead = el('thead'); thead.appendChild(head); table.appendChild(thead);
         c.rows.forEach(function(r, i){
           var tr = el('tr'), name = el('td', 'name', r.label), bar = el('div', 'share');
