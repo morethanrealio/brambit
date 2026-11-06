@@ -114,10 +114,10 @@
   .kpi{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
   .kpi > .l{order:-1;}
   .kpis.top{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:0 0 18px;}
-  .kpis.top .kpi,#mFunnels .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
+  .kpis.top .kpi,#mFunnels .kpi,#mRanks .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
   .kpis.top .kpi .n{font-size:30px;margin-top:4px;}
   .kpi .pair{display:flex;gap:22px;}
-  #mFunnels .kpi{margin:0 0 18px;}
+  #mFunnels .kpi,#mRanks .kpi{margin:0 0 18px;}
   .kpi .n{font-family:var(--font-num);font-size:24px;font-weight:700;line-height:1.2;}
   .kpi .l{font-size:12.5px;color:var(--mut);}
   .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
@@ -247,6 +247,7 @@
       </table>
       <p class="nota espaco hidden" id="mRetention"></p>
     </div>
+    <div id="mRanks"></div>
     <div id="metricsMsg" class="msg"></div>
   </div>
 
@@ -581,10 +582,12 @@
   // The plugin's cards: plain ones in the grid (those marked top in the dashboard's first
   // row, when it is given), funnels each across a row. For one conversation (oneContact)
   // a funnel step is done or not, with no share.
-  function drawCards(list, cards, funnels, oneContact, top){
+  // ranks: where ranking tables go (the dashboard's bottom); without it, with the funnels.
+  function drawCards(list, cards, funnels, oneContact, top, ranks){
     var lang = document.documentElement.lang, number = new Intl.NumberFormat(lang), percent = new Intl.NumberFormat(lang, { style: 'percent' });
     var shown = function(v){ return typeof v === 'number' ? number.format(v) : v; };
     cards.textContent = ''; funnels.textContent = '';
+    if (ranks) ranks.textContent = '';
     if (top) Array.prototype.forEach.call(top.querySelectorAll('.plugin-card'), function(k){ k.remove(); });
     (list || []).forEach(function(c){
       var k = el('div', 'kpi');
@@ -626,7 +629,7 @@
         table.appendChild(body);
         var wrap = el('div', 'rank-wrap'); wrap.appendChild(table);
         k.appendChild(wrap);
-        return funnels.appendChild(k);
+        return (ranks || funnels).appendChild(k);
       }
       k.appendChild(el('div', 'n', shown(c.value)));
       k.appendChild(el('div', 'l', c.label));
@@ -670,7 +673,7 @@
       // Link buttons pressed; only where the installation records events.
       $('mClicksBox').classList.toggle('hidden', !j.clicks);
       if (j.clicks) { $('mClicks').textContent = number.format(j.clicks.times); $('mClickPeople').textContent = t('metric_people_count', { count: j.clicks.people }); }
-      drawCards(j.cards, $('mCards'), $('mFunnels'), false, $('mTop'));
+      drawCards(j.cards, $('mCards'), $('mFunnels'), false, $('mTop'), $('mRanks'));
       drawBars(j.daily, number);
       $('mFirst').textContent = j.daily.length ? dayLabel(j.daily[0].day) : '';
       $('mLast').textContent = j.daily.length ? dayLabel(j.daily[j.daily.length - 1].day) : '';
