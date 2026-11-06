@@ -172,6 +172,9 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (avatarAvailable) for (const a of agentes) a.avatarFace = await avatar.face(a.agentId, user.id);
     // A member sees what their role uses: no spend, limits or website channel settings.
     const asMember = areas ? await areas.memberAgents(user.id) : [];
+    // Opening the panel as a member goes in each owner's log, once per sign-in and area.
+    const signedIn = new Map(asMember.map((m) => [m.ownerId + m.areaId, m]));
+    for (const m of signedIn.values()) await activity?.recordSignIn({ ownerId: m.ownerId, actorId: user.id, areaId: m.areaId, since: user.session_started_at ?? null });
     for (const ownerId of new Set(asMember.map((m) => m.ownerId))) {
       const ofOwner = new Map(asMember.filter((m) => m.ownerId === ownerId).map((m) => [m.agentId, m]));
       for (const a of await store.agentesDoDono(ownerId)) {
@@ -352,15 +355,13 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return res.end('\ufeff' + eventsCsv(rows));
   });
 
-  // The access log: the owner reads all of it, an area's admin the area's part; a viewer none.
+  // The access log: only the owner of the assistants reads it; an area's members get 403.
   if (activity) rota('GET', ACTIVITY_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
     if (!acc) return naoAchei(res);
-    if (!canEdit(acc.role)) return forbidden(res);
-    if (acc.role !== 'owner' && !acc.areaId) return naoAchei(res);
+    if (acc.role !== 'owner') return forbidden(res);
     const before = Number(url.searchParams.get('before'));
-    return send(res, 200, { lines: await activity.list({ ownerId: acc.ownerId, areaId: acc.role === 'owner' ? null : acc.areaId,
-      before: Number.isSafeInteger(before) && before > 0 ? before : null }) });
+    return send(res, 200, { lines: await activity.list({ ownerId: acc.ownerId, before: Number.isSafeInteger(before) && before > 0 ? before : null }) });
   });
 
   if (prompts) registerAgentTexts();

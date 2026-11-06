@@ -6700,7 +6700,7 @@ export async function resolveDeviceToken(token) {
 }
 
 // Resolves the session -> user. null if invalid, expired, or too idle.
-// Renews last_seen (idle sliding) in the same statement when the session is valid.
+// Renews last_seen (idle sliding) in the same statement when the session is valid; session_started_at = this sign-in.
 // The `deleted_at IS NULL` check is defense in depth: closeUserAccount already deletes
 // ALL of the owner's sessions, so this only catches a session created midway
 // through. A closed account never resolves to a user, on any route.
@@ -6712,9 +6712,9 @@ export async function getUserBySession(token) {
        WHERE token = $1
          AND expires_at > now()
          AND last_seen_at > now() - ($2 || ' days')::interval
-       RETURNING user_id
+       RETURNING user_id, created_at
      )
-     SELECT u.id, u.name, u.email, u.apple_sub, u.apple_private_email
+     SELECT u.id, u.name, u.email, u.apple_sub, u.apple_private_email, b.created_at AS session_started_at
      FROM bumped b JOIN ${S}.users u ON u.id = b.user_id
      WHERE u.deleted_at IS NULL`,
     [token, String(SESSION_IDLE_DAYS)],
