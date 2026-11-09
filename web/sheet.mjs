@@ -77,20 +77,53 @@ function nomeComExtensao(filename, tipo) {
 // Script that runs in the sandbox: opens the whole spreadsheet with pandas and
 // prints only the structure in JSON. Column and sheet names are truncated so
 // they fit a short note; the cells never leave here.
+//
+// A CSV whose quoting breaks the strict reader (a quote inside a quoted field, as in
+// SciELO exports, 2026-11-01) is read tolerantly: first keeping every line, then,
+// if a quote never closes, taking quotes as text. Lines with the wrong number of
+// fields are skipped and counted. The tolerant result is written back over the
+// sandbox copy as a clean CSV, so the analyst's plain read_csv opens it too.
 const SONDA_PY = String.raw`
-import sys, json, csv
+import sys, json, csv, warnings
 import pandas as pd
 caminho, tipo = sys.argv[1], sys.argv[2]
+tolerante = None
+def separador(enc):
+    with open(caminho, encoding=enc, newline='') as f:
+        cabecalho = f.readline()
+    try:
+        return csv.Sniffer().sniff(cabecalho, delimiters=',;\t|').delimiter
+    except csv.Error:
+        return ','
+def ler_tolerante(sep, enc):
+    global tolerante
+    ultimo = None
+    for quoting in (csv.QUOTE_MINIMAL, csv.QUOTE_NONE):
+        try:
+            with warnings.catch_warnings(record=True) as avisos:
+                warnings.simplefilter('always')
+                df = pd.read_csv(caminho, sep=sep, encoding=enc, dtype=str, quoting=quoting, on_bad_lines='warn')
+        except pd.errors.ParserError as e:
+            ultimo = e
+            continue
+        puladas = sum(str(a.message).count('Skipping line') for a in avisos)
+        df.to_csv(caminho, index=False, sep=sep, encoding='utf-8')
+        tolerante = {'puladas': puladas}
+        return df
+    raise ultimo
 def ler_texto(sep):
     ultimo = None
     for enc in ('utf-8-sig', 'latin-1'):
         try:
-            if sep is None:
-                try:
-                    return pd.read_csv(caminho, sep=None, engine='python', encoding=enc, dtype=str)
-                except csv.Error:
-                    return pd.read_csv(caminho, encoding=enc, dtype=str)
-            return pd.read_csv(caminho, sep=sep, encoding=enc, dtype=str)
+            try:
+                if sep is None:
+                    try:
+                        return pd.read_csv(caminho, sep=None, engine='python', encoding=enc, dtype=str)
+                    except csv.Error:
+                        return pd.read_csv(caminho, encoding=enc, dtype=str)
+                return pd.read_csv(caminho, sep=sep, encoding=enc, dtype=str)
+            except (pd.errors.ParserError, csv.Error):
+                return ler_tolerante(sep or separador(enc), enc)
         except UnicodeDecodeError as e:
             ultimo = e
     raise ultimo
@@ -105,7 +138,7 @@ try:
     for nome, df in abas.items():
         colunas = [str(c)[:60] for c in df.columns]
         saida.append({'nome': str(nome)[:60], 'linhas': int(len(df)), 'colunas': len(colunas), 'nomes': colunas[:50]})
-    print(json.dumps({'ok': True, 'abas': saida}, ensure_ascii=False))
+    print(json.dumps({'ok': True, 'abas': saida, 'tolerante': tolerante}, ensure_ascii=False))
 except Exception as e:
     print(json.dumps({'ok': False, 'erro': (type(e).__name__ + ': ' + str(e))[:200]}, ensure_ascii=False))
 `;
@@ -125,7 +158,7 @@ async function lerEstrutura(userId, path, tipo) {
   let out;
   try { out = JSON.parse(linha); } catch { return { ok: false, error: (res?.stderr || 'resposta inválida da leitura').slice(0, 200) }; }
   if (!out.ok) return { ok: false, error: out.erro || 'erro ao abrir' };
-  return { ok: true, abas: Array.isArray(out.abas) ? out.abas : [] };
+  return { ok: true, abas: Array.isArray(out.abas) ? out.abas : [], skipped: out.tolerante ? Number(out.tolerante.puladas) || 0 : null };
 }
 
 function descreverAbas(abas) {
@@ -135,9 +168,19 @@ function descreverAbas(abas) {
   }).join('\n');
 }
 
+// The reason in words the user understands; pandas' own text ("',' expected after
+// '\"'") reached the model and the user got no reason (2026-11-01).
+const MOTIVOS = [
+  [/ParserError|csv\.Error|expected after|EOF inside string|Expected \d+ fields/i, 'o arquivo tem aspas ou separadores fora do padrão de CSV, e não deu para separar as colunas'],
+  [/UnicodeDecodeError/i, 'o texto do arquivo está numa codificação que não reconheci'],
+  [/EmptyDataError|No columns to parse/i, 'o arquivo está vazio'],
+  [/BadZipFile|not a zip file|Excel file format cannot be determined|XLRDError/i, 'o arquivo não é uma planilha válida: pode estar corrompido ou ser outro tipo de arquivo com nome de planilha'],
+];
+export const motivoSimples = (motivo) => MOTIVOS.find(([re]) => re.test(String(motivo || '')))?.[1] || motivo;
+
 // Failure note. There's no text fallback, on purpose (see top of the file).
 export function notaPlanilhaIlegivel(filename, motivo) {
-  return `⚠️ A planilha "${filename}" não pôde ser aberta no ambiente de análise (${motivo}). O conteúdo dela NÃO está disponível por nenhum outro caminho: diga ao usuário que não conseguiu ler a planilha agora e não descreva, cite nem suponha nada do que ela contém.`;
+  return `⚠️ A planilha "${filename}" não pôde ser aberta no ambiente de análise (${motivoSimples(motivo)}). O conteúdo dela NÃO está disponível por nenhum outro caminho: comece a resposta dizendo ao usuário que o arquivo "${filename}" não abriu e por quê, em palavras simples, antes de qualquer outra coisa, e não descreva, cite nem suponha nada do que ela contém.`;
 }
 
 // Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
@@ -153,6 +196,14 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   if (!w.ok) return { ok: false, error: w.error || 'falha ao gravar no ambiente' };
   registerLoadedSheet(userId, { path, filename: clean, sheets: null, rows: null });
   return { ok: true, path, filename: clean };
+}
+
+// CSV opened only by the tolerant reader (see SONDA_PY). Skipped lines are data the
+// user would miss without knowing, so they are said first.
+function notaTolerante(skipped, rows) {
+  if (skipped == null) return '';
+  if (!skipped) return 'O CSV tinha aspas fora do padrão; abri em modo tolerante, sem perder linhas (aspas soltas ficaram como texto nas células).\n';
+  return `O CSV tinha linhas com aspas ou número de colunas fora do padrão: abri em modo tolerante, e ${skipped} de ${rows + skipped} linha(s) de dados ficaram de fora. Comece a resposta dizendo isso ao usuário, com o número, antes de qualquer resultado.\n`;
 }
 
 // Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and
@@ -172,7 +223,7 @@ export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tip
   registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
-    note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\nO conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
+    note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.skipped, rows)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
   };
 }
 

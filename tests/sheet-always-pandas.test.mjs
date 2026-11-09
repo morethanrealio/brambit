@@ -37,7 +37,7 @@ registerHooks({ resolve(specifier, context, next) {
 process.env.SANDBOX_URL = 'http://sandbox.invalid';
 process.env.SANDBOX_TOKEN = 'MOCK_ONLY';
 
-const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets } = await import('../web/sheet.mjs');
+const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets, notaPlanilhaIlegivel } = await import('../web/sheet.mjs');
 const { googleTools } = await import('../web/connectors.mjs');
 const { microsoftTools } = await import('../web/connectors-ext.mjs');
 const { openLinkTool, exportGoogleSheets } = await import('../web/websearch.mjs');
@@ -129,7 +129,7 @@ const temPandas = fs.existsSync(PY) && spawnSync(PY, ['-c', 'import pandas, open
 function sandboxLocal() {
   const raiz = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'planilha-'));
   const local = (p) => nodePath.join(raiz, p.replace(/^\/workspace\//, ''));
-  return { enabled: true,
+  return { enabled: true, local,
     async write(_u, path, buf) { fs.mkdirSync(nodePath.dirname(local(path)), { recursive: true }); fs.writeFileSync(local(path), buf); return { ok: true }; },
     async shell(_u, cmd) {
       const m = /^python3 - '([^']+)' (\w+) <<'SONDA_PY'\n([\s\S]*)\nSONDA_PY$/.exec(cmd);
@@ -162,6 +162,42 @@ test('real probe: file that is not a spreadsheet fails with a note, no text', { 
   assert.equal(lr.ok, false);
   assert.match(lr.note, /não pôde ser aberta/);
   assert.ok(!lr.note.includes('login'));
+});
+
+// SciELO export, 2026-11-01: a quote inside a quoted title broke the strict reader.
+test('real probe: CSV with stray quotes opens tolerantly and the analyst can read the copy', { skip: !temPandas && 'sem pandas local' }, async () => {
+  const sb = globalThis.__sb = sandboxLocal();
+  const csv = Buffer.from('Title,Authors,Year\n"Inovação "maker" na escola",Silva,2020\nOutro,"Souza, A",2021\n');
+  const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'scielo.csv');
+  assert.equal(lr.ok, true, lr.error);
+  assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 2, colunas: 3, nomes: ['Title', 'Authors', 'Year'] }]);
+  assert.match(lr.note, /modo tolerante, sem perder linhas/);
+  const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; print(pd.read_csv(sys.argv[1], sep=None, engine="python").shape)', sb.local(lr.path)], { encoding: 'utf8' });
+  assert.equal(r.stdout.trim(), '(2, 3)', r.stderr);
+});
+
+test('real probe: lines with extra fields are left out and counted for the user', { skip: !temPandas && 'sem pandas local' }, async () => {
+  globalThis.__sb = sandboxLocal();
+  const csv = Buffer.from('ID;Nome;Ano\n1;A;2020\n2;B;2021;extra\n3;C;2022\n4;D;2023;x;y\n');
+  const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'lista.csv');
+  assert.equal(lr.ok, true, lr.error);
+  assert.equal(lr.rows, 2);
+  assert.match(lr.note, /2 de 4 linha\(s\) de dados ficaram de fora\. Comece a resposta/);
+});
+
+test('the failure note gives the reason in plain words and asks to say which file first', () => {
+  for (const [erro, motivo] of [
+    ["ParserError: ',' expected after '\"'", /aspas ou separadores fora do padrão/],
+    ['UnicodeDecodeError: invalid start byte', /codificação/],
+    ['EmptyDataError: No columns to parse from file', /vazio/],
+    ['BadZipFile: File is not a zip file', /não é uma planilha válida/],
+  ]) {
+    const nota = notaPlanilhaIlegivel('artigos.csv', erro);
+    assert.match(nota, motivo, erro);
+    assert.ok(!nota.includes(erro), erro);
+    assert.match(nota, /comece a resposta dizendo ao usuário que o arquivo "artigos\.csv" não abriu e por quê/);
+  }
+  assert.match(notaPlanilhaIlegivel('a.xlsx', 'disco cheio'), /\(disco cheio\)/);
 });
 
 // ── Connectors: the result never carries cells ──
