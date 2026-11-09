@@ -48,7 +48,9 @@ t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', m
 // (an archived one is `base_yyyymmddhhmmss.ext`). baseFamily groups them.
 t('family strips the version stamp', baseFamily('Fontes_20260909170405.xlsx') === 'fontes.xlsx');
 t('family strips a doubly-stamped name', baseFamily('Fontes_20260909170405_20261101120000.xlsx') === 'fontes.xlsx');
-t('family strips the dateless _v fallback', baseFamily('a_v7.xlsx') === 'a.xlsx');
+t('family strips the dateless _v fallback', baseFamily('a_v0b1c2d3e-0000-4000-8000-123456789abc.xlsx') === 'a.xlsx');
+t('family strips the _vantiga fallback', baseFamily('a_vantiga.xlsx') === 'a.xlsx');
+t('family keeps a user _v2 suffix', baseFamily('Orcamento_v2.xlsx') === 'orcamento_v2.xlsx' && baseFamily('Orcamento_v3.xlsx') !== baseFamily('Orcamento_v2.xlsx'));
 t('family keeps a non-stamp suffix', baseFamily('Report_final.xlsx') === 'report_final.xlsx');
 t('canonical caption is its own family', baseFamily('Fontes.xlsx') === 'fontes.xlsx');
 {
@@ -555,6 +557,33 @@ for (const [nome, over] of [
     t('clarification does not spend the 2nd attempt', chamadas === 1);
     t('question goes back to the main agent', /qual delas/.test(r.clarificacao || ''));
   }
+}
+
+// ── beforeEdit: a spreadsheet linked to Google Sheets is edited from what came from there ──
+{
+  const { state, deps } = mkFake();
+  state.files['u/7'] = Buffer.from(JSON.stringify({ rows: 70, sheets: 2 }));
+  const pulled = { id: 7, caption: 'Matriz.xlsx', mime: XLSX_MIME, s3_key: 'u/7', created_at: '2026-09-09T17:30:00Z' };
+  let seen = null;
+  deps.beforeEdit = async (a) => { seen = a.id; return { asset: pulled, note: 'came from Google Sheets\n' }; };
+  const r = await editSpreadsheet({ userId: 'user-sync', objetivo: 'acrescente 4 linhas', deps });
+  t('beforeEdit gets the picked spreadsheet', seen === 1);
+  t('the edit starts from the version beforeEdit returned', r.ok && r.before.rows === 70 && r.after.rows === 74);
+  t('that version is the one archived', state.renamed.length === 1 && state.renamed[0][0] === 7);
+  t('the sync note goes to the model', r.avisos[0] === 'came from Google Sheets');
+}
+
+// ── afterEdit: the saved version is handed over to go back to Google Sheets ──
+{
+  const { deps } = mkFake();
+  let sent = null;
+  deps.afterEdit = async (a) => { sent = a; return { note: 'sent to Google Sheets\n' }; };
+  const r = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
+  t('afterEdit gets the new version', sent && sent.id === r.asset.id && sent.s3_key === r.asset.key && sent.caption === 'Matriz.xlsx');
+  t('its note goes to the model', r.avisos.includes('sent to Google Sheets'));
+  deps.afterEdit = async () => { throw new Error('quota'); };
+  const r2 = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
+  t('a failing afterEdit does not undo the edit', r2.ok && r2.avisos.some((a) => a.includes('quota')));
 }
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);

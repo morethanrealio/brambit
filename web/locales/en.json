@@ -474,7 +474,11 @@
       "done": "Copy{name} sent to your Google Drive.",
       "request_overwrite": "update the existing file{name} in your Google Drive, keeping the same link",
       "named": " \"{name}\"",
-      "copy_of": " of \"{name}\""
+      "copy_of": " of \"{name}\"",
+      "request_sheets": "create the Google Sheets spreadsheet{name} in your Google Drive, synced with the one in your library{share}",
+      "done_sheets": "Spreadsheet{name} created in Google Sheets, synced with the one in your library.",
+      "share_editar": ", with the link open for anyone to edit",
+      "share_ler": ", with the link open for anyone to view"
     },
     "docs_create": {
       "request": "create the Google Doc \"{name}\" in your Drive",

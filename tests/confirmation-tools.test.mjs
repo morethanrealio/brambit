@@ -21,6 +21,7 @@ const {confirmationFingerprint}=await import('../web/confirmation-store.mjs');
 const {routineConfirmationSnapshot}=await import('../web/confirmation-bindings.mjs');
 const {gateTool}=await import('../web/confirm.mjs');
 const {asaasTools}=await import('../web/connectors-vault.mjs');
+const {driveCopyTool}=await import('../web/drive-copy.mjs');
 const {conversationTools}=await import('../web/discovery-conversation.mjs');
 const {createDiscoveryStore}=await import('../web/discovery-store.mjs');
 const {isPauseOnlyRoutineChange,normalizeRoutineDays}=await import('../web/scheduler.mjs');
@@ -80,7 +81,7 @@ test('real routine editor binds exact ID and configuration, tolerates scheduler 
 test('real Drive upload resolves latest file at proposal time and refuses another version',async t=>{
   const f=await fixture(t);let latest={id:1,s3_key:'synthetic-original',caption:'Relatório'};
   const files=new Map([[1,latest]]);
-  const tool=()=>realTool('enviar_para_drive',{userId:f.scope.userId,agent:{name:'Synthetic'},
+  const tool=()=>driveCopyTool({userId:f.scope.userId,folderName:'Synthetic',
     getMediaAsset:async(_u,id)=>files.get(id),listMediaAssets:async()=>[latest],fetchMedia:denied});
   const row=await f.propose(tool(),{});assert.equal(row.args.id,1);assert.equal(row.args.assetKey,'synthetic-original');
   latest={id:2,s3_key:'synthetic-new',caption:'Outro'};files.set(2,latest);

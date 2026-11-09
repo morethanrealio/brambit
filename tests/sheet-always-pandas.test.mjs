@@ -37,7 +37,7 @@ registerHooks({ resolve(specifier, context, next) {
 process.env.SANDBOX_URL = 'http://sandbox.invalid';
 process.env.SANDBOX_TOKEN = 'MOCK_ONLY';
 
-const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets } = await import('../web/sheet.mjs');
+const { tipoPlanilha, loadSpreadsheetIntoSandbox, analisePlanilhaConector, getLoadedSheets, notaPlanilhaIlegivel } = await import('../web/sheet.mjs');
 const { googleTools } = await import('../web/connectors.mjs');
 const { microsoftTools } = await import('../web/connectors-ext.mjs');
 const { openLinkTool, exportGoogleSheets } = await import('../web/websearch.mjs');
@@ -110,8 +110,8 @@ test('any environment failure turns into a "could not read it" note, never sprea
     globalThis.__sb = sb;
     const lr = await loadSpreadsheetIntoSandbox('u-falha', duasAbas(), 'contas.xlsx');
     assert.equal(lr.ok, false, caso);
-    assert.match(lr.note, /não pôde ser aberta no ambiente de análise/, caso);
-    assert.match(lr.note, /NÃO está disponível por nenhum outro caminho/, caso);
+    assert.match(lr.note, /could not be opened in the analysis environment/, caso);
+    assert.match(lr.note, /is NOT available through any other path/, caso);
     semCelulas(lr.note);
   }
   assert.equal(getLoadedSheets('u-falha').filter((e) => e.sheets != null).length, 0, 'failure does not register the spreadsheet as read');
@@ -119,8 +119,8 @@ test('any environment failure turns into a "could not read it" note, never sprea
 
 test('connector without analysis environment, or with it breaking, returns the failure note', async () => {
   assert.match(await analisePlanilhaConector(null, duasAbas(), 'a.xlsx'), /ambiente de análise indisponível/);
-  assert.match(await analisePlanilhaConector(async () => { throw Error('boom'); }, duasAbas(), 'a.xlsx'), /não pôde ser aberta.*boom/);
-  assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /não pôde ser aberta no ambiente de análise \(x\)/);
+  assert.match(await analisePlanilhaConector(async () => { throw Error('boom'); }, duasAbas(), 'a.xlsx'), /could not be opened.*boom/);
+  assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /could not be opened in the analysis environment \(x\)/);
 });
 
 // ── The real probe, with local pandas ──
@@ -129,7 +129,7 @@ const temPandas = fs.existsSync(PY) && spawnSync(PY, ['-c', 'import pandas, open
 function sandboxLocal() {
   const raiz = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'planilha-'));
   const local = (p) => nodePath.join(raiz, p.replace(/^\/workspace\//, ''));
-  return { enabled: true,
+  return { enabled: true, local,
     async write(_u, path, buf) { fs.mkdirSync(nodePath.dirname(local(path)), { recursive: true }); fs.writeFileSync(local(path), buf); return { ok: true }; },
     async shell(_u, cmd) {
       const m = /^python3 - '([^']+)' (\w+) <<'SONDA_PY'\n([\s\S]*)\nSONDA_PY$/.exec(cmd);
@@ -160,8 +160,48 @@ test('real probe: file that is not a spreadsheet fails with a note, no text', { 
   globalThis.__sb = sandboxLocal();
   const lr = await loadSpreadsheetIntoSandbox('u-real', Buffer.from('<html>login</html>'), 'falsa.xlsx');
   assert.equal(lr.ok, false);
-  assert.match(lr.note, /não pôde ser aberta/);
+  assert.match(lr.note, /could not be opened/);
   assert.ok(!lr.note.includes('login'));
+});
+
+// SciELO export, 2026-11-01: a quote inside a quoted title broke the strict reader.
+test('real probe: CSV with stray quotes opens tolerantly and the analyst can read the copy', { skip: !temPandas && 'sem pandas local' }, async () => {
+  const sb = globalThis.__sb = sandboxLocal();
+  const csv = Buffer.from('Title,Authors,Year\n"Inovação "maker" na escola",Silva,2020\nOutro,"Souza, A",2021\n');
+  const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'scielo.csv');
+  assert.equal(lr.ok, true, lr.error);
+  assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 2, colunas: 3, nomes: ['Title', 'Authors', 'Year'] }]);
+  assert.match(lr.note, /tolerant mode, with no line lost/);
+  const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; print(pd.read_csv(sys.argv[1], sep=None, engine="python").shape)', sb.local(lr.path)], { encoding: 'utf8' });
+  assert.equal(r.stdout.trim(), '(2, 3)', r.stderr);
+});
+
+test('real probe: lines with extra fields stay, in extra columns, and are counted for the user', { skip: !temPandas && 'sem pandas local' }, async () => {
+  const sb = globalThis.__sb = sandboxLocal();
+  // The first data line is the long one: pandas would make "ID" the index.
+  const csv = Buffer.from('ID;Nome;Ano\n1;A;2020;extra\n2;B;2021\n3;C;2022\n4;D;2023;x;y\n');
+  const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'lista.csv');
+  assert.equal(lr.ok, true, lr.error);
+  assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 4, colunas: 5, nomes: ['ID', 'Nome', 'Ano', 'extra_1', 'extra_2'] }]);
+  assert.match(lr.note, /2 line\(s\) had more columns than the header.*extra_1.*Start the reply/);
+  assert.ok(!/left out/.test(lr.note));
+  const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; d = pd.read_csv(sys.argv[1], sep=None, engine="python", dtype=str); print(len(d), list(d["Nome"]))', sb.local(lr.path)], { encoding: 'utf8' });
+  assert.equal(r.stdout.trim(), "4 ['A', 'B', 'C', 'D']", r.stderr);
+});
+
+test('the failure note gives the reason in plain words and asks to say which file first', () => {
+  for (const [erro, motivo] of [
+    ["ParserError: ',' expected after '\"'", /quotes or separators outside the CSV standard/],
+    ['UnicodeDecodeError: invalid start byte', /encoding/],
+    ['EmptyDataError: No columns to parse from file', /empty/],
+    ['BadZipFile: File is not a zip file', /not a valid spreadsheet/],
+  ]) {
+    const nota = notaPlanilhaIlegivel('artigos.csv', erro);
+    assert.match(nota, motivo, erro);
+    assert.ok(!nota.includes(erro), erro);
+    assert.match(nota, /start the reply by telling the user that the file "artigos\.csv" did not open and why/);
+  }
+  assert.match(notaPlanilhaIlegivel('a.xlsx', 'disco cheio'), /\(disco cheio\)/);
 });
 
 // ── Connectors: the result never carries cells ──

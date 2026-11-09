@@ -1161,10 +1161,16 @@ import {
   routineNudgeContext, ofertaRegistrada, ofertaNaoFeita, CATALOGO as CATALOGO_ROTINA,
 } from './routine-offer.mjs';
 import { monitorsTools } from './monitors.mjs';
-import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
+import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
-import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
+import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
+import { createSheetLibrary, openForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
+import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from './media-list.mjs';
+import { driveCopyTool } from './drive-copy.mjs';
+import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
+import { createSheetSync } from './sheet-sync.mjs';
+import { mergeSheets } from './sheet-merge.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, readAudioUpload, audioForUse, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
@@ -4479,24 +4485,36 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // pandas in the sandbox and reads the WHOLE spreadsheet (no truncation, any size).
   // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
   // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
+  const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, accept });
+  // A library spreadsheet linked to Google Sheets syncs with it before every read, analysis and edit, and after every change.
+  const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets, getAsset: getMediaAsset,
+    fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption,
+    merge: sandboxEnabled() ? (b) => mergeSheets(userId, b, { shell: sandboxShell, writeBytes: sandboxWriteBytes, readBytes: sandboxReadBytes }) : null });
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
-      description: 'Reads and analyzes SPREADSHEETS (Excel .xlsx/.xlsm/.xls, CSV or TSV) by processing the data with CODE (Python/pandas) in an isolated environment; works for ANY size, without truncating. It is the ONLY way to see a spreadsheet\'s content: when a spreadsheet arrives (attachment, Drive, OneDrive, email, library), you only receive its structure (sheets, rows, columns), never the cells. Use it ALWAYS when the question is about the data: finding or checking a value, listing, counting, summing, averages, filters, cross-references, groupings, ranking, comparison or summary. Delegates to a sub-agent that reads the whole file and returns only the result. The sub-agent does NOT see the conversation: describe the goal with all the context (which column, period, what to calculate).',
+      description: 'Reads and analyzes SPREADSHEETS (Excel .xlsx/.xlsm/.xls, CSV or TSV) by processing the data with CODE (Python/pandas) in an isolated environment; works for ANY size, without truncating. It is the ONLY way to see a spreadsheet\'s content: when a spreadsheet arrives (attachment, Drive, OneDrive, email, library), you only receive its structure (sheets, rows, columns), never the cells. Use it ALWAYS when the question is about the data: finding or checking a value, listing, counting, summing, averages, filters, cross-references, groupings, ranking, comparison or summary. Delegates to a sub-agent that reads the whole file and returns only the result. The sub-agent does NOT see the conversation: describe the goal with all the context (which column, period, what to calculate). If no spreadsheet is loaded, it opens the user\'s spreadsheet from the library by itself (or tells you which ones exist).',
       parameters: {
         type: 'object',
         properties: {
           objetivo: { type: 'string', description: 'What to analyze/calculate, with context (the sub-agent does not see the conversation). E.g.: "some a coluna Valor por sócio e diga o total de cada um", "quantas linhas têm status Pago em 2026 e qual a soma".' },
           formato: { type: 'string', description: 'Optional: how you want the answer (e.g.: "tabela sócio × total", "só o número final").' },
+          nome: { type: 'string', description: 'Optional: name of a spreadsheet in the user\'s library, as they say it (e.g. "Controle de Gastos"). Opens its current version and analyzes only it.' },
         },
         required: ['objetivo'],
       },
-      run: async ({ objetivo, formato }) => {
+      run: async ({ objetivo, formato, nome }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        const sheets = getLoadedSheets(userId);
+        let sheets = currentLoaded(getLoadedSheets(userId));
+        const found = nome && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
+        if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync };
+        const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : await sheetSync.refreshLoaded(sheets, deps));
+        if (o.note) return o.note;
+        sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
         try {
-          return await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
+          return (o.sync || '') + await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
         } catch (e) {
           return `ERRO ao analisar a planilha: ${e?.message ?? e}`;
         }
@@ -4517,12 +4535,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         type: 'object',
         properties: {
           objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
-          arquivo_id: { type: 'string', description: 'Optional: id of the file in the library (listar_arquivos). Without it, edits the MOST RECENT spreadsheet, which is the valid version; the previous ones are history.' },
+          arquivo_id: { type: 'string', description: 'Optional: id of the spreadsheet in the library (from listar_midia). The edit always goes to the current version of that spreadsheet.' },
+          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). Without arquivo_id and nome, edits the most recent spreadsheet in the library, whatever its name: when the user has more than one spreadsheet, pass one of them.' },
         },
         required: ['objetivo'],
       },
-      run: async ({ objetivo, arquivo_id } = {}) => {
+      run: async ({ objetivo, arquivo_id, nome } = {}) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
+        if (!arquivo_id && nome) { const found = await byName(nome, isSheetAsset); if (found.reply) return found.reply; arquivo_id = found.asset.id; }
         // Incident guard: if the instruction already arrives with the truncation marker, it
         // is a copy of a truncated call. Writing this into the spreadsheet saves
         // mutilated content (and the marker itself) as data.
@@ -4552,6 +4572,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               runEditor: (a) => runSheetEditorSubagent({ ...a, userId, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente }),
               saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }),
               renameAsset: (uid, id, caption) => setMediaCaption(uid, id, caption),
+              beforeEdit: (a) => sheetSync.sync(a, { locked: true }),
+              afterEdit: (a) => sheetSync.sync(a, { locked: true }),
             },
           });
           // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
@@ -4912,50 +4934,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
     }], thread.id);
   }
-  // Library -> Drive bridge: uploads to the user's Google Drive a file that is already
-  // in their private library (generated by gerar_documento or received).
-  // It's the OPTIONAL export path: the file was already delivered in the chat and saved
-  // in the bucket; this just puts a copy in Drive when the user wants. No id =
-  // the most recent file in the library (the one just generated). Only works with
-  // Drive write scope. Gated: confirms before uploading.
+  // Library -> Drive bridge (enviar_para_drive, drive-copy.mjs): a library file copied to
+  // Drive, or a spreadsheet turned into a Google Sheets file synced with the library.
   if (caps.drive?.write && s3Enabled()) {
-    addGated(registry, [{
-      name: 'enviar_para_drive',
-      description: `Uploads to the user's Google Drive a copy of a file that is ALREADY in their private library (a document you generated with gerar_documento, or received media). The file goes to the assistant's folder ("${agent?.name || marca().nome}") in Drive. Use it ONLY when the user explicitly asks to save/send the file to their Google Drive ("salva isso no meu Drive", "manda pro Drive também"). If you just generated the document, simply call it without id (it takes the most recent one). Do not use this to deliver the file in the chat (gerar_documento already delivers it); this is only the copy in Drive. UPDATE AT THE SAME LINK: if a file with the SAME name already exists in the folder, this tool rewrites its content and returns the usual same link (atualizado:true). So, when the user wants to keep ONE living file ("atualiza a planilha", "usa o mesmo link"), reuse exactly the same name; only change the name when they really want a separate file.`,
-      parameters: { type: 'object', properties: {
-        id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to use the most recent one.' },
-        nome: { type: 'string', description: 'File name in Drive. Repeating the name of a file that is already in the folder UPDATES that file (same link). Default: the name it already has.' },
-      }, required: [] },
-      async normalizeConfirmationArgs(args = {}) {
-        const asset = args.id != null ? await getMediaAsset(userId,args.id) : (await listMediaAssets(userId,{limit:1}))[0];
-        if (!asset) return {erro:'Não achei o arquivo na biblioteca.'};
-        return {args:{...args,id:asset.id,nome:args.nome || asset.caption || 'arquivo',assetKey:asset.s3_key}};
-      },
-      async preflight(args) {
-        const asset = await getMediaAsset(userId,args.id);
-        if (!asset || asset.s3_key !== args.assetKey) return {erro:'O arquivo mudou ou não está disponível. Faça uma nova proposta.'};
-      },
-      async run({ id, nome, assetKey }) {
-        let asset;
-        if (id != null) asset = await getMediaAsset(userId, id);
-        else { const rows = await listMediaAssets(userId, { limit: 1 }); asset = rows[0] || null; }
-        if (!asset) return JSON.stringify({ ok: false, error: id != null ? 'Não achei esse arquivo na biblioteca.' : 'A biblioteca está vazia; gere ou receba um arquivo antes.' });
-        if (assetKey && asset.s3_key !== assetKey) return JSON.stringify({ok:false,error:'O arquivo mudou; não enviei outra versão.'});
-        let bytes;
-        try { bytes = await fetchMedia(asset.s3_key); } catch { bytes = null; }
-        if (!bytes) return JSON.stringify({ ok: false, error: 'Não consegui ler os bytes do arquivo na biblioteca.' });
-        const name = String(nome || asset.caption || 'arquivo').replace(/[\/\\:*?"<>|]+/g, ' ').trim().slice(0, 120) || 'arquivo';
-        const tok = gToken;
-        const folderId = await ensureAssistantFolder(tok, agent?.name || marca().nome);
-        const f = await uploadBinaryToDrive({ token: tok, name, buffer: bytes.buffer, mimeType: asset.mime || bytes.contentType || 'application/octet-stream', folderId });
-        return JSON.stringify({
-          ok: true, id: f.id, name: f.name, link: f.webViewLink, atualizado: !!f.updated,
-          note: f.updated
-            ? `Já existia um "${f.name}" na pasta "${agent?.name || marca().nome}" do Drive: atualizei o conteúdo DELE. O link é o mesmo de antes.`
-            : `Cópia enviada ao seu Drive, na pasta "${agent?.name || marca().nome}".`,
-        });
-      },
-    }], thread.id);
+    addGated(registry, [driveCopyTool({ userId, folderName: agent?.name || marca().nome, getMediaAsset, listMediaAssets, fetchMedia, token: gToken, ensureFolder: ensureAssistantFolder, upload: uploadBinaryToDrive,
+      listSheets: createSheetLibrary(pool).listSheets, googleEmail: gEmail, links: createSheetLinks(pool), createSheet, sheetVersion, shareByLink })], thread.id);
   }
   // Media tools (generate image / generate audio). The cost of each generation is
   // recorded separately (mediaUsages, with its own kind) and the binary is delivered
@@ -5323,7 +5306,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     parameters: {
       type: 'object',
       properties: {
-        nome: { type: 'string', description: 'File name (without extension), e.g. "Relatório de vendas".' },
+        nome: { type: 'string', description: 'File name (without extension), e.g. "Relatório de vendas". To REDO a file that already exists, EXACTLY the name it already has, so it becomes its new version; a new name only for a separate file.' },
         formato: { type: 'string', enum: SUPPORTED_FORMATS, description: 'xlsx (Excel SPREADSHEET: use it whenever the request is a spreadsheet/table/tracker/budget), docx (editable Word, default for text), pdf, md, txt, html (use html when there are IMAGES to embed). csv ONLY if the person explicitly asks for CSV.' },
         conteudo: { type: 'string', description: 'The file content, in simple markdown. For xlsx, use markdown TABLES (one table per sheet, header + |---| row). For images use html + ![](url) or <img src="url">.' },
       },
@@ -5350,12 +5333,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       try { ({ buffer, mime, ext, aviso } = await generateDocument({ format: fmt, content: conteudo, title: base })); }
       catch (e) { console.error('[docgen]', e?.message ?? e); return 'ERRO: não consegui gerar o arquivo. Avise o usuário e tente de novo.'; }
       const filename = `${base}.${ext}`;
-      const { url, key } = await saveBlob({ buffer, ext, mime, kind: 'document', source: 'generated', caption: filename });
+      const { url, key, assetId } = await saveBlob({ buffer, ext, mime, kind: 'document', source: 'generated', caption: filename });
+      const synced = ext === 'xlsx' && assetId ? (await sheetSync.sync({ id: assetId, s3_key: key, caption: filename, mime, created_at: new Date().toISOString() })).note : '';
       const att = { type: 'document', url, mime, key, filename, name: filename };
       attachments.push(att);
       try { onAttachment?.(att); } catch {}
-      if (aviso) return `Documento "${filename}" gerado e já enviado ao usuário no chat, MAS INCOMPLETO. ${aviso} Responda curto, dizendo o que ficou de fora.`;
-      return `Documento "${filename}" gerado e já enviado ao usuário no chat. Responda em uma frase curta (não cole o conteúdo de novo).`;
+      if (aviso) return `${synced}Documento "${filename}" gerado e já enviado ao usuário no chat, MAS INCOMPLETO. ${aviso} Responda curto, dizendo o que ficou de fora.`;
+      return `${synced}Documento "${filename}" gerado e já enviado ao usuário no chat. Responda em uma frase curta (não cole o conteúdo de novo).`;
     },
   });
   // ── Fetch a FILE from the owner's machine (Brambit Runner) ──────────────────
@@ -5543,24 +5527,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // image (re-read via vision -> text) and jot down a description to find it later.
   const mediaLibrary = s3Enabled();
   if (mediaLibrary) {
-    registry.add({
-      name: 'listar_midia',
-      description: 'Lists the FILES in the user\'s library (images, audio AND documents/spreadsheets: .xlsx/.docx/.pdf/.md/.txt that YOU generated with gerar_documento), from most recent to oldest, each with id, type, when and a DESCRIPTION/name. Use it ALWAYS when they refer to something from before ("aquela imagem", "o .doc que você fez", "cadê o arquivo do plano", "o PDF de ontem"): find it by the name/caption in this list, without reopening anything. To resend a document in the chat use reenviar_arquivo with the id from here.',
-      parameters: { type: 'object', properties: { limite: { type: 'number', description: 'How many items to list (default 20, max 50).' } } },
-      run: async ({ limite } = {}) => {
-        const rows = await listMediaAssets(userId, { limit: Math.min(Math.max(1, limite || 20), 50) });
-        if (!rows.length) return 'Nenhuma mídia guardada ainda.';
-        return rows.map((r) => {
-          const when = new Date(r.created_at).toLocaleString('pt-BR', { timeZone: userTz, dateStyle: 'short', timeStyle: 'short' });
-          const orig = r.source === 'upload' ? 'enviada pelo usuário' : (r.source === 'generated' ? 'gerada por você' : '');
-          // Here the caption is only to FIND the file by name/subject, not to
-          // answer about it: truncated to 200 characters so the list of up to 50
-          // items doesn't bloat now that the stored caption is a full reading.
-          const cap = String(r.caption || '').trim().slice(0, 200);
-          return `- id=${r.id} · ${r.kind || 'arquivo'} · ${when}${orig ? ' · ' + orig : ''}${cap ? ' · "' + cap + '"' : ''}`;
-        }).join('\n');
-      },
-    });
+    registry.add(mediaListTool({ userId, timeZone: userTz, listMediaAssets, getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, searchMedia: createMediaSearch(pool).searchMedia }));
     // RESEND a file that's ALREADY in the library (generated document or media)
     // without generating everything again. Re-anchors the attachment in the channel (getMedia reads the bytes by
     // key). Closes the "where's the file you made": listar_midia finds the id, this
@@ -5763,23 +5730,23 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // STORED zip, so the text comes out without a zip lib). Closes the "I can't open the file".
     registry.add({
       name: 'ler_arquivo',
-      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia. Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id, reads the most recent document in the library.',
+      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia or by its name (nome). Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id and nome, reads the most recent document in the library.',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to read the most recent document.' },
+          nome: { type: 'string', description: 'Optional, instead of id: the file name as the user says it (e.g. "Controle Financeiro"). A spreadsheet opens in its current version; if more than one file matches, you get their names to ask the user.' },
         },
       },
-      run: async ({ id } = {}) => {
-        let asset;
+      run: async ({ id, nome } = {}) => {
+        let asset, nota = '';
         if (id != null) asset = await getMediaAsset(userId, id);
-        else {
-          const rows = await listMediaAssets(userId, { limit: 20 });
-          asset = rows.find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
-        }
+        else if (nome) { const found = await byName(nome, isDocumentAsset); if (found.reply) return found.reply; asset = found.asset; }
+        else asset = (await listMediaAssets(userId, { limit: 20 })).find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
         if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
+        ({ asset, nota } = await sheetSync.forReading(asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));
         const bytes = await fetchMedia(asset.s3_key);
         if (!bytes || !bytes.buffer) return 'ERRO: não consegui recuperar os bytes do arquivo.';
         const name = asset.caption || `arquivo-${asset.id}`;
@@ -5791,7 +5758,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (tipo) {
           const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo });
           if (!lr.ok) console.error('[ler_arquivo] planilha:', lr.error);
-          return lr.note;
+          return nota + lr.note;
         }
         let text = '';
         try {
@@ -7580,7 +7547,7 @@ function systemFor(agent, { tools = [], mediaLibrary = false, subdomain = null, 
     if (names.has('gerar_documento')) {
       lines.push(
         '',
-        'SPREADSHEET (.xlsx), THE ONLY PATH: when the request is a spreadsheet, table, Excel, expense tracker, budget, organized statement, list of items or anything in rows and columns, call gerar_documento with format "xlsx" and the content as a markdown TABLE (| column | column | and the |---|---| line right below the header). Each table becomes a SHEET; a "# Title" before the table names the sheet. Write the values the natural way ("R$ 1.234,56", "12/03/2026", "15%") and they become REAL numbers, dates and percentages, with sums and sorting working. That is why a spreadsheet cannot stay as text in the chat: keeping the table in prose forces rewriting everything at each correction, and that is how rows disappear and categories get mixed up. So: they asked for a spreadsheet, a FILE comes out. If later they want to CHANGE something (add rows, fix a cell, create a sheet), use editar_planilha: it changes the existing file with code, keeping the rest intact and saving the previous version in the library. NEVER regenerate the whole spreadsheet with gerar_documento to apply a correction: in a big spreadsheet the table does not fit in the call, it comes back cut and the file ends up with fewer rows than it had. To check the current content before changing it, use analisar_planilha. Do NOT generate CSV: only use the "csv" format if the person asks for CSV in those letters. If they want the spreadsheet on Google Drive, FIRST generate the .xlsx (which already arrives in the chat) and then offer the copy on Drive with enviar_para_drive; if Google is not connected, say so right away and deliver the file anyway, NEVER promise to upload to Drive without having the tool.',
+        'SPREADSHEET (.xlsx), THE ONLY PATH: when the request is a spreadsheet, table, Excel, expense tracker, budget, organized statement, list of items or anything in rows and columns, call gerar_documento with format "xlsx" and the content as a markdown TABLE (| column | column | and the |---|---| line right below the header). Each table becomes a SHEET; a "# Title" before the table names the sheet. Write the values the natural way ("R$ 1.234,56", "12/03/2026", "15%") and they become REAL numbers, dates and percentages, with sums and sorting working. That is why a spreadsheet cannot stay as text in the chat: keeping the table in prose forces rewriting everything at each correction, and that is how rows disappear and categories get mixed up. So: they asked for a spreadsheet, a FILE comes out. If later they want to CHANGE something (add rows, fix a cell, create a sheet), use editar_planilha: it changes the existing file with code, keeping the rest intact and saving the previous version in the library. NEVER regenerate the whole spreadsheet with gerar_documento to apply a correction: in a big spreadsheet the table does not fit in the call, it comes back cut and the file ends up with fewer rows than it had. When they ask to REDO a file that already exists (refazer, fazer de novo, montar outra versão), call gerar_documento with EXACTLY the same nome it already has (see it in this conversation or with listar_midia): the new file becomes the current version of that same file in the library, and the previous one stays as an older version. A different nome only when they ask for a separate, new file. To check the current content before changing it, use analisar_planilha. Do NOT generate CSV: only use the "csv" format if the person asks for CSV in those letters. If they want the spreadsheet on Google Drive, FIRST generate the .xlsx (which already arrives in the chat) and then offer the copy on Drive with enviar_para_drive; if Google is not connected, say so right away and deliver the file anyway, NEVER promise to upload to Drive without having the tool. GOOGLE SHEETS, what connecting Google really allows: READ the Drive files and Sheets of the user, and turn a library spreadsheet into a Google Sheets file kept in sync with it (enviar_para_drive with planilha_google=true; add compartilhar only when they ask to share it by link). It does NOT allow editing a spreadsheet that already exists in the Google Sheets of the user and was not created that way. So never promise that, connected or not: for a change in such a Sheet, offer what works (they attach the file or send a link open to anyone with it; you read it, apply the change and deliver the edited .xlsx, which can then become a synced Google Sheets). Without Google connected, say that Google Sheets needs it and deliver the .xlsx.',
         '',
         'GENERATING A FILE (.docx, PDF, .md, .txt), THE DEFAULT PATH: when the user asks you to generate/create/assemble/export a document, Word, .doc, .docx or PDF from some content, use gerar_documento. It creates the file and DELIVERS it straight into the chat (a native document on WhatsApp/Telegram, a download link in the app) and keeps a copy in the user\'s private library. It works for ANY user, WITHOUT depending on Google Drive or any connection. Cases: "send me this as a PDF/Word", "make a .doc with this summary", and especially "turn this PDF into an editable document"; in that case you READ the PDF content (it already arrives extracted for you when the user attaches it) and call gerar_documento with format "docx". RULES: NEVER generate an .html/.txt/.md file for the user to "copy and paste by hand"; NEVER mention a file path, folder, /workspace, server or "I will leave the file at such a place" (the file goes attached, period); NEVER say you "cannot generate" the file when this tool is available. About layout: PDF/Word do not keep an identical structure, so you recreate an approximate structure (headings, sections, lists, bold), not a pixel-perfect copy; say that naturally instead of promising total fidelity or tangling yourself up saying you "cannot".',
       );

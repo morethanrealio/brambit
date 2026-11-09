@@ -50,7 +50,7 @@ export function hasCutMarker(s) {
 const MAX_TENTATIVAS = 2;
 
 const SHEET_EXT_RE = /\.(xlsx|xlsm)$/i;
-const SHEET_MIMES = new Set([
+export const SHEET_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel.sheet.macroenabled.12',
 ]);
@@ -66,13 +66,16 @@ export function isSheetAsset(a) {
 // `base_yyyymmddhhmmss.ext` (versionedCaption) or `base_v<id>.ext` on the dateless
 // fallback. Stripping those trailing stamps (even repeated, from doubly-stamped files
 // the old bug produced) groups every version of the same spreadsheet under one family.
+// The `_v` fallback only matches what versionedCaption writes (an asset uuid or
+// "antiga"), so a user's own "orcamento_v2" and "orcamento_v3" stay two spreadsheets.
+const VERSION_STAMP_RE = /_(?:\d{14}|v(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|antiga))$/i;
 export function baseFamily(caption) {
   const raw = String(caption || 'planilha.xlsx');
   const m = raw.match(SHEET_EXT_RE);
   const ext = m ? m[0] : '';
   let base = ext ? raw.slice(0, -ext.length) : raw;
   let prev;
-  do { prev = base; base = base.replace(/_(?:\d{14}|v[A-Za-z0-9-]+)$/, ''); } while (base !== prev);
+  do { prev = base; base = base.replace(VERSION_STAMP_RE, ''); } while (base !== prev);
   return (base + ext).toLowerCase();
 }
 
@@ -432,6 +435,8 @@ Use at most 20 (the most representative ones if you changed a lot). Formula: dec
 //   runEditor({ objetivo, path, filename, sheets, rows, tentativa }) -> string
 //   saveAsset({ buffer, ext, mime, caption }) -> { url, key, assetId }
 //   renameAsset(userId, id, caption) -> boolean
+//   beforeEdit(asset) -> { asset, note }  (optional, called inside the lock)
+//   afterEdit(newAsset) -> { note }        (optional, called inside the lock)
 export async function editSpreadsheet({ userId, objetivo, id = null, deps }) {
   if (!objetivo || !String(objetivo).trim()) return { ok: false, error: 'objetivo vazio.' };
   // Serializes by USER (not by file): the asset choice happens INSIDE
@@ -451,7 +456,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
   }
   const pick = pickSheetAsset(assets, { id });
   if (pick.error) return { ok: false, error: pick.error };
-  const asset = pick.asset;
+  // A spreadsheet linked to Google Sheets first takes what changed there (sheet-sync.mjs).
+  // Runs inside this lock, so beforeEdit must not take it again.
+  const synced = deps.beforeEdit ? await deps.beforeEdit(pick.asset) : { asset: pick.asset, note: '' };
+  const asset = synced.asset;
 
   // Always reloads from S3: the loaded-spreadsheets registry is an in-process
   // in-memory Map with a 6h TTL (sheet.mjs), so it's empty after
@@ -599,7 +607,14 @@ async function editOnce({ userId, objetivo, id, deps }) {
     await deps.renameAsset(userId, asset.id, arquivada);
   } catch (e) { arquivada = null; }
 
-  const avisos = [];
+  const avisos = synced.note ? [synced.note.trim()] : [];
+  // ...and the new version goes back to Google Sheets (also inside this lock).
+  if (deps.afterEdit) {
+    try {
+      const after = await deps.afterEdit({ id: saved.assetId ?? null, s3_key: saved.key, caption, mime: asset.mime, created_at: new Date().toISOString() });
+      if (after?.note) avisos.push(after.note.trim());
+    } catch (e) { avisos.push(`Google Sheets was not updated (${e?.message ?? e}).`); }
+  }
   if (declarouRemocao(resumo) && (Number(after.rows) || 0) < (Number(before.rows) || 0)) {
     avisos.push(`O editor removeu linhas de propósito (${before.rows} → ${after.rows}), por entender que a instrução pedia isso. Confirme com o usuário se era essa a intenção.`);
   }
