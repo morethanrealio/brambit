@@ -58,6 +58,9 @@ export function speechChunks(text, { first = 160, max = 300 } = {}) {
   return chunks;
 }
 
+// `ms` of silence as PCM (whole samples).
+export const silence = (ms) => Buffer.alloc(Math.round((ms * BYTES_PER_MS) / 2) * 2);
+
 // PCM → frames of 100 ms; the last one may be shorter (always whole samples).
 export function* toFrames(pcm, size = FRAME_BYTES) {
   for (let i = 0; i < pcm.length; i += size) {

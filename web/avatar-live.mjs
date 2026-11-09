@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
 import * as viduApi from './vidu.mjs';
 import { readBody } from './http-body.mjs';
 import { photoAge, EXPIRES_AFTER } from './avatar-photos.mjs';
-import { spokenText, speechChunks, toFrames, sendPaced, wait } from './avatar-speech.mjs';
+import { spokenText, speechChunks, toFrames, sendPaced, wait, silence } from './avatar-speech.mjs';
 
 // Times in ms. daily: a person's talk time in 24 h; sessions: how many are
 // open at once in the installation (0 = no limit, both).
@@ -32,6 +32,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const event = (name, data = {}) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
 // The usage kinds of an owner's talk time and of the face's speech.
 const OWNER_KINDS = { live: 'avatar', speech: 'tts' };
+// Silence sent after the last word, in ms. The voice ends almost at once, and
+// a face whose audio just stops is left on its last sound and closes the
+// mouth slowly; with some silence it closes it while it still hears audio.
+const SPEECH_TAIL = 600;
 
 function onProcessStop(fn) {
   process.once('SIGTERM', fn);
@@ -168,6 +172,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
       next?.catch(() => {});
       playsUntil = await sendPaced(toFrames(pcm), (frame) => s.stream.audio(frame), { signal, startAt: playsUntil, now });
     }
+    if (!signal.aborted) playsUntil = await sendPaced(toFrames(silence(SPEECH_TAIL)), (frame) => s.stream.audio(frame), { signal, startAt: playsUntil, now });
     await wait(playsUntil - now(), signal);
   }
 

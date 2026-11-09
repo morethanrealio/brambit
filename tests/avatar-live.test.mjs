@@ -137,7 +137,7 @@ test('the face says the chat\'s newest assistant reply once, without links or Ma
   assert.deepEqual(spoken, ['Kore: Done! See the doc.']);
   assert.ok(calls.includes('reply Done! See the doc.'));
   assert.ok(calls.includes('bill u1 tts'), 'the speech is billed to the owner');
-  assert.equal(audio(), 9600);
+  assert.equal(audio(), 9600 + 600 * 48, 'the speech, then silence so the face closes its mouth');
 });
 
 test('a reply becomes plain sentences, made into speech in short pieces', () => {
