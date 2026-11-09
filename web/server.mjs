@@ -4556,7 +4556,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               listAssets: (uid, o) => listMediaAssets(uid, o),
               getAsset: (uid, id) => getMediaAsset(uid, id),
               fetchBytes: (key) => fetchMedia(key),
-              loadIntoSandbox: (uid, buf, name) => gravarPlanilhaNoSandbox(uid, buf, name),
+              loadIntoSandbox: gravarPlanilhaNoSandbox,
               readBytes: (uid, p) => sandboxReadBytes(uid, p),
               // inspect combines reading the content (sheets/rows) with the file's
               // internal INVENTORY: the list of ZIP parts and the formula
@@ -5756,7 +5756,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // pandas and returns only the structure, or a note that it couldn't be opened.
         const tipo = tipoPlanilha(name, mime);
         if (tipo) {
-          const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo });
+          const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo, assetId: asset.id });
           if (!lr.ok) console.error('[ler_arquivo] planilha:', lr.error);
           return nota + lr.note;
         }

@@ -218,7 +218,8 @@ export function notaPlanilhaIlegivel(filename, motivo) {
 // Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
 // structure. This is the edit path (sheet-edit.mjs), which has its own
 // verification and doesn't show the spreadsheet to the model.
-export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
+// assetId: the library file it came from, so a later analysis finds its Google Sheets link.
+export async function gravarPlanilhaNoSandbox(userId, buffer, filename, { assetId = null } = {}) {
   if (!sandboxEnabled()) return { ok: false, error: 'ambiente de análise desligado' };
   const clean = safeName(filename);
   const path = sheetSandboxPath(clean);
@@ -226,7 +227,7 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   try { w = await sandboxWriteBytes(userId, path, buffer); }
   catch (e) { return { ok: false, error: `ambiente de análise não respondeu (${e?.message || e})` }; }
   if (!w.ok) return { ok: false, error: w.error || 'falha ao gravar no ambiente' };
-  registerLoadedSheet(userId, { path, filename: clean, sheets: null, rows: null });
+  registerLoadedSheet(userId, { path, filename: clean, sheets: null, rows: null, assetId });
   return { ok: true, path, filename: clean };
 }
 
@@ -246,18 +247,18 @@ function notaTolerante(t) {
 // (even on failure), so the caller isn't tempted to send the text.
 // register:false leaves it out of the loaded list (an older version analyzed once).
 // { ok, path, filename, sheets, rows, abas, note } | { ok:false, error, note }
-export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '', register = true } = {}) {
+export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '', register = true, assetId = null } = {}) {
   const t = tipo || tipoPlanilha(filename, mime) || 'excel';
   const nome = nomeComExtensao(filename, t);
   const falha = (error) => ({ ok: false, error, filename: nome, note: notaPlanilhaIlegivel(nome, error) });
-  const g = await gravarPlanilhaNoSandbox(userId, buffer, nome);
+  const g = await gravarPlanilhaNoSandbox(userId, buffer, nome, { assetId });
   if (!g.ok) return falha(g.error);
   const e = await lerEstrutura(userId, g.path, t);
   if (!register) forgetLoadedSheet(userId, g.path);
   if (!e.ok) return falha(e.error);
   const sheets = e.abas.length;
   const rows = e.abas.reduce((s, a) => s + (Number(a.linhas) || 0), 0);
-  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
+  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows, assetId });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
     note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.tolerant)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,

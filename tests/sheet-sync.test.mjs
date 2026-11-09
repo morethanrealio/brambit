@@ -186,8 +186,11 @@ test('analysis: a named spreadsheet is pulled before it is loaded', async () => 
 });
 
 test('analysis: a loaded linked spreadsheet is reloaded when Google changed, others stay', async () => {
-  const { sync } = await world({ google: await xlsx([['Gás', 50]]) });
-  const entries = [{ filename: 'Gastos.xlsx', path: '/w/old' }, { filename: 'Outra.xlsx', path: '/w/outra' }];
+  const { s, sync, cur } = await world({ google: await xlsx([['Gás', 50]]) });
+  // The sandbox name has spaces and accents replaced; the copy is known by its library file.
+  cur.caption = 'Controle Financeiro - Março.xlsx';
+  s.link.family = 'controle financeiro - março.xlsx';
+  const entries = [{ filename: 'Controle_Financeiro_-_Mar_o.xlsx', path: '/w/old', assetId: 'a1' }, { filename: 'Outra.xlsx', path: '/w/outra' }];
   const r = await sync.refreshLoaded(entries, { fetchBytes: async (k) => ({ buffer: Buffer.from(k) }), load: async (_u, _b, name) => ({ ok: true, filename: name, path: '/w/new' }) });
   assert.deepEqual(r.sheets.map((e) => e.path), ['/w/new', '/w/outra']);
   assert.match(r.sync, /id=a2/);

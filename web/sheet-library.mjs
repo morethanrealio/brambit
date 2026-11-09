@@ -81,7 +81,7 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare
   let bytes = null;
   try { bytes = await fetchBytes(asset.s3_key); } catch (e) { console.error('[analisar_planilha] bytes:', e?.message ?? e); }
   if (!bytes?.buffer) return { note: `ERROR: could not fetch the bytes of "${asset.caption}".` };
-  const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
+  const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '', assetId: asset.id });
   return lr.ok ? { sheet: lr, sync } : { note: sync + lr.note };
 }
 

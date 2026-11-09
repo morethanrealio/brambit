@@ -17,7 +17,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, baseFamily, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
+import { isSheetAsset, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
 import { currentVersion, sheetForReading, openForAnalysis } from './sheet-library.mjs';
 import { xlsxToText } from './xlsxread.mjs';
 import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport, replaceSheet as driveReplace } from './sheet-google.mjs';
@@ -135,15 +135,19 @@ export function createSheetSync(deps) {
       return { asset: p.asset, nota: r.nota + p.note };
     },
     // analisar_planilha with spreadsheets already loaded in the sandbox: a linked one
-    // whose Sheets changed is reloaded from the new library version.
+    // whose Sheets changed is reloaded from the new library version. A loaded copy is
+    // known by the library file it came from (assetId), not by its sandbox name, which
+    // has spaces and accents replaced; a copy from outside the library has none.
     async refreshLoaded(entries, { fetchBytes, load }) {
       const sheets = [];
-      let notes = '';
+      let notes = '', all = null;
       for (const e of entries) {
-        const family = baseFamily(e.filename);
         let asset = null;
-        if (await links.get(userId, family)) {
-          try { asset = (await deps.listSheets(userId)).find((a) => isSheetAsset(a) && baseFamily(a.caption) === family) || null; } catch {}
+        if (e.assetId) {
+          if (!all) { try { all = await deps.listSheets(userId); } catch { all = []; } }
+          let own = all.find((a) => String(a.id) === String(e.assetId));
+          if (!own) { try { own = await deps.getAsset(userId, e.assetId); } catch {} }
+          if (isSheetAsset(own) && await links.get(userId, familyKey(own))) asset = currentVersion(own, all);
         }
         if (!asset) { sheets.push(e); continue; }
         const p = await sync(asset);

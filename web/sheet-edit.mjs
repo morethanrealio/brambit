@@ -506,7 +506,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
   let evid = null, clarificacao = null, semProva = true, motivoSemProva = null;
   for (let t = 1; t <= MAX_TENTATIVAS; t++) {
     tentativas = t;
-    const load = await deps.loadIntoSandbox(userId, src.buffer, filename);
+    const load = await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id });
     if (!load?.ok) return { ok: false, error: `Não consegui carregar a planilha no ambiente: ${load?.error || 'erro'}.` };
     const path = load.path || sheetSandboxPath(filename);
 
