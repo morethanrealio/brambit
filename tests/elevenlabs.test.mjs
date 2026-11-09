@@ -8,7 +8,7 @@ import {elevenlabsVoices,elevenlabsPcm,ELEVENLABS_DEFAULT_MODEL} from '../web/el
 import {speechProvider} from '../web/audio-provider.mjs';
 import {priceFor} from '../web/pricing.mjs';
 
-const ENV=['BRAMBIT_SPEECH_PROVIDER','BRAMBIT_AUDIO_PROVIDER','ELEVENLABS_API_KEY','ELEVENLABS_VOICES','ELEVENLABS_MODEL','GEMINI_API_KEY','OPENAI_API_KEY'];
+const ENV=['BRAMBIT_SPEECH_PROVIDER','BRAMBIT_AUDIO_PROVIDER','ELEVENLABS_API_KEY','ELEVENLABS_VOICES','ELEVENLABS_MODEL','ELEVENLABS_VOICE_SETTINGS','GEMINI_API_KEY','OPENAI_API_KEY'];
 function withEnv(values,fn){
  const saved=Object.fromEntries(ENV.map(k=>[k,process.env[k]]));
  for(const k of ENV)delete process.env[k];
@@ -31,6 +31,17 @@ test('speaks with a listed voice, an unlisted one gets the first, and the usage 
   assert.match(urls[1],/\/text-to-speech\/VoiceOne1234\?/);
   assert.equal(buffer.length,480);assert.equal(rate,24000);
   assert.deepEqual([usage.in,usage.out],[5,0]);
+ }));
+
+test('the voice settings reach the request; out of range or not JSON, the voice keeps its own',()=>withEnv(
+ {ELEVENLABS_API_KEY:'test-key',ELEVENLABS_VOICES:'VoiceOne1234'},async()=>{
+  const bodies=[];
+  const fetchImpl=async(url,init)=>{bodies.push(JSON.parse(init.body));return new Response(new Uint8Array(480));};
+  const set={stability:0.3,similarity_boost:0.75,style:0.7,use_speaker_boost:true};
+  process.env.ELEVENLABS_VOICE_SETTINGS=JSON.stringify(set);
+  await elevenlabsPcm('Olá','VoiceOne1234',fetchImpl);
+  for(const bad of ['{"style":7}','{"stability":',' ']){process.env.ELEVENLABS_VOICE_SETTINGS=bad;await elevenlabsPcm('Olá','VoiceOne1234',fetchImpl);}
+  assert.deepEqual(bodies.map(b=>b.voice_settings),[set,undefined,undefined,undefined]);
  }));
 
 test('elevenlabs without its key or voices speaks with the audio provider',()=>withEnv(
