@@ -22,7 +22,7 @@ async function world({ link = {}, remote = { version: 5, trashed: false }, googl
   const sync = createSheetSync({
     userId: 'u1',
     links: {
-      get: async (_u, fam) => (s.link && fam === s.link.family ? s.link : null),
+      get: async (_u, fam, ids = []) => (s.link && (fam === s.link.family || ids.includes(s.link.base_asset_id)) ? s.link : null),
       synced: async (_u, fam, v) => { s.synced.push({ fam, ...v }); return true; },
     },
     tokenFor: (email) => () => `token-of-${email}`,
@@ -194,4 +194,12 @@ test('analysis: a loaded linked spreadsheet is reloaded when Google changed, oth
   const r = await sync.refreshLoaded(entries, { fetchBytes: async (k) => ({ buffer: Buffer.from(k) }), load: async (_u, _b, name) => ({ ok: true, filename: name, path: '/w/new' }) });
   assert.deepEqual(r.sheets.map((e) => e.path), ['/w/new', '/w/outra']);
   assert.match(r.sync, /id=a2/);
+});
+
+test('a renamed spreadsheet keeps syncing, and the sync is recorded under the link it found', async () => {
+  const { s, sync, cur } = await world({ google: await xlsx([['Luz', 120]]) });
+  cur.caption = 'Despesas.xlsx';
+  const r = await sync.sync(cur);
+  assert.equal(r.asset.id, 'a1');
+  assert.deepEqual(s.synced, [{ fam: 'gastos.xlsx', version: 5, baseAssetId: 'a1' }]);
 });

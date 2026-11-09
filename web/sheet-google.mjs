@@ -15,6 +15,7 @@
 
 const TABLE = 'mtr_harness.sheet_google_links';
 const UNDEFINED_TABLE = '42P01';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const SHEETS_MIME = 'application/vnd.google-apps.spreadsheet';
@@ -40,13 +41,26 @@ export function createSheetLinks(pool) {
     available() {
       return safely('available', false, async () => { await pool.query(`SELECT 1 FROM ${TABLE} LIMIT 0`); return true; });
     },
-    // The link of one spreadsheet family, or null.
-    get(userId, family) {
+    // The link of one spreadsheet family, or null. assetIds are the family's
+    // versions: a spreadsheet renamed in the library changes family, and its link,
+    // found by the last synced version, moves to the new family. The row's `family`
+    // is the key the sync writes back to.
+    get(userId, family, assetIds = []) {
       return safely('get', null, async () => {
+        const ids = assetIds.map(String).filter((id) => UUID_RE.test(id));
         const { rows } = await pool.query(
           `SELECT family, google_email, file_id, link, synced_version, base_asset_id FROM ${TABLE}
-           WHERE user_id=$1 AND family=$2`, [userId, family]);
-        return rows[0] || null;
+           WHERE user_id=$1 AND (family=$2 OR base_asset_id = ANY($3::uuid[]))
+           ORDER BY (family=$2) DESC, updated_at DESC LIMIT 1`, [userId, family, ids]);
+        const row = rows[0] || null;
+        if (!row || row.family === family) return row;
+        try {
+          await pool.query(`UPDATE ${TABLE} SET family=$3, updated_at=now() WHERE user_id=$1 AND family=$2`, [userId, row.family, family]);
+          return { ...row, family };
+        } catch (e) {
+          console.error('[sheet-google] move link:', e?.code || e?.message || e);
+          return row;
+        }
       });
     },
     // Links a family to a Sheets file (a new link replaces the old one). true when stored.

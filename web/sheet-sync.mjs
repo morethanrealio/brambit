@@ -33,6 +33,13 @@ export function cellText(buf) {
   return text.split('\n# ').map((sheet) => sheet.split('\n').map((l) => l.replace(/,+$/, '')).join('\n').replace(/\n+$/, '')).join('\n# ');
 }
 
+// Ids of the versions of `asset`'s spreadsheet, to find its Google Sheets link
+// after a rename (sheet-google.mjs, get).
+export function versionIds(asset, sheets) {
+  const fam = familyKey(asset);
+  return [...new Set([asset, ...sheets].filter((a) => isSheetAsset(a) && familyKey(a) === fam).map((a) => a.id))];
+}
+
 export function sameCells(a, b) {
   try { return cellText(a) === cellText(b); } catch { return false; }
 }
@@ -58,21 +65,23 @@ export function createSheetSync(deps) {
     return { ...asset, id: saved.assetId, s3_key: saved.key, mime: XLSX_MIME, created_at: new Date().toISOString() };
   }
 
-  async function push(token, link, family, asset, buffer) {
+  async function push(token, link, asset, buffer) {
     const r = await drive.replaceSheet(token, link.file_id, buffer);
     const version = Number(r?.version) || (await drive.sheetVersion(token, link.file_id)).version;
-    await links.synced(userId, family, { version, baseAssetId: asset.id });
+    await links.synced(userId, link.family, { version, baseAssetId: asset.id });
   }
 
   // Brings the library spreadsheet and its Google Sheets file to the same content:
   // only Sheets changed -> pull; only the library changed -> push; both -> merge, then push.
   async function doSync(asset) {
     if (!isSheetAsset(asset)) return { asset, note: '' };
-    const family = familyKey(asset);
-    const link = await links.get(userId, family);
-    if (!link) return { asset, note: '' };
     // Inside the lock: an edit that finished while this call waited made a newer version.
-    try { asset = currentVersion(asset, await deps.listSheets(userId)); } catch {}
+    let all = [];
+    try { all = await deps.listSheets(userId); } catch {}
+    const link = await links.get(userId, familyKey(asset), versionIds(asset, all));
+    if (!link) return { asset, note: '' };
+    asset = currentVersion(asset, all);
+    const family = link.family;
     const caption = asset.caption;
     const token = deps.tokenFor(link.google_email);
     let remote;
@@ -114,7 +123,7 @@ export function createSheetSync(deps) {
       }
       let current = asset, buffer = ours;
       if (merged && !sameCells(merged.buffer, ours)) { current = await saveVersion(asset, merged.buffer); buffer = merged.buffer; }
-      await push(token, link, family, current, buffer);
+      await push(token, link, current, buffer);
       const head = merged ? `"${caption}" was ${describeMerge(merged)}. ` : `"${caption}": `;
       const id = current === asset ? '' : ` The merged version is the current one in the library (id=${current.id}); use this id from now on.`;
       return { asset: current, newVersion: current !== asset, note: `${head}sent to Google Sheets, the file there now has this version at the same link.${id}\n` };
@@ -147,7 +156,7 @@ export function createSheetSync(deps) {
           if (!all) { try { all = await deps.listSheets(userId); } catch { all = []; } }
           let own = all.find((a) => String(a.id) === String(e.assetId));
           if (!own) { try { own = await deps.getAsset(userId, e.assetId); } catch {} }
-          if (isSheetAsset(own) && await links.get(userId, familyKey(own))) asset = currentVersion(own, all);
+          if (isSheetAsset(own) && await links.get(userId, familyKey(own), versionIds(own, all))) asset = currentVersion(own, all);
         }
         if (!asset) { sheets.push(e); continue; }
         const p = await sync(asset);

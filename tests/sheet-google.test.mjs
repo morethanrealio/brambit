@@ -31,10 +31,23 @@ test('the link is per user and family, and a new link replaces the old one', asy
   const seen = [];
   const links = createSheetLinks({ query: async (sql, params) => { seen.push({ sql, params }); return { rows: [], rowCount: 1 }; } });
   await links.get('u1', 'gastos.xlsx');
-  assert.match(seen[0].sql, /WHERE user_id=\$1 AND family=\$2/);
+  assert.match(seen[0].sql, /WHERE user_id=\$1 AND \(family=\$2 OR base_asset_id = ANY/);
   await links.link('u1', { family: 'gastos.xlsx', googleEmail: 'a@example.com', fileId: 'f1', link: 'https://x', version: 7, baseAssetId: 'a1' });
   assert.match(seen[1].sql, /ON CONFLICT\(user_id,family\) DO UPDATE/);
   assert.deepEqual(seen[1].params, ['u1', 'gastos.xlsx', 'a@example.com', 'f1', 'https://x', 7, 'a1']);
+});
+
+test('a renamed spreadsheet finds its link by a synced version and the link moves to the new name', async () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  const row = { family: 'gastos.xlsx', google_email: null, file_id: 'f1', link: null, synced_version: 3, base_asset_id: A };
+  const seen = [];
+  const links = createSheetLinks({ query: async (sql, params) => { seen.push({ sql, params }); return { rows: seen.length === 1 ? [row] : [], rowCount: 1 }; } });
+  const got = await links.get('u1', 'despesas.xlsx', [A, 'not-a-uuid']);
+  assert.equal(got.family, 'despesas.xlsx');
+  assert.equal(got.file_id, 'f1');
+  assert.deepEqual(seen[0].params, ['u1', 'despesas.xlsx', [A]]);
+  assert.match(seen[1].sql, /^UPDATE .* SET family=\$3/);
+  assert.deepEqual(seen[1].params, ['u1', 'gastos.xlsx', 'despesas.xlsx']);
 });
 
 test('the version check reads only version and trashed', async () => {

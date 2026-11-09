@@ -14,6 +14,7 @@
 
 import { isSheetAsset, familyKey } from './sheet-edit.mjs';
 import { currentVersion } from './sheet-library.mjs';
+import { versionIds } from './sheet-sync.mjs';
 
 const SHARE_ROLES = { editar: 'writer', ler: 'reader' };
 const cleanName = (s) => String(s || '').replace(/[/\\:*?"<>|]+/g, ' ').trim().slice(0, 120) || 'arquivo';
@@ -31,7 +32,7 @@ export function driveCopyTool(deps) {
   async function toGoogleSheets(asset, { compartilhar }) {
     const family = familyKey(asset);
     const role = SHARE_ROLES[compartilhar] || null;
-    let linked = await deps.links.get(userId, family);
+    let linked = await deps.links.get(userId, family, versionIds(asset, await sheetsFor()));
     if (linked) {
       try { if ((await deps.sheetVersion(token, linked.file_id)).trashed) linked = null; }
       catch (e) { if (e?.status === 404) linked = null; else throw e; }
