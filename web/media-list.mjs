@@ -69,7 +69,7 @@ export function formatMediaList(rows, { sheets = [], timeZone, limit = LIST_DEFA
     seen.add(fam);
     const atual = currentVersion(r, all);
     const n = new Set(versionsOf(atual, all).map((s) => String(s.id))).size;
-    out.push(line(atual, timeZone, n > 1 ? ` · planilha com ${n} versões guardadas; este id é a versão atual (versões antigas: listar_midia com versoes_de=${atual.id})` : ''));
+    out.push(line(atual, timeZone, n > 1 ? ` · spreadsheet with ${n} kept versions; this id is the current version (older versions: listar_midia with versoes_de=${atual.id})` : ''));
   }
   return out;
 }
@@ -80,9 +80,9 @@ export function formatVersions(asset, sheets, { timeZone } = {}) {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const [atual, ...antigas] = uniq;
   return [
-    `Versões da planilha "${caption(atual)}", da mais nova para a mais antiga. Use a versão atual para ler e editar; uma versão antiga só quando o usuário pedir o conteúdo de antes.`,
-    line(atual, timeZone, ' · VERSÃO ATUAL'),
-    ...antigas.map((v) => line(v, timeZone, ' · versão antiga')),
+    `Versions of the spreadsheet "${caption(atual)}", newest first. Use the current version to read and edit; an older version only when the user asks for the earlier content.`,
+    line(atual, timeZone, ' · CURRENT VERSION'),
+    ...antigas.map((v) => line(v, timeZone, ' · older version')),
   ].join('\n');
 }
 
@@ -102,18 +102,18 @@ export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset
       const limit = Math.min(Math.max(1, Number(limite) || LIST_DEFAULT), LIST_MAX);
       const sheetsOrEmpty = async () => {
         try { return await listSheets(userId); }
-        catch (e) { console.error('[listar_midia] planilhas:', e?.message ?? e); return []; }
+        catch (e) { console.error('[listar_midia] spreadsheets:', e?.message ?? e); return []; }
       };
       if (versoes_de != null && String(versoes_de).trim() !== '') {
         const asset = await getMediaAsset(userId, String(versoes_de).trim());
-        if (!asset) return 'ERRO: não achei esse arquivo na biblioteca (id inválido ou de outro usuário). Use listar_midia sem versoes_de pra achar o id.';
-        if (!isSheetAsset(asset)) return `O arquivo ${asset.id} ("${caption(asset)}") não é uma planilha .xlsx; só planilhas guardam versões.`;
+        if (!asset) return 'ERROR: this file is not in the library (invalid id or another user\'s). Use listar_midia without versoes_de to find the id.';
+        if (!isSheetAsset(asset)) return `File ${asset.id} ("${caption(asset)}") is not an .xlsx spreadsheet; only spreadsheets keep versions.`;
         return formatVersions(asset, await sheetsOrEmpty(), { timeZone });
       }
       const termo = typeof busca === 'string' ? busca.trim() : '';
       const scan = Math.min(limit * SCAN_FACTOR, SCAN_MAX);
       const rows = termo ? await searchMedia(userId, termo, { limit: scan }) : await listMediaAssets(userId, { limit: scan });
-      if (!rows.length) return termo ? `Nenhum arquivo com "${termo}" no nome ou na descrição.` : 'Nenhuma mídia guardada ainda.';
+      if (!rows.length) return termo ? `No file with "${termo}" in its name or description.` : 'Nenhuma mídia guardada ainda.';
       const sheets = rows.some(isSheetAsset) ? await sheetsOrEmpty() : [];
       return formatMediaList(rows, { sheets, timeZone, limit }).join('\n');
     },
@@ -132,11 +132,11 @@ const stem = (s) => normalize(s).replace(/\.[a-z0-9]{2,5}$/, '');
 export async function findByName(userId, nome, { searchMedia, listSheets, accept = () => true }) {
   const termo = String(nome || '').trim();
   const hits = (await searchMedia(userId, termo)).filter(accept);
-  if (!hits.length) return { notFound: true, reply: `Não achei na biblioteca nenhum arquivo desse tipo com "${termo}" no nome. Use listar_midia com busca para ver os nomes que existem, e não chute um id.` };
+  if (!hits.length) return { notFound: true, reply: `No file of this kind with "${termo}" in its name is in the library. Use listar_midia with busca to see the names that exist, and do not guess an id.` };
   let sheets = [];
   if (hits.some(isSheetAsset)) {
     try { sheets = await listSheets(userId); }
-    catch (e) { console.error('[arquivo por nome] planilhas:', e?.message ?? e); }
+    catch (e) { console.error('[file by name] spreadsheets:', e?.message ?? e); }
   }
   const byKey = new Map();
   for (const h of hits) {
@@ -149,5 +149,5 @@ export async function findByName(userId, nome, { searchMedia, listSheets, accept
   const exact = found.filter((a) => stem(baseFamily(a.caption)) === stem(termo));
   if (exact.length === 1) return { asset: exact[0] };
   const nomes = found.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
-  return { reply: `Achei ${found.length} arquivos com "${termo}" no nome: ${nomes}. Nada foi aberto nem alterado. Pergunte ao usuário qual deles, citando os nomes, e chame de novo com o id escolhido. Não escolha sozinho.` };
+  return { reply: `Found ${found.length} files with "${termo}" in their name: ${nomes}. Nothing was opened or changed. Ask the user which one, citing the names, and call again with the chosen id. Do not pick one yourself.` };
 }

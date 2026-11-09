@@ -199,16 +199,16 @@ function descreverAbas(abas) {
 // The reason in words the user understands; pandas' own text ("',' expected after
 // '\"'") reached the model and the user got no reason (2026-11-01).
 const MOTIVOS = [
-  [/ParserError|csv\.Error|expected after|EOF inside string|Expected \d+ fields/i, 'o arquivo tem aspas ou separadores fora do padrão de CSV, e não deu para separar as colunas'],
-  [/UnicodeDecodeError/i, 'o texto do arquivo está numa codificação que não reconheci'],
-  [/EmptyDataError|No columns to parse/i, 'o arquivo está vazio'],
-  [/BadZipFile|not a zip file|Excel file format cannot be determined|XLRDError/i, 'o arquivo não é uma planilha válida: pode estar corrompido ou ser outro tipo de arquivo com nome de planilha'],
+  [/ParserError|csv\.Error|expected after|EOF inside string|Expected \d+ fields/i, 'the file has quotes or separators outside the CSV standard, so the columns could not be split'],
+  [/UnicodeDecodeError/i, 'the file text is in an encoding that was not recognized'],
+  [/EmptyDataError|No columns to parse/i, 'the file is empty'],
+  [/BadZipFile|not a zip file|Excel file format cannot be determined|XLRDError/i, 'the file is not a valid spreadsheet: it may be corrupted or another kind of file named like a spreadsheet'],
 ];
 export const motivoSimples = (motivo) => MOTIVOS.find(([re]) => re.test(String(motivo || '')))?.[1] || motivo;
 
 // Failure note. There's no text fallback, on purpose (see top of the file).
 export function notaPlanilhaIlegivel(filename, motivo) {
-  return `⚠️ A planilha "${filename}" não pôde ser aberta no ambiente de análise (${motivoSimples(motivo)}). O conteúdo dela NÃO está disponível por nenhum outro caminho: comece a resposta dizendo ao usuário que o arquivo "${filename}" não abriu e por quê, em palavras simples, antes de qualquer outra coisa, e não descreva, cite nem suponha nada do que ela contém.`;
+  return `⚠️ The spreadsheet "${filename}" could not be opened in the analysis environment (${motivoSimples(motivo)}). Its content is NOT available through any other path: start the reply by telling the user that the file "${filename}" did not open and why, in simple words, before anything else, and do not describe, quote or guess anything it contains.`;
 }
 
 // Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
@@ -231,10 +231,10 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
 function notaTolerante(t) {
   if (!t) return '';
   const avisos = [];
-  if (t.long) avisos.push(`${t.long} linha(s) tinham mais colunas que o cabeçalho, e o que passou do cabeçalho ficou nas colunas extra_1, extra_2... (os valores dessas linhas podem estar deslocados)`);
-  if (t.skipped) avisos.push(`${t.skipped} linha(s) não deu para ler e ficaram de fora`);
-  if (!avisos.length) return 'O CSV tinha aspas fora do padrão; abri em modo tolerante, sem perder linhas (aspas soltas ficaram como texto nas células).\n';
-  return `O CSV estava fora do padrão e abri em modo tolerante: ${avisos.join('; ')}. Comece a resposta dizendo isso ao usuário, com o número.\n`;
+  if (t.long) avisos.push(`${t.long} line(s) had more columns than the header, and what went past the header is in columns extra_1, extra_2... (the values in those lines may be shifted)`);
+  if (t.skipped) avisos.push(`${t.skipped} line(s) could not be read and were left out`);
+  if (!avisos.length) return 'The CSV had nonstandard quotes; it was opened in tolerant mode, with no line lost (stray quotes stayed as text in the cells).\n';
+  return `The CSV was nonstandard and was opened in tolerant mode: ${avisos.join('; ')}. Start the reply by telling the user this, with the number.\n`;
 }
 
 // Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and

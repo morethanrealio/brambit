@@ -93,7 +93,7 @@ test('an archived id is synced through the current version', async () => {
   const r = await sync.forReading(old, { listSheets: async () => s.lib });
   assert.equal(r.asset.id, s.saved[0].id);
   assert.deepEqual(s.renamed, [['a1', 'Gastos_20261108100000.xlsx']]);
-  assert.match(r.nota, /versão antiga/);
+  assert.match(r.nota, /is an older version/);
   assert.match(r.nota, /changed in Google Sheets/);
 });
 

@@ -110,8 +110,8 @@ test('any environment failure turns into a "could not read it" note, never sprea
     globalThis.__sb = sb;
     const lr = await loadSpreadsheetIntoSandbox('u-falha', duasAbas(), 'contas.xlsx');
     assert.equal(lr.ok, false, caso);
-    assert.match(lr.note, /não pôde ser aberta no ambiente de análise/, caso);
-    assert.match(lr.note, /NÃO está disponível por nenhum outro caminho/, caso);
+    assert.match(lr.note, /could not be opened in the analysis environment/, caso);
+    assert.match(lr.note, /is NOT available through any other path/, caso);
     semCelulas(lr.note);
   }
   assert.equal(getLoadedSheets('u-falha').filter((e) => e.sheets != null).length, 0, 'failure does not register the spreadsheet as read');
@@ -119,8 +119,8 @@ test('any environment failure turns into a "could not read it" note, never sprea
 
 test('connector without analysis environment, or with it breaking, returns the failure note', async () => {
   assert.match(await analisePlanilhaConector(null, duasAbas(), 'a.xlsx'), /ambiente de análise indisponível/);
-  assert.match(await analisePlanilhaConector(async () => { throw Error('boom'); }, duasAbas(), 'a.xlsx'), /não pôde ser aberta.*boom/);
-  assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /não pôde ser aberta no ambiente de análise \(x\)/);
+  assert.match(await analisePlanilhaConector(async () => { throw Error('boom'); }, duasAbas(), 'a.xlsx'), /could not be opened.*boom/);
+  assert.match(await analisePlanilhaConector(async () => ({ ok: false, error: 'x' }), duasAbas(), 'a.xlsx'), /could not be opened in the analysis environment \(x\)/);
 });
 
 // ── The real probe, with local pandas ──
@@ -160,7 +160,7 @@ test('real probe: file that is not a spreadsheet fails with a note, no text', { 
   globalThis.__sb = sandboxLocal();
   const lr = await loadSpreadsheetIntoSandbox('u-real', Buffer.from('<html>login</html>'), 'falsa.xlsx');
   assert.equal(lr.ok, false);
-  assert.match(lr.note, /não pôde ser aberta/);
+  assert.match(lr.note, /could not be opened/);
   assert.ok(!lr.note.includes('login'));
 });
 
@@ -171,7 +171,7 @@ test('real probe: CSV with stray quotes opens tolerantly and the analyst can rea
   const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'scielo.csv');
   assert.equal(lr.ok, true, lr.error);
   assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 2, colunas: 3, nomes: ['Title', 'Authors', 'Year'] }]);
-  assert.match(lr.note, /modo tolerante, sem perder linhas/);
+  assert.match(lr.note, /tolerant mode, with no line lost/);
   const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; print(pd.read_csv(sys.argv[1], sep=None, engine="python").shape)', sb.local(lr.path)], { encoding: 'utf8' });
   assert.equal(r.stdout.trim(), '(2, 3)', r.stderr);
 });
@@ -183,23 +183,23 @@ test('real probe: lines with extra fields stay, in extra columns, and are counte
   const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'lista.csv');
   assert.equal(lr.ok, true, lr.error);
   assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 4, colunas: 5, nomes: ['ID', 'Nome', 'Ano', 'extra_1', 'extra_2'] }]);
-  assert.match(lr.note, /2 linha\(s\) tinham mais colunas que o cabeçalho.*extra_1.*Comece a resposta/);
-  assert.ok(!/ficaram de fora/.test(lr.note));
+  assert.match(lr.note, /2 line\(s\) had more columns than the header.*extra_1.*Start the reply/);
+  assert.ok(!/left out/.test(lr.note));
   const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; d = pd.read_csv(sys.argv[1], sep=None, engine="python", dtype=str); print(len(d), list(d["Nome"]))', sb.local(lr.path)], { encoding: 'utf8' });
   assert.equal(r.stdout.trim(), "4 ['A', 'B', 'C', 'D']", r.stderr);
 });
 
 test('the failure note gives the reason in plain words and asks to say which file first', () => {
   for (const [erro, motivo] of [
-    ["ParserError: ',' expected after '\"'", /aspas ou separadores fora do padrão/],
-    ['UnicodeDecodeError: invalid start byte', /codificação/],
-    ['EmptyDataError: No columns to parse from file', /vazio/],
-    ['BadZipFile: File is not a zip file', /não é uma planilha válida/],
+    ["ParserError: ',' expected after '\"'", /quotes or separators outside the CSV standard/],
+    ['UnicodeDecodeError: invalid start byte', /encoding/],
+    ['EmptyDataError: No columns to parse from file', /empty/],
+    ['BadZipFile: File is not a zip file', /not a valid spreadsheet/],
   ]) {
     const nota = notaPlanilhaIlegivel('artigos.csv', erro);
     assert.match(nota, motivo, erro);
     assert.ok(!nota.includes(erro), erro);
-    assert.match(nota, /comece a resposta dizendo ao usuário que o arquivo "artigos\.csv" não abriu e por quê/);
+    assert.match(nota, /start the reply by telling the user that the file "artigos\.csv" did not open and why/);
   }
   assert.match(notaPlanilhaIlegivel('a.xlsx', 'disco cheio'), /\(disco cheio\)/);
 });

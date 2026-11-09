@@ -23,8 +23,8 @@ test('a spreadsheet shows once, with its current id and how many versions are ke
   const gastos = out.filter((l) => l.includes('Gastos'));
   assert.equal(gastos.length, 1);
   assert.ok(gastos[0].startsWith(`- id=${v3.id}`));
-  assert.match(gastos[0], /3 versões guardadas/);
-  assert.doesNotMatch(out.find((l) => l.includes('To-Do')), /versões/);
+  assert.match(gastos[0], /3 kept versions/);
+  assert.doesNotMatch(out.find((l) => l.includes('To-Do')), /versions/);
 });
 
 test('an archived version alone in the rows is shown as the current one', () => {
@@ -39,10 +39,10 @@ test('the limit counts items, not the archived rows skipped', () => {
 
 test('versoes_de lists the versions newest first, the current one marked', async () => {
   const lines = formatVersions(v1, sheets, { timeZone: 'UTC' }).split('\n');
-  assert.ok(lines[1].includes(v3.id) && lines[1].includes('VERSÃO ATUAL'));
+  assert.ok(lines[1].includes(v3.id) && lines[1].includes('CURRENT VERSION'));
   assert.deepEqual(lines.slice(2).map((l) => l.slice(5, 41)), [v2.id, v1.id]);
   const tool = mediaListTool({ userId: 'u1', timeZone: 'UTC', getMediaAsset: async () => foto, listSheets: async () => sheets });
-  assert.match(await tool.run({ versoes_de: foto.id }), /não é uma planilha/);
+  assert.match(await tool.run({ versoes_de: foto.id }), /is not an .xlsx spreadsheet/);
 });
 
 test('busca matches without accents or wildcards from the term', async () => {

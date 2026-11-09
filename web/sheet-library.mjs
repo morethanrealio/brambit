@@ -60,13 +60,13 @@ export async function sheetForReading(userId, asset, { listSheets, timeZone } = 
   if (!isSheetAsset(asset) || typeof listSheets !== 'function') return { asset, nota: '' };
   let all;
   try { all = await listSheets(userId); }
-  catch (e) { console.error('[ler_arquivo] versões da planilha:', e?.message ?? e); return { asset, nota: '' }; }
+  catch (e) { console.error('[ler_arquivo] spreadsheet versions:', e?.message ?? e); return { asset, nota: '' }; }
   const atual = currentVersion(asset, all);
   if (String(atual.id) === String(asset.id)) return { asset, nota: '' };
   const quando = new Date(atual.created_at).toLocaleString('pt-BR', { timeZone, dateStyle: 'short', timeStyle: 'short' });
   return {
     asset: atual,
-    nota: `O id ${asset.id} é de uma versão antiga ("${asset.caption}"). Abri a versão atual da mesma planilha: id=${atual.id}, "${atual.caption}", de ${quando}. Use este id daqui pra frente.\n`,
+    nota: `Id ${asset.id} is an older version ("${asset.caption}"). Opened the current version of the same spreadsheet instead: id=${atual.id}, "${atual.caption}", from ${quando}. Use this id from now on.\n`,
   };
 }
 
@@ -79,7 +79,7 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare
   if (prepare) ({ asset, note: sync } = await prepare(asset));
   let bytes = null;
   try { bytes = await fetchBytes(asset.s3_key); } catch (e) { console.error('[analisar_planilha] bytes:', e?.message ?? e); }
-  if (!bytes?.buffer) return { note: `ERRO: não consegui recuperar os bytes de "${asset.caption}".` };
+  if (!bytes?.buffer) return { note: `ERROR: could not fetch the bytes of "${asset.caption}".` };
   const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
   return lr.ok ? { sheet: lr, sync } : { note: sync + lr.note };
 }
@@ -107,10 +107,10 @@ const CHOICES_MAX = 8;
 export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prepare }) {
   let all;
   try { all = await listSheets(userId); }
-  catch (e) { console.error('[analisar_planilha] planilhas:', e?.message ?? e); return {}; }
+  catch (e) { console.error('[analisar_planilha] spreadsheets:', e?.message ?? e); return {}; }
   const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [baseFamily(a.caption), currentVersion(a, all)])).values()];
   if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load, prepare });
   if (!atuais.length) return {};
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
-  return { note: `Nenhuma planilha está carregada agora, e a biblioteca do usuário tem ${atuais.length}: ${nomes}. Se o pedido já diz qual é, chame analisar_planilha de novo com nome; se não diz, pergunte ao usuário qual, citando os nomes.` };
+  return { note: `No spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call analisar_planilha again with nome; if not, ask the user which one, citing the names.` };
 }

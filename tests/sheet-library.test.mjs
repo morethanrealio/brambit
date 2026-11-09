@@ -34,7 +34,7 @@ test('a document that is not a spreadsheet is never swapped', () => {
 test('sheetForReading opens the current version and tells the model the new id', async () => {
   const r = await sheetForReading('u1', v1, { listSheets: async () => lib, timeZone: 'America/Sao_Paulo' });
   assert.equal(r.asset.id, v3.id);
-  assert.match(r.nota, /versão antiga/);
+  assert.match(r.nota, /is an older version/);
   assert.ok(r.nota.includes(v3.id));
 });
 

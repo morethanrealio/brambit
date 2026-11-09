@@ -50,12 +50,12 @@ export function driveCopyTool(deps) {
     let shareError = null;
     if (role) { try { await deps.shareByLink(token, file.id, role); } catch (e) { shareError = e?.message ?? String(e); } }
     const notes = [linked
-      ? `Esta planilha já estava no Google Sheets, sincronizada com a da biblioteca: é o mesmo arquivo e o mesmo link.`
-      : `Criei no Google Sheets a planilha "${sheetTitle(asset.caption)}", na pasta "${folderName}" do Drive.`];
-    if (!linked && sincronizada) notes.push('Ela fica sincronizada com a da biblioteca: o que mudarem lá entra aqui antes de cada leitura ou edição, e cada edição sua vai para lá.');
-    if (!sincronizada) notes.push('A sincronia com a biblioteca NÃO está ativa neste servidor: é uma cópia, e mudanças de um lado não vão para o outro. Diga isso ao usuário.');
-    if (role && !shareError) notes.push(`Qualquer pessoa com o link pode ${compartilhar === 'editar' ? 'editar' : 'ver'}.`);
-    if (shareError) notes.push(`NÃO consegui liberar o link para qualquer pessoa (${shareError}); a conta Google pode não permitir. O link abre só para o usuário, que pode compartilhar pelo próprio Sheets.`);
+      ? `This spreadsheet was already in Google Sheets, synced with the library one: same file, same link.`
+      : `Created the Google Sheets file "${sheetTitle(asset.caption)}" in the "${folderName}" Drive folder.`];
+    if (!linked && sincronizada) notes.push('It stays synced with the library spreadsheet: what changes there comes in before every read or edit, and every edit you make goes there.');
+    if (!sincronizada) notes.push('Sync with the library is NOT on in this server: it is a copy, and changes on one side do not reach the other. Tell the user.');
+    if (role && !shareError) notes.push(`Anyone with the link can ${compartilhar === 'editar' ? 'edit' : 'view'} it.`);
+    if (shareError) notes.push(`Could NOT open the link to anyone (${shareError}); the Google account may not allow it. The link opens only for the user, who can share it from Sheets.`);
     return { ok: true, id: file.id, name: sheetTitle(asset.caption), link: file.webViewLink, planilha_google: true, sincronizada, compartilhada: role && !shareError ? compartilhar : null, note: notes.join(' ') };
   }
 
@@ -72,8 +72,8 @@ export function driveCopyTool(deps) {
       let asset = await pickAsset(args.id);
       if (!asset) return { erro: 'Não achei o arquivo na biblioteca.' };
       const sheets = args.planilha_google === true;
-      if (sheets && !isSheetAsset(asset)) return { erro: `"${asset.caption || 'Esse arquivo'}" não é uma planilha .xlsx; só planilha vira Google Sheets.` };
-      if (sheets && !(await deps.links.available())) return { erro: 'A sincronia com o Google Sheets não está ativa neste servidor. Ofereça ao usuário a cópia .xlsx no Drive (sem planilha_google).' };
+      if (sheets && !isSheetAsset(asset)) return { erro: `"${asset.caption || 'This file'}" is not an .xlsx spreadsheet; only a spreadsheet becomes Google Sheets.` };
+      if (sheets && !(await deps.links.available())) return { erro: 'Google Sheets sync is not on in this server. Offer the user the .xlsx copy in Drive (without planilha_google).' };
       if (sheets) asset = currentVersion(asset, await sheetsFor());
       const share = sheets && SHARE_ROLES[args.compartilhar] ? args.compartilhar : undefined;
       return { args: { ...args, id: asset.id, nome: sheets ? sheetTitle(asset.caption) : (args.nome || asset.caption || 'arquivo'), assetKey: asset.s3_key, planilha_google: sheets || undefined, compartilhar: share } };

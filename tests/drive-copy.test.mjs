@@ -35,8 +35,8 @@ function setup({ available = true, linked = null, shareFails = false } = {}) {
 }
 
 test('only a spreadsheet becomes Google Sheets, and only where links are stored', async () => {
-  assert.match((await setup().tool.normalizeConfirmationArgs({ id: 'p1', planilha_google: true })).erro, /não é uma planilha/);
-  assert.match((await setup({ available: false }).tool.normalizeConfirmationArgs({ id: 'a2', planilha_google: true })).erro, /não está ativa/);
+  assert.match((await setup().tool.normalizeConfirmationArgs({ id: 'p1', planilha_google: true })).erro, /is not an .xlsx spreadsheet/);
+  assert.match((await setup({ available: false }).tool.normalizeConfirmationArgs({ id: 'a2', planilha_google: true })).erro, /is not on in this server/);
 });
 
 test('an archived id is confirmed as the current version, with sharing only when asked', async () => {
@@ -63,7 +63,7 @@ test('a refused share keeps the file and says the link is private', async () => 
   const r = JSON.parse(await tool.run({ id: 'a2', assetKey: 'k2', planilha_google: true, compartilhar: 'ler' }));
   assert.equal(r.ok, true);
   assert.equal(r.compartilhada, null);
-  assert.match(r.note, /NÃO consegui liberar o link/);
+  assert.match(r.note, /Could NOT open the link to anyone/);
 });
 
 test('an already linked spreadsheet returns its file instead of creating another', async () => {
