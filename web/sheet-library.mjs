@@ -79,3 +79,34 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load }) {
   const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
   return lr.ok ? { sheet: lr } : { note: lr.note };
 }
+
+// Spreadsheets loaded in the analysis environment, one per family. Reading an
+// archived copy and then editing leaves two versions of the same spreadsheet in
+// /workspace, and the analyst picked one on its own and mixed their data
+// (2026-11-09). Keeps the current version: the canonical name, without the
+// archive stamp, which is the one the edit path writes; else the newest loaded.
+export function currentLoaded(entries) {
+  const byFam = new Map();
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const fam = baseFamily(e.filename);
+    const prev = byFam.get(fam);
+    const canonical = (x) => String(x.filename || '').toLowerCase() === fam;
+    if (!prev || (canonical(e) && !canonical(prev)) || (canonical(e) === canonical(prev) && (e.ts || 0) >= (prev.ts || 0))) byFam.set(fam, e);
+  }
+  return [...byFam.values()];
+}
+
+// analisar_planilha with nothing loaded (after a restart, and in every routine
+// run, the in-memory registry is empty): opens the user's only spreadsheet, or
+// lists them for the model to ask which. {} when the library has none.
+const CHOICES_MAX = 8;
+export async function autoLoadSheet(userId, { listSheets, fetchBytes, load }) {
+  let all;
+  try { all = await listSheets(userId); }
+  catch (e) { console.error('[analisar_planilha] planilhas:', e?.message ?? e); return {}; }
+  const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [baseFamily(a.caption), currentVersion(a, all)])).values()];
+  if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load });
+  if (!atuais.length) return {};
+  const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
+  return { note: `Nenhuma planilha está carregada agora, e a biblioteca do usuário tem ${atuais.length}: ${nomes}. Se o pedido já diz qual é, chame analisar_planilha de novo com nome; se não diz, pergunte ao usuário qual, citando os nomes.` };
+}

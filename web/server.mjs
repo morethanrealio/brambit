@@ -1165,7 +1165,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, sheetForReading, openForAnalysis } from './sheet-library.mjs';
+import { createSheetLibrary, sheetForReading, openForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from './media-list.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
@@ -4485,7 +4485,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
-      description: 'Reads and analyzes SPREADSHEETS (Excel .xlsx/.xlsm/.xls, CSV or TSV) by processing the data with CODE (Python/pandas) in an isolated environment; works for ANY size, without truncating. It is the ONLY way to see a spreadsheet\'s content: when a spreadsheet arrives (attachment, Drive, OneDrive, email, library), you only receive its structure (sheets, rows, columns), never the cells. Use it ALWAYS when the question is about the data: finding or checking a value, listing, counting, summing, averages, filters, cross-references, groupings, ranking, comparison or summary. Delegates to a sub-agent that reads the whole file and returns only the result. The sub-agent does NOT see the conversation: describe the goal with all the context (which column, period, what to calculate).',
+      description: 'Reads and analyzes SPREADSHEETS (Excel .xlsx/.xlsm/.xls, CSV or TSV) by processing the data with CODE (Python/pandas) in an isolated environment; works for ANY size, without truncating. It is the ONLY way to see a spreadsheet\'s content: when a spreadsheet arrives (attachment, Drive, OneDrive, email, library), you only receive its structure (sheets, rows, columns), never the cells. Use it ALWAYS when the question is about the data: finding or checking a value, listing, counting, summing, averages, filters, cross-references, groupings, ranking, comparison or summary. Delegates to a sub-agent that reads the whole file and returns only the result. The sub-agent does NOT see the conversation: describe the goal with all the context (which column, period, what to calculate). If no spreadsheet is loaded, it opens the user\'s spreadsheet from the library by itself (or tells you which ones exist).',
       parameters: {
         type: 'object',
         properties: {
@@ -4497,14 +4497,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       run: async ({ objetivo, formato, nome }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        let sheets = getLoadedSheets(userId);
+        let sheets = currentLoaded(getLoadedSheets(userId));
         const found = nome && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
-        if (found.reply && !found.notFound) return found.reply;
-        if (found.asset) {
-          const o = await openForAnalysis(userId, found.asset, { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox });
-          if (!o.sheet) return o.note;
-          sheets = [o.sheet];
-        }
+        if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox };
+        const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : {});
+        if (o.note) return o.note;
+        if (o.sheet) sheets = [o.sheet];
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
         try {
           return await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });

@@ -3,7 +3,7 @@
 // Run with: node --test tests/sheet-library.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentVersion, sheetForReading, createSheetLibrary } from '../web/sheet-library.mjs';
+import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet } from '../web/sheet-library.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const a = (id, caption, created_at, mime = XLSX) => ({ id, caption, created_at, mime, s3_key: `k/${id}` });
@@ -54,4 +54,24 @@ test('listSheets asks only for this user\'s spreadsheets, newest first, capped',
   assert.match(sql, /ORDER BY created_at DESC/);
   assert.equal(params[0], 'u1');
   assert.equal(params[3], 500);
+});
+
+test('the analyst gets one loaded copy per spreadsheet, the current one', () => {
+  const old = { filename: 'Gastos_20261028152439.xlsx', path: '/w/old', ts: 2 };
+  const cur = { filename: 'Gastos.xlsx', path: '/w/cur', ts: 1 };
+  const drive = { filename: 'Pendencias.xlsx', path: '/w/drive', ts: 3 };
+  assert.deepEqual(currentLoaded([old, cur, drive]).map((e) => e.path).sort(), ['/w/cur', '/w/drive']);
+  assert.deepEqual(currentLoaded([cur, old]).map((e) => e.path), ['/w/cur']);
+});
+
+test('with nothing loaded, the only spreadsheet opens; several become a question', async () => {
+  let opened;
+  const deps = { fetchBytes: async () => ({ buffer: Buffer.from('x') }), load: async (_u, _b, name) => { opened = name; return { ok: true, filename: name, path: '/w/' + name }; } };
+  const one = await autoLoadSheet('u1', { ...deps, listSheets: async () => [v3, v2, v1] });
+  assert.equal(opened, v3.caption);
+  assert.equal(one.sheet.filename, v3.caption);
+  const many = await autoLoadSheet('u1', { ...deps, listSheets: async () => lib });
+  assert.equal(many.sheet, undefined);
+  assert.ok(many.note.includes('"To-Do.xlsx"') && many.note.includes('"Gastos.xlsx"') && !many.note.includes('Gastos_2026'));
+  assert.deepEqual(await autoLoadSheet('u1', { ...deps, listSheets: async () => [] }), {});
 });
