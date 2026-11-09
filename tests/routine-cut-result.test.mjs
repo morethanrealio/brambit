@@ -7,9 +7,13 @@ import { createRoutineExecutor } from '../web/routine-execution.mjs';
 // previous week's shopping list and was recorded as complete. A cut run must keep
 // the model's text, append an honest note, and be recorded as 'partial'.
 
-test('a clean finish (no termination) is returned unchanged', () => {
+test('a clean finish (no termination, or completed) is returned unchanged', () => {
   assert.equal(routineCutResult('A lista está pronta.', null, 'pt-BR'), 'A lista está pronta.');
   assert.equal(routineCutResult('done', undefined, 'en'), 'done');
+  // The core reports a clean finish as 'completed'; it is not a cut, and a
+  // validated no-news silence ('') must stay silent instead of becoming the note.
+  assert.equal(routineCutResult('A lista está pronta.', 'completed', 'pt-BR'), 'A lista está pronta.');
+  assert.equal(routineCutResult('', 'completed', 'pt-BR'), '');
 });
 
 test('a cut keeps the body and appends the honest note, marked partial', () => {
