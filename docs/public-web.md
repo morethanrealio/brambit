@@ -88,6 +88,30 @@ not typing:
 up to 64 characters. `data`: an object, up to 2000 characters as JSON. A
 call has `message` or `event`, never both.
 
+## A voice message
+
+Instead of `message`, send what the person said into the microphone, in
+`audio`:
+
+```json
+{ "audio": "data:audio/webm;base64,GkXfo…", "contact": "<token>" }
+```
+
+- `audio`: a data URL or plain base64 of WebM, Ogg, MP4, WAV or MP3 (what
+  browsers record with `MediaRecorder`), up to 2 MB decoded. Brambit reads the
+  type from the bytes.
+- Alone: not with `message`, `event` or `image`.
+- Brambit transcribes it with the installation's audio provider
+  (`BRAMBIT_AUDIO_PROVIDER`), and the model reads it as a voice message. The
+  answer adds `heard`, the transcript, so the page can show it. A transcript
+  that comes out empty gets `heard: ""` and `text: null`.
+- The transcription is billed to the owner like the rest of public support,
+  and only runs when the turn would: past a limit, without credit or past the
+  daily cap there is no transcription, and the call returns the notice.
+- The audio is not stored; the history keeps the transcript, with
+  `voice: true`. A contact who stopped the assistant resumes by typing.
+- Without a transcription provider, `400 audio_unavailable`.
+
 ## History
 
 ```http
@@ -97,7 +121,7 @@ Brambit-Contact: <token or your id>
 
 From a server, add the `Authorization` header as above. Returns the last 50
 messages of that contact only:
-`{ "messages": [{ "role", "text", "outputs"?, "event"?, "at" }] }`.
+`{ "messages": [{ "role", "text", "voice"?, "outputs"?, "event"?, "at" }] }`.
 
 The contact goes in the header, not in the address: addresses are often kept
 in proxy logs, and the browser token is enough to read the conversation.
@@ -238,7 +262,10 @@ Keep a proxy in front when Brambit is reachable from the internet. With
 | --- | --- | --- |
 | 400 | `contact_required` | Server call without `contact`, or history without the `Brambit-Contact` header |
 | 400 | `invalid_contact` | Browser token not issued by Brambit |
-| 400 | `message_required` | No `message` and no `event` |
+| 400 | `message_required` | No `message`, `audio` or `event` |
+| 400 | `audio_alone` | `audio` with `message`, `event` or `image` |
+| 400 | `invalid_audio` | `audio` is not WebM, Ogg, MP4, WAV or MP3 in base64 |
+| 400 | `audio_unavailable` | `audio` on an installation without a transcription provider |
 | 400 | `message_or_event` | Both `message` and `event` |
 | 400 | `invalid_event` | `event` outside the rules above |
 | 400 | `image_not_requested` | `image` in a browser call the assistant did not ask a photo for |
@@ -248,7 +275,8 @@ Keep a proxy in front when Brambit is reachable from the internet. With
 | 403 | `origin_not_allowed` | Browser call from a website not listed |
 | 403 | `ip_not_allowed` | Server call from an address not listed |
 | 404 | `not_found` | Unknown agent, public mode or the web channel off, or sign-up open on the installation |
-| 413 | `body_too_large` | Body over 64 KB, not counting the photo |
+| 413 | `body_too_large` | Body over 64 KB, not counting the photo or the audio |
+| 413 | `audio_too_large` | Audio over 2 MB decoded |
 | 413 | `image_too_large` | Photo over 1 MB decoded |
 | 429 | | Too many calls from this address |
 

@@ -3,6 +3,10 @@
 // brain, the voice and the transcription; Vidu only draws.
 // Off unless VIDU_API_KEY is set. VIDU_HOST picks the account's region
 // (api.vidu.com by default, api.vidu.cn for an account opened there).
+// VIDU_MODEL picks the session model (vidu-s1 by default, or vidu-s2);
+// both bill 1 credit per second. VIDU_IDLE_MOTION replaces the gestures the face
+// makes while it waits: Vidu's idle_motion object as JSON ({"enabled":false} for
+// none); an invalid one keeps the default.
 // Docs: platform.vidu.com, S2-Avatar > Component and Image Upload.
 //
 // Photos (/live/v1/avatars): registering a photo returns its avatar id, which
@@ -22,10 +26,36 @@ import { randomUUID } from 'node:crypto';
 export const SAMPLE_RATE = 24000;   // PCM s16le mono, the only format Vidu takes
 export const FRAME_BYTES = 4800;    // 100 ms of it
 
-export function viduConfig({ key = process.env.VIDU_API_KEY, host = process.env.VIDU_HOST } = {}) {
+export const VIDU_DEFAULT_MODEL = 'vidu-s1';
+const MODEL = /^vidu-[a-z0-9][a-z0-9.-]{0,30}$/;
+
+export function viduConfig({ key = process.env.VIDU_API_KEY, host = process.env.VIDU_HOST, model = process.env.VIDU_MODEL, idleMotion = process.env.VIDU_IDLE_MOTION } = {}) {
   key = String(key || '').trim();
   if (!key) return null;
-  return { host: String(host || '').trim() || 'api.vidu.com', key };
+  return { host: String(host || '').trim() || 'api.vidu.com', key, model: sessionModel(model), idleMotion: idleMotionFrom(idleMotion) };
+}
+
+const warned = new Set();
+const warnOnce = (what) => { if (!warned.has(what)) console.warn(`[vidu] ${what}: using the default`); warned.add(what); };
+
+function sessionModel(value) {
+  const m = String(value || '').trim().toLowerCase();
+  if (!m) return VIDU_DEFAULT_MODEL;
+  if (MODEL.test(m)) return m;
+  warnOnce('VIDU_MODEL is not a Vidu model name');
+  return VIDU_DEFAULT_MODEL;
+}
+
+// VIDU_IDLE_MOTION → the object, or IDLE_MOTION when unset or invalid.
+function idleMotionFrom(value) {
+  const v = String(value || '').trim();
+  if (!v) return IDLE_MOTION;
+  try {
+    const o = JSON.parse(v);
+    if (o && typeof o === 'object' && !Array.isArray(o) && typeof o.enabled === 'boolean') return o;
+  } catch { /* falls to the warning */ }
+  warnOnce('VIDU_IDLE_MOTION is not a JSON object with "enabled"');
+  return IDLE_MOTION;
 }
 
 // Ids are int64: a big number loses precision in JSON.parse, so it is quoted first.
@@ -87,10 +117,10 @@ const IDLE_MOTION = {
 
 // → {id, rtc: {provider, appId, channel, uid, token}}. photoGone: the photo no
 // longer exists at Vidu (it has to be registered again).
-export async function createSession(vidu, { avatarId, model = 'vidu-s1' }) {
+export async function createSession(vidu, { avatarId, model = vidu.model || VIDU_DEFAULT_MODEL }) {
   let d;
   try {
-    d = parse(await call(vidu, 'POST', '/live/s_avatar/component', { model, avatar_id: avatarId, managed_rtc: { provider: 'agora' }, idle_motion: IDLE_MOTION }));
+    d = parse(await call(vidu, 'POST', '/live/s_avatar/component', { model, avatar_id: avatarId, managed_rtc: { provider: 'agora' }, idle_motion: vidu.idleMotion || IDLE_MOTION }));
   } catch (e) {
     e.photoGone = e.status === 404 && /avatar_id/.test(e.body || '');
     throw e;

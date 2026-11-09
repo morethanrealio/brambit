@@ -188,7 +188,8 @@ is enough:
 Either way, image generation and reading scanned PDFs use Gemini: without
 `GEMINI_API_KEY` those two are off. Voice messages (speech and transcription) use
 Gemini or OpenAI, whichever key is set (`BRAMBIT_AUDIO_PROVIDER` picks one when
-both are). Everything else (WhatsApp, Slack,
+both are); `BRAMBIT_SPEECH_PROVIDER=elevenlabs` hands the speaking alone to
+ElevenLabs, with the account's voices. Everything else (WhatsApp, Slack,
 connectors, email) switches itself off while its settings in `.env` are empty; each
 block is explained in [.env.example](.env.example).
 

@@ -1166,7 +1166,7 @@ import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
-import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
+import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, readAudioUpload, audioForUse, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
 import { generateDocument, SUPPORTED_FORMATS, extractDocumentText } from './docgen.mjs';
 import { moderateVideoPrompt } from './videomod.mjs';
@@ -6790,6 +6790,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
 
 // Channel error notice (channel-notice.mjs): person's language + the channel's thread history.
 // Channel STT: transcribes the audio and logs the cost (kind='stt'); switch off = STT_DISABLED (the channel notifies).
+const AUDIO_UPLOAD_ERRORS = { missing: 'server.send_audio_file', unreadable: 'server.could_not_read_audio', too_large: 'server.audio_too_large' };
 const transcreverDoCanal = async (buffer, mime, userId) => {
   if (!(await getUserMediaPrefs(userId)).stt) throw new Error('STT_DISABLED');
   const { text, usage } = await transcribeAudio(buffer, mime, { language: (await getUserLocale(userId).catch(() => null))?.language });
@@ -10493,19 +10494,12 @@ async function atenderRequest(req, res) {
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
     const prefs = await getUserMediaPrefs(user.id);
     if (!prefs.stt) return send(res, 400, { error: 'server.audio_transcription_off_in_settings' });
-    const body = await readBody(req);
-    const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
-    let buffer;
-    try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
-    if (buffer.length > 20 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
-    // Normalizes to WAV 16k mono; if ffmpeg fails, sends the original anyway.
-    let outBuf = await audioToWav(buffer);
-    let mime = 'audio/wav';
-    if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; }
+    const up = readAudioUpload((await readBody(req))?.audio, { max: 20 * 1024 * 1024 });
+    if (!up.buffer) return send(res, up.status, { error: AUDIO_UPLOAD_ERRORS[up.reason] });
+    // WAV 16k mono; if ffmpeg fails, sends the original anyway.
+    const audio = await audioForUse(up);
     try {
-      const { text, usage } = await transcribeAudio(outBuf, mime, { language: (await getUserLocale(user.id).catch(() => null))?.language });
+      const { text, usage } = await transcribeAudio(audio.buffer, audio.mime, { language: (await getUserLocale(user.id).catch(() => null))?.language });
       await recordUsages([usage], { userId: user.id, turnId: randomUUID(), kind: 'stt' });
       return send(res, 200, { text: String(text || '') });
     } catch (e) { return fail(res, 500, 'server.failed_transcribe_audio', e); }
@@ -11441,18 +11435,11 @@ async function atenderRequest(req, res) {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
     if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
-    const body = await readBody(req);
-    const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
-    let buffer;
-    try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
-    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
-    // Normalizes to WAV 16k mono (universal format for the worker). If ffmpeg
-    // fails, stores the original anyway (the worker tries to decode it).
-    let outBuf = await audioToWav(buffer);
-    let mime = 'audio/wav', ext = 'wav';
-    if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; ext = (mime.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm'; }
+    const up = readAudioUpload((await readBody(req))?.audio, { max: 12 * 1024 * 1024 });
+    if (!up.buffer) return send(res, up.status, { error: AUDIO_UPLOAD_ERRORS[up.reason] });
+    // WAV 16k mono (universal format for the worker). If ffmpeg fails, stores
+    // the original anyway (the worker tries to decode it).
+    const { buffer: outBuf, mime, ext } = await audioForUse(up);
     try {
       const { key } = await putMedia(user.id, outBuf, ext, mime);
       if (!key) return send(res, 503, { error: 'server.storage_not_active' });
@@ -11481,16 +11468,9 @@ async function atenderRequest(req, res) {
     const user = await currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
     if (!s3Enabled()) return send(res, 503, { error: 'server.storage_not_active' });
-    const body = await readBody(req);
-    const raw = body?.audio;
-    if (!raw || typeof raw.data !== 'string') return send(res, 400, { error: 'server.send_audio_file' });
-    let buffer;
-    try { buffer = Buffer.from(raw.data, 'base64'); } catch { buffer = null; }
-    if (!buffer || !buffer.length) return send(res, 400, { error: 'server.could_not_read_audio' });
-    if (buffer.length > 12 * 1024 * 1024) return send(res, 413, { error: 'server.audio_too_large' });
-    let outBuf = await audioToWav(buffer);
-    let mime = 'audio/wav', ext = 'wav';
-    if (!outBuf) { outBuf = buffer; mime = /^audio\//i.test(raw.mimeType) ? raw.mimeType : 'audio/webm'; ext = (mime.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm'; }
+    const up = readAudioUpload((await readBody(req))?.audio, { max: 12 * 1024 * 1024 });
+    if (!up.buffer) return send(res, up.status, { error: AUDIO_UPLOAD_ERRORS[up.reason] });
+    const { buffer: outBuf, mime, ext } = await audioForUse(up);
     try {
       const { key } = await putMedia(user.id, outBuf, ext, mime);
       if (!key) return send(res, 503, { error: 'server.storage_not_active' });
