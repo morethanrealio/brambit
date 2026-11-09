@@ -1165,6 +1165,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
+import { createSheetLibrary, sheetForReading } from './sheet-library.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
@@ -5771,15 +5772,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         },
       },
       run: async ({ id } = {}) => {
-        let asset;
+        let asset, nota = '';
         if (id != null) asset = await getMediaAsset(userId, id);
-        else {
-          const rows = await listMediaAssets(userId, { limit: 20 });
-          asset = rows.find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
-        }
+        else asset = (await listMediaAssets(userId, { limit: 20 })).find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
         if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
+        ({ asset, nota } = await sheetForReading(userId, asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));
         const bytes = await fetchMedia(asset.s3_key);
         if (!bytes || !bytes.buffer) return 'ERRO: não consegui recuperar os bytes do arquivo.';
         const name = asset.caption || `arquivo-${asset.id}`;
@@ -5791,7 +5790,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (tipo) {
           const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo });
           if (!lr.ok) console.error('[ler_arquivo] planilha:', lr.error);
-          return lr.note;
+          return nota + lr.note;
         }
         let text = '';
         try {

@@ -50,7 +50,7 @@ export function hasCutMarker(s) {
 const MAX_TENTATIVAS = 2;
 
 const SHEET_EXT_RE = /\.(xlsx|xlsm)$/i;
-const SHEET_MIMES = new Set([
+export const SHEET_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel.sheet.macroenabled.12',
 ]);
@@ -66,13 +66,16 @@ export function isSheetAsset(a) {
 // `base_yyyymmddhhmmss.ext` (versionedCaption) or `base_v<id>.ext` on the dateless
 // fallback. Stripping those trailing stamps (even repeated, from doubly-stamped files
 // the old bug produced) groups every version of the same spreadsheet under one family.
+// The `_v` fallback only matches what versionedCaption writes (an asset uuid or
+// "antiga"), so a user's own "orcamento_v2" and "orcamento_v3" stay two spreadsheets.
+const VERSION_STAMP_RE = /_(?:\d{14}|v(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|antiga))$/i;
 export function baseFamily(caption) {
   const raw = String(caption || 'planilha.xlsx');
   const m = raw.match(SHEET_EXT_RE);
   const ext = m ? m[0] : '';
   let base = ext ? raw.slice(0, -ext.length) : raw;
   let prev;
-  do { prev = base; base = base.replace(/_(?:\d{14}|v[A-Za-z0-9-]+)$/, ''); } while (base !== prev);
+  do { prev = base; base = base.replace(VERSION_STAMP_RE, ''); } while (base !== prev);
   return (base + ext).toLowerCase();
 }
 

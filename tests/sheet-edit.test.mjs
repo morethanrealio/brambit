@@ -48,7 +48,9 @@ t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', m
 // (an archived one is `base_yyyymmddhhmmss.ext`). baseFamily groups them.
 t('family strips the version stamp', baseFamily('Fontes_20260909170405.xlsx') === 'fontes.xlsx');
 t('family strips a doubly-stamped name', baseFamily('Fontes_20260909170405_20261101120000.xlsx') === 'fontes.xlsx');
-t('family strips the dateless _v fallback', baseFamily('a_v7.xlsx') === 'a.xlsx');
+t('family strips the dateless _v fallback', baseFamily('a_v0b1c2d3e-0000-4000-8000-123456789abc.xlsx') === 'a.xlsx');
+t('family strips the _vantiga fallback', baseFamily('a_vantiga.xlsx') === 'a.xlsx');
+t('family keeps a user _v2 suffix', baseFamily('Orcamento_v2.xlsx') === 'orcamento_v2.xlsx' && baseFamily('Orcamento_v3.xlsx') !== baseFamily('Orcamento_v2.xlsx'));
 t('family keeps a non-stamp suffix', baseFamily('Report_final.xlsx') === 'report_final.xlsx');
 t('canonical caption is its own family', baseFamily('Fontes.xlsx') === 'fontes.xlsx');
 {
