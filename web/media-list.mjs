@@ -119,3 +119,35 @@ export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset
     },
   };
 }
+
+// ── A file by name, for ler_arquivo, editar_planilha and analisar_planilha ──
+// Users and routines name the file ("a planilha de gastos"), and the model used to
+// take the most recent file or invent an id. `accept` keeps only the kinds the
+// tool opens; a spreadsheet counts once, as its current version. More than one
+// match is a question for the user, never a guess.
+const NAME_CHOICES_MAX = 8;
+export const isDocumentAsset = (a) => !/^(image|audio)/.test(String(a?.mime || '')) && !/image|audio/.test(String(a?.kind || ''));
+const stem = (s) => normalize(s).replace(/\.[a-z0-9]{2,5}$/, '');
+
+export async function findByName(userId, nome, { searchMedia, listSheets, accept = () => true }) {
+  const termo = String(nome || '').trim();
+  const hits = (await searchMedia(userId, termo)).filter(accept);
+  if (!hits.length) return { notFound: true, reply: `Não achei na biblioteca nenhum arquivo desse tipo com "${termo}" no nome. Use listar_midia com busca para ver os nomes que existem, e não chute um id.` };
+  let sheets = [];
+  if (hits.some(isSheetAsset)) {
+    try { sheets = await listSheets(userId); }
+    catch (e) { console.error('[arquivo por nome] planilhas:', e?.message ?? e); }
+  }
+  const byKey = new Map();
+  for (const h of hits) {
+    const atual = isSheetAsset(h) ? currentVersion(h, [...sheets, ...hits]) : h;
+    const key = isSheetAsset(h) ? 'sheet:' + baseFamily(atual.caption) : 'id:' + h.id;
+    if (!byKey.has(key)) byKey.set(key, atual);
+  }
+  const found = [...byKey.values()];
+  if (found.length === 1) return { asset: found[0] };
+  const exact = found.filter((a) => stem(baseFamily(a.caption)) === stem(termo));
+  if (exact.length === 1) return { asset: exact[0] };
+  const nomes = found.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
+  return { reply: `Achei ${found.length} arquivos com "${termo}" no nome: ${nomes}. Nada foi aberto nem alterado. Pergunte ao usuário qual deles, citando os nomes, e chame de novo com o id escolhido. Não escolha sozinho.` };
+}

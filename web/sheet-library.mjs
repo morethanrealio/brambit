@@ -69,3 +69,13 @@ export async function sheetForReading(userId, asset, { listSheets, timeZone } = 
     nota: `O id ${asset.id} é de uma versão antiga ("${asset.caption}"). Abri a versão atual da mesma planilha: id=${atual.id}, "${atual.caption}", de ${quando}. Use este id daqui pra frente.\n`,
   };
 }
+
+// For analisar_planilha with a name: opens that library spreadsheet in the
+// analysis environment. { sheet } with the loaded entry, or { note } for the model.
+export async function openForAnalysis(userId, asset, { fetchBytes, load }) {
+  let bytes = null;
+  try { bytes = await fetchBytes(asset.s3_key); } catch (e) { console.error('[analisar_planilha] bytes:', e?.message ?? e); }
+  if (!bytes?.buffer) return { note: `ERRO: não consegui recuperar os bytes de "${asset.caption}".` };
+  const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
+  return lr.ok ? { sheet: lr } : { note: lr.note };
+}

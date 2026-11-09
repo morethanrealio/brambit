@@ -3,7 +3,8 @@
 // Run with: node --test tests/media-list.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMediaList, formatVersions, mediaListTool, createMediaSearch } from '../web/media-list.mjs';
+import { formatMediaList, formatVersions, mediaListTool, createMediaSearch, findByName, isDocumentAsset } from '../web/media-list.mjs';
+import { isSheetAsset } from '../web/sheet-edit.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const a = (id, caption, created_at, mime = XLSX, kind = 'document') => ({ id, caption, created_at, mime, kind, source: 'generated', s3_key: `k/${id}` });
@@ -51,4 +52,23 @@ test('busca matches without accents or wildcards from the term', async () => {
   assert.equal(params[0], 'u1');
   assert.equal(params[3], '%orcamento 100\\%\\_%');
   assert.equal(params[1].length, params[2].length);
+});
+
+const viagem = a('66666666-6666-4666-8666-666666666666', 'Gastos Viagem.xlsx', '2026-11-01T09:00:00Z');
+const contrato = a('77777777-7777-4777-8777-777777777777', 'Contrato de Gastos.pdf', '2026-11-02T09:00:00Z', 'application/pdf');
+const byName = (nome, hits, accept) => findByName('u1', nome, { searchMedia: async () => hits, listSheets: async () => [...sheets, viagem], accept });
+
+test('a name opens the current version of the one spreadsheet it matches', async () => {
+  assert.equal((await byName('gastos', [v2, v1], isSheetAsset)).asset.id, v3.id);
+});
+
+test('a name that matches two files is a question with their names, not a guess', async () => {
+  const r = await byName('gast', [v3, viagem, contrato, v1], isDocumentAsset);
+  assert.equal(r.asset, undefined);
+  for (const c of ['"Gastos.xlsx"', '"Gastos Viagem.xlsx"', '"Contrato de Gastos.pdf"']) assert.equal(r.reply.split(c).length, 2);
+});
+
+test('the exact name wins over names that only contain it; no match says so', async () => {
+  assert.equal((await byName('Gastos.xlsx', [v3, viagem], isSheetAsset)).asset.id, v3.id);
+  assert.equal((await byName('gastos', [foto], isDocumentAsset)).notFound, true);
 });
