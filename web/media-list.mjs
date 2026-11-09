@@ -151,3 +151,23 @@ export async function findByName(userId, nome, { searchMedia, listSheets, accept
   const nomes = found.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
   return { reply: `Found ${found.length} files with "${termo}" in their name: ${nomes}. Nothing was opened or changed. Ask the user which one, citing the names, and call again with the chosen id. Do not pick one yourself.` };
 }
+
+const isReadableDocument = (a) => a.kind === 'document' || /pdf|word|officedocument|text|markdown|html/.test(a.mime || '');
+
+// ler_arquivo without id and nome. Opening the newest document instead read the
+// wrong file (a routine that wanted one spreadsheet got another, 2026-10), so it
+// opens only when the library has a single document (a spreadsheet's versions count
+// once); with several, the model gets their names to choose from.
+export async function onlyDocument(userId, { listMediaAssets }) {
+  const rows = await listMediaAssets(userId, { limit: SCAN_MAX });
+  const byKey = new Map();
+  for (const a of rows.filter(isReadableDocument)) {
+    const key = isSheetAsset(a) ? 'sheet:' + familyKey(a) : 'id:' + a.id;
+    if (!byKey.has(key)) byKey.set(key, a);
+  }
+  const docs = [...byKey.values()];
+  if (!docs.length) return { reply: 'ERROR: there is no document in the user\'s library. Nothing was opened.' };
+  if (docs.length === 1 && rows.length < SCAN_MAX) return { asset: docs[0] };
+  const nomes = docs.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
+  return { reply: `No id or nome was given and the library has more than one document. The newest: ${nomes}. Nothing was opened. Call again with the nome or id of the one the user means; if the request does not make it clear, ask them, citing the names. Do not pick one yourself.` };
+}

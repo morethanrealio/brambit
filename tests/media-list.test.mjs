@@ -3,7 +3,7 @@
 // Run with: node --test tests/media-list.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMediaList, formatVersions, mediaListTool, createMediaSearch, findByName, isDocumentAsset } from '../web/media-list.mjs';
+import { formatMediaList, formatVersions, mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from '../web/media-list.mjs';
 import { isSheetAsset } from '../web/sheet-edit.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -83,4 +83,15 @@ test('two files sent with the same name are two lines, and asking by name is a q
   const r = await findByName('u1', 'fatura', { searchMedia: async () => [outubro, marco], listSheets: async () => [outubro, marco] });
   assert.equal(r.asset, undefined);
   assert.match(r.reply, /Found 2 files/);
+});
+
+test('without id and nome, only a library with a single document opens it', async () => {
+  const lister = (list) => ({ listMediaAssets: async () => list });
+  // Versions of one spreadsheet and a photo: one document, its current version.
+  assert.equal((await onlyDocument('u1', lister([foto, v3, v2, v1]))).asset.id, v3.id);
+  // Two spreadsheets: nothing opens, the newest names come back to choose from.
+  const many = await onlyDocument('u1', lister(rows));
+  assert.equal(many.asset, undefined);
+  assert.ok(many.reply.includes(todo.id) && many.reply.includes(v3.id) && !many.reply.includes(v1.id));
+  assert.match((await onlyDocument('u1', lister([foto]))).reply, /no document/);
 });

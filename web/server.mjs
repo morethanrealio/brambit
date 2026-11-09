@@ -1166,7 +1166,7 @@ import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
 import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
-import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from './media-list.mjs';
+import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
 import { createSheetSync } from './sheet-sync.mjs';
@@ -5730,11 +5730,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // STORED zip, so the text comes out without a zip lib). Closes the "I can't open the file".
     registry.add({
       name: 'ler_arquivo',
-      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia or by its name (nome). Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id and nome, reads the most recent document in the library.',
+      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia or by its name (nome). Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id and nome, it opens the library\'s document only when there is just one; otherwise it returns the names to choose from.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to read the most recent document.' },
+          id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it (and nome) only when the library has a single document.' },
           nome: { type: 'string', description: 'Optional, instead of id: the file name as the user says it (e.g. "Controle Financeiro"). A spreadsheet opens in its current version; if more than one file matches, you get their names to ask the user.' },
         },
       },
@@ -5742,7 +5742,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         let asset, nota = '';
         if (id != null) asset = await getMediaAsset(userId, id);
         else if (nome) { const found = await byName(nome, isDocumentAsset); if (found.reply) return found.reply; asset = found.asset; }
-        else asset = (await listMediaAssets(userId, { limit: 20 })).find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
+        else { const only = await onlyDocument(userId, { listMediaAssets }); if (only.reply) return only.reply; asset = only.asset; }
         if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
