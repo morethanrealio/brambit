@@ -140,6 +140,8 @@ test('the face says the chat\'s newest assistant reply once, without links or Ma
   assert.ok(calls.includes('bill u1 tts'), 'the speech is billed to the owner');
   assert.equal(audio(), 9600);
   assert.equal(calls.at(-1), 'rest', 'when the speech ends the face goes back to its rest pose');
+  await tick(3000);
+  assert.equal(calls.filter((c) => c === 'rest').length, 3, 'and is asked again while the video catches up');
 });
 
 test('a reply becomes plain sentences, made into speech in short pieces', () => {

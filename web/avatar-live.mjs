@@ -169,7 +169,16 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
       playsUntil = await sendPaced(toFrames(pcm), (frame) => s.stream.audio(frame), { signal, startAt: playsUntil, now });
     }
     await wait(playsUntil - now(), signal);
-    if (!signal.aborted) s.stream.rest();
+    if (signal.aborted) return;
+    // The face's video runs behind the audio sent, so the rest pose is asked
+    // again a little later, unless another speech has started.
+    s.stream.rest();
+    const again = (left) => arm(s, 'rest', 1500, () => {
+      if (s.current) return;
+      s.stream?.rest();
+      if (left > 1) again(left - 1);
+    });
+    again(2);
   }
 
   const live = {
