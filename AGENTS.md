@@ -50,15 +50,29 @@ cites a cloud file listed in `cloud.txt`.
 
 ## Library spreadsheets
 
-A spreadsheet in the user's library is a family of versions grouped by name
-(`baseFamily` in `web/sheet-edit.mjs`); the current one is the newest. A family
-may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
-`migrations/2026-11-09-sheet-google-links.sql`): `sheetSync.sync`
+A spreadsheet in the user's library is a family of versions; the current one is
+the newest. The family is `familyKey` in `web/sheet-edit.mjs`: by name
+(`baseFamily`) for files this code wrote (generated, edited, synced, or archived
+with a stamp), but an upload, attachment or runner file stands alone (by id), so
+a "fatura.xlsx" sent every month is not one spreadsheet with versions. An older
+version is read with `analisar_planilha versao_id` (`openVersionForAnalysis` in
+`web/sheet-library.mjs`), which never syncs it nor keeps it loaded. Uploads whose
+bytes are not a zip (`opensAsSheet`) are left out of the automatic choices.
+`ler_arquivo` with neither id nor name opens a file only when the library has a
+single document (`onlyDocument` in `web/media-list.mjs`); otherwise it asks.
+
+A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
+`migrations/2026-11-09-sheet-google-links.sql`), found by family or by the id of
+any of its versions, so a rename keeps the link. `sheetSync.sync`
 (`web/sheet-sync.mjs`) runs before every read, analysis and edit and after every
 change, so a new path that reads or writes a library spreadsheet goes through it.
-Changes on both sides are merged by `web/sheet-merge.mjs` in the sandbox; a cell
-changed on both sides keeps the Google Sheets value. Its real test needs a local
-Python with openpyxl (`SHEET_PY`) and is skipped without one.
+A copy loaded in the sandbox is matched to the library by `assetId`, never by its
+sandbox file name. Changes on both sides are merged by `web/sheet-merge.mjs` in
+the sandbox, columns matched before rows; a cell changed on both sides keeps the
+Google Sheets value, and when the last version in common is gone Google Sheets
+wins and the local one stays as an older version. An `.xlsm` (macros) is never
+linked nor synced. The merge's real test needs a local Python with openpyxl
+(`SHEET_PY`) and is skipped without one.
 
 ## Checks CI runs on every pull request
 
