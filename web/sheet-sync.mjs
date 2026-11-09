@@ -114,7 +114,18 @@ export function createSheetSync(deps) {
       if (googleMoved) {
         const baseAsset = link.base_asset_id ? await deps.getAsset(userId, link.base_asset_id) : null;
         base = baseAsset ? await bytesOf(baseAsset) : null;
-        if (!base) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and the last synced version is gone, so they could not be merged') };
+        // Without the common version there is nothing to merge against. Google Sheets
+        // wins, as it does for a cell changed on both sides; the version from here
+        // stays in the library as an older version, so nothing is lost.
+        if (!base && !sameCells(ours, theirs)) {
+          const pulled = await saveVersion(asset, theirs);
+          await links.synced(userId, family, { version: remote.version, baseAssetId: pulled.id });
+          return { asset: pulled, newVersion: true, note: `"${caption}" changed both here and in Google Sheets, and the last version they had in common is gone, so the two could not be merged. The Google Sheets content is now the current version in the library (id=${pulled.id}); the one from here is kept as an older version (id=${asset.id}). Tell the user both, and that nothing was lost. Use the new id from now on.\n` };
+        }
+        if (!base) {
+          await links.synced(userId, family, { version: remote.version, baseAssetId: asset.id });
+          return { asset, note: '' };
+        }
       }
       if (googleMoved && !sameCells(base, theirs)) {
         if (!deps.merge) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and merging needs the analysis environment, which is off') };

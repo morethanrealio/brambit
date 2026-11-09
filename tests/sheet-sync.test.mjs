@@ -149,10 +149,20 @@ test('changed on both sides without a way to merge: nothing is overwritten on ei
     assert.match(r.note, /^NOT synced/);
     assert.equal(s.saved.length + s.pushed.length + s.synced.length, 0);
   }
+});
+
+test('changed on both sides with the common version gone: Google Sheets wins and the version from here is kept', async () => {
   const { s, sync, cur } = await bothChanged({ merge: async () => assert.fail('no merge without base') });
   s.lib = s.lib.filter((a) => a.id !== 'a0');
-  assert.match((await sync.sync(cur)).note, /last synced version is gone/);
+  const r = await sync.sync(cur);
+  assert.notEqual(r.asset.id, cur.id);
+  assert.equal(r.newVersion, true);
   assert.equal(s.pushed.length, 0);
+  assert.deepEqual(s.synced, [{ fam: 'gastos.xlsx', version: 5, baseAssetId: r.asset.id }]);
+  assert.equal(s.renamed[0][0], cur.id, 'the version from here is archived, not deleted');
+  assert.ok(r.note.includes(r.asset.id) && r.note.includes(cur.id));
+  // A second read finds both sides equal and does nothing more.
+  assert.equal((await sync.sync(r.asset)).note, '');
 });
 
 test('a Sheets bump with no cell change while the library changed: just sent, no merge', async () => {
