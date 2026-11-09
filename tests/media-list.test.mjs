@@ -72,3 +72,15 @@ test('the exact name wins over names that only contain it; no match says so', as
   assert.equal((await byName('Gastos.xlsx', [v3, viagem], isSheetAsset)).asset.id, v3.id);
   assert.equal((await byName('gastos', [foto], isDocumentAsset)).notFound, true);
 });
+
+test('two files sent with the same name are two lines, and asking by name is a question', async () => {
+  const up = (id, created_at) => ({ ...a(id, 'fatura.xlsx', created_at), source: 'upload' });
+  const marco = up('66666666-6666-4666-8666-666666666666', '2026-03-05T10:00:00Z');
+  const outubro = up('77777777-7777-4777-8777-777777777777', '2026-10-05T10:00:00Z');
+  const out = formatMediaList([outubro, marco], { sheets: [outubro, marco], timeZone: 'UTC' });
+  assert.equal(out.length, 2);
+  assert.ok(out.every((l) => !/kept versions/.test(l)));
+  const r = await findByName('u1', 'fatura', { searchMedia: async () => [outubro, marco], listSheets: async () => [outubro, marco] });
+  assert.equal(r.asset, undefined);
+  assert.match(r.reply, /Found 2 files/);
+});

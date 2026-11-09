@@ -79,6 +79,27 @@ export function baseFamily(caption) {
   return (base + ext).toLowerCase();
 }
 
+// Which spreadsheet an asset is, for grouping versions. A name is only evidence of
+// "same spreadsheet" for what this code wrote: a file it generated (gerar_documento,
+// an edit, a sync) or a version it archived with a stamp. A file that came from
+// outside (upload, email attachment, runner) with the same name is a different
+// file until it is edited here: a "fatura.xlsx" sent every month must not turn the
+// March one into an old version of October's. Rows without a source are older
+// than the column and were all generated.
+export function familyKey(asset) {
+  const fam = baseFamily(asset?.caption);
+  const source = asset?.source;
+  if (source == null || source === 'generated' || isArchivedCaption(asset?.caption)) return fam;
+  return `${fam}#${asset.id}`;
+}
+
+// true for a caption this code archived (`base_yyyymmddhhmmss.ext` or `base_v<id>.ext`).
+export function isArchivedCaption(caption) {
+  const raw = String(caption || '');
+  const m = raw.match(SHEET_EXT_RE);
+  return VERSION_STAMP_RE.test(m ? raw.slice(0, -m[0].length) : raw);
+}
+
 // Picks WHICH asset to edit. Without an explicit id, the newest spreadsheet:
 // older ones are version history (decided 09/09/2026).
 // `assets` comes from listMediaAssets, already ordered by created_at DESC.
@@ -94,8 +115,8 @@ export function pickSheetAsset(assets, { id = null } = {}) {
     // family — never an already-archived copy, which would edit stale content and
     // promote it over the real current version (data loss). `sheets` is ordered
     // created_at DESC, so the first family match is the current version.
-    const fam = baseFamily(found.caption);
-    return { asset: sheets.find((a) => baseFamily(a.caption) === fam) || found };
+    const fam = familyKey(found);
+    return { asset: sheets.find((a) => familyKey(a) === fam) || found };
   }
   const found = sheets[0];
   if (!found) return { error: 'Não achei nenhuma planilha na biblioteca deste usuário. Gere a planilha primeiro (gerar_documento com formato xlsx) e depois edite.' };

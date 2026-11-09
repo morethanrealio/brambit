@@ -12,7 +12,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, baseFamily } from './sheet-edit.mjs';
+import { isSheetAsset, familyKey } from './sheet-edit.mjs';
 import { currentVersion } from './sheet-library.mjs';
 
 const SHARE_ROLES = { editar: 'writer', ler: 'reader' };
@@ -29,7 +29,7 @@ export function driveCopyTool(deps) {
   const sheetsFor = async () => { try { return await deps.listSheets(userId); } catch { return []; } };
 
   async function toGoogleSheets(asset, { compartilhar }) {
-    const family = baseFamily(asset.caption);
+    const family = familyKey(asset);
     const role = SHARE_ROLES[compartilhar] || null;
     let linked = await deps.links.get(userId, family);
     if (linked) {

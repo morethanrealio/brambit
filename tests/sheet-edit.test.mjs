@@ -41,6 +41,15 @@ t('non-spreadsheet id errors', !!pickSheetAsset(assets, { id: 8 }).error);
 t('library without spreadsheet errors', !!pickSheetAsset([assets[1]]).error);
 t('empty list errors', !!pickSheetAsset([]).error && !!pickSheetAsset(null).error);
 t('detects spreadsheet by extension without mime', isSheetAsset({ caption: 'x.xlsx' }));
+{
+  // A file sent from outside is a spreadsheet of its own: its id edits it, not a
+  // newer upload or generated file that happens to have the same name.
+  const up = [
+    { id: 31, caption: 'fatura.xlsx', mime: XLSX_MIME, source: 'upload', s3_key: 'u/31', created_at: '2026-10-05T10:00:00Z' },
+    { id: 30, caption: 'fatura.xlsx', mime: XLSX_MIME, source: 'upload', s3_key: 'u/30', created_at: '2026-03-05T10:00:00Z' },
+  ];
+  t('id of an older upload with the same name edits that upload', pickSheetAsset(up, { id: 30 }).asset.id === 30);
+}
 t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
 
 // ── 2b) Version family: an id must resolve to the CURRENT version, not an archived copy ──

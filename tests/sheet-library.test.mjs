@@ -75,3 +75,21 @@ test('with nothing loaded, the only spreadsheet opens; several become a question
   assert.ok(many.note.includes('"To-Do.xlsx"') && many.note.includes('"Gastos.xlsx"') && !many.note.includes('Gastos_2026'));
   assert.deepEqual(await autoLoadSheet('u1', { ...deps, listSheets: async () => [] }), {});
 });
+
+test('a file sent from outside with the same name is its own spreadsheet until edited here', async () => {
+  const up = (id, caption, created_at) => ({ ...a(id, caption, created_at), source: 'upload' });
+  const marco = up('66666666-6666-4666-8666-666666666666', 'fatura.xlsx', '2026-03-05T10:00:00Z');
+  const outubro = up('77777777-7777-4777-8777-777777777777', 'fatura.xlsx', '2026-10-05T10:00:00Z');
+  const sheets = [outubro, marco];
+  // Opening March's opens March's.
+  assert.equal(currentVersion(marco, sheets).id, marco.id);
+  assert.deepEqual(await sheetForReading('u1', marco, { listSheets: async () => sheets }), { asset: marco, nota: '' });
+  // An edited upload is archived with a stamp: from then on it is a version of the generated one.
+  const archived = { ...marco, caption: 'fatura_20260305100000.xlsx' };
+  const edited = { ...a('88888888-8888-4888-8888-888888888888', 'fatura.xlsx', '2026-03-06T10:00:00Z'), source: 'generated' };
+  assert.equal(currentVersion(archived, [outubro, edited, archived]).id, edited.id);
+  assert.equal(currentVersion(outubro, [outubro, edited, archived]).id, outubro.id);
+  // With nothing loaded, the two are two choices, not one spreadsheet.
+  const many = await autoLoadSheet('u1', { listSheets: async () => sheets, fetchBytes: async () => ({ buffer: Buffer.from('PK') }), load: async () => ({ ok: true }) });
+  assert.match(many.note, /library has 2/);
+});

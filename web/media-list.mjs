@@ -10,7 +10,7 @@
 //
 // No db connection/import here: the server injects the queries and tests pass fakes.
 
-import { isSheetAsset, baseFamily } from './sheet-edit.mjs';
+import { isSheetAsset, baseFamily, familyKey } from './sheet-edit.mjs';
 import { currentVersion } from './sheet-library.mjs';
 
 export const LIST_DEFAULT = 20;
@@ -53,8 +53,8 @@ function line(a, timeZone, extra = '') {
 }
 
 const versionsOf = (asset, sheets) => {
-  const fam = baseFamily(asset.caption);
-  return sheets.filter((s) => isSheetAsset(s) && baseFamily(s.caption) === fam);
+  const fam = familyKey(asset);
+  return sheets.filter((s) => isSheetAsset(s) && familyKey(s) === fam);
 };
 
 // One line per item, newest first; a spreadsheet appears once, as its current
@@ -64,7 +64,7 @@ export function formatMediaList(rows, { sheets = [], timeZone, limit = LIST_DEFA
   for (const r of rows) {
     if (out.length >= limit) break;
     if (!isSheetAsset(r)) { out.push(line(r, timeZone)); continue; }
-    const fam = baseFamily(r.caption);
+    const fam = familyKey(r);
     if (seen.has(fam)) continue;
     seen.add(fam);
     const atual = currentVersion(r, all);
@@ -141,7 +141,7 @@ export async function findByName(userId, nome, { searchMedia, listSheets, accept
   const byKey = new Map();
   for (const h of hits) {
     const atual = isSheetAsset(h) ? currentVersion(h, [...sheets, ...hits]) : h;
-    const key = isSheetAsset(h) ? 'sheet:' + baseFamily(atual.caption) : 'id:' + h.id;
+    const key = isSheetAsset(h) ? 'sheet:' + familyKey(atual) : 'id:' + h.id;
     if (!byKey.has(key)) byKey.set(key, atual);
   }
   const found = [...byKey.values()];

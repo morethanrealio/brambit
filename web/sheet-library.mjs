@@ -2,8 +2,9 @@
 //
 // Every edit saves a new asset with the canonical name and renames the previous
 // one to `base_yyyymmddhhmmss.ext` (sheet-edit.mjs, versionedCaption). There is
-// no version-group column, so a spreadsheet's versions are the assets whose
-// captions share a baseFamily, and the CURRENT one is the newest of them.
+// no version-group column, so a spreadsheet's versions are the assets that share a
+// familyKey (the caption's baseFamily; a file from outside stays on its own until
+// it is edited here), and the CURRENT one is the newest of them.
 //
 // An id names one immutable asset. The model takes ids from listar_midia and
 // from its own history, so it often holds the id of a version that has since
@@ -12,7 +13,7 @@
 //
 // No db connection/import here: the server injects the pool and tests pass a fake.
 
-import { isSheetAsset, baseFamily, SHEET_MIMES } from './sheet-edit.mjs';
+import { isSheetAsset, baseFamily, familyKey, SHEET_MIMES } from './sheet-edit.mjs';
 
 // How many spreadsheet assets of one user are scanned to find a family's
 // current version. The edit path looks at the newest 40 assets of any kind;
@@ -45,10 +46,10 @@ const ts = (a) => {
 // a spreadsheet or nothing newer shares its family. `assets` may be in any order.
 export function currentVersion(asset, assets) {
   if (!isSheetAsset(asset)) return asset;
-  const fam = baseFamily(asset.caption);
+  const fam = familyKey(asset);
   let best = asset;
   for (const a of Array.isArray(assets) ? assets : []) {
-    if (isSheetAsset(a) && baseFamily(a.caption) === fam && ts(a) > ts(best)) best = a;
+    if (isSheetAsset(a) && familyKey(a) === fam && ts(a) > ts(best)) best = a;
   }
   return best;
 }
@@ -108,7 +109,7 @@ export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prep
   let all;
   try { all = await listSheets(userId); }
   catch (e) { console.error('[analisar_planilha] spreadsheets:', e?.message ?? e); return {}; }
-  const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [baseFamily(a.caption), currentVersion(a, all)])).values()];
+  const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [familyKey(a), currentVersion(a, all)])).values()];
   if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load, prepare });
   if (!atuais.length) return {};
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');

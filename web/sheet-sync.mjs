@@ -17,7 +17,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, baseFamily, versionedCaption, withKeyLock } from './sheet-edit.mjs';
+import { isSheetAsset, baseFamily, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
 import { currentVersion, sheetForReading, openForAnalysis } from './sheet-library.mjs';
 import { xlsxToText } from './xlsxread.mjs';
 import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport, replaceSheet as driveReplace } from './sheet-google.mjs';
@@ -68,7 +68,7 @@ export function createSheetSync(deps) {
   // only Sheets changed -> pull; only the library changed -> push; both -> merge, then push.
   async function doSync(asset) {
     if (!isSheetAsset(asset)) return { asset, note: '' };
-    const family = baseFamily(asset.caption);
+    const family = familyKey(asset);
     const link = await links.get(userId, family);
     if (!link) return { asset, note: '' };
     // Inside the lock: an edit that finished while this call waited made a newer version.
