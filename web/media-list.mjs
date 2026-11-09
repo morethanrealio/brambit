@@ -80,7 +80,7 @@ export function formatVersions(asset, sheets, { timeZone } = {}) {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const [atual, ...antigas] = uniq;
   return [
-    `Versions of the spreadsheet "${caption(atual)}", newest first. Use the current version to read and edit; an older version only when the user asks for the earlier content.`,
+    `Versions of the spreadsheet "${caption(atual)}", newest first. Use the current version to read and edit. Only when the user asks what an older version contained: analisar_planilha with versao_id=<its id> reads it as it was, and reenviar_arquivo sends its file.`,
     line(atual, timeZone, ' · CURRENT VERSION'),
     ...antigas.map((v) => line(v, timeZone, ' · older version')),
   ].join('\n');

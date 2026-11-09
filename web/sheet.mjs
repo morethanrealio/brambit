@@ -30,6 +30,10 @@ export function registerLoadedSheet(userId, entry) {
   loaded.set(userId, filtered.slice(-MAX_PER_USER));
 }
 
+export function forgetLoadedSheet(userId, path) {
+  loaded.set(userId, (loaded.get(userId) || []).filter((e) => e.path !== path));
+}
+
 export function getLoadedSheets(userId) {
   const list = prune(loaded.get(userId) || []);
   loaded.set(userId, list);
@@ -240,18 +244,20 @@ function notaTolerante(t) {
 // Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and
 // returns the note that goes to the model, with only the structure. Always returns `note`
 // (even on failure), so the caller isn't tempted to send the text.
+// register:false leaves it out of the loaded list (an older version analyzed once).
 // { ok, path, filename, sheets, rows, abas, note } | { ok:false, error, note }
-export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '' } = {}) {
+export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '', register = true } = {}) {
   const t = tipo || tipoPlanilha(filename, mime) || 'excel';
   const nome = nomeComExtensao(filename, t);
   const falha = (error) => ({ ok: false, error, filename: nome, note: notaPlanilhaIlegivel(nome, error) });
   const g = await gravarPlanilhaNoSandbox(userId, buffer, nome);
   if (!g.ok) return falha(g.error);
   const e = await lerEstrutura(userId, g.path, t);
+  if (!register) forgetLoadedSheet(userId, g.path);
   if (!e.ok) return falha(e.error);
   const sheets = e.abas.length;
   const rows = e.abas.reduce((s, a) => s + (Number(a.linhas) || 0), 0);
-  registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
+  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
     note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.tolerant)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
@@ -271,4 +277,4 @@ export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mim
   }
 }
 
-export default { registerLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
+export default { registerLoadedSheet, forgetLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };

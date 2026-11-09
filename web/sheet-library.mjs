@@ -67,7 +67,7 @@ export async function sheetForReading(userId, asset, { listSheets, timeZone } = 
   const quando = new Date(atual.created_at).toLocaleString('pt-BR', { timeZone, dateStyle: 'short', timeStyle: 'short' });
   return {
     asset: atual,
-    nota: `Id ${asset.id} is an older version ("${asset.caption}"). Opened the current version of the same spreadsheet instead: id=${atual.id}, "${atual.caption}", from ${quando}. Use this id from now on.\n`,
+    nota: `Id ${asset.id} is an older version ("${asset.caption}"). Opened the current version of the same spreadsheet instead: id=${atual.id}, "${atual.caption}", from ${quando}. Use this id from now on. Only if the user asked about what that older version contained, analyze it with analisar_planilha and versao_id=${asset.id}.\n`,
   };
 }
 
@@ -83,6 +83,25 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare
   if (!bytes?.buffer) return { note: `ERROR: could not fetch the bytes of "${asset.caption}".` };
   const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
   return lr.ok ? { sheet: lr, sync } : { note: sync + lr.note };
+}
+
+// analisar_planilha with versao_id: one exact version, for when the user asks what
+// an older version contained (listar_midia versoes_de lists them). An older version
+// is opened as it was: no Google Sheets sync, which would turn it into the current
+// one, and not kept in the loaded list, so a later analysis without a name never
+// takes it for the spreadsheet. The current version's id opens like a name does.
+export async function openVersionForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare, timeZone }) {
+  const asset = await getAsset(userId, String(id).trim());
+  if (!asset) return { note: `ERROR: version ${id} is not in the user's library. Use listar_midia with versoes_de to see the versions.` };
+  if (!isSheetAsset(asset)) return { note: `ERROR: file ${id} ("${asset.caption}") is not an .xlsx spreadsheet.` };
+  let atual = asset;
+  try { atual = currentVersion(asset, await listSheets(userId)); } catch (e) { console.error('[analisar_planilha] versions:', e?.message ?? e); }
+  if (String(atual.id) === String(asset.id)) return openForAnalysis(userId, asset, { fetchBytes, load, prepare });
+  const once = (u, b, name, opts) => load(u, b, name, { ...opts, register: false });
+  const o = await openForAnalysis(userId, asset, { fetchBytes, load: once });
+  if (!o.sheet) return o;
+  const quando = new Date(asset.created_at).toLocaleString('pt-BR', { timeZone, dateStyle: 'short', timeStyle: 'short' });
+  return { ...o, sync: `This analysis is of an OLDER version ("${asset.caption}", from ${quando}), not the current one (id=${atual.id}, "${atual.caption}"). Say so in the reply.\n` };
 }
 
 // Spreadsheets loaded in the analysis environment, one per family. Reading an

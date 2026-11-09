@@ -3,7 +3,7 @@
 // Run with: node --test tests/sheet-library.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet } from '../web/sheet-library.mjs';
+import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis } from '../web/sheet-library.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const a = (id, caption, created_at, mime = XLSX) => ({ id, caption, created_at, mime, s3_key: `k/${id}` });
@@ -92,4 +92,26 @@ test('a file sent from outside with the same name is its own spreadsheet until e
   // With nothing loaded, the two are two choices, not one spreadsheet.
   const many = await autoLoadSheet('u1', { listSheets: async () => sheets, fetchBytes: async () => ({ buffer: Buffer.from('PK') }), load: async () => ({ ok: true }) });
   assert.match(many.note, /library has 2/);
+});
+
+test('versao_id analyzes exactly an older version, without syncing or keeping it loaded', async () => {
+  const calls = [];
+  const deps = {
+    getAsset: async (_u, id) => lib.find((x) => x.id === id) || null,
+    listSheets: async () => lib,
+    fetchBytes: async (key) => ({ buffer: Buffer.from(key) }),
+    load: async (_u, _b, name, opts) => { calls.push({ name, register: opts.register }); return { ok: true, filename: name }; },
+    prepare: async (asset) => { calls.push({ prepare: asset.id }); return { asset, note: '' }; },
+    timeZone: 'America/Sao_Paulo',
+  };
+  const old = await openVersionForAnalysis('u1', v1.id, deps);
+  assert.equal(old.sheet.filename, v1.caption);
+  assert.deepEqual(calls, [{ name: v1.caption, register: false }]);
+  assert.ok(old.sync.includes('OLDER version') && old.sync.includes(v3.id));
+  // The current version's id opens it like a name does: synced and kept loaded.
+  calls.length = 0;
+  const cur = await openVersionForAnalysis('u1', v3.id, deps);
+  assert.equal(cur.sheet.filename, v3.caption);
+  assert.deepEqual(calls, [{ prepare: v3.id }, { name: v3.caption, register: undefined }]);
+  assert.match((await openVersionForAnalysis('u1', 'nope', deps)).note, /not in the user's library/);
 });

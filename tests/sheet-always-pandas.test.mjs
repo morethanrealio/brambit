@@ -89,6 +89,14 @@ test('load spreadsheet: writes to the sandbox, registers it, and the note carrie
   assert.deepEqual(getLoadedSheets('u-estrutura').map((e) => [e.filename, e.sheets, e.rows]), [['Contas_a_Pagar.xlsx', 2, 3]]);
 });
 
+test('an older version analyzed once is loaded but left out of the loaded list', async () => {
+  globalThis.__sb = sondaOk(ABAS);
+  const lr = await loadSpreadsheetIntoSandbox('u-antiga', duasAbas(), 'Contas_20261001120000.xlsx', { register: false });
+  assert.equal(lr.ok, true);
+  assert.equal(lr.path, '/workspace/planilhas/Contas_20261001120000.xlsx');
+  assert.deepEqual(getLoadedSheets('u-antiga'), []);
+});
+
 test('CSV without extension gets .csv in the name and the probe opens it as CSV', async () => {
   const sb = globalThis.__sb = sondaOk([{ nome: '(csv)', linhas: 1, colunas: 2, nomes: ['a', 'b'] }]);
   const lr = await loadSpreadsheetIntoSandbox('u-csv', Buffer.from('a;b\n1;2'), 'export', { mime: 'text/csv' });
