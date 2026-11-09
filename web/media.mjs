@@ -24,7 +24,8 @@ import { awsCredentialsConfigured, currentAwsCredentials, getAwsCredentials } fr
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { costOf } from './pricing.mjs';
-import { audioProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
+import { audioProvider, speechProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
+import { elevenlabsPcm, elevenlabsModel } from './elevenlabs.mjs';
 import { GEMINI_DEFAULT_VOICE } from './tts-voices.mjs';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -38,7 +39,7 @@ const STT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_VOICE = GEMINI_DEFAULT_VOICE;
 
 export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
-export function ttsEnabled() { return !!audioProvider(); }
+export function ttsEnabled() { return !!speechProvider(); }
 export function sttEnabled() { return !!audioProvider(); }
 
 // ROUGH estimate of how much credit each media operation uses.
@@ -57,8 +58,11 @@ export function mediaEstimates(toUnits = (usd) => usd) {
   // Flash, ~270 on OpenAI, which counts ~9 per second).
   const openai = audioProvider() === 'openai';
   const stt = toUnits(costOf(openai ? { model: OPENAI_STT_MODEL, in: 270, out: 40, total: 310 } : { model: STT_MODEL, in: 350, out: 40, total: 390 }));
-  // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS.
-  const tts = toUnits(costOf({ model: openai ? OPENAI_TTS_MODEL : TTS_MODEL, in: 40, out: 600, total: 640 }));
+  // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS; on
+  // ElevenLabs, which bills its text, ~350 characters.
+  const speaker = speechProvider();
+  const tts = toUnits(costOf(speaker === 'elevenlabs' ? { model: elevenlabsModel(), in: 350, out: 0, total: 350 }
+    : { model: speaker === 'openai' ? OPENAI_TTS_MODEL : TTS_MODEL, in: 40, out: 600, total: 640 }));
   return { image, vision, stt, tts };
 }
 
@@ -495,12 +499,13 @@ async function geminiPcmOnce(text, voice) {
 }
 
 export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
-  if (audioProvider() === 'openai') {
+  const speaker = speechProvider();
+  if (speaker === 'openai') {
     const speech = await openaiSpeech(text, voice);
     console.log(`[media tts] in=${speech.usage.in} out=${speech.usage.out} total=${speech.usage.total}`);
     return speech;
   }
-  const { buffer: pcm, rate, usage } = await geminiPcm(text, voice);
+  const { buffer: pcm, rate, usage } = speaker === 'elevenlabs' ? await elevenlabsPcm(text, voice) : await geminiPcm(text, voice);
   const wav = pcmToWav(pcm, rate);
   console.log(`[media tts] in=${usage.in} out=${usage.out} total=${usage.total}`);
   // We prefer OGG/Opus (native voice note on WhatsApp/Telegram); WAV is the fallback.
@@ -514,7 +519,9 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
 
 // Speech as PCM s16le 24 kHz mono, what a live avatar takes (avatar-live.mjs).
 export async function synthesizePcm(text, voice = DEFAULT_VOICE) {
-  const speech = audioProvider() === 'openai' ? await openaiSpeech(text, voice, fetch, { format: 'pcm' }) : await geminiPcm(text, voice);
+  const speaker = speechProvider();
+  const speech = speaker === 'openai' ? await openaiSpeech(text, voice, fetch, { format: 'pcm' })
+    : speaker === 'elevenlabs' ? await elevenlabsPcm(text, voice) : await geminiPcm(text, voice);
   if (speech.rate !== 24000) throw new Error(`speech came at ${speech.rate} Hz, the avatar takes 24000`);
   return { pcm: speech.buffer, usage: speech.usage };
 }

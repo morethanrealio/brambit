@@ -43,6 +43,14 @@ const PRICES = {
   'gpt-4o-mini-transcribe': { in: 1.25, cachedIn: 1.25, out: 5.00 },
   // Voice: text in $0.60/M, audio out $12/M.
   'gpt-4o-mini-tts': { in: 0.60, cachedIn: 0.60, out: 12.00 },
+  // ElevenLabs voice (elevenlabs.mjs) bills its text per character: "in" counts
+  // characters, US$ per 1M (elevenlabs.io/pricing/api, 2026-11-09: v4 Turbo and
+  // Flash/Turbo $0.04 per 1K characters; v3 and Multilingual v2 $0.08).
+  'eleven_v4_turbo':        { in: 40.0, cachedIn: 40.0, out: 0.0 },
+  'eleven_flash_v2_5':      { in: 40.0, cachedIn: 40.0, out: 0.0 },
+  'eleven_turbo_v2_5':      { in: 40.0, cachedIn: 40.0, out: 0.0 },
+  'eleven_v3':              { in: 80.0, cachedIn: 80.0, out: 0.0 },
+  'eleven_multilingual_v2': { in: 80.0, cachedIn: 80.0, out: 0.0 },
   // GPT-4.1 mini: $0,40 in / $1,60 out / cache ~$0,10 (25% off).
   'gpt-4.1-mini': { in: 0.40, cachedIn: 0.10,  out: 1.60 },
   // GPT-4.1 nano: $0.10 in / $0.40 out / cache ~$0.025. The cheapest (Lite tier).

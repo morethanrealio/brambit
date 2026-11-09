@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readBody } from './http-body.mjs';
 import { pool, S, getAgentOwned, getThreadOwned } from './db.mjs';
 import { sniffImagem } from './image-sniff.mjs';
-import { audioProvider } from './audio-provider.mjs';
+import { speechProvider } from './audio-provider.mjs';
 import { synthesizeSpeech, synthesizePcm } from './media.mjs';
 import { productI18n } from './i18n.mjs';
 import { readyVoices, defaultVoice, isReadyVoice } from './tts-voices.mjs';
@@ -25,7 +25,7 @@ const SWEEP_EVERY = 6 * 3600e3;
 const STUCK_AFTER = 10 * 60e3;
 const RETRYABLE = new Set(['provider_unavailable', 'photo_not_ready']);
 
-export const avatarAvailable = () => !!viduConfig() && !!audioProvider();
+export const avatarAvailable = () => !!viduConfig() && !!speechProvider();
 
 // The browser watches the face on an Agora channel (avatar-live.js, with the
 // Agora Web SDK in vendor/): the page may connect to Agora's servers, which
@@ -48,7 +48,7 @@ export function avatarLimits() {
   };
 }
 
-const voiceOf = (row, provider = audioProvider()) => (isReadyVoice(provider, row.voice) ? row.voice : defaultVoice(provider));
+const voiceOf = (row, provider = speechProvider()) => (isReadyVoice(provider, row.voice) ? row.voice : defaultVoice(provider));
 
 // What the settings screen gets about an avatar (never the photo bytes).
 function view(row, provider) {
@@ -146,7 +146,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, getCr
     const agentId = url.searchParams.get('agentId') || '';
     const user = await owned(ctx, res, agentId);
     if (!user) return;
-    const provider = audioProvider();
+    const provider = speechProvider();
     try {
       return send(res, 200, { available: true, voices: readyVoices(provider), defaultVoice: defaultVoice(provider), avatar: view(await store.get(agentId, user.id), provider) });
     } catch (e) {
@@ -160,7 +160,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, getCr
     const agentId = String(body.agentId || '');
     const user = await owned(ctx, res, agentId);
     if (!user) return;
-    const provider = audioProvider();
+    const provider = speechProvider();
     if (!CONSENTS.includes(body.consent)) return send(res, 400, { error: 'server.avatar_consent_required' });
     if (!isReadyVoice(provider, body.voice)) return send(res, 400, { error: 'server.avatar_voice_invalid' });
     let photo = null;
@@ -219,7 +219,7 @@ export function registerAvatar(rotas, { eventos, send, fail, recordUsages, getCr
   rotas.registrar('GET', '/api/agent/avatar/voice-sample', async (req, res, url, ctx) => {
     const user = await ctx.currentUser();
     if (!user) return send(res, 401, { error: 'server.log_in_first' });
-    const provider = audioProvider();
+    const provider = speechProvider();
     if (!provider) return send(res, 503, { error: 'server.avatar_unavailable' });
     const voice = url.searchParams.get('voice') || '';
     if (!isReadyVoice(provider, voice)) return send(res, 400, { error: 'server.avatar_voice_invalid' });
