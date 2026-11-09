@@ -37,6 +37,11 @@ function setup({ available = true, linked = null, shareFails = false } = {}) {
 test('only a spreadsheet becomes Google Sheets, and only where links are stored', async () => {
   assert.match((await setup().tool.normalizeConfirmationArgs({ id: 'p1', planilha_google: true })).erro, /is not an .xlsx spreadsheet/);
   assert.match((await setup({ available: false }).tool.normalizeConfirmationArgs({ id: 'a2', planilha_google: true })).erro, /is not on in this server/);
+  cur.caption = 'Cardapio.xlsm';
+  try {
+    assert.match((await setup().tool.normalizeConfirmationArgs({ id: 'a2', planilha_google: true })).erro, /\.xlsm spreadsheet with macros.*without planilha_google/);
+    assert.equal((await setup().tool.normalizeConfirmationArgs({ id: 'a2' })).args.nome, 'Cardapio.xlsm');
+  } finally { cur.caption = 'Cardapio.xlsx'; }
 });
 
 test('an archived id is confirmed as the current version, with sharing only when asked', async () => {

@@ -97,6 +97,14 @@ test('an archived id is synced through the current version', async () => {
   assert.match(r.nota, /changed in Google Sheets/);
 });
 
+test('an .xlsm spreadsheet with macros is never synced, even when linked', async () => {
+  const { s, sync, cur } = await world();
+  cur.caption = 'Gastos.xlsm';
+  const r = await sync.sync(cur);
+  assert.match(r.note, /NOT synced.*\.xlsm spreadsheet with macros/);
+  assert.deepEqual([s.versions, s.exports, s.pushed.length, s.synced.length], [0, 0, 0, 0]);
+});
+
 test('a Google failure keeps the library copy and says it is not synced', async () => {
   const gone = Object.assign(new Error('Google 404: not found'), { status: 404 });
   for (const [remote, why] of [[new Error('Google não conectado.'), /Google error/], [gone, /no longer exists/], [{ version: 9, trashed: true }, /trash/]]) {

@@ -61,6 +61,12 @@ export function isSheetAsset(a) {
   return SHEET_EXT_RE.test(String(a.caption || ''));
 }
 
+// An .xlsm spreadsheet keeps Excel macros, which Google Sheets drops: it never
+// becomes a Google Sheets file nor syncs with one.
+export function isMacroSheet(a) {
+  return !!a && (String(a.mime || '').toLowerCase() === 'application/vnd.ms-excel.sheet.macroenabled.12' || /\.xlsm$/i.test(String(a.caption || '')));
+}
+
 // Logical spreadsheet a version belongs to. There is no version-group column in
 // the database: versioning lives only in the caption, where an archived version is
 // `base_yyyymmddhhmmss.ext` (versionedCaption) or `base_v<id>.ext` on the dateless

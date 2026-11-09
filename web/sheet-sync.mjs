@@ -17,7 +17,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
+import { isSheetAsset, isMacroSheet, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
 import { currentVersion, sheetForReading, openForAnalysis } from './sheet-library.mjs';
 import { xlsxToText } from './xlsxread.mjs';
 import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport, replaceSheet as driveReplace } from './sheet-google.mjs';
@@ -83,6 +83,7 @@ export function createSheetSync(deps) {
     asset = currentVersion(asset, all);
     const family = link.family;
     const caption = asset.caption;
+    if (isMacroSheet(asset)) return { asset, note: notSynced(caption, 'it is an .xlsm spreadsheet with macros, which Google Sheets would drop, so it is not synced') };
     const token = deps.tokenFor(link.google_email);
     let remote;
     try { remote = await drive.sheetVersion(token, link.file_id); }

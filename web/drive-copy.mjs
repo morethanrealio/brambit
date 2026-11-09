@@ -12,7 +12,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, familyKey } from './sheet-edit.mjs';
+import { isSheetAsset, isMacroSheet, familyKey } from './sheet-edit.mjs';
 import { currentVersion } from './sheet-library.mjs';
 import { versionIds } from './sheet-sync.mjs';
 
@@ -76,6 +76,7 @@ export function driveCopyTool(deps) {
       if (sheets && !isSheetAsset(asset)) return { erro: `"${asset.caption || 'This file'}" is not an .xlsx spreadsheet; only a spreadsheet becomes Google Sheets.` };
       if (sheets && !(await deps.links.available())) return { erro: 'Google Sheets sync is not on in this server. Offer the user the .xlsx copy in Drive (without planilha_google).' };
       if (sheets) asset = currentVersion(asset, await sheetsFor());
+      if (sheets && isMacroSheet(asset)) return { erro: `"${asset.caption || 'This file'}" is an .xlsm spreadsheet with macros, and Google Sheets drops Excel macros, so it cannot become a synced Google Sheets file. Offer the user a plain copy of the .xlsm in Drive (without planilha_google).` };
       const share = sheets && SHARE_ROLES[args.compartilhar] ? args.compartilhar : undefined;
       return { args: { ...args, id: asset.id, nome: sheets ? sheetTitle(asset.caption) : (args.nome || asset.caption || 'arquivo'), assetKey: asset.s3_key, planilha_google: sheets || undefined, compartilhar: share } };
     },
