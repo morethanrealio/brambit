@@ -65,14 +65,15 @@ export function routineFinalText(text, { kind, completed = false, failed = false
 // as complete). On a cut we keep the greeting and the result the model produced,
 // append a plain honest note at the end, and return an envelope the executor
 // records as 'partial' (never 'complete'), so a cut is never passed off as a
-// finished run. `termination` is null on a clean finish (nothing changes).
+// finished run. A clean finish (no termination, or the core's 'completed')
+// changes nothing.
 const ROUTINE_CUT_NOTE_PT = 'Tive um problema nesta execução. Se a resposta estiver incompleta me avisa que eu faço uma dupla checagem.';
 const ROUTINE_CUT_NOTE = {
   en: 'I had a problem in this run. If the answer looks incomplete, let me know and I will double-check it.',
   es: 'Tuve un problema en esta ejecución. Si la respuesta parece incompleta, avísame y hago una doble verificación.',
 };
 export function routineCutResult(text, termination, language) {
-  if (!termination) return text;
+  if (!termination || termination === 'completed') return text;
   const note = ROUTINE_CUT_NOTE[tagIdioma(language)] || ROUTINE_CUT_NOTE_PT;
   const body = String(text ?? '').trim();
   return { text: body ? `${body}\n\n${note}` : note, contentStatus: 'partial' };
