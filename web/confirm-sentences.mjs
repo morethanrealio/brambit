@@ -187,6 +187,7 @@ function infinityFields(fields) {
 const fixed = (tool) => ({ request: (a, c) => c.t(`${tool}.request`), done: (a, c) => c.t(`${tool}.done`) });
 // "update the existing file ..." when the tool overwrites, keeping the link.
 const overwrite = (tool, a) => `${tool}.${a.overwrite === true ? 'request_overwrite' : 'request'}`;
+const driveShare = (a, c) => (['editar', 'ler'].includes(a.compartilhar) ? c.t(`enviar_para_drive.share_${a.compartilhar}`) : '');
 const onedrive = {
   request: (a, c) => c.t('onedrive_upload.request', { name: c.or(a.nome, 'common.no_name_q') }),
   done: (a, c) => c.t('onedrive_upload.done', { name: c.or(a.nome, 'common.no_name') }),
@@ -348,9 +349,16 @@ const SENTENCES = {
     request: (a, c) => c.t(overwrite('drive_upload_arquivo', a), { name: c.or(a.nome, 'common.no_name_q') }),
     done: (a, c) => c.t('drive_upload_arquivo.done', { name: c.or(a.nome, 'common.no_name') }),
   },
+  // planilha_google: a spreadsheet becomes a synced Google Sheets file; `share`
+  // says when its link opens to anyone, which publishes it. The done sentence
+  // leaves sharing out: Google may refuse it, and the tool result says so.
   enviar_para_drive: {
-    request: (a, c) => c.t(overwrite('enviar_para_drive', a), { name: c.clause(a.nome, 'enviar_para_drive.named', { name: a.nome }) }),
-    done: (a, c) => c.t('enviar_para_drive.done', { name: c.clause(a.nome, 'enviar_para_drive.copy_of', { name: a.nome }) }),
+    request: (a, c) => (a.planilha_google === true
+      ? c.t('enviar_para_drive.request_sheets', { name: c.clause(a.nome, 'enviar_para_drive.named', { name: a.nome }), share: driveShare(a, c) })
+      : c.t(overwrite('enviar_para_drive', a), { name: c.clause(a.nome, 'enviar_para_drive.named', { name: a.nome }) })),
+    done: (a, c) => (a.planilha_google === true
+      ? c.t('enviar_para_drive.done_sheets', { name: c.clause(a.nome, 'enviar_para_drive.named', { name: a.nome }) })
+      : c.t('enviar_para_drive.done', { name: c.clause(a.nome, 'enviar_para_drive.copy_of', { name: a.nome }) })),
   },
   docs_create: {
     request: (a, c) => c.t(overwrite('docs_create', a), { name: c.or(a.name, 'common.no_name_q') }),

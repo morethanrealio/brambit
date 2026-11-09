@@ -36,6 +36,10 @@ export function createSheetLinks(pool) {
     }
   }
   return {
+    // false while the table is missing: then no spreadsheet can be linked.
+    available() {
+      return safely('available', false, async () => { await pool.query(`SELECT 1 FROM ${TABLE} LIMIT 0`); return true; });
+    },
     // The link of one spreadsheet family, or null.
     get(userId, family) {
       return safely('get', null, async () => {

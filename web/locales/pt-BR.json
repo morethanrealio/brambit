@@ -474,7 +474,11 @@
       "done": "Cópia{name} enviada pro seu Google Drive.",
       "request_overwrite": "atualizar o arquivo existente{name} no seu Google Drive, preservando o mesmo link",
       "named": " \"{name}\"",
-      "copy_of": " de \"{name}\""
+      "copy_of": " de \"{name}\"",
+      "request_sheets": "criar no seu Google Drive a planilha Google Sheets{name}, sincronizada com a da biblioteca{share}",
+      "done_sheets": "Planilha{name} criada no Google Sheets, sincronizada com a da biblioteca.",
+      "share_editar": ", com o link aberto para qualquer pessoa editar",
+      "share_ler": ", com o link aberto para qualquer pessoa ver"
     },
     "docs_create": {
       "request": "criar no seu Drive o Google Doc \"{name}\"",
