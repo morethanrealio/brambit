@@ -11,7 +11,7 @@
 // No db connection/import here: the server injects the queries and tests pass fakes.
 
 import { isSheetAsset, baseFamily, familyKey } from './sheet-edit.mjs';
-import { currentVersion } from './sheet-library.mjs';
+import { currentVersion, withoutUnreadable } from './sheet-library.mjs';
 
 export const LIST_DEFAULT = 20;
 export const LIST_MAX = 50;
@@ -129,7 +129,7 @@ const NAME_CHOICES_MAX = 8;
 export const isDocumentAsset = (a) => !/^(image|audio)/.test(String(a?.mime || '')) && !/image|audio/.test(String(a?.kind || ''));
 const stem = (s) => normalize(s).replace(/\.[a-z0-9]{2,5}$/, '');
 
-export async function findByName(userId, nome, { searchMedia, listSheets, accept = () => true }) {
+export async function findByName(userId, nome, { searchMedia, listSheets, fetchBytes, accept = () => true }) {
   const termo = String(nome || '').trim();
   const hits = (await searchMedia(userId, termo)).filter(accept);
   if (!hits.length) return { notFound: true, reply: `No file of this kind with "${termo}" in its name is in the library. Use listar_midia with busca to see the names that exist, and do not guess an id.` };
@@ -144,7 +144,7 @@ export async function findByName(userId, nome, { searchMedia, listSheets, accept
     const key = isSheetAsset(h) ? 'sheet:' + familyKey(atual) : 'id:' + h.id;
     if (!byKey.has(key)) byKey.set(key, atual);
   }
-  const found = [...byKey.values()];
+  const found = await withoutUnreadable([...byKey.values()], fetchBytes);
   if (found.length === 1) return { asset: found[0] };
   const exact = found.filter((a) => stem(baseFamily(a.caption)) === stem(termo));
   if (exact.length === 1) return { asset: exact[0] };

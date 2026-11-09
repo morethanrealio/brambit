@@ -4485,7 +4485,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // pandas in the sandbox and reads the WHOLE spreadsheet (no truncation, any size).
   // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
   // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
-  const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, accept });
+  const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, accept });
   // A library spreadsheet linked to Google Sheets syncs with it before every read, analysis and edit, and after every change.
   const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets, getAsset: getMediaAsset,
     fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption,

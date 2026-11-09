@@ -124,11 +124,36 @@ export function currentLoaded(entries) {
 // run, the in-memory registry is empty): opens the user's only spreadsheet, or
 // lists them for the model to ask which. {} when the library has none.
 const CHOICES_MAX = 8;
+// A spreadsheet sent from outside may not open at all (2026-11: an uploaded
+// "fatura.xlsx" with no zip inside). One the system generated always does. Checked
+// by the first bytes (an .xlsx is a zip, "PK"), once per asset, which never changes.
+const readableCache = new Map();
+export async function opensAsSheet(asset, fetchBytes) {
+  if (!isSheetAsset(asset) || asset.source == null || asset.source === 'generated' || !fetchBytes) return true;
+  if (readableCache.has(asset.id)) return readableCache.get(asset.id);
+  let buf = null;
+  try { buf = (await fetchBytes(asset.s3_key))?.buffer || null; } catch {}
+  if (!buf) return true;
+  const ok = buf.length > 4 && buf[0] === 0x50 && buf[1] === 0x4b;
+  if (readableCache.size >= 1000) readableCache.clear();
+  readableCache.set(asset.id, ok);
+  return ok;
+}
+
+// Leaves out of a choice the spreadsheets that cannot open, unless that leaves
+// none: a single file is still opened, and the failure note names it.
+export async function withoutUnreadable(list, fetchBytes) {
+  if (list.length < 2) return list;
+  const keep = [];
+  for (const a of list) if (await opensAsSheet(a, fetchBytes)) keep.push(a);
+  return keep.length ? keep : list;
+}
+
 export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prepare }) {
   let all;
   try { all = await listSheets(userId); }
   catch (e) { console.error('[analisar_planilha] spreadsheets:', e?.message ?? e); return {}; }
-  const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [familyKey(a), currentVersion(a, all)])).values()];
+  const atuais = await withoutUnreadable([...new Map(all.filter(isSheetAsset).map((a) => [familyKey(a), currentVersion(a, all)])).values()], fetchBytes);
   if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load, prepare });
   if (!atuais.length) return {};
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');

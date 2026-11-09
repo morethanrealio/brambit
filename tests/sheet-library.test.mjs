@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis } from '../web/sheet-library.mjs';
+import { findByName } from '../web/media-list.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const a = (id, caption, created_at, mime = XLSX) => ({ id, caption, created_at, mime, s3_key: `k/${id}` });
@@ -114,4 +115,21 @@ test('versao_id analyzes exactly an older version, without syncing or keeping it
   assert.equal(cur.sheet.filename, v3.caption);
   assert.deepEqual(calls, [{ prepare: v3.id }, { name: v3.caption, register: undefined }]);
   assert.match((await openVersionForAnalysis('u1', 'nope', deps)).note, /not in the user's library/);
+});
+
+test('an uploaded .xlsx that is not a zip stays out of a choice, but opens when it is the only one', async () => {
+  const gastos = { ...a('88888888-8888-4888-8888-888888888888', 'Controle de Gastos.xlsx', '2026-11-07T15:32:00Z'), source: 'generated' };
+  const fatura = { ...a('99999999-9999-4999-8999-999999999999', 'Controle de Gastos fatura.xlsx', '2026-11-07T15:08:00Z'), source: 'upload' };
+  const fetched = [];
+  const fetchBytes = async (s3) => { fetched.push(s3); return { buffer: Buffer.from(s3 === fatura.s3_key ? 'not a zip' : 'PK\x03\x04') }; };
+  let opened = null;
+  const load = async (_u, _b, name) => { opened = name; return { ok: true, filename: name }; };
+  const r = await autoLoadSheet('u1', { listSheets: async () => [gastos, fatura], fetchBytes, load });
+  assert.equal(r.sheet.filename, gastos.caption);
+  assert.deepEqual(fetched.filter((k) => k === gastos.s3_key).length, 1, 'a generated one is not checked, only opened');
+  const byName = await findByName('u1', 'controle de gastos', { searchMedia: async () => [gastos, fatura], listSheets: async () => [gastos, fatura], fetchBytes });
+  assert.equal(byName.asset.id, gastos.id);
+  const alone = await autoLoadSheet('u1', { listSheets: async () => [fatura], fetchBytes, load });
+  assert.equal(alone.sheet.filename, fatura.caption);
+  assert.equal(opened, fatura.caption);
 });
