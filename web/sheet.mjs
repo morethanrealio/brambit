@@ -79,10 +79,13 @@ function nomeComExtensao(filename, tipo) {
 // they fit a short note; the cells never leave here.
 //
 // A CSV whose quoting breaks the strict reader (a quote inside a quoted field, as in
-// SciELO exports, 2026-11-01) is read tolerantly: first keeping every line, then,
-// if a quote never closes, taking quotes as text. Lines with the wrong number of
-// fields are skipped and counted. The tolerant result is written back over the
-// sandbox copy as a clean CSV, so the analyst's plain read_csv opens it too.
+// SciELO exports, 2026-11-01) is read tolerantly: first keeping quotes as the
+// standard reader does, then, if a quote never closes, taking quotes as text. No
+// line is dropped: a line with more fields than the header keeps them in extra
+// columns, and those lines are counted. (Dropping them made the analyst, which
+// reads the clean copy, contradict the note and miss rows, 2026-11-09.) The
+// tolerant result is written back over the sandbox copy as a clean CSV, so the
+// analyst's plain read_csv opens it too.
 const SONDA_PY = String.raw`
 import sys, json, csv, warnings
 import pandas as pd
@@ -95,22 +98,47 @@ def separador(enc):
         return csv.Sniffer().sniff(cabecalho, delimiters=',;\t|').delimiter
     except csv.Error:
         return ','
+def cabecalho_unico(valores):
+    nomes, vistos = [], {}
+    for i, v in enumerate(valores):
+        n = 'Unnamed: %d' % i if v is None or pd.isna(v) or str(v) == '' else str(v)
+        if n in vistos:
+            vistos[n] += 1
+            n = '%s.%d' % (n, vistos[n])
+        else:
+            vistos[n] = 0
+        nomes.append(n)
+    return nomes
 def ler_tolerante(sep, enc):
     global tolerante
     ultimo = None
     for quoting in (csv.QUOTE_MINIMAL, csv.QUOTE_NONE):
+        # Widths counted here, not by pandas: pandas drops longer lines, turns the
+        # first column into the index when the first data line is longer, or cuts
+        # the extra fields, all without a word.
+        with open(caminho, encoding=enc, newline='') as f:
+            larguras = [len(l) for l in csv.reader(f, delimiter=sep, quoting=quoting) if l]
+        if not larguras:
+            break
+        largura = max(larguras)
         try:
             with warnings.catch_warnings(record=True) as avisos:
                 warnings.simplefilter('always')
-                df = pd.read_csv(caminho, sep=sep, encoding=enc, dtype=str, quoting=quoting, on_bad_lines='warn')
+                df = pd.read_csv(caminho, sep=sep, encoding=enc, dtype=str, quoting=quoting, header=None, names=range(largura), on_bad_lines='warn')
         except pd.errors.ParserError as e:
             ultimo = e
             continue
-        puladas = sum(str(a.message).count('Skipping line') for a in avisos)
+        if not len(df):
+            break
+        cab = larguras[0]
+        df.columns = cabecalho_unico(list(df.iloc[0])[:cab]) + ['extra_%d' % i for i in range(1, largura - cab + 1)]
+        df = df.iloc[1:].reset_index(drop=True)
         df.to_csv(caminho, index=False, sep=sep, encoding='utf-8')
-        tolerante = {'puladas': puladas}
+        tolerante = {'longas': sum(1 for w in larguras[1:] if w > cab), 'puladas': sum(str(a.message).count('Skipping line') for a in avisos)}
         return df
-    raise ultimo
+    if ultimo:
+        raise ultimo
+    raise pd.errors.EmptyDataError('No columns to parse from file')
 def ler_texto(sep):
     ultimo = None
     for enc in ('utf-8-sig', 'latin-1'):
@@ -158,7 +186,7 @@ async function lerEstrutura(userId, path, tipo) {
   let out;
   try { out = JSON.parse(linha); } catch { return { ok: false, error: (res?.stderr || 'resposta inválida da leitura').slice(0, 200) }; }
   if (!out.ok) return { ok: false, error: out.erro || 'erro ao abrir' };
-  return { ok: true, abas: Array.isArray(out.abas) ? out.abas : [], skipped: out.tolerante ? Number(out.tolerante.puladas) || 0 : null };
+  return { ok: true, abas: Array.isArray(out.abas) ? out.abas : [], tolerant: out.tolerante ? { long: Number(out.tolerante.longas) || 0, skipped: Number(out.tolerante.puladas) || 0 } : null };
 }
 
 function descreverAbas(abas) {
@@ -198,12 +226,15 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   return { ok: true, path, filename: clean };
 }
 
-// CSV opened only by the tolerant reader (see SONDA_PY). Skipped lines are data the
-// user would miss without knowing, so they are said first.
-function notaTolerante(skipped, rows) {
-  if (skipped == null) return '';
-  if (!skipped) return 'O CSV tinha aspas fora do padrão; abri em modo tolerante, sem perder linhas (aspas soltas ficaram como texto nas células).\n';
-  return `O CSV tinha linhas com aspas ou número de colunas fora do padrão: abri em modo tolerante, e ${skipped} de ${rows + skipped} linha(s) de dados ficaram de fora. Comece a resposta dizendo isso ao usuário, com o número, antes de qualquer resultado.\n`;
+// CSV opened only by the tolerant reader (see SONDA_PY). Lines longer than the
+// header may have shifted values, so the user hears about them first.
+function notaTolerante(t) {
+  if (!t) return '';
+  const avisos = [];
+  if (t.long) avisos.push(`${t.long} linha(s) tinham mais colunas que o cabeçalho, e o que passou do cabeçalho ficou nas colunas extra_1, extra_2... (os valores dessas linhas podem estar deslocados)`);
+  if (t.skipped) avisos.push(`${t.skipped} linha(s) não deu para ler e ficaram de fora`);
+  if (!avisos.length) return 'O CSV tinha aspas fora do padrão; abri em modo tolerante, sem perder linhas (aspas soltas ficaram como texto nas células).\n';
+  return `O CSV estava fora do padrão e abri em modo tolerante: ${avisos.join('; ')}. Comece a resposta dizendo isso ao usuário, com o número.\n`;
 }
 
 // Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and
@@ -223,7 +254,7 @@ export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tip
   registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
-    note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.skipped, rows)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
+    note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.tolerant)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
   };
 }
 

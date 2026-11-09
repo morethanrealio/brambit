@@ -176,13 +176,17 @@ test('real probe: CSV with stray quotes opens tolerantly and the analyst can rea
   assert.equal(r.stdout.trim(), '(2, 3)', r.stderr);
 });
 
-test('real probe: lines with extra fields are left out and counted for the user', { skip: !temPandas && 'sem pandas local' }, async () => {
-  globalThis.__sb = sandboxLocal();
-  const csv = Buffer.from('ID;Nome;Ano\n1;A;2020\n2;B;2021;extra\n3;C;2022\n4;D;2023;x;y\n');
+test('real probe: lines with extra fields stay, in extra columns, and are counted for the user', { skip: !temPandas && 'sem pandas local' }, async () => {
+  const sb = globalThis.__sb = sandboxLocal();
+  // The first data line is the long one: pandas would make "ID" the index.
+  const csv = Buffer.from('ID;Nome;Ano\n1;A;2020;extra\n2;B;2021\n3;C;2022\n4;D;2023;x;y\n');
   const lr = await loadSpreadsheetIntoSandbox('u-real', csv, 'lista.csv');
   assert.equal(lr.ok, true, lr.error);
-  assert.equal(lr.rows, 2);
-  assert.match(lr.note, /2 de 4 linha\(s\) de dados ficaram de fora\. Comece a resposta/);
+  assert.deepEqual(lr.abas, [{ nome: '(csv)', linhas: 4, colunas: 5, nomes: ['ID', 'Nome', 'Ano', 'extra_1', 'extra_2'] }]);
+  assert.match(lr.note, /2 linha\(s\) tinham mais colunas que o cabeçalho.*extra_1.*Comece a resposta/);
+  assert.ok(!/ficaram de fora/.test(lr.note));
+  const r = spawnSync(PY, ['-c', 'import sys, pandas as pd; d = pd.read_csv(sys.argv[1], sep=None, engine="python", dtype=str); print(len(d), list(d["Nome"]))', sb.local(lr.path)], { encoding: 'utf8' });
+  assert.equal(r.stdout.trim(), "4 ['A', 'B', 'C', 'D']", r.stderr);
 });
 
 test('the failure note gives the reason in plain words and asks to say which file first', () => {
