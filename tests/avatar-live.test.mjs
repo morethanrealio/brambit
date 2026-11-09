@@ -29,6 +29,7 @@ function setup(t, { replies = [], gate = null, hasCredit } = {}) {
       audio: (frame) => { audio += frame.length; },
       reply: (text) => calls.push(`reply ${text}`),
       cut: () => calls.push('cut'),
+      rest: () => calls.push('rest'),
       hangup: () => calls.push(`hangup ${id}`),
     }),
   };
@@ -138,6 +139,7 @@ test('the face says the chat\'s newest assistant reply once, without links or Ma
   assert.ok(calls.includes('reply Done! See the doc.'));
   assert.ok(calls.includes('bill u1 tts'), 'the speech is billed to the owner');
   assert.equal(audio(), 9600);
+  assert.equal(calls.at(-1), 'rest', 'when the speech ends the face goes back to its rest pose');
 });
 
 test('a reply becomes plain sentences, made into speech in short pieces', () => {

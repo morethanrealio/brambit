@@ -169,6 +169,7 @@ export function createAvatarLive({ vidu, tts, recordUsages, hasCredit = async ()
       playsUntil = await sendPaced(toFrames(pcm), (frame) => s.stream.audio(frame), { signal, startAt: playsUntil, now });
     }
     await wait(playsUntil - now(), signal);
+    if (!signal.aborted) s.stream.rest();
   }
 
   const live = {

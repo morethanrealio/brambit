@@ -20,7 +20,9 @@
 // the browser only watches it. Vidu bills per second from the session's
 // creation until it sees the hangup on the stream, or the stream closes.
 // The stream (/live/v1/external-lives/{id}/stream) is a WebSocket from the
-// server: the speech goes in as PCM, the reply's text as type 10.
+// server: the speech goes in as PCM, the reply's text as type 10, and when
+// the speech ends a baseline_reset (type 15) puts the face back in the photo's
+// pose with the mouth closed (left alone, it closes it slowly).
 import { randomUUID } from 'node:crypto';
 
 export const SAMPLE_RATE = 24000;   // PCM s16le mono, the only format Vidu takes
@@ -132,8 +134,8 @@ export async function createSession(vidu, { avatarId, model = vidu.model || VIDU
 
 // The session's stream. The first frame is conn_init (type 1); an ack with
 // NOT_READY means the face is still loading, so conn_init goes again on the
-// same socket. Once ready: PCM frames (binary), the reply's text (type 10) and
-// a cut of the current speech (type 7). onDrop(reason): after ready, the
+// same socket. Once ready: PCM frames (binary), the reply's text (type 10), a
+// cut of the current speech (type 7) and the rest pose (type 15). onDrop(reason): after ready, the
 // stream closed without a hangup from here (Vidu hung up, the network fell).
 export function openStream(vidu, liveId, { onDrop = () => {}, retryEvery = 1000, tries = 40, deadline = 60000, WebSocketImpl = globalThis.WebSocket } = {}) {
   const OPEN = 1, CONNECTING = 0;
@@ -159,6 +161,9 @@ export function openStream(vidu, liveId, { onDrop = () => {}, retryEvery = 1000,
         if (ack.success) { ready = true; clearTimeout(timer); resolve(); }
         else if (ack.error_code === 'NOT_READY' && ++n < tries) setTimeout(init, retryEvery);
         else { reject(new Error(`vidu conn_init: ${ack.error_code || 'no code'} ${ack.error_msg || ''}`.trim())); ws.close(); }
+      } else if (m.type === 103) {
+        const e = m.payload?.error || {};
+        console.warn(`[vidu] ${e.source || 'signal'} refused: ${e.code || 'no code'}`);
       } else if (m.type === 6) {
         if (ready && !leaving) onDrop(`vidu hung up (${m.payload?.hangup?.hangup_reason || 'no reason'})`);
         leaving = true;
@@ -186,6 +191,7 @@ export function openStream(vidu, liveId, { onDrop = () => {}, retryEvery = 1000,
     audio(pcm) { if (ready && ws.readyState === OPEN) ws.send(pcm); },
     reply: (content) => text(10, content),
     cut: () => { if (ready) send(7); },
+    rest: () => { if (ready) send(15); },
     // Billing only stops when Vidu sees the hangup: while still connecting it
     // waits for the socket to open (closing mid-handshake, Vidu never knows).
     hangup() {
