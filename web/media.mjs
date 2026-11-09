@@ -451,7 +451,9 @@ function toOggOpus(wavBuffer) {
 // PCM 16kHz mono via ffmpeg (stdin->stdout). It's the most universal format for the
 // video worker to consume the reference voice. If ffmpeg isn't
 // available or fails, returns null (the caller decides the fallback).
-export function audioToWav(inputBuffer) {
+// timeoutMs (optional) stops ffmpeg past it and returns null: for audio from
+// people the server doesn't know, which might keep it busy.
+export function audioToWav(inputBuffer, { timeoutMs = 0 } = {}) {
   return new Promise((resolve) => {
     let ff;
     try {
@@ -459,9 +461,11 @@ export function audioToWav(inputBuffer) {
         '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'wav', 'pipe:1']);
     } catch { return resolve(null); }
     const chunks = [];
+    let late = false;
+    const timer = timeoutMs > 0 ? setTimeout(() => { late = true; ff.kill('SIGKILL'); }, timeoutMs) : null;
     ff.stdout.on('data', (d) => chunks.push(d));
-    ff.on('error', () => resolve(null));
-    ff.on('close', (code) => resolve(code === 0 && chunks.length ? Buffer.concat(chunks) : null));
+    ff.on('error', () => { clearTimeout(timer); resolve(null); });
+    ff.on('close', (code) => { clearTimeout(timer); resolve(!late && code === 0 && chunks.length ? Buffer.concat(chunks) : null); });
     ff.stdin.on('error', () => {});
     ff.stdin.end(inputBuffer);
   });

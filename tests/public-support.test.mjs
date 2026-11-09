@@ -14,6 +14,7 @@ const { registrarRotasDoDono, AGENT_TEXTS_PATH } = await import('../web/extensio
 const { createRotas } = await import('../web/routes.mjs');
 const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = await import('../web/extensions/public-support/public-web.mjs');
 const { criarAtendimentoDoServidor, esquemaDoAtendimento, clientAreasOn } = await import('../web/extensions/public-support/public-support-channel.mjs');
+const { markVoiceInput } = await import('../web/voice-input.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
 const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
 
@@ -590,6 +591,52 @@ test('public web channel: a server may send one photo with the message; it reach
   // The larger cap is for the photo only: the rest of a call with a key keeps the 64 KB.
   assert.deepEqual(await recusa({ message: 'x'.repeat(70 * 1024), image: png }), [413, 'body_too_large']);
   assert.equal(m.chamadas.length, chamadas, 'a refused call reached the model');
+});
+
+// A voice message costs a transcription, so a flood of audio must not get one past the
+// free guards; the model reads the transcript as voice and the page gets it back.
+test('public web channel: a voice message is transcribed only when the turn would run, and the model reads it as voice', async (t) => {
+  const { db, pool, store, dono, ag } = await montar(t);
+  const webStore = createPublicWebStore(pool);
+  const m = modelo();
+  const heardFrom = [];
+  const a = atendimento(store, m, { listen: async ({ mimeType, buffer }) => { heardFrom.push(mimeType); return { text: buffer.length > 100 ? '' : 'where is my order', usage: { model: 'stt', in: 1 } }; },
+    markVoice: markVoiceInput });
+  const rotas = createRotas();
+  registerPublicWebRoutes({ rotas, webStore, turno: a.turno, send: (res, status, corpo) => Object.assign(res, { status, corpo }),
+    fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false });
+  const pede = async (corpo) => {
+    const req = Readable.from([Buffer.from(JSON.stringify({ contact: 'c1', ...corpo }))]); req.method = 'POST'; req.headers = key;
+    const res = { setHeader() {}, writeHead(st) { this.status = st; }, end() {} };
+    await rotas.atender(req, res, new URL(`http://x/api/public/messages?agent=${ag}`), {});
+    return res;
+  };
+  await store.configurar(ag, dono, { ativo: true, limitePorHora: 2 });
+  await webStore.configure(ag, dono, { enabled: true, origins: ['https://shop.example.com'] });
+  const key = { authorization: 'Bearer ' + await webStore.newKey(ag, dono) };
+  const ogg = Buffer.concat([Buffer.from('OggS'), randomBytes(20)]).toString('base64');
+  const r = await pede({ audio: `data:audio/webm;base64,${ogg}` });
+  assert.deepEqual([r.status, r.corpo.heard, r.corpo.text, heardFrom], [200, 'where is my order', 'resposta 1', ['audio/ogg']]);
+  assert.ok(m.chamadas[0].messages.at(-1).content.includes(markVoiceInput('where is my order')), 'the model did not read it as voice');
+  const [said] = await webStore.history(ag, 'api:c1');
+  assert.deepEqual([said.text, said.voice], ['where is my order', true]);
+  assert.ok(a.usos.length >= 2, 'the transcription was not billed');
+  // An empty transcript ends the turn without the model.
+  const quiet = await pede({ audio: Buffer.concat([Buffer.from('OggS'), randomBytes(200)]).toString('base64') });
+  assert.deepEqual([quiet.corpo.heard, quiet.corpo.text, m.chamadas.length], ['', null, 1]);
+  // Past the hourly limit, and past the daily cap, no transcription.
+  await pede({ message: 'and now?' });
+  const limited = heardFrom.length;
+  await pede({ audio: ogg });
+  assert.equal(heardFrom.length, limited, 'transcribed past the hourly limit');
+  await store.configurar(ag, dono, { limitePorHora: 100, tetoDiarioUsd: 0.5 });
+  await db.query(`INSERT INTO mtr_harness.usage_events (agent_id, kind, cost_usd) VALUES ($1, 'publico', 1)`, [ag]);
+  assert.equal((await pede({ audio: ogg })).corpo.text, RESPOSTA_INDISPONIVEL);
+  assert.equal(heardFrom.length, limited, 'transcribed past the daily cap');
+  const recusa = async (corpo) => { const x = await pede(corpo); return [x.status, x.corpo.error]; };
+  assert.deepEqual(await recusa({ audio: ogg, message: 'hi' }), [400, 'audio_alone']);
+  assert.deepEqual(await recusa({ audio: Buffer.from('%PDF-1.7 not audio').toString('base64') }), [400, 'invalid_audio']);
+  assert.deepEqual(await recusa({ audio: Buffer.alloc(2 * 1024 * 1024 + 1, 0xFF).toString('base64') }), [413, 'audio_too_large']);
 });
 
 // A browser has no key and anyone can call like one, so its photo reaches the model only as the

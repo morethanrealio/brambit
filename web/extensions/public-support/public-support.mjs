@@ -625,7 +625,7 @@ export function retainedByTool(tools) {
 // stopped contact (silence, nothing recorded) → contact's hourly limit (1 warning
 // per hour, then silence) → assistant's hourly limit, all contacts together →
 // owner's balance → assistant's daily cap.
-export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', log = console }) {
+export function createAtendimentoPublico({ store, makeProvider, recordUsage, saldo, ferramentas, agora = () => '', gastoDoDia = (id) => store.gastoDoDia(id), runAgent = runAgentPadrao, ganchos = null, prompts = null, events = null, linkBase = () => '', listen = null, markVoice = (t) => t, log = console }) {
   const noEvents = { count: async () => ({ times: 0, people: 0 }), funnel: async (steps) => steps.map(() => 0), top: async () => ({ rows: [], refs: 0 }) };
   const trackFor = (agentId, contactId) => async (kind, ref) => (events ? events.record({ agentId, contactId, kind, ref }) : false);
   const NO_EDITS = { installation: '', written: '', spoken: '' };
@@ -748,12 +748,17 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   // ({mimeType, data}, already checked by the channel); never stored.
   // imagesOnRequest: they came without a key, so the turn goes on only if the
   // plugin's photoRequested says yes (else motivo 'photo_not_requested', nothing recorded).
-  async function turno({ agentId, canal, endereco, mensagem, event, imagens, imagesOnRequest = false }) {
+  // audio: a voice message ({mimeType, buffer}, already checked by the channel) in
+  // place of the text; the result then carries `heard`, its transcript. Without
+  // listen (deps) the turn ends with motivo 'audio_off'. markVoice(transcript) is
+  // what the model reads (the channel's voice note, voice-input.mjs).
+  async function turno({ agentId, canal, endereco, mensagem, event, imagens, imagesOnRequest = false, audio = null }) {
     const agente = await store.agente(agentId);
     if (!agente?.ativo) return { text: null, motivo: 'inativo' };
+    if (audio && !listen) return { text: null, motivo: 'audio_off' };
     const ev = event === undefined ? null : normalizeEvent(event);
-    const msg = ev ? eventText(ev) : event === undefined ? texto(mensagem, MENSAGEM_MAX) : '';
-    const entrada = { role: 'user', content: msg, ...(ev ? { event: ev } : {}) };
+    let msg = audio ? '' : ev ? eventText(ev) : event === undefined ? texto(mensagem, MENSAGEM_MAX) : '';
+    let heard = null;
     // The contact is read INSIDE the queue: an "erase my data" ahead of it deletes
     // the row, and the next turn starts on a new contact.
     return emFila(`${agentId}:${canal}:${texto(endereco, 200)}`, async () => {
@@ -761,8 +766,15 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const ident = { userId: agente.user_id, agentId: agente.agent_id, contatoId: contato.id };
       const measured = (saidas) => measureLinks(events, linkBase(), { agentId: agente.agent_id, contactId: contato.id }, saidas, { keepUrl: canal === 'web' })
         .catch((e) => { log.error?.('[publico] measuring links failed:', e?.message ?? e); return saidas; });
+      if (audio) {
+        const r = await hear(agente, contato, ident, audio);
+        if (r.result) return r.result;
+        heard = r.heard;
+        msg = markVoice(heard);
+      }
+      const entrada = { role: 'user', content: msg, ...(ev ? { event: ev } : {}) };
       if (!msg) return { text: null, motivo: 'vazia', ...ident };
-      const comando = ev ? null : comandoDoContato(msg);
+      const comando = ev ? null : comandoDoContato(heard ?? msg);
       // Blocked by the owner: silence and nothing recorded. The delete request still
       // applies (deletes the conversation), but the contact stays, otherwise the block would disappear with it.
       if (contato.bloqueadoEm) {
@@ -779,14 +791,8 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         await store.parar(contato.id, false);
         return { text: RESPOSTA_VOLTOU, motivo: 'voltou', ...ident };
       }
-      if (await store.mensagensNaUltimaHora(contato.id) >= agente.limite_por_hora) {
-        const avisar = await store.avisarLimite(contato.id);
-        return { text: avisar ? RESPOSTA_LIMITE : null, motivo: 'limite', ...ident };
-      }
-      // All contacts together: nothing is recorded, so a flood of new contacts adds no messages.
-      if (await store.agentMessagesLastHour(agente.agent_id, agente.agent_hourly_limit) >= agente.agent_hourly_limit) {
-        return { text: RESPOSTA_INDISPONIVEL, motivo: 'agent_hourly_limit', ...ident };
-      }
+      const limited = await hourlyLimit(agente, contato, ident);
+      if (limited) return limited;
       const conversation = await store.currentConversation(contato.id, agente.conversation_idle_minutes ?? null);
       const indisponivel = async (motivo) => {
         await store.registrar(contato.id, [entrada, { role: 'assistant', content: RESPOSTA_INDISPONIVEL }], conversation);
@@ -851,7 +857,43 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       await store.registrar(contato.id, [entrada, { role: 'assistant', content: text, outputs: saidas, modelContent }], conversation);
       const out = await measured(saidas);
       return { text: out === saidas ? text : textoDasSaidas(out), ...(out.length ? { saidas: out } : {}), ...ident };
-    });
+    }).then((r) => (heard === null ? r : { ...r, heard }));
+  }
+
+  async function hourlyLimit(agente, contato, ident) {
+    if (await store.mensagensNaUltimaHora(contato.id) >= agente.limite_por_hora) {
+      const avisar = await store.avisarLimite(contato.id);
+      return { text: avisar ? RESPOSTA_LIMITE : null, motivo: 'limite', ...ident };
+    }
+    // All contacts together: nothing is recorded, so a flood of new contacts adds no messages.
+    if (await store.agentMessagesLastHour(agente.agent_id, agente.agent_hourly_limit) >= agente.agent_hourly_limit) {
+      return { text: RESPOSTA_INDISPONIVEL, motivo: 'agent_hourly_limit', ...ident };
+    }
+    return null;
+  }
+
+  // A voice message is transcribed only when the turn would run: the guards that
+  // cost nothing come first (blocked or stopped contact, the hourly limits, credit,
+  // the daily cap), so a flood of audio pays no transcription. A stopped contact
+  // gets silence, as for anything but the typed "come back". Nothing is recorded
+  // here. → { result } to end the turn, or { heard }.
+  async function hear(agente, contato, ident, audio) {
+    if (contato.bloqueadoEm) return { result: { text: null, motivo: 'bloqueado', ...ident } };
+    if (contato.paradoEm) return { result: { text: null, motivo: 'parado', ...ident } };
+    const limited = await hourlyLimit(agente, contato, ident);
+    if (limited) return { result: limited };
+    const credito = await saldo(agente.user_id);
+    if (!credito || credito.over !== false) return { result: { text: RESPOSTA_INDISPONIVEL, motivo: 'sem_saldo', ...ident } };
+    if (await gastoDoDia(agente.agent_id) >= agente.teto_diario_usd) return { result: { text: RESPOSTA_INDISPONIVEL, motivo: 'teto_diario', ...ident } };
+    try {
+      const { text: said, usage } = await listen(audio);
+      if (usage) await recordUsage([usage], ident);
+      const heard = texto(said, MENSAGEM_MAX);
+      return heard ? { heard } : { result: { text: null, motivo: 'vazia', heard: '', ...ident } };
+    } catch (e) {
+      log.error?.('[publico] transcription failed:', e?.message ?? e);
+      return { result: { text: RESPOSTA_INDISPONIVEL, motivo: 'audio_failed', ...ident } };
+    }
   }
 
   return { turno, registro, defaultTexts, metricCards, contactProfiles, contactNames };
