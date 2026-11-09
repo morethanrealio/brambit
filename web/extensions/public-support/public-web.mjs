@@ -25,6 +25,7 @@ import { indiceCego } from '../../vault.mjs';
 import { chaveDoContato, normalizeEvent } from './public-support.mjs';
 import { sniffImagem } from '../../image-sniff.mjs';
 import { VOICE_INPUT_NOTE } from '../../voice-input.mjs';
+import { readAudioUpload } from '../../media.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);
@@ -79,28 +80,6 @@ function webImage(v) {
   const type = bytes && sniffImagem(bytes)?.mime;
   if (!WEB_IMAGE_TYPES.has(type)) return { status: 400, error: 'invalid_image' };
   return { image: { mimeType: type, data: bytes.toString('base64') } };
-}
-
-// The audio's container from its first bytes, or null.
-export function sniffAudio(b) {
-  if (!b || b.length < 12) return null;
-  if (b.readUInt32BE(0) === 0x1a45dfa3) return 'audio/webm';
-  if (b.toString('latin1', 0, 4) === 'OggS') return 'audio/ogg';
-  if (b.toString('latin1', 4, 8) === 'ftyp') return 'audio/mp4';
-  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WAVE') return 'audio/wav';
-  if (b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
-  return null;
-}
-
-// { audio: {mimeType, buffer} } or { status, error }. Accepts the base64 alone or
-// in a data: URL, as the photo.
-function webAudio(v) {
-  const b64 = typeof v === 'string' ? v.replace(/^data:[^,]*,/, '').replace(/\s+/g, '') : '';
-  const bytes = /^[A-Za-z0-9+/]+={0,2}$/.test(b64) ? Buffer.from(b64, 'base64') : null;
-  if (bytes?.length > WEB_AUDIO_MAX) return { status: 413, error: 'audio_too_large' };
-  const type = sniffAudio(bytes);
-  if (!type) return { status: 400, error: 'invalid_audio' };
-  return { audio: { mimeType: type, buffer: bytes } };
 }
 
 // Browser contact token: random part + signature.
@@ -320,9 +299,9 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
       if (event === null) return send(res, 400, { error: 'invalid_event' });
       let audio = null;
       if (hasAudio) {
-        const a = webAudio(b.audio);
-        if (!a.audio) return send(res, a.status, { error: a.error });
-        audio = a.audio;
+        const a = readAudioUpload(b.audio, { max: WEB_AUDIO_MAX, known: true });
+        if (!a.buffer) return send(res, a.status, { error: a.status === 413 ? 'audio_too_large' : 'invalid_audio' });
+        audio = a;
       }
       if (!message && !event && !audio) return send(res, 400, { error: 'message_required' });
       // A photo goes with a typed message. A browser call has no key, and anyone can

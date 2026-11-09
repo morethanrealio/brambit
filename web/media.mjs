@@ -471,6 +471,43 @@ export function audioToWav(inputBuffer, { timeoutMs = 0 } = {}) {
   });
 }
 
+// The container of an audio from its first bytes: what browsers record (webm,
+// ogg, mp4) or a file may be (wav, mp3); null for anything else.
+export function sniffAudio(b) {
+  if (!b || b.length < 12) return null;
+  if (b.readUInt32BE(0) === 0x1a45dfa3) return 'audio/webm';
+  if (b.toString('latin1', 0, 4) === 'OggS') return 'audio/ogg';
+  if (b.toString('latin1', 4, 8) === 'ftyp') return 'audio/mp4';
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WAVE') return 'audio/wav';
+  if (b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+  return null;
+}
+
+// An audio a page uploads: {mimeType, data} with data in base64, or a data URL or
+// plain base64 string. → { buffer, mimeType } or { status, reason }, reason one of
+// 'missing', 'unreadable', 'too_large' (past max bytes decoded) or 'unknown_format'.
+// known: only the containers sniffAudio reads, for callers the server doesn't know.
+export function readAudioUpload(raw, { max, known = false }) {
+  const data = typeof raw === 'string' ? raw : raw?.data;
+  if (typeof data !== 'string') return { status: 400, reason: 'missing' };
+  const b64 = data.replace(/^data:[^,]*,/, '').replace(/\s+/g, '');
+  const buffer = /^[A-Za-z0-9+/]+={0,2}$/.test(b64) ? Buffer.from(b64, 'base64') : null;
+  if (!buffer?.length) return { status: 400, reason: 'unreadable' };
+  if (buffer.length > max) return { status: 413, reason: 'too_large' };
+  const declared = /^data:(audio\/[\w.+-]+)/i.exec(data)?.[1] || (/^audio\//i.test(raw?.mimeType) ? raw.mimeType : null);
+  const sniffed = sniffAudio(buffer);
+  if (known && !sniffed) return { status: 400, reason: 'unknown_format' };
+  return { buffer, mimeType: sniffed || declared || 'audio/webm' };
+}
+
+// An upload ready for transcription or storage: WAV 16k mono when ffmpeg reads it
+// (within timeoutMs, if given), else as it came. → { buffer, mime, ext }.
+export async function audioForUse({ buffer, mimeType }, { timeoutMs = 0 } = {}) {
+  const wav = await audioToWav(buffer, { timeoutMs });
+  if (wav) return { buffer: wav, mime: 'audio/wav', ext: 'wav' };
+  return { buffer, mime: mimeType, ext: (mimeType.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm' };
+}
+
 // Now and then Gemini's speech model starts writing text instead of speaking
 // (2026-10-24 on dev: 400 "Model tried to generate text, but it should only be
 // used for TTS"; the same sentence then spoke 48 times in a row). One more try

@@ -9,7 +9,7 @@
 // their assistant.
 import { defaultTimezone } from '../../locale.mjs';
 import { randomUUID } from 'node:crypto';
-import { sttEnabled, audioToWav, transcribeAudio } from '../../media.mjs';
+import { sttEnabled, audioForUse, transcribeAudio } from '../../media.mjs';
 import { markVoiceInput } from '../../voice-input.mjs';
 import { createPublicoStore, createAtendimentoPublico, esquemaPublico, RESPOSTA_INDISPONIVEL } from './public-support.mjs';
 import { registrarRotasDoDono } from './public-support-owner.mjs';
@@ -94,12 +94,12 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     setTimeout(limpar, Math.min(60_000, limpezaMs)).unref?.();
     setInterval(limpar, limpezaMs).unref?.();
   }
-  // A visitor's voice message (public-web.mjs): WAV 16k mono for any speech-to-text
-  // provider; if ffmpeg can't read it in time, the original goes as it came.
-  // Without a transcription provider the web channel answers audio_unavailable.
-  const listen = sttEnabled() ? async ({ mimeType, buffer }) => {
-    const wav = await audioToWav(buffer, { timeoutMs: 20_000 });
-    return transcribeAudio(wav || buffer, wav ? 'audio/wav' : mimeType);
+  // A visitor's voice message (public-web.mjs), as the owner's: WAV when ffmpeg
+  // reads it in time, else as it came. Without a transcription provider the web
+  // channel answers audio_unavailable.
+  const listen = sttEnabled() ? async (upload) => {
+    const audio = await audioForUse(upload, { timeoutMs: 20_000 });
+    return transcribeAudio(audio.buffer, audio.mime);
   } : null;
   const atendimento = createAtendimentoPublico({
     store, makeProvider, ferramentas, ganchos, prompts, events, linkBase: publicBase, log, agora: agoraPorExtenso,
