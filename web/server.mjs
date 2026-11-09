@@ -1166,6 +1166,7 @@ import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM } from './sheet-edit.mjs';
 import { createSheetLibrary, sheetForReading } from './sheet-library.mjs';
+import { mediaListTool, createMediaSearch } from './media-list.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
@@ -5544,24 +5545,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // image (re-read via vision -> text) and jot down a description to find it later.
   const mediaLibrary = s3Enabled();
   if (mediaLibrary) {
-    registry.add({
-      name: 'listar_midia',
-      description: 'Lists the FILES in the user\'s library (images, audio AND documents/spreadsheets: .xlsx/.docx/.pdf/.md/.txt that YOU generated with gerar_documento), from most recent to oldest, each with id, type, when and a DESCRIPTION/name. Use it ALWAYS when they refer to something from before ("aquela imagem", "o .doc que você fez", "cadê o arquivo do plano", "o PDF de ontem"): find it by the name/caption in this list, without reopening anything. To resend a document in the chat use reenviar_arquivo with the id from here.',
-      parameters: { type: 'object', properties: { limite: { type: 'number', description: 'How many items to list (default 20, max 50).' } } },
-      run: async ({ limite } = {}) => {
-        const rows = await listMediaAssets(userId, { limit: Math.min(Math.max(1, limite || 20), 50) });
-        if (!rows.length) return 'Nenhuma mídia guardada ainda.';
-        return rows.map((r) => {
-          const when = new Date(r.created_at).toLocaleString('pt-BR', { timeZone: userTz, dateStyle: 'short', timeStyle: 'short' });
-          const orig = r.source === 'upload' ? 'enviada pelo usuário' : (r.source === 'generated' ? 'gerada por você' : '');
-          // Here the caption is only to FIND the file by name/subject, not to
-          // answer about it: truncated to 200 characters so the list of up to 50
-          // items doesn't bloat now that the stored caption is a full reading.
-          const cap = String(r.caption || '').trim().slice(0, 200);
-          return `- id=${r.id} · ${r.kind || 'arquivo'} · ${when}${orig ? ' · ' + orig : ''}${cap ? ' · "' + cap + '"' : ''}`;
-        }).join('\n');
-      },
-    });
+    registry.add(mediaListTool({ userId, timeZone: userTz, listMediaAssets, getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, searchMedia: createMediaSearch(pool).searchMedia }));
     // RESEND a file that's ALREADY in the library (generated document or media)
     // without generating everything again. Re-anchors the attachment in the channel (getMedia reads the bytes by
     // key). Closes the "where's the file you made": listar_midia finds the id, this
