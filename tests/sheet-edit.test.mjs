@@ -573,5 +573,18 @@ for (const [nome, over] of [
   t('the sync note goes to the model', r.avisos[0] === 'came from Google Sheets');
 }
 
+// ── afterEdit: the saved version is handed over to go back to Google Sheets ──
+{
+  const { deps } = mkFake();
+  let sent = null;
+  deps.afterEdit = async (a) => { sent = a; return { note: 'sent to Google Sheets\n' }; };
+  const r = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
+  t('afterEdit gets the new version', sent && sent.id === r.asset.id && sent.s3_key === r.asset.key && sent.caption === 'Matriz.xlsx');
+  t('its note goes to the model', r.avisos.includes('sent to Google Sheets'));
+  deps.afterEdit = async () => { throw new Error('quota'); };
+  const r2 = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
+  t('a failing afterEdit does not undo the edit', r2.ok && r2.avisos.some((a) => a.includes('quota')));
+}
+
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

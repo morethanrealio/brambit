@@ -1161,7 +1161,7 @@ import {
   routineNudgeContext, ofertaRegistrada, ofertaNaoFeita, CATALOGO as CATALOGO_ROTINA,
 } from './routine-offer.mjs';
 import { monitorsTools } from './monitors.mjs';
-import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
+import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
@@ -1170,6 +1170,7 @@ import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from '.
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
 import { createSheetSync } from './sheet-sync.mjs';
+import { mergeSheets } from './sheet-merge.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
@@ -4485,9 +4486,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
   // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
   const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, accept });
-  // A library spreadsheet linked to Google Sheets takes what changed there before every read, analysis and edit.
-  const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets,
-    fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption });
+  // A library spreadsheet linked to Google Sheets syncs with it before every read, analysis and edit, and after every change.
+  const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets, getAsset: getMediaAsset,
+    fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption,
+    merge: sandboxEnabled() ? (b) => mergeSheets(userId, b, { shell: sandboxShell, writeBytes: sandboxWriteBytes, readBytes: sandboxReadBytes }) : null });
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
@@ -4506,7 +4508,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         let sheets = currentLoaded(getLoadedSheets(userId));
         const found = nome && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
-        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.pull };
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync };
         const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : await sheetSync.refreshLoaded(sheets, deps));
         if (o.note) return o.note;
         sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
@@ -4570,7 +4572,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               runEditor: (a) => runSheetEditorSubagent({ ...a, userId, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente }),
               saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }),
               renameAsset: (uid, id, caption) => setMediaCaption(uid, id, caption),
-              beforeEdit: (a) => sheetSync.pull(a, { locked: true }),
+              beforeEdit: (a) => sheetSync.sync(a, { locked: true }),
+              afterEdit: (a) => sheetSync.sync(a, { locked: true }),
             },
           });
           // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
@@ -5330,12 +5333,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       try { ({ buffer, mime, ext, aviso } = await generateDocument({ format: fmt, content: conteudo, title: base })); }
       catch (e) { console.error('[docgen]', e?.message ?? e); return 'ERRO: não consegui gerar o arquivo. Avise o usuário e tente de novo.'; }
       const filename = `${base}.${ext}`;
-      const { url, key } = await saveBlob({ buffer, ext, mime, kind: 'document', source: 'generated', caption: filename });
+      const { url, key, assetId } = await saveBlob({ buffer, ext, mime, kind: 'document', source: 'generated', caption: filename });
+      const synced = ext === 'xlsx' && assetId ? (await sheetSync.sync({ id: assetId, s3_key: key, caption: filename, mime, created_at: new Date().toISOString() })).note : '';
       const att = { type: 'document', url, mime, key, filename, name: filename };
       attachments.push(att);
       try { onAttachment?.(att); } catch {}
-      if (aviso) return `Documento "${filename}" gerado e já enviado ao usuário no chat, MAS INCOMPLETO. ${aviso} Responda curto, dizendo o que ficou de fora.`;
-      return `Documento "${filename}" gerado e já enviado ao usuário no chat. Responda em uma frase curta (não cole o conteúdo de novo).`;
+      if (aviso) return `${synced}Documento "${filename}" gerado e já enviado ao usuário no chat, MAS INCOMPLETO. ${aviso} Responda curto, dizendo o que ficou de fora.`;
+      return `${synced}Documento "${filename}" gerado e já enviado ao usuário no chat. Responda em uma frase curta (não cole o conteúdo de novo).`;
     },
   });
   // ── Fetch a FILE from the owner's machine (Brambit Runner) ──────────────────

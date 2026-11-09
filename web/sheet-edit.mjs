@@ -436,6 +436,7 @@ Use at most 20 (the most representative ones if you changed a lot). Formula: dec
 //   saveAsset({ buffer, ext, mime, caption }) -> { url, key, assetId }
 //   renameAsset(userId, id, caption) -> boolean
 //   beforeEdit(asset) -> { asset, note }  (optional, called inside the lock)
+//   afterEdit(newAsset) -> { note }        (optional, called inside the lock)
 export async function editSpreadsheet({ userId, objetivo, id = null, deps }) {
   if (!objetivo || !String(objetivo).trim()) return { ok: false, error: 'objetivo vazio.' };
   // Serializes by USER (not by file): the asset choice happens INSIDE
@@ -607,6 +608,13 @@ async function editOnce({ userId, objetivo, id, deps }) {
   } catch (e) { arquivada = null; }
 
   const avisos = synced.note ? [synced.note.trim()] : [];
+  // ...and the new version goes back to Google Sheets (also inside this lock).
+  if (deps.afterEdit) {
+    try {
+      const after = await deps.afterEdit({ id: saved.assetId ?? null, s3_key: saved.key, caption, mime: asset.mime, created_at: new Date().toISOString() });
+      if (after?.note) avisos.push(after.note.trim());
+    } catch (e) { avisos.push(`Google Sheets was not updated (${e?.message ?? e}).`); }
+  }
   if (declarouRemocao(resumo) && (Number(after.rows) || 0) < (Number(before.rows) || 0)) {
     avisos.push(`O editor removeu linhas de propósito (${before.rows} → ${after.rows}), por entender que a instrução pedia isso. Confirme com o usuário se era essa a intenção.`);
   }

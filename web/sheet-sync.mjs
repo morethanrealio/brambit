@@ -1,24 +1,27 @@
-// ── Library spreadsheet <-> Google Sheets, before every read, analysis or edit ──
+// ── Library spreadsheet <-> Google Sheets, before and after every read, analysis or edit ──
 //
 // A spreadsheet linked to a Google Sheets file (sheet-google.mjs, created by
-// enviar_para_drive with planilha_google) may have been changed in Sheets since
-// the last sync. Before the assistant reads, analyzes or edits it, `pull` checks
-// the Sheets version and, when it moved, brings the content back as a new
-// library version (the same way an edit does: canonical name for the new one,
-// archive stamp for the old one), so the library copy is always the latest.
+// enviar_para_drive with planilha_google) is one spreadsheet in two places: the
+// library (always the source the assistant works on) and Sheets (where people
+// type). `sync` brings both to the same content, compared by version: what changed
+// in Sheets comes back as a new library version (canonical name for the new one,
+// archive stamp for the old one, like an edit), what changed here is uploaded to
+// the same Sheets file, and when both changed they are merged first
+// (sheet-merge.mjs; a cell changed on both sides keeps the Sheets value).
 //
-// A version bump with the same cell values (Google bumps it for formatting,
-// comments, a resize) creates nothing: only the synced version moves.
+// A Sheets version bump with the same cell values (formatting, comments, a
+// resize) creates no library version: only the synced version moves.
 //
-// Any Google failure keeps the library copy and tells the model it may be
-// missing what changed in Sheets: the read still happens.
+// Any failure keeps the library copy and tells the model that the two may differ:
+// the read or edit still happens, and the next sync tries again.
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
 import { isSheetAsset, baseFamily, versionedCaption, withKeyLock } from './sheet-edit.mjs';
 import { currentVersion, sheetForReading, openForAnalysis } from './sheet-library.mjs';
 import { xlsxToText } from './xlsxread.mjs';
-import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport } from './sheet-google.mjs';
+import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport, replaceSheet as driveReplace } from './sheet-google.mjs';
+import { describeMerge } from './sheet-merge.mjs';
 
 const SHEET_EXT_RE = /\.(xlsx|xlsm)$/i;
 const READ_ALL = { maxChars: 20_000_000, maxRowsPerSheet: 1_048_576 };
@@ -35,69 +38,107 @@ export function sameCells(a, b) {
 }
 
 // deps: userId, links (createSheetLinks), tokenFor(googleEmail) -> token function,
-// listSheets(userId), fetchBytes(s3Key) -> { buffer }, saveAsset({ buffer, ext, mime, caption })
-// -> { assetId, key, url }, renameAsset(userId, id, caption); drive overrides the
-// Google calls in tests ({ sheetVersion, exportSheet }).
+// listSheets(userId), getAsset(userId, id), fetchBytes(s3Key) -> { buffer },
+// saveAsset({ buffer, ext, mime, caption }) -> { assetId, key, url },
+// renameAsset(userId, id, caption), merge({ base, ours, theirs }) -> mergeSheets
+// result (sheet-merge.mjs; absent without a sandbox); drive overrides the Google
+// calls in tests ({ sheetVersion, exportSheet, replaceSheet }).
 export function createSheetSync(deps) {
   const { userId, links } = deps;
-  const drive = { sheetVersion: driveVersion, exportSheet: driveExport, ...(deps.drive || {}) };
-  const notSynced = (caption, why) => `NOT synced with Google Sheets ("${caption}"): ${why}. This is the library copy, which may miss what was changed in Google Sheets since the last sync; tell the user.\n`;
+  const drive = { sheetVersion: driveVersion, exportSheet: driveExport, replaceSheet: driveReplace, ...(deps.drive || {}) };
+  const notSynced = (caption, why) => `NOT synced with Google Sheets ("${caption}"): ${why}. The library copy and the Google Sheets file may differ until the next sync; tell the user.\n`;
+  const bytesOf = async (asset) => { try { return (await deps.fetchBytes(asset.s3_key))?.buffer || null; } catch { return null; } };
 
-  async function doPull(asset) {
+  // Saves a new library version with the canonical name, then archives `asset` (same order as an edit).
+  async function saveVersion(asset, buffer) {
+    const caption = asset.caption;
+    const ext = (String(caption).match(SHEET_EXT_RE)?.[0] || '.xlsx').slice(1).toLowerCase();
+    const saved = await deps.saveAsset({ buffer, ext, mime: XLSX_MIME, caption });
+    try { await deps.renameAsset(userId, asset.id, versionedCaption(caption, asset.created_at, { id: asset.id })); } catch {}
+    return { ...asset, id: saved.assetId, s3_key: saved.key, mime: XLSX_MIME, created_at: new Date().toISOString() };
+  }
+
+  async function push(token, link, family, asset, buffer) {
+    const r = await drive.replaceSheet(token, link.file_id, buffer);
+    const version = Number(r?.version) || (await drive.sheetVersion(token, link.file_id)).version;
+    await links.synced(userId, family, { version, baseAssetId: asset.id });
+  }
+
+  // Brings the library spreadsheet and its Google Sheets file to the same content:
+  // only Sheets changed -> pull; only the library changed -> push; both -> merge, then push.
+  async function doSync(asset) {
     if (!isSheetAsset(asset)) return { asset, note: '' };
     const family = baseFamily(asset.caption);
     const link = await links.get(userId, family);
     if (!link) return { asset, note: '' };
     // Inside the lock: an edit that finished while this call waited made a newer version.
     try { asset = currentVersion(asset, await deps.listSheets(userId)); } catch {}
+    const caption = asset.caption;
     const token = deps.tokenFor(link.google_email);
     let remote;
     try { remote = await drive.sheetVersion(token, link.file_id); }
-    catch (e) { return { asset, note: notSynced(asset.caption, e?.status === 404 ? 'the Google Sheets file no longer exists' : `Google error (${e?.message ?? e})`) }; }
-    if (remote.trashed) return { asset, note: notSynced(asset.caption, 'the Google Sheets file is in the Drive trash') };
-    if (remote.version <= Number(link.synced_version)) return { asset, note: '' };
-    if (String(asset.id) !== String(link.base_asset_id)) {
-      return { asset, note: notSynced(asset.caption, 'it changed both here and in Google Sheets since the last sync, and they were not merged') };
+    catch (e) { return { asset, note: notSynced(caption, e?.status === 404 ? 'the Google Sheets file no longer exists' : `Google error (${e?.message ?? e})`) }; }
+    if (remote.trashed) return { asset, note: notSynced(caption, 'the Google Sheets file is in the Drive trash') };
+    const googleMoved = remote.version > Number(link.synced_version);
+    const localMoved = String(asset.id) !== String(link.base_asset_id);
+    if (!googleMoved && !localMoved) return { asset, note: '' };
+
+    const ours = await bytesOf(asset);
+    if (!ours) return { asset, note: notSynced(caption, 'could not read the library copy') };
+    let theirs = null;
+    if (googleMoved) {
+      try { theirs = await drive.exportSheet(token, link.file_id); cellText(theirs); }
+      catch (e) { return { asset, note: notSynced(caption, `could not bring it from Google (${e?.message ?? e})`) }; }
     }
 
-    let theirs, ours;
-    try { theirs = await drive.exportSheet(token, link.file_id); }
-    catch (e) { return { asset, note: notSynced(asset.caption, `could not export it from Google (${e?.message ?? e})`) }; }
-    try { cellText(theirs); } catch (e) { return { asset, note: notSynced(asset.caption, `the export from Google did not open (${e?.message ?? e})`) }; }
-    try { ours = (await deps.fetchBytes(asset.s3_key))?.buffer; } catch { ours = null; }
-    if (ours && sameCells(ours, theirs)) {
-      await links.synced(userId, family, { version: remote.version, baseAssetId: asset.id });
-      return { asset, note: '' };
+    try {
+      if (googleMoved && !localMoved) {
+        if (sameCells(ours, theirs)) {
+          await links.synced(userId, family, { version: remote.version, baseAssetId: asset.id });
+          return { asset, note: '' };
+        }
+        const pulled = await saveVersion(asset, theirs);
+        await links.synced(userId, family, { version: remote.version, baseAssetId: pulled.id });
+        return { asset: pulled, newVersion: true, note: `"${caption}" had changed in Google Sheets: those changes are now the current version in the library (id=${pulled.id}). Use this id from now on.\n` };
+      }
+      let base = null, merged = null;
+      if (googleMoved) {
+        const baseAsset = link.base_asset_id ? await deps.getAsset(userId, link.base_asset_id) : null;
+        base = baseAsset ? await bytesOf(baseAsset) : null;
+        if (!base) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and the last synced version is gone, so they could not be merged') };
+      }
+      if (googleMoved && !sameCells(base, theirs)) {
+        if (!deps.merge) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and merging needs the analysis environment, which is off') };
+        merged = await deps.merge({ base, ours, theirs });
+        if (!merged?.ok) return { asset, note: notSynced(caption, `it changed both here and in Google Sheets, and the merge failed (${merged?.error || 'unknown'})`) };
+      }
+      let current = asset, buffer = ours;
+      if (merged && !sameCells(merged.buffer, ours)) { current = await saveVersion(asset, merged.buffer); buffer = merged.buffer; }
+      await push(token, link, family, current, buffer);
+      const head = merged ? `"${caption}" was ${describeMerge(merged)}. ` : `"${caption}": `;
+      const id = current === asset ? '' : ` The merged version is the current one in the library (id=${current.id}); use this id from now on.`;
+      return { asset: current, newVersion: current !== asset, note: `${head}sent to Google Sheets, the file there now has this version at the same link.${id}\n` };
+    } catch (e) {
+      return { asset, note: notSynced(caption, `${e?.message ?? e}`) };
     }
-
-    // Saves the new version first, then archives the old one (same order as an edit).
-    const caption = asset.caption;
-    const ext = (String(caption).match(SHEET_EXT_RE)?.[0] || '.xlsx').slice(1).toLowerCase();
-    let saved;
-    try { saved = await deps.saveAsset({ buffer: theirs, ext, mime: XLSX_MIME, caption }); }
-    catch (e) { return { asset, note: notSynced(caption, `could not save what came from Google in the library (${e?.message ?? e})`) }; }
-    try { await deps.renameAsset(userId, asset.id, versionedCaption(caption, asset.created_at, { id: asset.id })); } catch {}
-    const pulled = { ...asset, id: saved.assetId, s3_key: saved.key, mime: XLSX_MIME, created_at: new Date().toISOString() };
-    await links.synced(userId, family, { version: remote.version, baseAssetId: pulled.id });
-    return { asset: pulled, pulled: true, note: `"${caption}" had changed in Google Sheets: those changes are now the current version in the library (id=${pulled.id}). Use this id from now on.\n` };
   }
 
   // locked: the caller already holds the user's spreadsheet lock (editar_planilha).
-  const pull = (asset, { locked = false } = {}) => (locked ? doPull(asset) : withKeyLock(`sheet:${userId}`, () => doPull(asset)));
+  const sync = (asset, { locked = false } = {}) => (locked ? doSync(asset) : withKeyLock(`sheet:${userId}`, () => doSync(asset)));
 
   return {
-    pull,
+    sync,
     // ler_arquivo: an archived id opens the current version, then Google's changes come in.
     async forReading(asset, opts) {
       const r = await sheetForReading(userId, asset, opts);
-      const p = await pull(r.asset);
+      const p = await sync(r.asset);
       return { asset: p.asset, nota: r.nota + p.note };
     },
     // analisar_planilha with spreadsheets already loaded in the sandbox: a linked one
     // whose Sheets changed is reloaded from the new library version.
     async refreshLoaded(entries, { fetchBytes, load }) {
       const sheets = [];
-      let sync = '';
+      let notes = '';
       for (const e of entries) {
         const family = baseFamily(e.filename);
         let asset = null;
@@ -105,13 +146,13 @@ export function createSheetSync(deps) {
           try { asset = (await deps.listSheets(userId)).find((a) => isSheetAsset(a) && baseFamily(a.caption) === family) || null; } catch {}
         }
         if (!asset) { sheets.push(e); continue; }
-        const p = await pull(asset);
-        sync += p.note;
-        const o = p.pulled ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
-        if (o.note) sync += `The new version did not open in the analysis environment (${o.note}); this analysis used the copy loaded before.\n`;
+        const p = await sync(asset);
+        notes += p.note;
+        const o = p.newVersion ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
+        if (o.note) notes += `The new version did not open in the analysis environment (${o.note}); this analysis used the copy loaded before.\n`;
         sheets.push(o.sheet || e);
       }
-      return { sheets, sync };
+      return { sheets, sync: notes };
     },
   };
 }

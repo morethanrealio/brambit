@@ -48,6 +48,18 @@ web the button keeps its real `url` and the measured one goes in `clickUrl`, bec
 style and in-chat modal by the url's domain. A store whose phone app claims every link on its domain (universal links) opens its own app on a 302 from `/go`; list that host in `BRAMBIT_CLICK_IN_BROWSER` and `/go` leaves by script instead, so the page stays in the browser. Extension tests stay in `tests/`. `test-support/core-guard.mjs` fails CI if the core imports or
 cites a cloud file listed in `cloud.txt`.
 
+## Library spreadsheets
+
+A spreadsheet in the user's library is a family of versions grouped by name
+(`baseFamily` in `web/sheet-edit.mjs`); the current one is the newest. A family
+may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
+`migrations/2026-11-09-sheet-google-links.sql`): `sheetSync.sync`
+(`web/sheet-sync.mjs`) runs before every read, analysis and edit and after every
+change, so a new path that reads or writes a library spreadsheet goes through it.
+Changes on both sides are merged by `web/sheet-merge.mjs` in the sandbox; a cell
+changed on both sides keeps the Google Sheets value. Its real test needs a local
+Python with openpyxl (`SHEET_PY`) and is skipped without one.
+
 ## Checks CI runs on every pull request
 
 - `web/server.mjs` and `web/db.mjs` may only shrink
