@@ -559,5 +559,19 @@ for (const [nome, over] of [
   }
 }
 
+// ── beforeEdit: a spreadsheet linked to Google Sheets is edited from what came from there ──
+{
+  const { state, deps } = mkFake();
+  state.files['u/7'] = Buffer.from(JSON.stringify({ rows: 70, sheets: 2 }));
+  const pulled = { id: 7, caption: 'Matriz.xlsx', mime: XLSX_MIME, s3_key: 'u/7', created_at: '2026-09-09T17:30:00Z' };
+  let seen = null;
+  deps.beforeEdit = async (a) => { seen = a.id; return { asset: pulled, note: 'came from Google Sheets\n' }; };
+  const r = await editSpreadsheet({ userId: 'user-sync', objetivo: 'acrescente 4 linhas', deps });
+  t('beforeEdit gets the picked spreadsheet', seen === 1);
+  t('the edit starts from the version beforeEdit returned', r.ok && r.before.rows === 70 && r.after.rows === 74);
+  t('that version is the one archived', state.renamed.length === 1 && state.renamed[0][0] === 7);
+  t('the sync note goes to the model', r.avisos[0] === 'came from Google Sheets');
+}
+
 console.log(`\n${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

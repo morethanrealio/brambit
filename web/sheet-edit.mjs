@@ -435,6 +435,7 @@ Use at most 20 (the most representative ones if you changed a lot). Formula: dec
 //   runEditor({ objetivo, path, filename, sheets, rows, tentativa }) -> string
 //   saveAsset({ buffer, ext, mime, caption }) -> { url, key, assetId }
 //   renameAsset(userId, id, caption) -> boolean
+//   beforeEdit(asset) -> { asset, note }  (optional, called inside the lock)
 export async function editSpreadsheet({ userId, objetivo, id = null, deps }) {
   if (!objetivo || !String(objetivo).trim()) return { ok: false, error: 'objetivo vazio.' };
   // Serializes by USER (not by file): the asset choice happens INSIDE
@@ -454,7 +455,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
   }
   const pick = pickSheetAsset(assets, { id });
   if (pick.error) return { ok: false, error: pick.error };
-  const asset = pick.asset;
+  // A spreadsheet linked to Google Sheets first takes what changed there (sheet-sync.mjs).
+  // Runs inside this lock, so beforeEdit must not take it again.
+  const synced = deps.beforeEdit ? await deps.beforeEdit(pick.asset) : { asset: pick.asset, note: '' };
+  const asset = synced.asset;
 
   // Always reloads from S3: the loaded-spreadsheets registry is an in-process
   // in-memory Map with a 6h TTL (sheet.mjs), so it's empty after
@@ -602,7 +606,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
     await deps.renameAsset(userId, asset.id, arquivada);
   } catch (e) { arquivada = null; }
 
-  const avisos = [];
+  const avisos = synced.note ? [synced.note.trim()] : [];
   if (declarouRemocao(resumo) && (Number(after.rows) || 0) < (Number(before.rows) || 0)) {
     avisos.push(`O editor removeu linhas de propósito (${before.rows} → ${after.rows}), por entender que a instrução pedia isso. Confirme com o usuário se era essa a intenção.`);
   }

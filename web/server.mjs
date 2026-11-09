@@ -1165,10 +1165,11 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, sheetForReading, openForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
+import { createSheetLibrary, openForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
+import { createSheetSync } from './sheet-sync.mjs';
 import { apagarObjetoComLapide, varrerLapides, purgarMidiaDaConta } from './media-gc.mjs';
 import { mediaTools, transcribeAudio, sttEnabled, imageEnabled, mediaEstimates, putMedia, fetchMedia, deleteMedia, s3Enabled, describeImage, presignGet, audioToWav, campaignS3Enabled, putCampaignObject, getCampaignObject } from './media.mjs';
 import { playableOnIos } from './playable-audio.mjs';
@@ -4484,6 +4485,9 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
   // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
   const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, accept });
+  // A library spreadsheet linked to Google Sheets takes what changed there before every read, analysis and edit.
+  const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets,
+    fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption });
   if (sandboxEnabled()) {
     registry.add({
       name: 'analisar_planilha',
@@ -4502,13 +4506,13 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         let sheets = currentLoaded(getLoadedSheets(userId));
         const found = nome && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
-        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox };
-        const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : {});
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.pull };
+        const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : await sheetSync.refreshLoaded(sheets, deps));
         if (o.note) return o.note;
-        if (o.sheet) sheets = [o.sheet];
+        sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
         try {
-          return await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
+          return (o.sync || '') + await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
         } catch (e) {
           return `ERRO ao analisar a planilha: ${e?.message ?? e}`;
         }
@@ -4566,6 +4570,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               runEditor: (a) => runSheetEditorSubagent({ ...a, userId, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente }),
               saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }),
               renameAsset: (uid, id, caption) => setMediaCaption(uid, id, caption),
+              beforeEdit: (a) => sheetSync.pull(a, { locked: true }),
             },
           });
           // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
@@ -5737,7 +5742,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
-        ({ asset, nota } = await sheetForReading(userId, asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));
+        ({ asset, nota } = await sheetSync.forReading(asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));
         const bytes = await fetchMedia(asset.s3_key);
         if (!bytes || !bytes.buffer) return 'ERRO: não consegui recuperar os bytes do arquivo.';
         const name = asset.caption || `arquivo-${asset.id}`;

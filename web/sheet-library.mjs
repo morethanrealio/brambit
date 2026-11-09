@@ -72,12 +72,16 @@ export async function sheetForReading(userId, asset, { listSheets, timeZone } = 
 
 // For analisar_planilha with a name: opens that library spreadsheet in the
 // analysis environment. { sheet } with the loaded entry, or { note } for the model.
-export async function openForAnalysis(userId, asset, { fetchBytes, load }) {
+// prepare(asset) -> { asset, note } runs first (Google Sheets sync, sheet-sync.mjs);
+// its note comes back as `sync`, to go before the analysis.
+export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare }) {
+  let sync = '';
+  if (prepare) ({ asset, note: sync } = await prepare(asset));
   let bytes = null;
   try { bytes = await fetchBytes(asset.s3_key); } catch (e) { console.error('[analisar_planilha] bytes:', e?.message ?? e); }
   if (!bytes?.buffer) return { note: `ERRO: não consegui recuperar os bytes de "${asset.caption}".` };
   const lr = await load(userId, bytes.buffer, asset.caption || `planilha-${asset.id}`, { mime: asset.mime || '' });
-  return lr.ok ? { sheet: lr } : { note: lr.note };
+  return lr.ok ? { sheet: lr, sync } : { note: sync + lr.note };
 }
 
 // Spreadsheets loaded in the analysis environment, one per family. Reading an
@@ -100,12 +104,12 @@ export function currentLoaded(entries) {
 // run, the in-memory registry is empty): opens the user's only spreadsheet, or
 // lists them for the model to ask which. {} when the library has none.
 const CHOICES_MAX = 8;
-export async function autoLoadSheet(userId, { listSheets, fetchBytes, load }) {
+export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prepare }) {
   let all;
   try { all = await listSheets(userId); }
   catch (e) { console.error('[analisar_planilha] planilhas:', e?.message ?? e); return {}; }
   const atuais = [...new Map(all.filter(isSheetAsset).map((a) => [baseFamily(a.caption), currentVersion(a, all)])).values()];
-  if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load });
+  if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load, prepare });
   if (!atuais.length) return {};
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
   return { note: `Nenhuma planilha está carregada agora, e a biblioteca do usuário tem ${atuais.length}: ${nomes}. Se o pedido já diz qual é, chame analisar_planilha de novo com nome; se não diz, pergunte ao usuário qual, citando os nomes.` };
