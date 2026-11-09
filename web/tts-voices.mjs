@@ -3,6 +3,7 @@
 // with the style its docs give each voice (ai.google.dev, speech generation);
 // the settings screen translates the style (index_script.avatar.style.*).
 import { OPENAI_DEFAULT_VOICE, OPENAI_VOICES } from './audio-provider.mjs';
+import { elevenlabsVoices } from './elevenlabs.mjs';
 
 export const GEMINI_DEFAULT_VOICE = 'Kore';
 const GEMINI_VOICES = [
@@ -16,14 +17,17 @@ const GEMINI_VOICES = [
   ['Sadaltager', 'knowledgeable'], ['Sulafat', 'warm'],
 ];
 
-// provider: 'gemini' | 'openai' (audioProvider()) → [{id, style}] (style null when the provider gives none).
+// provider: 'gemini' | 'openai' | 'elevenlabs' (speechProvider()) → [{id, style, name?}]
+// (style null when the provider gives none; name for the installation's ElevenLabs voices).
 export function readyVoices(provider) {
+  if (provider === 'elevenlabs') return elevenlabsVoices().map(({ id, name }) => ({ id, style: null, name }));
   if (provider === 'gemini') return GEMINI_VOICES.map(([id, style]) => ({ id, style }));
   if (provider === 'openai') return [...OPENAI_VOICES].map((id) => ({ id, style: null }));
   return [];
 }
 
 export function defaultVoice(provider) {
+  if (provider === 'elevenlabs') return elevenlabsVoices()[0]?.id ?? null;
   return provider === 'gemini' ? GEMINI_DEFAULT_VOICE : provider === 'openai' ? OPENAI_DEFAULT_VOICE : null;
 }
 

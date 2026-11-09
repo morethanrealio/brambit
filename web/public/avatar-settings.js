@@ -58,7 +58,7 @@
     voices.forEach(function (v) {
       var o = document.createElement('option');
       o.value = v.id;
-      o.textContent = v.style ? tx('voice_option', { voice: v.id, style: tx('style.' + v.style) }) : v.id;
+      o.textContent = v.style ? tx('voice_option', { voice: v.id, style: tx('style.' + v.style) }) : v.name || v.id;
       sel.appendChild(o);
     });
     sel.value = chosen;

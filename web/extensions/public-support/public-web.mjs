@@ -24,6 +24,8 @@ import { BlockList, isIP } from 'node:net';
 import { indiceCego } from '../../vault.mjs';
 import { chaveDoContato, normalizeEvent } from './public-support.mjs';
 import { sniffImagem } from '../../image-sniff.mjs';
+import { VOICE_INPUT_NOTE } from '../../voice-input.mjs';
+import { readAudioUpload } from '../../media.mjs';
 
 export const PUBLIC_WEB_PATH = '/api/public/messages';
 export const PUBLIC_WEB_PATHS = new Set([PUBLIC_WEB_PATH]);
@@ -37,6 +39,11 @@ export const WEB_BODY_MAX = 64 * 1024;
 export const WEB_IMAGE_MAX = 1024 * 1024;
 const WEB_IMAGE_B64_MAX = Math.ceil(WEB_IMAGE_MAX / 3) * 4;
 const WEB_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// A voice message in place of the typed one: decoded size, and the containers a
+// browser records (webm, ogg, mp4) or a server may send (wav, mp3). It is
+// transcribed and not stored.
+export const WEB_AUDIO_MAX = 2 * 1024 * 1024;
+const WEB_AUDIO_B64_MAX = Math.ceil(WEB_AUDIO_MAX / 3) * 4;
 // History names the contact in this header, not in the address: an address ends up
 // in proxy access logs, and the browser token is all it takes to read the conversation.
 export const WEB_CONTACT_HEADER = 'Brambit-Contact';
@@ -198,7 +205,9 @@ export function createPublicWebStore(pool, { S = 'mtr_harness', measure = async 
       const out = [];
       for (const r of rows) {
         const outputs = r.outputs ? await measure(r.outputs, { agentId, contactId: r.contact_id }).catch(() => r.outputs) : null;
-        out.push({ role: r.role, text: r.content, ...(outputs ? { outputs } : {}), ...(r.event ? { event: r.event } : {}), at: r.criado_em });
+        // A voice message comes back as its transcript, marked voice (the model's note stays out).
+        const voice = r.role === 'user' && typeof r.content === 'string' && r.content.startsWith(VOICE_INPUT_NOTE);
+        out.push({ role: r.role, text: voice ? r.content.slice(VOICE_INPUT_NOTE.length).trim() : r.content, ...(voice ? { voice: true } : {}), ...(outputs ? { outputs } : {}), ...(r.event ? { event: r.event } : {}), at: r.criado_em });
       }
       return out;
     },
@@ -271,36 +280,47 @@ export function registerPublicWebRoutes({ rotas, webStore, turno, send, fail, to
     res.setHeader('Cache-Control', 'no-store');
     if (tooManyRequests(req, res, 'public-web', 60, 60_000)) return;
     try {
-      // Any call may carry a photo, so the cap leaves room for one; the rest of the
-      // body keeps WEB_BODY_MAX (checked once the photo is known).
-      const read = await readSmallJson(req, WEB_BODY_MAX + WEB_IMAGE_B64_MAX + 1024);
+      // Any call may carry a photo or an audio, so the cap leaves room for the larger;
+      // the rest of the body keeps WEB_BODY_MAX (checked once they are known).
+      const read = await readSmallJson(req, WEB_BODY_MAX + Math.max(WEB_IMAGE_B64_MAX, WEB_AUDIO_B64_MAX) + 1024);
       if (!read) return send(res, 413, { error: 'body_too_large' });
       const b = read.body;
       const c = await caller(req, res, url, b.contact);
       if (!c.address) return answer(res, c);
-      if (read.size - (typeof b.image === 'string' ? Buffer.byteLength(b.image) : 0) > WEB_BODY_MAX) return send(res, 413, { error: 'body_too_large' });
-      // A turn is either a typed message or a page event ({type, data?}), never both.
+      const carried = (v) => (typeof v === 'string' ? Buffer.byteLength(v) : 0);
+      if (read.size - carried(b.image) - carried(b.audio) > WEB_BODY_MAX) return send(res, 413, { error: 'body_too_large' });
+      // A turn is a typed message, a voice message (audio) or a page event ({type, data?}), only one of them.
       const message = typeof b.message === 'string' && b.message.trim() ? b.message : null;
-      if (b.event !== undefined && message) return send(res, 400, { error: 'message_or_event' });
+      const hasAudio = b.audio !== undefined && b.audio !== null;
+      if (!!message + hasAudio + (b.event !== undefined) > 1) {
+        return send(res, 400, { error: hasAudio ? 'audio_alone' : 'message_or_event' });
+      }
       const event = b.event === undefined ? undefined : normalizeEvent(b.event);
       if (event === null) return send(res, 400, { error: 'invalid_event' });
-      if (!message && !event) return send(res, 400, { error: 'message_required' });
+      let audio = null;
+      if (hasAudio) {
+        const a = readAudioUpload(b.audio, { max: WEB_AUDIO_MAX, known: true });
+        if (!a.buffer) return send(res, a.status, { error: a.status === 413 ? 'audio_too_large' : 'invalid_audio' });
+        audio = a;
+      }
+      if (!message && !event && !audio) return send(res, 400, { error: 'message_required' });
       // A photo goes with a typed message. A browser call has no key, and anyone can
       // make one outside a browser, so its photo counts only as the answer to the
       // assistant's request (the turn asks the plugin, inside the contact's queue).
       let image = null;
       if (b.image !== undefined && b.image !== null) {
-        if (!message) return send(res, 400, { error: 'image_needs_message' });
+        if (!message) return send(res, 400, { error: audio ? 'audio_alone' : 'image_needs_message' });
         const p = webImage(b.image);
         if (!p.image) return send(res, p.status, { error: p.error });
         image = p.image;
       }
-      const r = await turno({ agentId: c.agentId, canal: 'web', endereco: c.address, ...(event ? { event } : { mensagem: message }),
+      const r = await turno({ agentId: c.agentId, canal: 'web', endereco: c.address, ...(event ? { event } : audio ? { audio } : { mensagem: message }),
         ...(image ? { imagens: [image], ...(c.address.startsWith('api:') ? {} : { imagesOnRequest: true }) } : {}) });
       if (r.motivo === 'inativo') return notFound(res);
       if (r.motivo === 'photo_not_requested') return send(res, 400, { error: 'image_not_requested' });
+      if (r.motivo === 'audio_off') return send(res, 400, { error: 'audio_unavailable' });
       const outputs = r.saidas || (r.text ? [{ tipo: 'texto', texto: r.text }] : []);
-      send(res, 200, { ...(c.token ? { contact: c.token } : {}), text: r.text ?? null, outputs });
+      send(res, 200, { ...(c.token ? { contact: c.token } : {}), ...(typeof r.heard === 'string' ? { heard: r.heard } : {}), text: r.text ?? null, outputs });
       if (afterTurn) Promise.resolve().then(() => afterTurn({ agentId: c.agentId, address: c.address, result: r })).catch((e) => console.error('[public-web] after turn:', e?.message ?? e));
       return;
     } catch (e) { return fail(res, 500, 'public_web_failed', e); }

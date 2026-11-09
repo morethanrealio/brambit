@@ -5,6 +5,9 @@
 // before the choice existed), else OpenAI when OPENAI_API_KEY is there.
 // Both return `usage` in the core's shape ({ model, in, cached, out, think,
 // total }), priced in pricing.mjs like any other model.
+// BRAMBIT_SPEECH_PROVIDER=elevenlabs hands the speaking alone to ElevenLabs
+// (elevenlabs.mjs); see speechProvider().
+import { elevenlabsReady } from './elevenlabs.mjs';
 
 const OPENAI_URL = 'https://api.openai.com/v1';
 export const OPENAI_STT_MODEL = 'gpt-4o-mini-transcribe';
@@ -21,6 +24,20 @@ export function audioProvider() {
   if (env.GEMINI_API_KEY) return 'gemini';
   if (env.OPENAI_API_KEY) return 'openai';
   return null;
+}
+
+// Who speaks the replies: 'elevenlabs' when BRAMBIT_SPEECH_PROVIDER picks it
+// and it has a key and a voice, else the audio provider above. A missing key or
+// voice falls back with a warning, so replies keep a voice.
+let warnedSpeech = false;
+export function speechProvider() {
+  const chosen = String(process.env.BRAMBIT_SPEECH_PROVIDER || '').trim().toLowerCase();
+  if (chosen === 'elevenlabs') {
+    if (elevenlabsReady()) return 'elevenlabs';
+    if (!warnedSpeech) console.warn('[audio] BRAMBIT_SPEECH_PROVIDER=elevenlabs without ELEVENLABS_API_KEY or ELEVENLABS_VOICES: speaking with the audio provider');
+    warnedSpeech = true;
+  }
+  return audioProvider();
 }
 
 const EXT = { 'audio/ogg': 'ogg', 'audio/opus': 'ogg', 'audio/webm': 'webm', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'm4a', 'audio/flac': 'flac' };

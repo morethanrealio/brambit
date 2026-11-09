@@ -24,7 +24,8 @@ import { awsCredentialsConfigured, currentAwsCredentials, getAwsCredentials } fr
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { costOf } from './pricing.mjs';
-import { audioProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
+import { audioProvider, speechProvider, openaiSpeech, openaiTranscribe, OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from './audio-provider.mjs';
+import { elevenlabsPcm, elevenlabsModel } from './elevenlabs.mjs';
 import { GEMINI_DEFAULT_VOICE } from './tts-voices.mjs';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -38,7 +39,7 @@ const STT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_VOICE = GEMINI_DEFAULT_VOICE;
 
 export function imageEnabled() { return !!process.env.GEMINI_API_KEY; }
-export function ttsEnabled() { return !!audioProvider(); }
+export function ttsEnabled() { return !!speechProvider(); }
 export function sttEnabled() { return !!audioProvider(); }
 
 // ROUGH estimate of how much credit each media operation uses.
@@ -57,8 +58,11 @@ export function mediaEstimates(toUnits = (usd) => usd) {
   // Flash, ~270 on OpenAI, which counts ~9 per second).
   const openai = audioProvider() === 'openai';
   const stt = toUnits(costOf(openai ? { model: OPENAI_STT_MODEL, in: 270, out: 40, total: 310 } : { model: STT_MODEL, in: 350, out: 40, total: 390 }));
-  // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS.
-  const tts = toUnits(costOf({ model: openai ? OPENAI_TTS_MODEL : TTS_MODEL, in: 40, out: 600, total: 640 }));
+  // Reply in voice (short speech ~25s): ~600 audio output tokens on TTS; on
+  // ElevenLabs, which bills its text, ~350 characters.
+  const speaker = speechProvider();
+  const tts = toUnits(costOf(speaker === 'elevenlabs' ? { model: elevenlabsModel(), in: 350, out: 0, total: 350 }
+    : { model: speaker === 'openai' ? OPENAI_TTS_MODEL : TTS_MODEL, in: 40, out: 600, total: 640 }));
   return { image, vision, stt, tts };
 }
 
@@ -447,7 +451,9 @@ function toOggOpus(wavBuffer) {
 // PCM 16kHz mono via ffmpeg (stdin->stdout). It's the most universal format for the
 // video worker to consume the reference voice. If ffmpeg isn't
 // available or fails, returns null (the caller decides the fallback).
-export function audioToWav(inputBuffer) {
+// timeoutMs (optional) stops ffmpeg past it and returns null: for audio from
+// people the server doesn't know, which might keep it busy.
+export function audioToWav(inputBuffer, { timeoutMs = 0 } = {}) {
   return new Promise((resolve) => {
     let ff;
     try {
@@ -455,12 +461,51 @@ export function audioToWav(inputBuffer) {
         '-i', 'pipe:0', '-ar', '16000', '-ac', '1', '-f', 'wav', 'pipe:1']);
     } catch { return resolve(null); }
     const chunks = [];
+    let late = false;
+    const timer = timeoutMs > 0 ? setTimeout(() => { late = true; ff.kill('SIGKILL'); }, timeoutMs) : null;
     ff.stdout.on('data', (d) => chunks.push(d));
-    ff.on('error', () => resolve(null));
-    ff.on('close', (code) => resolve(code === 0 && chunks.length ? Buffer.concat(chunks) : null));
+    ff.on('error', () => { clearTimeout(timer); resolve(null); });
+    ff.on('close', (code) => { clearTimeout(timer); resolve(!late && code === 0 && chunks.length ? Buffer.concat(chunks) : null); });
     ff.stdin.on('error', () => {});
     ff.stdin.end(inputBuffer);
   });
+}
+
+// The container of an audio from its first bytes: what browsers record (webm,
+// ogg, mp4) or a file may be (wav, mp3); null for anything else.
+export function sniffAudio(b) {
+  if (!b || b.length < 12) return null;
+  if (b.readUInt32BE(0) === 0x1a45dfa3) return 'audio/webm';
+  if (b.toString('latin1', 0, 4) === 'OggS') return 'audio/ogg';
+  if (b.toString('latin1', 4, 8) === 'ftyp') return 'audio/mp4';
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WAVE') return 'audio/wav';
+  if (b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+  return null;
+}
+
+// An audio a page uploads: {mimeType, data} with data in base64, or a data URL or
+// plain base64 string. → { buffer, mimeType } or { status, reason }, reason one of
+// 'missing', 'unreadable', 'too_large' (past max bytes decoded) or 'unknown_format'.
+// known: only the containers sniffAudio reads, for callers the server doesn't know.
+export function readAudioUpload(raw, { max, known = false }) {
+  const data = typeof raw === 'string' ? raw : raw?.data;
+  if (typeof data !== 'string') return { status: 400, reason: 'missing' };
+  const b64 = data.replace(/^data:[^,]*,/, '').replace(/\s+/g, '');
+  const buffer = /^[A-Za-z0-9+/]+={0,2}$/.test(b64) ? Buffer.from(b64, 'base64') : null;
+  if (!buffer?.length) return { status: 400, reason: 'unreadable' };
+  if (buffer.length > max) return { status: 413, reason: 'too_large' };
+  const declared = /^data:(audio\/[\w.+-]+)/i.exec(data)?.[1] || (/^audio\//i.test(raw?.mimeType) ? raw.mimeType : null);
+  const sniffed = sniffAudio(buffer);
+  if (known && !sniffed) return { status: 400, reason: 'unknown_format' };
+  return { buffer, mimeType: sniffed || declared || 'audio/webm' };
+}
+
+// An upload ready for transcription or storage: WAV 16k mono when ffmpeg reads it
+// (within timeoutMs, if given), else as it came. → { buffer, mime, ext }.
+export async function audioForUse({ buffer, mimeType }, { timeoutMs = 0 } = {}) {
+  const wav = await audioToWav(buffer, { timeoutMs });
+  if (wav) return { buffer: wav, mime: 'audio/wav', ext: 'wav' };
+  return { buffer, mime: mimeType, ext: (mimeType.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm' };
 }
 
 // Now and then Gemini's speech model starts writing text instead of speaking
@@ -495,12 +540,13 @@ async function geminiPcmOnce(text, voice) {
 }
 
 export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
-  if (audioProvider() === 'openai') {
+  const speaker = speechProvider();
+  if (speaker === 'openai') {
     const speech = await openaiSpeech(text, voice);
     console.log(`[media tts] in=${speech.usage.in} out=${speech.usage.out} total=${speech.usage.total}`);
     return speech;
   }
-  const { buffer: pcm, rate, usage } = await geminiPcm(text, voice);
+  const { buffer: pcm, rate, usage } = speaker === 'elevenlabs' ? await elevenlabsPcm(text, voice) : await geminiPcm(text, voice);
   const wav = pcmToWav(pcm, rate);
   console.log(`[media tts] in=${usage.in} out=${usage.out} total=${usage.total}`);
   // We prefer OGG/Opus (native voice note on WhatsApp/Telegram); WAV is the fallback.
@@ -514,7 +560,9 @@ export async function synthesizeSpeech(text, voice = DEFAULT_VOICE) {
 
 // Speech as PCM s16le 24 kHz mono, what a live avatar takes (avatar-live.mjs).
 export async function synthesizePcm(text, voice = DEFAULT_VOICE) {
-  const speech = audioProvider() === 'openai' ? await openaiSpeech(text, voice, fetch, { format: 'pcm' }) : await geminiPcm(text, voice);
+  const speaker = speechProvider();
+  const speech = speaker === 'openai' ? await openaiSpeech(text, voice, fetch, { format: 'pcm' })
+    : speaker === 'elevenlabs' ? await elevenlabsPcm(text, voice) : await geminiPcm(text, voice);
   if (speech.rate !== 24000) throw new Error(`speech came at ${speech.rate} Hz, the avatar takes 24000`);
   return { pcm: speech.buffer, usage: speech.usage };
 }
