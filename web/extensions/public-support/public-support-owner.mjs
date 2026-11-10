@@ -336,10 +336,11 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const volume = await metrics.volume(acc.ownerId, acc.agentId, range);
     if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null });
     const { from, to, days } = range;
-    // clicks = the link buttons pressed in the period (/go), null without events.
+    // clicks = the link buttons pressed in the period (/go); null without events or when
+    // a plugin card already counts them button by button (clicks: true).
     const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language }),
       events ? events.count(acc.agentId, { from, to }, { kind: 'link_click' }) : null]);
-    return send(res, 200, { ...volume, cards, clicks });
+    return send(res, 200, { ...volume, cards, clicks: cards.some((c) => c.clicks) ? null : clicks });
   });
 
   // The period's events as a spreadsheet, for everyone who sees the metrics.

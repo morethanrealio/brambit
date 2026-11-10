@@ -590,6 +590,8 @@ export function retainedByTool(tools) {
 //    'es'), for the labels. A card is {label, value, detail?}: value a number (the
 //    page formats it) or short text, detail a short line under it (e.g. '3 people'),
 //    top: true to show it in the dashboard's first row, next to the volume;
+//    clicks: true when it counts link button clicks (a card per button): the page
+//    then leaves out its own total of clicks;
 //    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
 //    shows across the row, each with its share of the step before;
 //    or a ranking {label, detail?, columns: [name header, number headers...], rows:
@@ -677,7 +679,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { label, ...(detail ? { detail } : {}), columns, rows };
       }
       const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
-      return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}) };
+      return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}), ...(c.clicks === true ? { clicks: true } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
   }
