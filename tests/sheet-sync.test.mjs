@@ -24,6 +24,7 @@ async function world({ link = {}, remote = { version: 5, trashed: false }, googl
     links: {
       get: async (_u, fam, ids = []) => (s.link && (fam === s.link.family || ids.includes(s.link.base_asset_id)) ? s.link : null),
       synced: async (_u, fam, v) => { s.synced.push({ fam, ...v }); return true; },
+      list: async () => (s.link ? [s.link] : []),
     },
     tokenFor: (email) => () => `token-of-${email}`,
     listSheets: async () => [...s.lib].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
@@ -235,4 +236,41 @@ test('a renamed spreadsheet keeps syncing, and the sync is recorded under the li
   const r = await sync.sync(cur);
   assert.equal(r.asset.id, 'a1');
   assert.deepEqual(s.synced, [{ fam: 'gastos.xlsx', version: 5, baseAssetId: 'a1' }]);
+});
+
+test('start of a turn: a spreadsheet changed in Google syncs and the model is told to read it again', async () => {
+  const { s, sync } = await world({ google: await xlsx([['Luz', 130]]) });
+  const note = await sync.changedInGoogle();
+  assert.match(note, /Gastos\.xlsx/);
+  assert.match(note, /id=a2/);
+  assert.match(note, /outdated: read it again/);
+  assert.equal(s.saved.length, 1);
+});
+
+test('start of a turn: nothing changed in Google, no note and no export', async () => {
+  const { s, sync } = await world({ remote: { version: 3, trashed: false } });
+  assert.equal(await sync.changedInGoogle(), '');
+  assert.equal(s.exports, 0);
+  assert.equal(s.versions, 1);
+});
+
+test('start of a turn: a version bump with the same cells says nothing', async () => {
+  const { s, sync } = await world();
+  assert.equal(await sync.changedInGoogle(), '');
+  assert.equal(s.saved.length, 0);
+});
+
+test('start of a turn: a Google error or no link leaves the turn as it was', async () => {
+  assert.equal(await (await world({ remote: new Error('Google 500') })).sync.changedInGoogle(), '');
+  const { s, sync } = await world({ link: null });
+  assert.equal(await sync.changedInGoogle(), '');
+  assert.equal(s.versions, 0);
+});
+
+test('start of a turn: a slow Google does not hold the turn past the budget', async () => {
+  const t0 = Date.now();
+  const slow = createSheetSync({ userId: 'u1', links: { list: async () => [{ family: 'f', file_id: 'f1', synced_version: 1 }] }, tokenFor: () => () => 't',
+    drive: { sheetVersion: () => new Promise((r) => setTimeout(() => r({ version: 9 }), 2000)) } });
+  assert.equal(await slow.changedInGoogle({ budgetMs: 50 }), '');
+  assert.ok(Date.now() - t0 < 1000);
 });

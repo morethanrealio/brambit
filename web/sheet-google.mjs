@@ -63,6 +63,12 @@ export function createSheetLinks(pool) {
         }
       });
     },
+    // The user's linked spreadsheets, most recently synced first (checked at the start of a turn).
+    list(userId, limit = 5) {
+      return safely('list', [], async () => (await pool.query(
+        `SELECT family, google_email, file_id, link, synced_version, base_asset_id FROM ${TABLE}
+         WHERE user_id=$1 ORDER BY updated_at DESC LIMIT $2`, [userId, limit])).rows);
+    },
     // Links a family to a Sheets file (a new link replaces the old one). true when stored.
     link(userId, { family, googleEmail = null, fileId, link = null, version, baseAssetId }) {
       return safely('link', false, async () => {
