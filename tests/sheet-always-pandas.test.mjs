@@ -89,6 +89,23 @@ test('load spreadsheet: writes to the sandbox, registers it, and the note carrie
   assert.deepEqual(getLoadedSheets('u-estrutura').map((e) => [e.filename, e.sheets, e.rows]), [['Contas_a_Pagar.xlsx', 2, 3]]);
 });
 
+test('an older version analyzed once is loaded but left out of the loaded list', async () => {
+  globalThis.__sb = sondaOk(ABAS);
+  const lr = await loadSpreadsheetIntoSandbox('u-antiga', duasAbas(), 'Contas_20261001120000.xlsx', { register: false });
+  assert.equal(lr.ok, true);
+  assert.equal(lr.path, '/workspace/planilhas/Contas_20261001120000.xlsx');
+  assert.deepEqual(getLoadedSheets('u-antiga'), []);
+});
+
+test('a name longer than 80 chars is cut before the extension, which stays', async () => {
+  globalThis.__sb = sondaOk(ABAS);
+  const longo = 'Controle de Horas - Consultoria' + '_20261001132505'.repeat(6) + '.xlsx';
+  const lr = await loadSpreadsheetIntoSandbox('u-longo', duasAbas(), longo);
+  assert.equal(lr.path.length, '/workspace/planilhas/'.length + 80);
+  assert.match(lr.path, /_\d+\.xlsx$/);
+  assert.equal(lr.filename, lr.path.slice('/workspace/planilhas/'.length));
+});
+
 test('CSV without extension gets .csv in the name and the probe opens it as CSV', async () => {
   const sb = globalThis.__sb = sondaOk([{ nome: '(csv)', linhas: 1, colunas: 2, nomes: ['a', 'b'] }]);
   const lr = await loadSpreadsheetIntoSandbox('u-csv', Buffer.from('a;b\n1;2'), 'export', { mime: 'text/csv' });
@@ -347,7 +364,7 @@ test('chat attachment: docKind routes xlsx, xls, csv and tsv to the spreadsheet 
   assert.equal(docKind('a.txt', 'text/plain'), 'text');
   // The attachment block uses the loading note, never spreadsheet text.
   const bloco = pega("if (kind === 'planilha')", 'continue;');
-  assert.match(bloco, /loadSpreadsheetIntoSandbox\(userId, f\.buffer, name, \{ tipo \}\)/);
+  assert.match(bloco, /loadSpreadsheetIntoSandbox\(userId, f\.buffer, name, \{ tipo, assetId \}\)/);
   assert.match(bloco, /\$\{lr\.note\}/);
   assert.doesNotMatch(bloco, /xlsxToText|toString\(/);
 });

@@ -11,11 +11,19 @@
 // saw, including saying something didn't exist when it was in the
 // truncated rows. Because of that there is no longer any path back to text: if the
 // analysis environment fails, the note says the spreadsheet couldn't be read.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { sandboxEnabled, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h: allows follow-up questions
 const MAX_PER_USER = 10;
-const loaded = new Map(); // userId -> [{ path, filename, sheets, rows, ts }]
+const loaded = new Map(); // userId -> [{ path, filename, name, sheets, rows, assetId, threadId, ts }]; name = before safeName
+
+// Conversation each copy was loaded in. The registry is per user, and a copy one
+// conversation or a routine loaded (a daily routine opens the user's finance
+// spreadsheet) is not "the spreadsheet" another one talks about (editTarget).
+const turnThread = new AsyncLocalStorage();
+export const withSheetThread = (threadId, run) => turnThread.run(threadId ?? null, run);
+export const sheetThread = () => turnThread.getStore() ?? null;
 
 function prune(list) {
   const now = Date.now();
@@ -26,8 +34,17 @@ export function registerLoadedSheet(userId, entry) {
   const list = prune(loaded.get(userId) || []);
   // Same spreadsheet reloaded (same path): replaces instead of duplicating.
   const filtered = list.filter((e) => e.path !== entry.path);
-  filtered.push({ ...entry, ts: Date.now() });
+  filtered.push({ ...entry, threadId: sheetThread(), ts: Date.now() });
   loaded.set(userId, filtered.slice(-MAX_PER_USER));
+}
+
+export function forgetLoadedSheet(userId, path) {
+  loaded.set(userId, (loaded.get(userId) || []).filter((e) => e.path !== path));
+}
+
+// The copy at `path` now is library file `assetId` (an edit saved it as a new version).
+export function relabelLoadedSheet(userId, path, assetId) {
+  for (const e of loaded.get(userId) || []) if (e.path === path) e.assetId = assetId;
 }
 
 export function getLoadedSheets(userId) {
@@ -36,10 +53,55 @@ export function getLoadedSheets(userId) {
   return list;
 }
 
+// Bytes of the user's loaded copies other than `except`, and a function that writes
+// back the ones that changed. A sub-agent has the whole sandbox and can write any of
+// them. A copy loaded again meanwhile (another conversation) is newer, not a stray
+// write, and stays. Without writeBytes it does nothing.
+export async function keepLoadedCopies(userId, { except = null, readBytes, writeBytes, label = 'sheet' }) {
+  if (typeof writeBytes !== 'function') return async () => [];
+  const kept = [];
+  for (const e of getLoadedSheets(userId)) {
+    if (e.path === except) continue;
+    let b = null;
+    try { b = await readBytes(userId, e.path); } catch {}
+    if (b?.ok && b.buffer?.length) kept.push({ path: e.path, ts: e.ts, name: e.name || e.filename, buffer: b.buffer });
+  }
+  return async () => {
+    const undone = [];
+    for (const k of kept) {
+      if (getLoadedSheets(userId).find((e) => e.path === k.path)?.ts !== k.ts) continue;
+      let now = null;
+      try { now = await readBytes(userId, k.path); } catch {}
+      if (now?.ok && now.buffer?.equals(k.buffer)) continue;
+      let w = null;
+      try { w = await writeBytes(userId, k.path, k.buffer); } catch (e) { w = { error: e?.message ?? e }; }
+      if (w?.ok) undone.push(k.name);
+      else { console.error(`[${label}] could not put back`, k.path, w?.error); forgetLoadedSheet(userId, k.path); }
+    }
+    return undone;
+  };
+}
+
+// analisar_planilha only reads: a loaded copy the analyst changed is written back
+// as it was, and the model is told.
+export async function analyzeKeepingCopies(userId, { readBytes, writeBytes }, run) {
+  const putBack = await keepLoadedCopies(userId, { readBytes, writeBytes, label: 'analisar_planilha' });
+  let text, undone = [];
+  try { text = await run(); }
+  finally { undone = await putBack(); }
+  return undone.length ? `${text}\n\n(The analyst also changed ${undone.map((n) => `"${n}"`).join(', ')}; an analysis never changes a file, so that was undone.)` : text;
+}
+
+// A long name is cut before its extension: openpyxl refuses a path without one, and
+// a 128-char name reached the editor ending in ".x" (2026-10-30).
+const SAFE_MAX = 80;
+const KEEP_EXT_RE = /\.(xlsx|xlsm|xls|csv|tsv)$/i;
 export function safeName(name) {
-  const base = String(name || 'planilha')
-    .replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
-  return base || 'planilha';
+  const clean = String(name || 'planilha')
+    .replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
+  if (clean.length <= SAFE_MAX) return clean || 'planilha';
+  const ext = clean.match(KEEP_EXT_RE)?.[0] || '';
+  return clean.slice(0, SAFE_MAX - ext.length) + ext;
 }
 
 // Canonical path of the spreadsheet inside the user's sandbox. Exported because
@@ -214,7 +276,8 @@ export function notaPlanilhaIlegivel(filename, motivo) {
 // Writes the bytes to the sandbox and registers them for analysis, WITHOUT reading the
 // structure. This is the edit path (sheet-edit.mjs), which has its own
 // verification and doesn't show the spreadsheet to the model.
-export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
+// assetId: the library file it came from, so a later analysis finds its Google Sheets link.
+export async function gravarPlanilhaNoSandbox(userId, buffer, filename, { assetId = null } = {}) {
   if (!sandboxEnabled()) return { ok: false, error: 'ambiente de análise desligado' };
   const clean = safeName(filename);
   const path = sheetSandboxPath(clean);
@@ -222,7 +285,7 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename) {
   try { w = await sandboxWriteBytes(userId, path, buffer); }
   catch (e) { return { ok: false, error: `ambiente de análise não respondeu (${e?.message || e})` }; }
   if (!w.ok) return { ok: false, error: w.error || 'falha ao gravar no ambiente' };
-  registerLoadedSheet(userId, { path, filename: clean, sheets: null, rows: null });
+  registerLoadedSheet(userId, { path, filename: clean, name: filename, sheets: null, rows: null, assetId });
   return { ok: true, path, filename: clean };
 }
 
@@ -240,18 +303,20 @@ function notaTolerante(t) {
 // Loads a spreadsheet for the conversation: writes it to the sandbox, opens it with pandas and
 // returns the note that goes to the model, with only the structure. Always returns `note`
 // (even on failure), so the caller isn't tempted to send the text.
+// register:false leaves it out of the loaded list (an older version analyzed once).
 // { ok, path, filename, sheets, rows, abas, note } | { ok:false, error, note }
-export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '' } = {}) {
+export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tipo = null, mime = '', register = true, assetId = null } = {}) {
   const t = tipo || tipoPlanilha(filename, mime) || 'excel';
   const nome = nomeComExtensao(filename, t);
   const falha = (error) => ({ ok: false, error, filename: nome, note: notaPlanilhaIlegivel(nome, error) });
-  const g = await gravarPlanilhaNoSandbox(userId, buffer, nome);
+  const g = await gravarPlanilhaNoSandbox(userId, buffer, nome, { assetId });
   if (!g.ok) return falha(g.error);
   const e = await lerEstrutura(userId, g.path, t);
+  if (!register) forgetLoadedSheet(userId, g.path);
   if (!e.ok) return falha(e.error);
   const sheets = e.abas.length;
   const rows = e.abas.reduce((s, a) => s + (Number(a.linhas) || 0), 0);
-  registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows });
+  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, name: nome, sheets, rows, assetId });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
     note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.tolerant)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,
@@ -271,4 +336,4 @@ export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mim
   }
 }
 
-export default { registerLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
+export default { withSheetThread, sheetThread, registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, keepLoadedCopies, analyzeKeepingCopies, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };

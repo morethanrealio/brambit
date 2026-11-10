@@ -13,6 +13,7 @@ const {
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
 } = await import('../web/sheet-edit.mjs');
+const { registerLoadedSheet, getLoadedSheets, withSheetThread, analyzeKeepingCopies } = await import('../web/sheet.mjs');
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -41,6 +42,15 @@ t('non-spreadsheet id errors', !!pickSheetAsset(assets, { id: 8 }).error);
 t('library without spreadsheet errors', !!pickSheetAsset([assets[1]]).error);
 t('empty list errors', !!pickSheetAsset([]).error && !!pickSheetAsset(null).error);
 t('detects spreadsheet by extension without mime', isSheetAsset({ caption: 'x.xlsx' }));
+{
+  // A file sent from outside is a spreadsheet of its own: its id edits it, not a
+  // newer upload or generated file that happens to have the same name.
+  const up = [
+    { id: 31, caption: 'fatura.xlsx', mime: XLSX_MIME, source: 'upload', s3_key: 'u/31', created_at: '2026-10-05T10:00:00Z' },
+    { id: 30, caption: 'fatura.xlsx', mime: XLSX_MIME, source: 'upload', s3_key: 'u/30', created_at: '2026-03-05T10:00:00Z' },
+  ];
+  t('id of an older upload with the same name edits that upload', pickSheetAsset(up, { id: 30 }).asset.id === 30);
+}
 t('does not confuse docx with spreadsheet', !isSheetAsset({ caption: 'x.docx', mime: 'application/msword' }));
 
 // ── 2b) Version family: an id must resolve to the CURRENT version, not an archived copy ──
@@ -94,6 +104,26 @@ t('declared removal is accepted',
 t('declaration with accent also counts', declarouRemocao('feito: REMOÇÃO_INTENCIONAL'));
 t('declaration does not accept cut marker',
   !!detectarProblema({ before: { rows: 62 }, after: { rows: 12, text: '…[cortado: 9 chars]…' }, resumo: 'REMOCAO_INTENCIONAL' }));
+{
+  const view = (rows, extra = {}) => ({ rows: rows.length, text: '# Contas\nConta,Vencimento,Valor\n' + rows.join('\n'), ...extra });
+  const base = ['Aluguel,09/11,2500', 'Luz,10/11,180', 'Agua,06/11,85'];
+  t('rows added again that were already there are a problem',
+    /2 linha/.test(detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180', 'Agua,06/11,85']), resumo: 'acrescentei Gás' })?.motivo || ''));
+  t('a new row added twice is a problem', !!detectarProblema({ before: view(base), after: view([...base, 'Gas,12/11,90', 'Gas,12/11,90']), resumo: '' }));
+  t('new rows that differ pass', !detectarProblema({ before: view(base), after: view([...base, 'Gas,12/11,90', 'Luz,10/12,180']), resumo: '' }));
+  t('a repetition that was there before passes', !detectarProblema({ before: view([...base, 'Luz,10/11,180']), after: view([...base, 'Luz,10/11,180', 'Gas,12/11,90']), resumo: '' }));
+  t('declared repetition is accepted', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180']), resumo: 'dupliquei a Luz. REPETICAO_INTENCIONAL' }));
+  {
+    const real = ['Condomínio,2026-10-05,995,A pagar', 'IPTU,2026-10-15,230,Pago,2026-10-14'];
+    t('a copy that lost the date format is still a repetition',
+      !!detectarProblema({ before: view(real), after: view([...real, 'Condomínio,2026-10-05 00:00:00,995.0,A pagar']), resumo: '' }));
+    t('the same day at another time is not a repetition',
+      !detectarProblema({ before: view(real), after: view([...real, 'Condomínio,2026-10-05 10:30:00,995,A pagar']), resumo: '' }));
+  }
+  t('a cut view never counts as repetition', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180'], { truncated: true }), resumo: '' }));
+  t('the same row in another sheet is not a repetition',
+    !detectarProblema({ before: view(base), after: { rows: 5, text: view(base).text + '\n\n# Copia\nAluguel,09/11,2500' }, resumo: '' }));
+}
 t('problem carries a correction instruction', typeof prob(62, 21).instrucao === 'string' && prob(62, 21).instrucao.length > 20);
 
 // ── 5) Queue per key (overlapping edits do not overlap) ──
@@ -227,6 +257,36 @@ for (const [nome, over] of [
   const { state, deps } = mkFake(over);
   const r = await editSpreadsheet({ userId: `user-${nome}`, objetivo: 'muda algo', deps });
   t(`atomic: ${nome}`, r.ok === false && !!r.error && state.saved.length === 0 && state.renamed.length === 0);
+}
+
+// A rejected edit puts the original back in the sandbox, where the copy stays
+// registered for analysis; a saved one leaves the copy named after the new version.
+{
+  const { state, deps } = mkFake({ runEditor: async ({ path }) => {
+    const j = JSON.parse(state.sandbox[path].toString('utf8'));
+    j.rows = 10;
+    state.sandbox[path] = Buffer.from(JSON.stringify(j));
+    return 'reescrevi a aba';
+  } });
+  const r = await editSpreadsheet({ userId: 'user-restore', objetivo: 'muda algo', deps });
+  t('rejected edit is not saved', r.ok === false && state.saved.length === 0);
+  t('rejected edit leaves the original bytes in the sandbox',
+    JSON.parse(state.sandbox['/workspace/planilhas/Matriz.xlsx'].toString()).rows === 62);
+}
+{
+  const { deps } = mkFake();
+  const load = deps.loadIntoSandbox;
+  let loads = 0;
+  deps.loadIntoSandbox = async (u, buf, name, opts) => {
+    loads++;
+    const r = await load(u, buf, name);
+    registerLoadedSheet(u, { path: r.path, filename: name, assetId: opts?.assetId });
+    return r;
+  };
+  const r = await editSpreadsheet({ userId: 'user-reregister', objetivo: 'acrescente 4 linhas', deps });
+  const [copy] = getLoadedSheets('user-reregister');
+  t('saved edit leaves the sandbox copy named after the new version', r.ok === true && copy?.assetId === 2);
+  t('saved edit does not write the sandbox again', loads === r.tentativas);
 }
 
 // Byte-for-byte identical file = nobody touched it: no new version is created.
@@ -584,6 +644,50 @@ for (const [nome, over] of [
   deps.afterEdit = async () => { throw new Error('quota'); };
   const r2 = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
   t('a failing afterEdit does not undo the edit', r2.ok && r2.avisos.some((a) => a.includes('quota')));
+}
+
+// The editor has the whole sandbox: another loaded copy it writes (2026-10-28: the
+// rows meant for one spreadsheet went into another) is put back, saved edit or not.
+for (const [caso, mexeNoAlvo] of [['saved', true], ['rejected', false]]) {
+  const userId = `user-other-${caso}`;
+  const outro = '/workspace/planilhas/To-Do.xlsx';
+  const { state, deps } = mkFake({ runEditor: async ({ path }) => {
+    if (mexeNoAlvo) {
+      const j = JSON.parse(state.sandbox[path].toString('utf8'));
+      j.rows += 4;
+      state.sandbox[path] = Buffer.from(JSON.stringify(j));
+    }
+    state.sandbox[outro] = Buffer.from(JSON.stringify({ rows: 9, sheets: 1 }));
+    return 'acrescentei 4 linhas';
+  } });
+  const writes = [];
+  deps.writeBytes = async (_u, path, buf) => { writes.push(path); state.sandbox[path] = Buffer.from(buf); return { ok: true }; };
+  state.sandbox[outro] = Buffer.from(JSON.stringify({ rows: 5, sheets: 1 }));
+  withSheetThread('t1', () => registerLoadedSheet(userId, { path: outro, filename: 'To-Do.xlsx', assetId: 99 }));
+  const r = await editSpreadsheet({ userId, objetivo: 'acrescente 4 linhas', deps });
+  t(`${caso} edit: the other loaded copy is put back`, JSON.parse(state.sandbox[outro].toString()).rows === 5 && writes.length === 1);
+  t(`${caso} edit: the model hears it was undone`, mexeNoAlvo ? r.ok && r.avisos.some((a) => a.includes('"To-Do.xlsx"')) : !r.ok && r.error.includes('"To-Do.xlsx"'));
+  t(`${caso} edit: the copy keeps the conversation it was loaded in`, getLoadedSheets(userId).find((e) => e.path === outro)?.threadId === 't1');
+}
+
+{
+  const { deps } = mkFake();
+  deps.notFound = async (id) => `near ${id}`;
+  const r = await editSpreadsheet({ userId: 'user-id-wrong', objetivo: 'mude A1', id: 'nope', deps });
+  t('an edit by an id copied wrong gets the near ids', !r.ok && r.error === 'near nope');
+}
+
+// An analysis only reads: whatever loaded copy the analyst wrote, the analyzed one
+// included, is put back, and the model hears it.
+{
+  const userId = 'user-analysis';
+  const box = { '/workspace/planilhas/Gastos.xlsx': Buffer.from('gastos'), '/workspace/planilhas/To-Do.xlsx': Buffer.from('todo') };
+  const io = { readBytes: async (_u, p) => (box[p] ? { ok: true, buffer: box[p] } : { ok: false }), writeBytes: async (_u, p, b) => { box[p] = Buffer.from(b); return { ok: true }; } };
+  for (const p of Object.keys(box)) registerLoadedSheet(userId, { path: p, filename: p.split('/').pop() });
+  const text = await analyzeKeepingCopies(userId, io, async () => { box['/workspace/planilhas/Gastos.xlsx'] = Buffer.from('x'); box['/workspace/planilhas/To-Do.xlsx'] = Buffer.from('y'); return 'total 10'; });
+  t('analysis: every loaded copy the analyst changed is put back', box['/workspace/planilhas/Gastos.xlsx'].toString() === 'gastos' && box['/workspace/planilhas/To-Do.xlsx'].toString() === 'todo');
+  t('analysis: the model hears it, the answer stays', text.startsWith('total 10') && text.includes('"Gastos.xlsx"') && text.includes('"To-Do.xlsx"'));
+  t('analysis that changes nothing: answer as it was', await analyzeKeepingCopies(userId, io, async () => 'total 10') === 'total 10');
 }
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);

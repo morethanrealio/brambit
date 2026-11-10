@@ -22,7 +22,7 @@ async function world({ link = {}, remote = { version: 5, trashed: false }, googl
   const sync = createSheetSync({
     userId: 'u1',
     links: {
-      get: async (_u, fam) => (s.link && fam === s.link.family ? s.link : null),
+      get: async (_u, fam, ids = []) => (s.link && (fam === s.link.family || ids.includes(s.link.base_asset_id)) ? s.link : null),
       synced: async (_u, fam, v) => { s.synced.push({ fam, ...v }); return true; },
     },
     tokenFor: (email) => () => `token-of-${email}`,
@@ -97,6 +97,14 @@ test('an archived id is synced through the current version', async () => {
   assert.match(r.nota, /changed in Google Sheets/);
 });
 
+test('an .xlsm spreadsheet with macros is never synced, even when linked', async () => {
+  const { s, sync, cur } = await world();
+  cur.caption = 'Gastos.xlsm';
+  const r = await sync.sync(cur);
+  assert.match(r.note, /NOT synced.*\.xlsm spreadsheet with macros/);
+  assert.deepEqual([s.versions, s.exports, s.pushed.length, s.synced.length], [0, 0, 0, 0]);
+});
+
 test('a Google failure keeps the library copy and says it is not synced', async () => {
   const gone = Object.assign(new Error('Google 404: not found'), { status: 404 });
   for (const [remote, why] of [[new Error('Google não conectado.'), /Google error/], [gone, /no longer exists/], [{ version: 9, trashed: true }, /trash/]]) {
@@ -149,10 +157,20 @@ test('changed on both sides without a way to merge: nothing is overwritten on ei
     assert.match(r.note, /^NOT synced/);
     assert.equal(s.saved.length + s.pushed.length + s.synced.length, 0);
   }
+});
+
+test('changed on both sides with the common version gone: Google Sheets wins and the version from here is kept', async () => {
   const { s, sync, cur } = await bothChanged({ merge: async () => assert.fail('no merge without base') });
   s.lib = s.lib.filter((a) => a.id !== 'a0');
-  assert.match((await sync.sync(cur)).note, /last synced version is gone/);
+  const r = await sync.sync(cur);
+  assert.notEqual(r.asset.id, cur.id);
+  assert.equal(r.newVersion, true);
   assert.equal(s.pushed.length, 0);
+  assert.deepEqual(s.synced, [{ fam: 'gastos.xlsx', version: 5, baseAssetId: r.asset.id }]);
+  assert.equal(s.renamed[0][0], cur.id, 'the version from here is archived, not deleted');
+  assert.ok(r.note.includes(r.asset.id) && r.note.includes(cur.id));
+  // A second read finds both sides equal and does nothing more.
+  assert.equal((await sync.sync(r.asset)).note, '');
 });
 
 test('a Sheets bump with no cell change while the library changed: just sent, no merge', async () => {
@@ -186,9 +204,35 @@ test('analysis: a named spreadsheet is pulled before it is loaded', async () => 
 });
 
 test('analysis: a loaded linked spreadsheet is reloaded when Google changed, others stay', async () => {
-  const { sync } = await world({ google: await xlsx([['Gás', 50]]) });
-  const entries = [{ filename: 'Gastos.xlsx', path: '/w/old' }, { filename: 'Outra.xlsx', path: '/w/outra' }];
+  const { s, sync, cur } = await world({ google: await xlsx([['Gás', 50]]) });
+  // The sandbox name has spaces and accents replaced; the copy is known by its library file.
+  cur.caption = 'Controle Financeiro - Março.xlsx';
+  s.link.family = 'controle financeiro - março.xlsx';
+  const entries = [{ filename: 'Controle_Financeiro_-_Mar_o.xlsx', path: '/w/old', assetId: 'a1' }, { filename: 'Outra.xlsx', path: '/w/outra' }];
   const r = await sync.refreshLoaded(entries, { fetchBytes: async (k) => ({ buffer: Buffer.from(k) }), load: async (_u, _b, name) => ({ ok: true, filename: name, path: '/w/new' }) });
   assert.deepEqual(r.sheets.map((e) => e.path), ['/w/new', '/w/outra']);
   assert.match(r.sync, /id=a2/);
+});
+
+test('analysis: an unlinked loaded copy is reloaded only when a newer version exists', async () => {
+  const { s, sync } = await world({ link: null });
+  const load = async (_u, buf, name) => ({ ok: true, filename: name, path: '/w/new', got: String(buf) });
+  const fetchBytes = async (k) => ({ buffer: Buffer.from(k) });
+  const entry = { filename: 'Gastos.xlsx', path: '/w/old', assetId: 'a1' };
+  let r = await sync.refreshLoaded([entry], { fetchBytes, load });
+  assert.deepEqual(r.sheets, [entry]);
+  assert.equal(r.sync, '');
+  // gerar_documento saved the same name again: a newer version, nothing in the sandbox.
+  s.lib.push({ id: 'a2', caption: 'Gastos.xlsx', mime: XLSX, source: 'generated', s3_key: 'k/a2', created_at: '2026-11-09T09:00:00Z' });
+  r = await sync.refreshLoaded([entry], { fetchBytes, load });
+  assert.equal(r.sheets[0].path, '/w/new');
+  assert.match(r.sync, /older version.*id=a2/);
+});
+
+test('a renamed spreadsheet keeps syncing, and the sync is recorded under the link it found', async () => {
+  const { s, sync, cur } = await world({ google: await xlsx([['Luz', 120]]) });
+  cur.caption = 'Despesas.xlsx';
+  const r = await sync.sync(cur);
+  assert.equal(r.asset.id, 'a1');
+  assert.deepEqual(s.synced, [{ fam: 'gastos.xlsx', version: 5, baseAssetId: 'a1' }]);
 });

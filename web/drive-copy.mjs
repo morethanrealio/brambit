@@ -12,8 +12,9 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, baseFamily } from './sheet-edit.mjs';
+import { isSheetAsset, isMacroSheet, familyKey } from './sheet-edit.mjs';
 import { currentVersion } from './sheet-library.mjs';
+import { versionIds } from './sheet-sync.mjs';
 
 const SHARE_ROLES = { editar: 'writer', ler: 'reader' };
 const cleanName = (s) => String(s || '').replace(/[/\\:*?"<>|]+/g, ' ').trim().slice(0, 120) || 'arquivo';
@@ -29,9 +30,9 @@ export function driveCopyTool(deps) {
   const sheetsFor = async () => { try { return await deps.listSheets(userId); } catch { return []; } };
 
   async function toGoogleSheets(asset, { compartilhar }) {
-    const family = baseFamily(asset.caption);
+    const family = familyKey(asset);
     const role = SHARE_ROLES[compartilhar] || null;
-    let linked = await deps.links.get(userId, family);
+    let linked = await deps.links.get(userId, family, versionIds(asset, await sheetsFor()));
     if (linked) {
       try { if ((await deps.sheetVersion(token, linked.file_id)).trashed) linked = null; }
       catch (e) { if (e?.status === 404) linked = null; else throw e; }
@@ -75,6 +76,7 @@ export function driveCopyTool(deps) {
       if (sheets && !isSheetAsset(asset)) return { erro: `"${asset.caption || 'This file'}" is not an .xlsx spreadsheet; only a spreadsheet becomes Google Sheets.` };
       if (sheets && !(await deps.links.available())) return { erro: 'Google Sheets sync is not on in this server. Offer the user the .xlsx copy in Drive (without planilha_google).' };
       if (sheets) asset = currentVersion(asset, await sheetsFor());
+      if (sheets && isMacroSheet(asset)) return { erro: `"${asset.caption || 'This file'}" is an .xlsm spreadsheet with macros, and Google Sheets drops Excel macros, so it cannot become a synced Google Sheets file. Offer the user a plain copy of the .xlsm in Drive (without planilha_google).` };
       const share = sheets && SHARE_ROLES[args.compartilhar] ? args.compartilhar : undefined;
       return { args: { ...args, id: asset.id, nome: sheets ? sheetTitle(asset.caption) : (args.nome || asset.caption || 'arquivo'), assetKey: asset.s3_key, planilha_google: sheets || undefined, compartilhar: share } };
     },

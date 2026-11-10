@@ -32,7 +32,7 @@
 //     SAME file, and the second would reload the S3 copy on top of the first's
 //     work — silent loss of an edit. The queue below solves this.
 
-import { sheetSandboxPath } from './sheet.mjs';
+import { sheetSandboxPath, relabelLoadedSheet, keepLoadedCopies } from './sheet.mjs';
 
 // ── Pure logic (testable offline, without a database or sandbox) ──
 
@@ -61,6 +61,12 @@ export function isSheetAsset(a) {
   return SHEET_EXT_RE.test(String(a.caption || ''));
 }
 
+// An .xlsm spreadsheet keeps Excel macros, which Google Sheets drops: it never
+// becomes a Google Sheets file nor syncs with one.
+export function isMacroSheet(a) {
+  return !!a && (String(a.mime || '').toLowerCase() === 'application/vnd.ms-excel.sheet.macroenabled.12' || /\.xlsm$/i.test(String(a.caption || '')));
+}
+
 // Logical spreadsheet a version belongs to. There is no version-group column in
 // the database: versioning lives only in the caption, where an archived version is
 // `base_yyyymmddhhmmss.ext` (versionedCaption) or `base_v<id>.ext` on the dateless
@@ -79,23 +85,45 @@ export function baseFamily(caption) {
   return (base + ext).toLowerCase();
 }
 
+// Which spreadsheet an asset is, for grouping versions. A name is only evidence of
+// "same spreadsheet" for what this code wrote: a file it generated (gerar_documento,
+// an edit, a sync) or a version it archived with a stamp. A file that came from
+// outside (upload, email attachment, runner) with the same name is a different
+// file until it is edited here: a "fatura.xlsx" sent every month must not turn the
+// March one into an old version of October's. Rows without a source are older
+// than the column and were all generated.
+export function familyKey(asset) {
+  const fam = baseFamily(asset?.caption);
+  const source = asset?.source;
+  if (source == null || source === 'generated' || isArchivedCaption(asset?.caption)) return fam;
+  return `${fam}#${asset.id}`;
+}
+
+// true for a caption this code archived (`base_yyyymmddhhmmss.ext` or `base_v<id>.ext`).
+export function isArchivedCaption(caption) {
+  const raw = String(caption || '');
+  const m = raw.match(SHEET_EXT_RE);
+  return VERSION_STAMP_RE.test(m ? raw.slice(0, -m[0].length) : raw);
+}
+
 // Picks WHICH asset to edit. Without an explicit id, the newest spreadsheet:
-// older ones are version history (decided 09/09/2026).
+// older ones are version history (decided 09/09/2026). editar_planilha no longer
+// gets here without an id: editTarget (sheet-library.mjs) picks it first.
 // `assets` comes from listMediaAssets, already ordered by created_at DESC.
 export function pickSheetAsset(assets, { id = null } = {}) {
   const all = Array.isArray(assets) ? assets : [];
   const sheets = all.filter(isSheetAsset);
   if (id != null && String(id).trim() !== '') {
     const found = all.find((a) => String(a.id) === String(id));
-    if (!found) return { error: 'Não achei esse arquivo na biblioteca.' };
+    if (!found) return { error: 'Não achei esse arquivo na biblioteca.', missing: true };
     if (!isSheetAsset(found)) return { error: `O arquivo ${id} ("${found.caption || 'sem nome'}") não é uma planilha .xlsx.` };
     // Resolve the id to the CURRENT version of its spreadsheet. The id names one
     // immutable asset, but "edit this spreadsheet" means the newest version of its
     // family — never an already-archived copy, which would edit stale content and
     // promote it over the real current version (data loss). `sheets` is ordered
     // created_at DESC, so the first family match is the current version.
-    const fam = baseFamily(found.caption);
-    return { asset: sheets.find((a) => baseFamily(a.caption) === fam) || found };
+    const fam = familyKey(found);
+    return { asset: sheets.find((a) => familyKey(a) === fam) || found };
   }
   const found = sheets[0];
   if (!found) return { error: 'Não achei nenhuma planilha na biblioteca deste usuário. Gere a planilha primeiro (gerar_documento com formato xlsx) e depois edite.' };
@@ -163,6 +191,52 @@ export const DECLARACAO_REMOCAO = 'REMOCAO_INTENCIONAL';
 export function declarouRemocao(resumo) {
   const s = String(resumo || '').toUpperCase();
   return s.includes('REMOCAO_INTENCIONAL') || s.includes('REMOÇÃO_INTENCIONAL');
+}
+
+// Same idea for rows that come out repeated. An edit made over an older copy put
+// back 6 rows that were already there, saved and sent (2026-10-19). A new row equal,
+// cell by cell, to one that already existed (or added twice) is treated as an error
+// unless the summary has this word.
+export const DECLARACAO_REPETICAO = 'REPETICAO_INTENCIONAL';
+
+export function declarouRepeticao(resumo) {
+  const s = String(resumo || '').toUpperCase();
+  return s.includes('REPETICAO_INTENCIONAL') || s.includes('REPETIÇÃO_INTENCIONAL');
+}
+
+// A cell by its value, not its format: a row copied with openpyxl loses the date
+// format and shows "2026-10-05 00:00:00" where the original shows "2026-10-05".
+const valorCelula = (c) => {
+  const v = c.trim();
+  if (/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(v)) return String(Number(v));
+  return v.replace(/^(\d{4}-\d{2}-\d{2})[ T]00:00(:00)?$/, '$1');
+};
+
+// Rows of the text view (xlsxread) per sheet, with 2+ filled cells; null when either
+// side is missing or cut, since a partial view cannot tell a copy from a row not read.
+function linhasPorAba(view) {
+  if (typeof view?.text !== 'string' || view.truncated) return null;
+  const abas = new Map();
+  let aba = '';
+  for (const linha of view.text.split('\n')) {
+    if (linha.startsWith('# ')) { aba = linha; continue; }
+    const cells = linha.split(',').map(valorCelula);
+    if (cells.filter(Boolean).length < 2) continue;
+    const k = `${aba}\n${cells.join(',')}`;
+    abas.set(k, (abas.get(k) || 0) + 1);
+  }
+  return abas;
+}
+
+export function linhasRepetidas(before, after) {
+  const b = linhasPorAba(before), a = linhasPorAba(after);
+  if (!b || !a) return { n: 0, exemplo: '' };
+  let n = 0, exemplo = '';
+  for (const [k, qtd] of a) {
+    const extra = qtd - Math.max(b.get(k) || 0, 1);
+    if (qtd > (b.get(k) || 0) && extra > 0) { n += extra; exemplo ||= k.split('\n')[1]; }
+  }
+  return { n, exemplo };
 }
 
 // ── Round-trip fidelity: the file's internal PARTS ──
@@ -247,6 +321,13 @@ export function detectarProblema({ before, after, resumo, identical = false }) {
     return {
       motivo: `a planilha encolheu de ${b} para ${a} linhas`,
       instrucao: `A instrução não pedia remoção em massa — você provavelmente recriou o arquivo em vez de editá-lo no lugar. Refaça preservando TODAS as ${b} linhas que já existiam. Se a remoção REALMENTE era o que a instrução pedia, escreva a palavra ${DECLARACAO_REMOCAO} no seu resumo pra confirmar que foi de propósito.`,
+    };
+  }
+  const rep = linhasRepetidas(before, after);
+  if (rep.n && !declarouRepeticao(resumo)) {
+    return {
+      motivo: `a planilha ganhou ${rep.n} linha(s) repetida(s), iguais célula a célula a outra linha (ex.: "${rep.exemplo.slice(0, 120)}")`,
+      instrucao: `A instrução não pedia linhas repetidas: você provavelmente acrescentou de novo linhas que o arquivo já tinha. Refaça sobre o arquivo como ele está, sem duplicar nenhuma linha. Se a repetição REALMENTE era o que a instrução pedia, escreva a palavra ${DECLARACAO_REPETICAO} no seu resumo.`,
     };
   }
   return null;
@@ -455,7 +536,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
     if (one) assets = [...assets, one];
   }
   const pick = pickSheetAsset(assets, { id });
-  if (pick.error) return { ok: false, error: pick.error };
+  if (pick.error) return { ok: false, error: pick.missing && deps.notFound ? await deps.notFound(id) : pick.error };
   // A spreadsheet linked to Google Sheets first takes what changed there (sheet-sync.mjs).
   // Runs inside this lock, so beforeEdit must not take it again.
   const synced = deps.beforeEdit ? await deps.beforeEdit(pick.asset) : { asset: pick.asset, note: '' };
@@ -474,20 +555,45 @@ async function editOnce({ userId, objetivo, id, deps }) {
   try { before = deps.inspect(src.buffer); }
   catch (e) { return { ok: false, error: `A planilha da biblioteca não abriu (${e?.message ?? e}).` }; }
 
-  // Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated
-  // the file, saved to another path, wrote truncated content). Returning "look at
-  // the previous version" would dump the problem on the user, who asked for a
-  // change and would be left without it. Each attempt starts from the ORIGINAL bytes: the
-  // loadIntoSandbox overwrites the broken file from the previous attempt.
+  // The editor runs with the user's whole sandbox, so it can write a spreadsheet it
+  // was not given: on 2026-10-28 it put the rows meant for one in another loaded
+  // copy, nothing was saved and the next analysis read those rows as if they were
+  // in the spreadsheet. The other loaded copies are put back as they were.
   const filename = asset.caption || 'planilha.xlsx';
+  const putBack = await keepLoadedCopies(userId, { except: sheetSandboxPath(filename), readBytes: deps.readBytes, writeBytes: deps.writeBytes, label: 'editar_planilha' });
+  let r;
+  try { r = await editAttempts({ userId, objetivo, deps, asset, synced, src, before, filename }); }
+  finally {
+    const undone = await putBack();
+    const nota = undone.length ? `The editor also changed ${undone.map((n) => `"${n}"`).join(', ')}, which it was not asked to edit; that was undone, so only "${filename}" could change.` : '';
+    if (nota && r?.ok) r.avisos.push(nota);
+    else if (nota && r) r.error = `${r.error} ${nota}`;
+  }
+  return r;
+}
+
+// Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated
+// the file, saved to another path, wrote truncated content). Returning "look at
+// the previous version" would dump the problem on the user, who asked for a
+// change and would be left without it. Each attempt starts from the ORIGINAL bytes: the
+// loadIntoSandbox overwrites the broken file from the previous attempt.
+async function editAttempts({ userId, objetivo, deps, asset, synced, src, before, filename }) {
   const podeConferir = typeof deps.readCells === 'function';
-  let out = null, after = null, resumo = null, problema = null, tentativas = 0;
+  // The sandbox copy stays registered for analysis, so an edit that is not saved
+  // puts the original bytes back: a later analysis without a name read the
+  // rejected change as if it were the spreadsheet.
+  const failed = async (r) => {
+    try { await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id }); } catch {}
+    return r;
+  };
+  let out = null, after = null, resumo = null, problema = null, tentativas = 0, loadedPath = null;
   let evid = null, clarificacao = null, semProva = true, motivoSemProva = null;
   for (let t = 1; t <= MAX_TENTATIVAS; t++) {
     tentativas = t;
-    const load = await deps.loadIntoSandbox(userId, src.buffer, filename);
+    const load = await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id });
     if (!load?.ok) return { ok: false, error: `Não consegui carregar a planilha no ambiente: ${load?.error || 'erro'}.` };
     const path = load.path || sheetSandboxPath(filename);
+    loadedPath = load.path;
 
     const correcao = problema
       ? `\n\nATENÇÃO — a sua tentativa anterior deu errado: ${problema.motivo}. O arquivo foi RESTAURADO pro estado original (${before.rows} linhas, ${before.sheets} aba(s)); comece de novo dele. ${problema.instrucao}`
@@ -498,7 +604,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
         sheets: before.sheets, rows: before.rows, tentativa: t,
       });
     } catch (e) {
-      return { ok: false, error: `O editor falhou: ${e?.message ?? e}. Nada foi gravado; a planilha da biblioteca está intacta.` };
+      return failed({ ok: false, error: `O editor falhou: ${e?.message ?? e}. Nada foi gravado; a planilha da biblioteca está intacta.` });
     }
 
     // Real ambiguity: the editor returns the QUESTION instead of guessing. It doesn't save
@@ -507,19 +613,19 @@ async function editOnce({ userId, objetivo, id, deps }) {
     // user and calls the tool again with the resolved instruction.
     clarificacao = pedeClarificacao(resumo);
     if (clarificacao) {
-      return {
+      return failed({
         ok: false, tentativas, clarificacao,
         error: `A instrução ficou ambígua pro editor e ele preferiu perguntar em vez de adivinhar. NÃO gravei nada — a planilha do usuário continua íntegra e com o mesmo nome. Pergunte ao usuário: ${clarificacao}`,
-      };
+      });
     }
 
     out = await deps.readBytes(userId, path);
     if (!out?.ok || !out.buffer?.length) {
-      return { ok: false, error: `Não consegui reler a planilha editada do ambiente (${out?.error || 'arquivo vazio'}). Nada foi gravado: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+      return failed({ ok: false, error: `Não consegui reler a planilha editada do ambiente (${out?.error || 'arquivo vazio'}). Nada foi gravado: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
     }
     try { after = deps.inspect(out.buffer); }
     catch (e) {
-      return { ok: false, error: `A planilha editada saiu corrompida (${e?.message ?? e}). NÃO gravei nada: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+      return failed({ ok: false, error: `A planilha editada saiu corrompida (${e?.message ?? e}). NÃO gravei nada: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
     }
 
     problema = detectarProblema({ before, after, resumo, identical: out.buffer.equals(src.buffer) });
@@ -579,10 +685,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
   // shrink, didn't lose a part, has no truncation marker). In this case it saves and
   // warns that the change wasn't checked cell by cell.
   if (problema) {
-    return {
+    return failed({
       ok: false, tentativas,
       error: `Tentei ${tentativas}x e não consegui aplicar a mudança: ${problema.motivo}. NÃO gravei nada — a planilha do usuário continua íntegra e com o mesmo nome. Explique pro usuário que a mudança não foi aplicada (não ofereça "versão anterior": a atual já é a boa) e, se der, peça a mudança em partes menores ou mais específica. Último relato do editor: ${resumo}`,
-    };
+    });
   }
 
   // Saves the NEW version first (with the canonical name) and only then archives
@@ -599,8 +705,11 @@ async function editOnce({ userId, objetivo, id, deps }) {
       caption,
     });
   } catch (e) {
-    return { ok: false, error: `Não consegui salvar a planilha editada na biblioteca (${e?.message ?? e}). A planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+    return failed({ ok: false, error: `Não consegui salvar a planilha editada na biblioteca (${e?.message ?? e}). A planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
   }
+  // The sandbox already holds these bytes: the loaded copy now names the saved
+  // version, so the next analysis does not take it for a stale copy and reload it.
+  if (saved.assetId && loadedPath) relabelLoadedSheet(userId, loadedPath, saved.assetId);
   let arquivada = null;
   try {
     arquivada = versionedCaption(caption, asset.created_at, { id: asset.id });

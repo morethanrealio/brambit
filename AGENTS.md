@@ -50,15 +50,57 @@ cites a cloud file listed in `cloud.txt`.
 
 ## Library spreadsheets
 
-A spreadsheet in the user's library is a family of versions grouped by name
-(`baseFamily` in `web/sheet-edit.mjs`); the current one is the newest. A family
-may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
-`migrations/2026-11-09-sheet-google-links.sql`): `sheetSync.sync`
+A spreadsheet in the user's library is a family of versions; the current one is
+the newest. The family is `familyKey` in `web/sheet-edit.mjs`: by name
+(`baseFamily`) for files this code wrote (generated, edited, synced, or archived
+with a stamp), but an upload, attachment or runner file stands alone (by id), so
+a "fatura.xlsx" sent every month is not one spreadsheet with versions. An older
+version is read with `analisar_planilha versao_id` (`openVersionForAnalysis` in
+`web/sheet-library.mjs`), which never syncs it nor keeps it loaded. Uploads whose
+bytes are not a zip (`opensAsSheet`) are left out of the automatic choices.
+`analisar_planilha arquivo_id` analyzes the current version of that id's
+spreadsheet (`openIdForAnalysis`); without a library file it analyzes only the
+copies loaded in this conversation (`analysisCopies`), and with none loaded it
+opens the library's only spreadsheet or asks which. An id that is not found lists
+the files whose id starts or ends the same way (`idNotFound` in
+`web/media-list.mjs`, also in `ler_arquivo`, `listar_midia versoes_de` and
+`editar_planilha`): models copy long ids wrong, so none is opened on a guess. `ler_arquivo` with neither id nor name opens a
+file only when the library has a single document (`onlyDocument` in
+`web/media-list.mjs`); otherwise it asks. `editar_planilha` with neither id nor
+name edits the one spreadsheet loaded in this conversation (`editTarget` in
+`web/sheet-library.mjs`), and asks when several are loaded or, with none loaded,
+the library has several; it never just takes the newest. A loaded copy from
+outside the library (link, Drive, OneDrive, e-mail) has no `assetId` and is saved
+in the library (source `link`) on its first edit, also when it is named with
+`nome` (the library is searched first).
+
+The loaded registry (`web/sheet.mjs`) is per user, in memory, 6h; each copy
+records the conversation it was loaded in (`withSheetThread`, set for the whole
+turn in `runConversationTurn`), so one a routine or another chat loaded is never
+taken for "the spreadsheet" without a name. `safeName`
+cuts long names at 80 characters keeping the extension (openpyxl refuses a path
+without one). Before an analysis, a loaded copy that is no longer its family's
+current version is reloaded (`refreshLoaded`); an edit that fails puts the
+original bytes back in the sandbox and one that is saved relabels the sandbox
+copy with the new version's id, so the sandbox never keeps a rejected edit. The
+editor and the analyst have the whole sandbox, so a loaded copy the editor was not
+asked to change, or any one the analyst changes, is written back as it was
+(`keepLoadedCopies` in `web/sheet.mjs`). An edit that comes out with rows repeated
+cell by cell, or one that shrinks a lot, is redone unless the editor declares it
+was asked (`detectarProblema` in `web/sheet-edit.mjs`).
+
+A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
+`migrations/2026-11-09-sheet-google-links.sql`), found by family or by the id of
+any of its versions, so a rename keeps the link. `sheetSync.sync`
 (`web/sheet-sync.mjs`) runs before every read, analysis and edit and after every
 change, so a new path that reads or writes a library spreadsheet goes through it.
-Changes on both sides are merged by `web/sheet-merge.mjs` in the sandbox; a cell
-changed on both sides keeps the Google Sheets value. Its real test needs a local
-Python with openpyxl (`SHEET_PY`) and is skipped without one.
+A copy loaded in the sandbox is matched to the library by `assetId`, never by its
+sandbox file name. Changes on both sides are merged by `web/sheet-merge.mjs` in
+the sandbox, columns matched before rows; a cell changed on both sides keeps the
+Google Sheets value, and when the last version in common is gone Google Sheets
+wins and the local one stays as an older version. An `.xlsm` (macros) is never
+linked nor synced. The merge's real test needs a local Python with openpyxl
+(`SHEET_PY`) and is skipped without one.
 
 ## Checks CI runs on every pull request
 

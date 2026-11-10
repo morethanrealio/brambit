@@ -10,8 +10,8 @@
 //
 // No db connection/import here: the server injects the queries and tests pass fakes.
 
-import { isSheetAsset, baseFamily } from './sheet-edit.mjs';
-import { currentVersion } from './sheet-library.mjs';
+import { isSheetAsset, baseFamily, familyKey } from './sheet-edit.mjs';
+import { currentVersion, withoutUnreadable } from './sheet-library.mjs';
 
 export const LIST_DEFAULT = 20;
 export const LIST_MAX = 50;
@@ -53,8 +53,8 @@ function line(a, timeZone, extra = '') {
 }
 
 const versionsOf = (asset, sheets) => {
-  const fam = baseFamily(asset.caption);
-  return sheets.filter((s) => isSheetAsset(s) && baseFamily(s.caption) === fam);
+  const fam = familyKey(asset);
+  return sheets.filter((s) => isSheetAsset(s) && familyKey(s) === fam);
 };
 
 // One line per item, newest first; a spreadsheet appears once, as its current
@@ -64,7 +64,7 @@ export function formatMediaList(rows, { sheets = [], timeZone, limit = LIST_DEFA
   for (const r of rows) {
     if (out.length >= limit) break;
     if (!isSheetAsset(r)) { out.push(line(r, timeZone)); continue; }
-    const fam = baseFamily(r.caption);
+    const fam = familyKey(r);
     if (seen.has(fam)) continue;
     seen.add(fam);
     const atual = currentVersion(r, all);
@@ -80,10 +80,33 @@ export function formatVersions(asset, sheets, { timeZone } = {}) {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const [atual, ...antigas] = uniq;
   return [
-    `Versions of the spreadsheet "${caption(atual)}", newest first. Use the current version to read and edit; an older version only when the user asks for the earlier content.`,
+    `Versions of the spreadsheet "${caption(atual)}", newest first. Use the current version to read and edit. Only when the user asks what an older version contained: analisar_planilha with versao_id=<its id> reads it as it was, and reenviar_arquivo sends its file.`,
     line(atual, timeZone, ' · CURRENT VERSION'),
     ...antigas.map((v) => line(v, timeZone, ' · older version')),
   ].join('\n');
+}
+
+// A model copying a long id often keeps one end and garbles the other (2026-11:
+// "fd7ff88c-a585-..." joined the current version's start to an older version's end,
+// after the listing had been dropped from the context). With the id not found, the
+// files whose id starts or ends the same way are listed with name and date and, for a
+// spreadsheet, whether it is the current version. None is opened on a guess.
+export async function idNotFound(userId, id, { listMediaAssets, listSheets, timeZone }) {
+  const want = String(id ?? '').trim().toLowerCase();
+  const parts = want.split('-');
+  let rows = [];
+  if (parts.length === 5) { try { rows = await listMediaAssets(userId, { limit: SCAN_MAX }); } catch (e) { console.error('[media] near ids:', e?.message ?? e); } }
+  const near = rows.filter((a) => { const p = String(a.id).toLowerCase().split('-'); return p[0] === parts[0] || p[4] === parts[4]; }).slice(0, NAME_CHOICES_MAX);
+  const base = `ERROR: there is no file with id ${want} in the user's library (or it is another user's). Nothing was opened.`;
+  if (!near.length) return `${base} Use listar_midia to find the id and copy it exactly as listed.`;
+  let sheets = [];
+  if (near.some(isSheetAsset) && listSheets) { try { sheets = await listSheets(userId); } catch (e) { console.error('[media] near ids:', e?.message ?? e); } }
+  const lines = near.map((a) => {
+    if (!isSheetAsset(a)) return line(a, timeZone);
+    const atual = currentVersion(a, sheets);
+    return line(a, timeZone, String(atual.id) === String(a.id) ? ' · current version' : ` · older version; the current one is id=${atual.id}`);
+  });
+  return `${base} An id is often copied wrong; these start or end the same way:\n${lines.join('\n')}\nIf one is the file the user means, call again with its id exactly as written above (for a spreadsheet, the current version unless they asked for an older one). If not sure, ask the user.`;
 }
 
 export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset, listSheets, searchMedia }) {
@@ -106,7 +129,7 @@ export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset
       };
       if (versoes_de != null && String(versoes_de).trim() !== '') {
         const asset = await getMediaAsset(userId, String(versoes_de).trim());
-        if (!asset) return 'ERROR: this file is not in the library (invalid id or another user\'s). Use listar_midia without versoes_de to find the id.';
+        if (!asset) return idNotFound(userId, versoes_de, { listMediaAssets, listSheets, timeZone });
         if (!isSheetAsset(asset)) return `File ${asset.id} ("${caption(asset)}") is not an .xlsx spreadsheet; only spreadsheets keep versions.`;
         return formatVersions(asset, await sheetsOrEmpty(), { timeZone });
       }
@@ -129,7 +152,7 @@ const NAME_CHOICES_MAX = 8;
 export const isDocumentAsset = (a) => !/^(image|audio)/.test(String(a?.mime || '')) && !/image|audio/.test(String(a?.kind || ''));
 const stem = (s) => normalize(s).replace(/\.[a-z0-9]{2,5}$/, '');
 
-export async function findByName(userId, nome, { searchMedia, listSheets, accept = () => true }) {
+export async function findByName(userId, nome, { searchMedia, listSheets, fetchBytes, accept = () => true }) {
   const termo = String(nome || '').trim();
   const hits = (await searchMedia(userId, termo)).filter(accept);
   if (!hits.length) return { notFound: true, reply: `No file of this kind with "${termo}" in its name is in the library. Use listar_midia with busca to see the names that exist, and do not guess an id.` };
@@ -141,13 +164,33 @@ export async function findByName(userId, nome, { searchMedia, listSheets, accept
   const byKey = new Map();
   for (const h of hits) {
     const atual = isSheetAsset(h) ? currentVersion(h, [...sheets, ...hits]) : h;
-    const key = isSheetAsset(h) ? 'sheet:' + baseFamily(atual.caption) : 'id:' + h.id;
+    const key = isSheetAsset(h) ? 'sheet:' + familyKey(atual) : 'id:' + h.id;
     if (!byKey.has(key)) byKey.set(key, atual);
   }
-  const found = [...byKey.values()];
+  const found = await withoutUnreadable([...byKey.values()], fetchBytes);
   if (found.length === 1) return { asset: found[0] };
   const exact = found.filter((a) => stem(baseFamily(a.caption)) === stem(termo));
   if (exact.length === 1) return { asset: exact[0] };
   const nomes = found.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
   return { reply: `Found ${found.length} files with "${termo}" in their name: ${nomes}. Nothing was opened or changed. Ask the user which one, citing the names, and call again with the chosen id. Do not pick one yourself.` };
+}
+
+const isReadableDocument = (a) => a.kind === 'document' || /pdf|word|officedocument|text|markdown|html/.test(a.mime || '');
+
+// ler_arquivo without id and nome. Opening the newest document instead read the
+// wrong file (a routine that wanted one spreadsheet got another, 2026-10), so it
+// opens only when the library has a single document (a spreadsheet's versions count
+// once); with several, the model gets their names to choose from.
+export async function onlyDocument(userId, { listMediaAssets }) {
+  const rows = await listMediaAssets(userId, { limit: SCAN_MAX });
+  const byKey = new Map();
+  for (const a of rows.filter(isReadableDocument)) {
+    const key = isSheetAsset(a) ? 'sheet:' + familyKey(a) : 'id:' + a.id;
+    if (!byKey.has(key)) byKey.set(key, a);
+  }
+  const docs = [...byKey.values()];
+  if (!docs.length) return { reply: 'ERROR: there is no document in the user\'s library. Nothing was opened.' };
+  if (docs.length === 1 && rows.length < SCAN_MAX) return { asset: docs[0] };
+  const nomes = docs.slice(0, NAME_CHOICES_MAX).map((a) => `"${caption(a)}" (id=${a.id})`).join('; ');
+  return { reply: `No id or nome was given and the library has more than one document. The newest: ${nomes}. Nothing was opened. Call again with the nome or id of the one the user means; if the request does not make it clear, ask them, citing the names. Do not pick one yourself.` };
 }

@@ -1163,10 +1163,10 @@ import {
 import { monitorsTools } from './monitors.mjs';
 import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
-import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
+import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread, analyzeKeepingCopies } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, openForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
-import { mediaListTool, createMediaSearch, findByName, isDocumentAsset } from './media-list.mjs';
+import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, analysisCopies, autoLoadSheet, editTarget } from './sheet-library.mjs';
+import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument, idNotFound } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
 import { createSheetSync } from './sheet-sync.mjs';
@@ -2384,6 +2384,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (ephemeral && noTools) {
     return { text: await isolatedAgentDraft(agent, userId, message), attachments: [] };
   }
+  if (sheetThread() !== (thread?.id ?? null)) return withSheetThread(thread?.id, () => runConversationTurn(agent, thread, userId, message, opts)); // spreadsheets loaded in this turn belong to this conversation
   // Opt-in pilot. Human input only, never a routine, webhook, reaction, or draft.
   let discovery = {context:'',participant:null,source:null,reply:null};
   if (!opts.confirmationRestore && !ephemeral && !noTools && !viaReaction && !webhook && ['chat','telegram','whatsapp'].includes(kind) && typeof message==='string') {
@@ -4485,7 +4486,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // pandas in the sandbox and reads the WHOLE spreadsheet (no truncation, any size).
   // The spreadsheet is automatically loaded into the environment when it arrives as an attachment or
   // is opened from Drive (see loadSpreadsheetIntoSandbox). Only the synthesis comes back.
-  const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, accept });
+  const byName = (nome, accept) => findByName(userId, nome, { searchMedia: createMediaSearch(pool).searchMedia, listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, accept });
   // A library spreadsheet linked to Google Sheets syncs with it before every read, analysis and edit, and after every change.
   const sheetSync = createSheetSync({ userId, links: createSheetLinks(pool), tokenFor: (email) => () => validGoogleToken(userId, email || gEmail), listSheets: createSheetLibrary(pool).listSheets, getAsset: getMediaAsset,
     fetchBytes: fetchMedia, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'generated' }), renameAsset: setMediaCaption,
@@ -4499,22 +4500,22 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'What to analyze/calculate, with context (the sub-agent does not see the conversation). E.g.: "some a coluna Valor por sócio e diga o total de cada um", "quantas linhas têm status Pago em 2026 e qual a soma".' },
           formato: { type: 'string', description: 'Optional: how you want the answer (e.g.: "tabela sócio × total", "só o número final").' },
-          nome: { type: 'string', description: 'Optional: name of a spreadsheet in the user\'s library, as they say it (e.g. "Controle de Gastos"). Opens its current version and analyzes only it.' },
+          nome: { type: 'string', description: 'Optional: name of a spreadsheet in the user\'s library, as they say it (e.g. "Controle de Gastos"). Opens its current version and analyzes only it.' }, arquivo_id: { type: 'string', description: 'Optional, instead of nome: id of the spreadsheet in the library (from listar_midia or ler_arquivo). Analyzes the current version of that spreadsheet.' }, versao_id: { type: 'string', description: 'Only when the user asks what an OLDER version contained: its id, from listar_midia with versoes_de. Analyzes exactly that version, as it was.' },
         },
         required: ['objetivo'],
       },
-      run: async ({ objetivo, formato, nome }) => {
+      run: async ({ objetivo, formato, nome, arquivo_id, versao_id }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        let sheets = currentLoaded(getLoadedSheets(userId));
-        const found = nome && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
+        const found = nome && !versao_id && !arquivo_id && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
+        let sheets = analysisCopies(getLoadedSheets(userId), { thread: thread?.id, nome });
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
-        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync };
-        const o = found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, { ...deps, listSheets: createSheetLibrary(pool).listSheets }) : await sheetSync.refreshLoaded(sheets, deps));
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync, getAsset: getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz, notFound: (i) => idNotFound(userId, i, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }) };
+        const o = versao_id && s3Enabled() ? await openVersionForAnalysis(userId, versao_id, deps) : arquivo_id && s3Enabled() ? await openIdForAnalysis(userId, arquivo_id, deps) : found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, deps) : await sheetSync.refreshLoaded(sheets, deps));
         if (o.note) return o.note;
         sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
         try {
-          return (o.sync || '') + await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
+          return (o.sync || '') + await analyzeKeepingCopies(userId, { readBytes: sandboxReadBytes, writeBytes: sandboxWriteBytes }, () => runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente }));
         } catch (e) {
           return `ERRO ao analisar a planilha: ${e?.message ?? e}`;
         }
@@ -4536,28 +4537,28 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
           arquivo_id: { type: 'string', description: 'Optional: id of the spreadsheet in the library (from listar_midia). The edit always goes to the current version of that spreadsheet.' },
-          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). Without arquivo_id and nome, edits the most recent spreadsheet in the library, whatever its name: when the user has more than one spreadsheet, pass one of them.' },
+          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). It also finds a spreadsheet opened by link, Drive, OneDrive or e-mail, which is first saved in the library (the original is not changed). Without arquivo_id and nome, edits the spreadsheet loaded in this conversation or the library\'s only one; otherwise it returns the names to choose from.' },
         },
         required: ['objetivo'],
       },
       run: async ({ objetivo, arquivo_id, nome } = {}) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        if (!arquivo_id && nome) { const found = await byName(nome, isSheetAsset); if (found.reply) return found.reply; arquivo_id = found.asset.id; }
         // Incident guard: if the instruction already arrives with the truncation marker, it
         // is a copy of a truncated call. Writing this into the spreadsheet saves
         // mutilated content (and the marker itself) as data.
         if (hasCutMarker(objetivo)) {
           return 'ERRO: a instrução contém o marcador "…[cortado: N chars]…", ou seja, é um trecho TRUNCADO de uma chamada anterior. NÃO reescreva a planilha a partir dele. Descreva a mudança em poucas linhas (só o que muda), ou use analisar_planilha pra reler o conteúdo atual do arquivo.';
         }
+        const alvo = arquivo_id ? {} : await editTarget(userId, { nome, byName: (n) => byName(n, isSheetAsset), loaded: getLoadedSheets(userId), thread: thread?.id, listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
         try {
           const r = await editSpreadsheet({
             userId, objetivo, id: arquivo_id,
             deps: {
               listAssets: (uid, o) => listMediaAssets(uid, o),
-              getAsset: (uid, id) => getMediaAsset(uid, id),
+              getAsset: (uid, id) => getMediaAsset(uid, id), notFound: (i) => idNotFound(userId, i, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }),
               fetchBytes: (key) => fetchMedia(key),
-              loadIntoSandbox: (uid, buf, name) => gravarPlanilhaNoSandbox(uid, buf, name),
-              readBytes: (uid, p) => sandboxReadBytes(uid, p),
+              loadIntoSandbox: gravarPlanilhaNoSandbox,
+              readBytes: (uid, p) => sandboxReadBytes(uid, p), writeBytes: sandboxWriteBytes,
               // inspect combines reading the content (sheets/rows) with the file's
               // internal INVENTORY: the list of ZIP parts and the formula
               // count. This is what catches a deleted chart/image/macro and a formula
@@ -4576,8 +4577,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               afterEdit: (a) => sheetSync.sync(a, { locked: true }),
             },
           });
-          // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
-          // try again on its own (guessing) instead of asking the user.
+          // Ambiguity is a question, not an error: as an ERROR the model would retry on its own (guessing) instead of asking.
           if (!r.ok && r.clarificacao) {
             return [
               'A edição NÃO foi aplicada porque a instrução ficou ambígua, e nada foi gravado (a planilha do usuário está íntegra e com o mesmo nome).',
@@ -4594,7 +4594,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             `Mudança: ${r.resumo}`,
             r.delta ? `Dimensões: ${r.delta}.` : null,
             r.arquivada ? `A versão anterior ficou na biblioteca como "${r.arquivada}".` : null,
-            ...r.avisos,
+            ...r.avisos, alvo.note,
             'Responda em uma frase curta dizendo o que mudou (não cole o conteúdo da planilha).',
           ].filter(Boolean);
           // Typed receipt: the file was saved (r.asset.key), so the model's
@@ -5135,14 +5135,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       // environment fails, the note says it couldn't be read; there's no fallback to
       // text (see sheet.mjs). The raw file goes to the owner's bucket.
       if (kind === 'planilha') {
-        const tipo = tipoPlanilha(name, f.mime) || 'excel';
+        const tipo = tipoPlanilha(name, f.mime) || 'excel'; let assetId = null;
         if (s3Enabled()) {
           const ext = (name.match(/\.(xls[xm]?|csv|tsv)$/i)?.[1] || (tipo === 'excel' ? 'xlsx' : tipo)).toLowerCase();
           const mime = f.mime || (tipo === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : tipo === 'tsv' ? 'text/tab-separated-values' : 'text/csv');
-          try { await saveBlob({ buffer: f.buffer, ext, mime, kind: 'document', source: 'upload', caption: name }); }
+          try { assetId = (await saveBlob({ buffer: f.buffer, ext, mime, kind: 'document', source: 'upload', caption: name }))?.assetId ?? null; }
           catch (e) { console.error('[planilha] persist:', e?.message ?? e); }
         }
-        const lr = await loadSpreadsheetIntoSandbox(userId, f.buffer, name, { tipo });
+        const lr = await loadSpreadsheetIntoSandbox(userId, f.buffer, name, { tipo, assetId });
         if (!lr.ok) console.error('[planilha] carregar:', lr.error);
         blocks.push(`[Planilha anexada: "${name}"]\n${lr.note}`);
         // The content didn't come in this turn: describing the spreadsheet requires reading
@@ -5730,11 +5730,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     // STORED zip, so the text comes out without a zip lib). Closes the "I can't open the file".
     registry.add({
       name: 'ler_arquivo',
-      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia or by its name (nome). Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id and nome, reads the most recent document in the library.',
+      description: 'Reads and returns the TEXT of a DOCUMENT in the user\'s library (an .xlsx/.docx/.pdf/.md/.txt/.html that YOU generated or that they sent), by the id from listar_midia or by its name (nome). Use it when they ask to "abrir/ler/retomar" a file, or when you need the content of an existing document to continue where you left off. A SPREADSHEET (.xlsx/.xls/.csv) is different: this tool opens it in the analysis environment and returns only its structure (sheets, rows, columns); the content is queried with analisar_planilha and changes are made with editar_planilha. NEVER ask the user to resend the file so you can read it: read it directly with this tool. (For an image, use ver_midia.) Without id and nome, it opens the library\'s document only when there is just one; otherwise it returns the names to choose from.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it to read the most recent document.' },
+          id: { type: 'string', description: 'Id of the file in the library (from listar_midia). Omit it (and nome) only when the library has a single document.' },
           nome: { type: 'string', description: 'Optional, instead of id: the file name as the user says it (e.g. "Controle Financeiro"). A spreadsheet opens in its current version; if more than one file matches, you get their names to ask the user.' },
         },
       },
@@ -5742,8 +5742,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         let asset, nota = '';
         if (id != null) asset = await getMediaAsset(userId, id);
         else if (nome) { const found = await byName(nome, isDocumentAsset); if (found.reply) return found.reply; asset = found.asset; }
-        else asset = (await listMediaAssets(userId, { limit: 20 })).find((r) => (r.kind === 'document') || /pdf|word|officedocument|text|markdown|html/.test(r.mime || '')) || null;
-        if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
+        else { const only = await onlyDocument(userId, { listMediaAssets }); if (only.reply) return only.reply; asset = only.asset; }
+        if (!asset) return id != null ? idNotFound(userId, id, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }) : 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
         ({ asset, nota } = await sheetSync.forReading(asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));
@@ -5756,7 +5756,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // pandas and returns only the structure, or a note that it couldn't be opened.
         const tipo = tipoPlanilha(name, mime);
         if (tipo) {
-          const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo });
+          const lr = await loadSpreadsheetIntoSandbox(userId, bytes.buffer, name, { tipo, assetId: asset.id });
           if (!lr.ok) console.error('[ler_arquivo] planilha:', lr.error);
           return nota + lr.note;
         }

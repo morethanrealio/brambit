@@ -17,7 +17,7 @@
 //
 // No db connection/import here: the server injects everything and tests pass fakes.
 
-import { isSheetAsset, baseFamily, versionedCaption, withKeyLock } from './sheet-edit.mjs';
+import { isSheetAsset, isMacroSheet, familyKey, versionedCaption, withKeyLock } from './sheet-edit.mjs';
 import { currentVersion, sheetForReading, openForAnalysis } from './sheet-library.mjs';
 import { xlsxToText } from './xlsxread.mjs';
 import { XLSX_MIME, sheetVersion as driveVersion, exportSheet as driveExport, replaceSheet as driveReplace } from './sheet-google.mjs';
@@ -31,6 +31,13 @@ const READ_ALL = { maxChars: 20_000_000, maxRowsPerSheet: 1_048_576 };
 export function cellText(buf) {
   const { text } = xlsxToText(buf, READ_ALL);
   return text.split('\n# ').map((sheet) => sheet.split('\n').map((l) => l.replace(/,+$/, '')).join('\n').replace(/\n+$/, '')).join('\n# ');
+}
+
+// Ids of the versions of `asset`'s spreadsheet, to find its Google Sheets link
+// after a rename (sheet-google.mjs, get).
+export function versionIds(asset, sheets) {
+  const fam = familyKey(asset);
+  return [...new Set([asset, ...sheets].filter((a) => isSheetAsset(a) && familyKey(a) === fam).map((a) => a.id))];
 }
 
 export function sameCells(a, b) {
@@ -58,22 +65,25 @@ export function createSheetSync(deps) {
     return { ...asset, id: saved.assetId, s3_key: saved.key, mime: XLSX_MIME, created_at: new Date().toISOString() };
   }
 
-  async function push(token, link, family, asset, buffer) {
+  async function push(token, link, asset, buffer) {
     const r = await drive.replaceSheet(token, link.file_id, buffer);
     const version = Number(r?.version) || (await drive.sheetVersion(token, link.file_id)).version;
-    await links.synced(userId, family, { version, baseAssetId: asset.id });
+    await links.synced(userId, link.family, { version, baseAssetId: asset.id });
   }
 
   // Brings the library spreadsheet and its Google Sheets file to the same content:
   // only Sheets changed -> pull; only the library changed -> push; both -> merge, then push.
   async function doSync(asset) {
     if (!isSheetAsset(asset)) return { asset, note: '' };
-    const family = baseFamily(asset.caption);
-    const link = await links.get(userId, family);
-    if (!link) return { asset, note: '' };
     // Inside the lock: an edit that finished while this call waited made a newer version.
-    try { asset = currentVersion(asset, await deps.listSheets(userId)); } catch {}
+    let all = [];
+    try { all = await deps.listSheets(userId); } catch {}
+    const link = await links.get(userId, familyKey(asset), versionIds(asset, all));
+    if (!link) return { asset, note: '' };
+    asset = currentVersion(asset, all);
+    const family = link.family;
     const caption = asset.caption;
+    if (isMacroSheet(asset)) return { asset, note: notSynced(caption, 'it is an .xlsm spreadsheet with macros, which Google Sheets would drop, so it is not synced') };
     const token = deps.tokenFor(link.google_email);
     let remote;
     try { remote = await drive.sheetVersion(token, link.file_id); }
@@ -105,7 +115,18 @@ export function createSheetSync(deps) {
       if (googleMoved) {
         const baseAsset = link.base_asset_id ? await deps.getAsset(userId, link.base_asset_id) : null;
         base = baseAsset ? await bytesOf(baseAsset) : null;
-        if (!base) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and the last synced version is gone, so they could not be merged') };
+        // Without the common version there is nothing to merge against. Google Sheets
+        // wins, as it does for a cell changed on both sides; the version from here
+        // stays in the library as an older version, so nothing is lost.
+        if (!base && !sameCells(ours, theirs)) {
+          const pulled = await saveVersion(asset, theirs);
+          await links.synced(userId, family, { version: remote.version, baseAssetId: pulled.id });
+          return { asset: pulled, newVersion: true, note: `"${caption}" changed both here and in Google Sheets, and the last version they had in common is gone, so the two could not be merged. The Google Sheets content is now the current version in the library (id=${pulled.id}); the one from here is kept as an older version (id=${asset.id}). Tell the user both, and that nothing was lost. Use the new id from now on.\n` };
+        }
+        if (!base) {
+          await links.synced(userId, family, { version: remote.version, baseAssetId: asset.id });
+          return { asset, note: '' };
+        }
       }
       if (googleMoved && !sameCells(base, theirs)) {
         if (!deps.merge) return { asset, note: notSynced(caption, 'it changed both here and in Google Sheets, and merging needs the analysis environment, which is off') };
@@ -114,7 +135,7 @@ export function createSheetSync(deps) {
       }
       let current = asset, buffer = ours;
       if (merged && !sameCells(merged.buffer, ours)) { current = await saveVersion(asset, merged.buffer); buffer = merged.buffer; }
-      await push(token, link, family, current, buffer);
+      await push(token, link, current, buffer);
       const head = merged ? `"${caption}" was ${describeMerge(merged)}. ` : `"${caption}": `;
       const id = current === asset ? '' : ` The merged version is the current one in the library (id=${current.id}); use this id from now on.`;
       return { asset: current, newVersion: current !== asset, note: `${head}sent to Google Sheets, the file there now has this version at the same link.${id}\n` };
@@ -134,21 +155,30 @@ export function createSheetSync(deps) {
       const p = await sync(r.asset);
       return { asset: p.asset, nota: r.nota + p.note };
     },
-    // analisar_planilha with spreadsheets already loaded in the sandbox: a linked one
-    // whose Sheets changed is reloaded from the new library version.
+    // analisar_planilha with spreadsheets already loaded in the sandbox: a copy that is
+    // no longer the library's current version (a newer one was saved, regenerated or
+    // came from Sheets) is reloaded from the current one. A loaded copy is known by the
+    // library file it came from (assetId), not by its sandbox name, which has spaces
+    // and accents replaced; a copy from outside the library has none and stays.
     async refreshLoaded(entries, { fetchBytes, load }) {
       const sheets = [];
-      let notes = '';
+      let notes = '', all = null;
       for (const e of entries) {
-        const family = baseFamily(e.filename);
-        let asset = null;
-        if (await links.get(userId, family)) {
-          try { asset = (await deps.listSheets(userId)).find((a) => isSheetAsset(a) && baseFamily(a.caption) === family) || null; } catch {}
+        let own = null;
+        if (e.assetId) {
+          if (!all) { try { all = await deps.listSheets(userId); } catch { all = []; } }
+          own = all.find((a) => String(a.id) === String(e.assetId));
+          if (!own) { try { own = await deps.getAsset(userId, e.assetId); } catch {} }
         }
-        if (!asset) { sheets.push(e); continue; }
-        const p = await sync(asset);
+        if (!isSheetAsset(own)) { sheets.push(e); continue; }
+        const atual = currentVersion(own, all);
+        const stale = String(atual.id) !== String(own.id);
+        const linked = await links.get(userId, familyKey(own), versionIds(own, all));
+        if (!linked && !stale) { sheets.push(e); continue; }
+        const p = linked ? await sync(atual) : { asset: atual, note: '' };
         notes += p.note;
-        const o = p.newVersion ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
+        const o = p.newVersion || stale ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
+        if (stale && o.sheet) notes += `The copy loaded before was an older version of "${atual.caption}"; this analysis reads the current one (id=${p.asset.id}).\n`;
         if (o.note) notes += `The new version did not open in the analysis environment (${o.note}); this analysis used the copy loaded before.\n`;
         sheets.push(o.sheet || e);
       }

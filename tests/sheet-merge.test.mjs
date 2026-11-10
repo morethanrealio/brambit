@@ -84,6 +84,30 @@ test('a row inserted in the middle in Google lands in the same place here', { sk
   assert.equal(m.middle, 1);
 });
 
+test('a column inserted in Google comes in without losing a cell edited here', { skip }, async () => {
+  const theirs = { Gastos: [['Item', 'Categoria', 'Valor', 'Pago'], ['Luz', 'Casa', 120, 'não'], ['Água', 'Casa', 80, 'não'], ['Gás', 'Casa', 55, 'não'], ['Net', 'Lazer', 100, 'não']] };
+  const ours = { Gastos: [head, ['Luz', 120, 'sim'], ['Água', 80, 'não'], ['Gás', 50, 'não'], ['Net', 100, 'não'], ['Aluguel', 2000, 'não']] };
+  const m = await mergeSheets('u1', { base: book(base), ours: book(ours), theirs: book(theirs) }, sandbox);
+  assert.equal(m.ok, true, m.error);
+  assert.deepEqual(read(m.buffer).Gastos, [
+    ['Item', 'Categoria', 'Valor', 'Pago'], ['Luz', 'Casa', 120, 'sim'], ['Água', 'Casa', 80, 'não'],
+    ['Gás', 'Casa', 55, 'não'], ['Net', 'Lazer', 100, 'não'], ['Aluguel', null, 2000, 'não'],
+  ]);
+  assert.deepEqual(m.conflicts, []);
+  assert.equal(m.columns, 1);
+  assert.match(describeMerge(m), /1 column\(s\).*formulas that point to their right/);
+});
+
+test('a column deleted in Google goes away here, unless it was edited here', { skip }, async () => {
+  const theirs = { Gastos: [['Item', 'Pago'], ['Luz', 'não'], ['Água', 'não'], ['Gás', 'não'], ['Net', 'sim']] };
+  const clean = await mergeSheets('u1', { base: book(base), ours: book(base), theirs: book(theirs) }, sandbox);
+  assert.deepEqual(read(clean.buffer).Gastos, theirs.Gastos);
+  const ours = { Gastos: [head, ['Luz', 120, 'não'], ['Água', 85, 'não'], ['Gás', 50, 'não'], ['Net', 100, 'não']] };
+  const m = await mergeSheets('u1', { base: book(base), ours: book(ours), theirs: book(theirs) }, sandbox);
+  assert.deepEqual(read(m.buffer).Gastos, [head, ['Luz', 120, 'não'], ['Água', 85, 'não'], ['Gás', 50, 'não'], ['Net', 100, 'sim']]);
+  assert.match(m.kept.join(), /column "Valor" was edited here but deleted in Google Sheets/);
+});
+
 test('a sheet deleted in Google stays here, and the script failing is an error, not a merge', { skip }, async () => {
   const two = { ...base, Extra: [['x']] };
   const m = await mergeSheets('u1', { base: book(two), ours: book(two), theirs: book(base) }, sandbox);
