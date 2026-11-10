@@ -2311,7 +2311,6 @@ const routineMgmtTurnCooldown = new Map();
 const ROUTINE_MGMT_COOLDOWN_MS = 10 * 60_000; // 1 no-credit routine-management turn every 10 min per thread
 
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
-  if (sheetThread() !== (thread?.id ?? null)) return withSheetThread(thread?.id, () => runConversationTurn(agent, thread, userId, message, opts)); // spreadsheets loaded in this turn belong to this conversation
   const baseHistory = structuredClone(thread.history || []);
   // `appClient` = the conversation arrived via the iOS app (X-Brambs-Mobile: 1
   // header on POST /api/chat). When true, the assistant does NOT mention price, package,
@@ -2385,6 +2384,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   if (ephemeral && noTools) {
     return { text: await isolatedAgentDraft(agent, userId, message), attachments: [] };
   }
+  if (sheetThread() !== (thread?.id ?? null)) return withSheetThread(thread?.id, () => runConversationTurn(agent, thread, userId, message, opts)); // spreadsheets loaded in this turn belong to this conversation
   // Opt-in pilot. Human input only, never a routine, webhook, reaction, or draft.
   let discovery = {context:'',participant:null,source:null,reply:null};
   if (!opts.confirmationRestore && !ephemeral && !noTools && !viaReaction && !webhook && ['chat','telegram','whatsapp'].includes(kind) && typeof message==='string') {
