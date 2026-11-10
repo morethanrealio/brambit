@@ -22,8 +22,10 @@ export const SHEETS_MIME = 'application/vnd.google-apps.spreadsheet';
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 
+// Once per process: every turn makes its own createSheetLinks and checks the links.
+let warnedMissing = false;
+
 export function createSheetLinks(pool) {
-  let warnedMissing = false;
   async function safely(op, fallback, fn) {
     try {
       return await fn();
