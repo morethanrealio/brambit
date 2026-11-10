@@ -40,10 +40,16 @@ export function getLoadedSheets(userId) {
   return list;
 }
 
+// A long name is cut before its extension: openpyxl refuses a path without one, and
+// a 128-char name reached the editor ending in ".x" (2026-10-30).
+const SAFE_MAX = 80;
+const KEEP_EXT_RE = /\.(xlsx|xlsm|xls|csv|tsv)$/i;
 export function safeName(name) {
-  const base = String(name || 'planilha')
-    .replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
-  return base || 'planilha';
+  const clean = String(name || 'planilha')
+    .replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
+  if (clean.length <= SAFE_MAX) return clean || 'planilha';
+  const ext = clean.match(KEEP_EXT_RE)?.[0] || '';
+  return clean.slice(0, SAFE_MAX - ext.length) + ext;
 }
 
 // Canonical path of the spreadsheet inside the user's sandbox. Exported because

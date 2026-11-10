@@ -97,6 +97,15 @@ test('an older version analyzed once is loaded but left out of the loaded list',
   assert.deepEqual(getLoadedSheets('u-antiga'), []);
 });
 
+test('a name longer than 80 chars is cut before the extension, which stays', async () => {
+  globalThis.__sb = sondaOk(ABAS);
+  const longo = 'Controle de Horas - Consultoria' + '_20261001132505'.repeat(6) + '.xlsx';
+  const lr = await loadSpreadsheetIntoSandbox('u-longo', duasAbas(), longo);
+  assert.equal(lr.path.length, '/workspace/planilhas/'.length + 80);
+  assert.match(lr.path, /_\d+\.xlsx$/);
+  assert.equal(lr.filename, lr.path.slice('/workspace/planilhas/'.length));
+});
+
 test('CSV without extension gets .csv in the name and the probe opens it as CSV', async () => {
   const sb = globalThis.__sb = sondaOk([{ nome: '(csv)', linhas: 1, colunas: 2, nomes: ['a', 'b'] }]);
   const lr = await loadSpreadsheetIntoSandbox('u-csv', Buffer.from('a;b\n1;2'), 'export', { mime: 'text/csv' });
