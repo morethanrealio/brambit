@@ -230,6 +230,7 @@
   <div class="card hidden" id="whatsappCard" data-view-panel="whatsapp"><p class="nota" data-i18n="public_service_page.whatsapp_soon">Campaigns and message templates for WhatsApp. Coming soon.</p></div>
 
   <div class="hidden" id="metricsCard" data-view-panel="dashboard">
+    <div id="mFunnels"></div>
     <div class="kpis top" id="mTop">
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div><div class="n" id="mConversations">0</div><div class="d" id="mPerPerson"></div></div>
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_people">People</div><div class="n" id="mPeople">0</div></div>
@@ -238,7 +239,6 @@
           <div><div class="n" id="mReplies">0</div><div class="d" data-i18n="public_service_page.metric_sent_short">sent</div></div></div></div>
       <div class="kpi hidden" id="mClicksBox"><div class="l" data-i18n="public_service_page.metric_clicks">Button clicks</div><div class="n" id="mClicks">0</div><div class="d" id="mClickPeople"></div></div>
     </div>
-    <div id="mFunnels"></div>
     <div class="card">
       <h2 data-i18n="public_service_page.metric_per_day">Conversations per day</h2>
       <div class="chart"><div class="bars" id="mBars"></div><div class="tip hidden" id="mTip" role="status"></div></div>
@@ -363,8 +363,8 @@
           </div>
           <div id="convMetrics" class="hidden">
             <h3 data-i18n="public_service_page.metric_conversation">In this conversation</h3>
-            <div class="kpis plugin" id="cCards"></div>
             <div id="cFunnels"></div>
+            <div class="kpis plugin" id="cCards"></div>
           </div>
         </div>
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
