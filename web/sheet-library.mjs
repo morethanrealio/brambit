@@ -183,7 +183,8 @@ export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prep
 // e-mail has no library file at all (2026-11: an edit went to another file, and
 // one by the name of a sheet opened by link found nothing). With a name, the
 // library is searched first, then the spreadsheets loaded from outside it.
-// Without one, it edits the one spreadsheet loaded for the user. A loaded copy
+// Without one, it edits the one spreadsheet loaded in this conversation (`thread`);
+// a copy another conversation or a routine loaded does not count. A loaded copy
 // from outside the library is saved there first (the original stays as it was).
 // Several loaded, or none loaded and several in the library: the model asks.
 // { asset } (only the id is used) | { asset, note } | { reply }
@@ -192,8 +193,9 @@ const MACRO_MIME = [...SHEET_MIMES].find((m) => /macro/i.test(m));
 const XLSX_MIME = [...SHEET_MIMES].find((m) => m !== MACRO_MIME);
 const plainName = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .replace(/\.(xlsx|xlsm|xls|csv|tsv)$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
-export async function editTarget(userId, { nome = null, byName = null, loaded, listSheets, fetchBytes, readBytes, saveAsset }) {
+export async function editTarget(userId, { nome = null, byName = null, loaded, thread = null, listSheets, fetchBytes, readBytes, saveAsset }) {
   const entries = currentLoaded(loaded);
+  const here = currentLoaded((Array.isArray(loaded) ? loaded : []).filter((e) => (e.threadId ?? null) === (thread ?? null)));
   const nameOf = (e) => e.name || e.filename;
   const fromLoaded = async (e) => {
     if (e.assetId) return { asset: { id: e.assetId } };
@@ -215,17 +217,17 @@ export async function editTarget(userId, { nome = null, byName = null, loaded, l
     const hits = entries.filter((e) => !e.assetId && [nameOf(e), e.filename].some((n) => plainName(n).includes(want)));
     return hits.length === 1 ? fromLoaded(hits[0]) : r;
   }
-  if (entries.length > 1) {
-    const nomes = entries.slice(0, CHOICES_MAX).map((e) => `"${nameOf(e)}"`).join('; ');
-    return { reply: `Nothing was edited: ${entries.length} spreadsheets are loaded now: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
+  if (here.length > 1) {
+    const nomes = here.slice(0, CHOICES_MAX).map((e) => `"${nameOf(e)}"`).join('; ');
+    return { reply: `Nothing was edited: ${here.length} spreadsheets are loaded in this conversation: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
   }
-  if (entries.length === 1) return fromLoaded(entries[0]);
+  if (here.length === 1) return fromLoaded(here[0]);
   let all;
   try { all = await listSheets(userId); }
   catch (e) { return { reply: `ERRO: could not list the user's spreadsheets (${e?.message ?? e}). Nothing was edited.` }; }
   const atuais = await withoutUnreadable([...new Map(all.filter(isSheetAsset).map((a) => [familyKey(a), currentVersion(a, all)])).values()], fetchBytes);
   if (atuais.length === 1) return { asset: atuais[0] };
-  if (!atuais.length) return { reply: 'ERRO: the user has no .xlsx spreadsheet in the library and none is loaded now. Generate it first (gerar_documento with format xlsx), or open it from where it is, and then edit.' };
+  if (!atuais.length) return { reply: 'ERRO: the user has no .xlsx spreadsheet in the library and none is loaded in this conversation. Generate it first (gerar_documento with format xlsx), or open it from where it is, and then edit.' };
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
-  return { reply: `Nothing was edited: no spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
+  return { reply: `Nothing was edited: no spreadsheet is loaded in this conversation, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
 }

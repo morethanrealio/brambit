@@ -11,11 +11,19 @@
 // saw, including saying something didn't exist when it was in the
 // truncated rows. Because of that there is no longer any path back to text: if the
 // analysis environment fails, the note says the spreadsheet couldn't be read.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { sandboxEnabled, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h: allows follow-up questions
 const MAX_PER_USER = 10;
-const loaded = new Map(); // userId -> [{ path, filename, name, sheets, rows, assetId, ts }]; name = before safeName
+const loaded = new Map(); // userId -> [{ path, filename, name, sheets, rows, assetId, threadId, ts }]; name = before safeName
+
+// Conversation each copy was loaded in. The registry is per user, and a copy one
+// conversation or a routine loaded (a daily routine opens the user's finance
+// spreadsheet) is not "the spreadsheet" another one talks about (editTarget).
+const turnThread = new AsyncLocalStorage();
+export const withSheetThread = (threadId, run) => turnThread.run(threadId ?? null, run);
+export const sheetThread = () => turnThread.getStore() ?? null;
 
 function prune(list) {
   const now = Date.now();
@@ -26,7 +34,7 @@ export function registerLoadedSheet(userId, entry) {
   const list = prune(loaded.get(userId) || []);
   // Same spreadsheet reloaded (same path): replaces instead of duplicating.
   const filtered = list.filter((e) => e.path !== entry.path);
-  filtered.push({ ...entry, ts: Date.now() });
+  filtered.push({ ...entry, threadId: sheetThread(), ts: Date.now() });
   loaded.set(userId, filtered.slice(-MAX_PER_USER));
 }
 
@@ -289,4 +297,4 @@ export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mim
   }
 }
 
-export default { registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
+export default { withSheetThread, sheetThread, registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };

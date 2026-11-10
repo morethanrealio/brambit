@@ -197,6 +197,13 @@ test('editing with neither id nor name: the loaded spreadsheet, never just the n
   assert.match(r.reply, /has 2/);
   r = await editTarget('u1', { ...deps([]), listSheets: async () => [v3, v2, v1] });
   assert.equal(r.asset.id, v3.id);
+
+  // Loaded by another conversation or a routine: not this one's spreadsheet, so the library decides.
+  r = await editTarget('u1', { ...deps([{ path: '/w/Gastos.xlsx', filename: 'Gastos.xlsx', assetId: v3.id, threadId: 'routine', ts: 1 }]), thread: 'chat' });
+  assert.ok(!r.asset);
+  assert.match(r.reply, /has 2/);
+  r = await editTarget('u1', { ...deps([{ path: '/w/Gastos.xlsx', filename: 'Gastos.xlsx', assetId: v3.id, threadId: 'routine', ts: 1 }, { path: '/w/To-Do.xlsx', filename: 'To-Do.xlsx', assetId: todo.id, threadId: 'chat', ts: 2 }]), thread: 'chat' });
+  assert.equal(r.asset.id, todo.id);
 });
 
 test('editing by the name of a spreadsheet opened by link saves it in the library first', async () => {

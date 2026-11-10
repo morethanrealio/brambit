@@ -1163,7 +1163,7 @@ import {
 import { monitorsTools } from './monitors.mjs';
 import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
-import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
+import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
 import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, currentLoaded, autoLoadSheet, editTarget } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
@@ -2311,6 +2311,7 @@ const routineMgmtTurnCooldown = new Map();
 const ROUTINE_MGMT_COOLDOWN_MS = 10 * 60_000; // 1 no-credit routine-management turn every 10 min per thread
 
 async function runConversationTurn(agent, thread, userId, message, opts = {}) {
+  if (sheetThread() !== (thread?.id ?? null)) return withSheetThread(thread?.id, () => runConversationTurn(agent, thread, userId, message, opts)); // spreadsheets loaded in this turn belong to this conversation
   const baseHistory = structuredClone(thread.history || []);
   // `appClient` = the conversation arrived via the iOS app (X-Brambs-Mobile: 1
   // header on POST /api/chat). When true, the assistant does NOT mention price, package,
@@ -4536,7 +4537,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
           arquivo_id: { type: 'string', description: 'Optional: id of the spreadsheet in the library (from listar_midia). The edit always goes to the current version of that spreadsheet.' },
-          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). It also finds a spreadsheet opened by link, Drive, OneDrive or e-mail, which is first saved in the library (the original is not changed). Without arquivo_id and nome, edits the spreadsheet loaded now or the library\'s only one; otherwise it returns the names to choose from.' },
+          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). It also finds a spreadsheet opened by link, Drive, OneDrive or e-mail, which is first saved in the library (the original is not changed). Without arquivo_id and nome, edits the spreadsheet loaded in this conversation or the library\'s only one; otherwise it returns the names to choose from.' },
         },
         required: ['objetivo'],
       },
@@ -4548,7 +4549,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (hasCutMarker(objetivo)) {
           return 'ERRO: a instrução contém o marcador "…[cortado: N chars]…", ou seja, é um trecho TRUNCADO de uma chamada anterior. NÃO reescreva a planilha a partir dele. Descreva a mudança em poucas linhas (só o que muda), ou use analisar_planilha pra reler o conteúdo atual do arquivo.';
         }
-        const alvo = arquivo_id ? {} : await editTarget(userId, { nome, byName: (n) => byName(n, isSheetAsset), loaded: getLoadedSheets(userId), listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
+        const alvo = arquivo_id ? {} : await editTarget(userId, { nome, byName: (n) => byName(n, isSheetAsset), loaded: getLoadedSheets(userId), thread: thread?.id, listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
         try {
           const r = await editSpreadsheet({
             userId, objetivo, id: arquivo_id,
@@ -4557,7 +4558,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               getAsset: (uid, id) => getMediaAsset(uid, id),
               fetchBytes: (key) => fetchMedia(key),
               loadIntoSandbox: gravarPlanilhaNoSandbox,
-              readBytes: (uid, p) => sandboxReadBytes(uid, p),
+              readBytes: (uid, p) => sandboxReadBytes(uid, p), writeBytes: sandboxWriteBytes,
               // inspect combines reading the content (sheets/rows) with the file's
               // internal INVENTORY: the list of ZIP parts and the formula
               // count. This is what catches a deleted chart/image/macro and a formula
@@ -4576,8 +4577,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
               afterEdit: (a) => sheetSync.sync(a, { locked: true }),
             },
           });
-          // Ambiguity is not an error: it's a question. Returning it as an ERROR would make the model
-          // try again on its own (guessing) instead of asking the user.
+          // Ambiguity is a question, not an error: as an ERROR the model would retry on its own (guessing) instead of asking.
           if (!r.ok && r.clarificacao) {
             return [
               'A edição NÃO foi aplicada porque a instrução ficou ambígua, e nada foi gravado (a planilha do usuário está íntegra e com o mesmo nome).',
