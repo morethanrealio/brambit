@@ -214,6 +214,21 @@ test('analysis: a loaded linked spreadsheet is reloaded when Google changed, oth
   assert.match(r.sync, /id=a2/);
 });
 
+test('analysis: an unlinked loaded copy is reloaded only when a newer version exists', async () => {
+  const { s, sync } = await world({ link: null });
+  const load = async (_u, buf, name) => ({ ok: true, filename: name, path: '/w/new', got: String(buf) });
+  const fetchBytes = async (k) => ({ buffer: Buffer.from(k) });
+  const entry = { filename: 'Gastos.xlsx', path: '/w/old', assetId: 'a1' };
+  let r = await sync.refreshLoaded([entry], { fetchBytes, load });
+  assert.deepEqual(r.sheets, [entry]);
+  assert.equal(r.sync, '');
+  // gerar_documento saved the same name again: a newer version, nothing in the sandbox.
+  s.lib.push({ id: 'a2', caption: 'Gastos.xlsx', mime: XLSX, source: 'generated', s3_key: 'k/a2', created_at: '2026-11-09T09:00:00Z' });
+  r = await sync.refreshLoaded([entry], { fetchBytes, load });
+  assert.equal(r.sheets[0].path, '/w/new');
+  assert.match(r.sync, /older version.*id=a2/);
+});
+
 test('a renamed spreadsheet keeps syncing, and the sync is recorded under the link it found', async () => {
   const { s, sync, cur } = await world({ google: await xlsx([['Luz', 120]]) });
   cur.caption = 'Despesas.xlsx';

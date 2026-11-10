@@ -5135,14 +5135,14 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       // environment fails, the note says it couldn't be read; there's no fallback to
       // text (see sheet.mjs). The raw file goes to the owner's bucket.
       if (kind === 'planilha') {
-        const tipo = tipoPlanilha(name, f.mime) || 'excel';
+        const tipo = tipoPlanilha(name, f.mime) || 'excel'; let assetId = null;
         if (s3Enabled()) {
           const ext = (name.match(/\.(xls[xm]?|csv|tsv)$/i)?.[1] || (tipo === 'excel' ? 'xlsx' : tipo)).toLowerCase();
           const mime = f.mime || (tipo === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : tipo === 'tsv' ? 'text/tab-separated-values' : 'text/csv');
-          try { await saveBlob({ buffer: f.buffer, ext, mime, kind: 'document', source: 'upload', caption: name }); }
+          try { assetId = (await saveBlob({ buffer: f.buffer, ext, mime, kind: 'document', source: 'upload', caption: name }))?.assetId ?? null; }
           catch (e) { console.error('[planilha] persist:', e?.message ?? e); }
         }
-        const lr = await loadSpreadsheetIntoSandbox(userId, f.buffer, name, { tipo });
+        const lr = await loadSpreadsheetIntoSandbox(userId, f.buffer, name, { tipo, assetId });
         if (!lr.ok) console.error('[planilha] carregar:', lr.error);
         blocks.push(`[Planilha anexada: "${name}"]\n${lr.note}`);
         // The content didn't come in this turn: describing the spreadsheet requires reading

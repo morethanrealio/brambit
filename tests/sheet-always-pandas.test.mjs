@@ -364,7 +364,7 @@ test('chat attachment: docKind routes xlsx, xls, csv and tsv to the spreadsheet 
   assert.equal(docKind('a.txt', 'text/plain'), 'text');
   // The attachment block uses the loading note, never spreadsheet text.
   const bloco = pega("if (kind === 'planilha')", 'continue;');
-  assert.match(bloco, /loadSpreadsheetIntoSandbox\(userId, f\.buffer, name, \{ tipo \}\)/);
+  assert.match(bloco, /loadSpreadsheetIntoSandbox\(userId, f\.buffer, name, \{ tipo, assetId \}\)/);
   assert.match(bloco, /\$\{lr\.note\}/);
   assert.doesNotMatch(bloco, /xlsxToText|toString\(/);
 });

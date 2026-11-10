@@ -238,6 +238,29 @@ for (const [nome, over] of [
   t(`atomic: ${nome}`, r.ok === false && !!r.error && state.saved.length === 0 && state.renamed.length === 0);
 }
 
+// A rejected edit puts the original back in the sandbox, where the copy stays
+// registered for analysis; a saved one leaves the copy named after the new version.
+{
+  const { state, deps } = mkFake({ runEditor: async ({ path }) => {
+    const j = JSON.parse(state.sandbox[path].toString('utf8'));
+    j.rows = 10;
+    state.sandbox[path] = Buffer.from(JSON.stringify(j));
+    return 'reescrevi a aba';
+  } });
+  const r = await editSpreadsheet({ userId: 'user-restore', objetivo: 'muda algo', deps });
+  t('rejected edit is not saved', r.ok === false && state.saved.length === 0);
+  t('rejected edit leaves the original bytes in the sandbox',
+    JSON.parse(state.sandbox['/workspace/planilhas/Matriz.xlsx'].toString()).rows === 62);
+}
+{
+  const ids = [];
+  const { deps } = mkFake();
+  const load = deps.loadIntoSandbox;
+  deps.loadIntoSandbox = async (u, buf, name, opts) => { ids.push(opts?.assetId); return load(u, buf, name); };
+  const r = await editSpreadsheet({ userId: 'user-reregister', objetivo: 'acrescente 4 linhas', deps });
+  t('saved edit leaves the sandbox copy named after the new version', r.ok === true && ids.at(-1) === 2);
+}
+
 // Byte-for-byte identical file = nobody touched it: no new version is created.
 {
   let chamadas = 0;

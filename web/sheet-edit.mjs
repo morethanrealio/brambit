@@ -508,6 +508,13 @@ async function editOnce({ userId, objetivo, id, deps }) {
   // loadIntoSandbox overwrites the broken file from the previous attempt.
   const filename = asset.caption || 'planilha.xlsx';
   const podeConferir = typeof deps.readCells === 'function';
+  // The sandbox copy stays registered for analysis, so an edit that is not saved
+  // puts the original bytes back: a later analysis without a name read the
+  // rejected change as if it were the spreadsheet.
+  const failed = async (r) => {
+    try { await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id }); } catch {}
+    return r;
+  };
   let out = null, after = null, resumo = null, problema = null, tentativas = 0;
   let evid = null, clarificacao = null, semProva = true, motivoSemProva = null;
   for (let t = 1; t <= MAX_TENTATIVAS; t++) {
@@ -525,7 +532,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
         sheets: before.sheets, rows: before.rows, tentativa: t,
       });
     } catch (e) {
-      return { ok: false, error: `O editor falhou: ${e?.message ?? e}. Nada foi gravado; a planilha da biblioteca está intacta.` };
+      return failed({ ok: false, error: `O editor falhou: ${e?.message ?? e}. Nada foi gravado; a planilha da biblioteca está intacta.` });
     }
 
     // Real ambiguity: the editor returns the QUESTION instead of guessing. It doesn't save
@@ -534,19 +541,19 @@ async function editOnce({ userId, objetivo, id, deps }) {
     // user and calls the tool again with the resolved instruction.
     clarificacao = pedeClarificacao(resumo);
     if (clarificacao) {
-      return {
+      return failed({
         ok: false, tentativas, clarificacao,
         error: `A instrução ficou ambígua pro editor e ele preferiu perguntar em vez de adivinhar. NÃO gravei nada — a planilha do usuário continua íntegra e com o mesmo nome. Pergunte ao usuário: ${clarificacao}`,
-      };
+      });
     }
 
     out = await deps.readBytes(userId, path);
     if (!out?.ok || !out.buffer?.length) {
-      return { ok: false, error: `Não consegui reler a planilha editada do ambiente (${out?.error || 'arquivo vazio'}). Nada foi gravado: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+      return failed({ ok: false, error: `Não consegui reler a planilha editada do ambiente (${out?.error || 'arquivo vazio'}). Nada foi gravado: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
     }
     try { after = deps.inspect(out.buffer); }
     catch (e) {
-      return { ok: false, error: `A planilha editada saiu corrompida (${e?.message ?? e}). NÃO gravei nada: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+      return failed({ ok: false, error: `A planilha editada saiu corrompida (${e?.message ?? e}). NÃO gravei nada: a planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
     }
 
     problema = detectarProblema({ before, after, resumo, identical: out.buffer.equals(src.buffer) });
@@ -606,10 +613,10 @@ async function editOnce({ userId, objetivo, id, deps }) {
   // shrink, didn't lose a part, has no truncation marker). In this case it saves and
   // warns that the change wasn't checked cell by cell.
   if (problema) {
-    return {
+    return failed({
       ok: false, tentativas,
       error: `Tentei ${tentativas}x e não consegui aplicar a mudança: ${problema.motivo}. NÃO gravei nada — a planilha do usuário continua íntegra e com o mesmo nome. Explique pro usuário que a mudança não foi aplicada (não ofereça "versão anterior": a atual já é a boa) e, se der, peça a mudança em partes menores ou mais específica. Último relato do editor: ${resumo}`,
-    };
+    });
   }
 
   // Saves the NEW version first (with the canonical name) and only then archives
@@ -626,8 +633,11 @@ async function editOnce({ userId, objetivo, id, deps }) {
       caption,
     });
   } catch (e) {
-    return { ok: false, error: `Não consegui salvar a planilha editada na biblioteca (${e?.message ?? e}). A planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` };
+    return failed({ ok: false, error: `Não consegui salvar a planilha editada na biblioteca (${e?.message ?? e}). A planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
   }
+  // The sandbox already holds these bytes; it now names the saved version, so the
+  // next analysis does not take it for a stale copy and reload it.
+  if (saved.assetId) { try { await deps.loadIntoSandbox(userId, out.buffer, filename, { assetId: saved.assetId }); } catch {} }
   let arquivada = null;
   try {
     arquivada = versionedCaption(caption, asset.created_at, { id: asset.id });

@@ -155,25 +155,30 @@ export function createSheetSync(deps) {
       const p = await sync(r.asset);
       return { asset: p.asset, nota: r.nota + p.note };
     },
-    // analisar_planilha with spreadsheets already loaded in the sandbox: a linked one
-    // whose Sheets changed is reloaded from the new library version. A loaded copy is
-    // known by the library file it came from (assetId), not by its sandbox name, which
-    // has spaces and accents replaced; a copy from outside the library has none.
+    // analisar_planilha with spreadsheets already loaded in the sandbox: a copy that is
+    // no longer the library's current version (a newer one was saved, regenerated or
+    // came from Sheets) is reloaded from the current one. A loaded copy is known by the
+    // library file it came from (assetId), not by its sandbox name, which has spaces
+    // and accents replaced; a copy from outside the library has none and stays.
     async refreshLoaded(entries, { fetchBytes, load }) {
       const sheets = [];
       let notes = '', all = null;
       for (const e of entries) {
-        let asset = null;
+        let own = null;
         if (e.assetId) {
           if (!all) { try { all = await deps.listSheets(userId); } catch { all = []; } }
-          let own = all.find((a) => String(a.id) === String(e.assetId));
+          own = all.find((a) => String(a.id) === String(e.assetId));
           if (!own) { try { own = await deps.getAsset(userId, e.assetId); } catch {} }
-          if (isSheetAsset(own) && await links.get(userId, familyKey(own), versionIds(own, all))) asset = currentVersion(own, all);
         }
-        if (!asset) { sheets.push(e); continue; }
-        const p = await sync(asset);
+        if (!isSheetAsset(own)) { sheets.push(e); continue; }
+        const atual = currentVersion(own, all);
+        const stale = String(atual.id) !== String(own.id);
+        const linked = await links.get(userId, familyKey(own), versionIds(own, all));
+        if (!linked && !stale) { sheets.push(e); continue; }
+        const p = linked ? await sync(atual) : { asset: atual, note: '' };
         notes += p.note;
-        const o = p.newVersion ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
+        const o = p.newVersion || stale ? await openForAnalysis(userId, p.asset, { fetchBytes, load }) : {};
+        if (stale && o.sheet) notes += `The copy loaded before was an older version of "${atual.caption}"; this analysis reads the current one (id=${p.asset.id}).\n`;
         if (o.note) notes += `The new version did not open in the analysis environment (${o.note}); this analysis used the copy loaded before.\n`;
         sheets.push(o.sheet || e);
       }
