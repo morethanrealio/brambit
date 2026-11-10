@@ -193,6 +193,43 @@ export function declarouRemocao(resumo) {
   return s.includes('REMOCAO_INTENCIONAL') || s.includes('REMOÇÃO_INTENCIONAL');
 }
 
+// Same idea for rows that come out repeated. An edit made over an older copy put
+// back 6 rows that were already there, saved and sent (2026-10-19). A new row equal,
+// cell by cell, to one that already existed (or added twice) is treated as an error
+// unless the summary has this word.
+export const DECLARACAO_REPETICAO = 'REPETICAO_INTENCIONAL';
+
+export function declarouRepeticao(resumo) {
+  const s = String(resumo || '').toUpperCase();
+  return s.includes('REPETICAO_INTENCIONAL') || s.includes('REPETIÇÃO_INTENCIONAL');
+}
+
+// Rows of the text view (xlsxread) per sheet, with 2+ filled cells; null when either
+// side is missing or cut, since a partial view cannot tell a copy from a row not read.
+function linhasPorAba(view) {
+  if (typeof view?.text !== 'string' || view.truncated) return null;
+  const abas = new Map();
+  let aba = '';
+  for (const linha of view.text.split('\n')) {
+    if (linha.startsWith('# ')) { aba = linha; continue; }
+    if (linha.split(',').filter((c) => c.trim()).length < 2) continue;
+    const k = `${aba}\n${linha}`;
+    abas.set(k, (abas.get(k) || 0) + 1);
+  }
+  return abas;
+}
+
+export function linhasRepetidas(before, after) {
+  const b = linhasPorAba(before), a = linhasPorAba(after);
+  if (!b || !a) return { n: 0, exemplo: '' };
+  let n = 0, exemplo = '';
+  for (const [k, qtd] of a) {
+    const extra = qtd - Math.max(b.get(k) || 0, 1);
+    if (qtd > (b.get(k) || 0) && extra > 0) { n += extra; exemplo ||= k.split('\n')[1]; }
+  }
+  return { n, exemplo };
+}
+
 // ── Round-trip fidelity: the file's internal PARTS ──
 //
 // An .xlsx is a ZIP. Chart, image, pivot table and macro are separate
@@ -275,6 +312,13 @@ export function detectarProblema({ before, after, resumo, identical = false }) {
     return {
       motivo: `a planilha encolheu de ${b} para ${a} linhas`,
       instrucao: `A instrução não pedia remoção em massa — você provavelmente recriou o arquivo em vez de editá-lo no lugar. Refaça preservando TODAS as ${b} linhas que já existiam. Se a remoção REALMENTE era o que a instrução pedia, escreva a palavra ${DECLARACAO_REMOCAO} no seu resumo pra confirmar que foi de propósito.`,
+    };
+  }
+  const rep = linhasRepetidas(before, after);
+  if (rep.n && !declarouRepeticao(resumo)) {
+    return {
+      motivo: `a planilha ganhou ${rep.n} linha(s) repetida(s), iguais célula a célula a outra linha (ex.: "${rep.exemplo.slice(0, 120)}")`,
+      instrucao: `A instrução não pedia linhas repetidas: você provavelmente acrescentou de novo linhas que o arquivo já tinha. Refaça sobre o arquivo como ele está, sem duplicar nenhuma linha. Se a repetição REALMENTE era o que a instrução pedia, escreva a palavra ${DECLARACAO_REPETICAO} no seu resumo.`,
     };
   }
   return null;

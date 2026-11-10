@@ -104,6 +104,19 @@ t('declared removal is accepted',
 t('declaration with accent also counts', declarouRemocao('feito: REMOÇÃO_INTENCIONAL'));
 t('declaration does not accept cut marker',
   !!detectarProblema({ before: { rows: 62 }, after: { rows: 12, text: '…[cortado: 9 chars]…' }, resumo: 'REMOCAO_INTENCIONAL' }));
+{
+  const view = (rows, extra = {}) => ({ rows: rows.length, text: '# Contas\nConta,Vencimento,Valor\n' + rows.join('\n'), ...extra });
+  const base = ['Aluguel,09/11,2500', 'Luz,10/11,180', 'Agua,06/11,85'];
+  t('rows added again that were already there are a problem',
+    /2 linha/.test(detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180', 'Agua,06/11,85']), resumo: 'acrescentei Gás' })?.motivo || ''));
+  t('a new row added twice is a problem', !!detectarProblema({ before: view(base), after: view([...base, 'Gas,12/11,90', 'Gas,12/11,90']), resumo: '' }));
+  t('new rows that differ pass', !detectarProblema({ before: view(base), after: view([...base, 'Gas,12/11,90', 'Luz,10/12,180']), resumo: '' }));
+  t('a repetition that was there before passes', !detectarProblema({ before: view([...base, 'Luz,10/11,180']), after: view([...base, 'Luz,10/11,180', 'Gas,12/11,90']), resumo: '' }));
+  t('declared repetition is accepted', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180']), resumo: 'dupliquei a Luz. REPETICAO_INTENCIONAL' }));
+  t('a cut view never counts as repetition', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180'], { truncated: true }), resumo: '' }));
+  t('the same row in another sheet is not a repetition',
+    !detectarProblema({ before: view(base), after: { rows: 5, text: view(base).text + '\n\n# Copia\nAluguel,09/11,2500' }, resumo: '' }));
+}
 t('problem carries a correction instruction', typeof prob(62, 21).instrucao === 'string' && prob(62, 21).instrucao.length > 20);
 
 // ── 5) Queue per key (overlapping edits do not overlap) ──
