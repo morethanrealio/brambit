@@ -147,8 +147,35 @@ export function createSheetSync(deps) {
   // locked: the caller already holds the user's spreadsheet lock (editar_planilha).
   const sync = (asset, { locked = false } = {}) => (locked ? doSync(asset) : withKeyLock(`sheet:${userId}`, () => doSync(asset)));
 
+  // Start of a turn: a linked spreadsheet changed in Google Sheets syncs now and the model
+  // is told, since what the conversation said about it before is outdated. A question
+  // answered from the history ("quanto está o Pão?") calls no tool, so without this the
+  // sync never ran. At most `max` links, one version call each, `budgetMs` in all: past
+  // that the turn goes on and the sync finishes in the background.
+  async function changedInGoogle({ max = 5, budgetMs = 4000 } = {}) {
+    const work = (async () => {
+      let notes = '', all = null;
+      for (const link of (await links.list?.(userId, max)) || []) {
+        let remote;
+        try { remote = await drive.sheetVersion(deps.tokenFor(link.google_email), link.file_id); } catch { continue; }
+        if (remote.trashed || !(remote.version > Number(link.synced_version))) continue;
+        if (!all) { try { all = await deps.listSheets(userId); } catch { all = []; } }
+        let base = all.find((a) => String(a.id) === String(link.base_asset_id));
+        if (!base && link.base_asset_id) { try { base = await deps.getAsset(userId, link.base_asset_id); } catch {} }
+        if (!isSheetAsset(base)) continue;
+        const p = await sync(currentVersion(base, all));
+        if (p.note) notes += `${p.note.trimEnd()}${p.newVersion ? ' What this conversation said about it before is outdated: read it again before answering about it.' : ''}\n`;
+      }
+      return notes;
+    })().catch(() => '');
+    let timer;
+    const late = new Promise((resolve) => { timer = setTimeout(() => resolve(''), budgetMs); timer.unref?.(); });
+    try { return await Promise.race([work, late]); } finally { clearTimeout(timer); }
+  }
+
   return {
     sync,
+    changedInGoogle,
     // ler_arquivo: an archived id opens the current version, then Google's changes come in.
     async forReading(asset, opts) {
       const r = await sheetForReading(userId, asset, opts);

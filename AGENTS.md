@@ -94,6 +94,9 @@ A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table fr
 any of its versions, so a rename keeps the link. `sheetSync.sync`
 (`web/sheet-sync.mjs`) runs before every read, analysis and edit and after every
 change, so a new path that reads or writes a library spreadsheet goes through it.
+A question answered from the history calls no tool, so each turn also runs
+`sheetSync.changedInGoogle` (at most 5 links, one version call each, 4s in all):
+a spreadsheet changed in Google syncs and the model is told to read it again.
 A copy loaded in the sandbox is matched to the library by `assetId`, never by its
 sandbox file name. Changes on both sides are merged by `web/sheet-merge.mjs` in
 the sandbox, columns matched before rows; a cell changed on both sides keeps the

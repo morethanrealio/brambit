@@ -6017,8 +6017,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const histParaModelo = stripStaleSkillReads(thread.history || [], skillsCtx?.ativas);
   // Index of the user's trackers + the routing rule (use registrar_evento
   // for countable data, not text memory; count via consultar_evento). Always
-  // present in a non-ephemeral turn, even without a tracker yet, to anchor the choice.
-  const trackers = semDono ? '' : (await trackersContext(userId)) + '\n\n' + CHECKLIST_CONTEXT;
+  // present in a non-ephemeral turn, even without a tracker yet, to anchor the choice; then linked Google Sheets that changed there (sheet-sync.mjs).
+  const trackers = semDono ? '' : `${await trackersContext(userId)}\n\n${CHECKLIST_CONTEXT}\n\n${await sheetSync.changedInGoogle()}`.trimEnd();
   // Leaves it to offer a schedule to whoever doesn't have one yet. The block only exists for
   // those below the target AND who pass the offer-book rule (opt-out,
   // cooldown, attempt cap), so "good sense" isn't asked of the model via
