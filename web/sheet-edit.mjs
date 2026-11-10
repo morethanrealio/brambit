@@ -32,7 +32,7 @@
 //     SAME file, and the second would reload the S3 copy on top of the first's
 //     work — silent loss of an edit. The queue below solves this.
 
-import { sheetSandboxPath, relabelLoadedSheet, getLoadedSheets, forgetLoadedSheet } from './sheet.mjs';
+import { sheetSandboxPath, relabelLoadedSheet, keepLoadedCopies } from './sheet.mjs';
 
 // ── Pure logic (testable offline, without a database or sandbox) ──
 
@@ -507,7 +507,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
   // copy, nothing was saved and the next analysis read those rows as if they were
   // in the spreadsheet. The other loaded copies are put back as they were.
   const filename = asset.caption || 'planilha.xlsx';
-  const putBack = await keepOtherCopies(userId, sheetSandboxPath(filename), deps);
+  const putBack = await keepLoadedCopies(userId, { except: sheetSandboxPath(filename), readBytes: deps.readBytes, writeBytes: deps.writeBytes, label: 'editar_planilha' });
   let r;
   try { r = await editAttempts({ userId, objetivo, deps, asset, synced, src, before, filename }); }
   finally {
@@ -517,34 +517,6 @@ async function editOnce({ userId, objetivo, id, deps }) {
     else if (nota && r) r.error = `${r.error} ${nota}`;
   }
   return r;
-}
-
-// Bytes of the user's loaded copies other than `target`, and a function that writes
-// back the ones that changed. A copy loaded again meanwhile (another conversation)
-// is newer, not a stray write, and stays. Without deps.writeBytes it does nothing.
-async function keepOtherCopies(userId, target, deps) {
-  if (typeof deps.writeBytes !== 'function') return async () => [];
-  const kept = [];
-  for (const e of getLoadedSheets(userId)) {
-    if (e.path === target) continue;
-    let b = null;
-    try { b = await deps.readBytes(userId, e.path); } catch {}
-    if (b?.ok && b.buffer?.length) kept.push({ path: e.path, ts: e.ts, name: e.name || e.filename, buffer: b.buffer });
-  }
-  return async () => {
-    const undone = [];
-    for (const k of kept) {
-      if (getLoadedSheets(userId).find((e) => e.path === k.path)?.ts !== k.ts) continue;
-      let now = null;
-      try { now = await deps.readBytes(userId, k.path); } catch {}
-      if (now?.ok && now.buffer?.equals(k.buffer)) continue;
-      let w = null;
-      try { w = await deps.writeBytes(userId, k.path, k.buffer); } catch (e) { w = { error: e?.message ?? e }; }
-      if (w?.ok) undone.push(k.name);
-      else { console.error('[editar_planilha] could not put back', k.path, w?.error); forgetLoadedSheet(userId, k.path); }
-    }
-    return undone;
-  };
 }
 
 // Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated

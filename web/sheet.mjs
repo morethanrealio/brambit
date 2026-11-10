@@ -53,6 +53,45 @@ export function getLoadedSheets(userId) {
   return list;
 }
 
+// Bytes of the user's loaded copies other than `except`, and a function that writes
+// back the ones that changed. A sub-agent has the whole sandbox and can write any of
+// them. A copy loaded again meanwhile (another conversation) is newer, not a stray
+// write, and stays. Without writeBytes it does nothing.
+export async function keepLoadedCopies(userId, { except = null, readBytes, writeBytes, label = 'sheet' }) {
+  if (typeof writeBytes !== 'function') return async () => [];
+  const kept = [];
+  for (const e of getLoadedSheets(userId)) {
+    if (e.path === except) continue;
+    let b = null;
+    try { b = await readBytes(userId, e.path); } catch {}
+    if (b?.ok && b.buffer?.length) kept.push({ path: e.path, ts: e.ts, name: e.name || e.filename, buffer: b.buffer });
+  }
+  return async () => {
+    const undone = [];
+    for (const k of kept) {
+      if (getLoadedSheets(userId).find((e) => e.path === k.path)?.ts !== k.ts) continue;
+      let now = null;
+      try { now = await readBytes(userId, k.path); } catch {}
+      if (now?.ok && now.buffer?.equals(k.buffer)) continue;
+      let w = null;
+      try { w = await writeBytes(userId, k.path, k.buffer); } catch (e) { w = { error: e?.message ?? e }; }
+      if (w?.ok) undone.push(k.name);
+      else { console.error(`[${label}] could not put back`, k.path, w?.error); forgetLoadedSheet(userId, k.path); }
+    }
+    return undone;
+  };
+}
+
+// analisar_planilha only reads: a loaded copy the analyst changed is written back
+// as it was, and the model is told.
+export async function analyzeKeepingCopies(userId, { readBytes, writeBytes }, run) {
+  const putBack = await keepLoadedCopies(userId, { readBytes, writeBytes, label: 'analisar_planilha' });
+  let text, undone = [];
+  try { text = await run(); }
+  finally { undone = await putBack(); }
+  return undone.length ? `${text}\n\n(The analyst also changed ${undone.map((n) => `"${n}"`).join(', ')}; an analysis never changes a file, so that was undone.)` : text;
+}
+
 // A long name is cut before its extension: openpyxl refuses a path without one, and
 // a 128-char name reached the editor ending in ".x" (2026-10-30).
 const SAFE_MAX = 80;
@@ -297,4 +336,4 @@ export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mim
   }
 }
 
-export default { withSheetThread, sheetThread, registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
+export default { withSheetThread, sheetThread, registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, keepLoadedCopies, analyzeKeepingCopies, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };

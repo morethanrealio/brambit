@@ -13,7 +13,7 @@ const {
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
 } = await import('../web/sheet-edit.mjs');
-const { registerLoadedSheet, getLoadedSheets, withSheetThread } = await import('../web/sheet.mjs');
+const { registerLoadedSheet, getLoadedSheets, withSheetThread, analyzeKeepingCopies } = await import('../web/sheet.mjs');
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -648,6 +648,19 @@ for (const [caso, mexeNoAlvo] of [['saved', true], ['rejected', false]]) {
   t(`${caso} edit: the other loaded copy is put back`, JSON.parse(state.sandbox[outro].toString()).rows === 5 && writes.length === 1);
   t(`${caso} edit: the model hears it was undone`, mexeNoAlvo ? r.ok && r.avisos.some((a) => a.includes('"To-Do.xlsx"')) : !r.ok && r.error.includes('"To-Do.xlsx"'));
   t(`${caso} edit: the copy keeps the conversation it was loaded in`, getLoadedSheets(userId).find((e) => e.path === outro)?.threadId === 't1');
+}
+
+// An analysis only reads: whatever loaded copy the analyst wrote, the analyzed one
+// included, is put back, and the model hears it.
+{
+  const userId = 'user-analysis';
+  const box = { '/workspace/planilhas/Gastos.xlsx': Buffer.from('gastos'), '/workspace/planilhas/To-Do.xlsx': Buffer.from('todo') };
+  const io = { readBytes: async (_u, p) => (box[p] ? { ok: true, buffer: box[p] } : { ok: false }), writeBytes: async (_u, p, b) => { box[p] = Buffer.from(b); return { ok: true }; } };
+  for (const p of Object.keys(box)) registerLoadedSheet(userId, { path: p, filename: p.split('/').pop() });
+  const text = await analyzeKeepingCopies(userId, io, async () => { box['/workspace/planilhas/Gastos.xlsx'] = Buffer.from('x'); box['/workspace/planilhas/To-Do.xlsx'] = Buffer.from('y'); return 'total 10'; });
+  t('analysis: every loaded copy the analyst changed is put back', box['/workspace/planilhas/Gastos.xlsx'].toString() === 'gastos' && box['/workspace/planilhas/To-Do.xlsx'].toString() === 'todo');
+  t('analysis: the model hears it, the answer stays', text.startsWith('total 10') && text.includes('"Gastos.xlsx"') && text.includes('"To-Do.xlsx"'));
+  t('analysis that changes nothing: answer as it was', await analyzeKeepingCopies(userId, io, async () => 'total 10') === 'total 10');
 }
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);

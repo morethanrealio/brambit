@@ -1163,7 +1163,7 @@ import {
 import { monitorsTools } from './monitors.mjs';
 import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 import { githubProposeTools } from './github-propose.mjs';
-import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread } from './sheet.mjs';
+import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread, analyzeKeepingCopies } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
 import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, analysisCopies, autoLoadSheet, editTarget } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
@@ -4515,7 +4515,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
         try {
-          return (o.sync || '') + await runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente });
+          return (o.sync || '') + await analyzeKeepingCopies(userId, { readBytes: sandboxReadBytes, writeBytes: sandboxWriteBytes }, () => runSpreadsheetSubagent({ objetivo, formato, userId, sheets, onUsage: (e) => mediaUsages.push(e), language: userLang, onToolOutput: saidaDeSubagente }));
         } catch (e) {
           return `ERRO ao analisar a planilha: ${e?.message ?? e}`;
         }
