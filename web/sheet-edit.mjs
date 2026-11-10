@@ -32,7 +32,7 @@
 //     SAME file, and the second would reload the S3 copy on top of the first's
 //     work — silent loss of an edit. The queue below solves this.
 
-import { sheetSandboxPath } from './sheet.mjs';
+import { sheetSandboxPath, relabelLoadedSheet } from './sheet.mjs';
 
 // ── Pure logic (testable offline, without a database or sandbox) ──
 
@@ -516,13 +516,14 @@ async function editOnce({ userId, objetivo, id, deps }) {
     try { await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id }); } catch {}
     return r;
   };
-  let out = null, after = null, resumo = null, problema = null, tentativas = 0;
+  let out = null, after = null, resumo = null, problema = null, tentativas = 0, loadedPath = null;
   let evid = null, clarificacao = null, semProva = true, motivoSemProva = null;
   for (let t = 1; t <= MAX_TENTATIVAS; t++) {
     tentativas = t;
     const load = await deps.loadIntoSandbox(userId, src.buffer, filename, { assetId: asset.id });
     if (!load?.ok) return { ok: false, error: `Não consegui carregar a planilha no ambiente: ${load?.error || 'erro'}.` };
     const path = load.path || sheetSandboxPath(filename);
+    loadedPath = load.path;
 
     const correcao = problema
       ? `\n\nATENÇÃO — a sua tentativa anterior deu errado: ${problema.motivo}. O arquivo foi RESTAURADO pro estado original (${before.rows} linhas, ${before.sheets} aba(s)); comece de novo dele. ${problema.instrucao}`
@@ -636,9 +637,9 @@ async function editOnce({ userId, objetivo, id, deps }) {
   } catch (e) {
     return failed({ ok: false, error: `Não consegui salvar a planilha editada na biblioteca (${e?.message ?? e}). A planilha do usuário continua íntegra e com o mesmo nome, só não recebeu a mudança.` });
   }
-  // The sandbox already holds these bytes; it now names the saved version, so the
-  // next analysis does not take it for a stale copy and reload it.
-  if (saved.assetId) { try { await deps.loadIntoSandbox(userId, out.buffer, filename, { assetId: saved.assetId }); } catch {} }
+  // The sandbox already holds these bytes: the loaded copy now names the saved
+  // version, so the next analysis does not take it for a stale copy and reload it.
+  if (saved.assetId && loadedPath) relabelLoadedSheet(userId, loadedPath, saved.assetId);
   let arquivada = null;
   try {
     arquivada = versionedCaption(caption, asset.created_at, { id: asset.id });

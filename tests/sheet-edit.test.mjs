@@ -13,6 +13,7 @@ const {
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
 } = await import('../web/sheet-edit.mjs');
+const { registerLoadedSheet, getLoadedSheets } = await import('../web/sheet.mjs');
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -253,12 +254,19 @@ for (const [nome, over] of [
     JSON.parse(state.sandbox['/workspace/planilhas/Matriz.xlsx'].toString()).rows === 62);
 }
 {
-  const ids = [];
   const { deps } = mkFake();
   const load = deps.loadIntoSandbox;
-  deps.loadIntoSandbox = async (u, buf, name, opts) => { ids.push(opts?.assetId); return load(u, buf, name); };
+  let loads = 0;
+  deps.loadIntoSandbox = async (u, buf, name, opts) => {
+    loads++;
+    const r = await load(u, buf, name);
+    registerLoadedSheet(u, { path: r.path, filename: name, assetId: opts?.assetId });
+    return r;
+  };
   const r = await editSpreadsheet({ userId: 'user-reregister', objetivo: 'acrescente 4 linhas', deps });
-  t('saved edit leaves the sandbox copy named after the new version', r.ok === true && ids.at(-1) === 2);
+  const [copy] = getLoadedSheets('user-reregister');
+  t('saved edit leaves the sandbox copy named after the new version', r.ok === true && copy?.assetId === 2);
+  t('saved edit does not write the sandbox again', loads === r.tentativas);
 }
 
 // Byte-for-byte identical file = nobody touched it: no new version is created.

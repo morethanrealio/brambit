@@ -73,8 +73,8 @@ The loaded registry (`web/sheet.mjs`) is per user, in memory, 6h. `safeName`
 cuts long names at 80 characters keeping the extension (openpyxl refuses a path
 without one). Before an analysis, a loaded copy that is no longer its family's
 current version is reloaded (`refreshLoaded`); an edit that fails puts the
-original bytes back in the sandbox and one that is saved reloads the new version
-there, so the sandbox never keeps a rejected edit.
+original bytes back in the sandbox and one that is saved relabels the sandbox
+copy with the new version's id, so the sandbox never keeps a rejected edit.
 
 A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
 `migrations/2026-11-09-sheet-google-links.sql`), found by family or by the id of

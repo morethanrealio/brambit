@@ -34,6 +34,11 @@ export function forgetLoadedSheet(userId, path) {
   loaded.set(userId, (loaded.get(userId) || []).filter((e) => e.path !== path));
 }
 
+// The copy at `path` now is library file `assetId` (an edit saved it as a new version).
+export function relabelLoadedSheet(userId, path, assetId) {
+  for (const e of loaded.get(userId) || []) if (e.path === path) e.assetId = assetId;
+}
+
 export function getLoadedSheets(userId) {
   const list = prune(loaded.get(userId) || []);
   loaded.set(userId, list);
@@ -284,4 +289,4 @@ export async function analisePlanilhaConector(onSheetLoad, buffer, filename, mim
   }
 }
 
-export default { registerLoadedSheet, forgetLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
+export default { registerLoadedSheet, forgetLoadedSheet, relabelLoadedSheet, getLoadedSheets, loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, notaPlanilhaIlegivel, analisePlanilhaConector, tipoPlanilha, sheetSandboxPath, safeName };
