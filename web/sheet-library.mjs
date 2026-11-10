@@ -85,6 +85,23 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare
   return lr.ok ? { sheet: lr, sync } : { note: sync + lr.note };
 }
 
+// analisar_planilha with arquivo_id: the spreadsheet that id belongs to, at its
+// current version, as ler_arquivo opens it (the model often holds the id of a
+// version since archived). Without this the id was ignored and the analysis ran on
+// whatever was loaded (2026-11: 11 of 42 calls passed one). A CSV has no versions.
+const OTHER_TABLE_RE = /\.(xls|csv|tsv)$/i;
+export async function openIdForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare }) {
+  const asset = await getAsset(userId, String(id).trim());
+  if (!asset) return { note: `ERROR: file ${id} is not in the user's library. Use listar_midia to find the id.` };
+  if (!isSheetAsset(asset)) {
+    if (OTHER_TABLE_RE.test(asset.caption || '')) return openForAnalysis(userId, asset, { fetchBytes, load });
+    return { note: `ERROR: file ${id} ("${asset.caption}") is not a spreadsheet.` };
+  }
+  let atual = asset;
+  try { atual = currentVersion(asset, await listSheets(userId)); } catch (e) { console.error('[analisar_planilha] versions:', e?.message ?? e); }
+  return openForAnalysis(userId, atual, { fetchBytes, load, prepare });
+}
+
 // analisar_planilha with versao_id: one exact version, for when the user asks what
 // an older version contained (listar_midia versoes_de lists them). An older version
 // is opened as it was: no Google Sheets sync, which would turn it into the current

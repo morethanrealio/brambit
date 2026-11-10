@@ -3,7 +3,7 @@
 // Run with: node --test tests/sheet-library.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis } from '../web/sheet-library.mjs';
+import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis, openIdForAnalysis } from '../web/sheet-library.mjs';
 import { findByName } from '../web/media-list.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -115,6 +115,24 @@ test('versao_id analyzes exactly an older version, without syncing or keeping it
   assert.equal(cur.sheet.filename, v3.caption);
   assert.deepEqual(calls, [{ prepare: v3.id }, { name: v3.caption, register: undefined }]);
   assert.match((await openVersionForAnalysis('u1', 'nope', deps)).note, /not in the user's library/);
+});
+
+test('arquivo_id analyzes the current version of that spreadsheet, synced and kept loaded', async () => {
+  const csv = a('55555555-5555-4555-8555-555555555555', 'extrato.csv', '2026-11-08T10:00:00Z', 'text/csv');
+  const all = [...lib, csv];
+  const calls = [];
+  const deps = {
+    getAsset: async (_u, id) => all.find((x) => x.id === id) || null,
+    listSheets: async () => lib,
+    fetchBytes: async (key) => ({ buffer: Buffer.from(key) }),
+    load: async (_u, _b, name, opts) => { calls.push({ name, register: opts.register }); return { ok: true, filename: name }; },
+    prepare: async (asset) => { calls.push({ prepare: asset.id }); return { asset, note: '' }; },
+  };
+  const o = await openIdForAnalysis('u1', v1.id, deps);
+  assert.equal(o.sheet.filename, v3.caption);
+  assert.deepEqual(calls, [{ prepare: v3.id }, { name: v3.caption, register: undefined }]);
+  assert.equal((await openIdForAnalysis('u1', csv.id, deps)).sheet.filename, 'extrato.csv');
+  assert.match((await openIdForAnalysis('u1', 'nope', deps)).note, /not in the user's library/);
 });
 
 test('an uploaded .xlsx that is not a zip stays out of a choice, but opens when it is the only one', async () => {

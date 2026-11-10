@@ -1165,7 +1165,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWr
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
+import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
@@ -4499,17 +4499,17 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'What to analyze/calculate, with context (the sub-agent does not see the conversation). E.g.: "some a coluna Valor por sócio e diga o total de cada um", "quantas linhas têm status Pago em 2026 e qual a soma".' },
           formato: { type: 'string', description: 'Optional: how you want the answer (e.g.: "tabela sócio × total", "só o número final").' },
-          nome: { type: 'string', description: 'Optional: name of a spreadsheet in the user\'s library, as they say it (e.g. "Controle de Gastos"). Opens its current version and analyzes only it.' }, versao_id: { type: 'string', description: 'Only when the user asks what an OLDER version contained: its id, from listar_midia with versoes_de. Analyzes exactly that version, as it was.' },
+          nome: { type: 'string', description: 'Optional: name of a spreadsheet in the user\'s library, as they say it (e.g. "Controle de Gastos"). Opens its current version and analyzes only it.' }, arquivo_id: { type: 'string', description: 'Optional, instead of nome: id of the spreadsheet in the library (from listar_midia or ler_arquivo). Analyzes the current version of that spreadsheet.' }, versao_id: { type: 'string', description: 'Only when the user asks what an OLDER version contained: its id, from listar_midia with versoes_de. Analyzes exactly that version, as it was.' },
         },
         required: ['objetivo'],
       },
-      run: async ({ objetivo, formato, nome, versao_id }) => {
+      run: async ({ objetivo, formato, nome, arquivo_id, versao_id }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
         let sheets = currentLoaded(getLoadedSheets(userId));
-        const found = nome && !versao_id && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
+        const found = nome && !versao_id && !arquivo_id && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
         const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync, getAsset: getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz };
-        const o = versao_id && s3Enabled() ? await openVersionForAnalysis(userId, versao_id, deps) : found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, deps) : await sheetSync.refreshLoaded(sheets, deps));
+        const o = versao_id && s3Enabled() ? await openVersionForAnalysis(userId, versao_id, deps) : arquivo_id && s3Enabled() ? await openIdForAnalysis(userId, arquivo_id, deps) : found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, deps) : await sheetSync.refreshLoaded(sheets, deps));
         if (o.note) return o.note;
         sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
         if (!sheets.length) return 'Nenhuma planilha está carregada no ambiente agora. Se ela está na biblioteca do usuário, abra com ler_arquivo (isso a carrega); se está no Drive/OneDrive/e-mail, abra de lá. Se não estiver em lugar nenhum, peça pro usuário enviar a planilha.';
