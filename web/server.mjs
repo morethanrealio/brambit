@@ -1165,7 +1165,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWr
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, currentLoaded, autoLoadSheet, editTarget } from './sheet-library.mjs';
+import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, analysisCopies, autoLoadSheet, editTarget } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
@@ -4506,8 +4506,8 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       },
       run: async ({ objetivo, formato, nome, arquivo_id, versao_id }) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        let sheets = currentLoaded(getLoadedSheets(userId));
         const found = nome && !versao_id && !arquivo_id && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
+        let sheets = analysisCopies(getLoadedSheets(userId), { thread: thread?.id, nome });
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
         const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync, getAsset: getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz };
         const o = versao_id && s3Enabled() ? await openVersionForAnalysis(userId, versao_id, deps) : arquivo_id && s3Enabled() ? await openIdForAnalysis(userId, arquivo_id, deps) : found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, deps) : await sheetSync.refreshLoaded(sheets, deps));

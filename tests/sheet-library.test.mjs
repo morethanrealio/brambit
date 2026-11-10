@@ -3,7 +3,7 @@
 // Run with: node --test tests/sheet-library.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis, openIdForAnalysis, editTarget } from '../web/sheet-library.mjs';
+import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, analysisCopies, autoLoadSheet, openVersionForAnalysis, openIdForAnalysis, editTarget } from '../web/sheet-library.mjs';
 import { findByName } from '../web/media-list.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -63,6 +63,16 @@ test('the analyst gets one loaded copy per spreadsheet, the current one', () => 
   const drive = { filename: 'Pendencias.xlsx', path: '/w/drive', ts: 3 };
   assert.deepEqual(currentLoaded([old, cur, drive]).map((e) => e.path).sort(), ['/w/cur', '/w/drive']);
   assert.deepEqual(currentLoaded([cur, old]).map((e) => e.path), ['/w/cur']);
+});
+
+test('an analysis without a name sees only the copies loaded in this conversation', () => {
+  const radar = { filename: 'Gastos.xlsx', path: '/w/Gastos.xlsx', assetId: v3.id, threadId: 'routine', ts: 1 };
+  const link = { filename: 'Ano_Novo.xlsx', name: 'Ano Novo.xlsx', path: '/w/Ano_Novo.xlsx', threadId: 'other', ts: 2 };
+  const mine = { filename: 'To-Do.xlsx', path: '/w/To-Do.xlsx', assetId: todo.id, threadId: 'chat', ts: 3 };
+  assert.deepEqual(analysisCopies([radar, link, mine], { thread: 'chat' }).map((e) => e.path), ['/w/To-Do.xlsx']);
+  assert.deepEqual(analysisCopies([radar, link], { thread: 'chat' }), []);
+  assert.deepEqual(analysisCopies([radar, link, mine], { thread: 'chat', nome: 'ano novo' }).map((e) => e.path), ['/w/Ano_Novo.xlsx']);
+  assert.deepEqual(analysisCopies([radar, link, mine], { thread: 'chat', nome: 'Gastos' }).map((e) => e.path), ['/w/To-Do.xlsx']);
 });
 
 test('with nothing loaded, the only spreadsheet opens; several become a question', async () => {

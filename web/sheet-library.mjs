@@ -137,6 +137,22 @@ export function currentLoaded(entries) {
   return [...byFam.values()];
 }
 
+// The copies a conversation may take for "the spreadsheet": the ones loaded in it
+// (`threadId`, sheet.mjs). A routine or another chat loads its own, and the
+// registry is per user (2026-11: an edit without a name took one from another chat).
+export function loadedHere(entries, thread = null) {
+  return currentLoaded((Array.isArray(entries) ? entries : []).filter((e) => (e.threadId ?? null) === (thread ?? null)));
+}
+
+// analisar_planilha without a library file: with `nome`, the copies from outside the
+// library loaded under that name in any conversation (as editar_planilha finds them);
+// with no name, or none by that name, only the ones loaded in this conversation.
+export function analysisCopies(entries, { thread = null, nome = null } = {}) {
+  const want = plainName(nome);
+  const hits = want ? (Array.isArray(entries) ? entries : []).filter((e) => !e.assetId && [e.name, e.filename].some((n) => plainName(n).includes(want))) : [];
+  return hits.length ? currentLoaded(hits) : loadedHere(entries, thread);
+}
+
 // analisar_planilha with nothing loaded (after a restart, and in every routine
 // run, the in-memory registry is empty): opens the user's only spreadsheet, or
 // lists them for the model to ask which. {} when the library has none.
@@ -174,7 +190,7 @@ export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prep
   if (atuais.length === 1) return openForAnalysis(userId, atuais[0], { fetchBytes, load, prepare });
   if (!atuais.length) return {};
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
-  return { note: `No spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call analisar_planilha again with nome; if not, ask the user which one, citing the names.` };
+  return { note: `No spreadsheet is loaded in this conversation, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call analisar_planilha again with nome; if not, ask the user which one, citing the names.` };
 }
 
 // editar_planilha without arquivo_id. It used to take the newest spreadsheet in
@@ -195,7 +211,7 @@ const plainName = (s) => String(s || '').toLowerCase().normalize('NFD').replace(
   .replace(/\.(xlsx|xlsm|xls|csv|tsv)$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
 export async function editTarget(userId, { nome = null, byName = null, loaded, thread = null, listSheets, fetchBytes, readBytes, saveAsset }) {
   const entries = currentLoaded(loaded);
-  const here = currentLoaded((Array.isArray(loaded) ? loaded : []).filter((e) => (e.threadId ?? null) === (thread ?? null)));
+  const here = loadedHere(loaded, thread);
   const nameOf = (e) => e.name || e.filename;
   const fromLoaded = async (e) => {
     if (e.assetId) return { asset: { id: e.assetId } };
