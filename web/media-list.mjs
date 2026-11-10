@@ -86,6 +86,29 @@ export function formatVersions(asset, sheets, { timeZone } = {}) {
   ].join('\n');
 }
 
+// A model copying a long id often keeps one end and garbles the other (2026-11:
+// "fd7ff88c-a585-..." joined the current version's start to an older version's end,
+// after the listing had been dropped from the context). With the id not found, the
+// files whose id starts or ends the same way are listed with name and date and, for a
+// spreadsheet, whether it is the current version. None is opened on a guess.
+export async function idNotFound(userId, id, { listMediaAssets, listSheets, timeZone }) {
+  const want = String(id ?? '').trim().toLowerCase();
+  const parts = want.split('-');
+  let rows = [];
+  if (parts.length === 5) { try { rows = await listMediaAssets(userId, { limit: SCAN_MAX }); } catch (e) { console.error('[media] near ids:', e?.message ?? e); } }
+  const near = rows.filter((a) => { const p = String(a.id).toLowerCase().split('-'); return p[0] === parts[0] || p[4] === parts[4]; }).slice(0, NAME_CHOICES_MAX);
+  const base = `ERROR: there is no file with id ${want} in the user's library (or it is another user's). Nothing was opened.`;
+  if (!near.length) return `${base} Use listar_midia to find the id and copy it exactly as listed.`;
+  let sheets = [];
+  if (near.some(isSheetAsset) && listSheets) { try { sheets = await listSheets(userId); } catch (e) { console.error('[media] near ids:', e?.message ?? e); } }
+  const lines = near.map((a) => {
+    if (!isSheetAsset(a)) return line(a, timeZone);
+    const atual = currentVersion(a, sheets);
+    return line(a, timeZone, String(atual.id) === String(a.id) ? ' · current version' : ` · older version; the current one is id=${atual.id}`);
+  });
+  return `${base} An id is often copied wrong; these start or end the same way:\n${lines.join('\n')}\nIf one is the file the user means, call again with its id exactly as written above (for a spreadsheet, the current version unless they asked for an older one). If not sure, ask the user.`;
+}
+
 export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset, listSheets, searchMedia }) {
   return {
     name: 'listar_midia',
@@ -106,7 +129,7 @@ export function mediaListTool({ userId, timeZone, listMediaAssets, getMediaAsset
       };
       if (versoes_de != null && String(versoes_de).trim() !== '') {
         const asset = await getMediaAsset(userId, String(versoes_de).trim());
-        if (!asset) return 'ERROR: this file is not in the library (invalid id or another user\'s). Use listar_midia without versoes_de to find the id.';
+        if (!asset) return idNotFound(userId, versoes_de, { listMediaAssets, listSheets, timeZone });
         if (!isSheetAsset(asset)) return `File ${asset.id} ("${caption(asset)}") is not an .xlsx spreadsheet; only spreadsheets keep versions.`;
         return formatVersions(asset, await sheetsOrEmpty(), { timeZone });
       }

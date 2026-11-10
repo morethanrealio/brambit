@@ -125,6 +125,8 @@ test('versao_id analyzes exactly an older version, without syncing or keeping it
   assert.equal(cur.sheet.filename, v3.caption);
   assert.deepEqual(calls, [{ prepare: v3.id }, { name: v3.caption, register: undefined }]);
   assert.match((await openVersionForAnalysis('u1', 'nope', deps)).note, /not in the user's library/);
+  assert.equal((await openVersionForAnalysis('u1', 'nope', { ...deps, notFound: async (id) => `near ${id}` })).note, 'near nope');
+  assert.equal((await openIdForAnalysis('u1', 'nope', { ...deps, notFound: async (id) => `near ${id}` })).note, 'near nope');
 });
 
 test('arquivo_id analyzes the current version of that spreadsheet, synced and kept loaded', async () => {

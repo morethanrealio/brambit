@@ -663,6 +663,13 @@ for (const [caso, mexeNoAlvo] of [['saved', true], ['rejected', false]]) {
   t(`${caso} edit: the copy keeps the conversation it was loaded in`, getLoadedSheets(userId).find((e) => e.path === outro)?.threadId === 't1');
 }
 
+{
+  const { deps } = mkFake();
+  deps.notFound = async (id) => `near ${id}`;
+  const r = await editSpreadsheet({ userId: 'user-id-wrong', objetivo: 'mude A1', id: 'nope', deps });
+  t('an edit by an id copied wrong gets the near ids', !r.ok && r.error === 'near nope');
+}
+
 // An analysis only reads: whatever loaded copy the analyst wrote, the analyzed one
 // included, is put back, and the model hears it.
 {

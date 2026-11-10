@@ -115,7 +115,7 @@ export function pickSheetAsset(assets, { id = null } = {}) {
   const sheets = all.filter(isSheetAsset);
   if (id != null && String(id).trim() !== '') {
     const found = all.find((a) => String(a.id) === String(id));
-    if (!found) return { error: 'Não achei esse arquivo na biblioteca.' };
+    if (!found) return { error: 'Não achei esse arquivo na biblioteca.', missing: true };
     if (!isSheetAsset(found)) return { error: `O arquivo ${id} ("${found.caption || 'sem nome'}") não é uma planilha .xlsx.` };
     // Resolve the id to the CURRENT version of its spreadsheet. The id names one
     // immutable asset, but "edit this spreadsheet" means the newest version of its
@@ -527,7 +527,7 @@ async function editOnce({ userId, objetivo, id, deps }) {
     if (one) assets = [...assets, one];
   }
   const pick = pickSheetAsset(assets, { id });
-  if (pick.error) return { ok: false, error: pick.error };
+  if (pick.error) return { ok: false, error: pick.missing && deps.notFound ? await deps.notFound(id) : pick.error };
   // A spreadsheet linked to Google Sheets first takes what changed there (sheet-sync.mjs).
   // Runs inside this lock, so beforeEdit must not take it again.
   const synced = deps.beforeEdit ? await deps.beforeEdit(pick.asset) : { asset: pick.asset, note: '' };

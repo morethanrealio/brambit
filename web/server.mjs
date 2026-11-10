@@ -1166,7 +1166,7 @@ import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha, withSheetThread, sheetThread, analyzeKeepingCopies } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
 import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, analysisCopies, autoLoadSheet, editTarget } from './sheet-library.mjs';
-import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
+import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument, idNotFound } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
 import { createSheetSync } from './sheet-sync.mjs';
@@ -4509,7 +4509,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         const found = nome && !versao_id && !arquivo_id && s3Enabled() ? await byName(nome, (a) => !!tipoPlanilha(a.caption, a.mime)) : {};
         let sheets = analysisCopies(getLoadedSheets(userId), { thread: thread?.id, nome });
         if (found.reply && (!found.notFound || !sheets.length)) return found.reply;
-        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync, getAsset: getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz };
+        const deps = { fetchBytes: fetchMedia, load: loadSpreadsheetIntoSandbox, prepare: sheetSync.sync, getAsset: getMediaAsset, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz, notFound: (i) => idNotFound(userId, i, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }) };
         const o = versao_id && s3Enabled() ? await openVersionForAnalysis(userId, versao_id, deps) : arquivo_id && s3Enabled() ? await openIdForAnalysis(userId, arquivo_id, deps) : found.asset ? await openForAnalysis(userId, found.asset, deps) : (!sheets.length && s3Enabled() ? await autoLoadSheet(userId, deps) : await sheetSync.refreshLoaded(sheets, deps));
         if (o.note) return o.note;
         sheets = o.sheet ? [o.sheet] : (o.sheets || sheets);
@@ -4555,7 +4555,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             userId, objetivo, id: arquivo_id,
             deps: {
               listAssets: (uid, o) => listMediaAssets(uid, o),
-              getAsset: (uid, id) => getMediaAsset(uid, id),
+              getAsset: (uid, id) => getMediaAsset(uid, id), notFound: (i) => idNotFound(userId, i, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }),
               fetchBytes: (key) => fetchMedia(key),
               loadIntoSandbox: gravarPlanilhaNoSandbox,
               readBytes: (uid, p) => sandboxReadBytes(uid, p), writeBytes: sandboxWriteBytes,
@@ -5743,7 +5743,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (id != null) asset = await getMediaAsset(userId, id);
         else if (nome) { const found = await byName(nome, isDocumentAsset); if (found.reply) return found.reply; asset = found.asset; }
         else { const only = await onlyDocument(userId, { listMediaAssets }); if (only.reply) return only.reply; asset = only.asset; }
-        if (!asset) return 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
+        if (!asset) return id != null ? idNotFound(userId, id, { listMediaAssets, listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }) : 'ERRO: não achei o documento (id inválido, biblioteca sem documento, ou de outro usuário). Use listar_midia pra achar o id.';
         if (asset.kind === 'image' || (asset.mime || '').startsWith('image')) return 'Isso é uma imagem, não um documento de texto. Use ver_midia pra analisar imagem.';
         if ((asset.kind || '').includes('audio') || (asset.mime || '').startsWith('audio')) return 'Isso é um áudio; não dá pra ler como texto.';
         ({ asset, nota } = await sheetSync.forReading(asset, { listSheets: createSheetLibrary(pool).listSheets, timeZone: userTz }));

@@ -90,9 +90,9 @@ export async function openForAnalysis(userId, asset, { fetchBytes, load, prepare
 // version since archived). Without this the id was ignored and the analysis ran on
 // whatever was loaded (2026-11: 11 of 42 calls passed one). A CSV has no versions.
 const OTHER_TABLE_RE = /\.(xls|csv|tsv)$/i;
-export async function openIdForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare }) {
+export async function openIdForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare, notFound }) {
   const asset = await getAsset(userId, String(id).trim());
-  if (!asset) return { note: `ERROR: file ${id} is not in the user's library. Use listar_midia to find the id.` };
+  if (!asset) return { note: notFound ? await notFound(id) : `ERROR: file ${id} is not in the user's library. Use listar_midia to find the id.` };
   if (!isSheetAsset(asset)) {
     if (OTHER_TABLE_RE.test(asset.caption || '')) return openForAnalysis(userId, asset, { fetchBytes, load });
     return { note: `ERROR: file ${id} ("${asset.caption}") is not a spreadsheet.` };
@@ -107,9 +107,9 @@ export async function openIdForAnalysis(userId, id, { getAsset, listSheets, fetc
 // is opened as it was: no Google Sheets sync, which would turn it into the current
 // one, and not kept in the loaded list, so a later analysis without a name never
 // takes it for the spreadsheet. The current version's id opens like a name does.
-export async function openVersionForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare, timeZone }) {
+export async function openVersionForAnalysis(userId, id, { getAsset, listSheets, fetchBytes, load, prepare, timeZone, notFound }) {
   const asset = await getAsset(userId, String(id).trim());
-  if (!asset) return { note: `ERROR: version ${id} is not in the user's library. Use listar_midia with versoes_de to see the versions.` };
+  if (!asset) return { note: notFound ? await notFound(id) : `ERROR: version ${id} is not in the user's library. Use listar_midia with versoes_de to see the versions.` };
   if (!isSheetAsset(asset)) return { note: `ERROR: file ${id} ("${asset.caption}") is not an .xlsx spreadsheet.` };
   let atual = asset;
   try { atual = currentVersion(asset, await listSheets(userId)); } catch (e) { console.error('[analisar_planilha] versions:', e?.message ?? e); }
