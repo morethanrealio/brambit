@@ -113,6 +113,13 @@ t('declaration does not accept cut marker',
   t('new rows that differ pass', !detectarProblema({ before: view(base), after: view([...base, 'Gas,12/11,90', 'Luz,10/12,180']), resumo: '' }));
   t('a repetition that was there before passes', !detectarProblema({ before: view([...base, 'Luz,10/11,180']), after: view([...base, 'Luz,10/11,180', 'Gas,12/11,90']), resumo: '' }));
   t('declared repetition is accepted', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180']), resumo: 'dupliquei a Luz. REPETICAO_INTENCIONAL' }));
+  {
+    const real = ['Condomínio,2026-10-05,995,A pagar', 'IPTU,2026-10-15,230,Pago,2026-10-14'];
+    t('a copy that lost the date format is still a repetition',
+      !!detectarProblema({ before: view(real), after: view([...real, 'Condomínio,2026-10-05 00:00:00,995.0,A pagar']), resumo: '' }));
+    t('the same day at another time is not a repetition',
+      !detectarProblema({ before: view(real), after: view([...real, 'Condomínio,2026-10-05 10:30:00,995,A pagar']), resumo: '' }));
+  }
   t('a cut view never counts as repetition', !detectarProblema({ before: view(base), after: view([...base, 'Luz,10/11,180'], { truncated: true }), resumo: '' }));
   t('the same row in another sheet is not a repetition',
     !detectarProblema({ before: view(base), after: { rows: 5, text: view(base).text + '\n\n# Copia\nAluguel,09/11,2500' }, resumo: '' }));

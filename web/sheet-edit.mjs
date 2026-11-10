@@ -204,6 +204,14 @@ export function declarouRepeticao(resumo) {
   return s.includes('REPETICAO_INTENCIONAL') || s.includes('REPETIÇÃO_INTENCIONAL');
 }
 
+// A cell by its value, not its format: a row copied with openpyxl loses the date
+// format and shows "2026-10-05 00:00:00" where the original shows "2026-10-05".
+const valorCelula = (c) => {
+  const v = c.trim();
+  if (/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(v)) return String(Number(v));
+  return v.replace(/^(\d{4}-\d{2}-\d{2})[ T]00:00(:00)?$/, '$1');
+};
+
 // Rows of the text view (xlsxread) per sheet, with 2+ filled cells; null when either
 // side is missing or cut, since a partial view cannot tell a copy from a row not read.
 function linhasPorAba(view) {
@@ -212,8 +220,9 @@ function linhasPorAba(view) {
   let aba = '';
   for (const linha of view.text.split('\n')) {
     if (linha.startsWith('# ')) { aba = linha; continue; }
-    if (linha.split(',').filter((c) => c.trim()).length < 2) continue;
-    const k = `${aba}\n${linha}`;
+    const cells = linha.split(',').map(valorCelula);
+    if (cells.filter(Boolean).length < 2) continue;
+    const k = `${aba}\n${cells.join(',')}`;
     abas.set(k, (abas.get(k) || 0) + 1);
   }
   return abas;
