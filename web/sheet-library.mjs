@@ -177,26 +177,25 @@ export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prep
   return { note: `No spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call analisar_planilha again with nome; if not, ask the user which one, citing the names.` };
 }
 
-// editar_planilha with neither arquivo_id nor nome. It used to take the newest
-// spreadsheet in the library, which was not always the one being talked about: the
-// analysis reads the loaded copy, and a spreadsheet opened by link, Drive, OneDrive
-// or e-mail has no library file at all (2026-11: an edit went to another file).
-// Now it edits the one spreadsheet loaded for the user; a loaded copy from outside
-// the library is saved there first (the original stays as it was). Several loaded,
-// or none loaded and several in the library: the model asks which.
+// editar_planilha without arquivo_id. It used to take the newest spreadsheet in
+// the library, which was not always the one being talked about: the analysis
+// reads the loaded copy, and a spreadsheet opened by link, Drive, OneDrive or
+// e-mail has no library file at all (2026-11: an edit went to another file, and
+// one by the name of a sheet opened by link found nothing). With a name, the
+// library is searched first, then the spreadsheets loaded from outside it.
+// Without one, it edits the one spreadsheet loaded for the user. A loaded copy
+// from outside the library is saved there first (the original stays as it was).
+// Several loaded, or none loaded and several in the library: the model asks.
 // { asset } (only the id is used) | { asset, note } | { reply }
 const EDITABLE_RE = /\.(xlsx|xlsm)$/i;
 const MACRO_MIME = [...SHEET_MIMES].find((m) => /macro/i.test(m));
 const XLSX_MIME = [...SHEET_MIMES].find((m) => m !== MACRO_MIME);
-export async function editTarget(userId, { loaded, listSheets, fetchBytes, readBytes, saveAsset }) {
+const plainName = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\.(xlsx|xlsm|xls|csv|tsv)$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+export async function editTarget(userId, { nome = null, byName = null, loaded, listSheets, fetchBytes, readBytes, saveAsset }) {
   const entries = currentLoaded(loaded);
   const nameOf = (e) => e.name || e.filename;
-  if (entries.length > 1) {
-    const nomes = entries.slice(0, CHOICES_MAX).map((e) => `"${nameOf(e)}"`).join('; ');
-    return { reply: `Nothing was edited: ${entries.length} spreadsheets are loaded now: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
-  }
-  if (entries.length === 1) {
-    const e = entries[0];
+  const fromLoaded = async (e) => {
     if (e.assetId) return { asset: { id: e.assetId } };
     const name = nameOf(e);
     if (!EDITABLE_RE.test(e.filename)) return { reply: `Nothing was edited: the spreadsheet loaded now, "${name}", is not an .xlsx, and editar_planilha only changes .xlsx files. If the user meant a library spreadsheet, call editar_planilha again with its nome; if not, tell the user.` };
@@ -208,7 +207,19 @@ export async function editTarget(userId, { loaded, listSheets, fetchBytes, readB
     try { saved = await saveAsset({ buffer, ext: macro ? 'xlsm' : 'xlsx', mime: macro ? MACRO_MIME : XLSX_MIME, caption: name }); } catch {}
     if (!saved?.assetId) return { reply: `ERRO: could not save "${name}" in the library to edit it. Nothing was edited.` };
     return { asset: { id: saved.assetId }, note: `"${name}" came from outside the library (a link, Drive, OneDrive or e-mail), so it was saved in the library to be edited, and the edited version is there. The original file where it came from was NOT changed: tell the user.` };
+  };
+  if (nome) {
+    const r = await byName(nome);
+    const want = plainName(nome);
+    if (!r?.notFound || !want) return r;
+    const hits = entries.filter((e) => !e.assetId && [nameOf(e), e.filename].some((n) => plainName(n).includes(want)));
+    return hits.length === 1 ? fromLoaded(hits[0]) : r;
   }
+  if (entries.length > 1) {
+    const nomes = entries.slice(0, CHOICES_MAX).map((e) => `"${nameOf(e)}"`).join('; ');
+    return { reply: `Nothing was edited: ${entries.length} spreadsheets are loaded now: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
+  }
+  if (entries.length === 1) return fromLoaded(entries[0]);
   let all;
   try { all = await listSheets(userId); }
   catch (e) { return { reply: `ERRO: could not list the user's spreadsheets (${e?.message ?? e}). Nothing was edited.` }; }

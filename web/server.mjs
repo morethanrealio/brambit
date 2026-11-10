@@ -4536,7 +4536,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
           arquivo_id: { type: 'string', description: 'Optional: id of the spreadsheet in the library (from listar_midia). The edit always goes to the current version of that spreadsheet.' },
-          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). Without arquivo_id and nome, edits the spreadsheet loaded now (one opened by link, Drive, OneDrive or e-mail is first saved in the library; the original is not changed) or the library\'s only one; otherwise it returns the names to choose from.' },
+          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). It also finds a spreadsheet opened by link, Drive, OneDrive or e-mail, which is first saved in the library (the original is not changed). Without arquivo_id and nome, edits the spreadsheet loaded now or the library\'s only one; otherwise it returns the names to choose from.' },
         },
         required: ['objetivo'],
       },
@@ -4548,7 +4548,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         if (hasCutMarker(objetivo)) {
           return 'ERRO: a instrução contém o marcador "…[cortado: N chars]…", ou seja, é um trecho TRUNCADO de uma chamada anterior. NÃO reescreva a planilha a partir dele. Descreva a mudança em poucas linhas (só o que muda), ou use analisar_planilha pra reler o conteúdo atual do arquivo.';
         }
-        const alvo = arquivo_id ? {} : nome ? await byName(nome, isSheetAsset) : await editTarget(userId, { loaded: getLoadedSheets(userId), listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
+        const alvo = arquivo_id ? {} : await editTarget(userId, { nome, byName: (n) => byName(n, isSheetAsset), loaded: getLoadedSheets(userId), listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
         try {
           const r = await editSpreadsheet({
             userId, objetivo, id: arquivo_id,

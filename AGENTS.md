@@ -66,7 +66,8 @@ name edits the one spreadsheet loaded for the user (`editTarget` in
 `web/sheet-library.mjs`), and asks when several are loaded or, with none loaded,
 the library has several; it never just takes the newest. A loaded copy from
 outside the library (link, Drive, OneDrive, e-mail) has no `assetId` and is saved
-in the library (source `link`) on its first edit.
+in the library (source `link`) on its first edit, also when it is named with
+`nome` (the library is searched first).
 
 The loaded registry (`web/sheet.mjs`) is per user, in memory, 6h. `safeName`
 cuts long names at 80 characters keeping the extension (openpyxl refuses a path

@@ -198,3 +198,26 @@ test('editing with neither id nor name: the loaded spreadsheet, never just the n
   r = await editTarget('u1', { ...deps([]), listSheets: async () => [v3, v2, v1] });
   assert.equal(r.asset.id, v3.id);
 });
+
+test('editing by the name of a spreadsheet opened by link saves it in the library first', async () => {
+  const saved = [];
+  const zip = Buffer.from('PK\x03\x04 resto');
+  const notFound = { notFound: true, reply: 'No file of this kind' };
+  const deps = (byName) => ({
+    byName, listSheets: async () => lib, fetchBytes: async () => null,
+    loaded: [{ path: '/w/calendar-1900.xlsx', filename: 'calendar-1900.xlsx', name: 'calendar-1900.xlsx', ts: 1 }, { path: '/w/Gastos.xlsx', filename: 'Gastos.xlsx', assetId: v3.id, ts: 2 }],
+    readBytes: async () => ({ ok: true, buffer: zip }),
+    saveAsset: async (x) => { saved.push(x); return { assetId: 'novo-id' }; },
+  });
+  // In the library: the library answer, nothing saved.
+  let r = await editTarget('u1', { nome: 'Gastos', ...deps(async () => ({ asset: v3 })) });
+  assert.equal(r.asset.id, v3.id);
+  // Not in the library, but loaded from a link: saved, then edited.
+  r = await editTarget('u1', { nome: 'calendar-1900', ...deps(async () => notFound) });
+  assert.equal(r.asset.id, 'novo-id');
+  assert.equal(saved[0].caption, 'calendar-1900.xlsx');
+  // Nowhere: the not-found answer.
+  r = await editTarget('u1', { nome: 'Orçamento', ...deps(async () => notFound) });
+  assert.equal(r, notFound);
+  assert.equal(saved.length, 1);
+});
