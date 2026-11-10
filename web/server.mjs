@@ -1165,7 +1165,7 @@ import { sandboxTools, sandboxEnabled, sandboxReadBytes, sandboxShell, sandboxWr
 import { githubProposeTools } from './github-propose.mjs';
 import { loadSpreadsheetIntoSandbox, gravarPlanilhaNoSandbox, getLoadedSheets, tipoPlanilha } from './sheet.mjs';
 import { editSpreadsheet, hasCutMarker, SHEET_EDITOR_SYSTEM, isSheetAsset } from './sheet-edit.mjs';
-import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, currentLoaded, autoLoadSheet } from './sheet-library.mjs';
+import { createSheetLibrary, openForAnalysis, openVersionForAnalysis, openIdForAnalysis, currentLoaded, autoLoadSheet, editTarget } from './sheet-library.mjs';
 import { mediaListTool, createMediaSearch, findByName, isDocumentAsset, onlyDocument } from './media-list.mjs';
 import { driveCopyTool } from './drive-copy.mjs';
 import { createSheetLinks, createSheet, sheetVersion, shareByLink } from './sheet-google.mjs';
@@ -4536,19 +4536,19 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         properties: {
           objetivo: { type: 'string', description: 'The change to apply, with ALL the context and the concrete values (the sub-agent does not see the conversation). E.g.: "na aba Fontes, acrescente 4 linhas: | Autor | Ano | ... |", "troque o status da linha do cliente X para Pago".' },
           arquivo_id: { type: 'string', description: 'Optional: id of the spreadsheet in the library (from listar_midia). The edit always goes to the current version of that spreadsheet.' },
-          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). Without arquivo_id and nome, edits the most recent spreadsheet in the library, whatever its name: when the user has more than one spreadsheet, pass one of them.' },
+          nome: { type: 'string', description: 'Optional, instead of arquivo_id: the spreadsheet\'s name as the user says it (e.g. "Controle Financeiro"). Without arquivo_id and nome, edits the spreadsheet loaded now (one opened by link, Drive, OneDrive or e-mail is first saved in the library; the original is not changed) or the library\'s only one; otherwise it returns the names to choose from.' },
         },
         required: ['objetivo'],
       },
       run: async ({ objetivo, arquivo_id, nome } = {}) => {
         if (!objetivo || !String(objetivo).trim()) return 'ERRO: objetivo vazio.';
-        if (!arquivo_id && nome) { const found = await byName(nome, isSheetAsset); if (found.reply) return found.reply; arquivo_id = found.asset.id; }
         // Incident guard: if the instruction already arrives with the truncation marker, it
         // is a copy of a truncated call. Writing this into the spreadsheet saves
         // mutilated content (and the marker itself) as data.
         if (hasCutMarker(objetivo)) {
           return 'ERRO: a instrução contém o marcador "…[cortado: N chars]…", ou seja, é um trecho TRUNCADO de uma chamada anterior. NÃO reescreva a planilha a partir dele. Descreva a mudança em poucas linhas (só o que muda), ou use analisar_planilha pra reler o conteúdo atual do arquivo.';
         }
+        const alvo = arquivo_id ? {} : nome ? await byName(nome, isSheetAsset) : await editTarget(userId, { loaded: getLoadedSheets(userId), listSheets: createSheetLibrary(pool).listSheets, fetchBytes: fetchMedia, readBytes: sandboxReadBytes, saveAsset: (a) => saveBlob({ ...a, kind: 'document', source: 'link' }) }); if (alvo.reply) return alvo.reply; arquivo_id = alvo.asset?.id ?? arquivo_id;
         try {
           const r = await editSpreadsheet({
             userId, objetivo, id: arquivo_id,
@@ -4594,7 +4594,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
             `Mudança: ${r.resumo}`,
             r.delta ? `Dimensões: ${r.delta}.` : null,
             r.arquivada ? `A versão anterior ficou na biblioteca como "${r.arquivada}".` : null,
-            ...r.avisos,
+            ...r.avisos, alvo.note,
             'Responda em uma frase curta dizendo o que mudou (não cole o conteúdo da planilha).',
           ].filter(Boolean);
           // Typed receipt: the file was saved (r.asset.key), so the model's

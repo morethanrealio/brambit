@@ -15,7 +15,7 @@ import { sandboxEnabled, sandboxShell, sandboxWriteBytes } from './sandbox.mjs';
 
 const TTL_MS = 6 * 60 * 60 * 1000; // 6h: allows follow-up questions
 const MAX_PER_USER = 10;
-const loaded = new Map(); // userId -> [{ path, filename, sheets, rows, ts }]
+const loaded = new Map(); // userId -> [{ path, filename, name, sheets, rows, assetId, ts }]; name = before safeName
 
 function prune(list) {
   const now = Date.now();
@@ -233,7 +233,7 @@ export async function gravarPlanilhaNoSandbox(userId, buffer, filename, { assetI
   try { w = await sandboxWriteBytes(userId, path, buffer); }
   catch (e) { return { ok: false, error: `ambiente de análise não respondeu (${e?.message || e})` }; }
   if (!w.ok) return { ok: false, error: w.error || 'falha ao gravar no ambiente' };
-  registerLoadedSheet(userId, { path, filename: clean, sheets: null, rows: null, assetId });
+  registerLoadedSheet(userId, { path, filename: clean, name: filename, sheets: null, rows: null, assetId });
   return { ok: true, path, filename: clean };
 }
 
@@ -264,7 +264,7 @@ export async function loadSpreadsheetIntoSandbox(userId, buffer, filename, { tip
   if (!e.ok) return falha(e.error);
   const sheets = e.abas.length;
   const rows = e.abas.reduce((s, a) => s + (Number(a.linhas) || 0), 0);
-  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, sheets, rows, assetId });
+  if (register) registerLoadedSheet(userId, { path: g.path, filename: g.filename, name: nome, sheets, rows, assetId });
   return {
     ok: true, path: g.path, filename: g.filename, sheets, rows, abas: e.abas,
     note: `📊 Planilha "${g.filename}" aberta no ambiente de análise. Estrutura:\n${descreverAbas(e.abas)}\n${notaTolerante(e.tolerant)}O conteúdo das células NÃO é mostrado aqui. Para qualquer pergunta sobre os dados desta planilha (buscar, listar, contar, somar, conferir um valor, resumir, comparar), use a tool analisar_planilha, que lê o arquivo inteiro por código. Não responda sobre o conteúdo sem ela.`,

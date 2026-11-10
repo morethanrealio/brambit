@@ -176,3 +176,45 @@ export async function autoLoadSheet(userId, { listSheets, fetchBytes, load, prep
   const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
   return { note: `No spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call analisar_planilha again with nome; if not, ask the user which one, citing the names.` };
 }
+
+// editar_planilha with neither arquivo_id nor nome. It used to take the newest
+// spreadsheet in the library, which was not always the one being talked about: the
+// analysis reads the loaded copy, and a spreadsheet opened by link, Drive, OneDrive
+// or e-mail has no library file at all (2026-11: an edit went to another file).
+// Now it edits the one spreadsheet loaded for the user; a loaded copy from outside
+// the library is saved there first (the original stays as it was). Several loaded,
+// or none loaded and several in the library: the model asks which.
+// { asset } (only the id is used) | { asset, note } | { reply }
+const EDITABLE_RE = /\.(xlsx|xlsm)$/i;
+const MACRO_MIME = [...SHEET_MIMES].find((m) => /macro/i.test(m));
+const XLSX_MIME = [...SHEET_MIMES].find((m) => m !== MACRO_MIME);
+export async function editTarget(userId, { loaded, listSheets, fetchBytes, readBytes, saveAsset }) {
+  const entries = currentLoaded(loaded);
+  const nameOf = (e) => e.name || e.filename;
+  if (entries.length > 1) {
+    const nomes = entries.slice(0, CHOICES_MAX).map((e) => `"${nameOf(e)}"`).join('; ');
+    return { reply: `Nothing was edited: ${entries.length} spreadsheets are loaded now: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
+  }
+  if (entries.length === 1) {
+    const e = entries[0];
+    if (e.assetId) return { asset: { id: e.assetId } };
+    const name = nameOf(e);
+    if (!EDITABLE_RE.test(e.filename)) return { reply: `Nothing was edited: the spreadsheet loaded now, "${name}", is not an .xlsx, and editar_planilha only changes .xlsx files. If the user meant a library spreadsheet, call editar_planilha again with its nome; if not, tell the user.` };
+    const r = await readBytes(userId, e.path);
+    const buffer = r?.ok ? r.buffer : null;
+    if (!buffer || buffer[0] !== 0x50 || buffer[1] !== 0x4b) return { reply: `ERRO: could not read the spreadsheet "${name}" loaded now (${r?.error || 'not an .xlsx file'}). Nothing was edited. Open it again from where it came from and try once more.` };
+    const macro = /\.xlsm$/i.test(e.filename);
+    let saved = null;
+    try { saved = await saveAsset({ buffer, ext: macro ? 'xlsm' : 'xlsx', mime: macro ? MACRO_MIME : XLSX_MIME, caption: name }); } catch {}
+    if (!saved?.assetId) return { reply: `ERRO: could not save "${name}" in the library to edit it. Nothing was edited.` };
+    return { asset: { id: saved.assetId }, note: `"${name}" came from outside the library (a link, Drive, OneDrive or e-mail), so it was saved in the library to be edited, and the edited version is there. The original file where it came from was NOT changed: tell the user.` };
+  }
+  let all;
+  try { all = await listSheets(userId); }
+  catch (e) { return { reply: `ERRO: could not list the user's spreadsheets (${e?.message ?? e}). Nothing was edited.` }; }
+  const atuais = await withoutUnreadable([...new Map(all.filter(isSheetAsset).map((a) => [familyKey(a), currentVersion(a, all)])).values()], fetchBytes);
+  if (atuais.length === 1) return { asset: atuais[0] };
+  if (!atuais.length) return { reply: 'ERRO: the user has no .xlsx spreadsheet in the library and none is loaded now. Generate it first (gerar_documento with format xlsx), or open it from where it is, and then edit.' };
+  const nomes = atuais.slice(0, CHOICES_MAX).map((a) => `"${a.caption}"`).join('; ');
+  return { reply: `Nothing was edited: no spreadsheet is loaded now, and the user's library has ${atuais.length}: ${nomes}. If the request already says which one, call editar_planilha again with nome; if not, ask the user which one, citing the names.` };
+}

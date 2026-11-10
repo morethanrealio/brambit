@@ -3,7 +3,7 @@
 // Run with: node --test tests/sheet-library.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis, openIdForAnalysis } from '../web/sheet-library.mjs';
+import { currentVersion, sheetForReading, createSheetLibrary, currentLoaded, autoLoadSheet, openVersionForAnalysis, openIdForAnalysis, editTarget } from '../web/sheet-library.mjs';
 import { findByName } from '../web/media-list.mjs';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -150,4 +150,51 @@ test('an uploaded .xlsx that is not a zip stays out of a choice, but opens when 
   const alone = await autoLoadSheet('u1', { listSheets: async () => [fatura], fetchBytes, load });
   assert.equal(alone.sheet.filename, fatura.caption);
   assert.equal(opened, fatura.caption);
+});
+
+test('editing with neither id nor name: the loaded spreadsheet, never just the newest one', async () => {
+  const saved = [];
+  const deps = (loaded, files = {}) => ({
+    loaded, listSheets: async () => lib, fetchBytes: async () => null,
+    readBytes: async (_u, path) => (files[path] ? { ok: true, buffer: files[path] } : { ok: false, error: 'missing' }),
+    saveAsset: async (x) => { saved.push(x); return { assetId: 'novo-id', key: 'k/novo' }; },
+  });
+  const zip = Buffer.from('PK\x03\x04 resto');
+
+  // Loaded from the library: edits that one, not To-Do (the newest).
+  let r = await editTarget('u1', deps([{ path: '/w/Gastos.xlsx', filename: 'Gastos.xlsx', assetId: v3.id, ts: 1 }]));
+  assert.equal(r.asset.id, v3.id);
+
+  // Opened by link: saved in the library under its own name first, then edited.
+  r = await editTarget('u1', deps([{ path: '/w/Ano_Novo.xlsx', filename: 'Ano_Novo.xlsx', name: 'Ano Novo.xlsx', ts: 1 }], { '/w/Ano_Novo.xlsx': zip }));
+  assert.equal(r.asset.id, 'novo-id');
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].caption, 'Ano Novo.xlsx');
+  assert.equal(saved[0].ext, 'xlsx');
+  assert.ok(saved[0].buffer.equals(zip));
+  assert.match(r.note, /NOT changed/);
+
+  // Not editable or not readable: a reply, nothing saved.
+  for (const [loaded, files] of [
+    [[{ path: '/w/c.csv', filename: 'c.csv', ts: 1 }], {}],
+    [[{ path: '/w/x.xlsx', filename: 'x.xlsx', ts: 1 }], { '/w/x.xlsx': Buffer.from('not a zip') }],
+    [[{ path: '/w/y.xlsx', filename: 'y.xlsx', ts: 1 }], {}],
+  ]) {
+    r = await editTarget('u1', deps(loaded, files));
+    assert.ok(r.reply && !r.asset);
+  }
+  assert.equal(saved.length, 1);
+
+  // Two loaded: asks which, citing both.
+  r = await editTarget('u1', deps([{ path: '/w/Gastos.xlsx', filename: 'Gastos.xlsx', assetId: v3.id, ts: 1 }, { path: '/w/To-Do.xlsx', filename: 'To-Do.xlsx', assetId: todo.id, ts: 2 }]));
+  assert.ok(!r.asset);
+  assert.match(r.reply, /"Gastos\.xlsx"/);
+  assert.match(r.reply, /"To-Do\.xlsx"/);
+
+  // Nothing loaded: two spreadsheets in the library ask; a single one is edited (current version).
+  r = await editTarget('u1', deps([]));
+  assert.ok(!r.asset);
+  assert.match(r.reply, /has 2/);
+  r = await editTarget('u1', { ...deps([]), listSheets: async () => [v3, v2, v1] });
+  assert.equal(r.asset.id, v3.id);
 });

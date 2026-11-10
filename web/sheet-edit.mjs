@@ -107,7 +107,8 @@ export function isArchivedCaption(caption) {
 }
 
 // Picks WHICH asset to edit. Without an explicit id, the newest spreadsheet:
-// older ones are version history (decided 09/09/2026).
+// older ones are version history (decided 09/09/2026). editar_planilha no longer
+// gets here without an id: editTarget (sheet-library.mjs) picks it first.
 // `assets` comes from listMediaAssets, already ordered by created_at DESC.
 export function pickSheetAsset(assets, { id = null } = {}) {
   const all = Array.isArray(assets) ? assets : [];
