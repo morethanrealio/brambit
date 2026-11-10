@@ -172,6 +172,7 @@
   .area-sub{font-size:13px;font-weight:600;color:var(--mut);margin:12px 0 4px;}
   .area-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:14.5px;}
   .area-line .btn{padding:4px 10px;font-size:13px;font-weight:500;}
+  .area-line-acts{display:flex;gap:6px;flex-shrink:0;}
   .area .inline{flex-wrap:wrap;margin-top:6px;}
   .area .inline input,.area .inline select{flex:1;min-width:160px;width:auto;}
   .area .check{font-size:14px;}
@@ -1033,9 +1034,16 @@
     if (!areas.length) box.appendChild(el('div', 'vazio', t('areas_none')));
     areas.forEach(function(ar){ box.appendChild(drawArea(ar, where)); });
   }
-  function areaLine(text, label, run){
-    var d = el('div', 'area-line'), b = button('ghost', label);
-    d.appendChild(el('span', null, text)); d.appendChild(b);
+  // extra = { label, run }: a second button on the line.
+  function areaLine(text, label, run, extra){
+    var d = el('div', 'area-line'), b = button('ghost', label), acts = el('span', 'area-line-acts');
+    d.appendChild(el('span', null, text));
+    if (extra) {
+      var x = button('ghost', extra.label);
+      x.addEventListener('click', function(){ extra.run(x); });
+      acts.appendChild(x);
+    }
+    acts.appendChild(b); d.appendChild(acts);
     b.addEventListener('click', function(){ run(b); });
     return d;
   }
@@ -1088,7 +1096,11 @@
     ar.members.forEach(function(m){
       d.appendChild(areaLine(m.email + ' · ' + t('role_' + m.role), t('area_remove'), function(b){
         if (confirm(t('area_remove_confirm', { email: m.email, area: ar.name }))) act(b, function(){ return pedir(AREAS + '/member', { areaId: ar.id, email: m.email, role: null }); });
-      }));
+      }, m.panel ? { label: t('area_password_link'), run: function(b){
+        act(b, function(){ return pedir(AREAS + '/password-link', { areaId: ar.id, userId: m.userId }); }, function(j){
+          return { areaId: ar.id, link: j.link, text: t('area_password_link_ready', { email: m.email, hours: j.linkHours }) };
+        });
+      } } : null));
     });
     var email = el('input'), role = el('select', 'role'), invite = button('primary', t('area_invite')), row = el('div', 'inline');
     email.type = 'email'; email.placeholder = t('area_email'); email.setAttribute('aria-label', t('area_email'));

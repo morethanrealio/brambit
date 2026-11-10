@@ -213,6 +213,35 @@ test('invite: a new e-mail becomes a panel account with a one-time password link
   assert.equal(await scope.homeFor(stranger), null);
 });
 
+test('password link: the owner who created a panel account gets a new one-time link for it, logged; nobody else does', async (t) => {
+  const s = await setup(t);
+  const { ask, db, owner, stranger } = s;
+  const { a } = await twoClients(s);
+  await ask(owner, 'POST', CLIENT_AREAS_PATH + '/member', { areaId: a.id, email: 'new@c.test', role: 'viewer' });
+  const invited = (await db.query(`SELECT id FROM mtr_harness.users WHERE email = 'new@c.test'`)).rows[0].id;
+  await db.query(`UPDATE mtr_harness.password_resets SET used_at = now() WHERE user_id = $1`, [invited]);
+  const members = (await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.areas.find((x) => x.id === a.id).members;
+  assert.deepEqual(members.map((m) => [m.email, m.panel]), [['admin@a.test', false], ['new@c.test', true]]);
+
+  const link = (who, userId, areaId = a.id) => ask(who, 'POST', CLIENT_AREAS_PATH + '/password-link', { areaId, userId });
+  const first = await link(owner, invited);
+  assert.equal(first.status, 200);
+  assert.match(first.body.link, /^https:\/\/panel\.example\/reset\?token=\w+/);
+  assert.equal(first.body.linkHours, 24);
+  const second = await link(owner, invited);
+  const live = (await db.query(`SELECT token FROM mtr_harness.password_resets WHERE user_id = $1 AND used_at IS NULL AND expires_at > now()`, [invited])).rows;
+  assert.deepEqual(live.map((r) => r.token), [second.body.link.split('token=')[1]], 'only the newest link works');
+  const log = (await ask(owner, 'GET', `${ACTIVITY_PATH}?agent=${s.agA}`)).body.lines.filter((l) => l.action === 'password_link');
+  assert.deepEqual(log.map((l) => l.detail.email), ['new@c.test', 'new@c.test']);
+
+  // A full account, the panel account itself, and another owner who added the same person: 404.
+  assert.equal((await link(owner, s.adminA)).status, 404);
+  assert.equal((await link(invited, invited)).status, 404);
+  const other = (await ask(stranger, 'POST', CLIENT_AREAS_PATH, { name: 'Other' })).body;
+  await ask(stranger, 'POST', CLIENT_AREAS_PATH + '/member', { areaId: other.id, email: 'new@c.test', role: 'viewer' });
+  assert.equal((await link(stranger, invited, other.id)).status, 404);
+});
+
 test('account scope: with no panel account loaded, the core does not look the session up', async (t) => {
   const s = await setup(t);
   const scope = createAccountScope();
