@@ -59,7 +59,12 @@ version is read with `analisar_planilha versao_id` (`openVersionForAnalysis` in
 `web/sheet-library.mjs`), which never syncs it nor keeps it loaded. Uploads whose
 bytes are not a zip (`opensAsSheet`) are left out of the automatic choices.
 `analisar_planilha arquivo_id` analyzes the current version of that id's
-spreadsheet (`openIdForAnalysis`). `ler_arquivo` with neither id nor name opens a
+spreadsheet (`openIdForAnalysis`); without a library file it analyzes only the
+copies loaded in this conversation (`analysisCopies`), and with none loaded it
+opens the library's only spreadsheet or asks which. An id that is not found lists
+the files whose id starts or ends the same way (`idNotFound` in
+`web/media-list.mjs`, also in `ler_arquivo`, `listar_midia versoes_de` and
+`editar_planilha`): models copy long ids wrong, so none is opened on a guess. `ler_arquivo` with neither id nor name opens a
 file only when the library has a single document (`onlyDocument` in
 `web/media-list.mjs`); otherwise it asks. `editar_planilha` with neither id nor
 name edits the one spreadsheet loaded in this conversation (`editTarget` in
@@ -78,8 +83,11 @@ without one). Before an analysis, a loaded copy that is no longer its family's
 current version is reloaded (`refreshLoaded`); an edit that fails puts the
 original bytes back in the sandbox and one that is saved relabels the sandbox
 copy with the new version's id, so the sandbox never keeps a rejected edit. The
-editor has the whole sandbox, so any other loaded copy it changes is written back
-as it was (`keepOtherCopies` in `web/sheet-edit.mjs`).
+editor and the analyst have the whole sandbox, so a loaded copy the editor was not
+asked to change, or any one the analyst changes, is written back as it was
+(`keepLoadedCopies` in `web/sheet.mjs`). An edit that comes out with rows repeated
+cell by cell, or one that shrinks a lot, is redone unless the editor declares it
+was asked (`detectarProblema` in `web/sheet-edit.mjs`).
 
 A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
 `migrations/2026-11-09-sheet-google-links.sql`), found by family or by the id of
