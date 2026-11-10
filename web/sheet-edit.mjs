@@ -32,7 +32,7 @@
 //     SAME file, and the second would reload the S3 copy on top of the first's
 //     work — silent loss of an edit. The queue below solves this.
 
-import { sheetSandboxPath, relabelLoadedSheet } from './sheet.mjs';
+import { sheetSandboxPath, relabelLoadedSheet, getLoadedSheets, forgetLoadedSheet } from './sheet.mjs';
 
 // ── Pure logic (testable offline, without a database or sandbox) ──
 
@@ -502,12 +502,57 @@ async function editOnce({ userId, objetivo, id, deps }) {
   try { before = deps.inspect(src.buffer); }
   catch (e) { return { ok: false, error: `A planilha da biblioteca não abriu (${e?.message ?? e}).` }; }
 
-  // Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated
-  // the file, saved to another path, wrote truncated content). Returning "look at
-  // the previous version" would dump the problem on the user, who asked for a
-  // change and would be left without it. Each attempt starts from the ORIGINAL bytes: the
-  // loadIntoSandbox overwrites the broken file from the previous attempt.
+  // The editor runs with the user's whole sandbox, so it can write a spreadsheet it
+  // was not given: on 2026-10-28 it put the rows meant for one in another loaded
+  // copy, nothing was saved and the next analysis read those rows as if they were
+  // in the spreadsheet. The other loaded copies are put back as they were.
   const filename = asset.caption || 'planilha.xlsx';
+  const putBack = await keepOtherCopies(userId, sheetSandboxPath(filename), deps);
+  let r;
+  try { r = await editAttempts({ userId, objetivo, deps, asset, synced, src, before, filename }); }
+  finally {
+    const undone = await putBack();
+    const nota = undone.length ? `The editor also changed ${undone.map((n) => `"${n}"`).join(', ')}, which it was not asked to edit; that was undone, so only "${filename}" could change.` : '';
+    if (nota && r?.ok) r.avisos.push(nota);
+    else if (nota && r) r.error = `${r.error} ${nota}`;
+  }
+  return r;
+}
+
+// Bytes of the user's loaded copies other than `target`, and a function that writes
+// back the ones that changed. A copy loaded again meanwhile (another conversation)
+// is newer, not a stray write, and stays. Without deps.writeBytes it does nothing.
+async function keepOtherCopies(userId, target, deps) {
+  if (typeof deps.writeBytes !== 'function') return async () => [];
+  const kept = [];
+  for (const e of getLoadedSheets(userId)) {
+    if (e.path === target) continue;
+    let b = null;
+    try { b = await deps.readBytes(userId, e.path); } catch {}
+    if (b?.ok && b.buffer?.length) kept.push({ path: e.path, ts: e.ts, name: e.name || e.filename, buffer: b.buffer });
+  }
+  return async () => {
+    const undone = [];
+    for (const k of kept) {
+      if (getLoadedSheets(userId).find((e) => e.path === k.path)?.ts !== k.ts) continue;
+      let now = null;
+      try { now = await deps.readBytes(userId, k.path); } catch {}
+      if (now?.ok && now.buffer?.equals(k.buffer)) continue;
+      let w = null;
+      try { w = await deps.writeBytes(userId, k.path, k.buffer); } catch (e) { w = { error: e?.message ?? e }; }
+      if (w?.ok) undone.push(k.name);
+      else { console.error('[editar_planilha] could not put back', k.path, w?.error); forgetLoadedSheet(userId, k.path); }
+    }
+    return undone;
+  };
+}
+
+// Redoes the edit when the result comes out wrong WITHOUT a technical error (recreated
+// the file, saved to another path, wrote truncated content). Returning "look at
+// the previous version" would dump the problem on the user, who asked for a
+// change and would be left without it. Each attempt starts from the ORIGINAL bytes: the
+// loadIntoSandbox overwrites the broken file from the previous attempt.
+async function editAttempts({ userId, objetivo, deps, asset, synced, src, before, filename }) {
   const podeConferir = typeof deps.readCells === 'function';
   // The sandbox copy stays registered for analysis, so an edit that is not saved
   // puts the original bytes back: a later analysis without a name read the

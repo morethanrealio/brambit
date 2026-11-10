@@ -13,7 +13,7 @@ const {
   describeDelta, detectarProblema, declarouRemocao, withKeyLock, isSheetAsset,
   pecasPerdidas, pedeClarificacao, parseEvidencia, conferirEvidencia,
 } = await import('../web/sheet-edit.mjs');
-const { registerLoadedSheet, getLoadedSheets } = await import('../web/sheet.mjs');
+const { registerLoadedSheet, getLoadedSheets, withSheetThread } = await import('../web/sheet.mjs');
 
 let ok = 0, fail = 0;
 const t = (nome, cond) => { if (cond) { ok++; console.log('  ok  ', nome); } else { fail++; console.log('  FALHA', nome); } };
@@ -624,6 +624,30 @@ for (const [nome, over] of [
   deps.afterEdit = async () => { throw new Error('quota'); };
   const r2 = await editSpreadsheet({ userId: 'user-push', objetivo: 'acrescente 4 linhas', deps });
   t('a failing afterEdit does not undo the edit', r2.ok && r2.avisos.some((a) => a.includes('quota')));
+}
+
+// The editor has the whole sandbox: another loaded copy it writes (2026-10-28: the
+// rows meant for one spreadsheet went into another) is put back, saved edit or not.
+for (const [caso, mexeNoAlvo] of [['saved', true], ['rejected', false]]) {
+  const userId = `user-other-${caso}`;
+  const outro = '/workspace/planilhas/To-Do.xlsx';
+  const { state, deps } = mkFake({ runEditor: async ({ path }) => {
+    if (mexeNoAlvo) {
+      const j = JSON.parse(state.sandbox[path].toString('utf8'));
+      j.rows += 4;
+      state.sandbox[path] = Buffer.from(JSON.stringify(j));
+    }
+    state.sandbox[outro] = Buffer.from(JSON.stringify({ rows: 9, sheets: 1 }));
+    return 'acrescentei 4 linhas';
+  } });
+  const writes = [];
+  deps.writeBytes = async (_u, path, buf) => { writes.push(path); state.sandbox[path] = Buffer.from(buf); return { ok: true }; };
+  state.sandbox[outro] = Buffer.from(JSON.stringify({ rows: 5, sheets: 1 }));
+  withSheetThread('t1', () => registerLoadedSheet(userId, { path: outro, filename: 'To-Do.xlsx', assetId: 99 }));
+  const r = await editSpreadsheet({ userId, objetivo: 'acrescente 4 linhas', deps });
+  t(`${caso} edit: the other loaded copy is put back`, JSON.parse(state.sandbox[outro].toString()).rows === 5 && writes.length === 1);
+  t(`${caso} edit: the model hears it was undone`, mexeNoAlvo ? r.ok && r.avisos.some((a) => a.includes('"To-Do.xlsx"')) : !r.ok && r.error.includes('"To-Do.xlsx"'));
+  t(`${caso} edit: the copy keeps the conversation it was loaded in`, getLoadedSheets(userId).find((e) => e.path === outro)?.threadId === 't1');
 }
 
 console.log(`\n${ok} ok, ${fail} falha(s)`);
