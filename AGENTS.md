@@ -58,8 +58,22 @@ a "fatura.xlsx" sent every month is not one spreadsheet with versions. An older
 version is read with `analisar_planilha versao_id` (`openVersionForAnalysis` in
 `web/sheet-library.mjs`), which never syncs it nor keeps it loaded. Uploads whose
 bytes are not a zip (`opensAsSheet`) are left out of the automatic choices.
-`ler_arquivo` with neither id nor name opens a file only when the library has a
-single document (`onlyDocument` in `web/media-list.mjs`); otherwise it asks.
+`analisar_planilha arquivo_id` analyzes the current version of that id's
+spreadsheet (`openIdForAnalysis`). `ler_arquivo` with neither id nor name opens a
+file only when the library has a single document (`onlyDocument` in
+`web/media-list.mjs`); otherwise it asks. `editar_planilha` with neither id nor
+name edits the one spreadsheet loaded for the user (`editTarget` in
+`web/sheet-library.mjs`), and asks when several are loaded or, with none loaded,
+the library has several; it never just takes the newest. A loaded copy from
+outside the library (link, Drive, OneDrive, e-mail) has no `assetId` and is saved
+in the library (source `link`) on its first edit.
+
+The loaded registry (`web/sheet.mjs`) is per user, in memory, 6h. `safeName`
+cuts long names at 80 characters keeping the extension (openpyxl refuses a path
+without one). Before an analysis, a loaded copy that is no longer its family's
+current version is reloaded (`refreshLoaded`); an edit that fails puts the
+original bytes back in the sandbox and one that is saved reloads the new version
+there, so the sandbox never keeps a rejected edit.
 
 A family may be linked to a Google Sheets file (`web/sheet-google.mjs`, table from
 `migrations/2026-11-09-sheet-google-links.sql`), found by family or by the id of
