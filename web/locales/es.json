@@ -1188,6 +1188,8 @@
     "web_key_confirm": "¿Generar una clave nueva? La actual deja de funcionar al instante.",
     "web_save_first": "Primero guarda la configuración.",
     "usage_link": "Uso",
+    "usage_lead": "Tokens y costo por día, mes, modelo o asistente.",
+    "usage_open": "Abrir uso",
     "settings_link": "Configuración de la instalación",
     "sign_out": "Salir",
     "new_assistant": "Nuevo asistente (su nombre)",

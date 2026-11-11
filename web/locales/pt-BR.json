@@ -1188,6 +1188,8 @@
     "web_key_confirm": "Gerar uma chave nova? A atual para de funcionar na hora.",
     "web_save_first": "Salve as configurações primeiro.",
     "usage_link": "Uso",
+    "usage_lead": "Tokens e custo por dia, mês, modelo ou assistente.",
+    "usage_open": "Abrir uso",
     "settings_link": "Configurações da instalação",
     "sign_out": "Sair",
     "new_assistant": "Novo assistente (o nome dele)",

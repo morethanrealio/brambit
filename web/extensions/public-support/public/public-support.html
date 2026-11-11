@@ -410,6 +410,12 @@
     <div id="activityMsg" class="msg"></div>
   </div>
 
+  <div class="card hidden" id="usageCard" data-view-panel="settings" data-owner-only>
+    <h2 data-i18n="public_service_page.usage_link">Usage</h2>
+    <p class="nota" data-i18n="public_service_page.usage_lead">Tokens and cost by day, month, model or assistant.</p>
+    <div class="acoes"><a class="btn ghost" href="/usage" data-i18n="public_service_page.usage_open">Open usage</a></div>
+  </div>
+
   <div class="card hidden" id="newAssistant" data-view-panel="settings" data-owner-only>
     <label for="newName" data-i18n="public_service_page.new_assistant">New assistant (its name)</label>
     <div class="inline"><input type="text" id="newName" maxlength="60"/><button class="btn primary" id="createAssistant" data-i18n="public_service_page.create">Create</button></div>
@@ -460,6 +466,8 @@
       avatarAvailable = !!j.avatarAvailable;
       // A client area's panel account has only this screen: no app to go back to, no usage of its own.
       if (j.panelAccount) { $('backLink').classList.add('hidden'); $('usageLink').classList.add('hidden'); $('ownerLinks').classList.remove('hidden'); }
+      // The owner's usage page, in settings whatever the installation's profile.
+      $('usageCard').classList.toggle('hidden', !!j.panelAccount);
       signupOpen = !!j.signupOpen;
       loadAreas();
       var sel = $('agente'); sel.textContent = '';
@@ -649,7 +657,7 @@
           var step = el('div', 'step'), before = c.steps[i - 1];
           step.appendChild(oneContact ? el('div', 'n' + (s.value > 0 ? '' : ' undone'), t(s.value > 0 ? 'metric_step_done' : 'metric_step_not_done')) : el('div', 'n', shown(s.value)));
           step.appendChild(el('div', 'l', s.label));
-          if (!oneContact && before && before.value > 0) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
+          if (!oneContact && before && before.value > 0 && s.rate !== false) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
           row.appendChild(step);
         });
         k.appendChild(row);
@@ -682,7 +690,7 @@
       }
       k.appendChild(el('div', 'n', shown(c.value)));
       k.appendChild(el('div', 'l', c.label));
-      if (c.detail) k.appendChild(el('div', 'd', c.detail));
+      [].concat(c.detail || []).forEach(function(d){ k.appendChild(el('div', 'd', d)); });
       if (top && c.top) { k.classList.add('plugin-card'); top.appendChild(k); }
       else cards.appendChild(k);
     });
