@@ -18,6 +18,7 @@ import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
 import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
 import { eventsSchema, measureLinks, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
+import { testContactsSchema, markIfTest } from './public-support-test-contacts.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -105,7 +106,7 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_max_sessions integer NOT NULL DEFAULT ${AVATAR_MAX_SESSIONS} CHECK (avatar_max_sessions BETWEEN 1 AND ${AVATAR_SESSIONS_MAX});
 ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS conversation_idle_minutes integer CHECK (conversation_idle_minutes BETWEEN 1 AND ${CONVERSATION_IDLE_MAX});
  ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS conversation integer NOT NULL DEFAULT 1;
-${eventsSchema(S)}`;
+${eventsSchema(S)}${testContactsSchema(S)}`;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
 // A note may hold personal data (a name, an e-mail), so it is stored like the
@@ -193,6 +194,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
          RETURNING id, canal, endereco, criado_em, parado_em, limite_avisado_em, bloqueado_em, (xmax = 0) AS novo`,
         [agentId, canal, chave, encMaybe(end)]);
       const r = rows[0];
+      if (r.novo && canal === 'whatsapp') await markIfTest(pool, S, r.id, end);
       return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em, bloqueadoEm: r.bloqueado_em };
     },
 
@@ -428,6 +430,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         await c.query(
           `INSERT INTO ${S}.public_contact_state (contact_id, chave, valor) VALUES ($1, $2, $3)
            ON CONFLICT (contact_id, chave) DO UPDATE SET valor = excluded.valor, atualizado_em = now()`, [contatoId, k, encMaybe(v)]);
+        await markIfTest(c, S, contatoId, v);
         return { ok: true, chave: k };
       });
     },

@@ -97,7 +97,7 @@
   .card h3{font-size:15px;margin:22px 0 4px;}
   .nota{font-size:13.5px;color:var(--mut);margin:0;}
   code{display:block;background:var(--field);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 11px;font-size:13.5px;word-break:break-all;}
-  #webOrigens,#linkSites{min-height:70px;}
+  #webOrigens,#linkSites,#testContacts{min-height:70px;}
   .th-box{min-height:220px;white-space:pre-wrap;}
   .th-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;color:var(--mut);font-size:12.5px;}
   .th-over{color:var(--err);}
@@ -380,6 +380,14 @@
     </div>
   </div>
 
+  <div class="card hidden" id="testCard" data-view-panel="settings">
+    <h2 data-i18n="public_service_page.test_contacts">Test contacts</h2>
+    <p class="nota" data-i18n="public_service_page.test_contacts_help">E-mails or phone numbers of whoever tests this assistant, one per line. Their conversations stay in the contact list, but they leave every number on the dashboard, for any period, as soon as the list is saved.</p>
+    <textarea id="testContacts" spellcheck="false" data-i18n-aria-label="public_service_page.test_contacts" aria-label="Test contacts"></textarea>
+    <div class="acoes"><button class="btn primary" id="saveTests" data-i18n="public_service_page.save">Save</button></div>
+    <div id="testMsg" class="msg"></div>
+  </div>
+
   <div class="card hidden" id="areasCard" data-view-panel="settings" data-owner-only>
     <h2 data-i18n="public_service_page.areas">Client areas</h2>
     <p class="nota" data-i18n="public_service_page.areas_lead">Put assistants in an area and let a client's people in. An admin edits the instructions, texts and link sites and handles the contacts; a viewer only reads. Everything else stays with you.</p>
@@ -499,7 +507,7 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('promptMsg'), ''); msg($('webChaveMsg'), '');
-    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
+    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false); loadTests();
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
 
@@ -823,6 +831,30 @@
 
   // The access log (client-area-activity.mjs): only the owner of the assistants reads it.
   // before = the last line shown, to load older ones.
+  // Test contacts (public-support-test-contacts.mjs): the owner's and an area admin's;
+  // saving takes them out of the metrics, so the dashboard reloads.
+  var TESTS = '/api/public-support/test-contacts', testsFor = null;
+  function loadTests(){
+    var id = testsFor = agenteAtual.agentId;
+    $('testContacts').value = ''; msg($('testMsg'), '');
+    $('testCard').classList.toggle('hidden', !canEdit());
+    if (!canEdit()) return;
+    pedir(TESTS + '?agent=' + encodeURIComponent(id)).then(function(j){
+      if (testsFor === id) $('testContacts').value = (j.entries || []).join('\n');
+    }).catch(function(e){ if (testsFor === id && e.message !== NO_SESSION) msg($('testMsg'), e.message, 'err'); });
+  }
+  $('saveTests').addEventListener('click', function(){
+    var b = this, id = agenteAtual.agentId;
+    var entries = $('testContacts').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    b.disabled = true; msg($('testMsg'), t('saving'));
+    pedir(TESTS, { agentId: id, entries: entries }).then(function(j){
+      if (testsFor !== id) return;
+      $('testContacts').value = (j.entries || []).join('\n');
+      msg($('testMsg'), t('test_contacts_saved', { count: j.testContacts }), 'ok');
+      loadMetrics();
+    }).catch(function(e){ msg($('testMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
   var ACTIVITY = '/api/public-support/activity', ACTIVITY_PAGE = 50, activityFor = null, activityLast = null;
   function loadActivity(more){
     var id = agenteAtual.agentId;

@@ -29,6 +29,7 @@ import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
 import { AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } from './public-support-owner.mjs';
 import { METRICS_PATH } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
+import { TEST_CONTACTS_PATH } from './public-support-test-contacts.mjs';
 import { EVENTS_PATH } from './public-support-events.mjs';
 import { listThemes } from './client-area-themes.mjs';
 
@@ -238,7 +239,7 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
 export const panelScope = (areas) => ({
   name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
   api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH || path === EVENTS_PATH || path === ACTIVITY_PATH
-    || path === PROFILES_PATH || path === PROFILES_CSV_PATH,
+    || path === PROFILES_PATH || path === PROFILES_CSV_PATH || path === TEST_CONTACTS_PATH,
 });
 
 // The invite e-mail, in the inviter's language (the invitee has none yet).

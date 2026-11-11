@@ -83,6 +83,9 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
     if (from && to) { parts.push(period(n + params.length)); params.push(from, to, timezone); }
     return [parts.join(' AND ') || 'true', params];
   };
+  // The assistant's ($1) test contacts stay out of the counts (public-support-test-contacts.mjs);
+  // one contact's own cards still count it.
+  const notTest = (column, range) => (range?.contactId ? '' : ` AND ${column} NOT IN (SELECT id FROM ${S}.public_contacts WHERE agent_id = $1 AND is_test)`);
 
   return {
     // A plugin's event. Never throws: a failed write only goes to the log, the
@@ -130,7 +133,7 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       const [where, params] = match(step, 2 + scoped.length);
       const { rows: [r] } = await pool.query(
         `SELECT count(*)::int AS times, count(DISTINCT contact_id)::int AS people FROM ${S}.public_support_events
-          WHERE agent_id = $1 AND ${inScope} AND ${where}`, [agentId, ...scoped, ...params]);
+          WHERE agent_id = $1 AND ${inScope} AND ${where}${notTest('contact_id', range)}`, [agentId, ...scoped, ...params]);
       return { times: r?.times ?? 0, people: r?.people ?? 0 };
     },
 
@@ -143,7 +146,7 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       const { rows } = await pool.query(
         `SELECT ref, count(*)::int AS times, count(DISTINCT contact_id)::int AS people, count(*) OVER ()::int AS refs
            FROM ${S}.public_support_events
-          WHERE agent_id = $1 AND ${inScope} AND ${where} AND ref <> ''
+          WHERE agent_id = $1 AND ${inScope} AND ${where} AND ref <> ''${notTest('contact_id', range)}
           GROUP BY ref ORDER BY times DESC, ref LIMIT ${n}`, [agentId, ...scoped, ...params]);
       return { rows: rows.map(({ ref, times, people }) => ({ ref, times, people })), refs: rows[0]?.refs ?? 0 };
     },
@@ -157,7 +160,7 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
       const ctes = steps.map((s, i) => {
         const [where, p] = match(s, params.length + 1);
         params.push(...p);
-        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${inScope.replace(/\b(at|contact_id)\b/g, 'e.$1')} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}`;
+        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${inScope.replace(/\b(at|contact_id)\b/g, 'e.$1')} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}${notTest('e.contact_id', range)}`;
         return i === 0
           ? `s0 AS (SELECT e.contact_id, min(e.at) AS t ${base} GROUP BY e.contact_id)`
           : `s${i} AS (SELECT e.contact_id, min(e.at) AS t ${base.replace('WHERE', `JOIN s${i - 1} p ON p.contact_id = e.contact_id AND e.at >= p.t WHERE`)} GROUP BY e.contact_id)`;
@@ -168,14 +171,14 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
 
     // The owner's assistant's events from `from` to `to` (first and last day,
     // YYYY-MM-DD), oldest first: local time, contact, channel, kind, ref. Null when
-    // the assistant is not ownerId's (agents.user_id).
+    // the assistant is not ownerId's (agents.user_id). Test contacts stay out.
     async list(ownerId, agentId, { from, to }) {
       const own = await pool.query(`SELECT 1 FROM ${S}.agents WHERE id = $1 AND user_id = $2`, [agentId, ownerId]);
       if (!own.rows.length) return null;
       const { rows } = await pool.query(
         `SELECT to_char(e.at AT TIME ZONE $4, 'YYYY-MM-DD HH24:MI:SS') AS at, e.contact_id, c.canal AS channel, e.kind, e.ref
            FROM ${S}.public_support_events e JOIN ${S}.public_contacts c ON c.id = e.contact_id
-          WHERE e.agent_id = $1 AND ${period(2).replace(/\bat\b/g, 'e.at')}
+          WHERE e.agent_id = $1 AND ${period(2).replace(/\bat\b/g, 'e.at')} AND NOT c.is_test
           ORDER BY e.at, e.id LIMIT ${EVENTS_EXPORT_MAX}`, [agentId, from, to, timezone]);
       return rows;
     },

@@ -869,8 +869,8 @@ test('assistant texts on the owner screen: another account gets 404, the plugin 
 
 // Isolation is by construction: the module must not start importing whatever reads
 // the owner's data (memory, connectors, channels, routines). A new import here = review it.
-test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs, the events and the locale rules', () => {
+test('public-support.mjs only imports the tool loop, the vault, the health rule, the outputs, the events, the test contacts and the locale rules', () => {
   const src = fs.readFileSync(new URL('../web/extensions/public-support/public-support.mjs', import.meta.url), 'utf8');
   const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(imports, ['../../../core-proto/core.mjs', '../../health-guardrail.mjs', '../../locale.mjs', '../../vault.mjs', './public-support-events.mjs', './public-support-outputs.mjs']);
+  assert.deepEqual(imports, ['../../../core-proto/core.mjs', '../../health-guardrail.mjs', '../../locale.mjs', '../../vault.mjs', './public-support-events.mjs', './public-support-outputs.mjs', './public-support-test-contacts.mjs']);
 });

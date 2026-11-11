@@ -1,7 +1,8 @@
 // Volume of an assistant's public support, for its owner and the members of its
 // client area (client-areas.mjs): people who wrote, the conversations they had
 // (a contact's messages are split into conversations by conversation_idle_minutes,
-// public-support.mjs), messages received and answered, by channel and by day. No cost: the owner pays for it, and a
+// public-support.mjs), messages received and answered, by channel and by day; test contacts
+// (public-support-test-contacts.mjs) left out. No cost: the owner pays for it, and a
 // client sees only how much it is used.
 //
 // It counts what is still stored, so a period reaching further back than the
@@ -48,7 +49,7 @@ export function createMetricsStore(pool, { S = 'mtr_harness', timezone = default
     async volume(ownerId, agentId, { from, to, days } = {}) {
       if (!isDay(from) || !isDay(to) || !(days >= 1)) throw Error('metrics: the period needs from, to and days');
       const inPeriod = `m.criado_em >= ($3::date::timestamp AT TIME ZONE $4) AND m.criado_em < (($5::date + 1)::timestamp AT TIME ZONE $4)`;
-      const mine = `JOIN ${S}.agents a ON a.id = c.agent_id WHERE c.agent_id = $1 AND a.user_id = $2`;
+      const mine = `JOIN ${S}.agents a ON a.id = c.agent_id WHERE c.agent_id = $1 AND a.user_id = $2 AND NOT c.is_test`;
       const params = [agentId, ownerId, from, timezone, to];
       const [byDay, byChannel, retention] = await Promise.all([
         // A contact is in a single channel, so the per-channel counts add up.

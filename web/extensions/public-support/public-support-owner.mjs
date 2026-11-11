@@ -17,6 +17,7 @@ import { METRICS_PATH, METRIC_DAYS, METRIC_RANGE_MAX, metricRange, todayIn } fro
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
+import { TEST_CONTACTS_PATH, TEST_CONTACTS_MAX, normalizeTestContact } from './public-support-test-contacts.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -107,8 +108,9 @@ export function camposDaConfig(b = {}) {
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet
 // and as the metrics' click count.
+// testContacts (public-support-test-contacts.mjs) = who the metrics leave out, kept by the owner and area admins.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -368,6 +370,29 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (acc.role !== 'owner') return forbidden(res);
     const before = Number(url.searchParams.get('before'));
     return send(res, 200, { lines: await activity.list({ ownerId: acc.ownerId, before: Number.isSafeInteger(before) && before > 0 ? before : null }) });
+  });
+
+  // The assistant's test contacts: one e-mail or phone number per entry. Only the owner
+  // and an area admin see and change them (they are people's addresses).
+  if (testContacts) rota('GET', TEST_CONTACTS_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    const entries = await testContacts.list(acc.agentId, acc.ownerId);
+    return entries ? send(res, 200, { entries }) : naoAchei(res);
+  });
+  if (testContacts) rota('POST', TEST_CONTACTS_PATH, async ({ req, res, user }) => {
+    const b = await readBody(req);
+    const acc = await agentAccess(user, b.agentId);
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    if (!Array.isArray(b.entries) || b.entries.length > TEST_CONTACTS_MAX) return send(res, 400, { error: 'server.public_test_contacts_too_many' });
+    const entries = b.entries.map(normalizeTestContact);
+    if (entries.some((e) => !e)) return send(res, 400, { error: 'server.public_test_contact_invalid' });
+    const r = await testContacts.save(acc.agentId, acc.ownerId, [...new Set(entries)]);
+    if (!r) return naoAchei(res);
+    await record(user, acc, 'test_contacts_changed', { count: r.entries.length });
+    return send(res, 200, { ok: true, ...r });
   });
 
   if (prompts) registerAgentTexts();
