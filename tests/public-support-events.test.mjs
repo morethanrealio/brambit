@@ -28,7 +28,7 @@ async function setup(t) {
   const store = createPublicoStore(pool); await store.init();
   await store.configurar(ag, owner, { ativo: true, retencaoDias: 30 });
   const events = createEventsStore(pool, { timezone: TZ, log: { error() {} } });
-  return { db, store, events, ag };
+  return { db, store, events, ag, owner, pool };
 }
 
 const model = () => ({ name: 'fake', async complete() { return { stop: 'end', text: 'ok', usage: { in: 1, out: 1 } }; } });
@@ -67,6 +67,39 @@ test('the plugin records events in the turn; cards count them and follow people 
   assert.deepEqual(await hers.funnel([{ kind: 'scan_click' }, { kind: 'scan_result' }, { kind: 'tap' }]), [1, 1, 0]);
   // Another period sees nothing.
   assert.deepEqual(await events.count(ag, { from: '2020-01-01', to: '2020-01-31' }, { kind: 'shown' }), { times: 0, people: 0 });
+});
+
+test('a plugin segment narrows the volume, the cards, the latest contacts and the spreadsheet to one side', async (t) => {
+  const { store, events, ag, owner, pool } = await setup(t);
+  const { createMetricsStore } = await import('../web/extensions/public-support/public-support-metrics.mjs');
+  const ganchos = { antesDoModelo: async (ctx) => { for (const s of ctx.mensagem.split(' ')) await ctx.track(...s.split('=')); return null; },
+    metricSegment: async () => ({ label: 'Store', inside: 'In the store', outside: 'Elsewhere', step: { kind: 'in_store' }, extra: 1 }),
+    metricCards: async ({ events: e }) => {
+      const [shown, funnel] = await Promise.all([e.count({ kind: 'shown' }), e.funnel([{ kind: 'shown' }, { kind: 'tap' }])]);
+      return [{ label: 'shown', value: `${shown.people}/${funnel.join('>')}` }];
+    } };
+  const a = createAtendimentoPublico({ store, makeProvider: model, recordUsage: async () => {}, saldo: async () => ({ over: false }),
+    ganchos, events, log: { error() {}, info() {} } });
+  const say = (who, msg) => a.turno({ agentId: ag, canal: 'web', endereco: who, mensagem: msg });
+  await say('ana', 'in_store shown=product:1 tap=product:1');
+  await say('bia', 'shown=product:2');
+  await say('caio', 'in_store');
+  const seg = await a.metricSegment({ agentId: ag, language: 'en' });
+  assert.deepEqual(seg, { label: 'Store', inside: 'In the store', outside: 'Elsewhere', step: { kind: 'in_store' } });
+  const range = { from: today(), to: today(), days: 1 };
+  const inside = { step: seg.step, has: true }, outside = { step: seg.step, has: false };
+  const cards = async (segment) => (await a.metricCards({ agentId: ag, ...range, segment }))[0].value;
+  assert.deepEqual([await cards(null), await cards(inside), await cards(outside)], ['2/2>1', '1/1>1', '1/1>0']);
+  const metrics = createMetricsStore(pool, { timezone: TZ });
+  const people = async (segment) => (await metrics.volume(owner, ag, range, { segment })).total.people;
+  assert.deepEqual([await people(null), await people(inside), await people(outside)], [3, 2, 1]);
+  const names = async (segment) => (await store.contatosDoDono(owner, ag, { period: range, segment })).map((c) => c.endereco).sort();
+  assert.deepEqual(await names(inside), ['ana', 'caio']);
+  assert.deepEqual(await names(outside), ['bia']);
+  assert.deepEqual((await store.contatosDoDono(owner, ag, { segment: outside })).map((c) => c.endereco), ['bia'], 'with no period too');
+  const kinds = async (segment) => (await events.list(owner, ag, { ...range, segment })).map((r) => r.kind);
+  assert.deepEqual(await kinds(outside), ['shown']);
+  assert.equal((await kinds(inside)).length, 4);
 });
 
 test('events go with the conversation, the contact and retention, and are in the contact export', async (t) => {

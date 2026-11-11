@@ -103,6 +103,7 @@ export function camposDaConfig(b = {}) {
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
 // metricCards({agentId, contactId?, days, from, to, language}) → the plugin's cards (public-support.mjs); language = the page's (?lang).
 // metricHide({agentId}) → the volume boxes the plugin hides for that assistant (public-support.mjs).
+// metricSegment({agentId, language}) → the plugin's dashboard filter or null (public-support.mjs).
 // contactProfiles({agentId, language, contacts: [{id, notes}]}) → the plugin's profile of each contact (public-support.mjs).
 // contactNames({agentId, contacts: [{id, notes}]}) → the plugin's name for each contact it knows (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
@@ -110,7 +111,7 @@ export function camposDaConfig(b = {}) {
 // and as the metrics' click count.
 // testContacts (public-support-test-contacts.mjs) = who the metrics leave out, kept by the owner and area admins.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], metricSegment = async () => null, contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -234,7 +235,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   });
 
   // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones),
-  // ?days= or ?from=&to= (metricRange) for only the contacts with messages in that period.
+  // ?days= or ?from=&to= (metricRange) for only the contacts with messages in that period,
+  // ?segment= (segmentOf) for only one side of the plugin's filter.
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agente'));
     if (!acc) return naoAchei(res);
@@ -244,9 +246,10 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     const hasPeriod = ['days', 'from', 'to'].some((k) => url.searchParams.has(k));
     const period = hasPeriod ? metricRange(url.searchParams, todayIn()) : null;
     if (hasPeriod && !period) return badPeriod(res);
+    const { segment } = await segmentOf(acc, url, language);
     // With a profile filter, a page is the next contacts it keeps.
     const contatos = keep ? await scanProfiles(acc, language, { antes: quando, keep, max: CONTATOS_POR_PAGINA })
-      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined, period }));
+      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined, period, segment }));
     return send(res, 200, { contatos });
   });
 
@@ -328,6 +331,15 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
 
   // ?days= one of METRIC_DAYS, or ?from=&to= (metricRange).
   const badPeriod = (res) => send(res, 400, { error: 'bad_days', allowed: METRIC_DAYS, maxDays: METRIC_RANGE_MAX });
+  // ?segment=in|out: one side of the plugin's dashboard filter (metricSegment). → {offer: what
+  // the page shows ({label, inside, outside}, or null), segment: what the queries take, or
+  // null for everyone (no filter, no value, or a filter the assistant doesn't have).
+  async function segmentOf(acc, url, language) {
+    const s = await metricSegment({ agentId: acc.agentId, language });
+    const side = url.searchParams.get('segment');
+    if (!s) return { offer: null, segment: null };
+    return { offer: { label: s.label, inside: s.inside, outside: s.outside }, segment: side === 'in' || side === 'out' ? { step: s.step, has: side === 'in' } : null };
+  }
   if (metrics) rota('GET', METRICS_PATH, async ({ res, url, user }) => {
     const language = normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
     // ?contact: one conversation's cards, whoever can open it sees them.
@@ -340,14 +352,15 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const range = metricRange(url.searchParams, todayIn());
     if (!range) return badPeriod(res);
-    const [volume, hide] = await Promise.all([metrics.volume(acc.ownerId, acc.agentId, range), metricHide({ agentId: acc.agentId })]);
-    if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null, hide });
+    const { offer, segment } = await segmentOf(acc, url, language);
+    const [volume, hide] = await Promise.all([metrics.volume(acc.ownerId, acc.agentId, range, { segment }), metricHide({ agentId: acc.agentId })]);
+    if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null, hide, segment: offer });
     const { from, to, days } = range;
     // clicks = the link buttons pressed in the period (/go); null without events or when
     // a plugin card already counts them button by button (clicks: true).
-    const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language }),
-      events ? events.count(acc.agentId, { from, to }, { kind: 'link_click' }) : null]);
-    return send(res, 200, { ...volume, cards, clicks: cards.some((c) => c.clicks) ? null : clicks, hide });
+    const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language, segment }),
+      events ? events.count(acc.agentId, { from, to, segment }, { kind: 'link_click' }) : null]);
+    return send(res, 200, { ...volume, cards, clicks: cards.some((c) => c.clicks) ? null : clicks, hide, segment: offer });
   });
 
   // The period's events as a spreadsheet, for everyone who sees the metrics.
@@ -356,9 +369,10 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const range = metricRange(url.searchParams, todayIn());
     if (!range) return badPeriod(res);
-    const rows = await events.list(acc.ownerId, acc.agentId, range);
+    const { segment } = await segmentOf(acc, url, pageLanguage(url));
+    const rows = await events.list(acc.ownerId, acc.agentId, { ...range, segment });
     if (!rows) return naoAchei(res);
-    await record(user, acc, 'events_exported', { from: range.from, to: range.to, rows: rows.length });
+    await record(user, acc, 'events_exported', { from: range.from, to: range.to, rows: rows.length, ...(segment ? { segment: segment.has ? 'in' : 'out' } : {}) });
     res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="events-${acc.agentId}-${range.from}-${range.to}.csv"` });
     return res.end('\ufeff' + eventsCsv(rows));
   });

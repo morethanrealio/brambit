@@ -24,7 +24,7 @@ export const EVENT_KIND = /^[a-z][a-z0-9_.-]{0,63}$/;
 export const EVENT_REF_MAX = 200;
 export const LINK_URL_MAX = 2000;
 export const FUNNEL_STEPS_MAX = 5;
-const KINDS_PER_STEP_MAX = 5;
+export const KINDS_PER_STEP_MAX = 5;
 export const TOP_REFS_MAX = 50;    // refs a top() call returns, or a step lists, at most
 export const EVENTS_EXPORT_MAX = 50000;
 const CLICK_REPEAT_MS = 5000;      // a second tap on the same link this soon is the same click
@@ -73,14 +73,24 @@ function match(step, n) {
   return [kind, [value]];
 }
 
+// A dashboard segment ({step, has}, from a plugin's metricSegment): the assistant's ($1)
+// contacts that did the step at any time (has: true), or that never did. → [sql, params]
+// keeping `column` (a contact id) in it, numbered from `n`.
+export function inSegment(S, segment, n, column) {
+  const [where, params] = match(segment.step, n);
+  return [`${column} ${segment.has ? '' : 'NOT '}IN (SELECT contact_id FROM ${S}.public_support_events WHERE agent_id = $1 AND ${where})`, params];
+}
+
 export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultTimezone(), log = console } = {}) {
-  // from/to = first and last day (YYYY-MM-DD) in the installation's timezone.
-  const period = (n) => `at >= ($${n}::date::timestamp AT TIME ZONE $${n + 2}) AND at < (($${n + 1}::date + 1)::timestamp AT TIME ZONE $${n + 2})`;
-  // range = {from, to} and/or {contactId}: the period, one contact, or both. → [sql, params], numbered from `n`.
-  const scope = ({ from, to, contactId } = {}, n) => {
+  // from/to = first and last day (YYYY-MM-DD) in the installation's timezone; p = the table's alias.
+  const period = (n, p = '') => `${p}at >= ($${n}::date::timestamp AT TIME ZONE $${n + 2}) AND ${p}at < (($${n + 1}::date + 1)::timestamp AT TIME ZONE $${n + 2})`;
+  // range = {from, to} and/or {contactId}: the period, one contact, or both; segment
+  // (inSegment) narrows it to some contacts. → [sql, params], numbered from `n`.
+  const scope = ({ from, to, contactId, segment } = {}, n, p = '') => {
     const parts = [], params = [];
-    if (contactId) { parts.push(`contact_id = $${n}`); params.push(contactId); }
-    if (from && to) { parts.push(period(n + params.length)); params.push(from, to, timezone); }
+    if (contactId) { parts.push(`${p}contact_id = $${n}`); params.push(contactId); }
+    if (from && to) { parts.push(period(n + params.length, p)); params.push(from, to, timezone); }
+    if (segment) { const [sql, sp] = inSegment(S, segment, n + params.length, `${p}contact_id`); parts.push(sql); params.push(...sp); }
     return [parts.join(' AND ') || 'true', params];
   };
   // The assistant's ($1) test contacts stay out of the counts (public-support-test-contacts.mjs);
@@ -155,12 +165,12 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
     // step 1, step 3 after step 2, ...].
     async funnel(agentId, range, steps) {
       if (!Array.isArray(steps) || !steps.length || steps.length > FUNNEL_STEPS_MAX) throw Error('events: 1 to ' + FUNNEL_STEPS_MAX + ' steps');
-      const [inScope, scoped] = scope(range, 2);
+      const [inScope, scoped] = scope(range, 2, 'e.');
       const params = [agentId, ...scoped];
       const ctes = steps.map((s, i) => {
         const [where, p] = match(s, params.length + 1);
         params.push(...p);
-        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${inScope.replace(/\b(at|contact_id)\b/g, 'e.$1')} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}${notTest('e.contact_id', range)}`;
+        const base = `FROM ${S}.public_support_events e WHERE e.agent_id = $1 AND ${inScope} AND ${where.replace(/\b(kind|ref)\b/g, 'e.$1')}${notTest('e.contact_id', range)}`;
         return i === 0
           ? `s0 AS (SELECT e.contact_id, min(e.at) AS t ${base} GROUP BY e.contact_id)`
           : `s${i} AS (SELECT e.contact_id, min(e.at) AS t ${base.replace('WHERE', `JOIN s${i - 1} p ON p.contact_id = e.contact_id AND e.at >= p.t WHERE`)} GROUP BY e.contact_id)`;
@@ -171,20 +181,22 @@ export function createEventsStore(pool, { S = 'mtr_harness', timezone = defaultT
 
     // The owner's assistant's events from `from` to `to` (first and last day,
     // YYYY-MM-DD), oldest first: local time, contact, channel, kind, ref. Null when
-    // the assistant is not ownerId's (agents.user_id). Test contacts stay out.
-    async list(ownerId, agentId, { from, to }) {
+    // the assistant is not ownerId's (agents.user_id). Test contacts stay out; segment
+    // (inSegment) keeps only some contacts.
+    async list(ownerId, agentId, { from, to, segment }) {
       const own = await pool.query(`SELECT 1 FROM ${S}.agents WHERE id = $1 AND user_id = $2`, [agentId, ownerId]);
       if (!own.rows.length) return null;
+      const [some, sp] = segment ? inSegment(S, segment, 5, 'e.contact_id') : ['true', []];
       const { rows } = await pool.query(
         `SELECT to_char(e.at AT TIME ZONE $4, 'YYYY-MM-DD HH24:MI:SS') AS at, e.contact_id, c.canal AS channel, e.kind, e.ref
            FROM ${S}.public_support_events e JOIN ${S}.public_contacts c ON c.id = e.contact_id
-          WHERE e.agent_id = $1 AND ${period(2).replace(/\bat\b/g, 'e.at')} AND NOT c.is_test
-          ORDER BY e.at, e.id LIMIT ${EVENTS_EXPORT_MAX}`, [agentId, from, to, timezone]);
+          WHERE e.agent_id = $1 AND ${period(2, 'e.')} AND NOT c.is_test AND ${some}
+          ORDER BY e.at, e.id LIMIT ${EVENTS_EXPORT_MAX}`, [agentId, from, to, timezone, ...sp]);
       return rows;
     },
 
     // What metricCards gets: the queries above tied to one assistant and its
-    // period, or to one of its contacts.
+    // period (and segment), or to one of its contacts.
     forCards(agentId, range) {
       return {
         count: (step) => this.count(agentId, range, step),

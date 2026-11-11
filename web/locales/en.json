@@ -1203,6 +1203,7 @@
     "metric_from": "First day",
     "metric_to": "Last day",
     "metric_period": "Period",
+    "metric_segment_all": "{label}: everyone",
     "metric_messages": "Messages",
     "metric_received_short": "received",
     "metric_sent_short": "sent",

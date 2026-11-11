@@ -7,9 +7,11 @@
 //
 // It counts what is still stored, so a period reaching further back than the
 // assistant's retention (retencao_dias) only covers the retained part; the reply
-// says so (partial). Days follow the installation's timezone.
+// says so (partial). Days follow the installation's timezone. A segment (a plugin's
+// metricSegment, public-support-events.mjs inSegment) counts only some contacts.
 import { defaultTimezone } from '../../locale.mjs';
 import { CANAIS_PUBLICOS } from './public-support.mjs';
+import { inSegment } from './public-support-events.mjs';
 
 export const METRICS_PATH = '/api/public-support/metrics';
 export const METRIC_DAYS = [7, 30, 90];
@@ -46,11 +48,12 @@ export function createMetricsStore(pool, { S = 'mtr_harness', timezone = default
   return {
     // ownerId checks the assistant's owner in the SQL itself (agents.user_id),
     // like every query of the owner's view. range = metricRange()'s {from, to, days}.
-    async volume(ownerId, agentId, { from, to, days } = {}) {
+    async volume(ownerId, agentId, { from, to, days } = {}, { segment = null } = {}) {
       if (!isDay(from) || !isDay(to) || !(days >= 1)) throw Error('metrics: the period needs from, to and days');
       const inPeriod = `m.criado_em >= ($3::date::timestamp AT TIME ZONE $4) AND m.criado_em < (($5::date + 1)::timestamp AT TIME ZONE $4)`;
-      const mine = `JOIN ${S}.agents a ON a.id = c.agent_id WHERE c.agent_id = $1 AND a.user_id = $2 AND NOT c.is_test`;
-      const params = [agentId, ownerId, from, timezone, to];
+      const [some, sp] = segment ? inSegment(S, segment, 6, 'c.id') : ['true', []];
+      const mine = `JOIN ${S}.agents a ON a.id = c.agent_id WHERE c.agent_id = $1 AND a.user_id = $2 AND NOT c.is_test AND ${some}`;
+      const params = [agentId, ownerId, from, timezone, to, ...sp];
       const [byDay, byChannel, retention] = await Promise.all([
         // A contact is in a single channel, so the per-channel counts add up.
         pool.query(`SELECT to_char(m.criado_em AT TIME ZONE $4, 'YYYY-MM-DD') AS day, c.canal AS channel,

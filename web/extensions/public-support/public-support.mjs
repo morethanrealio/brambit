@@ -17,7 +17,7 @@ import { runAgent as runAgentPadrao, ToolRegistry } from '../../../core-proto/co
 import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
 import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
-import { eventsSchema, measureLinks, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
+import { eventsSchema, measureLinks, inSegment, EVENT_KIND, EVENT_REF_MAX, KINDS_PER_STEP_MAX, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
 import { testContactsSchema, markIfTest } from './public-support-test-contacts.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
@@ -305,8 +305,10 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
     // (lastMessage, cut at LAST_MESSAGE_MAX chars). antes = ultima_em of the last one on the previous page.
     // period {from, to} (YYYY-MM-DD, fuso): only the contacts with messages in it, ordered by
     // their last one in it; mensagens and ultimaEm count only that period.
-    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA, period = null } = {}) {
+    // segment (public-support-events.mjs inSegment): only some contacts.
+    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA, period = null, segment = null } = {}) {
       const inPeriod = period ? `AND m.criado_em >= ($6::date::timestamp AT TIME ZONE $8) AND m.criado_em < (($7::date + 1)::timestamp AT TIME ZONE $8)` : '';
+      const [some, sp] = segment ? inSegment(S, segment, period ? 9 : 6, 'c.id') : ['true', []];
       const { rows } = await pool.query(
         `SELECT c.id, c.canal, c.endereco, c.criado_em, ${period ? 'p.ultima' : 'c.ultima_em'} AS ultima_em, c.parado_em, c.bloqueado_em,
                 (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) AS mensagens,
@@ -316,9 +318,9 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
            ${period ? `JOIN LATERAL (SELECT max(m.criado_em) AS ultima FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) p ON p.ultima IS NOT NULL` : ''}
            LEFT JOIN LATERAL (SELECT m.role, left(m.content, $5) AS content FROM ${S}.public_messages m
                                WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) last ON true
-          WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
+          WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3) AND ${some}
           ORDER BY ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2,
-          ...(period ? [period.from, period.to, fuso] : [])]);
+          ...(period ? [period.from, period.to, fuso] : []), ...sp]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
         paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations,
         ...(r.last_role ? { lastMessage: { role: r.last_role, text: preview(r.last_content) } } : {}) }));
@@ -618,6 +620,11 @@ export function retainedByTool(tools) {
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
+//   metricSegment({agentId, language}) → {label, inside, outside, step: {kind, ref?}}: a filter
+//    of the assistant's dashboard by who did the step at any time (e.g. said they were in a
+//    store): label names it, inside and outside name its two sides. The owner then picks all,
+//    inside or outside, and the volume, cards, latest conversations and events spreadsheet
+//    count only those contacts. Slower than METRIC_CARDS_WAIT_MS = no filter this time.
 //   metricHide({agentId}) → names from METRIC_HIDEABLE: the volume boxes this assistant's
 //    dashboard leaves out (e.g. 'messages' when the client is not charged by them);
 //    unknown names are ignored. Slower than METRIC_CARDS_WAIT_MS = nothing hidden this time.
@@ -675,9 +682,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
   const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
   // The plugin's cards for the metrics, only the well-formed ones.
-  async function metricCards(q) {
+  async function metricCards({ segment, ...q }) {
     if (typeof ganchos?.metricCards !== 'function') return [];
-    const r = await screenHook('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId }) : noEvents });
+    const r = await screenHook('metricCards', { ...q, events: events ? events.forCards(q.agentId, { from: q.from, to: q.to, contactId: q.contactId, segment }) : noEvents });
     const card = (c) => {
       const label = text(c?.label, 60);
       if (!label) return null;
@@ -706,6 +713,18 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     if (typeof ganchos?.metricHide !== 'function') return [];
     const r = await screenHook('metricHide', { agentId });
     return Array.isArray(r) ? METRIC_HIDEABLE.filter((name) => r.includes(name)) : [];
+  }
+
+  // The plugin's dashboard segment for this assistant ({label, inside, outside, step}),
+  // or null without the hook or with a malformed one.
+  async function metricSegment({ agentId, language }) {
+    if (typeof ganchos?.metricSegment !== 'function') return null;
+    const r = await screenHook('metricSegment', { agentId, language });
+    const [label, inside, outside] = [r?.label, r?.inside, r?.outside].map((v) => text(v, 40));
+    const kinds = [r?.step?.kind].flat();
+    if (!label || !inside || !outside || !kinds.length || kinds.length > KINDS_PER_STEP_MAX || !kinds.every((k) => EVENT_KIND.test(String(k ?? '')))) return null;
+    const ref = typeof r.step.ref === 'string' ? { ref: r.step.ref.slice(0, EVENT_REF_MAX) } : {};
+    return { label, inside, outside, step: { kind: r.step.kind, ...ref } };
   }
 
   const list = (v) => {
@@ -922,5 +941,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     }
   }
 
-  return { turno, registro, defaultTexts, metricCards, metricHide, contactProfiles, contactNames };
+  return { turno, registro, defaultTexts, metricCards, metricHide, metricSegment, contactProfiles, contactNames };
 }
