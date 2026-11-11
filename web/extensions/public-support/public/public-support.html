@@ -127,7 +127,7 @@
   .kpi{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
   .kpi > .l{order:-1;}
   .kpis.top{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:0 0 18px;}
-  .kpis.top .kpi,#mFunnels .kpi,#mRanks .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
+  .kpis.top .kpi,#mFunnels .kpi,#mCards .kpi,#mRanks .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
   .kpis.top .kpi .n{font-size:30px;margin-top:4px;}
   .kpi .pair{display:flex;gap:22px;}
   #mFunnels .kpi,#mRanks .kpi{margin:0 0 18px;}
@@ -135,6 +135,7 @@
   .kpi .l{font-size:12.5px;color:var(--mut);}
   .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
   .kpis.plugin{grid-template-columns:repeat(3,minmax(0,1fr));}
+  #mCards{gap:14px;margin:0 0 18px;}
   .funnel{margin:12px 0 4px;}
   .funnel .n.undone{color:var(--mut);font-weight:500;}
   .funnel > .l{font-size:13.5px;font-weight:600;color:inherit;}
@@ -231,6 +232,7 @@
 
   <div class="hidden" id="metricsCard" data-view-panel="dashboard">
     <div id="mFunnels"></div>
+    <div class="kpis plugin hidden" id="mCards"></div>
     <div class="kpis top" id="mTop">
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div><div class="n" id="mConversations">0</div><div class="d" id="mPerPerson"></div></div>
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_people">People</div><div class="n" id="mPeople">0</div></div>
@@ -255,7 +257,6 @@
     </div>
     <div class="card" id="mMore">
       <h2 data-i18n="public_service_page.metric_more">More numbers</h2>
-      <div class="kpis plugin hidden" id="mCards"></div>
       <table class="mtable">
         <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_people">People</th>
           <th data-i18n="public_service_page.metric_conversations">Conversations</th><th data-i18n="public_service_page.metric_received">Messages received</th>
@@ -718,7 +719,7 @@
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&' + period;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
-    loadLatest();
+    loadLatest(period);
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&' + period + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mPeople', 'people'], ['mConversations', 'conversations'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
@@ -779,12 +780,12 @@
   $('mBars').addEventListener('pointermove', tipAt);
   $('mBars').addEventListener('pointerdown', tipAt);
   $('mBars').addEventListener('pointerleave', function(ev){ if (ev.pointerType === 'mouse') showTip(null); });
-  // The newest contacts, each with its latest conversation; a row opens it under Conversations.
+  // The contacts with messages in the period, newest first; a row opens the conversation under Conversations.
   var latestFor = null;
-  function loadLatest(){
-    var id = latestFor = agenteAtual.agentId;
-    pedir('/api/publico/contatos?agente=' + encodeURIComponent(id) + '&lang=' + encodeURIComponent(document.documentElement.lang) + '&limit=20').then(function(j){
-      if (latestFor !== id) return;
+  function loadLatest(period){
+    var id = agenteAtual.agentId, key = latestFor = id + '|' + period;
+    pedir('/api/publico/contatos?agente=' + encodeURIComponent(id) + '&' + period + '&lang=' + encodeURIComponent(document.documentElement.lang) + '&limit=20').then(function(j){
+      if (latestFor !== key) return;
       var rows = $('mLatest'); rows.textContent = '';
       (j.contatos || []).forEach(function(c){
         var tr = el('tr'), who = el('td', null, c.name || c.endereco), channel = el('td', null, channelName(c));

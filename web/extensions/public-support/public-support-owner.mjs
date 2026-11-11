@@ -230,16 +230,20 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return send(res, 200, { ok: true, key });
   });
 
-  // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones).
+  // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones),
+  // ?days= or ?from=&to= (metricRange) for only the contacts with messages in that period.
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agente'));
     if (!acc) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
     const language = pageLanguage(url), keep = profileFilter(url);
+    const hasPeriod = ['days', 'from', 'to'].some((k) => url.searchParams.has(k));
+    const period = hasPeriod ? metricRange(url.searchParams, todayIn()) : null;
+    if (hasPeriod && !period) return badPeriod(res);
     // With a profile filter, a page is the next contacts it keeps.
     const contatos = keep ? await scanProfiles(acc, language, { antes: quando, keep, max: CONTATOS_POR_PAGINA })
-      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined }));
+      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined, period }));
     return send(res, 200, { contatos });
   });
 

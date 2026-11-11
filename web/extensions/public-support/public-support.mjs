@@ -299,17 +299,22 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
 
     // An owner's assistant's contacts, from newest to oldest, each with its last message
     // (lastMessage, cut at LAST_MESSAGE_MAX chars). antes = ultima_em of the last one on the previous page.
-    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
+    // period {from, to} (YYYY-MM-DD, fuso): only the contacts with messages in it, ordered by
+    // their last one in it; mensagens and ultimaEm count only that period.
+    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA, period = null } = {}) {
+      const inPeriod = period ? `AND m.criado_em >= ($6::date::timestamp AT TIME ZONE $8) AND m.criado_em < (($7::date + 1)::timestamp AT TIME ZONE $8)` : '';
       const { rows } = await pool.query(
-        `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
-                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens,
+        `SELECT c.id, c.canal, c.endereco, c.criado_em, ${period ? 'p.ultima' : 'c.ultima_em'} AS ultima_em, c.parado_em, c.bloqueado_em,
+                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) AS mensagens,
                 (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations,
                 last.role AS last_role, last.content AS last_content
            FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+           ${period ? `JOIN LATERAL (SELECT max(m.criado_em) AS ultima FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) p ON p.ultima IS NOT NULL` : ''}
            LEFT JOIN LATERAL (SELECT m.role, left(m.content, $5) AS content FROM ${S}.public_messages m
                                WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) last ON true
           WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
-          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2]);
+          ORDER BY ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2,
+          ...(period ? [period.from, period.to, fuso] : [])]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
         paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations,
         ...(r.last_role ? { lastMessage: { role: r.last_role, text: preview(r.last_content) } } : {}) }));

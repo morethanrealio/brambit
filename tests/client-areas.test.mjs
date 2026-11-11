@@ -316,6 +316,12 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const day = (n) => new Date(Date.parse(today) - n * 86400000).toISOString().slice(0, 10);
   const picked = await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&from=${day(45)}&to=${day(35)}`);
   assert.deepEqual([picked.body.total.conversations, picked.body.daily.length, picked.body.daily[0].day], [1, 11, day(45)], 'only the 40-day-old conversation');
+  // The dashboard's latest conversations follow the period too.
+  const latest = async (q) => (await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}&limit=20${q}`)).body.contatos.map((c) => [c.id, c.mensagens]);
+  assert.deepEqual(await latest(`&from=${day(45)}&to=${day(35)}`), [[old.id, 1]], 'only who had messages in the period');
+  assert.ok(!(await latest('&days=7')).some(([id]) => id === old.id));
+  assert.ok((await latest('')).some(([id]) => id === old.id), 'without a period, everyone');
+  assert.equal((await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}&days=8`)).status, 400);
   assert.equal((await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&from=${day(2)}&to=2999-01-01`)).body.daily.length, 3);
   for (const bad of [`from=${day(1)}&to=${day(2)}`, `from=${day(400)}&to=${today}`, 'from=2026-02-30&to=2026-03-01', `from=${today}`])
     assert.equal((await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&${bad}`)).status, 400, bad);
