@@ -43,6 +43,7 @@ export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's dat
 export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
 export const METRIC_HIDEABLE = ['messages']; // volume boxes of the dashboard a plugin may hide
+export const CARD_DETAIL_LINES_MAX = 2; // lines under a plugin card's number
 export const RANKING_ROWS_MAX = 20;   // rows of a ranking card
 export const RANKING_COLUMNS_MAX = 4; // its columns, the name included
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
@@ -597,7 +598,8 @@ export function retainedByTool(tools) {
 //    members of its client area. from/to = the period's first and last day
 //    (YYYY-MM-DD, installation timezone); language = the page's ('pt-BR', 'en' or
 //    'es'), for the labels. A card is {label, value, detail?}: value a number (the
-//    page formats it) or short text, detail a short line under it (e.g. '3 people'),
+//    page formats it) or short text, detail a short line under it (e.g. '3 people')
+//    or a list of up to CARD_DETAIL_LINES_MAX of them,
 //    top: true to show it in the dashboard's first row, next to the volume;
 //    clicks: true when it counts link button clicks (a card per button): the page
 //    then leaves out its own total of clicks;
@@ -691,7 +693,9 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         const detail = text(c.detail, 80);
         return { label, ...(detail ? { detail } : {}), columns, rows };
       }
-      const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
+      const value = number(c.value) ?? text(c.value, 24);
+      const lines = (Array.isArray(c.detail) ? c.detail : [c.detail]).map((d) => text(d, 40)).filter(Boolean).slice(0, CARD_DETAIL_LINES_MAX);
+      const detail = lines.length > 1 ? lines : lines[0];
       return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}), ...(c.clicks === true ? { clicks: true } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);

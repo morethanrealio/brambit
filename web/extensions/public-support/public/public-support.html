@@ -690,7 +690,7 @@
       }
       k.appendChild(el('div', 'n', shown(c.value)));
       k.appendChild(el('div', 'l', c.label));
-      if (c.detail) k.appendChild(el('div', 'd', c.detail));
+      [].concat(c.detail || []).forEach(function(d){ k.appendChild(el('div', 'd', d)); });
       if (top && c.top) { k.classList.add('plugin-card'); top.appendChild(k); }
       else cards.appendChild(k);
     });
