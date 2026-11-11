@@ -22,6 +22,7 @@ import { createMetricsStore } from './public-support-metrics.mjs';
 import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, panelScope } from './client-areas.mjs';
 import { activitySchema, createActivityStore } from './client-area-activity.mjs';
 import { createEventsStore, measureLinks, registerClickRoute } from './public-support-events.mjs';
+import { createTestContactsStore } from './public-support-test-contacts.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -110,8 +111,8 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
     const face = avatar && registerPublicAvatar({ rotas, avatar, store, webStore, avatarStore: createPublicAvatarStore(pool, { S }), creditStatus,
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas: clientAreas ? areas : null,
-      metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, contactProfiles: atendimento.contactProfiles,
-      contactNames: atendimento.contactNames, activity, events });
+      metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, metricHide: atendimento.metricHide, contactProfiles: atendimento.contactProfiles,
+      contactNames: atendimento.contactNames, activity, events, testContacts: createTestContactsStore(pool, { S }) });
     if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerClickRoute({ rotas, events, send, log });

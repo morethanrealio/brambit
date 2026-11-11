@@ -17,6 +17,7 @@ import { METRICS_PATH, METRIC_DAYS, METRIC_RANGE_MAX, metricRange, todayIn } fro
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
+import { TEST_CONTACTS_PATH, TEST_CONTACTS_MAX, normalizeTestContact } from './public-support-test-contacts.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -101,13 +102,15 @@ export function camposDaConfig(b = {}) {
 // areas (client-areas.mjs) = who else reaches an assistant; null = only its owner.
 // metrics (public-support-metrics.mjs) = the assistant's volume, for every role, with
 // metricCards({agentId, contactId?, days, from, to, language}) → the plugin's cards (public-support.mjs); language = the page's (?lang).
+// metricHide({agentId}) → the volume boxes the plugin hides for that assistant (public-support.mjs).
 // contactProfiles({agentId, language, contacts: [{id, notes}]}) → the plugin's profile of each contact (public-support.mjs).
 // contactNames({agentId, contacts: [{id, notes}]}) → the plugin's name for each contact it knows (public-support.mjs).
 // activity (client-area-activity.mjs) = the access log; each route below records its action there.
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet
 // and as the metrics' click count.
+// testContacts (public-support-test-contacts.mjs) = who the metrics leave out, kept by the owner and area admins.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -230,16 +233,20 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     return send(res, 200, { ok: true, key });
   });
 
-  // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones).
+  // Newest first, a page at a time; ?limit= for a shorter page (the dashboard's latest ones),
+  // ?days= or ?from=&to= (metricRange) for only the contacts with messages in that period.
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agente'));
     if (!acc) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
     const language = pageLanguage(url), keep = profileFilter(url);
+    const hasPeriod = ['days', 'from', 'to'].some((k) => url.searchParams.has(k));
+    const period = hasPeriod ? metricRange(url.searchParams, todayIn()) : null;
+    if (hasPeriod && !period) return badPeriod(res);
     // With a profile filter, a page is the next contacts it keeps.
     const contatos = keep ? await scanProfiles(acc, language, { antes: quando, keep, max: CONTATOS_POR_PAGINA })
-      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined }));
+      : await withProfiles(acc, language, await store.contatosDoDono(acc.ownerId, acc.agentId, { antes: quando, limite: Number(url.searchParams.get('limit')) || undefined, period }));
     return send(res, 200, { contatos });
   });
 
@@ -333,13 +340,14 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!acc) return naoAchei(res);
     const range = metricRange(url.searchParams, todayIn());
     if (!range) return badPeriod(res);
-    const volume = await metrics.volume(acc.ownerId, acc.agentId, range);
-    if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null });
+    const [volume, hide] = await Promise.all([metrics.volume(acc.ownerId, acc.agentId, range), metricHide({ agentId: acc.agentId })]);
+    if (!volume.daily.length) return send(res, 200, { ...volume, cards: [], clicks: null, hide });
     const { from, to, days } = range;
-    // clicks = the link buttons pressed in the period (/go), null without events.
+    // clicks = the link buttons pressed in the period (/go); null without events or when
+    // a plugin card already counts them button by button (clicks: true).
     const [cards, clicks] = await Promise.all([metricCards({ agentId: acc.agentId, days, from, to, language }),
       events ? events.count(acc.agentId, { from, to }, { kind: 'link_click' }) : null]);
-    return send(res, 200, { ...volume, cards, clicks });
+    return send(res, 200, { ...volume, cards, clicks: cards.some((c) => c.clicks) ? null : clicks, hide });
   });
 
   // The period's events as a spreadsheet, for everyone who sees the metrics.
@@ -362,6 +370,29 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (acc.role !== 'owner') return forbidden(res);
     const before = Number(url.searchParams.get('before'));
     return send(res, 200, { lines: await activity.list({ ownerId: acc.ownerId, before: Number.isSafeInteger(before) && before > 0 ? before : null }) });
+  });
+
+  // The assistant's test contacts: one e-mail or phone number per entry. Only the owner
+  // and an area admin see and change them (they are people's addresses).
+  if (testContacts) rota('GET', TEST_CONTACTS_PATH, async ({ res, url, user }) => {
+    const acc = await agentAccess(user, url.searchParams.get('agent'));
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    const entries = await testContacts.list(acc.agentId, acc.ownerId);
+    return entries ? send(res, 200, { entries }) : naoAchei(res);
+  });
+  if (testContacts) rota('POST', TEST_CONTACTS_PATH, async ({ req, res, user }) => {
+    const b = await readBody(req);
+    const acc = await agentAccess(user, b.agentId);
+    if (!acc) return naoAchei(res);
+    if (!canEdit(acc.role)) return forbidden(res);
+    if (!Array.isArray(b.entries) || b.entries.length > TEST_CONTACTS_MAX) return send(res, 400, { error: 'server.public_test_contacts_too_many' });
+    const entries = b.entries.map(normalizeTestContact);
+    if (entries.some((e) => !e)) return send(res, 400, { error: 'server.public_test_contact_invalid' });
+    const r = await testContacts.save(acc.agentId, acc.ownerId, [...new Set(entries)]);
+    if (!r) return naoAchei(res);
+    await record(user, acc, 'test_contacts_changed', { count: r.entries.length });
+    return send(res, 200, { ok: true, ...r });
   });
 
   if (prompts) registerAgentTexts();

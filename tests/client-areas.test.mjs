@@ -213,6 +213,35 @@ test('invite: a new e-mail becomes a panel account with a one-time password link
   assert.equal(await scope.homeFor(stranger), null);
 });
 
+test('password link: the owner who created a panel account gets a new one-time link for it, logged; nobody else does', async (t) => {
+  const s = await setup(t);
+  const { ask, db, owner, stranger } = s;
+  const { a } = await twoClients(s);
+  await ask(owner, 'POST', CLIENT_AREAS_PATH + '/member', { areaId: a.id, email: 'new@c.test', role: 'viewer' });
+  const invited = (await db.query(`SELECT id FROM mtr_harness.users WHERE email = 'new@c.test'`)).rows[0].id;
+  await db.query(`UPDATE mtr_harness.password_resets SET used_at = now() WHERE user_id = $1`, [invited]);
+  const members = (await ask(owner, 'GET', CLIENT_AREAS_PATH)).body.areas.find((x) => x.id === a.id).members;
+  assert.deepEqual(members.map((m) => [m.email, m.panel]), [['admin@a.test', false], ['new@c.test', true]]);
+
+  const link = (who, userId, areaId = a.id) => ask(who, 'POST', CLIENT_AREAS_PATH + '/password-link', { areaId, userId });
+  const first = await link(owner, invited);
+  assert.equal(first.status, 200);
+  assert.match(first.body.link, /^https:\/\/panel\.example\/reset\?token=\w+/);
+  assert.equal(first.body.linkHours, 24);
+  const second = await link(owner, invited);
+  const live = (await db.query(`SELECT token FROM mtr_harness.password_resets WHERE user_id = $1 AND used_at IS NULL AND expires_at > now()`, [invited])).rows;
+  assert.deepEqual(live.map((r) => r.token), [second.body.link.split('token=')[1]], 'only the newest link works');
+  const log = (await ask(owner, 'GET', `${ACTIVITY_PATH}?agent=${s.agA}`)).body.lines.filter((l) => l.action === 'password_link');
+  assert.deepEqual(log.map((l) => l.detail.email), ['new@c.test', 'new@c.test']);
+
+  // A full account, the panel account itself, and another owner who added the same person: 404.
+  assert.equal((await link(owner, s.adminA)).status, 404);
+  assert.equal((await link(invited, invited)).status, 404);
+  const other = (await ask(stranger, 'POST', CLIENT_AREAS_PATH, { name: 'Other' })).body;
+  await ask(stranger, 'POST', CLIENT_AREAS_PATH + '/member', { areaId: other.id, email: 'new@c.test', role: 'viewer' });
+  assert.equal((await link(stranger, invited, other.id)).status, 404);
+});
+
 test('account scope: with no panel account loaded, the core does not look the session up', async (t) => {
   const s = await setup(t);
   const scope = createAccountScope();
@@ -287,6 +316,12 @@ test('metrics: an area\'s volume by channel and day, without page events, only t
   const day = (n) => new Date(Date.parse(today) - n * 86400000).toISOString().slice(0, 10);
   const picked = await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&from=${day(45)}&to=${day(35)}`);
   assert.deepEqual([picked.body.total.conversations, picked.body.daily.length, picked.body.daily[0].day], [1, 11, day(45)], 'only the 40-day-old conversation');
+  // The dashboard's latest conversations follow the period too.
+  const latest = async (q) => (await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}&limit=20${q}`)).body.contatos.map((c) => [c.id, c.mensagens]);
+  assert.deepEqual(await latest(`&from=${day(45)}&to=${day(35)}`), [[old.id, 1]], 'only who had messages in the period');
+  assert.ok(!(await latest('&days=7')).some(([id]) => id === old.id));
+  assert.ok((await latest('')).some(([id]) => id === old.id), 'without a period, everyone');
+  assert.equal((await ask(owner, 'GET', `/api/publico/contatos?agente=${agA}&days=8`)).status, 400);
   assert.equal((await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&from=${day(2)}&to=2999-01-01`)).body.daily.length, 3);
   for (const bad of [`from=${day(1)}&to=${day(2)}`, `from=${day(400)}&to=${today}`, 'from=2026-02-30&to=2026-03-01', `from=${today}`])
     assert.equal((await ask(owner, 'GET', `${METRICS_PATH}?agent=${agA}&${bad}`)).status, 400, bad);

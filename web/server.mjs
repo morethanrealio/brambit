@@ -8540,7 +8540,7 @@ async function atenderRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/forgot') {
     if (tooManyRequests(req, res, 'forgot', 5, 60 * 60_000)) return;
     const { email } = await readBody(req);
-    const generic = { ok: true, message: 'server.reset_link_sent' };
+    const generic = { ok: true, message: mailEnabled() ? 'server.reset_link_sent' : 'server.reset_link_ask_inviter' }; // no mailer: the link only comes from whoever gave access
     if (!validEmail(email)) return send(res, 200, generic);
     try {
       const user = await getUserByEmail(email.toLowerCase());

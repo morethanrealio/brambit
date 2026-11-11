@@ -16,7 +16,9 @@
 // screen (account-scope.mjs), so it never chats, creates assistants or spends,
 // and it is not a product sign-up (no conta_criada event, so no plan or welcome
 // from a plugin). The owner gets a one-time link to set the password and passes
-// it on; with e-mail set up, the server can send it too.
+// it on; with e-mail set up, the server can send it too. When that person loses
+// the password later, the owner who created the account gets a new link the same
+// way (passwordLink), so a server without e-mail still has a way back in.
 import { readBody } from '../../http-body.mjs';
 import { hashPassword, newToken, validEmail } from '../../auth.mjs';
 import { marca } from '../../brand.mjs';
@@ -27,6 +29,7 @@ import { PUBLIC_SUPPORT_PAGE } from '../../page-paths.mjs';
 import { AGENT_TEXTS_PATH, PROFILES_PATH, PROFILES_CSV_PATH } from './public-support-owner.mjs';
 import { METRICS_PATH } from './public-support-metrics.mjs';
 import { ACTIVITY_PATH } from './client-area-activity.mjs';
+import { TEST_CONTACTS_PATH } from './public-support-test-contacts.mjs';
 import { EVENTS_PATH } from './public-support-events.mjs';
 import { listThemes } from './client-area-themes.mjs';
 
@@ -35,6 +38,8 @@ export const AREA_NAME_MAX = 120;
 export const CLIENT_AREAS_PATH = '/api/public-support/areas';
 // How long the link to set a panel account's password lasts.
 export const INVITE_LINK_MINUTES = 72 * 60;
+// How long the owner's link to replace a panel account's lost password lasts.
+export const PASSWORD_LINK_MINUTES = 24 * 60;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
@@ -122,8 +127,9 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
                 coalesce((SELECT json_agg(json_build_object('agentId', x.agent_id, 'name', a.name) ORDER BY a.name)
                             FROM ${S}.client_area_agents x JOIN ${S}.agents a ON a.id = x.agent_id AND a.user_id = ar.owner_user_id
                            WHERE x.area_id = ar.id), '[]') AS agents,
-                coalesce((SELECT json_agg(json_build_object('userId', u.id, 'email', u.email, 'role', m.role) ORDER BY u.email)
+                coalesce((SELECT json_agg(json_build_object('userId', u.id, 'email', u.email, 'role', m.role, 'panel', p.user_id IS NOT NULL) ORDER BY u.email)
                             FROM ${S}.client_area_members m JOIN ${S}.users u ON u.id = m.user_id
+                            LEFT JOIN ${S}.client_area_panel_accounts p ON p.user_id = u.id AND p.invited_by = ar.owner_user_id
                            WHERE m.area_id = ar.id), '[]') AS members
            FROM ${S}.client_areas ar WHERE ar.owner_user_id = $1 ORDER BY ar.name`, [ownerId]);
       return rows.map((r) => ({ id: r.id, name: r.name, theme: r.theme, createdAt: r.created_at, agents: r.agents, members: r.members }));
@@ -205,6 +211,25 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
         [token, userId, String(minutes)]);
       return token;
     },
+
+    // A one-time token to replace a lost password, only for a panel account this
+    // owner created and still has in this area: a person who signed up on their own
+    // or was created by another owner stays out of reach. Earlier unused links of
+    // the account stop working. → { token, email } or null.
+    async passwordLink(ownerId, areaId, userId, minutes = PASSWORD_LINK_MINUTES) {
+      const { rows } = await pool.query(
+        `SELECT u.email FROM ${S}.client_area_members m
+           JOIN ${S}.client_areas ar ON ar.id = m.area_id AND ar.owner_user_id = $1
+           JOIN ${S}.client_area_panel_accounts p ON p.user_id = m.user_id AND p.invited_by = $1
+           JOIN ${S}.users u ON u.id = m.user_id AND u.deleted_at IS NULL
+          WHERE m.area_id = $2 AND m.user_id = $3`, [ownerId, areaId, userId]);
+      if (!rows[0]) return null;
+      await pool.query(`UPDATE ${S}.password_resets SET expires_at = now() WHERE user_id = $1 AND used_at IS NULL AND expires_at > now()`, [userId]);
+      const token = newToken();
+      await pool.query(`INSERT INTO ${S}.password_resets (token, user_id, expires_at) VALUES ($1, $2, now() + ($3 || ' minutes')::interval)`,
+        [token, userId, String(minutes)]);
+      return { token, email: rows[0].email };
+    },
   };
 }
 
@@ -214,7 +239,7 @@ export function createClientAreaStore(pool, { S = 'mtr_harness' } = {}) {
 export const panelScope = (areas) => ({
   name: 'public-support', active: areas.panelActive, holds: areas.isPanelAccount, home: PUBLIC_SUPPORT_PAGE,
   api: (method, path) => path.startsWith('/api/publico/') || path === AGENT_TEXTS_PATH || path.startsWith(AGENT_TEXTS_PATH + '/') || path === METRICS_PATH || path === EVENTS_PATH || path === ACTIVITY_PATH
-    || path === PROFILES_PATH || path === PROFILES_CSV_PATH,
+    || path === PROFILES_PATH || path === PROFILES_CSV_PATH || path === TEST_CONTACTS_PATH,
 });
 
 // The invite e-mail, in the inviter's language (the invitee has none yet).
@@ -241,6 +266,7 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
     catch (e) { return fail(res, 500, 'client_areas_failed', e); }
   });
   const notFound = (res) => send(res, 404, { error: 'not_found' });
+  const resetLink = (token) => `${String(publicBase() || '').replace(/\/+$/, '')}/reset?token=${token}`;
   const record = (user, action, areaId, { agentId = null, detail = null } = {}) =>
     activity?.record({ ownerId: user.id, actorId: user.id, agentId, areaId, action, detail });
 
@@ -294,7 +320,7 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
       { detail: b.role === null ? { email: email.toLowerCase() } : { email: email.toLowerCase(), role: b.role } });
     const token = b.role !== null && (await areas.inviteToken(r.userId));
     if (!token) return send(res, 200, { ok: true, created: r.created });
-    const link = `${String(publicBase() || '').replace(/\/+$/, '')}/reset?token=${token}`;
+    const link = resetLink(token);
     let emailed = false;
     if (b.sendEmail === true && mail.enabled()) {
       try {
@@ -303,5 +329,17 @@ export function registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequ
       } catch (e) { log.error?.('[client-areas] invite e-mail failed:', e?.message ?? e); }
     }
     return send(res, 200, { ok: true, created: r.created, link, linkHours: INVITE_LINK_MINUTES / 60, emailed });
+  });
+
+  // { areaId, userId }: a new password link for a panel account this owner
+  // created, for the owner to pass on; logged with the account's e-mail.
+  route('POST', CLIENT_AREAS_PATH + '/password-link', async ({ req, res, user }) => {
+    const b = await readBody(req);
+    const areaId = uuid(b.areaId), userId = uuid(b.userId);
+    if (!areaId || !userId) return notFound(res);
+    const r = await areas.passwordLink(user.id, areaId, userId);
+    if (!r) return notFound(res);
+    await record(user, 'password_link', areaId, { detail: { email: r.email } });
+    return send(res, 200, { ok: true, link: resetLink(r.token), linkHours: PASSWORD_LINK_MINUTES / 60 });
   });
 }

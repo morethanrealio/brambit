@@ -18,6 +18,7 @@ import { encMaybe, decMaybe, indiceCego } from '../../vault.mjs';
 import { HEALTH_GUARDRAIL } from '../../health-guardrail.mjs';
 import { normalizarSaidas, textoDasSaidas, keepLinksToSites, withoutLinksOutside } from './public-support-outputs.mjs';
 import { eventsSchema, measureLinks, FUNNEL_STEPS_MAX } from './public-support-events.mjs';
+import { testContactsSchema, markIfTest } from './public-support-test-contacts.mjs';
 
 export const CANAIS_PUBLICOS = ['whatsapp', 'web'];
 export const HISTORICO_MAX = 40;      // contact messages that go back to the model
@@ -41,6 +42,7 @@ export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
 export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
+export const METRIC_HIDEABLE = ['messages']; // volume boxes of the dashboard a plugin may hide
 export const RANKING_ROWS_MAX = 20;   // rows of a ranking card
 export const RANKING_COLUMNS_MAX = 4; // its columns, the name included
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
@@ -104,7 +106,7 @@ export const esquemaPublico = (S) => `
  ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS avatar_max_sessions integer NOT NULL DEFAULT ${AVATAR_MAX_SESSIONS} CHECK (avatar_max_sessions BETWEEN 1 AND ${AVATAR_SESSIONS_MAX});
 ALTER TABLE ${S}.public_agents ADD COLUMN IF NOT EXISTS conversation_idle_minutes integer CHECK (conversation_idle_minutes BETWEEN 1 AND ${CONVERSATION_IDLE_MAX});
  ALTER TABLE ${S}.public_messages ADD COLUMN IF NOT EXISTS conversation integer NOT NULL DEFAULT 1;
-${eventsSchema(S)}`;
+${eventsSchema(S)}${testContactsSchema(S)}`;
 
 const texto = (v, max) => String(v ?? '').replace(/\u0000/g, '').trim().slice(0, max);
 // A note may hold personal data (a name, an e-mail), so it is stored like the
@@ -192,6 +194,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
          RETURNING id, canal, endereco, criado_em, parado_em, limite_avisado_em, bloqueado_em, (xmax = 0) AS novo`,
         [agentId, canal, chave, encMaybe(end)]);
       const r = rows[0];
+      if (r.novo && canal === 'whatsapp') await markIfTest(pool, S, r.id, end);
       return { id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), novo: r.novo, paradoEm: r.parado_em, limiteAvisadoEm: r.limite_avisado_em, bloqueadoEm: r.bloqueado_em };
     },
 
@@ -299,17 +302,22 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
 
     // An owner's assistant's contacts, from newest to oldest, each with its last message
     // (lastMessage, cut at LAST_MESSAGE_MAX chars). antes = ultima_em of the last one on the previous page.
-    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA } = {}) {
+    // period {from, to} (YYYY-MM-DD, fuso): only the contacts with messages in it, ordered by
+    // their last one in it; mensagens and ultimaEm count only that period.
+    async contatosDoDono(userId, agentId, { antes = null, limite = CONTATOS_POR_PAGINA, period = null } = {}) {
+      const inPeriod = period ? `AND m.criado_em >= ($6::date::timestamp AT TIME ZONE $8) AND m.criado_em < (($7::date + 1)::timestamp AT TIME ZONE $8)` : '';
       const { rows } = await pool.query(
-        `SELECT c.id, c.canal, c.endereco, c.criado_em, c.ultima_em, c.parado_em, c.bloqueado_em,
-                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS mensagens,
+        `SELECT c.id, c.canal, c.endereco, c.criado_em, ${period ? 'p.ultima' : 'c.ultima_em'} AS ultima_em, c.parado_em, c.bloqueado_em,
+                (SELECT count(*)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) AS mensagens,
                 (SELECT coalesce(max(m.conversation), 0)::int FROM ${S}.public_messages m WHERE m.contact_id = c.id) AS conversations,
                 last.role AS last_role, last.content AS last_content
            FROM ${S}.public_contacts c JOIN ${S}.agents a ON a.id = c.agent_id
+           ${period ? `JOIN LATERAL (SELECT max(m.criado_em) AS ultima FROM ${S}.public_messages m WHERE m.contact_id = c.id ${inPeriod}) p ON p.ultima IS NOT NULL` : ''}
            LEFT JOIN LATERAL (SELECT m.role, left(m.content, $5) AS content FROM ${S}.public_messages m
                                WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) last ON true
           WHERE c.agent_id = $1 AND a.user_id = $2 AND ($3::timestamptz IS NULL OR c.ultima_em < $3)
-          ORDER BY c.ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2]);
+          ORDER BY ultima_em DESC LIMIT $4`, [agentId, userId, antes, Math.min(Math.max(1, limite | 0), CONTATOS_POR_PAGINA), LAST_MESSAGE_MAX * 2,
+          ...(period ? [period.from, period.to, fuso] : [])]);
       return rows.map((r) => ({ id: r.id, canal: r.canal, endereco: decMaybe(r.endereco), criadoEm: r.criado_em, ultimaEm: r.ultima_em,
         paradoEm: r.parado_em, bloqueadoEm: r.bloqueado_em, mensagens: r.mensagens, conversations: r.conversations,
         ...(r.last_role ? { lastMessage: { role: r.last_role, text: preview(r.last_content) } } : {}) }));
@@ -422,6 +430,7 @@ export function createPublicoStore(pool, { S = 'mtr_harness', fuso = defaultTime
         await c.query(
           `INSERT INTO ${S}.public_contact_state (contact_id, chave, valor) VALUES ($1, $2, $3)
            ON CONFLICT (contact_id, chave) DO UPDATE SET valor = excluded.valor, atualizado_em = now()`, [contatoId, k, encMaybe(v)]);
+        await markIfTest(c, S, contatoId, v);
         return { ok: true, chave: k };
       });
     },
@@ -590,6 +599,8 @@ export function retainedByTool(tools) {
 //    'es'), for the labels. A card is {label, value, detail?}: value a number (the
 //    page formats it) or short text, detail a short line under it (e.g. '3 people'),
 //    top: true to show it in the dashboard's first row, next to the volume;
+//    clicks: true when it counts link button clicks (a card per button): the page
+//    then leaves out its own total of clicks;
 //    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
 //    shows across the row, each with its share of the step before;
 //    or a ranking {label, detail?, columns: [name header, number headers...], rows:
@@ -604,6 +615,9 @@ export function retainedByTool(tools) {
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
+//   metricHide({agentId}) → names from METRIC_HIDEABLE: the volume boxes this assistant's
+//    dashboard leaves out (e.g. 'messages' when the client is not charged by them);
+//    unknown names are ignored. Slower than METRIC_CARDS_WAIT_MS = nothing hidden this time.
 //   contactProfiles({agentId, language, contacts: [{id, notes}]}) → {[contactId]: [{label, value}]}:
 //    what the owner's screen shows about each person (kind of customer, skin
 //    type...), built from that contact's notes. The plugin decides which notes are
@@ -677,9 +691,16 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
         return { label, ...(detail ? { detail } : {}), columns, rows };
       }
       const value = number(c.value) ?? text(c.value, 24), detail = text(c.detail, 40);
-      return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}) };
+      return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}), ...(c.clicks === true ? { clicks: true } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
+  }
+
+  // The volume boxes the plugin hides for this assistant; [] without the hook.
+  async function metricHide({ agentId }) {
+    if (typeof ganchos?.metricHide !== 'function') return [];
+    const r = await screenHook('metricHide', { agentId });
+    return Array.isArray(r) ? METRIC_HIDEABLE.filter((name) => r.includes(name)) : [];
   }
 
   const list = (v) => {
@@ -896,5 +917,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     }
   }
 
-  return { turno, registro, defaultTexts, metricCards, contactProfiles, contactNames };
+  return { turno, registro, defaultTexts, metricCards, metricHide, contactProfiles, contactNames };
 }

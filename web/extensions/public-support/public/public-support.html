@@ -97,7 +97,7 @@
   .card h3{font-size:15px;margin:22px 0 4px;}
   .nota{font-size:13.5px;color:var(--mut);margin:0;}
   code{display:block;background:var(--field);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 11px;font-size:13.5px;word-break:break-all;}
-  #webOrigens,#linkSites{min-height:70px;}
+  #webOrigens,#linkSites,#testContacts{min-height:70px;}
   .th-box{min-height:220px;white-space:pre-wrap;}
   .th-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;color:var(--mut);font-size:12.5px;}
   .th-over{color:var(--err);}
@@ -127,7 +127,7 @@
   .kpi{display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:var(--radius-md);padding:10px 12px;background:var(--field);}
   .kpi > .l{order:-1;}
   .kpis.top{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:0 0 18px;}
-  .kpis.top .kpi,#mFunnels .kpi,#mRanks .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
+  .kpis.top .kpi,#mFunnels .kpi,#mCards .kpi,#mRanks .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;}
   .kpis.top .kpi .n{font-size:30px;margin-top:4px;}
   .kpi .pair{display:flex;gap:22px;}
   #mFunnels .kpi,#mRanks .kpi{margin:0 0 18px;}
@@ -135,6 +135,7 @@
   .kpi .l{font-size:12.5px;color:var(--mut);}
   .kpi .d{font-size:12px;color:var(--mut);opacity:.8;margin-top:2px;}
   .kpis.plugin{grid-template-columns:repeat(3,minmax(0,1fr));}
+  #mCards{gap:14px;margin:0 0 18px;}
   .funnel{margin:12px 0 4px;}
   .funnel .n.undone{color:var(--mut);font-weight:500;}
   .funnel > .l{font-size:13.5px;font-weight:600;color:inherit;}
@@ -172,6 +173,7 @@
   .area-sub{font-size:13px;font-weight:600;color:var(--mut);margin:12px 0 4px;}
   .area-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:14.5px;}
   .area-line .btn{padding:4px 10px;font-size:13px;font-weight:500;}
+  .area-line-acts{display:flex;gap:6px;flex-shrink:0;}
   .area .inline{flex-wrap:wrap;margin-top:6px;}
   .area .inline input,.area .inline select{flex:1;min-width:160px;width:auto;}
   .area .check{font-size:14px;}
@@ -229,15 +231,16 @@
   <div class="card hidden" id="whatsappCard" data-view-panel="whatsapp"><p class="nota" data-i18n="public_service_page.whatsapp_soon">Campaigns and message templates for WhatsApp. Coming soon.</p></div>
 
   <div class="hidden" id="metricsCard" data-view-panel="dashboard">
+    <div id="mFunnels"></div>
+    <div class="kpis plugin hidden" id="mCards"></div>
     <div class="kpis top" id="mTop">
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div><div class="n" id="mConversations">0</div><div class="d" id="mPerPerson"></div></div>
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_people">People</div><div class="n" id="mPeople">0</div></div>
-      <div class="kpi"><div class="l" data-i18n="public_service_page.metric_messages">Messages</div>
+      <div class="kpi" id="mMessagesBox"><div class="l" data-i18n="public_service_page.metric_messages">Messages</div>
         <div class="pair"><div><div class="n" id="mReceived">0</div><div class="d" data-i18n="public_service_page.metric_received_short">received</div></div>
           <div><div class="n" id="mReplies">0</div><div class="d" data-i18n="public_service_page.metric_sent_short">sent</div></div></div></div>
       <div class="kpi hidden" id="mClicksBox"><div class="l" data-i18n="public_service_page.metric_clicks">Button clicks</div><div class="n" id="mClicks">0</div><div class="d" id="mClickPeople"></div></div>
     </div>
-    <div id="mFunnels"></div>
     <div class="card">
       <h2 data-i18n="public_service_page.metric_per_day">Conversations per day</h2>
       <div class="chart"><div class="bars" id="mBars"></div><div class="tip hidden" id="mTip" role="status"></div></div>
@@ -254,7 +257,6 @@
     </div>
     <div class="card" id="mMore">
       <h2 data-i18n="public_service_page.metric_more">More numbers</h2>
-      <div class="kpis plugin hidden" id="mCards"></div>
       <table class="mtable">
         <thead><tr><th data-i18n="public_service_page.metric_channel">Channel</th><th data-i18n="public_service_page.metric_people">People</th>
           <th data-i18n="public_service_page.metric_conversations">Conversations</th><th data-i18n="public_service_page.metric_received">Messages received</th>
@@ -286,6 +288,14 @@
     <textarea id="linkSites" spellcheck="false"></textarea>
     <div class="acoes" id="promptActions"><button class="btn primary" id="salvarPrompt" data-i18n="public_service_page.save">Save</button></div>
     <div id="promptMsg" class="msg"></div>
+  </div>
+
+  <div class="card hidden" id="testCard" data-view-panel="agent">
+    <h2 id="testTitle" data-i18n="public_service_page.test_contacts">Test contacts</h2>
+    <p class="nota" data-i18n="public_service_page.test_contacts_help">E-mails or phone numbers of whoever tests this assistant, one per line. Their conversations stay in the contact list, but they leave every number on the dashboard, for any period, as soon as the list is saved.</p>
+    <textarea id="testContacts" spellcheck="false" data-i18n-aria-label="public_service_page.test_contacts" aria-label="Test contacts"></textarea>
+    <div class="acoes"><button class="btn primary" id="saveTests" data-i18n="public_service_page.save">Save</button></div>
+    <div id="testMsg" class="msg"></div>
   </div>
 
   <div class="card hidden" id="cfgCard" data-view-panel="settings" data-owner-only>
@@ -362,8 +372,8 @@
           </div>
           <div id="convMetrics" class="hidden">
             <h3 data-i18n="public_service_page.metric_conversation">In this conversation</h3>
-            <div class="kpis plugin" id="cCards"></div>
             <div id="cFunnels"></div>
+            <div class="kpis plugin" id="cCards"></div>
           </div>
         </div>
         <div class="acoes topo"><button class="btn ghost hidden" id="anteriores" data-i18n="public_service_page.earlier">Earlier messages</button></div>
@@ -497,7 +507,7 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('promptMsg'), ''); msg($('webChaveMsg'), '');
-    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false);
+    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false); loadTests();
     if (textsFor !== agenteAtual.agentId) loadTexts();
   }
 
@@ -717,7 +727,7 @@
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&' + period;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
-    loadLatest();
+    loadLatest(period);
     pedir(METRICS + '?agent=' + encodeURIComponent(id) + '&' + period + '&lang=' + encodeURIComponent(document.documentElement.lang)).then(function(j){
       if (metricsFor !== key) return;
       [['mPeople', 'people'], ['mConversations', 'conversations'], ['mReceived', 'received'], ['mReplies', 'replies']].forEach(function(p){
@@ -725,6 +735,7 @@
       });
       $('mPerPerson').textContent = j.total.people ? t('metric_per_person_detail', { value: new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
         .format(j.total.conversations / j.total.people) }) : '';
+      $('mMessagesBox').classList.toggle('hidden', (j.hide || []).indexOf('messages') >= 0);
       // Link buttons pressed; only where the installation records events.
       $('mClicksBox').classList.toggle('hidden', !j.clicks);
       if (j.clicks) { $('mClicks').textContent = number.format(j.clicks.times); $('mClickPeople').textContent = t('metric_people_count', { count: j.clicks.people }); }
@@ -778,12 +789,12 @@
   $('mBars').addEventListener('pointermove', tipAt);
   $('mBars').addEventListener('pointerdown', tipAt);
   $('mBars').addEventListener('pointerleave', function(ev){ if (ev.pointerType === 'mouse') showTip(null); });
-  // The newest contacts, each with its latest conversation; a row opens it under Conversations.
+  // The contacts with messages in the period, newest first; a row opens the conversation under Conversations.
   var latestFor = null;
-  function loadLatest(){
-    var id = latestFor = agenteAtual.agentId;
-    pedir('/api/publico/contatos?agente=' + encodeURIComponent(id) + '&lang=' + encodeURIComponent(document.documentElement.lang) + '&limit=20').then(function(j){
-      if (latestFor !== id) return;
+  function loadLatest(period){
+    var id = agenteAtual.agentId, key = latestFor = id + '|' + period;
+    pedir('/api/publico/contatos?agente=' + encodeURIComponent(id) + '&' + period + '&lang=' + encodeURIComponent(document.documentElement.lang) + '&limit=20').then(function(j){
+      if (latestFor !== key) return;
       var rows = $('mLatest'); rows.textContent = '';
       (j.contatos || []).forEach(function(c){
         var tr = el('tr'), who = el('td', null, c.name || c.endereco), channel = el('td', null, channelName(c));
@@ -820,6 +831,31 @@
 
   // The access log (client-area-activity.mjs): only the owner of the assistants reads it.
   // before = the last line shown, to load older ones.
+  // Test contacts (public-support-test-contacts.mjs): the owner's and an area admin's;
+  // saving takes them out of the metrics, so the dashboard reloads.
+  var TESTS = '/api/public-support/test-contacts', testsFor = null;
+  function loadTests(){
+    var id = testsFor = agenteAtual.agentId;
+    $('testContacts').value = ''; msg($('testMsg'), '');
+    $('testTitle').textContent = t('test_contacts_of', { name: agenteAtual.nome });
+    $('testCard').classList.toggle('hidden', !canEdit());
+    if (!canEdit()) return;
+    pedir(TESTS + '?agent=' + encodeURIComponent(id)).then(function(j){
+      if (testsFor === id) $('testContacts').value = (j.entries || []).join('\n');
+    }).catch(function(e){ if (testsFor === id && e.message !== NO_SESSION) msg($('testMsg'), e.message, 'err'); });
+  }
+  $('saveTests').addEventListener('click', function(){
+    var b = this, id = agenteAtual.agentId;
+    var entries = $('testContacts').value.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    b.disabled = true; msg($('testMsg'), t('saving'));
+    pedir(TESTS, { agentId: id, entries: entries }).then(function(j){
+      if (testsFor !== id) return;
+      $('testContacts').value = (j.entries || []).join('\n');
+      msg($('testMsg'), t('test_contacts_saved', { count: j.testContacts }), 'ok');
+      loadMetrics();
+    }).catch(function(e){ msg($('testMsg'), e.message, 'err'); }).then(function(){ b.disabled = false; });
+  });
+
   var ACTIVITY = '/api/public-support/activity', ACTIVITY_PAGE = 50, activityFor = null, activityLast = null;
   function loadActivity(more){
     var id = agenteAtual.agentId;
@@ -1033,9 +1069,16 @@
     if (!areas.length) box.appendChild(el('div', 'vazio', t('areas_none')));
     areas.forEach(function(ar){ box.appendChild(drawArea(ar, where)); });
   }
-  function areaLine(text, label, run){
-    var d = el('div', 'area-line'), b = button('ghost', label);
-    d.appendChild(el('span', null, text)); d.appendChild(b);
+  // extra = { label, run }: a second button on the line.
+  function areaLine(text, label, run, extra){
+    var d = el('div', 'area-line'), b = button('ghost', label), acts = el('span', 'area-line-acts');
+    d.appendChild(el('span', null, text));
+    if (extra) {
+      var x = button('ghost', extra.label);
+      x.addEventListener('click', function(){ extra.run(x); });
+      acts.appendChild(x);
+    }
+    acts.appendChild(b); d.appendChild(acts);
     b.addEventListener('click', function(){ run(b); });
     return d;
   }
@@ -1088,7 +1131,11 @@
     ar.members.forEach(function(m){
       d.appendChild(areaLine(m.email + ' · ' + t('role_' + m.role), t('area_remove'), function(b){
         if (confirm(t('area_remove_confirm', { email: m.email, area: ar.name }))) act(b, function(){ return pedir(AREAS + '/member', { areaId: ar.id, email: m.email, role: null }); });
-      }));
+      }, m.panel ? { label: t('area_password_link'), run: function(b){
+        act(b, function(){ return pedir(AREAS + '/password-link', { areaId: ar.id, userId: m.userId }); }, function(j){
+          return { areaId: ar.id, link: j.link, text: t('area_password_link_ready', { email: m.email, hours: j.linkHours }) };
+        });
+      } } : null));
     });
     var email = el('input'), role = el('select', 'role'), invite = button('primary', t('area_invite')), row = el('div', 'inline');
     email.type = 'email'; email.placeholder = t('area_email'); email.setAttribute('aria-label', t('area_email'));
