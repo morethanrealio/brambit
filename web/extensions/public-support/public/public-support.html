@@ -236,7 +236,7 @@
     <div class="kpis top" id="mTop">
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_conversations">Conversations</div><div class="n" id="mConversations">0</div><div class="d" id="mPerPerson"></div></div>
       <div class="kpi"><div class="l" data-i18n="public_service_page.metric_people">People</div><div class="n" id="mPeople">0</div></div>
-      <div class="kpi"><div class="l" data-i18n="public_service_page.metric_messages">Messages</div>
+      <div class="kpi" id="mMessagesBox"><div class="l" data-i18n="public_service_page.metric_messages">Messages</div>
         <div class="pair"><div><div class="n" id="mReceived">0</div><div class="d" data-i18n="public_service_page.metric_received_short">received</div></div>
           <div><div class="n" id="mReplies">0</div><div class="d" data-i18n="public_service_page.metric_sent_short">sent</div></div></div></div>
       <div class="kpi hidden" id="mClicksBox"><div class="l" data-i18n="public_service_page.metric_clicks">Button clicks</div><div class="n" id="mClicks">0</div><div class="d" id="mClickPeople"></div></div>
@@ -727,6 +727,7 @@
       });
       $('mPerPerson').textContent = j.total.people ? t('metric_per_person_detail', { value: new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
         .format(j.total.conversations / j.total.people) }) : '';
+      $('mMessagesBox').classList.toggle('hidden', (j.hide || []).indexOf('messages') >= 0);
       // Link buttons pressed; only where the installation records events.
       $('mClicksBox').classList.toggle('hidden', !j.clicks);
       if (j.clicks) { $('mClicks').textContent = number.format(j.clicks.times); $('mClickPeople').textContent = t('metric_people_count', { count: j.clicks.people }); }

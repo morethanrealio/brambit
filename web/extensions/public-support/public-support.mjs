@@ -41,6 +41,7 @@ export const CONVERSA_POR_PAGINA = 100;
 export const EVENT_DATA_MAX = 2000;   // chars of the JSON of a page event's data
 export const METRIC_CARDS_MAX = 12;   // a plugin's cards next to an assistant's volume
 export const METRIC_CARDS_WAIT_MS = 5000;
+export const METRIC_HIDEABLE = ['messages']; // volume boxes of the dashboard a plugin may hide
 export const RANKING_ROWS_MAX = 20;   // rows of a ranking card
 export const RANKING_COLUMNS_MAX = 4; // its columns, the name included
 export const PROFILE_FIELDS_MAX = 8;  // a plugin's profile fields per contact, on the owner's screen
@@ -611,6 +612,9 @@ export function retainedByTool(tools) {
 //    With contactId (one conversation, under it on the owner's screen) there is no
 //    period: events are that contact's, all still kept; a funnel's steps are 0 or 1
 //    and the page shows them as done or not.
+//   metricHide({agentId}) → names from METRIC_HIDEABLE: the volume boxes this assistant's
+//    dashboard leaves out (e.g. 'messages' when the client is not charged by them);
+//    unknown names are ignored. Slower than METRIC_CARDS_WAIT_MS = nothing hidden this time.
 //   contactProfiles({agentId, language, contacts: [{id, notes}]}) → {[contactId]: [{label, value}]}:
 //    what the owner's screen shows about each person (kind of customer, skin
 //    type...), built from that contact's notes. The plugin decides which notes are
@@ -687,6 +691,13 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       return value === null ? null : { label, value, ...(detail ? { detail } : {}), ...(c.top === true ? { top: true } : {}), ...(c.clicks === true ? { clicks: true } : {}) };
     };
     return (Array.isArray(r) ? r : []).map(card).filter(Boolean).slice(0, METRIC_CARDS_MAX);
+  }
+
+  // The volume boxes the plugin hides for this assistant; [] without the hook.
+  async function metricHide({ agentId }) {
+    if (typeof ganchos?.metricHide !== 'function') return [];
+    const r = await screenHook('metricHide', { agentId });
+    return Array.isArray(r) ? METRIC_HIDEABLE.filter((name) => r.includes(name)) : [];
   }
 
   const list = (v) => {
@@ -903,5 +914,5 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
     }
   }
 
-  return { turno, registro, defaultTexts, metricCards, contactProfiles, contactNames };
+  return { turno, registro, defaultTexts, metricCards, metricHide, contactProfiles, contactNames };
 }
