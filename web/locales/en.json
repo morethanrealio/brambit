@@ -1163,6 +1163,7 @@
     "delete_confirm": "Delete this contact, the conversation and the notes? This cannot be undone.",
     "link_sites": "Sites the assistant may send people to (one per line, only the domain, e.g. shop.example.com; its subdomains count too; empty = any site)",
     "test_contacts": "Test contacts",
+    "test_contacts_of": "Test contacts: {name}",
     "test_contacts_help": "E-mails or phone numbers of whoever tests this assistant, one per line. Their conversations stay in the contact list, but they leave every number on the dashboard, for any period, as soon as the list is saved.",
     "test_contacts_saved_one": "Saved. {count} contact marked as test.",
     "test_contacts_saved_other": "Saved. {count} contacts marked as test.",

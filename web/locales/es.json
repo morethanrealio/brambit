@@ -1163,6 +1163,7 @@
     "delete_confirm": "¿Borrar este contacto, la conversación y las notas? No se puede deshacer.",
     "link_sites": "Sitios a los que el asistente puede enviar al cliente (uno por línea, solo el dominio, ej.: tienda.ejemplo.com; también cuentan sus subdominios; vacío = cualquier sitio)",
     "test_contacts": "Contactos de prueba",
+    "test_contacts_of": "Contactos de prueba: {name}",
     "test_contacts_help": "Correos o teléfonos de quienes prueban este asistente, uno por línea. Sus conversaciones siguen en la lista de contactos, pero salen de todos los números del panel, de cualquier período, en cuanto se guarda la lista.",
     "test_contacts_saved_one": "Guardado. {count} contacto marcado como prueba.",
     "test_contacts_saved_other": "Guardado. {count} contactos marcados como prueba.",

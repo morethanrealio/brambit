@@ -1163,6 +1163,7 @@
     "delete_confirm": "Apagar este contato, a conversa e as anotações? Não dá pra desfazer.",
     "link_sites": "Sites pra onde o assistente pode mandar o cliente (um por linha, só o domínio, ex.: loja.exemplo.com; vale também pros subdomínios; vazio = qualquer site)",
     "test_contacts": "Contatos de teste",
+    "test_contacts_of": "Contatos de teste: {name}",
     "test_contacts_help": "E-mails ou telefones de quem testa este assistente, um por linha. As conversas dessas pessoas continuam na lista de contatos, mas saem de todos os números do painel, de qualquer período, assim que a lista é salva.",
     "test_contacts_saved_one": "Salvo. {count} contato marcado como teste.",
     "test_contacts_saved_other": "Salvo. {count} contatos marcados como teste.",

@@ -290,6 +290,14 @@
     <div id="promptMsg" class="msg"></div>
   </div>
 
+  <div class="card hidden" id="testCard" data-view-panel="agent">
+    <h2 id="testTitle" data-i18n="public_service_page.test_contacts">Test contacts</h2>
+    <p class="nota" data-i18n="public_service_page.test_contacts_help">E-mails or phone numbers of whoever tests this assistant, one per line. Their conversations stay in the contact list, but they leave every number on the dashboard, for any period, as soon as the list is saved.</p>
+    <textarea id="testContacts" spellcheck="false" data-i18n-aria-label="public_service_page.test_contacts" aria-label="Test contacts"></textarea>
+    <div class="acoes"><button class="btn primary" id="saveTests" data-i18n="public_service_page.save">Save</button></div>
+    <div id="testMsg" class="msg"></div>
+  </div>
+
   <div class="card hidden" id="cfgCard" data-view-panel="settings" data-owner-only>
     <h2 data-i18n="public_service_page.settings">Settings</h2>
     <div id="avisoCadastro" class="warn hidden" data-i18n="public_service_page.signup_open">Sign-up is open on this installation, so anyone who opens its address can create an account. Public support stays off, on WhatsApp and on the website, until sign-up is closed (BRAMBIT_SIGNUP=closed in the installation settings).</div>
@@ -378,14 +386,6 @@
         <div id="convMsg" class="msg"></div>
       </div>
     </div>
-  </div>
-
-  <div class="card hidden" id="testCard" data-view-panel="settings">
-    <h2 data-i18n="public_service_page.test_contacts">Test contacts</h2>
-    <p class="nota" data-i18n="public_service_page.test_contacts_help">E-mails or phone numbers of whoever tests this assistant, one per line. Their conversations stay in the contact list, but they leave every number on the dashboard, for any period, as soon as the list is saved.</p>
-    <textarea id="testContacts" spellcheck="false" data-i18n-aria-label="public_service_page.test_contacts" aria-label="Test contacts"></textarea>
-    <div class="acoes"><button class="btn primary" id="saveTests" data-i18n="public_service_page.save">Save</button></div>
-    <div id="testMsg" class="msg"></div>
   </div>
 
   <div class="card hidden" id="areasCard" data-view-panel="settings" data-owner-only>
@@ -837,6 +837,7 @@
   function loadTests(){
     var id = testsFor = agenteAtual.agentId;
     $('testContacts').value = ''; msg($('testMsg'), '');
+    $('testTitle').textContent = t('test_contacts_of', { name: agenteAtual.nome });
     $('testCard').classList.toggle('hidden', !canEdit());
     if (!canEdit()) return;
     pedir(TESTS + '?agent=' + encodeURIComponent(id)).then(function(j){
