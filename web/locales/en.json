@@ -1188,6 +1188,8 @@
     "web_key_confirm": "Generate a new key? The current one stops working at once.",
     "web_save_first": "Save the settings first.",
     "usage_link": "Usage",
+    "usage_lead": "Tokens and cost by day, month, model or assistant.",
+    "usage_open": "Open usage",
     "settings_link": "Installation settings",
     "sign_out": "Sign out",
     "new_assistant": "New assistant (its name)",
