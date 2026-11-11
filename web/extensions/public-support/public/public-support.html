@@ -224,6 +224,7 @@
       </select>
       <input type="date" id="metricFrom" class="hidden" data-i18n-aria-label="public_service_page.metric_from" aria-label="First day"/>
       <input type="date" id="metricTo" class="hidden" data-i18n-aria-label="public_service_page.metric_to" aria-label="Last day"/>
+      <select id="metricSegment" class="hidden"></select>
     </div>
   </div>
 
@@ -568,6 +569,9 @@
   }
   // The period as the server's query (?days= or ?from=&to=), from the address.
   function periodQuery(p){ return p.days ? 'days=' + p.days : 'from=' + p.from + '&to=' + p.to; }
+  // The side of the plugin's filter in the address (?segment=in|out), as the server's query; '' = everyone.
+  function addressSegment(){ var s = new URLSearchParams(location.search).get('segment'); return s === 'in' || s === 'out' ? s : ''; }
+  function segmentQuery(){ return addressSegment() ? '&segment=' + addressSegment() : ''; }
   function localDay(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   // Shows the address's period in the controls; the date fields only for picked dates.
   function showPeriod(p){
@@ -596,7 +600,7 @@
     if (!agenteAtual) return;
     showView(addressView());
     var p = addressPeriod();
-    if (periodQuery(p) !== String(metricsFor).split('|')[1]) { showPeriod(p); loadMetrics(); }
+    if (periodQuery(p) + segmentQuery() !== String(metricsFor).split('|')[1]) { showPeriod(p); loadMetrics(); }
   });
   showPeriod(addressPeriod());
 
@@ -731,7 +735,7 @@
     }).catch(function(){});
   }
   function loadMetrics(){
-    var id = agenteAtual.agentId, period = periodQuery(addressPeriod()), key = metricsFor = id + '|' + period;
+    var id = agenteAtual.agentId, period = periodQuery(addressPeriod()) + segmentQuery(), key = metricsFor = id + '|' + period;
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&' + period;
     var number = new Intl.NumberFormat(document.documentElement.lang);
     msg($('metricsMsg'), '');
@@ -744,6 +748,7 @@
       $('mPerPerson').textContent = j.total.people ? t('metric_per_person_detail', { value: new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 })
         .format(j.total.conversations / j.total.people) }) : '';
       $('mMessagesBox').classList.toggle('hidden', (j.hide || []).indexOf('messages') >= 0);
+      showSegment(j.segment);
       // Link buttons pressed; only where the installation records events.
       $('mClicksBox').classList.toggle('hidden', !j.clicks);
       if (j.clicks) { $('mClicks').textContent = number.format(j.clicks.times); $('mClickPeople').textContent = t('metric_people_count', { count: j.clicks.people }); }
@@ -764,6 +769,22 @@
       $('mRetention').classList.toggle('hidden', !j.partial);
     }).catch(function(e){ if (metricsFor === key && e.message !== NO_SESSION) msg($('metricsMsg'), e.message, 'err'); });
   }
+  // The plugin's filter (metricSegment), when the assistant has one: everyone, inside or outside.
+  function showSegment(s){
+    var box = $('metricSegment');
+    box.classList.toggle('hidden', !s);
+    if (!s) return;
+    box.textContent = '';
+    [['', t('metric_segment_all', { label: s.label })], ['in', s.inside], ['out', s.outside]].forEach(function(o){
+      var option = el('option', null, o[1]); option.value = o[0]; box.appendChild(option);
+    });
+    box.value = addressSegment();
+    box.setAttribute('aria-label', s.label);
+  }
+  $('metricSegment').addEventListener('change', function(){
+    setAddress({ segment: this.value || null });
+    if (agenteAtual) loadMetrics();
+  });
   // One bar per day; hovering or tapping one shows its numbers above it.
   function drawBars(daily, number){
     var bars = $('mBars'), top = Math.max.apply(null, daily.map(function(d){ return d.conversations; }).concat([1]));
