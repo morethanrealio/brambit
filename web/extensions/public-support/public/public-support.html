@@ -657,7 +657,7 @@
           var step = el('div', 'step'), before = c.steps[i - 1];
           step.appendChild(oneContact ? el('div', 'n' + (s.value > 0 ? '' : ' undone'), t(s.value > 0 ? 'metric_step_done' : 'metric_step_not_done')) : el('div', 'n', shown(s.value)));
           step.appendChild(el('div', 'l', s.label));
-          if (!oneContact && before && before.value > 0) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
+          if (!oneContact && before && before.value > 0 && s.rate !== false) step.appendChild(el('div', 'rate', t('metric_funnel_rate', { rate: percent.format(s.value / before.value) })));
           row.appendChild(step);
         });
         k.appendChild(row);

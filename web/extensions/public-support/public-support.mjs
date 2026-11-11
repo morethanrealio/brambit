@@ -601,8 +601,9 @@ export function retainedByTool(tools) {
 //    top: true to show it in the dashboard's first row, next to the volume;
 //    clicks: true when it counts link button clicks (a card per button): the page
 //    then leaves out its own total of clicks;
-//    or a funnel {label, steps:[{label, value}]}: 2 to FUNNEL_STEPS_MAX numbers the page
-//    shows across the row, each with its share of the step before;
+//    or a funnel {label, steps:[{label, value, rate?}]}: 2 to FUNNEL_STEPS_MAX numbers the page
+//    shows across the row, each with its share of the step before (rate: false leaves it
+//    out, for a step counted in another unit);
 //    or a ranking {label, detail?, columns: [name header, number headers...], rows:
 //    [{label, values: [numbers]}]}: a table in the given order, 2 to RANKING_COLUMNS_MAX
 //    columns, up to RANKING_ROWS_MAX rows, the first number drawn as a bar. Up to
@@ -679,7 +680,7 @@ export function createAtendimentoPublico({ store, makeProvider, recordUsage, sal
       const label = text(c?.label, 60);
       if (!label) return null;
       if (Array.isArray(c.steps)) {
-        const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value) }));
+        const steps = c.steps.map((s) => ({ label: text(s?.label, 40), value: number(s?.value), ...(s?.rate === false ? { rate: false } : {}) }));
         return steps.length >= 2 && steps.length <= FUNNEL_STEPS_MAX && steps.every((s) => s.label && s.value !== null) ? { label, steps } : null;
       }
       if (Array.isArray(c.rows)) {
