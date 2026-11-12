@@ -2382,7 +2382,19 @@
     "reason_unreachable": "não foi possível falar com o serviço",
     "section_public_support": "Atendimento ao público",
     "public_support_text_label": "Texto da instalação",
-    "public_support_text_help": "Regras que todo assistente que atende o público nesta instalação segue, além do texto de cada assistente. A mudança vale a partir da próxima mensagem, para todos os assistentes."
+    "public_support_text_help": "Regras que todo assistente que atende o público nesta instalação segue, além do texto de cada assistente. A mudança vale a partir da próxima mensagem, para todos os assistentes.",
+    "panel_menu_label": "Menu do painel",
+    "panel_menu_help": "Quais itens do menu e quais templates o painel de cada assistente mostra, para o dono e para os membros da área do cliente. Configurações aparece sempre. A mudança vale na próxima vez que o painel abrir.",
+    "panel_menu_assistant": "Assistente",
+    "panel_menu_none": "Nenhum assistente atende o público ainda.",
+    "panel_menu_modules": "Itens do menu",
+    "panel_menu_templates": "Templates",
+    "panel_menu_no_templates": "Nenhum template para este assistente ainda.",
+    "panel_module_dashboard": "Dashboard",
+    "panel_module_conversations": "Conversas",
+    "panel_module_agent": "Agente",
+    "panel_module_crm": "CRM",
+    "panel_module_whatsapp": "WhatsApp"
   },
   "text_history": {
     "history_save": "Salvar",

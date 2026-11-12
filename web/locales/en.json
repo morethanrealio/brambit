@@ -2382,7 +2382,19 @@
     "reason_unreachable": "could not reach the service",
     "section_public_support": "Public support",
     "public_support_text_label": "Installation text",
-    "public_support_text_help": "Rules every assistant that answers the public on this installation follows, on top of each assistant's own text. A change applies from the next message, for every assistant."
+    "public_support_text_help": "Rules every assistant that answers the public on this installation follows, on top of each assistant's own text. A change applies from the next message, for every assistant.",
+    "panel_menu_label": "Panel menu",
+    "panel_menu_help": "Which menu items and templates each assistant's panel shows, for its owner and for the client area's members. Settings is always there. A change applies the next time the panel opens.",
+    "panel_menu_assistant": "Assistant",
+    "panel_menu_none": "No assistant answers the public yet.",
+    "panel_menu_modules": "Menu items",
+    "panel_menu_templates": "Templates",
+    "panel_menu_no_templates": "No template for this assistant yet.",
+    "panel_module_dashboard": "Dashboard",
+    "panel_module_conversations": "Conversations",
+    "panel_module_agent": "Agent",
+    "panel_module_crm": "CRM",
+    "panel_module_whatsapp": "WhatsApp"
   },
   "text_history": {
     "history_save": "Save",

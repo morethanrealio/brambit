@@ -16,7 +16,8 @@ const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = awai
 const { criarAtendimentoDoServidor, esquemaDoAtendimento, clientAreasOn } = await import('../web/extensions/public-support/public-support-channel.mjs');
 const { markVoiceInput } = await import('../web/voice-input.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
-const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
+const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH, PANEL_ITEMS_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
+const { panelSchema, createPanelStore, PANEL_MODULES } = await import('../web/extensions/public-support/public-support-panel.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
 
@@ -834,6 +835,44 @@ test('installation text on the admin screen: admin only, saving the default stor
   assert.equal(restored.content, 'new rules');
   assert.equal((await prompts.current()).installation, 'new rules');
   assert.equal((await ask(boss, 'POST', INSTALLATION_PROMPT_PATH + '/restore', { versionId: '999' })).code, 404);
+});
+
+// The panel's menu per assistant: only ADMIN_EMAIL changes it; an unset module is on, an unset template off,
+// and a template made for one client is not offered to another.
+test('panel menu on the admin screen: admin only, today\'s menu by default, one client\'s template stays with it', async (t) => {
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
+  await pool.query('ALTER TABLE mtr_harness.users ADD COLUMN name text');
+  await pool.query("UPDATE mtr_harness.users SET name = 'Owner' WHERE id = $1", [dono]);
+  await pool.query(panelSchema('mtr_harness'));
+  await store.configurar(ag, dono, { ativo: true });
+  const saved = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = 'boss@example.com';
+  t.after(() => { if (saved === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = saved; });
+  const rotas = createRotas();
+  const panel = createPanelStore(pool, { templates: () => [{ id: 'all', module: 'dashboard' }, { id: 'mine', module: 'crm', agentIds: [ag] }] });
+  registerPublicSupportAdmin({ rotas, prompts: createPromptStore(pool), panel });
+  const boss = { id: dono, email: 'boss@example.com' }, stranger = { id: outro, email: 'someone@example.com' };
+  const ask = async (user, method, body) => {
+    const req = Readable.from(body === undefined ? [] : [JSON.stringify(body)]); req.method = method;
+    const res = { code: 0, out: '', writeHead(c) { this.code = c; }, end(x) { this.out += x ?? ''; } };
+    const answered = await rotas.atender(req, res, new URL('http://x' + PANEL_ITEMS_PATH), { currentUser: async () => user });
+    return { answered, code: res.code, json: res.out ? JSON.parse(res.out) : null };
+  };
+  assert.equal((await ask(stranger, 'GET')).answered, false);
+  assert.equal((await ask(stranger, 'POST', { agentId: ag, kind: 'module', item: 'crm', enabled: false })).answered, false);
+  const allOn = Object.fromEntries(PANEL_MODULES.map((m) => [m, true]));
+  const first = (await ask(boss, 'GET')).json;
+  assert.deepEqual(first.agents, [{ id: ag, name: 'Lia', owner: 'Owner', modules: allOn, templates: { all: false, mine: false } }]);
+  assert.deepEqual((await ask(boss, 'POST', { agentId: ag, kind: 'module', item: 'crm', enabled: false })).json,
+    { modules: { ...allOn, crm: false }, templates: { all: false, mine: false } });
+  assert.deepEqual((await ask(boss, 'POST', { agentId: ag, kind: 'template', item: 'mine', enabled: true })).json.templates, { all: false, mine: true });
+  for (const bad of [{ agentId: ag, kind: 'module', item: 'settings', enabled: false }, { agentId: ag, kind: 'module', item: 'crm', enabled: 'no' },
+    { agentId: 'x', kind: 'module', item: 'crm', enabled: false }, { agentId: ag2, kind: 'module', item: 'crm', enabled: false }]) {
+    assert.equal((await ask(boss, 'POST', bad)).code, 400);
+  }
+  await store.configurar(ag2, dono, { ativo: false });
+  assert.equal((await ask(boss, 'POST', { agentId: ag2, kind: 'template', item: 'mine', enabled: true })).code, 400);
+  assert.deepEqual(await panel.items(ag2), { modules: allOn, templates: { all: false } });
 });
 
 // An assistant's texts on /public-support: only its owner, and spoken only where the plugin has a voice text.
