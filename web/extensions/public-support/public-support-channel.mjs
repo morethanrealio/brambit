@@ -75,6 +75,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });
+  const panel = createPanelStore(pool, { S });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -113,12 +114,12 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas: clientAreas ? areas : null,
       metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, metricHide: atendimento.metricHide, metricSegment: atendimento.metricSegment, contactProfiles: atendimento.contactProfiles,
-      contactNames: atendimento.contactNames, activity, events, testContacts: createTestContactsStore(pool, { S }) });
+      contactNames: atendimento.contactNames, activity, events, testContacts: createTestContactsStore(pool, { S }), panel });
     if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerClickRoute({ rotas, events, send, log });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
-    if (enabled) registerPublicSupportAdmin({ rotas, prompts, panel: createPanelStore(pool, { S }) });
+    if (enabled) registerPublicSupportAdmin({ rotas, prompts, panel });
   }
   return {
     store, webStore, prompts, areas, events, limpar,

@@ -480,6 +480,9 @@
     });
   }
   function isOwner(){ return !agenteAtual.role || agenteAtual.role === 'owner'; }
+  // The menu items the installation's admin left on for this assistant (public-support-panel.mjs);
+  // settings is always there. The server answers 404 for an item that is off.
+  function moduleOn(m){ return m === 'settings' || !agenteAtual.panel || agenteAtual.panel.modules[m] !== false; }
   function canEdit(){ return isOwner() || agenteAtual.role === 'admin'; }
   function escolherAgente(id){
     agenteAtual = agentes.filter(function(a){ return a.agentId === id; })[0];
@@ -516,8 +519,11 @@
     $('webChaveEstado').textContent = agenteAtual.webHasKey ? t('web_key_exists') : t('web_key_none');
     $('webChaveNova').classList.add('hidden'); $('webChaveNova').textContent = '';
     msg($('cfgMsg'), ''); msg($('promptMsg'), ''); msg($('webChaveMsg'), '');
-    loadProfileFields(); fecharConversa(); contatos = []; $('contatos').textContent = ''; carregarContatos(); loadMetrics(); loadActivity(false); loadTests();
-    if (textsFor !== agenteAtual.agentId) loadTexts();
+    fecharConversa(); contatos = []; $('contatos').textContent = '';
+    if (moduleOn('conversations')) { loadProfileFields(); carregarContatos(); }
+    $('seeAll').classList.toggle('hidden', !moduleOn('conversations'));
+    loadMetrics(); loadActivity(false);
+    if (moduleOn('agent')) { loadTests(); if (textsFor !== agenteAtual.agentId) loadTexts(); }
   }
 
   // The assistant's written and spoken texts (text-history.js), each saved on its
@@ -582,8 +588,9 @@
     $('metricFrom').classList.toggle('hidden', !p.from); $('metricTo').classList.toggle('hidden', !p.from);
   }
   function showView(name, push){
-    var allowed = VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer;
-    if (allowed.indexOf(name) < 0) name = 'dashboard';
+    var allowed = (VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer).filter(moduleOn);
+    if (allowed.indexOf(name) < 0) name = allowed[0] || null;
+    if (!name) $('viewTitle').textContent = '';
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function(b){
       b.classList.toggle('hidden', allowed.indexOf(b.dataset.view) < 0);
       if (b.dataset.view === name) { b.setAttribute('aria-current', 'page'); $('viewTitle').textContent = b.querySelector('span').textContent; }
@@ -592,7 +599,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-view-panel]'), function(p){
       p.classList.toggle('off', p.dataset.viewPanel !== name || (p.hasAttribute('data-owner-only') && !isOwner()));
     });
-    setAddress({ view: name === 'dashboard' ? null : name }, push);
+    setAddress({ view: name === 'dashboard' || !name ? null : name }, push);
     if (push) window.scrollTo(0, 0);
   }
   document.querySelector('.side').addEventListener('click', function(ev){ var b = ev.target.closest('[data-view]'); if (b && agenteAtual) showView(b.dataset.view, true); });
@@ -735,6 +742,7 @@
     }).catch(function(){});
   }
   function loadMetrics(){
+    if (!moduleOn('dashboard')) return;
     var id = agenteAtual.agentId, period = periodQuery(addressPeriod()) + segmentQuery(), key = metricsFor = id + '|' + period;
     $('eventsCsv').href = '/api/public-support/events.csv?agent=' + encodeURIComponent(id) + '&' + period;
     var number = new Intl.NumberFormat(document.documentElement.lang);
@@ -830,7 +838,7 @@
         if (c.name) who.title = c.endereco;
         if (c.canal === 'whatsapp') channel.setAttribute('translate', 'no');
         [who, channel, el('td', null, profileNumber.format(c.mensagens)), el('td', null, quando(c.ultimaEm))].forEach(function(td){ tr.appendChild(td); });
-        tr.addEventListener('click', function(){ showView('conversations', true); abrirConversa(c); });
+        if (moduleOn('conversations')) tr.addEventListener('click', function(){ showView('conversations', true); abrirConversa(c); });
         rows.appendChild(tr);
       });
       if (!rows.firstChild) { var none = el('tr'), td = el('td', 'vazio', t('no_contacts')); td.colSpan = 4; none.appendChild(td); rows.appendChild(none); }

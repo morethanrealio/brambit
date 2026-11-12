@@ -875,6 +875,38 @@ test('panel menu on the admin screen: admin only, today\'s menu by default, one 
   assert.deepEqual(await panel.items(ag2), { modules: allOn, templates: { all: false } });
 });
 
+// A menu item the admin turned off is gone from the server too, not only from the menu.
+test('owner view with panel items off: their routes answer 404, the rest keeps working', async (t) => {
+  const { pool, store, dono, ag } = await montar(t);
+  await pool.query(panelSchema('mtr_harness'));
+  await store.configurar(ag, dono, { ativo: true });
+  const { contatoId } = await atendimento(store, modelo()).turno({ agentId: ag, canal: 'whatsapp', endereco: '5511000000005', mensagem: 'oi' });
+  const panel = createPanelStore(pool);
+  const prompts = createPromptStore(pool); await prompts.init();
+  const rotas = createRotas();
+  const send = (res, status, corpo) => Object.assign(res, { status, corpo });
+  registrarRotasDoDono({ rotas, store, webStore: createPublicWebStore(pool), send, fail: (res, st, msg, e) => { throw e; }, tooManyRequests: () => false,
+    agenteDoNumero: () => ag, prompts, defaultTexts: async () => ({ written: 'w', spoken: null }), panel });
+  const pede = async (metodo, caminho, corpo) => {
+    const req = Readable.from(corpo ? [JSON.stringify(corpo)] : []); req.method = metodo;
+    const res = { setHeader() {} };
+    await rotas.atender(req, res, new URL('http://x' + caminho), { currentUser: async () => ({ id: dono }) });
+    return res.status;
+  };
+  const routes = { contacts: ['GET', `/api/publico/contatos?agente=${ag}`], conversation: ['GET', `/api/publico/conversa?contato=${contatoId}`],
+    texts: ['GET', `${AGENT_TEXTS_PATH}?agent=${ag}`], settings: ['POST', '/api/publico/configurar', { agentId: ag, ativo: true }] };
+  const statuses = async () => Object.fromEntries(await Promise.all(Object.entries(routes).map(async ([k, r]) => [k, await pede(...r)])));
+  assert.deepEqual(await statuses(), { contacts: 200, conversation: 200, texts: 200, settings: 200 });
+  await panel.set(ag, 'module', 'conversations', false);
+  await panel.set(ag, 'module', 'agent', false);
+  assert.deepEqual(await statuses(), { contacts: 200, conversation: 404, texts: 404, settings: 200 });
+  await panel.set(ag, 'module', 'dashboard', false);
+  assert.equal((await statuses()).contacts, 404);
+  const res = { setHeader() {} };
+  await rotas.atender(Object.assign(Readable.from([]), { method: 'GET' }), res, new URL('http://x/api/publico/agentes'), { currentUser: async () => ({ id: dono }) });
+  assert.deepEqual(res.corpo.agentes.find((a) => a.agentId === ag).panel.modules, { dashboard: false, conversations: false, agent: false, crm: true, whatsapp: true });
+});
+
 // An assistant's texts on /public-support: only its owner, and spoken only where the plugin has a voice text.
 test('assistant texts on the owner screen: another account gets 404, the plugin default comes prefilled, no spoken text without voice', async (t) => {
   const { pool, store, dono, outro, ag, ag2 } = await montar(t);
