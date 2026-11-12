@@ -10,7 +10,6 @@ import { SEGUE } from '../../routes.mjs';
 import { adminUser } from '../../admin-user.mjs';
 import { INSTALLATION_PROMPT_DEFAULT } from './public-support.mjs';
 import { PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
-import { PANEL_MODULES } from './public-support-panel.mjs';
 
 export const INSTALLATION_PROMPT_PATH = '/api/admin/public-support/installation-prompt';
 export const PANEL_ITEMS_PATH = '/api/admin/public-support/panel';
@@ -45,8 +44,9 @@ export function registerPublicSupportAdmin({ rotas, prompts, panel = null, defau
   });
 
   if (!panel) return;
-  // → {modules, templates, agents: [{id, name, owner, modules, templates}]}.
-  route('GET', PANEL_ITEMS_PATH, async ({ res }) => reply(res, 200, { modules: PANEL_MODULES, templates: panel.catalog(), agents: await panel.agents() }));
+  // → {modules: [{id, label}], templates, agents: [{id, name, owner, modules, templates}]}; a core
+  // module's label is null (the page has its name), a plugin's is a text or one per language.
+  route('GET', PANEL_ITEMS_PATH, async ({ res }) => reply(res, 200, { modules: panel.modules(), templates: panel.catalog(), agents: await panel.agents() }));
 
   // { agentId, kind: 'module' | 'template', item, enabled } → that assistant's panel.
   route('POST', PANEL_ITEMS_PATH, async ({ req, res }) => {

@@ -489,6 +489,7 @@
     if (!agenteAtual) return;
     applyTheme(agenteAtual.areaTheme);
     ['menu', 'menuFoot', 'dashTools', 'metricsCard', 'promptCard', 'cfgCard', 'atendGrid', 'crmCard', 'whatsappCard', 'agentLead'].forEach(function(id){ $(id).classList.remove('hidden'); });
+    drawPluginItems();
     // A client area's member (client-areas.mjs) sees what its role allows (showView): an admin
     // edits the prompt and handles the contacts; a viewer only reads. Settings are the owner's
     // (an admin sees only the access log there).
@@ -524,6 +525,68 @@
     $('seeAll').classList.toggle('hidden', !moduleOn('conversations'));
     loadMetrics(); loadActivity(false);
     if (moduleOn('agent')) { loadTests(); if (textsFor !== agenteAtual.agentId) loadTexts(); }
+  }
+
+  // A plugin's menu items and templates (public-support-panel.mjs), as the admin left them on for
+  // this assistant: an item gets a menu button and its own view; a template draws inside its
+  // item's view through the script the plugin serves, which registers
+  // window.publicSupportTemplates[id] = { mount: function(el, ctx){...} }. ctx.api({query, method,
+  // body, type}) calls the template's server side (TEMPLATE_API_PATH) and resolves to its JSON.
+  // A core item with a template drops its "soon" note.
+  var TEMPLATE_API = '/api/public-support/template', templateScripts = {};
+  function labelOf(l){
+    if (!l || typeof l === 'string') return l || '';
+    var lang = document.documentElement.lang || 'en';
+    return l[lang] || l[lang.split('-')[0]] || l.en || l[Object.keys(l)[0]] || '';
+  }
+  function customModules(){ return agenteAtual && agenteAtual.panel && agenteAtual.panel.custom || []; }
+  function mounts(){ return agenteAtual && agenteAtual.panel && agenteAtual.panel.mounts || []; }
+  function loadScript(src){
+    return templateScripts[src] || (templateScripts[src] = new Promise(function(ok, fail){
+      var s = document.createElement('script'); s.src = src; s.onload = ok;
+      s.onerror = function(){ delete templateScripts[src]; fail(new Error(t('error_generic'))); };
+      document.body.appendChild(s);
+    }));
+  }
+  function templateApi(agentId, id){
+    return function(o){
+      o = o || {};
+      var q = new URLSearchParams(o.query || {}); q.set('agent', agentId); q.set('template', id); q.set('lang', document.documentElement.lang || 'en');
+      var op = { credentials:'include', method: o.method || (o.body != null ? 'POST' : 'GET') };
+      if (o.body != null) { op.body = o.body; op.headers = { 'content-type': o.type || (typeof o.body === 'string' ? 'application/json' : 'application/octet-stream') }; }
+      return fetch(TEMPLATE_API + '?' + q.toString(), op).then(function(r){
+        if (r.status === 401) { location.href = '/login?mode=sign-in'; throw new Error(NO_SESSION); }
+        return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw Object.assign(new Error(j && j.error || t('error_generic')), { code: j && j.error, status: r.status, body: j }); return j; });
+      });
+    };
+  }
+  function drawPluginItems(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-plugin]'), function(e){ e.remove(); });
+    var main = document.querySelector('.main .in'), id = agenteAtual.agentId;
+    customModules().forEach(function(m){
+      var b = el('button'); b.type = 'button'; b.dataset.view = m.id; b.setAttribute('data-plugin', '');
+      var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), r = document.createElementNS(NS, 'rect'), p = document.createElementNS(NS, 'path');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+      [['x', 4], ['y', 4], ['width', 16], ['height', 16], ['rx', 3]].forEach(function(k){ r.setAttribute(k[0], k[1]); });
+      p.setAttribute('d', 'M8 9h8M8 13h8M8 17h5');
+      svg.appendChild(r); svg.appendChild(p); b.appendChild(svg);
+      b.appendChild(el('span', null, labelOf(m.label)));
+      $('menu').appendChild(b);
+    });
+    ['crm', 'whatsapp'].forEach(function(m){
+      var has = mounts().some(function(x){ return x.module === m; });
+      $(m + 'Card').classList.toggle('hidden', has);
+      var soon = document.querySelector('[data-view="' + m + '"] .soon'); if (soon) soon.classList.toggle('hidden', has);
+    });
+    mounts().forEach(function(x){
+      var box = el('div', 'card off'); box.dataset.viewPanel = x.module; box.dataset.template = x.id; box.setAttribute('data-plugin', '');
+      main.appendChild(box);
+      loadScript(x.script).then(function(){
+        var tpl = window.publicSupportTemplates && window.publicSupportTemplates[x.id];
+        if (!tpl || typeof tpl.mount !== 'function' || !agenteAtual || agenteAtual.agentId !== id || !box.isConnected) return;
+        tpl.mount(box, { agentId: id, role: agenteAtual.role || 'owner', canEdit: canEdit(), language: document.documentElement.lang || 'en', api: templateApi(id, x.id) });
+      }).catch(function(e){ if (box.isConnected) box.appendChild(el('div', 'msg err', e.message)); });
+    });
   }
 
   // The assistant's written and spoken texts (text-history.js), each saved on its
@@ -588,7 +651,8 @@
     $('metricFrom').classList.toggle('hidden', !p.from); $('metricTo').classList.toggle('hidden', !p.from);
   }
   function showView(name, push){
-    var allowed = (VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer).filter(moduleOn);
+    var base = VIEWS[isOwner() ? 'owner' : agenteAtual.role] || VIEWS.viewer;
+    var allowed = base.filter(function(v){ return v !== 'settings'; }).concat(customModules().map(function(m){ return m.id; }), base.indexOf('settings') < 0 ? [] : ['settings']).filter(moduleOn);
     if (allowed.indexOf(name) < 0) name = allowed[0] || null;
     if (!name) $('viewTitle').textContent = '';
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function(b){
@@ -912,6 +976,7 @@
     var d = l.detail || {}, v = { area: l.area || '', email: d.email || '' };
     if (d.kind) v.kind = t('activity_kind_' + d.kind);
     if (l.action === 'theme_changed') v.theme = d.theme || t('area_theme_default');
+    if (l.action === 'template_used') v.template = labelOf((mounts().filter(function(x){ return x.id === d.template; })[0] || {}).label) || d.template || '';
     return t(l.action === 'member_invited' ? 'activity_member_invited_' + d.role : 'activity_' + l.action, v);
   }
   function activityRow(l){

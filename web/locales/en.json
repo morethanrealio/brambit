@@ -1299,6 +1299,7 @@
     "activity_panel_signed_in": "Signed in to the panel ({area})",
     "activity_password_link": "Made a new password link for {email} ({area})",
     "activity_test_contacts_changed": "Changed the test contacts",
+    "activity_template_used": "Used the panel tool {template}",
     "profile_filter": "Filter by profile",
     "profile_filter_all": "Everyone",
     "profile_download": "Download spreadsheet (CSV)",

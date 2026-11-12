@@ -18,12 +18,15 @@ import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
 import { TEST_CONTACTS_PATH, TEST_CONTACTS_MAX, normalizeTestContact } from './public-support-test-contacts.mjs';
+import { TEMPLATE_BODY_MAX } from './public-support-panel.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
 export const AGENT_TEXTS_PATH = '/api/public-support/texts';
+// A panel template's requests (public-support-panel.mjs): ?agent=&template=, then the template's own.
+export const TEMPLATE_API_PATH = '/api/public-support/template';
 // The profile fields and values the assistant's contacts have (the filter's options),
 // and the contacts' profiles as a spreadsheet.
 export const PROFILES_PATH = '/api/public-support/profiles';
@@ -55,6 +58,18 @@ const profilesCsv = (contatos) => {
   return [head, ...contatos.map(row)].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';
 };
 const iso = (d) => (d ? new Date(d).toISOString() : '');
+// A template's request body as it came (a spreadsheet, JSON), or null past max.
+export function readTemplateBody(req, max = TEMPLATE_BODY_MAX) {
+  if (Number(req.headers['content-length'] || 0) > max) return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => { size += c.length; if (size <= max) chunks.push(c); else chunks.length = 0; });
+    req.once('end', () => resolve(size > max ? null : Buffer.concat(chunks)));
+    req.once('error', reject);
+    req.once('aborted', () => reject(Object.assign(new Error('request aborted'), { code: 'REQUEST_BODY_INTERRUPTED' })));
+  });
+}
 
 // What comes from the form becomes store.configurar fields; a missing field stays
 // as is. Returns {erro} if any value is invalid.
@@ -110,8 +125,8 @@ export function camposDaConfig(b = {}) {
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet
 // and as the metrics' click count.
 // testContacts (public-support-test-contacts.mjs) = who the metrics leave out, kept by the owner and area admins.
-// panel (public-support-panel.mjs) = the menu items each assistant's panel shows; a route of an item
-// that is off answers 404, as for an assistant you cannot reach. null = every item on.
+// panel (public-support-panel.mjs) = the menu items and templates each assistant's panel shows; a route of
+// an item that is off answers 404, as for an assistant you cannot reach. null = every item on, no templates.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
   prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], metricSegment = async () => null, contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null, panel = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
@@ -196,7 +211,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
           linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName, areaTheme: m.areaTheme });
       }
     }
-    if (panel) for (const a of agentes) a.panel = await panel.items(a.agentId);
+    if (panel) for (const a of agentes) a.panel = await panel.page(a.agentId);
     // panelAccount: the person has only this screen (client-areas.mjs), so it offers no way back to the app.
     return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable, panelAccount: !!(await areas?.isPanelAccount(user.id)) });
   });
@@ -419,6 +434,27 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     await record(user, acc, 'test_contacts_changed', { count: r.entries.length });
     return send(res, 200, { ok: true, ...r });
   });
+
+  // A template's requests: GET for every role, POST (an upload, a check that costs) for the owner and
+  // area admins, logged. Off, not fitting this assistant, or its module off = 404. The template's
+  // api({method, query, body, agentId, ownerId, role, language}) → {status?, body}: body is the JSON
+  // answer, status 200 or a 4xx; a throw is a 500 with no detail.
+  for (const method of ['GET', 'POST']) {
+    if (panel) rota(method, TEMPLATE_API_PATH, async ({ req, res, url, user }) => {
+      const tpl = panel.template(url.searchParams.get('template'));
+      const acc = tpl?.api && (await agentAccess(user, url.searchParams.get('agent')));
+      if (!acc) return naoAchei(res);
+      const on = await panel.items(acc.agentId);
+      if (!on.templates[tpl.id] || !on.modules[tpl.module]) return naoAchei(res);
+      if (method === 'POST' && !canEdit(acc.role)) return forbidden(res);
+      const body = method === 'POST' ? await readTemplateBody(req) : null;
+      if (method === 'POST' && !body) return send(res, 413, { error: 'too_large', max: TEMPLATE_BODY_MAX });
+      if (method === 'POST') await record(user, acc, 'template_used', { template: tpl.id });
+      const r = await tpl.api({ method, query: url.searchParams, body, agentId: acc.agentId, ownerId: acc.ownerId, role: acc.role, language: pageLanguage(url) });
+      const status = Number.isInteger(r?.status) && r.status >= 200 && r.status < 500 ? r.status : 200;
+      return send(res, status, r?.body ?? null);
+    });
+  }
 
   if (prompts) registerAgentTexts();
 

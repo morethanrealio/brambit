@@ -268,14 +268,21 @@ async function loadPanelMenu() {
     });
     return el('label', { class: 'pm-item' }, input, label);
   };
+  // A core module's name is the page's; a plugin's comes as a text or one per language.
+  const pick1 = (l) => {
+    if (!l || typeof l === 'string') return l || '';
+    const lang = document.documentElement.lang || 'en';
+    return l[lang] || l[lang.split('-')[0]] || l.en || Object.values(l)[0] || '';
+  };
+  const moduleName = (id) => { const m = data.modules.find((x) => x.id === id); return m?.label ? pick1(m.label) : t('panel_module_' + id); };
   const items = el('div');
   const render = (agent) => {
     const fitting = data.templates.filter((x) => x.id in agent.templates);
     items.replaceChildren(
       el('div', { class: 'pm-title' }, t('panel_menu_modules')),
-      ...data.modules.map((m) => box(agent, 'module', m, t('panel_module_' + m))),
+      ...data.modules.map((m) => box(agent, 'module', m.id, moduleName(m.id))),
       el('div', { class: 'pm-title' }, t('panel_menu_templates')),
-      ...(fitting.length ? fitting.map((x) => box(agent, 'template', x.id, (x.label || x.id) + ' · ' + t('panel_module_' + x.module)))
+      ...(fitting.length ? fitting.map((x) => box(agent, 'template', x.id, (pick1(x.label) || x.id) + ' · ' + moduleName(x.module)))
         : [el('p', { class: 'th-none' }, t('panel_menu_no_templates'))]),
     );
   };

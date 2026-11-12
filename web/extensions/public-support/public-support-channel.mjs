@@ -75,7 +75,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });
-  const panel = createPanelStore(pool, { S });
+  const panel = createPanelStore(pool, { S, log, catalog: () => (typeof ganchos?.panelCatalog === 'function' ? ganchos.panelCatalog() : null) });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
