@@ -916,8 +916,8 @@ test('panel template route: off or not fitting = 404, viewer cannot send, body c
   await pool.query(panelSchema('mtr_harness'));
   await store.configurar(ag, dono, { ativo: true });
   await store.configurar(ag2, dono, { ativo: true });
-  const api = async ({ method, query, body, agentId, role }) => (query.get('x') === 'bad' ? { status: 422, body: { error: 'bad_sheet' } }
-    : { body: { method, agentId, role, size: body?.length ?? null } });
+  const api = async ({ method, query, body, agentId, role, user }) => (query.get('x') === 'bad' ? { status: 422, body: { error: 'bad_sheet' } }
+    : { body: { method, agentId, role, size: body?.length ?? null, user: user.id } });
   const warned = [];
   const panel = createPanelStore(pool, { log: { warn: (m) => warned.push(m) }, catalog: () => ({
     modules: [{ id: 'prices', label: 'Prices' }, { id: 'settings', label: 'x' }],
@@ -941,9 +941,9 @@ test('panel template route: off or not fitting = 404, viewer cannot send, body c
   await panel.set(ag, 'template', 'check', true);
   assert.equal((await ask(dono, 'GET', 'agent=' + ag)).status, 404, 'its menu item is still off');
   await panel.set(ag, 'module', 'prices', true);
-  assert.deepEqual((await ask(outro, 'GET', 'agent=' + ag)).json, { method: 'GET', agentId: ag, role: 'viewer', size: null });
+  assert.deepEqual((await ask(outro, 'GET', 'agent=' + ag)).json, { method: 'GET', agentId: ag, role: 'viewer', size: null, user: outro });
   assert.equal((await ask(outro, 'POST', 'agent=' + ag, Buffer.from('xlsx'))).status, 403);
-  assert.deepEqual((await ask(dono, 'POST', 'agent=' + ag, Buffer.from('xlsx'))).json, { method: 'POST', agentId: ag, role: 'owner', size: 4 });
+  assert.deepEqual((await ask(dono, 'POST', 'agent=' + ag, Buffer.from('xlsx'))).json, { method: 'POST', agentId: ag, role: 'owner', size: 4, user: dono });
   assert.deepEqual((await ask(dono, 'GET', 'agent=' + ag + '&x=bad')).json, { error: 'bad_sheet' });
   assert.equal((await ask(dono, 'POST', 'agent=' + ag, Buffer.from('x'), { 'content-length': String(TEMPLATE_BODY_MAX + 1) })).status, 413);
   assert.deepEqual(logged, ['template_used:check']);

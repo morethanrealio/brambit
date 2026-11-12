@@ -437,8 +437,9 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
 
   // A template's requests: GET for every role, POST (an upload, a check that costs) for the owner and
   // area admins, logged. Off, not fitting this assistant, or its module off = 404. The template's
-  // api({method, query, body, agentId, ownerId, role, language}) → {status?, body}: body is the JSON
-  // answer, status 200 or a 4xx; a throw is a 500 with no detail.
+  // api({method, query, body, agentId, ownerId, role, language, user}) → {status?, body}: body is the JSON
+  // answer, status 200 or a 4xx; a throw is a 500 with no detail. user = {id, name, email} of who asks
+  // (e.g. to record who sent an upload).
   for (const method of ['GET', 'POST']) {
     if (panel) rota(method, TEMPLATE_API_PATH, async ({ req, res, url, user }) => {
       const tpl = panel.template(url.searchParams.get('template'));
@@ -450,7 +451,8 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       const body = method === 'POST' ? await readTemplateBody(req) : null;
       if (method === 'POST' && !body) return send(res, 413, { error: 'too_large', max: TEMPLATE_BODY_MAX });
       if (method === 'POST') await record(user, acc, 'template_used', { template: tpl.id });
-      const r = await tpl.api({ method, query: url.searchParams, body, agentId: acc.agentId, ownerId: acc.ownerId, role: acc.role, language: pageLanguage(url) });
+      const r = await tpl.api({ method, query: url.searchParams, body, agentId: acc.agentId, ownerId: acc.ownerId, role: acc.role, language: pageLanguage(url),
+        user: { id: user.id, name: user.name ?? null, email: user.email ?? null } });
       const status = Number.isInteger(r?.status) && r.status >= 200 && r.status < 500 ? r.status : 200;
       return send(res, status, r?.body ?? null);
     });
