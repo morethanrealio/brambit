@@ -53,6 +53,10 @@
   .th-version-head button { padding: 3px 10px; font-size: 12px; }
   .th-full { white-space: pre-wrap; background: #0e0f13; border: 1px solid #23252c; border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; max-height: 320px; overflow: auto; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
   .th-none { color: #8a8d96; font-size: 12px; }
+  select { background: #0e0f13; color: #e6e7ea; border: 1px solid #2b2e37; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .pm-title { font-size: 12px; color: #8a8d96; margin: 12px 0 4px; }
+  .pm-item { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+  .pm-item input { flex: none; }
 </style>
 </head>
 <body>
@@ -73,6 +77,11 @@
       <div id="installationTextLabel" class="th-label" data-i18n="system_settings.public_support_text_label">Installation text</div>
       <p class="note" data-i18n="system_settings.public_support_text_help">Rules every assistant that answers the public on this installation follows, on top of each assistant's own text. A change applies from the next message, for every assistant.</p>
       <div id="installationText"></div>
+    </div>
+    <div id="panelMenu" class="group hidden">
+      <div class="th-label" data-i18n="system_settings.panel_menu_label">Panel menu</div>
+      <p class="note" data-i18n="system_settings.panel_menu_help">Which menu items and templates each assistant's panel shows, for its owner and for the client area's members. Settings is always there. A change applies the next time the panel opens.</p>
+      <div id="panelMenuBody"></div>
     </div>
   </section>
   <div id="toast" class="toast hidden" data-i18n="system_settings.saved">Saved.</div>
@@ -223,7 +232,65 @@ function loadInstallationText() {
     if (found === false) return;
     $('publicSupport').classList.remove('hidden');
     if ($('nav').children.length) $('nav').append(publicSupportLink());
+    loadPanelMenu();
   });
+}
+
+// Which menu items and templates each public assistant's panel shows
+// (extensions/public-support/public-support-panel.mjs). Each box saves on its own.
+const PANEL_ITEMS = '/api/admin/public-support/panel';
+
+async function loadPanelMenu() {
+  let data;
+  try { data = await textCall(PANEL_ITEMS); } catch (e) { if (e.status === 404) return; data = null; }
+  $('panelMenu').classList.remove('hidden');
+  const body = $('panelMenuBody');
+  if (!data) return body.replaceChildren(el('p', { class: 'err' }, t('load_failed')));
+  if (!data.agents.length) return body.replaceChildren(el('p', { class: 'th-none' }, t('panel_menu_none')));
+  const result = el('span', { class: 'result' });
+  const box = (agent, kind, item, label) => {
+    const input = el('input', { type: 'checkbox', checked: agent[kind + 's'][item] });
+    input.addEventListener('change', async () => {
+      input.disabled = true;
+      result.className = 'result';
+      result.textContent = t('saving');
+      try {
+        const saved = await textCall(PANEL_ITEMS, { agentId: agent.id, kind, item, enabled: input.checked });
+        Object.assign(agent, saved);
+        result.textContent = '';
+        $('toast').classList.remove('hidden');
+        setTimeout(() => $('toast').classList.add('hidden'), 3000);
+      } catch {
+        input.checked = !input.checked;
+        result.className = 'result err';
+        result.textContent = t('error_generic');
+      } finally { input.disabled = false; }
+    });
+    return el('label', { class: 'pm-item' }, input, label);
+  };
+  // A core module's name is the page's; a plugin's comes as a text or one per language.
+  const pick1 = (l) => {
+    if (!l || typeof l === 'string') return l || '';
+    const lang = document.documentElement.lang || 'en';
+    return l[lang] || l[lang.split('-')[0]] || l.en || Object.values(l)[0] || '';
+  };
+  const moduleName = (id) => { const m = data.modules.find((x) => x.id === id); return m?.label ? pick1(m.label) : t('panel_module_' + id); };
+  const items = el('div');
+  const render = (agent) => {
+    const fitting = data.templates.filter((x) => x.id in agent.templates);
+    items.replaceChildren(
+      el('div', { class: 'pm-title' }, t('panel_menu_modules')),
+      ...data.modules.map((m) => box(agent, 'module', m.id, moduleName(m.id))),
+      el('div', { class: 'pm-title' }, t('panel_menu_templates')),
+      ...(fitting.length ? fitting.map((x) => box(agent, 'template', x.id, (pick1(x.label) || x.id) + ' · ' + moduleName(x.module)))
+        : [el('p', { class: 'th-none' }, t('panel_menu_no_templates'))]),
+    );
+  };
+  const pick = el('select', { 'aria-label': t('panel_menu_assistant') },
+    ...data.agents.map((a) => el('option', { value: a.id }, a.owner ? `${a.name} (${a.owner})` : a.name)));
+  pick.addEventListener('change', () => render(data.agents.find((a) => a.id === pick.value)));
+  body.replaceChildren(el('div', { class: 'actions' }, el('span', {}, t('panel_menu_assistant')), pick, result), items);
+  render(data.agents[0]);
 }
 
 async function load() {

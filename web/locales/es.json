@@ -1299,6 +1299,7 @@
     "activity_panel_signed_in": "Entró al panel ({area})",
     "activity_password_link": "Generó un enlace de nueva contraseña para {email} ({area})",
     "activity_test_contacts_changed": "Cambió los contactos de prueba",
+    "activity_template_used": "Usó la herramienta del panel {template}",
     "profile_filter": "Filtrar por perfil",
     "profile_filter_all": "Todos",
     "profile_download": "Descargar hoja de cálculo (CSV)",
@@ -2382,7 +2383,19 @@
     "reason_unreachable": "no se pudo contactar el servicio",
     "section_public_support": "Atención al público",
     "public_support_text_label": "Texto de la instalación",
-    "public_support_text_help": "Reglas que sigue todo asistente que atiende al público en esta instalación, además del texto de cada asistente. El cambio se aplica desde el próximo mensaje, para todos los asistentes."
+    "public_support_text_help": "Reglas que sigue todo asistente que atiende al público en esta instalación, además del texto de cada asistente. El cambio se aplica desde el próximo mensaje, para todos los asistentes.",
+    "panel_menu_label": "Menú del panel",
+    "panel_menu_help": "Qué ítems del menú y qué plantillas muestra el panel de cada asistente, para su dueño y para los miembros del área del cliente. Configuración siempre aparece. El cambio se aplica la próxima vez que se abre el panel.",
+    "panel_menu_assistant": "Asistente",
+    "panel_menu_none": "Todavía ningún asistente atiende al público.",
+    "panel_menu_modules": "Ítems del menú",
+    "panel_menu_templates": "Plantillas",
+    "panel_menu_no_templates": "Todavía no hay plantillas para este asistente.",
+    "panel_module_dashboard": "Panel",
+    "panel_module_conversations": "Conversaciones",
+    "panel_module_agent": "Agente",
+    "panel_module_crm": "CRM",
+    "panel_module_whatsapp": "WhatsApp"
   },
   "text_history": {
     "history_save": "Guardar",

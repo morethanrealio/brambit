@@ -639,6 +639,10 @@ export function retainedByTool(tools) {
 //    owner's screen shows for a person the plugin knows (an email they gave, a name), in
 //    place of the channel address; up to CONTACT_NAME_MAX characters. The owner can list
 //    only the named ones. Slower than METRIC_CARDS_WAIT_MS = no names this time.
+//   panelCatalog() → {modules: [{id, label}], templates: [{id, module, label, script, agentIds?, api?}]}:
+//    the plugin's own menu items and templates for the owner's screen, read once
+//    (readPanelCatalog in public-support-panel.mjs has the format). The installation's
+//    admin turns each one on per assistant; they start off.
 //   A hook that fails or returns garbage is ignored: the turn proceeds as if there were no plugin.
 //
 // The turn returns {text, saidas?, motivo?, userId, agentId, contatoId}. With

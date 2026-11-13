@@ -18,12 +18,15 @@ import { ACTIVITY_PATH } from './client-area-activity.mjs';
 import { EVENTS_PATH, eventsCsv, csvCell } from './public-support-events.mjs';
 import { normalizaIdioma, defaultLanguage } from '../../locale.mjs';
 import { TEST_CONTACTS_PATH, TEST_CONTACTS_MAX, normalizeTestContact } from './public-support-test-contacts.mjs';
+import { TEMPLATE_BODY_MAX } from './public-support-panel.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuid = (v) => (UUID.test(String(v || '')) ? String(v) : null);
 const inteiro = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : undefined);
 const TETO_MAX_USD = 100000;
 export const AGENT_TEXTS_PATH = '/api/public-support/texts';
+// A panel template's requests (public-support-panel.mjs): ?agent=&template=, then the template's own.
+export const TEMPLATE_API_PATH = '/api/public-support/template';
 // The profile fields and values the assistant's contacts have (the filter's options),
 // and the contacts' profiles as a spreadsheet.
 export const PROFILES_PATH = '/api/public-support/profiles';
@@ -55,6 +58,18 @@ const profilesCsv = (contatos) => {
   return [head, ...contatos.map(row)].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n';
 };
 const iso = (d) => (d ? new Date(d).toISOString() : '');
+// A template's request body as it came (a spreadsheet, JSON), or null past max.
+export function readTemplateBody(req, max = TEMPLATE_BODY_MAX) {
+  if (Number(req.headers['content-length'] || 0) > max) return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => { size += c.length; if (size <= max) chunks.push(c); else chunks.length = 0; });
+    req.once('end', () => resolve(size > max ? null : Buffer.concat(chunks)));
+    req.once('error', reject);
+    req.once('aborted', () => reject(Object.assign(new Error('request aborted'), { code: 'REQUEST_BODY_INTERRUPTED' })));
+  });
+}
 
 // What comes from the form becomes store.configurar fields; a missing field stays
 // as is. Returns {erro} if any value is invalid.
@@ -110,8 +125,10 @@ export function camposDaConfig(b = {}) {
 // events (public-support-events.mjs) = what the plugin recorded and the link clicks, as a spreadsheet
 // and as the metrics' click count.
 // testContacts (public-support-test-contacts.mjs) = who the metrics leave out, kept by the owner and area admins.
+// panel (public-support-panel.mjs) = the menu items and templates each assistant's panel shows; a route of
+// an item that is off answers 404, as for an assistant you cannot reach. null = every item on, no templates.
 export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available = async () => true,
-  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], metricSegment = async () => null, contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null }) {
+  prompts = null, defaultTexts = async () => ({ written: '', spoken: null }), avatar = null, areas = null, metrics = null, metricCards = async () => [], metricHide = async () => [], metricSegment = async () => null, contactProfiles = async () => ({}), contactNames = async () => ({}), activity = null, events = null, testContacts = null, panel = null }) {
   // Wraps each route: session, no cache, request limit and no-detail error.
   const rota = (metodo, caminho, tratar) => rotas.registrar(metodo, caminho, async (req, res, url, ctx) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -129,11 +146,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (!agentId) return null;
     return areas ? areas.agentAccess(user.id, agentId) : { ownerId: user.id, role: 'owner', agentId };
   };
+  // A contact is opened under Conversations, so it answers only while that item is on.
   const contatoDoPedido = async (user, id) => {
     const c = uuid(id);
     const acc = c && (areas ? await areas.contactAccess(user.id, c) : { ownerId: user.id, role: 'owner' });
     const agentId = acc && (await store.contatoDoDono(acc.ownerId, c));
-    return agentId ? { ...acc, agentId, contatoId: c } : null;
+    return agentId && (await moduleOn({ agentId }, 'conversations')) ? { ...acc, agentId, contatoId: c } : null;
   };
   // acc = what agentAccess or contatoDoPedido resolved.
   const record = (user, acc, action, detail = null) => activity?.record({ ownerId: acc.ownerId, actorId: user.id,
@@ -157,6 +175,12 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       seen += page.length; cursor = new Date(page.at(-1).ultimaEm).toISOString();
     }
     return out;
+  };
+  // Whether any of these menu items is on for the assistant acc resolved.
+  const moduleOn = async (acc, ...modules) => {
+    if (!panel) return true;
+    const on = (await panel.items(acc.agentId)).modules;
+    return modules.some((m) => on[m]);
   };
   const pageLanguage = (url) => normalizaIdioma(url.searchParams.get('lang')) ?? defaultLanguage();
 
@@ -187,6 +211,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
           linkSites: a.link_sites, contatos: a.contatos, doNumero: a.agent_id === doNumero, role: m.role, areaId: m.areaId, areaName: m.areaName, areaTheme: m.areaTheme });
       }
     }
+    if (panel) for (const a of agentes) a.panel = await panel.page(a.agentId);
     // panelAccount: the person has only this screen (client-areas.mjs), so it offers no way back to the app.
     return send(res, 200, { agentes, signupOpen: !(await available()), avatarAvailable, panelAccount: !!(await areas?.isPanelAccount(user.id)) });
   });
@@ -199,6 +224,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     if (acc.role !== 'owner' && (acc.role !== 'admin' || Object.keys(b).some((k) => !CLIENT_ADMIN_FIELDS.has(k)))) return forbidden(res);
     const { campos, erro } = camposDaConfig(b);
     if (acc.role !== 'owner') {
+      if (!(await moduleOn(acc, 'agent'))) return naoAchei(res);
       if (erro) return send(res, 400, { error: erro });
       const r = await store.configurar(agentId, acc.ownerId, campos);
       if (!r) return naoAchei(res);
@@ -239,7 +265,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // ?segment= (segmentOf) for only one side of the plugin's filter.
   rota('GET', '/api/publico/contatos', async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agente'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'dashboard', 'conversations'))) return naoAchei(res);
     const antes = url.searchParams.get('antes');
     const quando = antes && !Number.isNaN(Date.parse(antes)) ? new Date(antes).toISOString() : null;
     const language = pageLanguage(url), keep = profileFilter(url);
@@ -257,7 +283,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // first, and how many contacts the plugin names (the "named only" box shows when any).
   rota('GET', PROFILES_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'conversations'))) return naoAchei(res);
     const fields = new Map();
     let named = 0;
     for (const c of await scanProfiles(acc, pageLanguage(url))) {
@@ -275,7 +301,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // personal data, so only for who can edit, and it goes in the access log.
   rota('GET', PROFILES_CSV_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'conversations'))) return naoAchei(res);
     if (!canEdit(acc.role)) return forbidden(res);
     const keep = profileFilter(url);
     const contatos = await scanProfiles(acc, pageLanguage(url), keep ? { keep } : {});
@@ -349,7 +375,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
       return send(res, 200, { cards: await metricCards({ agentId: c.agentId, contactId: c.contatoId, language }) });
     }
     const acc = await agentAccess(user, url.searchParams.get('agent'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'dashboard'))) return naoAchei(res);
     const range = metricRange(url.searchParams, todayIn());
     if (!range) return badPeriod(res);
     const { offer, segment } = await segmentOf(acc, url, language);
@@ -366,7 +392,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // The period's events as a spreadsheet, for everyone who sees the metrics.
   if (events && metrics) rota('GET', EVENTS_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'dashboard'))) return naoAchei(res);
     const range = metricRange(url.searchParams, todayIn());
     if (!range) return badPeriod(res);
     const { segment } = await segmentOf(acc, url, pageLanguage(url));
@@ -390,7 +416,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   // and an area admin see and change them (they are people's addresses).
   if (testContacts) rota('GET', TEST_CONTACTS_PATH, async ({ res, url, user }) => {
     const acc = await agentAccess(user, url.searchParams.get('agent'));
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'agent'))) return naoAchei(res);
     if (!canEdit(acc.role)) return forbidden(res);
     const entries = await testContacts.list(acc.agentId, acc.ownerId);
     return entries ? send(res, 200, { entries }) : naoAchei(res);
@@ -398,7 +424,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
   if (testContacts) rota('POST', TEST_CONTACTS_PATH, async ({ req, res, user }) => {
     const b = await readBody(req);
     const acc = await agentAccess(user, b.agentId);
-    if (!acc) return naoAchei(res);
+    if (!acc || !(await moduleOn(acc, 'agent'))) return naoAchei(res);
     if (!canEdit(acc.role)) return forbidden(res);
     if (!Array.isArray(b.entries) || b.entries.length > TEST_CONTACTS_MAX) return send(res, 400, { error: 'server.public_test_contacts_too_many' });
     const entries = b.entries.map(normalizeTestContact);
@@ -408,6 +434,29 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     await record(user, acc, 'test_contacts_changed', { count: r.entries.length });
     return send(res, 200, { ok: true, ...r });
   });
+
+  // A template's requests: GET for every role, POST (an upload, a check that costs) for the owner and
+  // area admins, logged. Off, not fitting this assistant, or its module off = 404. The template's
+  // api({method, query, body, agentId, ownerId, role, language, user}) → {status?, body}: body is the JSON
+  // answer, status 200 or a 4xx; a throw is a 500 with no detail. user = {id, name, email} of who asks
+  // (e.g. to record who sent an upload).
+  for (const method of ['GET', 'POST']) {
+    if (panel) rota(method, TEMPLATE_API_PATH, async ({ req, res, url, user }) => {
+      const tpl = panel.template(url.searchParams.get('template'));
+      const acc = tpl?.api && (await agentAccess(user, url.searchParams.get('agent')));
+      if (!acc) return naoAchei(res);
+      const on = await panel.items(acc.agentId);
+      if (!on.templates[tpl.id] || !on.modules[tpl.module]) return naoAchei(res);
+      if (method === 'POST' && !canEdit(acc.role)) return forbidden(res);
+      const body = method === 'POST' ? await readTemplateBody(req) : null;
+      if (method === 'POST' && !body) return send(res, 413, { error: 'too_large', max: TEMPLATE_BODY_MAX });
+      if (method === 'POST') await record(user, acc, 'template_used', { template: tpl.id });
+      const r = await tpl.api({ method, query: url.searchParams, body, agentId: acc.agentId, ownerId: acc.ownerId, role: acc.role, language: pageLanguage(url),
+        user: { id: user.id, name: user.name ?? null, email: user.email ?? null } });
+      const status = Number.isInteger(r?.status) && r.status >= 200 && r.status < 500 ? r.status : 200;
+      return send(res, status, r?.body ?? null);
+    });
+  }
 
   if (prompts) registerAgentTexts();
 
@@ -423,7 +472,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
 
     rota('GET', AGENT_TEXTS_PATH, async ({ res, url, user }) => {
       const acc = await agentAccess(user, url.searchParams.get('agent'));
-      if (!acc) return notFound(res);
+      if (!acc || !(await moduleOn(acc, 'agent'))) return notFound(res);
       const { agentId } = acc;
       const d = await defaultTexts(agentId);
       const written = await textState(prompts, key(agentId, 'written', acc), d.written);
@@ -437,7 +486,7 @@ export function registrarRotasDoDono({ rotas, store, webStore, send, fail, tooMa
     // { forbidden } = a role that only reads.
     const editable = async (b, user) => {
       const acc = await agentAccess(user, b?.agentId);
-      if (!acc || !AGENT_PROMPT_KINDS.includes(b.kind)) return null;
+      if (!acc || !AGENT_PROMPT_KINDS.includes(b.kind) || !(await moduleOn(acc, 'agent'))) return null;
       if (!canEdit(acc.role)) return { forbidden: true };
       const fallback = fallbackOf(await defaultTexts(acc.agentId), b.kind);
       return fallback == null ? null : { agentId: acc.agentId, kind: b.kind, fallback, acc };

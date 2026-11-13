@@ -23,6 +23,7 @@ import { clientAreaSchema, createClientAreaStore, registerClientAreaRoutes, pane
 import { activitySchema, createActivityStore } from './client-area-activity.mjs';
 import { createEventsStore, measureLinks, registerClickRoute } from './public-support-events.mjs';
 import { createTestContactsStore } from './public-support-test-contacts.mjs';
+import { panelSchema, createPanelStore } from './public-support-panel.mjs';
 
 export const PUBLIC_WEB_PATHS = new Set([...WEB_PATHS, ...PUBLIC_AVATAR_PATHS]);
 
@@ -30,7 +31,7 @@ const LIMPEZA_MS = 6 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Joins the initDb schema list.
-export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); await pool.query(clientAreaSchema(S)); await pool.query(activitySchema(S)); };
+export const esquemaDoAtendimento = async ({ pool, S }) => { await pool.query(esquemaPublico(S)); await pool.query(promptSchema(S)); await pool.query(clientAreaSchema(S)); await pool.query(activitySchema(S)); await pool.query(panelSchema(S)); };
 
 export const agentePublicoDoNumero = (valor = process.env.PUBLIC_SUPPORT_AGENT) => {
   const id = String(valor || '').trim();
@@ -52,7 +53,7 @@ const agoraPorExtenso = () => new Date().toLocaleString('pt-BR', {
 // limpezaMs, the first one a minute after boot; limpezaMs=0 turns it off.
 // With routes (+ send/fail/tooManyRequests/clientIp from the server), registers the owner's view
 // (public-support-owner.mjs), the public web channel (public-web.mjs), the
-// admin's installation text (public-support-admin.mjs) and the owner's client areas
+// admin's installation text and panel menu (public-support-admin.mjs) and the owner's client areas
 // (client-areas.mjs), which also open the owner's view to an area's members. avatar = what
 // registerAvatar returns, for the face on the web channel (public-avatar.mjs).
 // accountScope (account-scope.mjs) holds the panel accounts a client area
@@ -74,6 +75,7 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
   const prompts = createPromptStore(pool, { S });
   const areas = createClientAreaStore(pool, { S });
   const activity = createActivityStore(pool, { S, log });
+  const panel = createPanelStore(pool, { S, log, catalog: () => (typeof ganchos?.panelCatalog === 'function' ? ganchos.panelCatalog() : null) });
   // A failed check counts as open. Logged once each time it turns support off.
   let warned = false;
   const available = async () => {
@@ -112,12 +114,12 @@ export function criarAtendimentoDoServidor({ pool, S, makeProvider, recordUsages
       send, fail, tooManyRequests, clientIp, available });
     registrarRotasDoDono({ rotas, store, webStore, send, fail, tooManyRequests, agenteDoNumero, available, prompts, defaultTexts: atendimento.defaultTexts, avatar: face || null, areas: clientAreas ? areas : null,
       metrics: createMetricsStore(pool, { S }), metricCards: atendimento.metricCards, metricHide: atendimento.metricHide, metricSegment: atendimento.metricSegment, contactProfiles: atendimento.contactProfiles,
-      contactNames: atendimento.contactNames, activity, events, testContacts: createTestContactsStore(pool, { S }) });
+      contactNames: atendimento.contactNames, activity, events, testContacts: createTestContactsStore(pool, { S }), panel });
     if (clientAreas) registerClientAreaRoutes({ rotas, areas, send, fail, tooManyRequests, publicBase, log, activity });
     accountScope?.register(panelScope(areas));
     registerClickRoute({ rotas, events, send, log });
     registerPublicWebRoutes({ rotas, webStore, turno: atendimento.turno, send, fail, tooManyRequests, clientIp, available, afterTurn: face ? face.afterTurn : null });
-    if (enabled) registerPublicSupportAdmin({ rotas, prompts });
+    if (enabled) registerPublicSupportAdmin({ rotas, prompts, panel });
   }
   return {
     store, webStore, prompts, areas, events, limpar,
