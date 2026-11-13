@@ -30,11 +30,12 @@ const validScript = (s) => typeof s === 'string' && /^\/[^/\\][^\\?#]*\.js$/.tes
 // The plugin's panelCatalog() hook (public-support.mjs) → {modules, templates}, keeping
 // only the entries that are well formed; each one dropped goes to the log.
 //  modules: [{id, label}]: new menu items, after the core's.
-//  templates: [{id, module, label, script, agentIds?, api?}]: a piece of a module's view.
+//  templates: [{id, module, label, script, agentIds?, api?, wide?}]: a piece of a module's view.
 //   module is a core module or one of the plugin's; agentIds lists the only assistants it
 //   fits (one client's), without it, it fits every assistant; script is the file that draws
 //   it (window.publicSupportTemplates, see public-support.html); api(ctx) answers its
-//   requests (TEMPLATE_API_PATH in public-support-owner.mjs).
+//   requests (TEMPLATE_API_PATH in public-support-owner.mjs); wide: true lets the view use the
+//   whole window width (wide tables) while it is open.
 export function readPanelCatalog(raw, log = console) {
   const drop = (what, x) => { log.warn?.(`[public-support] panel ${what} ignored: ${String(x?.id ?? '?').slice(0, 40)}`); return false; };
   const modules = [], templates = [], ids = new Set(['settings', ...PANEL_MODULES]);
@@ -49,7 +50,7 @@ export function readPanelCatalog(raw, log = console) {
       || (agentIds !== null && !(Array.isArray(agentIds) && agentIds.every((a) => typeof a === 'string')))
       || (x.api != null && typeof x.api !== 'function')) { drop('template', x); continue; }
     tplIds.add(x.id);
-    templates.push({ id: x.id, module: x.module, label: x.label, script: x.script, agentIds: agentIds?.length ? agentIds : null, api: x.api ?? null });
+    templates.push({ id: x.id, module: x.module, label: x.label, script: x.script, agentIds: agentIds?.length ? agentIds : null, api: x.api ?? null, wide: x.wide === true });
   }
   return { modules, templates };
 }
@@ -92,12 +93,12 @@ export function createPanelStore(pool, { S = 'mtr_harness', catalog = () => null
     },
 
     // What the page draws for one assistant: items() plus the plugin's modules that are on
-    // (custom: [{id, label}]) and the templates that are on (mounts: [{id, module, label, script}]),
+    // (custom: [{id, label}]) and the templates that are on (mounts: [{id, module, label, script, wide?}]),
     // each inside a module that is on.
     async page(agentId) {
       const on = await this.items(agentId);
       return { ...on, custom: cat().modules.filter((m) => on.modules[m.id]),
-        mounts: cat().templates.filter((x) => on.templates[x.id] && on.modules[x.module]).map(({ id, module, label, script }) => ({ id, module, label, script })) };
+        mounts: cat().templates.filter((x) => on.templates[x.id] && on.modules[x.module]).map(({ id, module, label, script, wide }) => ({ id, module, label, script, ...(wide ? { wide } : {}) })) };
     },
 
     // → false when the assistant has no public settings or the item is not in the

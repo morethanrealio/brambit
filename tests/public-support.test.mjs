@@ -921,7 +921,7 @@ test('panel template route: off or not fitting = 404, viewer cannot send, body c
   const warned = [];
   const panel = createPanelStore(pool, { log: { warn: (m) => warned.push(m) }, catalog: () => ({
     modules: [{ id: 'prices', label: 'Prices' }, { id: 'settings', label: 'x' }],
-    templates: [{ id: 'check', module: 'prices', label: 'Check', script: '/varejo/check.js', agentIds: [ag], api },
+    templates: [{ id: 'check', module: 'prices', label: 'Check', script: '/varejo/check.js', agentIds: [ag], api, wide: true },
       { id: 'far', module: 'prices', label: 'Far', script: 'https://example.com/x.js' }, { id: 'lost', module: 'nowhere', label: 'Lost', script: '/x.js' }] }) });
   assert.deepEqual([panel.modules().at(-1).id, panel.catalog().map((x) => x.id), warned.length], ['prices', ['check'], 3]);
   const logged = [];
@@ -953,7 +953,7 @@ test('panel template route: off or not fitting = 404, viewer cannot send, body c
   const res = { setHeader() {} };
   await rotas.atender(Object.assign(Readable.from([]), { method: 'GET' }), res, new URL('http://x/api/publico/agentes'), { currentUser: async () => ({ id: dono }) });
   const page = res.json.agentes.find((a) => a.agentId === ag).panel;
-  assert.deepEqual([page.custom, page.mounts], [[{ id: 'prices', label: 'Prices' }], [{ id: 'check', module: 'prices', label: 'Check', script: '/varejo/check.js' }]]);
+  assert.deepEqual([page.custom, page.mounts], [[{ id: 'prices', label: 'Prices' }], [{ id: 'check', module: 'prices', label: 'Check', script: '/varejo/check.js', wide: true }]]);
 });
 
 // An assistant's texts on /public-support: only its owner, and spoken only where the plugin has a voice text.

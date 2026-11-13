@@ -31,6 +31,7 @@
   .side .foot{margin-top:auto;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line2);padding-top:12px;}
   .main{min-width:0;padding:30px 32px 60px;}
   .main .in{max-width:1180px;margin:0 auto;}
+  .main .in:has(> [data-wide]:not(.off)){max-width:none;}
   @media (max-width:760px){.shell{grid-template-columns:1fr;grid-template-rows:auto 1fr;}.side{position:static;height:auto;gap:12px;border-right:0;border-bottom:1px solid var(--line);}
     .nav{flex-direction:row;flex-wrap:wrap;}.nav button,.nav a{width:auto;}.side .foot{margin-top:0;flex-direction:row;flex-wrap:wrap;}.main{padding:22px 16px 48px;}}
   .inline{display:flex;gap:8px;}
@@ -533,6 +534,7 @@
   // window.publicSupportTemplates[id] = { mount: function(el, ctx){...} }. ctx.api({query, method,
   // body, type}) calls the template's server side (TEMPLATE_API_PATH) and resolves to its JSON.
   // A core item with a template drops its "soon" note.
+  // A wide template (wide: true) lifts the page's max width while its view is open.
   var TEMPLATE_API = '/api/public-support/template', templateScripts = {};
   function labelOf(l){
     if (!l || typeof l === 'string') return l || '';
@@ -579,7 +581,7 @@
       var soon = document.querySelector('[data-view="' + m + '"] .soon'); if (soon) soon.classList.toggle('hidden', has);
     });
     mounts().forEach(function(x){
-      var box = el('div', 'card off'); box.dataset.viewPanel = x.module; box.dataset.template = x.id; box.setAttribute('data-plugin', '');
+      var box = el('div', 'card off'); box.dataset.viewPanel = x.module; box.dataset.template = x.id; box.setAttribute('data-plugin', ''); if (x.wide) box.setAttribute('data-wide', '');
       main.appendChild(box);
       loadScript(x.script).then(function(){
         var tpl = window.publicSupportTemplates && window.publicSupportTemplates[x.id];
