@@ -578,10 +578,10 @@
     ['crm', 'whatsapp'].forEach(function(m){
       var has = mounts().some(function(x){ return x.module === m; });
       $(m + 'Card').classList.toggle('hidden', has);
-      var soon = document.querySelector('[data-view="' + m + '"] .soon'); if (soon) soon.classList.toggle('hidden', has);
+      var item = document.querySelector('[data-view="' + m + '"]'), soon = item && item.querySelector('.soon'); if (soon) soon.classList.toggle('hidden', has);
     });
     mounts().forEach(function(x){
-      var box = el('div', 'card off'); box.dataset.viewPanel = x.module; box.dataset.template = x.id; box.setAttribute('data-plugin', ''); if (x.wide) box.setAttribute('data-wide', '');
+      var box = el('div', 'card'); box.classList.add('off'); box.dataset.viewPanel = x.module; box.dataset.template = x.id; box.setAttribute('data-plugin', ''); if (x.wide) box.setAttribute('data-wide', '');
       main.appendChild(box);
       loadScript(x.script).then(function(){
         var tpl = window.publicSupportTemplates && window.publicSupportTemplates[x.id];
