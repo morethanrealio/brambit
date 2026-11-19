@@ -24,7 +24,7 @@ export function gruposAbertosNoHistory(history) {
 // Opens one group: runs its populate() and marks it loaded. Returns the names of the
 // tools it added (empty when a 'grupo' agent's allow-list drops them all). Throws
 // what populate() throws, and then the group stays closed.
-export function abrirGrupo(registry, deferredGroups, loadedGroups, grupo) {
+export function openGroup(registry, deferredGroups, loadedGroups, grupo) {
   const before = new Set(registry.map.keys());
   deferredGroups[grupo].populate();
   loadedGroups.add(grupo);
@@ -42,22 +42,22 @@ export function abrirGrupo(registry, deferredGroups, loadedGroups, grupo) {
 // The core asks keepsStepText() before run(), so both look the name up first.
 // Only while abrir_ferramentas is in the registry: a turn that prunes it (onboarding,
 // curation routine) keeps its groups closed, as the model could not open them either.
-export function abrirGruposSobDemanda(registry, deferredGroups, loadedGroups) {
-  const tentados = new Set();
-  const garantir = (name) => {
-    if (typeof name !== 'string' || registry.map.has(name) || tentados.has(name)) return;
+export function openGroupsOnDemand(registry, deferredGroups, loadedGroups) {
+  const tried = new Set();
+  const ensure = (name) => {
+    if (typeof name !== 'string' || registry.map.has(name) || tried.has(name)) return;
     if (!registry.map.has('abrir_ferramentas')) return;
-    tentados.add(name);
+    tried.add(name);
     for (const grupo of Object.keys(deferredGroups)) {
       if (loadedGroups.has(grupo)) continue;
-      try { abrirGrupo(registry, deferredGroups, loadedGroups, grupo); }
-      catch (e) { console.error('[abrir grupo sozinho]', grupo, e?.message ?? e); continue; }
-      if (registry.map.has(name)) { console.log(`[abrir grupo sozinho] "${grupo}" aberto para ${name}`); return; }
+      try { openGroup(registry, deferredGroups, loadedGroups, grupo); }
+      catch (e) { console.error('[open group on demand]', grupo, e?.message ?? e); continue; }
+      if (registry.map.has(name)) { console.log(`[open group on demand] "${grupo}" opened for ${name}`); return; }
     }
   };
-  for (const metodo of ['keepsStepText', 'providerFallbackSafe', 'run']) {
-    const original = registry[metodo].bind(registry);
-    registry[metodo] = (name, ...rest) => { garantir(name); return original(name, ...rest); };
+  for (const method of ['keepsStepText', 'providerFallbackSafe', 'run']) {
+    const original = registry[method].bind(registry);
+    registry[method] = (name, ...rest) => { ensure(name); return original(name, ...rest); };
   }
   return registry;
 }

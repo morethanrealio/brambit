@@ -105,6 +105,17 @@ wins and the local one stays as an older version. An `.xlsm` (macros) is never
 linked nor synced. The merge's real test needs a local Python with openpyxl
 (`SHEET_PY`) and is skipped without one.
 
+## Deferred tool groups
+
+Rare suites (`cofre`, `espacos`, `skills`, `codigo`) stay out of a turn's
+registry until opened with `abrir_ferramentas`; the opening logic lives in
+`web/deferred-tool-groups.mjs`. A group opened in an earlier turn reopens from
+the history, and a call to a tool of a closed group opens the group by itself
+(compaction may drop the opening but keep the call), so the tool runs through its
+normal path and a write still stops at the confirmation card. A turn that prunes
+`abrir_ferramentas` from its registry (onboarding, curation routines) keeps every
+group closed.
+
 ## Checks CI runs on every pull request
 
 - `web/server.mjs` and `web/db.mjs` may only shrink

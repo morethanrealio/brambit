@@ -1185,7 +1185,7 @@ import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForT
 import { codingTools } from './coding.mjs';
 import { makeCodarTool, makeConstruirAppTool } from './coding-subagent.mjs';
 import { projectTools } from './projects.mjs';
-import { gruposAbertosNoHistory, abrirGrupo, abrirGruposSobDemanda } from './deferred-tool-groups.mjs';
+import { gruposAbertosNoHistory, openGroup, openGroupsOnDemand } from './deferred-tool-groups.mjs';
 import { hostingTools, newAppQuotaBlock, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
 import { ctl as appsCtl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
 import { verifyTotp } from './totp.mjs';
@@ -3272,7 +3272,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const g = deferredGroups[grupo];
       if (!g) return `Grupo desconhecido "${grupo}". Disponíveis: ${Object.keys(deferredGroups).join(', ')}.`;
       if (loadedGroups.has(grupo)) return `O grupo "${grupo}" já está aberto; use as ferramentas dele normalmente.`;
-      let added; try { added = abrirGrupo(registry, deferredGroups, loadedGroups, grupo); } catch (e) { return `Falha ao abrir o grupo "${grupo}": ${e?.message ?? e}`; }
+      let added; try { added = openGroup(registry, deferredGroups, loadedGroups, grupo); } catch (e) { return `Falha ao abrir o grupo "${grupo}": ${e?.message ?? e}`; }
       // On a 'grupo' agent the allow-list may drop the whole group.
       if (!added.length && agentCategory === 'grupo') return `No tool from the "${grupo}" group is enabled for this assistant.`;
       return `Ferramentas do grupo "${grupo}" carregadas e disponíveis agora: ${added.join(', ')}. Chame a que precisar no próximo passo. (Ações de escrita seguem pedindo confirmação como sempre.)`;
@@ -4884,10 +4884,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // loses the belief along with it, so the two stay consistent.
   for (const grupo of gruposAbertosNoHistory(thread.history)) {
     if (loadedGroups.has(grupo) || !deferredGroups[grupo]) continue;
-    try { abrirGrupo(registry, deferredGroups, loadedGroups, grupo); } catch (e) { console.error('[reabrir grupo]', grupo, e?.message ?? e); }
+    try { openGroup(registry, deferredGroups, loadedGroups, grupo); } catch (e) { console.error('[reabrir grupo]', grupo, e?.message ?? e); }
   }
   // And a group whose opening compaction ate opens by itself when its tool is called.
-  abrirGruposSobDemanda(registry, deferredGroups, loadedGroups);
+  openGroupsOnDemand(registry, deferredGroups, loadedGroups);
   // Sandbox -> Drive bridge: uploads a FILE (binary) the agent generated in the
   // sandbox (PDF, image, spreadsheet) to the user's Google Drive. The text tool
   // (drive_upload) doesn't work for binary. Only when the user has given Drive write

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ToolRegistry } from '../core-proto/core.mjs';
-import { abrirGruposSobDemanda, gruposAbertosNoHistory } from '../web/deferred-tool-groups.mjs';
+import { openGroupsOnDemand, gruposAbertosNoHistory } from '../web/deferred-tool-groups.mjs';
 
 const tool = (name, run = async () => `ran ${name}`) => ({ name, description: name, parameters: { type: 'object' }, run });
 
@@ -15,7 +15,7 @@ function turno() {
     cofre: { populate: () => { populated.push('cofre'); registry.add(tool('splitwise_add_expense')).add(tool('notion_search')); } },
     espacos: { populate: () => { populated.push('espacos'); registry.add(tool('criar_espaco')); } },
   };
-  abrirGruposSobDemanda(registry, deferredGroups, loadedGroups);
+  openGroupsOnDemand(registry, deferredGroups, loadedGroups);
   return { registry, loadedGroups, populated };
 }
 
