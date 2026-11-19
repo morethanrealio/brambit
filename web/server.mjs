@@ -1185,6 +1185,7 @@ import { runnerOnline, runnerPoll, runnerResult, runnerStatus, runnerContextForT
 import { codingTools } from './coding.mjs';
 import { makeCodarTool, makeConstruirAppTool } from './coding-subagent.mjs';
 import { projectTools } from './projects.mjs';
+import { gruposAbertosNoHistory, openGroup, openGroupsOnDemand } from './deferred-tool-groups.mjs';
 import { hostingTools, newAppQuotaBlock, configurarPermissoes, replicateApp, deleteAppForUser, lembrarAppAtual, reconcileAppAccess, reconciliarCotasDeDisco } from './hosting.mjs';
 import { ctl as appsCtl, hostingEnabled, dominioDosApps, urlDoApp } from './appshost.mjs';
 import { verifyTotp } from './totp.mjs';
@@ -1543,22 +1544,6 @@ const ONBOARD_TOOLS = new Set([
 // anything, and writing is where the 2026-09-01 A/B measured line loss. On first
 // contact the write STAYS: there the page is empty, there's nothing to lose.
 const REFRESH_TOOLS = new Set([...ONBOARD_TOOLS].filter((n) => !/^memoria_(anotar|escrever)$/.test(n)));
-
-// Groups from `abrir_ferramentas` already opened in PREVIOUS turns of this thread.
-// Reads the CALL persisted in history (toolCalls), not the result text: the
-// `grupo` argument is the data, the returned sentence is just prose. Whoever consumes this
-// uses it to reopen the group in the new turn's registry (see buildRegistry).
-function gruposAbertosNoHistory(history) {
-  const out = new Set();
-  for (const m of Array.isArray(history) ? history : []) {
-    for (const c of Array.isArray(m?.toolCalls) ? m.toolCalls : []) {
-      if (c?.name !== 'abrir_ferramentas') continue;
-      const g = typeof c?.args?.grupo === 'string' ? c.args.grupo.trim() : '';
-      if (g) out.add(g);
-    }
-  }
-  return out;
-}
 
 // Returns the decrypted secret for the user's connection to a service, or null if
 // there is none. Matches by provider (case-insensitive) and simple credential kind.
@@ -3287,10 +3272,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       const g = deferredGroups[grupo];
       if (!g) return `Grupo desconhecido "${grupo}". Disponíveis: ${Object.keys(deferredGroups).join(', ')}.`;
       if (loadedGroups.has(grupo)) return `O grupo "${grupo}" já está aberto; use as ferramentas dele normalmente.`;
-      const before = new Set(registry.map.keys());
-      try { g.populate(); } catch (e) { return `Falha ao abrir o grupo "${grupo}": ${e?.message ?? e}`; }
-      loadedGroups.add(grupo);
-      const added = [...registry.map.keys()].filter((n) => !before.has(n));
+      let added; try { added = openGroup(registry, deferredGroups, loadedGroups, grupo); } catch (e) { return `Falha ao abrir o grupo "${grupo}": ${e?.message ?? e}`; }
       // On a 'grupo' agent the allow-list may drop the whole group.
       if (!added.length && agentCategory === 'grupo') return `No tool from the "${grupo}" group is enabled for this assistant.`;
       return `Ferramentas do grupo "${grupo}" carregadas e disponíveis agora: ${added.join(', ')}. Chame a que precisar no próximo passo. (Ações de escrita seguem pedindo confirmação como sempre.)`;
@@ -4902,9 +4884,10 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // loses the belief along with it, so the two stay consistent.
   for (const grupo of gruposAbertosNoHistory(thread.history)) {
     if (loadedGroups.has(grupo) || !deferredGroups[grupo]) continue;
-    try { deferredGroups[grupo].populate(); loadedGroups.add(grupo); }
-    catch (e) { console.error('[reabrir grupo]', grupo, e?.message ?? e); }
+    try { openGroup(registry, deferredGroups, loadedGroups, grupo); } catch (e) { console.error('[reabrir grupo]', grupo, e?.message ?? e); }
   }
+  // And a group whose opening compaction ate opens by itself when its tool is called.
+  openGroupsOnDemand(registry, deferredGroups, loadedGroups);
   // Sandbox -> Drive bridge: uploads a FILE (binary) the agent generated in the
   // sandbox (PDF, image, spreadsheet) to the user's Google Drive. The text tool
   // (drive_upload) doesn't work for binary. Only when the user has given Drive write
