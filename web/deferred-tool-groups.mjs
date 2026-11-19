@@ -40,10 +40,13 @@ export function abrirGrupo(registry, deferredGroups, loadedGroups, grupo) {
 // in order until the name shows up; the tool then runs through its normal path, so a
 // write still stops at the confirmation card. A name no group has keeps the error.
 // The core asks keepsStepText() before run(), so both look the name up first.
+// Only while abrir_ferramentas is in the registry: a turn that prunes it (onboarding,
+// curation routine) keeps its groups closed, as the model could not open them either.
 export function abrirGruposSobDemanda(registry, deferredGroups, loadedGroups) {
   const tentados = new Set();
   const garantir = (name) => {
     if (typeof name !== 'string' || registry.map.has(name) || tentados.has(name)) return;
+    if (!registry.map.has('abrir_ferramentas')) return;
     tentados.add(name);
     for (const grupo of Object.keys(deferredGroups)) {
       if (loadedGroups.has(grupo)) continue;

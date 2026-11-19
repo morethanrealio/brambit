@@ -39,6 +39,13 @@ test('a name no group has keeps the error and does not reopen groups on every ca
   assert.deepEqual(populated, ['cofre', 'espacos']);
 });
 
+test('a turn that pruned abrir_ferramentas keeps its groups closed', async () => {
+  const { registry, populated } = turno();
+  registry.map.delete('abrir_ferramentas');
+  assert.match(await registry.run('splitwise_add_expense', {}), /tool desconhecida/);
+  assert.deepEqual(populated, []);
+});
+
 test('a known tool does not open anything', async () => {
   const { registry, populated } = turno();
   await registry.run('abrir_ferramentas', {});
