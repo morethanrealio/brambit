@@ -87,6 +87,13 @@ export function createPanelStore(pool, { S = 'mtr_harness', catalog = () => null
       return rows.map((r) => ({ id: r.id, name: r.name ?? '', owner: r.owner ?? '', ...effective(r.id, items.filter((i) => i.agent_id === r.id)) }));
     },
 
+    // The account that owns a public assistant not deleted yet, or null (not public, deleted or unknown).
+    async owner(agentId) {
+      const { rows } = await pool.query(`SELECT a.user_id FROM ${S}.public_agents p JOIN ${S}.agents a ON a.id = p.agent_id
+        WHERE p.agent_id = $1 AND a.archived_at IS NULL`, [agentId]);
+      return rows[0]?.user_id ?? null;
+    },
+
     // One assistant's panel → {modules, templates}, each {name: on}.
     async items(agentId) {
       return effective(agentId, await rowsOf([agentId]));

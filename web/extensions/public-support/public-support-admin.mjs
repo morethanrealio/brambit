@@ -2,7 +2,8 @@
 // public assistant of this installation follows (INSTALLATION_PROMPT_DEFAULT in
 // public-support.mjs, edits and history in public-support-prompts.mjs); and, with
 // panel, which menu items and templates each assistant's panel shows
-// (public-support-panel.mjs). Only the
+// (public-support-panel.mjs); and deleting a public assistant of any account here.
+// Only the
 // administrator (ADMIN_EMAIL) reaches these routes; anyone else gets a 404, and
 // so does everyone when public support is off for the installation.
 import { readBody } from '../../http-body.mjs';
@@ -13,11 +14,15 @@ import { PROMPT_MAX, asEdit, textState } from './public-support-prompts.mjs';
 
 export const INSTALLATION_PROMPT_PATH = '/api/admin/public-support/installation-prompt';
 export const PANEL_ITEMS_PATH = '/api/admin/public-support/panel';
+export const AGENT_DELETE_PATH = '/api/admin/public-support/agent/delete';
+
+// The core's delete (db.mjs archiveAgent), loaded only when used.
+const archiveAgent = async (id, userId) => (await import('../../db.mjs')).archiveAgent(id, userId);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const reply = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 
-export function registerPublicSupportAdmin({ rotas, prompts, panel = null, defaultText = INSTALLATION_PROMPT_DEFAULT }) {
+export function registerPublicSupportAdmin({ rotas, prompts, panel = null, defaultText = INSTALLATION_PROMPT_DEFAULT, archive = archiveAgent, log = console }) {
   const key = (user) => ({ kind: 'installation', userId: user.id });
   const route = (method, path, handle) => rotas.registrar(method, path, async (req, res, url, ctx) => {
     const user = await adminUser(ctx);
@@ -54,5 +59,19 @@ export function registerPublicSupportAdmin({ rotas, prompts, panel = null, defau
     if (!UUID.test(String(body?.agentId ?? ''))) return reply(res, 400, { error: 'bad_request' });
     if (!(await panel.set(body.agentId, body.kind, body.item, body.enabled))) return reply(res, 400, { error: 'bad_request' });
     return reply(res, 200, await panel.items(body.agentId));
+  });
+
+  // { agentId } → deletes a public assistant of any account, the same delete its owner has
+  // (archiveAgent): it leaves every channel and the panel, its routines stop and the history
+  // stays. A personal assistant is not reachable here: only one with public settings.
+  route('POST', AGENT_DELETE_PATH, async ({ req, res, user }) => {
+    const body = await readBody(req).catch(() => null);
+    if (!UUID.test(String(body?.agentId ?? ''))) return reply(res, 400, { error: 'bad_request' });
+    const owner = await panel.owner(body.agentId);
+    if (!owner) return reply(res, 404, { error: 'not_found' });
+    const { archived } = await archive(body.agentId, owner);
+    if (!archived) return reply(res, 404, { error: 'not_found' });
+    log.log?.(`[public-support-admin] assistant ${body.agentId} deleted by the installation admin ${user.id}`);
+    return reply(res, 200, { deleted: true, name: archived.name });
   });
 }

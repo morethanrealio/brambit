@@ -2388,6 +2388,8 @@
     "panel_menu_help": "Qué ítems del menú y qué plantillas muestra el panel de cada asistente, para su dueño y para los miembros del área del cliente. Configuración siempre aparece. El cambio se aplica la próxima vez que se abre el panel.",
     "panel_menu_assistant": "Asistente",
     "panel_menu_none": "Todavía ningún asistente atiende al público.",
+    "panel_delete": "Eliminar asistente",
+    "panel_delete_confirm": "¿Eliminar {name}? Sale del sitio, de WhatsApp y del panel, y sus rutinas se detienen. El historial de conversaciones queda guardado.",
     "panel_menu_modules": "Ítems del menú",
     "panel_menu_templates": "Plantillas",
     "panel_menu_no_templates": "Todavía no hay plantillas para este asistente.",

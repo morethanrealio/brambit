@@ -2388,6 +2388,8 @@
     "panel_menu_help": "Which menu items and templates each assistant's panel shows, for its owner and for the client area's members. Settings is always there. A change applies the next time the panel opens.",
     "panel_menu_assistant": "Assistant",
     "panel_menu_none": "No assistant answers the public yet.",
+    "panel_delete": "Delete assistant",
+    "panel_delete_confirm": "Delete {name}? It leaves the website, WhatsApp and the panel, and its routines stop. Its conversation history stays stored.",
     "panel_menu_modules": "Menu items",
     "panel_menu_templates": "Templates",
     "panel_menu_no_templates": "No template for this assistant yet.",

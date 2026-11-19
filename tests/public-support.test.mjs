@@ -16,7 +16,7 @@ const { createPublicWebStore, registerPublicWebRoutes, contactFromToken } = awai
 const { criarAtendimentoDoServidor, esquemaDoAtendimento, clientAreasOn } = await import('../web/extensions/public-support/public-support-channel.mjs');
 const { markVoiceInput } = await import('../web/voice-input.mjs');
 const { createPromptStore, PROMPT_VERSIONS_KEPT } = await import('../web/extensions/public-support/public-support-prompts.mjs');
-const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH, PANEL_ITEMS_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
+const { registerPublicSupportAdmin, INSTALLATION_PROMPT_PATH, PANEL_ITEMS_PATH, AGENT_DELETE_PATH } = await import('../web/extensions/public-support/public-support-admin.mjs');
 const { panelSchema, createPanelStore, PANEL_MODULES, TEMPLATE_BODY_MAX } = await import('../web/extensions/public-support/public-support-panel.mjs');
 
 const SEGREDO = 'SEGREDO-DO-DONO-' + randomUUID();
@@ -875,6 +875,41 @@ test('panel menu on the admin screen: admin only, today\'s menu by default, one 
   await store.configurar(ag2, dono, { ativo: false });
   assert.equal((await ask(boss, 'POST', { agentId: ag2, kind: 'template', item: 'mine', enabled: true })).code, 400);
   assert.deepEqual(await panel.items(ag2), { modules: allOn, templates: { all: false } });
+});
+
+// The installation admin deletes a public assistant of any account with its owner's delete; a personal one is out of reach.
+test('admin deletes a public assistant: admin only, public only, through the owner\'s delete', async (t) => {
+  const { pool, store, dono, outro, ag, ag2 } = await montar(t);
+  await pool.query('ALTER TABLE mtr_harness.users ADD COLUMN name text');
+  await pool.query(panelSchema('mtr_harness'));
+  await store.configurar(ag, dono, { ativo: true });
+  const saved = process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL = 'boss@example.com';
+  t.after(() => { if (saved === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = saved; });
+  const calls = [];
+  const archive = async (id, userId) => {
+    calls.push([id, userId]);
+    const { rows } = await pool.query('UPDATE mtr_harness.agents SET archived_at = now() WHERE id = $1 AND user_id = $2 AND archived_at IS NULL RETURNING name', [id, userId]);
+    return { archived: rows[0] ?? null };
+  };
+  const rotas = createRotas();
+  const panel = createPanelStore(pool);
+  registerPublicSupportAdmin({ rotas, prompts: createPromptStore(pool), panel, archive, log: {} });
+  const ask = async (user, body) => {
+    const req = Readable.from([JSON.stringify(body)]); req.method = 'POST';
+    const res = { code: 0, out: '', writeHead(c) { this.code = c; }, end(x) { this.out += x ?? ''; } };
+    const answered = await rotas.atender(req, res, new URL('http://x' + AGENT_DELETE_PATH), { currentUser: async () => user });
+    return { answered, code: res.code, json: res.out ? JSON.parse(res.out) : null };
+  };
+  const boss = { id: outro, email: 'boss@example.com' };
+  assert.equal((await ask({ id: dono, email: 'owner@example.com' }, { agentId: ag })).answered, false);
+  assert.equal((await ask(boss, { agentId: 'x' })).code, 400);
+  assert.equal((await ask(boss, { agentId: ag2 })).code, 404); // personal assistant: no public settings
+  assert.deepEqual(calls, []);
+  assert.deepEqual((await ask(boss, { agentId: ag })).json, { deleted: true, name: 'Lia' });
+  assert.deepEqual(calls, [[ag, dono]]); // the owner's account, not the admin's
+  assert.deepEqual(await panel.agents(), []);
+  assert.equal((await ask(boss, { agentId: ag })).code, 404);
 });
 
 // A menu item the admin turned off is gone from the server too, not only from the menu.
