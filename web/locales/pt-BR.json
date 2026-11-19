@@ -2388,6 +2388,8 @@
     "panel_menu_help": "Quais itens do menu e quais templates o painel de cada assistente mostra, para o dono e para os membros da área do cliente. Configurações aparece sempre. A mudança vale na próxima vez que o painel abrir.",
     "panel_menu_assistant": "Assistente",
     "panel_menu_none": "Nenhum assistente atende o público ainda.",
+    "panel_delete": "Apagar assistente",
+    "panel_delete_confirm": "Apagar {name}? Ele sai do site, do WhatsApp e do painel, e as rotinas dele param. O histórico de conversas fica guardado.",
     "panel_menu_modules": "Itens do menu",
     "panel_menu_templates": "Templates",
     "panel_menu_no_templates": "Nenhum template para este assistente ainda.",

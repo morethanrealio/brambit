@@ -239,6 +239,7 @@ function loadInstallationText() {
 // Which menu items and templates each public assistant's panel shows
 // (extensions/public-support/public-support-panel.mjs). Each box saves on its own.
 const PANEL_ITEMS = '/api/admin/public-support/panel';
+const AGENT_DELETE = '/api/admin/public-support/agent/delete';
 
 async function loadPanelMenu() {
   let data;
@@ -289,7 +290,24 @@ async function loadPanelMenu() {
   const pick = el('select', { 'aria-label': t('panel_menu_assistant') },
     ...data.agents.map((a) => el('option', { value: a.id }, a.owner ? `${a.name} (${a.owner})` : a.name)));
   pick.addEventListener('change', () => render(data.agents.find((a) => a.id === pick.value)));
-  body.replaceChildren(el('div', { class: 'actions' }, el('span', {}, t('panel_menu_assistant')), pick, result), items);
+  // Deletes the chosen assistant (the owner's delete: history stays), then draws the list again.
+  const remove = el('button', { type: 'button', class: 'ghost' }, t('panel_delete'));
+  remove.addEventListener('click', async () => {
+    const agent = data.agents.find((a) => a.id === pick.value);
+    if (!agent || !confirm(t('panel_delete_confirm', { name: agent.name }))) return;
+    remove.disabled = true;
+    result.className = 'result';
+    result.textContent = t('saving');
+    try {
+      await textCall(AGENT_DELETE, { agentId: agent.id });
+      loadPanelMenu();
+    } catch {
+      result.className = 'result err';
+      result.textContent = t('error_generic');
+      remove.disabled = false;
+    }
+  });
+  body.replaceChildren(el('div', { class: 'actions' }, el('span', {}, t('panel_menu_assistant')), pick, remove, result), items);
   render(data.agents[0]);
 }
 
