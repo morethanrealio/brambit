@@ -35,7 +35,7 @@ export function openGroup(registry, deferredGroups, loadedGroups, grupo) {
 // group (splitwise_add_expense) and lose the abrir_ferramentas that opened it: the
 // model then calls the tool directly, the group is closed, the core answered
 // `ERRO: tool desconhecida` and the receipt told the user the service could not be
-// confirmed (Luffy/Splitwise, 2026-10-24, 2026-11-07 and 2026-11-19). Now, when the
+// confirmed (seen with splitwise_add_expense in production). Now, when the
 // core asks the registry about a name it does not have, the closed groups are opened
 // in order until the name shows up; the tool then runs through its normal path, so a
 // write still stops at the confirmation card. A name no group has keeps the error.
