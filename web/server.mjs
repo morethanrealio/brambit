@@ -6291,7 +6291,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if(veto) return {ok:false,error:veto};
     return blocked || activeRegistry.run(name,args);
   } };
-  const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg });
+  const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg, shownReceipt: opts.confirmationReceipt });
   // Everything the tools returned in THIS turn. It's the origin proof for the
   // grounding guard: data that doesn't show up here (nor in the owner's own words) wasn't
   // looked up by anyone. Also included is what the platform delivered to the model

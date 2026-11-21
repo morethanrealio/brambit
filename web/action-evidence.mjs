@@ -436,7 +436,9 @@ function reportedByUser(task, ownerText) {
   // Only explicit reporting, never interpret "marque como feito" as a fact.
   return String(ownerText || '').split(/[\n.!?]/).some(s => /^(?:eu\s+)?(?:ja\s+)?(?:conclui|finalizei|fiz|enviei)\s+/.test(norm(s)) && norm(s).includes(key));
 }
-export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {}) {
+// shownReceipt: the receipt of the action the owner just confirmed, already
+// delivered on top of this reply (confirmation-continuation.mjs).
+export function createActionJournal({ language = 'pt-BR', ownerText = '', shownReceipt = '' } = {}) {
   const entries = [];
   let checkedItems = new Set();
   const itemKey = s => String(s || '').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[*_`]/g,'').replace(/\s+/g,' ').trim();
@@ -648,7 +650,12 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       if (!final && !proposalShown && quiet.length) return renderActions(quiet, language);
       // Removing the claim can never turn into silence.
       // With a card below, the response is no longer silent.
-      return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? w.unknown : '');
+      // Right after a confirmed action the reply is not silent either: its
+      // receipt is on top. The model restating that action has no receipt in
+      // THIS turn (the proof stayed with the confirmation) and is removed; what
+      // remains is the receipt itself, not a doubt printed under it.
+      const receiptAbove = typeof shownReceipt === 'string' ? shownReceipt.trim() : '';
+      return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? receiptAbove || w.unknown : '');
     },
     get entries() { return entries.map(e => ({...e})); },
     observeDroppedClaims(fn) { onDroppedClaim = fn; }, // TEMPORARY: diagnosticoDosFiltros port

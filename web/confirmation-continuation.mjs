@@ -33,17 +33,21 @@ export async function settleConfirmedTurn({ resolution, agent, thread, userId, m
   if (over) return receiptOnly();
   let cont;
   try {
-    cont = await runTurn(agent, thread, userId, message, { ...opts, confirmationManaged: true, confirmationNote: CONTINUATION_NOTE });
+    cont = await runTurn(agent, thread, userId, message, { ...opts, confirmationManaged: true, confirmationNote: CONTINUATION_NOTE, confirmationReceipt: resolution.text });
   } catch {
     return receiptOnly();
   }
   // The continuation turn already persisted itself (user's confirmation + the
   // model's reply). The receipt is delivered to the owner here and stays durable
   // in the confirmation record; we don't persist it a second time.
+  // The turn knows the receipt (opts.confirmationReceipt) and falls back to it
+  // when all the model wrote was an unproven restatement of the action; a reply
+  // that already carries the receipt is not prefixed with it again.
   const extra = typeof cont?.text === 'string' ? cont.text.trim() : '';
+  const shown = String(resolution.text || '').trim();
   return {
     ...cont,
-    text: extra ? `${resolution.text}\n\n${cont.text}` : resolution.text,
+    text: !extra ? resolution.text : shown && extra.includes(shown) ? cont.text : `${resolution.text}\n\n${cont.text}`,
     attachments: [...(resolution.attachments || []), ...(cont?.attachments || [])],
   };
 }
