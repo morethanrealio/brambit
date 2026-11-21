@@ -107,6 +107,23 @@ test('a proven memory save keeps the model words and adds no receipt', () => {
   cut('Anotei que seu aniversário é 12/03.');
 });
 
+// The memory answers "Já estava anotado" when the information is already on a
+// page. Read as "unknown", it appended the doubt sentence to a reply whose other
+// step had finished, with nothing the person could act on.
+test('a note the memory already had is a stable success, not a doubt', () => {
+  for (const [name, out] of [['memoria_anotar', 'Já estava anotado (add:ja_existe(perfil)). Nada a gravar.'],
+    ['memoria_atualizar', 'Já estava anotado (definir:ja_existe(perfil)).']]) {
+    const j = createActionJournal();
+    reminder(j); j.toolResult({ name, args:{ pagina:'perfil' } }, out);
+    assert.doesNotMatch(j.finish('Pronto.'), /Não consegui confirmar/);
+    assert.equal(j.entries[1].state, 'already_saved');
+  }
+  // Any other answer that wrote nothing still proves nothing.
+  const j = createActionJournal();
+  reminder(j); j.toolResult({ name:'memoria_anotar', args:{ pagina:'perfil' } }, 'Nada gravado (corrigir:ancora).');
+  assert.match(j.finish('Pronto.'), /Não consegui confirmar/);
+});
+
 // A failed editar_lista whose retry succeeds in the same turn must not leave the
 // "A ação não foi concluída" receipt next to the success. The failure receipt's
 // subject is the list id (args.lista) and the success receipt's is the list

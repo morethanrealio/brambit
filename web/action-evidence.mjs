@@ -241,6 +241,11 @@ function receipt(name, args, out) {
       if (name === 'memoria_atualizar' && /^Nada gravado \(definir:igual\)\.$/.test(raw)) {
         return { ...base, state:'already_saved', id:`memory:${page}` };
       }
+      // The reconciliation found the same information already on a page and
+      // wrote nothing: the same stable success, worded differently by the tool.
+      if ((name === 'memoria_anotar' || name === 'memoria_atualizar') && /^Já estava anotado \(/.test(raw)) {
+        return { ...base, state:'already_saved', id:`memory:${page}` };
+      }
       if (name === 'memoria_escrever' && /^Página "[^"]+" salva\.$/.test(raw)) {
         return { ...base, state:'saved', id:`memory:${page}` };
       }
