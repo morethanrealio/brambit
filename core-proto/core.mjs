@@ -190,6 +190,11 @@ function pruneTurnBlobs(messages, turnStart, providerName, consumedUpTo = Infini
  * Tool registry. The defs become JSON Schema (the same shape MCP uses),
  * so plugging in an MCP server later is trivial: just map its tools here.
  */
+// The two answers run() gives BEFORE running a tool (unknown name, missing
+// required parameter): nothing was attempted, so an action receipt has nothing
+// to doubt. "ERRO ao executar" is not here: that tool ran and may have written.
+const REFUSED = ['ERRO: tool desconhecida "', 'ERRO: falta o parâmetro obrigatório "', 'ERRO: faltam os parâmetros obrigatórios "'];
+export const refusedBeforeRunning = out => typeof out === 'string' && REFUSED.some(p => out.startsWith(p));
 export class ToolRegistry {
   constructor() { this.map = new Map(); }
   add(tool) { this.map.set(tool.name, tool); return this; }

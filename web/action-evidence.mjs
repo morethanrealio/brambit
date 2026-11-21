@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { marca } from './brand.mjs';
 import { connectorActionReceipt } from './connector-action-evidence.mjs';
 import { recurrenceLabel } from './calendar-recurrence.mjs';
+import { refusedBeforeRunning } from '../core-proto/core.mjs';
 // Action receipts are created by the code at the execution boundary, never by
 // the model nor from a plain tool_call. No network, retries or storage.
 const NATIVE = new Set(['criar_lembrete', 'enviar_mensagem', 'enviar_sugestao_time', 'agendar_execucao_rotina', 'executar_rotina_agora', 'memoria_anotar', 'memoria_atualizar', 'memoria_escrever']);
@@ -457,6 +458,11 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
         if (toolChars < 400000) { const o = foldText(typeof out === 'string' ? out : JSON.stringify(out) || ''); toolText.push(o); toolChars += o.length; }
         return out;
       }
+      // The registry refused the call before running it: the action certainly
+      // did not happen. Kept as 'unknown' it printed "I could not confirm" next
+      // to the retry that worked, and for a connector it replaced the reply with
+      // "check the service" about a service that was never called.
+      if (e.state === 'unknown' && refusedBeforeRunning(out)) Object.assign(e, { state:'failed', notExecuted:true });
       e.ref = `${turnKey}:${entries.length + 1}`;
       entries.push(e);
       if (quietOnSuccess(e)) return JSON.stringify({ result:out, action_evidence:e });
@@ -487,8 +493,11 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       const redoneLater = (e, i) => entries.slice(i + 1).some(l => l.family === e.family
         && !['unknown','failed','pending'].includes(l.state)
         && ((e.family === 'list' && e.id && sameList(e, l)) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
+      // A call refused before running whose corrected call (same tool) went
+      // through later in the turn, or now waits on the confirmation card.
+      const corrected = (e, i) => e.notExecuted && entries.slice(i + 1).some(l => l.tool === e.tool && !['unknown','failed'].includes(l.state));
       const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
-        && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i))));
+        && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i) || corrected(e, i))));
       // Only the server enables this after validating the routine's exact
       // protocol. A coverage/error notice appended after validation prevents
       // silence. The evidence stays in entries for persistence and metrics.
