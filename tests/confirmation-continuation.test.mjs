@@ -77,3 +77,29 @@ test('an empty continuation reply delivers just the receipt', async () => {
     opts: { kind: 'chat' }, runTurn: h.runTurn, saveTurn: h.saveTurn, creditStatus: h.creditStatus });
   assert.equal(out.text, receipt.text);
 });
+
+// Production, 2026-11: the action ran, its receipt was shown, and the
+// continuation turn restated it ("Mensagem enviada ao colega ✅"). That turn has
+// no receipt of its own (the proof stays with the confirmation), so the true
+// sentence was cut and replaced by "Não consegui confirmar isso agora" right
+// under the receipt. The turn now gets the receipt and falls back to it.
+test('a continuation that only restates the confirmed action leaves the receipt, not a doubt', async () => {
+  const { createActionJournal } = await import('../web/action-evidence.mjs');
+  const shown = 'Mensagem enviada. Destino: colega.', restated = 'Mensagem enviada ao colega ✅';
+  const doubt = /Não consegui confirmar/;
+  assert.equal(createActionJournal({ shownReceipt: shown }).finish(restated), shown);
+  assert.match(createActionJournal().finish(restated), doubt, 'any other turn keeps the doubt');
+  // Text that claims nothing is kept, and a new action that failed in the
+  // continuation still shows.
+  const next = 'Amanhã cedo eu te lembro de conferir.';
+  assert.equal(createActionJournal({ shownReceipt: shown }).finish(next), next);
+  const j = createActionJournal({ shownReceipt: shown });
+  j.toolResult({ name: 'criar_lembrete', args: { mensagem: 'conferir' } }, JSON.stringify({ ok: false }));
+  assert.match(j.finish('Lembrete agendado para amanhã.'), /não foi concluída/);
+
+  // The turn receives the receipt, and a reply that fell back to it is not doubled.
+  const h = harness({ runTurn: async (_a, _t, _u, _m, opts) => ({ text: opts.confirmationReceipt, attachments: [] }) });
+  const out = await settleConfirmedTurn({ resolution: receipt, agent, thread: baseThread(), userId: 'u', message: 'go',
+    opts: { kind: 'chat' }, runTurn: h.runTurn, saveTurn: h.saveTurn, creditStatus: h.creditStatus });
+  assert.equal(out.text, receipt.text);
+});

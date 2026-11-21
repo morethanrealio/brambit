@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { marca } from './brand.mjs';
 import { connectorActionReceipt } from './connector-action-evidence.mjs';
 import { recurrenceLabel } from './calendar-recurrence.mjs';
+import { refusedBeforeRunning } from '../core-proto/core.mjs';
 // Action receipts are created by the code at the execution boundary, never by
 // the model nor from a plain tool_call. No network, retries or storage.
 const NATIVE = new Set(['criar_lembrete', 'enviar_mensagem', 'enviar_sugestao_time', 'agendar_execucao_rotina', 'executar_rotina_agora', 'memoria_anotar', 'memoria_atualizar', 'memoria_escrever']);
@@ -178,6 +179,10 @@ function renderTrackerRead(e, lang, t, n) {
     : lang==='es' ? `Anotado en "${t}"${quando.es}: ${n} ${n === 1 ? 'registro' : 'registros'}${total}.`
     : `Consta em "${t}"${quando.pt}: ${n} ${n === 1 ? 'lançamento' : 'lançamentos'}${total}.`;
 }
+// List ids are uuids. The model sometimes copies one wrong: the head stays and
+// the tail comes out garbled, so no list has that id. Such a reference names
+// nothing the person would recognize and never goes into the visible receipt.
+const idLike = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(v.trim());
 function receipt(name, args, out) {
   if (name === 'consultar_evento') return trackerReadReceipt(out);
   if (TRACKER[name]) return trackerReceipt(name, out);
@@ -186,9 +191,10 @@ function receipt(name, args, out) {
     state:d?.ok===true && validId(d.id) && typeof d.canal==='string' ? (name==='editar_lembrete'?'updated':'deleted') : d?.ok===false ? 'failed' : 'unknown',
     id:d?.id,target:d?.canal,at:d?.quando_legivel || d?.quando,inFlight:d?.inFlight===true,
     ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
-  if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
+  if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || (idLike(args?.lista) ? '' : args?.lista) || args?.nome || '',
     state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',
-    id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined)};
+    id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined),
+    ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
   // A spreadsheet edit (editar_planilha) only vouches for itself when the
   // sub-agent actually saved the new file: the tool wraps that success in an
   // action_evidence envelope (state 'saved' + the saved asset id). A failure,
@@ -233,6 +239,11 @@ function receipt(name, args, out) {
         return { ...base, state:'already_saved', id:`memory:${page}` };
       }
       if (name === 'memoria_atualizar' && /^Nada gravado \(definir:igual\)\.$/.test(raw)) {
+        return { ...base, state:'already_saved', id:`memory:${page}` };
+      }
+      // The reconciliation found the same information already on a page and
+      // wrote nothing: the same stable success, worded differently by the tool.
+      if ((name === 'memoria_anotar' || name === 'memoria_atualizar') && /^Já estava anotado \(/.test(raw)) {
         return { ...base, state:'already_saved', id:`memory:${page}` };
       }
       if (name === 'memoria_escrever' && /^Página "[^"]+" salva\.$/.test(raw)) {
@@ -430,14 +441,16 @@ function reportedByUser(task, ownerText) {
   // Only explicit reporting, never interpret "marque como feito" as a fact.
   return String(ownerText || '').split(/[\n.!?]/).some(s => /^(?:eu\s+)?(?:ja\s+)?(?:conclui|finalizei|fiz|enviei)\s+/.test(norm(s)) && norm(s).includes(key));
 }
-export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {}) {
+// shownReceipt: the receipt of the action the owner just confirmed, already
+// delivered on top of this reply (confirmation-continuation.mjs).
+export function createActionJournal({ language = 'pt-BR', ownerText = '', shownReceipt = '' } = {}) {
   const entries = [];
   let checkedItems = new Set();
   const itemKey = s => String(s || '').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[*_`]/g,'').replace(/\s+/g,' ').trim();
   const turnKey = randomUUID();
   const toolText = [];
   let toolChars = 0;
-  let onDroppedClaim = null; // TEMPORARY: diagnosticoDosFiltros port
+  let onDroppedClaim = null, onHiddenAttempt = null; // TEMPORARY: diagnosticoDosFiltros port
   const w = words[languageKey(language)];
   return {
     // Core calls AFTER execution, once, also on the salvage/interjection paths.
@@ -452,6 +465,11 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
         if (toolChars < 400000) { const o = foldText(typeof out === 'string' ? out : JSON.stringify(out) || ''); toolText.push(o); toolChars += o.length; }
         return out;
       }
+      // The registry refused the call before running it: the action certainly
+      // did not happen. Kept as 'unknown' it printed "I could not confirm" next
+      // to the retry that worked, and for a connector it replaced the reply with
+      // "check the service" about a service that was never called.
+      if (e.state === 'unknown' && refusedBeforeRunning(out)) Object.assign(e, { state:'failed', notExecuted:true });
       e.ref = `${turnKey}:${entries.length + 1}`;
       entries.push(e);
       if (quietOnSuccess(e)) return JSON.stringify({ result:out, action_evidence:e });
@@ -474,11 +492,25 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // success receipt's is the list name, so subject matching never joined the
       // two and the "A ação não foi concluída" line leaked next to the success.
       // Both receipts now carry the list id, so match list redos by id.
+      // A miscopied id (see idLike) found no list, so nothing ran anywhere; when
+      // it shares the first block with the list saved later, that save is its
+      // redo. A list that was not found under any other reference stays visible.
+      const sameList = (e, l) => l.id === e.id || (e.code === 'NOT_FOUND' && idLike(e.id) && idLike(l.id)
+        && l.id.trim().slice(0, 8).toLowerCase() === e.id.trim().slice(0, 8).toLowerCase());
       const redoneLater = (e, i) => entries.slice(i + 1).some(l => l.family === e.family
         && !['unknown','failed','pending'].includes(l.state)
-        && ((e.family === 'list' && e.id && l.id === e.id) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
-      const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
-        && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i))));
+        && ((e.family === 'list' && e.id && sameList(e, l)) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
+      // A call refused before running whose corrected call (same tool) went
+      // through later in the turn, or now waits on the confirmation card.
+      const corrected = (e, i) => e.notExecuted && entries.slice(i + 1).some(l => l.tool === e.tool && !['unknown','failed'].includes(l.state));
+      const hiddenBy = (e, i) => e.state !== 'failed' ? '' : recreated(e, i) ? 'recreated' : redoneLater(e, i) ? 'redone' : corrected(e, i) ? 'corrected' : '';
+      const visible = entries.map((e, i) => ({ e, rule:hiddenBy(e, i) })).filter(v => !(proposalShown && v.e.state === 'pending'));
+      const shown = visible.filter(v => !v.rule).map(v => v.e);
+      // TEMPORARY: diagnosticoDosFiltros port. A hidden attempt leaves no trace in
+      // the reply, so each one is reported with the rule that hid it (receipts
+      // with and without it): a real failure hidden by mistake can be found later.
+      if (shown.length < visible.length) onHiddenAttempt?.(renderActions(visible.map(v => v.e), language), renderActions(shown, language),
+        { hidden:visible.filter(v => v.rule).map(v => ({ ...v.e, rule:v.rule })), receipts:entries.map(e => ({ ...e })) });
       // Only the server enables this after validating the routine's exact
       // protocol. A coverage/error notice appended after validation prevents
       // silence. The evidence stays in entries for persistence and metrics.
@@ -629,9 +661,15 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       if (!final && !proposalShown && quiet.length) return renderActions(quiet, language);
       // Removing the claim can never turn into silence.
       // With a card below, the response is no longer silent.
-      return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? w.unknown : '');
+      // Right after a confirmed action the reply is not silent either: its
+      // receipt is on top. The model restating that action has no receipt in
+      // THIS turn (the proof stayed with the confirmation) and is removed; what
+      // remains is the receipt itself, not a doubt printed under it.
+      const receiptAbove = typeof shownReceipt === 'string' ? shownReceipt.trim() : '';
+      return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? receiptAbove || w.unknown : '');
     },
     get entries() { return entries.map(e => ({...e})); },
-    observeDroppedClaims(fn) { onDroppedClaim = fn; }, // TEMPORARY: diagnosticoDosFiltros port
+    observeDroppedClaims(fn) { onDroppedClaim = fn; return this; }, // TEMPORARY: diagnosticoDosFiltros port
+    observeHiddenAttempts(fn) { onHiddenAttempt = fn; return this; }, // TEMPORARY: diagnosticoDosFiltros port
   };
 }

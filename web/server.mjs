@@ -6291,7 +6291,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
     if(veto) return {ok:false,error:veto};
     return blocked || activeRegistry.run(name,args);
   } };
-  const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg });
+  const actionJournal = createActionJournal({ language: idiomaResposta, ownerText: kind === 'routine' ? '' : savedUserMsg, shownReceipt: opts.confirmationReceipt });
   // Everything the tools returned in THIS turn. It's the origin proof for the
   // grounding guard: data that doesn't show up here (nor in the owner's own words) wasn't
   // looked up by anyone. Also included is what the platform delivered to the model
@@ -6317,7 +6317,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // TEMPORARY (2026-09-30): before/after the 5 verification filters.
   const diag = pecas.diagnosticoDosFiltros?.({ userId, agentId: agent.id, threadId: thread.id, origem: kind === 'routine' ? 'rotina' : 'chat', toolCounts, saidas: groundingPool, estado: () => ({ buscaNativa }) }) ?? { removidas: [], corte() {} };
   searchCoverage.observeEmailGuard((a, d) => diag.corte('email_cobertura', a, d));
-  actionJournal.observeDroppedClaims((frase, familia) => diag.removidas.push({ frase, familia }));
+  actionJournal.observeDroppedClaims((frase, familia) => diag.removidas.push({ frase, familia })).observeHiddenAttempts((a, d, extra) => diag.corte('hidden_attempt', a, d, extra));
   let approvedResult=null;
   if(approvedAppContinuation){
     approvedResult=activeRegistry.map?.has('construir_app')?await activeRegistry.run('construir_app',approvedAppContinuation):{ok:false,error:'A política atual não permite executar esta tarefa.'};
