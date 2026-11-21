@@ -50,6 +50,27 @@ test('a refused call that was never corrected does not become success or doubt',
   assert.match(g.finish('Pronto.'), new RegExp(failedPt));
 });
 
+// Hiding leaves nothing in the reply, so the diagnostics observer is the only
+// place where a failure hidden by mistake can still be found.
+test('every hidden attempt is reported with the rule that hid it, and nothing else is', async () => {
+  const seen = [], watch = () => createActionJournal().observeHiddenAttempts((before, after, extra) => seen.push({ before, after, ...extra }));
+  const saved = JSON.stringify({ ok:true, lista:{ id:'l-1', nome:'Mercado', versao:3, itens:[] } });
+  const corrected = async j => {
+    await call(j, 'editar_lista', { lista:'Mercado' });
+    await call(j, 'editar_lista', { lista:'Mercado', versao:2 }, saved);
+    return j.finish('Pronto.');
+  };
+  assert.equal(await corrected(watch()), await corrected(createActionJournal())); // observing changes nothing
+  assert.deepEqual(seen.map(s => s.hidden.map(h => [h.tool, h.state, Boolean(h.rule)])), [[['editar_lista', 'failed', true]]]);
+  assert.ok(seen[0].before.includes(failedPt) && !seen[0].after.includes(failedPt) && seen[0].receipts.length === 2, JSON.stringify(seen[0]));
+  // A failure that stays visible, or a turn with no failure, reports nothing.
+  const g = watch();
+  await call(g, 'splitwise_add_expense', dinner);
+  await call(g, 'editar_lista', { lista:'Mercado', versao:2 }, saved);
+  g.finish('Pronto.');
+  assert.equal(seen.length, 1);
+});
+
 test('a tool that threw while running stays uncertain, even next to a later success', async () => {
   const j = createActionJournal();
   await call(j, 'splitwise_add_expense', { ...dinner, cost:'120.00' }); // ran and threw: it may have written

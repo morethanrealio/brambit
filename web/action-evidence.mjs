@@ -450,7 +450,7 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '', shownR
   const turnKey = randomUUID();
   const toolText = [];
   let toolChars = 0;
-  let onDroppedClaim = null; // TEMPORARY: diagnosticoDosFiltros port
+  let onDroppedClaim = null, onHiddenAttempt = null; // TEMPORARY: diagnosticoDosFiltros port
   const w = words[languageKey(language)];
   return {
     // Core calls AFTER execution, once, also on the salvage/interjection paths.
@@ -503,8 +503,14 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '', shownR
       // A call refused before running whose corrected call (same tool) went
       // through later in the turn, or now waits on the confirmation card.
       const corrected = (e, i) => e.notExecuted && entries.slice(i + 1).some(l => l.tool === e.tool && !['unknown','failed'].includes(l.state));
-      const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
-        && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i) || corrected(e, i))));
+      const hiddenBy = (e, i) => e.state !== 'failed' ? '' : recreated(e, i) ? 'recreated' : redoneLater(e, i) ? 'redone' : corrected(e, i) ? 'corrected' : '';
+      const visible = entries.map((e, i) => ({ e, rule:hiddenBy(e, i) })).filter(v => !(proposalShown && v.e.state === 'pending'));
+      const shown = visible.filter(v => !v.rule).map(v => v.e);
+      // TEMPORARY: diagnosticoDosFiltros port. A hidden attempt leaves no trace in
+      // the reply, so each one is reported with the rule that hid it (receipts
+      // with and without it): a real failure hidden by mistake can be found later.
+      if (shown.length < visible.length) onHiddenAttempt?.(renderActions(visible.map(v => v.e), language), renderActions(shown, language),
+        { hidden:visible.filter(v => v.rule).map(v => ({ ...v.e, rule:v.rule })), receipts:entries.map(e => ({ ...e })) });
       // Only the server enables this after validating the routine's exact
       // protocol. A coverage/error notice appended after validation prevents
       // silence. The evidence stays in entries for persistence and metrics.
@@ -663,6 +669,7 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '', shownR
       return final || (!proposalShown && (hadLegacyUnknown || droppedClaim) ? receiptAbove || w.unknown : '');
     },
     get entries() { return entries.map(e => ({...e})); },
-    observeDroppedClaims(fn) { onDroppedClaim = fn; }, // TEMPORARY: diagnosticoDosFiltros port
+    observeDroppedClaims(fn) { onDroppedClaim = fn; return this; }, // TEMPORARY: diagnosticoDosFiltros port
+    observeHiddenAttempts(fn) { onHiddenAttempt = fn; return this; }, // TEMPORARY: diagnosticoDosFiltros port
   };
 }
