@@ -128,3 +128,26 @@ test('a list edit failure redone successfully in the same turn is suppressed', (
     JSON.stringify({ ok:true, lista:{ id:'list-other', nome:'Mercado', versao:1, itens:[] } }));
   assert.match(g.finish(''), /não foi concluída/i);
 });
+
+// The model copied the list id wrong on the first call (same head, garbled
+// tail): no list has that id, the retry with the right id saved, and the reply
+// showed "A ação não foi concluída. Ação: <wrong id>" next to the success.
+test('a list edit sent to a miscopied id and redone on the right list is suppressed', () => {
+  const id = '11111111-aaaa-4bbb-8ccc-222222222222', miscopied = '11111111-aaaa-4b0b-9ddd-3333-444444444444';
+  const notFound = (j, lista) => j.toolResult({ name:'editar_lista', args:{ lista, versao:2 } },
+    JSON.stringify({ ok:false, code:'NOT_FOUND', error:'Lista não encontrada para esta conta.' }));
+  const saved = j => j.toolResult({ name:'editar_lista', args:{ lista:id, versao:2 } },
+    JSON.stringify({ ok:true, lista:{ id, nome:'Mercado', versao:3, itens:[] } }));
+  const j = createActionJournal();
+  notFound(j, miscopied); saved(j);
+  assert.doesNotMatch(j.finish('Pronto, atualizei a lista.'), /não foi concluída|4b0b/i);
+  // Not over-suppressed: another list that was not found (a different id, or a
+  // name) is a real failure and stays, and a raw id never shows as the action.
+  for (const other of ['99999999-dddd-4eee-8fff-000000000000', 'Feira']) {
+    const g = createActionJournal();
+    notFound(g, other); saved(g);
+    const out = g.finish('');
+    assert.match(out, /não foi concluída/i);
+    assert.doesNotMatch(out, /99999999/);
+  }
+});

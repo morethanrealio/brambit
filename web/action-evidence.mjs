@@ -178,6 +178,10 @@ function renderTrackerRead(e, lang, t, n) {
     : lang==='es' ? `Anotado en "${t}"${quando.es}: ${n} ${n === 1 ? 'registro' : 'registros'}${total}.`
     : `Consta em "${t}"${quando.pt}: ${n} ${n === 1 ? 'lançamento' : 'lançamentos'}${total}.`;
 }
+// List ids are uuids. The model sometimes copies one wrong: the head stays and
+// the tail comes out garbled, so no list has that id. Such a reference names
+// nothing the person would recognize and never goes into the visible receipt.
+const idLike = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(v.trim());
 function receipt(name, args, out) {
   if (name === 'consultar_evento') return trackerReadReceipt(out);
   if (TRACKER[name]) return trackerReceipt(name, out);
@@ -186,9 +190,10 @@ function receipt(name, args, out) {
     state:d?.ok===true && validId(d.id) && typeof d.canal==='string' ? (name==='editar_lembrete'?'updated':'deleted') : d?.ok===false ? 'failed' : 'unknown',
     id:d?.id,target:d?.canal,at:d?.quando_legivel || d?.quando,inFlight:d?.inFlight===true,
     ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
-  if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || args?.lista || args?.nome || '',
+  if (['criar_lista','editar_lista'].includes(name)) return {family:'list',tool:name,subject:d?.lista?.nome || (idLike(args?.lista) ? '' : args?.lista) || args?.nome || '',
     state:d?.ok===true && validId(d.lista?.id) && Number.isInteger(d.lista?.versao) ? 'saved' : d?.ok===false ? 'failed' : 'unknown',
-    id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined)};
+    id:d?.lista?.id ?? (typeof args?.lista === 'string' && args.lista.trim() ? args.lista : undefined),
+    ...(d?.ok===false && typeof d.code==='string' ? {code:d.code} : {})};
   // A spreadsheet edit (editar_planilha) only vouches for itself when the
   // sub-agent actually saved the new file: the tool wraps that success in an
   // action_evidence envelope (state 'saved' + the saved asset id). A failure,
@@ -474,9 +479,14 @@ export function createActionJournal({ language = 'pt-BR', ownerText = '' } = {})
       // success receipt's is the list name, so subject matching never joined the
       // two and the "A ação não foi concluída" line leaked next to the success.
       // Both receipts now carry the list id, so match list redos by id.
+      // A miscopied id (see idLike) found no list, so nothing ran anywhere; when
+      // it shares the first block with the list saved later, that save is its
+      // redo. A list that was not found under any other reference stays visible.
+      const sameList = (e, l) => l.id === e.id || (e.code === 'NOT_FOUND' && idLike(e.id) && idLike(l.id)
+        && l.id.trim().slice(0, 8).toLowerCase() === e.id.trim().slice(0, 8).toLowerCase());
       const redoneLater = (e, i) => entries.slice(i + 1).some(l => l.family === e.family
         && !['unknown','failed','pending'].includes(l.state)
-        && ((e.family === 'list' && e.id && l.id === e.id) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
+        && ((e.family === 'list' && e.id && sameList(e, l)) || (subjectKey(e) && subjectKey(l) === subjectKey(e))));
       const shown = entries.filter((e, i) => !(proposalShown && e.state === 'pending')
         && !(e.state === 'failed' && (recreated(e, i) || redoneLater(e, i))));
       // Only the server enables this after validating the routine's exact
