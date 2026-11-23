@@ -10,6 +10,12 @@
 //   MAIL_FROM=oi@exemplo.com
 //   MAIL_FROM_NAME=Acme
 //
+// SMTP with no login (a relay that knows the sender by its address, such as
+// the Google Workspace SMTP relay or a mail server on the same network):
+//   SMTP_HOST=smtp-relay.gmail.com
+//   SMTP_PORT=587
+//   MAIL_FROM=oi@exemplo.com   (SMTP_USER and SMTP_PASS left empty)
+//
 // Resend (HTTP, fallback, no dependency):
 //   RESEND_API_KEY=...
 //   MAIL_FROM=oi@exemplo.com
@@ -19,14 +25,29 @@
 
 const RESEND_API = 'https://api.resend.com/emails';
 
+// The login is optional, but never half of it: a user with no password (or the
+// reverse) is a mistake in the settings, not a relay.
 export function smtpEnabled() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.MAIL_FROM);
+  return !!(process.env.SMTP_HOST && process.env.MAIL_FROM && !process.env.SMTP_USER === !process.env.SMTP_PASS);
 }
 export function resendEnabled() {
   return !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 }
 export function mailEnabled() {
   return smtpEnabled() || resendEnabled();
+}
+
+// What nodemailer needs to reach an SMTP server (the one in the environment, or
+// the one a settings check is trying). With no login the server tells senders
+// apart by their address and by the name they give in EHLO, and the Google
+// relay refuses nodemailer's default for a machine with no domain name
+// ("[127.0.0.1]"), so the domain of `from` goes there.
+export function smtpOptions({ host, port, user, pass, from }) {
+  const number = Number(port || 465);
+  const server = { host, port: number, secure: number === 465 }; // 465 = implicit TLS; 587 = STARTTLS
+  if (user || pass) return { ...server, auth: { user, pass } };
+  const domain = String(from || '').trim().split('@').pop();
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain) ? { ...server, name: domain } : server;
 }
 
 // Builds the From header: "Assistant Name <oi@exemplo.com>".
@@ -51,18 +72,15 @@ function textToHtml(text) {
 }
 
 // Sends via SMTP (nodemailer, dynamic import so it doesn't require the dep at boot
-// when SMTP isn't configured). Used by Gmail/Workspace.
+// when SMTP isn't configured). Used by Gmail/Workspace, with or without login.
 // `attachments`: [{ filename, content: Buffer, contentType }] — same format
 // accepted by nodemailer, normalized in sendEmail before reaching here.
 async function sendViaSmtp({ to, subject, text, html, fromName, fromAddr, headers, attachments }) {
   const { default: nodemailer } = await import('nodemailer');
-  const port = Number(process.env.SMTP_PORT || 465);
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465, // 465 = implicit TLS; 587 = STARTTLS
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
+  const transporter = nodemailer.createTransport(smtpOptions({
+    host: process.env.SMTP_HOST, port: process.env.SMTP_PORT,
+    user: process.env.SMTP_USER, pass: process.env.SMTP_PASS, from: process.env.MAIL_FROM,
+  }));
   const info = await transporter.sendMail({
     from: fromHeader(fromName, fromAddr),
     to,
