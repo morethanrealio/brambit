@@ -126,6 +126,29 @@ function composeSummary(prose, ledger) {
   return `${p}\n\n${LEDGER_MARK}\n${ledger.map((l) => `- ${l}`).join('\n')}`.trim();
 }
 
+// ── Handing the summary to the assistant ──
+// The summary reaches the assistant at every turn but was written at the last
+// compaction, and the ledger lines carry no date. Said plainly here, because with
+// no caveat both read as the present.
+export function summaryForPrompt(summary) {
+  const text = (summary || '').trim();
+  if (!text) return '';
+  const lines = [
+    'Summary of what was discussed earlier (for continuity; the oldest raw turns have left the context).',
+    'It was written at an earlier point of this conversation and is not rewritten at every turn: where it disagrees with the recent turns or with a tool result, those win. For anything a tool keeps (a list, reminder, routine, calendar event, task, note, file), take from it only that the thing exists; read what is in it now from the tool before you state it or act on it.',
+  ];
+  if (splitSummary(text).ledger.length) lines.push('The lines under "USER DATA" are sentences the user wrote at some earlier point, kept word for word and with no date: they are a record, not a request for now, and a newer instruction from the user wins over them.');
+  return `${lines.join(' ')}\n${text}`;
+}
+
+// The overview of the user's other conversations is built from the first characters
+// of each conversation's summary, so it is as old as those summaries and cut short.
+export function conversationsOverviewForPrompt(digest) {
+  if (!digest) return '';
+  return 'OVERVIEW OF THE USER\'S OTHER CONVERSATIONS (context on what they have been handling with you or with their other assistants, on other channels, in recent days). It is only a summary so you have a sense of the whole; the detailed history of each one stays in that conversation. Do NOT bring this up out of nowhere; use it only when it is relevant to what they are talking about now. Each line is only the clipped start of that conversation\'s summary and may be out of date: never take from it the state of anything (what is in a list, what is pending, what was done); read that from the tool that keeps it:\n'
+    + digest;
+}
+
 // Estimates tokens for a text (cheap heuristic, no tokenizer).
 export const estTokens = (s) => Math.ceil((s || '').length / 4);
 
@@ -214,19 +237,29 @@ function splitIndex(messages, lowTokens) {
   return chosen;
 }
 
+// Instructions of the model that writes the rolling summary.
+// The summary is only rewritten at the next compaction, which can be weeks away,
+// and is read at every turn until then. A copy of what a tool keeps (the items of
+// a list, which one is open) goes on being read as current long after the tool
+// has moved on, so what a tool keeps enters as a pointer, not as a copy.
+export function summarizerSystem() {
+  return [
+    'You maintain the ROLLING SUMMARY of a conversation between a user and their personal assistant.',
+    'Goal: preserve continuity so the conversation can go on without the raw turns.',
+    'Keep: decisions made, open tasks/threads, what was being done, pending requests and mentioned facts that still matter.',
+    'CRITICAL: preserve VERBATIM every concrete piece of data the user provided — dates, times, addresses, prices, proper names (places/people/products), links and CHOICES/selections they made (e.g. "quero o restaurante X na quarta"). NEVER generalize this data into vague sentences or drop it. If they built a schedule/itinerary/list, keep each item with its day/time.',
+    'EXCEPTION, what a tool keeps: when the turns show that something was saved or changed through a tool call (a list, reminder, routine, calendar event, task, note, file), the tool is the source of truth and its content goes on changing after this summary is written. Write one line saying that it exists, its name and what it is for. Do NOT copy its items, counts, versions or ids, and do NOT say what is in it now nor which one is open, current or closed: that is read from the tool when needed. The rule about keeping each item is for data that lives only in the conversation. If the previous summary carries such a copy, reduce it to that one line too.',
+    'Do NOT repeat what is already in the long-term profile; focus on the "glue" of the conversation.',
+    `Be concise, in the language the conversation is written in, at most ~${SUMMARY_CAP() / 4 | 0} words. Return only the updated summary.`,
+  ].join('\n');
+}
+
 // Summarizes the old turns, incorporating the previous summary.
 // The prose is compressed by Flash (cap SUMMARY_CAP); the concrete-data ledger
 // is preserved VERBATIM outside the compression and accumulated across compactions.
 async function summarize(prevSummary, oldMessages, onUsage) {
   const { prose: prevProse, ledger: prevLedger } = splitSummary(prevSummary);
-  const sys = [
-    'You maintain the ROLLING SUMMARY of a conversation between a user and their personal assistant.',
-    'Goal: preserve continuity so the conversation can go on without the raw turns.',
-    'Keep: decisions made, open tasks/threads, what was being done, pending requests and mentioned facts that still matter.',
-    'CRITICAL: preserve VERBATIM every concrete piece of data the user provided — dates, times, addresses, prices, proper names (places/people/products), links and CHOICES/selections they made (e.g. "quero o restaurante X na quarta"). NEVER generalize this data into vague sentences or drop it. If they built a schedule/itinerary/list, keep each item with its day/time.',
-    'Do NOT repeat what is already in the long-term profile; focus on the "glue" of the conversation.',
-    `Be concise, in the language the conversation is written in, at most ~${SUMMARY_CAP() / 4 | 0} words. Return only the updated summary.`,
-  ].join('\n');
+  const sys = summarizerSystem();
   const body = oldMessages.map(renderMsg).join('\n');
   const prompt = `Previous summary:\n${prevProse || '(empty)'}\n\nNew turns to incorporate:\n${body}`;
   const selected=selectedDeepSeek();
