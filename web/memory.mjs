@@ -214,19 +214,29 @@ function splitIndex(messages, lowTokens) {
   return chosen;
 }
 
+// Instructions of the model that writes the rolling summary.
+// The summary is only rewritten at the next compaction, which can be weeks away,
+// and is read at every turn until then. A copy of what a tool keeps (the items of
+// a list, which one is open) goes on being read as current long after the tool
+// has moved on, so what a tool keeps enters as a pointer, not as a copy.
+export function summarizerSystem() {
+  return [
+    'You maintain the ROLLING SUMMARY of a conversation between a user and their personal assistant.',
+    'Goal: preserve continuity so the conversation can go on without the raw turns.',
+    'Keep: decisions made, open tasks/threads, what was being done, pending requests and mentioned facts that still matter.',
+    'CRITICAL: preserve VERBATIM every concrete piece of data the user provided — dates, times, addresses, prices, proper names (places/people/products), links and CHOICES/selections they made (e.g. "quero o restaurante X na quarta"). NEVER generalize this data into vague sentences or drop it. If they built a schedule/itinerary/list, keep each item with its day/time.',
+    'EXCEPTION, what a tool keeps: when the turns show that something was saved or changed through a tool call (a list, reminder, routine, calendar event, task, note, file), the tool is the source of truth and its content goes on changing after this summary is written. Write one line saying that it exists, its name and what it is for. Do NOT copy its items, counts, versions or ids, and do NOT say what is in it now nor which one is open, current or closed: that is read from the tool when needed. The rule about keeping each item is for data that lives only in the conversation. If the previous summary carries such a copy, reduce it to that one line too.',
+    'Do NOT repeat what is already in the long-term profile; focus on the "glue" of the conversation.',
+    `Be concise, in the language the conversation is written in, at most ~${SUMMARY_CAP() / 4 | 0} words. Return only the updated summary.`,
+  ].join('\n');
+}
+
 // Summarizes the old turns, incorporating the previous summary.
 // The prose is compressed by Flash (cap SUMMARY_CAP); the concrete-data ledger
 // is preserved VERBATIM outside the compression and accumulated across compactions.
 async function summarize(prevSummary, oldMessages, onUsage) {
   const { prose: prevProse, ledger: prevLedger } = splitSummary(prevSummary);
-  const sys = [
-    'You maintain the ROLLING SUMMARY of a conversation between a user and their personal assistant.',
-    'Goal: preserve continuity so the conversation can go on without the raw turns.',
-    'Keep: decisions made, open tasks/threads, what was being done, pending requests and mentioned facts that still matter.',
-    'CRITICAL: preserve VERBATIM every concrete piece of data the user provided — dates, times, addresses, prices, proper names (places/people/products), links and CHOICES/selections they made (e.g. "quero o restaurante X na quarta"). NEVER generalize this data into vague sentences or drop it. If they built a schedule/itinerary/list, keep each item with its day/time.',
-    'Do NOT repeat what is already in the long-term profile; focus on the "glue" of the conversation.',
-    `Be concise, in the language the conversation is written in, at most ~${SUMMARY_CAP() / 4 | 0} words. Return only the updated summary.`,
-  ].join('\n');
+  const sys = summarizerSystem();
   const body = oldMessages.map(renderMsg).join('\n');
   const prompt = `Previous summary:\n${prevProse || '(empty)'}\n\nNew turns to incorporate:\n${body}`;
   const selected=selectedDeepSeek();
