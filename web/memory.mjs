@@ -126,6 +126,29 @@ function composeSummary(prose, ledger) {
   return `${p}\n\n${LEDGER_MARK}\n${ledger.map((l) => `- ${l}`).join('\n')}`.trim();
 }
 
+// ── Handing the summary to the assistant ──
+// The summary reaches the assistant at every turn but was written at the last
+// compaction, and the ledger lines carry no date. Said plainly here, because with
+// no caveat both read as the present.
+export function summaryForPrompt(summary) {
+  const text = (summary || '').trim();
+  if (!text) return '';
+  const lines = [
+    'Summary of what was discussed earlier (for continuity; the oldest raw turns have left the context).',
+    'It was written at an earlier point of this conversation and is not rewritten at every turn: where it disagrees with the recent turns or with a tool result, those win. For anything a tool keeps (a list, reminder, routine, calendar event, task, note, file), take from it only that the thing exists; read what is in it now from the tool before you state it or act on it.',
+  ];
+  if (splitSummary(text).ledger.length) lines.push('The lines under "USER DATA" are sentences the user wrote at some earlier point, kept word for word and with no date: they are a record, not a request for now, and a newer instruction from the user wins over them.');
+  return `${lines.join(' ')}\n${text}`;
+}
+
+// The overview of the user's other conversations is built from the first characters
+// of each conversation's summary, so it is as old as those summaries and cut short.
+export function conversationsOverviewForPrompt(digest) {
+  if (!digest) return '';
+  return 'OVERVIEW OF THE USER\'S OTHER CONVERSATIONS (context on what they have been handling with you or with their other assistants, on other channels, in recent days). It is only a summary so you have a sense of the whole; the detailed history of each one stays in that conversation. Do NOT bring this up out of nowhere; use it only when it is relevant to what they are talking about now. Each line is only the clipped start of that conversation\'s summary and may be out of date: never take from it the state of anything (what is in a list, what is pending, what was done); read that from the tool that keeps it:\n'
+    + digest;
+}
+
 // Estimates tokens for a text (cheap heuristic, no tokenizer).
 export const estTokens = (s) => Math.ceil((s || '').length / 4);
 
