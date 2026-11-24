@@ -51,6 +51,17 @@ test('lock or new password: receipt carries the login; opening the app shows non
   assert.doesNotMatch(renderConfirmed(open, { ok: true, acesso: 'público' }), /Senha|privado/);
 });
 
+// Where the owner is not the one typing, a check still goes through the card:
+// its receipt answers the question and never says the app was locked.
+test('access check through the card: receipt gives the login or says the app is open', () => {
+  const check = { name: 'definir_acesso_sistema', args: { nome_do_sistema: 'planner' } };
+  const priv = renderConfirmed(check, { ok: true, acesso: 'privado', credenciais: { usuario: 'planner', senha: 'Xy12abCD' } });
+  assert.match(priv, /Usuário: planner\nSenha: Xy12abCD/);
+  const open = renderConfirmed(check, { ok: true, acesso: 'público' });
+  assert.match(open, /está aberto/);
+  for (const t of [priv, open]) assert.doesNotMatch(t, /trancado/);
+});
+
 test('another tool with a credentials field prints nothing', () => {
   const t = renderConfirmed({ name: 'apagar_sistema', args: { nome_do_sistema: 'z' } }, { ok: true, credenciais: { usuario: 'a', senha: 'b' } });
   assert.doesNotMatch(t, /Senha/);

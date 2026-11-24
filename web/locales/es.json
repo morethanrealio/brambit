@@ -337,7 +337,9 @@
       "request_locked": "cerrar el sistema \"{app}\" con usuario y contraseña{password}",
       "new_password": " (contraseña nueva)",
       "done_public": "El sistema \"{app}\" ahora está abierto.",
-      "done_locked": "Sistema \"{app}\" cerrado con contraseña."
+      "done_locked": "Sistema \"{app}\" cerrado con contraseña.",
+      "request_check": "consultar quién puede abrir el sistema \"{app}\" y mostrar su acceso, si lo tiene",
+      "done_check": "Acceso del sistema \"{app}\" consultado."
     },
     "remover_da_home": {
       "request": "quitar el bloque {id} de la página de inicio de tu subdominio",
@@ -832,6 +834,7 @@
       "app_login": "La app es privada; el navegador pedirá este acceso:\nUsuario: {user}\nContraseña: {password}\nPuedes compartirlo con quien quieras dar acceso.",
       "app_unlocked": "⚠️ La app se publicó, pero la plataforma todavía no pudo proteger el enlace: por ahora cualquiera con él puede abrirla.",
       "app_save_login": "Guarda este acceso ahora: la plataforma no pudo registrarlo y quizá no pueda mostrarlo de nuevo.",
+      "app_open": "La app está abierta: cualquiera con el enlace entra, sin contraseña.",
       "how_to_confirm_reaction": "Para confirmar, responde “adelante” o reacciona con 👍.",
       "how_to_confirm_text": "Para confirmar, responde “adelante” por texto.",
       "address_check": "REVISA LA DIRECCIÓN: {mismatches}",

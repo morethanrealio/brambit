@@ -337,7 +337,9 @@
       "request_locked": "trancar o sistema \"{app}\" com login e senha{password}",
       "new_password": " (gerando senha nova)",
       "done_public": "Sistema \"{app}\" agora é aberto.",
-      "done_locked": "Sistema \"{app}\" trancado com senha."
+      "done_locked": "Sistema \"{app}\" trancado com senha.",
+      "request_check": "consultar quem pode abrir o sistema \"{app}\" e mostrar o login, se ele tiver",
+      "done_check": "Acesso do sistema \"{app}\" consultado."
     },
     "remover_da_home": {
       "request": "tirar o bloco {id} da página inicial do seu subdomínio",
@@ -832,6 +834,7 @@
       "app_login": "O app é privado; o navegador vai pedir este login:\nUsuário: {user}\nSenha: {password}\nVocê pode passar pra quem quiser dar acesso.",
       "app_unlocked": "⚠️ O app foi publicado, mas a plataforma ainda não conseguiu trancar o link: por enquanto qualquer pessoa com ele abre o app.",
       "app_save_login": "Guarde este login agora: a plataforma não conseguiu registrá-lo e pode não conseguir mostrar de novo.",
+      "app_open": "O app está aberto: qualquer pessoa com o link entra, sem senha.",
       "how_to_confirm_reaction": "Para confirmar, responda “pode” ou reaja com 👍.",
       "how_to_confirm_text": "Para confirmar, responda “pode” por texto.",
       "address_check": "CONFIRA O ENDEREÇO: {mismatches}",

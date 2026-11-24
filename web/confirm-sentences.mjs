@@ -265,11 +265,14 @@ const SENTENCES = {
     request: (a, c) => c.t('definir_visibilidade_sistema.request', { app: c.q(a.nome_do_sistema), visibility: c.q(a.visibilidade, 'common.unknown') }),
     done: (a, c) => c.t('definir_visibilidade_sistema.done', { app: c.q(a.nome_do_sistema), visibility: c.q(a.visibilidade) }),
   },
+  // Without `acesso` the tool only reads the current state: the card and the
+  // receipt must not say the app was locked.
   definir_acesso_sistema: {
-    request: (a, c) => (a.acesso === 'publico'
+    request: (a, c) => (!a.acesso ? c.t('definir_acesso_sistema.request_check', { app: c.q(a.nome_do_sistema) })
+      : a.acesso === 'publico'
       ? c.t('definir_acesso_sistema.request_public', { app: c.q(a.nome_do_sistema) })
       : c.t('definir_acesso_sistema.request_locked', { app: c.q(a.nome_do_sistema), password: c.clause(a.nova_senha, 'definir_acesso_sistema.new_password') })),
-    done: (a, c) => c.t(`definir_acesso_sistema.${a.acesso === 'publico' ? 'done_public' : 'done_locked'}`, { app: c.q(a.nome_do_sistema) }),
+    done: (a, c) => c.t(`definir_acesso_sistema.${!a.acesso ? 'done_check' : a.acesso === 'publico' ? 'done_public' : 'done_locked'}`, { app: c.q(a.nome_do_sistema) }),
   },
   remover_da_home: {
     request: (a, c) => c.t('remover_da_home.request', { id: c.q(a.id, 'common.unknown') }),
