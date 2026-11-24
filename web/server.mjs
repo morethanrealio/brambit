@@ -137,6 +137,7 @@ import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './im
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
 import { channelThreadTitle, channelMessagesSinceLastRun, routineChannelFeedbackBlock } from './routine-feedback.mjs';
+import { activeAdjustments, routineAdjustmentsBlock } from './routine-adjustments.mjs';
 import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';
@@ -6183,7 +6184,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   const routineOwnControl = curationHistory !== null || !!opts.emailSearch || !!opts.flightMonitor;
   const routineFrame = routineExecutionFrame({ kind, title: routineTitle, channel: routineChannel })
     + (curationHistory !== null ? '\n\n' + curationPrompt(opts.curationConfig,curationHistory) : '')
-    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: routineOwnControl })
+    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: routineOwnControl }) + routineAdjustmentsBlock(activeAdjustments(opts.routineConfig, { timeZone: opts.routineTz }), { kind, ownControl: routineOwnControl })
     + (kind !== 'routine' || semDono || routineOwnControl ? '' : routineChannelFeedbackBlock(await channelMessagesSinceLastRun({ agentId: agent.id, userId, channel: routineChannel, title: routineTitle, routineThreadId: thread.id }), { kind, channel: routineChannel, timeZone: userTz }));
   const discoveryFrame = discovery.context
     ? `${discovery.context}\n\nMENSAGEM HUMANA ATUAL, PEDIDO PRIORITÁRIO (não é um check-in nem uma pendência antiga):\n`
@@ -6879,7 +6880,7 @@ async function runRoutine(r, { agendada = false } = {}) {
     agentId: agent.id, userId: r.user_id, title: `⏰ ${r.title}`,
   });
   const result = await runConversationInThread(agent, thread, r.user_id, r.prompt, {
-    kind:'routine',routineChannel:r.channel,routineTitle:r.title,routineScheduled:agendada,
+    kind:'routine',routineChannel:r.channel,routineTitle:r.title,routineScheduled:agendada,routineConfig:r.config,routineTz:r.tz,
     ...(hasMonitor ? {flightMonitor:monitor,routineId:r.id,routineTimezone:r.tz} : {}),
     ...(hasCuration ? {curationConfig,routineId:r.id,search:curationConfig.source!=='gmail'} : {}),
     ...(hasEmailSearch ? {emailSearch,routineId:r.id,search:false} : {}),
@@ -6906,10 +6907,7 @@ async function runRoutine(r, { agendada = false } = {}) {
 // Best-effort: never breaks delivery.
 async function persistProactiveToThread(r, body) {
   if (!r.agent_id || !r.user_id) return;
-  // Email: INBOUND routing threads by `📧 {normalized subject}`
-  // (see email.mjs). For the reply to land in the SAME thread, the title saved
-  // here must match that formula exactly (r.title = subject sent).
-  const title = channelThreadTitle(r);
+  const title = channelThreadTitle(r); // must match the channel's inbound routing, so the reply lands in the same thread
   if (!title) return;
   try {
     const thread = await getOrCreateThreadByTitle({ agentId: r.agent_id, userId: r.user_id, title });
