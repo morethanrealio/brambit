@@ -125,6 +125,16 @@ new kind of routine with structured parameters goes in that list):
   compare, like `execution`: a new key the platform writes by itself needs the
   same two things.
 
+## Overview of the person's other conversations
+
+Every turn with an owner gets one line per other conversation of the last days
+(`web/conversations-overview.mjs`). A line carries the person's latest messages
+there, with the start of the summary only as the topic, because a summary's
+start is its oldest part. A conversation where a row with role `user` is not the
+person writing (a routine's own conversation, a webhook, a team assistant's
+channel) keeps the plain line: a new kind of conversation like those goes in
+`personWritesHere`.
+
 ## Deferred tool groups
 
 Rare suites (`cofre`, `espacos`, `skills`, `codigo`) stay out of a turn's
