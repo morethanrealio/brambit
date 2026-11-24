@@ -136,6 +136,7 @@ import { SEARCH_PAGINATION_RULE } from './search-pagination.mjs';
 import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './image-context.mjs';
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
+import { channelThreadTitle, channelMessagesSinceLastRun, routineChannelFeedbackBlock } from './routine-feedback.mjs';
 import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';
@@ -1112,7 +1113,7 @@ async function billWaMessages({ userId, messages, agentId = null, threadId = nul
 }
 import { inboxDigest } from './agent-inbox.mjs';
 import { agentToAgentTool, confirmAgentDecisionTool, respondDecisionTool, respondExternalQuestionTool, listContactsTool, acceptContactTool, declineContactTool, inviteContactTool } from './agent2agent.mjs';
-import { createEmailPoller, emailEnabled, normalizeSubject } from './email.mjs';
+import { createEmailPoller, emailEnabled } from './email.mjs';
 import { createSlackHandler, slackEnabled, verifySlackSignature } from './slack.mjs';
 import { avisoNaThread } from './channel-notice.mjs';
 import {
@@ -6179,9 +6180,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       console.warn(`[rotina busca_email] rotina=${opts.routineId || '?'} FAILED: ${String(e?.message || e).slice(0, 300)}`);
     }
   }
+  const routineOwnControl = curationHistory !== null || !!opts.emailSearch || !!opts.flightMonitor;
   const routineFrame = routineExecutionFrame({ kind, title: routineTitle, channel: routineChannel })
     + (curationHistory !== null ? '\n\n' + curationPrompt(opts.curationConfig,curationHistory) : '')
-    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: curationHistory !== null || !!opts.emailSearch || !!opts.flightMonitor });
+    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: routineOwnControl })
+    + (kind !== 'routine' || semDono || routineOwnControl ? '' : routineChannelFeedbackBlock(await channelMessagesSinceLastRun({ agentId: agent.id, userId, channel: routineChannel, title: routineTitle, routineThreadId: thread.id }), { kind, channel: routineChannel, timeZone: userTz }));
   const discoveryFrame = discovery.context
     ? `${discovery.context}\n\nMENSAGEM HUMANA ATUAL, PEDIDO PRIORITÁRIO (não é um check-in nem uma pendência antiga):\n`
     : '';
@@ -6906,10 +6909,7 @@ async function persistProactiveToThread(r, body) {
   // Email: INBOUND routing threads by `📧 {normalized subject}`
   // (see email.mjs). For the reply to land in the SAME thread, the title saved
   // here must match that formula exactly (r.title = subject sent).
-  const title = r.channel === 'telegram' ? 'Telegram'
-    : r.channel === 'whatsapp' ? 'WhatsApp'
-    : r.channel === 'email' ? (r.title ? `📧 ${(normalizeSubject(r.title) || 'E-mail').slice(0, 80)}` : '📧 E-mail')
-    : null;
+  const title = channelThreadTitle(r);
   if (!title) return;
   try {
     const thread = await getOrCreateThreadByTitle({ agentId: r.agent_id, userId: r.user_id, title });
