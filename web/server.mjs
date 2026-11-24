@@ -979,7 +979,7 @@ import {
   createSession, deleteSession, getUserBySession,
   createPasswordReset, getValidPasswordReset, markPasswordResetUsed, updateUserPassword,
   createAgent, listAgents, getAgentOwned, archiveAgent, saveTurn,
-  createThread, listThreads, getThreadOwned, getThreadMessages, markThreadRead, recentCrossChannelThreads,
+  createThread, listThreads, getThreadOwned, getThreadMessages, markThreadRead,
   searchThreads, readThreadContent, getThreadAppFocus, setThreadAppFocus,
   getOrCreateThreadByTitle, saveThreadTurn, startThreadTurn, appendAssistantToThread, renameThread, setThreadStatus, deleteThread, setThreadFavorite, setThreadArchived,
   saveGoogleTokens, getGoogleTokens, clearGooglePrimary,
@@ -1145,7 +1145,8 @@ import {
 import { mcpConnect, mcpListTools } from './mcp.mjs';
 import { assertUrlPublica } from './net-guard.mjs';
 import { canvaTools } from './canva.mjs';
-import { compactIfNeeded, summaryForPrompt, conversationsOverviewForPrompt } from './memory.mjs';
+import { compactIfNeeded, summaryForPrompt } from './memory.mjs';
+import { crossChannelDigest, conversationsOverviewForPrompt } from './conversations-overview.mjs';
 import { wikiTools, wikiContext, updateUserProfile } from './wiki.mjs';
 import { pruneWikiPageVersions } from './db.mjs';
 import { spacesTools, spaceInviteTool, spacesContext, isPrivateSpace } from './spaces.mjs';
@@ -1804,25 +1805,6 @@ function guessMime(name = '') {
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   }[ext] || '';
-}
-
-// Short digest of what's happening in the user's OTHER conversations/channels, so
-// the current assistant has a sense of the surrounding context (e.g. asking on WhatsApp
-// about something they said on the web). One line per recent thread. Empty if there's
-// nothing. Each thread's history stays isolated; this is just an overview.
-async function crossChannelDigest(userId, currentThreadId, timeZone = defaultTimezone()) {
-  try {
-    const rows = await recentCrossChannelThreads(userId, currentThreadId, 6);
-    if (!rows.length) return '';
-    const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-    const lines = rows.map((r) => {
-      const when = new Date(r.updated_at).toLocaleString('pt-BR', { timeZone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      const title = clip(r.title, 60) || '(sem título)';
-      const gist = clip(r.summary || r.last_user_msg, 160);
-      return `- "${title}" (com ${r.agent_name}, ${when})${gist ? ': ' + gist : ''}`;
-    });
-    return lines.join('\n');
-  } catch (e) { console.error('[crosschannel]', e?.message ?? e); return ''; }
 }
 
 // Agent-to-agent mailbox: decisions that ANOTHER owner's assistant sent to this
