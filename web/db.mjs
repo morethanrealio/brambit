@@ -4998,8 +4998,8 @@ export async function updateRoutine(id, userId, fields) {
     await c.query('BEGIN');
     const {rows}=await c.query(`SELECT * FROM ${S}.routines WHERE id=$1 AND user_id=$2 FOR UPDATE`,[id,userId]);
     const current=rows[0];if(!current)throw Error('Rotina não encontrada.');
-    // Heartbeats are operational state, not a change to the user's proposal.
-    const stableConfig=value=>{const {execution,...rest}=value||{};return JSON.stringify(rest,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);};
+    // Heartbeats and noted adjustments are not a change to the user's proposal.
+    const stableConfig=value=>{const {execution,adjustments,...rest}=value||{};return JSON.stringify(rest,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);};
     if(fields.expected && Object.entries(fields.expected).some(([k,v])=>!['agent_id','config','prompt','channel','hour','minute','days','tz','enabled','title','repeat_every_min','repeat_until'].includes(k)||(k==='config'?stableConfig(current[k])!==stableConfig(v):JSON.stringify(current[k])!==JSON.stringify(v))))throw Object.assign(Error('A rotina mudou desde a proposta. Atualize a lista e confirme novamente.'),{code:'ROUTINE_CHANGED'});
     const config=composeRoutineConfig(current,{tipo:emailSearchTipo(fields.emailSearch,fields.curation),curation:fields.curation,emailSearch:fields.emailSearch,prompt:fields.prompt,channel:fields.channel});
     if(current.config?.flight_monitor&&fields.prompt!==undefined)throw Error('Monitor de voos exige revisão dos parâmetros estruturados. Nada foi alterado.');
@@ -5015,7 +5015,7 @@ export async function updateRoutine(id, userId, fields) {
 export async function deleteRoutine(id, userId, expected) {
   const guarded = expected !== undefined;
   const { rows } = await pool.query(
-    `DELETE FROM ${S}.routines r WHERE id=$1 AND user_id=$2${guarded ? ` AND (to_jsonb(r) #- '{config,execution}') @> (($3::jsonb - 'repeat_until') #- '{config,execution}') AND (NOT ($3::jsonb ? 'repeat_until') OR repeat_until IS NOT DISTINCT FROM ($3::jsonb->>'repeat_until')::timestamptz)` : ''} RETURNING id`,
+    `DELETE FROM ${S}.routines r WHERE id=$1 AND user_id=$2${guarded ? ` AND (to_jsonb(r) #- '{config,execution}' #- '{config,adjustments}') @> (($3::jsonb - 'repeat_until') #- '{config,execution}' #- '{config,adjustments}') AND (NOT ($3::jsonb ? 'repeat_until') OR repeat_until IS NOT DISTINCT FROM ($3::jsonb->>'repeat_until')::timestamptz)` : ''} RETURNING id`,
     guarded ? [id,userId,JSON.stringify(expected)] : [id,userId],
   );
   if (guarded && !rows.length) throw Object.assign(Error('A rotina mudou ou não está disponível. Atualize a lista e confirme novamente.'), {code:'ROUTINE_CHANGED'});

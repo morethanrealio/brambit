@@ -9,6 +9,7 @@ const denied=()=>{throw Error('REAL I/O FORBIDDEN');};net.Socket.prototype.conne
 for(const n of ['spawn','spawnSync','exec','execSync','execFile','execFileSync','fork'])cp[n]=denied;syncBuiltinESMExports();
 const {routineExecutionFrame,routineFinalText,ROUTINE_NO_NEWS}=await import('../web/routine-delivery.mjs');
 const {turnSearchCoverage}=await import('../web/turn-search-coverage.mjs');
+const {channelThreadTitle}=await import('../web/routine-feedback.mjs');
 const {runAgent,ToolRegistry}=await import('../core-proto/core.mjs');
 let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;},ok=a=>{assert.ok(a);checks++;};
 const source=readFileSync(new URL('../web/server.mjs',import.meta.url),'utf8');
@@ -19,7 +20,7 @@ function harness({kind='routine',sendFail=false,persistFail=false,skipped=false,
  const deps={actionResult,kind,agent:{id:'synthetic-agent',name:'Mock'},userId:'synthetic-user',
  console:{error:()=>{calls.push(['persist-error']);}},
  getOrCreateThreadByTitle:async r=>{calls.push(['thread',r]);if(persistFail)throw Error('DB mock failure');return {id:'synthetic-channel-thread'};},
- appendAssistantToThread:async r=>{calls.push(['append',r]);},normalizeSubject:s=>s.replace(/^Re:\s*/i,''),
+ appendAssistantToThread:async r=>{calls.push(['append',r]);},channelThreadTitle,
  getTelegramBotForDelivery:async()=>connected?{token:'MOCK',chat_id:'MOCK'}:null,
  waEnabled:()=>connected,getWhatsAppLinkForUser:async()=>({wa_phone:'MOCK',enabled:connected}),whatsappProse:denied,
  getUserById:async()=>connected?{email:'mock@example.invalid',name:'Mock'}:null,

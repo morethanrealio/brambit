@@ -45,6 +45,8 @@ test('all three channels require real receipts for reminders and routines', asyn
     assert.equal(routine.status, 'accepted');
     assert.equal(routine.channel, channel);
     assert.equal(h.calls.at(-1)[0], 'persist');
+    // The copy in the channel's conversation names the routine as the person saw it.
+    assert.equal(h.calls.at(-1)[2], { email: 'Synthetic report', telegram: `⏰ ${row.title}\n\nSynthetic report`, whatsapp: `*${row.title}*\n\nSynthetic report` }[channel]);
     assert.equal(h.calls.filter(call => call[0] === channel).length, 2);
   }
 });

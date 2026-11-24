@@ -68,7 +68,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerAppleNotifications(rotas);const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs), Apple's account notifications (apple-notifications.mjs) and the assistant avatar (avatar.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerRoutineAdjustmentRoutes(rotas);registerConfigAdmin(rotas,{sendHtml});registerAppleNotifications(rotas);const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the removal of a routine's adjustment (routine-adjustments.mjs), the admin settings (config-admin.mjs), Apple's account notifications (apple-notifications.mjs) and the assistant avatar (avatar.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
@@ -136,6 +136,8 @@ import { SEARCH_PAGINATION_RULE } from './search-pagination.mjs';
 import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './image-context.mjs';
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
+import { channelThreadTitle, channelMessagesSinceLastRun, routineChannelFeedbackBlock } from './routine-feedback.mjs';
+import { activeAdjustments, routineAdjustmentsBlock, routineAdjustmentsListing, createRoutineAdjustmentTools, ROUTINE_ADJUSTMENT_TOOLS, registerRoutineAdjustmentRoutes } from './routine-adjustments.mjs';
 import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';
@@ -1112,7 +1114,7 @@ async function billWaMessages({ userId, messages, agentId = null, threadId = nul
 }
 import { inboxDigest } from './agent-inbox.mjs';
 import { agentToAgentTool, confirmAgentDecisionTool, respondDecisionTool, respondExternalQuestionTool, listContactsTool, acceptContactTool, declineContactTool, inviteContactTool } from './agent2agent.mjs';
-import { createEmailPoller, emailEnabled, normalizeSubject } from './email.mjs';
+import { createEmailPoller, emailEnabled } from './email.mjs';
 import { createSlackHandler, slackEnabled, verifySlackSignature } from './slack.mjs';
 import { avisoNaThread } from './channel-notice.mjs';
 import {
@@ -3893,7 +3895,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // asks "where does this routine notify me?" and the real state stays invisible.
         const info = routineExecutionInfo(r);
         const tentativa = info ? ` Última tentativa — ${routineExecutionText(r)}${['failed','partial','uncertain','interrupted'].includes(info.status) ? ' Confira o conteúdo e o estado de entrega antes de repetir.' : ''}` : '';
-        return `• #${routineCode(r, rows)} ${r.enabled === false ? '(pausada) ' : ''}"${r.title}" — ${routineCadence(r)}. ${routineChannelText(r)}.${tentativa} ${String(r.prompt || '').slice(0, 120)}${r.config?.curation?'\nCritérios atuais (para editar sem perder preferências): '+JSON.stringify(editableCuration(r.config.curation))+'\nPedido completo: '+r.prompt:''}${r.config?.email_search?'\nBusca de e-mail (a plataforma executa; edite via busca_email): '+describeEmailSearch(r.config.email_search)+' Parâmetros: '+JSON.stringify(editableEmailSearch(r.config.email_search)):''}`;
+        return `• #${routineCode(r, rows)} ${r.enabled === false ? '(pausada) ' : ''}"${r.title}" — ${routineCadence(r)}. ${routineChannelText(r)}.${tentativa} ${String(r.prompt || '').slice(0, 120)}${r.config?.curation?'\nCritérios atuais (para editar sem perder preferências): '+JSON.stringify(editableCuration(r.config.curation))+'\nPedido completo: '+r.prompt:''}${r.config?.email_search?'\nBusca de e-mail (a plataforma executa; edite via busca_email): '+describeEmailSearch(r.config.email_search)+' Parâmetros: '+JSON.stringify(editableEmailSearch(r.config.email_search)):''}${routineAdjustmentsListing(r)}`;
       });
       return `Rotinas configuradas:\n${lines.join('\n')}`;
     },
@@ -3986,6 +3988,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   });
   // Stops a routine: pauses it, or deletes it only when the owner asks (routine-stop.mjs).
   registry.add(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }));
+  for (const t of createRoutineAdjustmentTools({ userId, listRoutines: listRoutinesForUser, resolveRoutine, routineCode })) registry.add(t);
   // Edits a routine that ALREADY EXISTS, in place (without deleting and recreating). Fixes the
   // gap where "reshaping a routine" turned into cancelar_rotina (immediate) +
   // criar_rotina (gated/pending), leaving the owner with no routine at all while the
@@ -6179,9 +6182,11 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
       console.warn(`[rotina busca_email] rotina=${opts.routineId || '?'} FAILED: ${String(e?.message || e).slice(0, 300)}`);
     }
   }
+  const routineOwnControl = curationHistory !== null || !!opts.emailSearch || !!opts.flightMonitor;
   const routineFrame = routineExecutionFrame({ kind, title: routineTitle, channel: routineChannel })
     + (curationHistory !== null ? '\n\n' + curationPrompt(opts.curationConfig,curationHistory) : '')
-    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: curationHistory !== null || !!opts.emailSearch || !!opts.flightMonitor });
+    + (emailSearchBlock ? '\n\n' + emailSearchBlock : '') + routineVarietyBlock(baseHistory, { kind, ownControl: routineOwnControl }) + routineAdjustmentsBlock(activeAdjustments(opts.routineConfig, { timeZone: opts.routineTz }), { kind, ownControl: routineOwnControl })
+    + (kind !== 'routine' || semDono || routineOwnControl ? '' : routineChannelFeedbackBlock(await channelMessagesSinceLastRun({ agentId: agent.id, userId, channel: routineChannel, title: routineTitle, routineThreadId: thread.id }), { kind, channel: routineChannel, timeZone: userTz }));
   const discoveryFrame = discovery.context
     ? `${discovery.context}\n\nMENSAGEM HUMANA ATUAL, PEDIDO PRIORITÁRIO (não é um check-in nem uma pendência antiga):\n`
     : '';
@@ -6242,7 +6247,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself: it pauses).
   if (!noTools && kind === 'routine') {
     const podadas = [];
-    for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
+    for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina', ...ROUTINE_ADJUSTMENT_TOOLS]) {
       if (registry.map.delete(n)) podadas.push(n);
     }
     if (podadas.length) console.log(`[rotina] configuration tools removed from the dispatch: ${podadas.join(', ')}.`);
@@ -6876,7 +6881,7 @@ async function runRoutine(r, { agendada = false } = {}) {
     agentId: agent.id, userId: r.user_id, title: `⏰ ${r.title}`,
   });
   const result = await runConversationInThread(agent, thread, r.user_id, r.prompt, {
-    kind:'routine',routineChannel:r.channel,routineTitle:r.title,routineScheduled:agendada,
+    kind:'routine',routineChannel:r.channel,routineTitle:r.title,routineScheduled:agendada,routineConfig:r.config,routineTz:r.tz,
     ...(hasMonitor ? {flightMonitor:monitor,routineId:r.id,routineTimezone:r.tz} : {}),
     ...(hasCuration ? {curationConfig,routineId:r.id,search:curationConfig.source!=='gmail'} : {}),
     ...(hasEmailSearch ? {emailSearch,routineId:r.id,search:false} : {}),
@@ -6903,13 +6908,7 @@ async function runRoutine(r, { agendada = false } = {}) {
 // Best-effort: never breaks delivery.
 async function persistProactiveToThread(r, body) {
   if (!r.agent_id || !r.user_id) return;
-  // Email: INBOUND routing threads by `📧 {normalized subject}`
-  // (see email.mjs). For the reply to land in the SAME thread, the title saved
-  // here must match that formula exactly (r.title = subject sent).
-  const title = r.channel === 'telegram' ? 'Telegram'
-    : r.channel === 'whatsapp' ? 'WhatsApp'
-    : r.channel === 'email' ? (r.title ? `📧 ${(normalizeSubject(r.title) || 'E-mail').slice(0, 80)}` : '📧 E-mail')
-    : null;
+  const title = channelThreadTitle(r); // must match the channel's inbound routing, so the reply lands in the same thread
   if (!title) return;
   try {
     const thread = await getOrCreateThreadByTitle({ agentId: r.agent_id, userId: r.user_id, title });

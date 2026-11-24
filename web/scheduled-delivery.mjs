@@ -199,6 +199,13 @@ export function createScheduledDelivery({
     }), 'email');
   }
 
+  // What the person sees on a chat channel: the routine's title above the body.
+  // The copy kept in the channel's conversation carries the same heading, so
+  // the assistant there knows WHICH routine delivered it when the person
+  // answers "no leg exercises this week" (see routine-adjustments.mjs).
+  const asSeen = (r, body) => r.channel === 'whatsapp' ? `*${r.title}*\n\n${body}`
+    : r.channel === 'telegram' ? `⏰ ${r.title}\n\n${body}` : body;
+
   // messageIds are the references a reply or reaction to this message carries
   // back (Telegram: chat:message, WhatsApp: wamid), one per part sent.
   async function sendToChannel(r, body, templateText = null) {
@@ -206,7 +213,7 @@ export function createScheduledDelivery({
     if (r.channel === 'telegram') {
       const bot = await getTelegramBotForDelivery(r.user_id, r.agent_id);
       if (!bot?.token || !bot.chat_id) throw deliveryFailure('TELEGRAM_NOT_CONNECTED', 'Telegram não conectado.');
-      const receipt = await sendTelegramMessage(bot.token, bot.chat_id, `⏰ ${r.title}\n\n${body}`);
+      const receipt = await sendTelegramMessage(bot.token, bot.chat_id, asSeen(r, body));
       return { receipt: requireDeliveryReceipt({ ok: true, id: receipt?.message_id == null ? null : String(receipt.message_id) }, 'telegram'),
         messageIds: (receipt?.message_ids || [receipt?.message_id]).filter(id => id != null).map(id => `${bot.chat_id}:${id}`) };
     }
@@ -214,7 +221,7 @@ export function createScheduledDelivery({
       if (!waEnabled()) throw deliveryFailure('WHATSAPP_NOT_CONFIGURED', 'WhatsApp não configurado.');
       const link = await getWhatsAppLinkForUser(r.user_id);
       if (!link?.wa_phone || link.enabled === false) throw deliveryFailure('WHATSAPP_NOT_CONNECTED', 'WhatsApp não conectado.');
-      const receipt = await sendWhatsAppProactive(link.wa_phone, `*${r.title}*\n\n${body}`, {
+      const receipt = await sendWhatsAppProactive(link.wa_phone, asSeen(r, body), {
         templateText, retryUnknown: false,
         proseFallback: templateText === null ? (text) => whatsappProse({ agent_id: r.agent_id, user_id: r.user_id }, text) : null,
       });
@@ -303,7 +310,7 @@ export function createScheduledDelivery({
     }
     const { receipt, messageIds } = await sendToChannel(r, body, templateText);
     await handOffConfirmations?.(r, body, messageIds);
-    await persistProactiveToThread(r, body);
+    await persistProactiveToThread(r, asSeen(r, body));
     return receipt;
   }
 
