@@ -141,14 +141,6 @@ export function summaryForPrompt(summary) {
   return `${lines.join(' ')}\n${text}`;
 }
 
-// The overview of the user's other conversations is built from the first characters
-// of each conversation's summary, so it is as old as those summaries and cut short.
-export function conversationsOverviewForPrompt(digest) {
-  if (!digest) return '';
-  return 'OVERVIEW OF THE USER\'S OTHER CONVERSATIONS (context on what they have been handling with you or with their other assistants, on other channels, in recent days). It is only a summary so you have a sense of the whole; the detailed history of each one stays in that conversation. Do NOT bring this up out of nowhere; use it only when it is relevant to what they are talking about now. Each line is only the clipped start of that conversation\'s summary and may be out of date: never take from it the state of anything (what is in a list, what is pending, what was done); read that from the tool that keeps it:\n'
-    + digest;
-}
-
 // Estimates tokens for a text (cheap heuristic, no tokenizer).
 export const estTokens = (s) => Math.ceil((s || '').length / 4);
 

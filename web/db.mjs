@@ -5085,29 +5085,6 @@ export async function listThreads(userId) {
   return rows;
 }
 
-// Recent activity from the user's OTHER conversations (all assistants/channels),
-// to give the current assistant a sense of what's going on outside this thread.
-// Returns title, assistant name, when it was, the summary (if any) and the last
-// user message in that thread. Excludes the current thread and the internal onboarding one.
-export async function recentCrossChannelThreads(userId, excludeThreadId, limit = 6) {
-  const { rows } = await pool.query(
-    `SELECT t.id, t.title, t.updated_at, t.summary, a.name AS agent_name,
-            (SELECT m.content FROM ${S}.messages m
-               WHERE m.thread_id = t.id AND m.role = 'user'
-               ORDER BY m.ts DESC LIMIT 1) AS last_user_msg
-       FROM ${S}.threads t JOIN ${S}.agents a ON a.id = t.agent_id
-       WHERE t.user_id = $1
-         AND t.id <> $2
-         AND t.title <> '✨ Boas-vindas'
-         AND t.deleted_at IS NULL
-         AND t.updated_at > now() - interval '7 days'
-       ORDER BY t.updated_at DESC
-       LIMIT $3`,
-    [userId, excludeThreadId || '00000000-0000-0000-0000-000000000000', limit],
-  );
-  return rows;
-}
-
 // Map: channel name as the user says it -> fixed title of that channel's thread.
 // Web/free-form titles return null (they fall back to word search).
 export function channelToThreadTitle(channel) {
