@@ -1,5 +1,13 @@
 export type Routine = {id:string;agent_id:string;agent_name:string;title:string;prompt:string;hour:number;minute?:number;days:string;tz:string;channel:string;enabled:boolean;repeat_every_min?:number|null;repeat_until?:string|null;last_run_day?:string|null;config?:Record<string,unknown>};
 type Agent={id:string;name:string};
+// One line the person asked the assistant to keep on a routine (routine-adjustments.mjs on the server).
+export type Adjustment={id:string;text:string;at?:string;until?:string};
+// The adjustments that still apply today in the routine's time zone. Routines with their own control take none.
+export function routineAdjustments(r:Routine,now=new Date()):Adjustment[]{
+ const config=r.config||{};if(['curation','email_search','flight_monitor'].some(k=>k in config)||!Array.isArray(config.adjustments))return [];
+ let today=now.toISOString().slice(0,10);try{today=new Intl.DateTimeFormat('en-CA',{timeZone:r.tz||'UTC'}).format(now);}catch{/* unknown zone: UTC day */}
+ return (config.adjustments as Adjustment[]).filter(a=>a&&typeof a.id==='string'&&typeof a.text==='string'&&a.text.trim()!==''&&(!a.until||a.until>=today));
+}
 type Reply={error?:string;netFail?:boolean;routines?:Routine[]};
 type Dependencies={api:(path:string,body?:Record<string,unknown>)=>Promise<Reply>;agents:()=>Agent[];activeAgent:()=>string|null;openDraft:(agentId:string,text:string)=>Promise<boolean>;locale?:string;marca:string};
 // Texts come from the catalogs (routines.* in web/locales), served by GET /api/texts/routines.
@@ -48,11 +56,14 @@ export async function mountRoutines(root:HTMLElement,deps:Dependencies){
   const text=review&&r?t('review_draft',{title:r.title}):r?t('edit_draft',{title:r.title,cadence:cadence(r,locale,texts)}):t('create_draft');
   state(true);try{if(await deps.openDraft(id,text))message(t('unsent'));}catch{message(t('error'),true);}finally{state(false);}
  }
- async function confirm(r:Routine,action:'pause'|'resume'|'delete'){
+ function confirm(r:Routine,action:'pause'|'resume'|'delete'){
   const caption=action==='delete'?t('remove'):action==='pause'?t('pause'):t('resume');
+  return ask(`${caption}: ${r.title}`,action==='delete'?t('delete_warn'):action==='pause'?t('pause_warn'):t('resume_warn'),caption,action==='delete');
+ }
+ async function ask(heading:string,text:string,caption:string,danger:boolean){
   const dialog=el('dialog',undefined,'routine-dialog');dialog.setAttribute('aria-labelledby','routine-confirm-title');dialog.setAttribute('aria-describedby','routine-confirm-body');
-  const title=el('h3',`${caption}: ${r.title}`);title.id='routine-confirm-title';const body=el('p',action==='delete'?t('delete_warn'):action==='pause'?t('pause_warn'):t('resume_warn'));body.id='routine-confirm-body';
-  const buttons=el('div',undefined,'routine-actions');const cancel=button(t('cancel'),()=>dialog.close('cancel')),accept=button(caption,()=>dialog.close('ok'));if(action==='delete')accept.classList.add('routine-danger');buttons.append(cancel,accept);dialog.append(title,body,buttons);document.body.append(dialog);
+  const title=el('h3',heading);title.id='routine-confirm-title';const body=el('p',text);body.id='routine-confirm-body';
+  const buttons=el('div',undefined,'routine-actions');const cancel=button(t('cancel'),()=>dialog.close('cancel')),accept=button(caption,()=>dialog.close('ok'));if(danger)accept.classList.add('routine-danger');buttons.append(cancel,accept);dialog.append(title,body,buttons);document.body.append(dialog);
   const focus=document.activeElement;
   return new Promise<boolean>(resolve=>{dialog.addEventListener('close',()=>{const approved=dialog.returnValue==='ok';dialog.remove();if(focus instanceof HTMLElement&&focus.isConnected)focus.focus();resolve(approved);},{once:true});dialog.showModal();cancel.focus();});
  }
@@ -65,6 +76,29 @@ export async function mountRoutines(root:HTMLElement,deps:Dependencies){
    if(response.error||response.netFail){list.querySelectorAll<HTMLButtonElement>('button').forEach(b=>b.dataset.locked='true');message(`${response.error||t('error')} ${t('stale')}`,true);return;}
    await load(action==='delete'?t('deleted'):t('saved'));
   }catch{message(t('error'),true);}finally{state(false);}
+ }
+ async function removeAdjustment(r:Routine,a:Adjustment){
+  if(busy)return;state(true);
+  try{
+   if(!await ask(t('adjustments.remove'),t('adjustments.remove_warn',{text:a.text}),t('adjustments.remove'),true))return;
+   message(t('save'));
+   const response=await deps.api('api/routine/adjustment/remove',{id:r.id,adjustment:a.id});
+   if(response.error||response.netFail){message(t('error'),true);return;}
+   await load(t('adjustments.removed'));
+  }catch{message(t('error'),true);}finally{state(false);}
+ }
+ // What the person asked the assistant to change in this routine, one line each, removable here.
+ function adjustmentList(r:Routine):HTMLElement|null{
+  const adjustments=routineAdjustments(r);if(!adjustments.length)return null;
+  const box=el('details',undefined,'routine-adjustments');box.append(el('summary',plural(texts,locale,'adjustments.count',adjustments.length)));const items=el('ul');
+  for(const a of adjustments){
+   const item=el('li');const noted=a.at&&Number.isFinite(Date.parse(a.at))?t('adjustments.noted',{date:dateLabel(a.at,locale,r.tz||'UTC')}):'';
+   const meta=[noted,a.until?t('adjustments.until',{date:dateLabel(a.until,locale)}):''].filter(Boolean).join(' · ');
+   const text=el('div');text.append(el('p',a.text,'routine-prompt'));if(meta)text.append(el('p',meta,'routine-note'));
+   const remove=button(t('adjustments.remove'),()=>{void removeAdjustment(r,a);});remove.classList.add('routine-danger');remove.setAttribute('aria-label',`${t('adjustments.remove')}: ${a.text}`);
+   item.append(text,remove);items.append(item);
+  }
+  box.append(items);return box;
  }
  function render(routines:Routine[]){
   list.replaceChildren();if(!routines.length){list.append(el('p',t('empty'),'routine-empty'));return;}
@@ -95,7 +129,7 @@ export async function mountRoutines(root:HTMLElement,deps:Dependencies){
    const edit=button(t('edit'),()=>{void draft(r);});const remove=button(t('remove'),()=>{void change(r,'delete');});remove.classList.add('routine-danger');
    for(const b of [toggle,edit,remove])b.setAttribute('aria-label',`${b.textContent}: ${r.title}`);
    actions.append(toggle,edit,remove);
-   if(health?.needsReview){const review=button(t('review_failure'),()=>{void draft(r,true);});actions.append(review);}card.append(top,meta,details,actions);list.append(card);
+   if(health?.needsReview){const review=button(t('review_failure'),()=>{void draft(r,true);});actions.append(review);}const noted=adjustmentList(r);card.append(top,meta,details,...(noted?[noted]:[]),actions);list.append(card);
   }
  }
  async function load(notice=''){

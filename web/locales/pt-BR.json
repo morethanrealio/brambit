@@ -961,6 +961,15 @@
     "channel_email": "E-mail pela plataforma {brand} (não usa Gmail)",
     "last_attempt": "Última tentativa",
     "review_failure": "Revisar falha na conversa",
+    "adjustments": {
+      "count_one": "{count} ajuste que você pediu",
+      "count_other": "{count} ajustes que você pediu",
+      "noted": "Anotado em {date}",
+      "until": "vale até {date}",
+      "remove": "Remover ajuste",
+      "remove_warn": "A partir da próxima execução, a rotina deixa de seguir: “{text}”",
+      "removed": "Ajuste removido."
+    },
     "email_search": {
       "label": "Busca de e-mail executada pela plataforma",
       "from": "de: {senders}",

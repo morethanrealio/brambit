@@ -68,7 +68,7 @@ const ferramentas=pecas.ferramentas??createFerramentasSimples(); // Tools port (
 const contaPagamento=pecas.contaPagamento??createContaPagamentoSimples(); // Payment account port (payment-account.mjs).
 const chaveDeepSeek=pecas.chaveDeepSeek??(async()=>{const k=(process.env.DEEPSEEK_API_KEY||'').trim();if(!k)throw Error('DEEPSEEK_API_KEY ausente.');return k;}); // Official DeepSeek key (selectable model); without it the option disappears.
 const eventos=createEventos(), criarConta=criadorDeConta(eventos); // Port 3 (events.mjs): the core notifies; plugins subscribe at startup. Every signup goes through criarConta.
-const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerConfigAdmin(rotas,{sendHtml});registerAppleNotifications(rotas);const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the admin settings (config-admin.mjs), Apple's account notifications (apple-notifications.mjs) and the assistant avatar (avatar.mjs).
+const rotas=createRotas();registerScreenTexts(rotas);registerOnboardingIntro(rotas);registerRoutineAdjustmentRoutes(rotas);registerConfigAdmin(rotas,{sendHtml});registerAppleNotifications(rotas);const avatar=registerAvatar(rotas,{eventos,send,fail,recordUsages,getCreditStatus}); // Routes port (routes.mjs): plugins register theirs in ligar; the core serves the screen texts (screen-texts.mjs), the first chat (onboarding-intro.mjs), the removal of a routine's adjustment (routine-adjustments.mjs), the admin settings (config-admin.mjs), Apple's account notifications (apple-notifications.mjs) and the assistant avatar (avatar.mjs).
 const midiaPublica=createMidiaPublica(); // Published media port (public-media.mjs): a plugin says which third-party keys /api/media may serve.
 // Port 1 (spend.mjs): the rest of the server only talks to `gasto`, never to credit directly.
 // Without a plugin, no credit and no billing: usage is logged in US$ (simple-spend.mjs).
@@ -137,7 +137,7 @@ import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './im
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
 import { channelThreadTitle, channelMessagesSinceLastRun, routineChannelFeedbackBlock } from './routine-feedback.mjs';
-import { activeAdjustments, routineAdjustmentsBlock, routineAdjustmentsListing, createRoutineAdjustmentTools, ROUTINE_ADJUSTMENT_TOOLS } from './routine-adjustments.mjs';
+import { activeAdjustments, routineAdjustmentsBlock, routineAdjustmentsListing, createRoutineAdjustmentTools, ROUTINE_ADJUSTMENT_TOOLS, registerRoutineAdjustmentRoutes } from './routine-adjustments.mjs';
 import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';

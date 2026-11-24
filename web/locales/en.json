@@ -961,6 +961,15 @@
     "channel_email": "E-mail via {brand} (not Gmail)",
     "last_attempt": "Last attempt",
     "review_failure": "Review failure in chat",
+    "adjustments": {
+      "count_one": "{count} adjustment you asked for",
+      "count_other": "{count} adjustments you asked for",
+      "noted": "Noted on {date}",
+      "until": "applies until {date}",
+      "remove": "Remove adjustment",
+      "remove_warn": "From the next run on, the routine no longer follows: “{text}”",
+      "removed": "Adjustment removed."
+    },
     "email_search": {
       "label": "E-mail search run by the platform",
       "from": "from: {senders}",

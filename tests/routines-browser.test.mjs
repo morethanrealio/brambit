@@ -15,6 +15,7 @@ await page.route('**/*',async r=>{const u=new URL(r.request().url());if(u.hostna
   if(failWrite)return r.fulfill({status:409,json:{error:'A rotina mudou. Atualize a lista.'}});
   const i=rows.findIndex(x=>x.id===data.id);if(i>=0){if(u.pathname.endsWith('delete'))rows.splice(i,1);else rows[i].enabled=data.enabled;}d={ok:true};
  }
+ if(u.pathname==='/api/routine/adjustment/remove'){const row=rows.find(x=>x.id===data.id);row.config.adjustments=row.config.adjustments.filter(a=>a.id!==data.adjustment);d={ok:true};}
  return r.fulfill({json:d});
  }
  let f=path.resolve(root,'.'+u.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)||fs.statSync(f).isDirectory())f=path.join(root,'index.html');
@@ -53,6 +54,10 @@ try{
   check(await cards.getByRole('button',{name:'Revisar falha na conversa',exact:true}).isVisible());
   if(status==='uncertain'){await page.setViewportSize({width:390,height:844});await page.waitForTimeout(300);await box.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'secondary-notice-mobile.png'),fullPage:true});check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.setViewportSize({width:1280,height:1000});}
  }
+ // Adjustments the person asked for in the chat: the expired one is hidden, and removing one names the routine and the line.
+ rows=[{...base,config:{adjustments:[{id:'aa11bb',text:'No leg exercises: knee injury',at:'2026-11-20T12:00:00Z'},{id:'cc22dd',text:'Hotel without gym',at:'2020-01-01T12:00:00Z',until:'2020-01-05'}]}}];await load();const noted=cards.locator('.routine-adjustments');
+ check((await noted.locator('summary').innerText())==='1 ajuste que você pediu');await noted.locator('summary').click();check((await noted.innerText()).includes('Anotado em 20 de nov. de 2026'));check(!(await noted.innerText()).includes('Hotel'));
+ await noted.getByRole('button',{name:'Remover ajuste: No leg exercises: knee injury',exact:true}).click();await confirm('Remover ajuste');check(rw().at(-1).path==='/api/routine/adjustment/remove'&&rw().at(-1).data.id==='routine-test'&&rw().at(-1).data.adjustment==='aa11bb');check(await noted.count()===0);
  rows=[{...base,config:{execution:{status:'uncertain',phase:'delivering',token:'private-runtime-token',startedAt:'2026-09-11T17:00:00Z'}}}];await load();
  check((await box.innerText()).includes('Entrega não confirmada'));check(!(await box.innerText()).includes('private-runtime-token'));
  for(const [name,width,height] of [['health-desktop',1280,1000],['health-tablet',768,1024],['health-mobile',390,844]]){await page.setViewportSize({width,height});await box.scrollIntoViewIfNeeded();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,name+'.png'),fullPage:true});check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));if(width===390){await box.getByRole('button',{name:'Revisar falha na conversa',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'health-mobile-actions.png'),fullPage:true});}}

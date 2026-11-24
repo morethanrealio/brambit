@@ -14,6 +14,7 @@
 // loses a line, and a line never rewrites the rest of the configuration.
 import { randomUUID } from 'node:crypto';
 import { pool, S } from './db.mjs';
+import { readBody } from './http-body.mjs';
 
 // The list is read on every run and by the person on a phone screen.
 export const MAX_ADJUSTMENTS = 10;
@@ -198,4 +199,23 @@ export function createRoutineAdjustmentTools({ userId, listRoutines, resolveRout
         error: out.adjustments.length ? 'No adjustment with this code on this routine. Nothing was removed. The current ones are listed in `adjustments`: call again with the right [code].' : 'This routine has no adjustments. Nothing was removed.' };
     },
   }];
+}
+
+// The Routines screen removes a line here. The scope is the signed-in person:
+// the statement only finds a routine that is theirs.
+export function registerRoutineAdjustmentRoutes(rotas, { remove = removeRoutineAdjustment } = {}) {
+  rotas.registrar('POST', '/api/routine/adjustment/remove', async (req, res, url, ctx) => {
+    const reply = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    try {
+      const user = await ctx.currentUser?.();
+      if (!user) return reply(401, { error: 'unauthorized' });
+      const { id, adjustment } = await readBody(req);
+      if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id) || typeof adjustment !== 'string' || !adjustment.trim()) return reply(400, { error: 'invalid_request' });
+      const out = await remove({ routineId: id, userId: user.id, adjustmentId: adjustment });
+      return out.ok ? reply(200, { ok: true }) : reply(404, { error: 'adjustment_not_found' });
+    } catch (e) {
+      console.error('[routine adjustment]', e?.message ?? e);
+      return reply(500, { error: 'adjustment_not_removed' });
+    }
+  });
 }
