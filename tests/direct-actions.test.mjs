@@ -38,3 +38,26 @@ test('a note runs directly only in a Space the owner has to themselves', async (
   assert.equal(calls.length, 1);
   assert.deepEqual(ids.map(hasPending), [false, true, true]);
 });
+
+// The app tools reach the turn already wrapped (addGated). Asking who can open
+// the app gives the login back, so only the owner gets it without a card;
+// locking, a new password and opening the app to anyone always wait for one.
+test('checking an app\'s access runs directly only for the owner; changing it always keeps the card', async (t) => {
+  const ids = ['access-check', 'access-lock', 'access-new-password', 'access-open', 'access-email', 'access-team'];
+  t.after(() => ids.forEach((id) => takePending(id)));
+  const calls = [];
+  const state = { ok: true, acesso: 'privado', credenciais: { usuario: 'planner', senha: 'example-pass' } };
+  const access = (threadId) => gateTool({ name: 'definir_acesso_sistema', run: async (args) => { calls.push(args); return state; } }, threadId);
+  const app = { nome_do_sistema: 'planner' };
+
+  assert.deepEqual(await turnGate(access(ids[0]), { kind: 'telegram', threadId: ids[0] }).run(app), state);
+  assert.equal(hasPending(ids[0]), false);
+
+  await turnGate(access(ids[1]), { kind: 'telegram', threadId: ids[1] }).run({ ...app, acesso: 'privado' });
+  await turnGate(access(ids[2]), { kind: 'chat', threadId: ids[2] }).run({ ...app, acesso: 'privado', nova_senha: true });
+  await turnGate(access(ids[3]), { kind: 'whatsapp', threadId: ids[3] }).run({ ...app, acesso: 'publico', confirmo_publico: true });
+  await turnGate(access(ids[4]), { kind: 'email', threadId: ids[4] }).run(app);
+  await turnGate(access(ids[5]), { kind: 'chat', threadId: ids[5], agentCategory: 'grupo' }).run(app);
+  assert.equal(calls.length, 1);
+  for (const id of ids.slice(1)) assert.equal(hasPending(id), true, id);
+});

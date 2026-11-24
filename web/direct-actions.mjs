@@ -6,10 +6,9 @@
 import { gateTool, GATE_TOOLS } from './confirm.mjs';
 import { selfStopOnly } from './routine-stop.mjs';
 
-// Narrow exceptions to the 2026-09-28 audit gate: checking the app's access
-// without changing anything, and going back to a MORE restricted permission mode.
+// Narrow exception to the 2026-09-28 audit gate, in every channel: going back
+// to a MORE restricted permission mode.
 const NO_CARD = {
-  definir_acesso_sistema: (a) => !a?.acesso,
   definir_modo_permissao: (a) => ['padrao', 'plano'].includes(a?.modo),
 };
 // A routine has no one to click the card, and these two are how a routine ends
@@ -36,6 +35,10 @@ const OWNER_ONLY = {
   drive_upload: () => true,
   anotar_no_espaco: (a, ctx) => ctx.privateSpace?.(a) ?? false,
   editar_nota: (a, ctx) => ctx.privateSpace?.(a) ?? false,
+  // Checking an app's access changes nothing, but the answer carries the app's
+  // login: it goes straight only to the owner. Locking, a new password and
+  // opening the app to anyone always keep the card.
+  definir_acesso_sistema: (a) => !a?.acesso,
 };
 
 // Runs without a card when any of the policies says so. A single policy is
@@ -56,16 +59,19 @@ export function turnGate(tool, ctx) {
   const { kind, threadId, gateOpts, agentCategory } = ctx;
   const ownerOnly = OWNER_CHANNELS.has(kind) && agentCategory !== 'grupo' && OWNER_ONLY[tool.name];
   const direct = ownerOnly ? (args) => ownerOnly(args, ctx) : null;
-  // Already wrapped where it was registered (addGated): wrap the original again
-  // with the same options, adding only the direct path.
+  const noCard = either(NO_CARD[tool.name], direct);
+  // Already wrapped where it was registered (addGated), as the app tools are:
+  // wrap the original again with the same options, adding only the exceptions
+  // above. Leaving them out here made the card show up for calls meant to run
+  // without one.
   if (tool.confirmationTool) {
-    if (!direct) return tool;
+    if (!noCard) return tool;
     const original = tool.confirmationTool;
-    return gateTool({ ...original, runWithoutConfirmation: either(original.runWithoutConfirmation, direct) },
+    return gateTool({ ...original, runWithoutConfirmation: either(original.runWithoutConfirmation, noCard) },
       threadId, tool.confirmationOptions);
   }
   if (!GATE_TOOLS.has(tool.name) && tool.requiresConfirmation !== true) return tool;
   if (kind === 'routine' && ROUTINE_ENDS_ITSELF.has(tool.name)) return selfStopOnly(tool);
-  const policy = either(tool.runWithoutConfirmation, NO_CARD[tool.name], direct);
+  const policy = either(tool.runWithoutConfirmation, noCard);
   return gateTool(policy ? { ...tool, runWithoutConfirmation: policy } : tool, threadId, gateOpts);
 }
