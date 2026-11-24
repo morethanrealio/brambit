@@ -491,8 +491,11 @@ export function renderConfirmed(pend, r) {
   if (link && !receiptText?.includes(link)) msg += `\n${link}`;
   // Private app: the receipt is deterministic and the model just repeats the
   // reference, so username and password need to come out here or the person
-  // never receives them.
-  if (['publicar_sistema','replicar_sistema'].includes(pend?.name)) msg += appAccessLines(data, lang);
+  // never receives them. Same for locking an app or changing its password.
+  if (['publicar_sistema','replicar_sistema','definir_acesso_sistema'].includes(pend?.name)) msg += appAccessLines(data, lang);
+  // A check that went through the card answers on the receipt: the login above
+  // when the app is private, this line when it is open.
+  if (pend?.name === 'definir_acesso_sistema' && !pend.args?.acesso && data?.acesso === 'público') msg += `\n\n${text('app_open')}`;
   return msg;
 }
 

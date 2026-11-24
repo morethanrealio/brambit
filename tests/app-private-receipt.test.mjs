@@ -40,6 +40,28 @@ test("owner's language: en and es", () => {
   assert.match(renderConfirmed({ ...pub, language: 'es' }, { ok: true, url: 'u', credenciais: { usuario: 'a', senha: 'b' } }), /Usuario: a\nContraseña: b/);
 });
 
+// 2026-11-06: a new password was generated twice and never reached the owner,
+// because the receipt of locking an app left the login out.
+test('lock or new password: receipt carries the login; opening the app shows none', () => {
+  const lock = { name: 'definir_acesso_sistema', args: { nome_do_sistema: 'planner', acesso: 'privado', nova_senha: true } };
+  const t = renderConfirmed(lock, { ok: true, acesso: 'privado', credenciais: { usuario: 'planner', senha: 'Xy12abCD' } });
+  assert.match(t, /trancado com senha/);
+  assert.match(t, /Usuário: planner\nSenha: Xy12abCD/);
+  const open = { name: 'definir_acesso_sistema', args: { nome_do_sistema: 'planner', acesso: 'publico', confirmo_publico: true } };
+  assert.doesNotMatch(renderConfirmed(open, { ok: true, acesso: 'público' }), /Senha|privado/);
+});
+
+// Where the owner is not the one typing, a check still goes through the card:
+// its receipt answers the question and never says the app was locked.
+test('access check through the card: receipt gives the login or says the app is open', () => {
+  const check = { name: 'definir_acesso_sistema', args: { nome_do_sistema: 'planner' } };
+  const priv = renderConfirmed(check, { ok: true, acesso: 'privado', credenciais: { usuario: 'planner', senha: 'Xy12abCD' } });
+  assert.match(priv, /Usuário: planner\nSenha: Xy12abCD/);
+  const open = renderConfirmed(check, { ok: true, acesso: 'público' });
+  assert.match(open, /está aberto/);
+  for (const t of [priv, open]) assert.doesNotMatch(t, /trancado/);
+});
+
 test('another tool with a credentials field prints nothing', () => {
   const t = renderConfirmed({ name: 'apagar_sistema', args: { nome_do_sistema: 'z' } }, { ok: true, credenciais: { usuario: 'a', senha: 'b' } });
   assert.doesNotMatch(t, /Senha/);

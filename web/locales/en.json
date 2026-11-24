@@ -337,7 +337,9 @@
       "request_locked": "lock the system \"{app}\" with a login and password{password}",
       "new_password": " (new password)",
       "done_public": "System \"{app}\" is now open.",
-      "done_locked": "System \"{app}\" locked with a password."
+      "done_locked": "System \"{app}\" locked with a password.",
+      "request_check": "check who can open the system \"{app}\" and show its login, if it has one",
+      "done_check": "Checked who can open the system \"{app}\"."
     },
     "remover_da_home": {
       "request": "remove block {id} from your subdomain home page",
@@ -832,6 +834,7 @@
       "app_login": "The app is private; the browser will ask for this login:\nUser: {user}\nPassword: {password}\nYou can share it with anyone you want to give access to.",
       "app_unlocked": "⚠️ The app was published but the platform could not lock the link yet: for now anyone with it can open the app.",
       "app_save_login": "Save this login now: the platform could not record it and may not be able to show it again.",
+      "app_open": "The app is open: anyone with the link gets in, no password.",
       "how_to_confirm_reaction": "To confirm, reply “go ahead” or react with 👍.",
       "how_to_confirm_text": "To confirm, reply “go ahead” in text.",
       "address_check": "CHECK THE ADDRESS: {mismatches}",
