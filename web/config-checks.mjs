@@ -6,6 +6,8 @@
 // A check gets the values to try (what the admin typed, falling back to what
 // is in use) and answers { ok, reason }. The reason is a short code, never the
 // service's answer: an error body can echo the key or other private data.
+import { smtpOptions } from './mailer.mjs';
+
 const TIMEOUT_MS = 8000;
 
 const chatToModels = (url) => String(url).replace(/\/chat\/completions\/?$/, '/models');
@@ -57,8 +59,12 @@ export const CHECKS = {
     },
   },
   smtp: {
-    keys: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'],
-    run: (v, { smtp }) => smtp({ host: v.SMTP_HOST, port: Number(v.SMTP_PORT || 465), user: v.SMTP_USER, pass: v.SMTP_PASS }),
+    keys: ['SMTP_HOST'],
+    // The login is optional (a relay takes none), but never half of it.
+    run: (v, { smtp }) => {
+      const missing = ['SMTP_USER', 'SMTP_PASS'].filter((k) => !String(v[k] ?? '').trim());
+      return missing.length === 1 ? { ok: false, reason: 'missing', missing } : smtp(smtpOptions({ host: v.SMTP_HOST, port: v.SMTP_PORT, user: v.SMTP_USER, pass: v.SMTP_PASS, from: v.MAIL_FROM }));
+    },
   },
   // The assistant's own inbox: reads with IMAP, replies with SMTP.
   email_inbox: {
@@ -67,7 +73,8 @@ export const CHECKS = {
       const auth = { user: v.EMAIL_ADDRESS, pass: v.EMAIL_APP_PASSWORD };
       const read = await imap({ host: v.EMAIL_IMAP_HOST || 'imap.gmail.com', port: Number(v.EMAIL_IMAP_PORT || 993), ...auth });
       if (!read.ok) return { ok: false, reason: `imap_${read.reason}` };
-      const send = await smtp({ host: v.EMAIL_SMTP_HOST || 'smtp.gmail.com', port: Number(v.EMAIL_SMTP_PORT || 465), ...auth });
+      const port = Number(v.EMAIL_SMTP_PORT || 465);
+      const send = await smtp({ host: v.EMAIL_SMTP_HOST || 'smtp.gmail.com', port, secure: port === 465, auth });
       return send.ok ? send : { ok: false, reason: `smtp_${send.reason}` };
     },
   },
@@ -132,10 +139,11 @@ export function defaultTools({ fetchFn = fetch, timeoutMs = TIMEOUT_MS } = {}) {
       return opts?.readName ? r : r.status;
     },
     post: (url, headers) => call(url, 'POST', { ...headers, 'content-type': 'application/json' }),
-    smtp: async ({ host, port, user, pass }) => {
+    // `options`: host, port, secure and the login, if any (smtpOptions in mailer.mjs).
+    smtp: async (options) => {
       const { default: nodemailer } = await import('nodemailer');
       const t = nodemailer.createTransport({
-        host, port, secure: port === 465, auth: { user, pass },
+        ...options,
         connectionTimeout: timeoutMs, greetingTimeout: timeoutMs, socketTimeout: timeoutMs,
       });
       try { await t.verify(); return { ok: true }; }
