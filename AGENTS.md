@@ -105,6 +105,26 @@ wins and the local one stays as an older version. An `.xlsm` (macros) is never
 linked nor synced. The merge's real test needs a local Python with openpyxl
 (`SHEET_PY`) and is skipped without one.
 
+## Routines and what the person says about them
+
+A routine runs in its own conversation and delivers into the conversation of its
+channel, where the person answers. Two things carry that answer back to the run,
+both as blocks of the routine frame and both skipped for routines with their own
+control (curation, e-mail search, flight monitor; `routineHasOwnControl`, so a
+new kind of routine with structured parameters goes in that list):
+
+- `web/routine-feedback.mjs`: the person's messages in the delivery channel's
+  conversation since the routine last ran. The copy of a delivery kept in that
+  conversation carries the routine's title, as the person saw it.
+- `web/routine-adjustments.mjs`: lasting adjustments in
+  `routines.config.adjustments` (short lines, optional last day, a ceiling),
+  written by the chat tools `note_routine_adjustment` and
+  `remove_routine_adjustment` with no confirmation card, and removed by the
+  person on the Routines screen. The key is written alone (never the whole
+  `config`) and is left out of the snapshots that edit and delete proposals
+  compare, like `execution`: a new key the platform writes by itself needs the
+  same two things.
+
 ## Deferred tool groups
 
 Rare suites (`cofre`, `espacos`, `skills`, `codigo`) stay out of a turn's
