@@ -119,3 +119,83 @@ export async function removeRoutineAdjustment({ routineId, userId, adjustmentId 
   const { rows: found } = await db.query(`SELECT r.config, r.tz FROM ${schema}.routines r WHERE r.id = $1 AND r.user_id = $2`, [routineId, userId]);
   return { ok: false, code: 'NOT_FOUND', adjustments: found[0] ? activeAdjustments(found[0].config, { timeZone: found[0].tz }) : [] };
 }
+
+// One line per adjustment for the model, with the code it needs to remove it.
+const listed = (adjustments) => adjustments.map((a) => `[${a.id}] ${a.text}${a.until ? ` (applies until ${a.until})` : ''}`);
+
+// What listar_rotinas shows under a routine: '' when there is nothing noted.
+export function routineAdjustmentsListing(routine) {
+  const adjustments = routineHasOwnControl(routine?.config) ? [] : activeAdjustments(routine?.config, { timeZone: routine?.tz });
+  return adjustments.length ? `\nAdjustments noted on this routine (note_routine_adjustment adds, remove_routine_adjustment removes by the [code]): ${listed(adjustments).join('; ')}` : '';
+}
+
+const WHY_NOT = {
+  INVALID_TEXT: 'The adjustment text is empty. Nothing was noted.',
+  TEXT_TOO_LONG: `The adjustment has more than ${ADJUSTMENT_MAX_CHARS} characters. Nothing was noted: rewrite it as one short line and call again.`,
+  INVALID_DATE: 'valid_until must be a real date in the YYYY-MM-DD format. Nothing was noted.',
+  NOT_FOUND: 'This routine no longer exists. Nothing was noted.',
+  OWN_CONTROL: 'This routine follows structured parameters (curation criteria, e-mail search or flight monitor) and takes no free adjustments. Nothing was noted: change its parameters with editar_rotina instead.',
+};
+
+// The two chat tools. They run right away, with no confirmation card: an
+// adjustment is one visible, removable line, and the assistant tells the
+// owner what it noted. A routine's own run never gets them (the dispatch
+// removes configuration tools), so a routine cannot adjust itself.
+export const ROUTINE_ADJUSTMENT_TOOLS = ['note_routine_adjustment', 'remove_routine_adjustment'];
+export function createRoutineAdjustmentTools({ userId, listRoutines, resolveRoutine, routineCode, add = addRoutineAdjustment, remove = removeRoutineAdjustment }) {
+  // resolveRoutine writes its message, in Portuguese, around the verb it gets.
+  const routineOf = async ({ id, title }, tool, verbo = 'ajustar') => {
+    const rows = await listRoutines(userId);
+    if (!rows.length) return { error: 'The user has no routines.' };
+    const sel = resolveRoutine(rows, { id, titulo: title, verbo, tool });
+    return sel.err ? { error: sel.err } : { row: sel.row, label: `"${sel.row.title}" (#${routineCode(sel.row, rows)})` };
+  };
+  const which = {
+    title: { type: 'string', description: 'Title (or part of it) of the routine.' },
+    id: { type: 'string', description: 'OPTIONAL. Routine code (the #xxxx from listar_rotinas). Use it when two routines have the same or similar titles.' },
+  };
+  return [{
+    name: ROUTINE_ADJUSTMENT_TOOLS[0],
+    description: `Notes a lasting ADJUSTMENT on one of the user's recurring routines: one short line that every next run of that routine follows, with priority over the routine's task text. Use it when the owner corrects or reshapes WHAT a routine delivers in a way that must still hold on the next runs: a restriction ("no leg exercises, my knee is injured"), a preference ("shorter, please", "skip the quote at the end"), or a fact that changes the delivery for some days ("I am travelling until Tuesday, the hotel has no gym": pass valid_until with that Tuesday). The routine they mean is usually the one whose delivery appears just above in this conversation, under its title. Do NOT use it to change the schedule, the channel or the title, to pause or resume (that is editar_rotina or cancelar_rotina), nor when the owner asks to rewrite the whole task (editar_rotina). It takes effect right away, with no confirmation card: after it returns ok, tell the owner in one sentence what you noted (and until when, if it has an end), and that they can see or remove it on the Routines screen or by asking you. Write the line in the owner's language and self-contained, because the routine reads it without this conversation. Several separate changes are one call each. A routine keeps at most ${MAX_ADJUSTMENTS} adjustments.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        ...which,
+        text: { type: 'string', description: `The adjustment, as one short self-contained line in the owner's language (at most ${ADJUSTMENT_MAX_CHARS} characters). Example: "No leg exercises: knee injury."` },
+        valid_until: { type: 'string', description: 'OPTIONAL. Last day the adjustment applies, as YYYY-MM-DD, when the owner gave it an end ("until Tuesday", "this week", "tomorrow only"). Without it the adjustment stays until someone removes it.' },
+      },
+      required: ['text'],
+    },
+    run: async ({ title, id, text, valid_until } = {}) => {
+      const sel = await routineOf({ id, title }, ROUTINE_ADJUSTMENT_TOOLS[0]);
+      if (sel.error) return { ok: false, error: sel.error };
+      const out = await add({ routineId: sel.row.id, userId, text, until: valid_until });
+      if (out.ok) return { ok: true, routine: sel.label, result: out.already ? 'already_noted' : 'noted', adjustment: listed([out.adjustment])[0],
+        note: out.already ? 'This same adjustment was already noted. Nothing changed.' : 'Noted. The next runs of this routine follow it. Tell the owner what you noted and that it can be seen or removed on the Routines screen.' };
+      if (out.code === 'PAST_DATE') return { ok: false, routine: sel.label, error: `valid_until is before today (${out.today}) in the routine's time zone. Nothing was noted.` };
+      if (out.code === 'FULL') return { ok: false, routine: sel.label, adjustments: listed(out.adjustments),
+        error: `This routine already has ${MAX_ADJUSTMENTS} adjustments, the limit. Nothing was noted. Show the owner the current ones and ask which to remove (remove_routine_adjustment), or offer to rewrite the routine's task with editar_rotina so it absorbs them.` };
+      return { ok: false, routine: sel.label, error: WHY_NOT[out.code] || 'Nothing was noted.' };
+    },
+  }, {
+    name: ROUTINE_ADJUSTMENT_TOOLS[1],
+    description: 'Removes one adjustment noted on a recurring routine. Use it when the owner says an adjustment no longer applies ("my knee is fine now", "I am back from the trip", "forget that rule"). The adjustments of each routine and their [codes] come in listar_rotinas. It takes effect right away, with no confirmation card: after it returns ok, tell the owner in one sentence what was removed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        ...which,
+        adjustment: { type: 'string', description: 'Code of the adjustment to remove (the [xxxxxx] shown in listar_rotinas).' },
+      },
+      required: ['adjustment'],
+    },
+    run: async ({ title, id, adjustment } = {}) => {
+      const sel = await routineOf({ id, title }, ROUTINE_ADJUSTMENT_TOOLS[1]);
+      if (sel.error) return { ok: false, error: sel.error };
+      const out = await remove({ routineId: sel.row.id, userId, adjustmentId: adjustment });
+      if (out.ok) return { ok: true, routine: sel.label, result: 'removed', removed: out.removed.text, remaining: listed(out.adjustments),
+        note: 'Removed. The next runs of this routine no longer follow it.' };
+      return { ok: false, routine: sel.label, adjustments: listed(out.adjustments),
+        error: out.adjustments.length ? 'No adjustment with this code on this routine. Nothing was removed. The current ones are listed in `adjustments`: call again with the right [code].' : 'This routine has no adjustments. Nothing was removed.' };
+    },
+  }];
+}

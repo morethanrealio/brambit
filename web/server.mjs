@@ -137,7 +137,7 @@ import { imageHistoryMarkers, boundedImageCaption, readContextImage } from './im
 import { executeFlightMonitor, normalizeFlightMonitor } from './flight-monitor.mjs';
 import { previousFlightObservation, recordFlightObservation } from './db.mjs';
 import { channelThreadTitle, channelMessagesSinceLastRun, routineChannelFeedbackBlock } from './routine-feedback.mjs';
-import { activeAdjustments, routineAdjustmentsBlock } from './routine-adjustments.mjs';
+import { activeAdjustments, routineAdjustmentsBlock, routineAdjustmentsListing, createRoutineAdjustmentTools, ROUTINE_ADJUSTMENT_TOOLS } from './routine-adjustments.mjs';
 import { routineExecutionFrame, routineFinalText, routineCutResult, routineReminderDeliveryConflict, routineVarietyBlock, ROUTINE_REMINDER_CONFLICT, ROUTINE_NO_NEWS } from './routine-delivery.mjs';
 import { generateMessageDraft } from './message-draft.mjs';
 import { EMAIL_PAGINATION_RULE, trackEmailPagination } from './email-pagination.mjs';
@@ -3895,7 +3895,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
         // asks "where does this routine notify me?" and the real state stays invisible.
         const info = routineExecutionInfo(r);
         const tentativa = info ? ` Última tentativa — ${routineExecutionText(r)}${['failed','partial','uncertain','interrupted'].includes(info.status) ? ' Confira o conteúdo e o estado de entrega antes de repetir.' : ''}` : '';
-        return `• #${routineCode(r, rows)} ${r.enabled === false ? '(pausada) ' : ''}"${r.title}" — ${routineCadence(r)}. ${routineChannelText(r)}.${tentativa} ${String(r.prompt || '').slice(0, 120)}${r.config?.curation?'\nCritérios atuais (para editar sem perder preferências): '+JSON.stringify(editableCuration(r.config.curation))+'\nPedido completo: '+r.prompt:''}${r.config?.email_search?'\nBusca de e-mail (a plataforma executa; edite via busca_email): '+describeEmailSearch(r.config.email_search)+' Parâmetros: '+JSON.stringify(editableEmailSearch(r.config.email_search)):''}`;
+        return `• #${routineCode(r, rows)} ${r.enabled === false ? '(pausada) ' : ''}"${r.title}" — ${routineCadence(r)}. ${routineChannelText(r)}.${tentativa} ${String(r.prompt || '').slice(0, 120)}${r.config?.curation?'\nCritérios atuais (para editar sem perder preferências): '+JSON.stringify(editableCuration(r.config.curation))+'\nPedido completo: '+r.prompt:''}${r.config?.email_search?'\nBusca de e-mail (a plataforma executa; edite via busca_email): '+describeEmailSearch(r.config.email_search)+' Parâmetros: '+JSON.stringify(editableEmailSearch(r.config.email_search)):''}${routineAdjustmentsListing(r)}`;
       });
       return `Rotinas configuradas:\n${lines.join('\n')}`;
     },
@@ -3988,6 +3988,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   });
   // Stops a routine: pauses it, or deletes it only when the owner asks (routine-stop.mjs).
   registry.add(createStopRoutineTool({ userId, listRoutines: listRoutinesForUser, updateRoutine, deleteRoutine, resolveRoutine, routineCode, routineCadence }));
+  for (const t of createRoutineAdjustmentTools({ userId, listRoutines: listRoutinesForUser, resolveRoutine, routineCode })) registry.add(t);
   // Edits a routine that ALREADY EXISTS, in place (without deleting and recreating). Fixes the
   // gap where "reshaping a routine" turned into cancelar_rotina (immediate) +
   // criar_rotina (gated/pending), leaving the owner with no routine at all while the
@@ -6246,7 +6247,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // like the Lent one from 2026-08-15 to 2026-09-29, has to be able to end itself: it pauses).
   if (!noTools && kind === 'routine') {
     const podadas = [];
-    for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina']) {
+    for (const n of ['criar_rotina', 'editar_rotina', 'executar_rotina_agora', 'agendar_execucao_rotina', 'oferecer_rotina', 'dispensar_oferta_de_rotina', ...ROUTINE_ADJUSTMENT_TOOLS]) {
       if (registry.map.delete(n)) podadas.push(n);
     }
     if (podadas.length) console.log(`[rotina] configuration tools removed from the dispatch: ${podadas.join(', ')}.`);

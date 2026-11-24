@@ -6,7 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
-import { MAX_ADJUSTMENTS, activeAdjustments, addRoutineAdjustment, removeRoutineAdjustment, routineAdjustmentsBlock } from '../web/routine-adjustments.mjs';
+import { MAX_ADJUSTMENTS, activeAdjustments, addRoutineAdjustment, removeRoutineAdjustment, routineAdjustmentsBlock, routineAdjustmentsListing, createRoutineAdjustmentTools } from '../web/routine-adjustments.mjs';
+import { createRoutineSelect } from '../web/routine-select.mjs';
 
 const id = (n) => '00000000-0000-0000-0000-' + String(n).padStart(12, '0');
 const OWNER = id(1), OTHER = id(2), TZ = 'America/Sao_Paulo';
@@ -69,4 +70,23 @@ test('a run receives only the lines that still apply, and only in a routine with
   assert.equal(routineAdjustmentsBlock(active, { kind: 'routine', ownControl: true }), '');
   assert.equal(routineAdjustmentsBlock(active, { kind: 'chat' }), '');
   assert.equal(routineAdjustmentsBlock([], { kind: 'routine' }), '');
+});
+
+test('the chat tools note and remove a line on the routine the owner named', async () => {
+  await db.query('ALTER TABLE s.routines ADD COLUMN title text');
+  await routine(30, OWNER);
+  await db.query('UPDATE s.routines SET title=$2 WHERE id=$1', [id(30), 'Training of the day']);
+  const listRoutines = async (userId) => (await db.query('SELECT id, title, tz, config FROM s.routines WHERE user_id=$1 AND title IS NOT NULL', [userId])).rows;
+  const [note, remove] = createRoutineAdjustmentTools({ userId: OWNER, listRoutines, ...createRoutineSelect({ userTz: TZ }),
+    add: (a) => addRoutineAdjustment(a, db, 's'), remove: (a) => removeRoutineAdjustment(a, db, 's') });
+  const noted = await note.run({ title: 'training', text: 'No leg exercises: knee injury.', valid_until: day(5) });
+  assert.equal(noted.result, 'noted');
+  const [{ id: code }] = (await config(30)).adjustments;
+  assert.equal(noted.adjustment, `[${code}] No leg exercises: knee injury. (applies until ${day(5)})`);
+  assert.match(routineAdjustmentsListing((await listRoutines(OWNER))[0]), new RegExp(`\\[${code}\\] No leg exercises`));
+  assert.equal((await note.run({ title: 'no such routine', text: 'x' })).ok, false);
+  const wrong = await remove.run({ title: 'training', adjustment: 'zzzzzz' });
+  assert.deepEqual([wrong.ok, wrong.adjustments.length], [false, 1]);
+  assert.equal((await remove.run({ title: 'training', adjustment: code })).removed, 'No leg exercises: knee injury.');
+  assert.equal(routineAdjustmentsListing((await listRoutines(OWNER))[0]), '');
 });
