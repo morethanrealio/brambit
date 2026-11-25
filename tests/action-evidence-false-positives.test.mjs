@@ -84,6 +84,25 @@ test('own claims and done headlines without a receipt are still removed', () => 
   ]) cut(text);
 });
 
+// "Registrei isso no roadmap do time." passed untouched next to a refused
+// enviar_sugestao_time: the team was only recognized as a destination ("para o
+// time"), not as the owner of the record.
+test('our own record on the team roadmap or backlog is a support claim', () => {
+  for (const text of ['Registrei isso no roadmap do time.', 'Já anotei no backlog da equipe.', 'I have registered this on the team roadmap.']) {
+    const j = createActionJournal();
+    j.toolResult({ name:'enviar_sugestao_time', args:{ sugestao:'fixture' } }, { ok:false, error:'explicit request required' });
+    const out = j.finish(text);
+    assert.match(out, /A ação não foi concluída/, text);
+    assert.doesNotMatch(out, /roadmap|backlog/, text);
+    cut(text);
+  }
+  // Someone else's roadmap, or the person's own one with a real save, stays.
+  kept('O item está registrado no roadmap da equipe de vendas.');
+  const j = createActionJournal();
+  j.toolResult({ name:'memoria_anotar', args:{ pagina:'projeto' } }, 'Memória atualizada: projeto');
+  assert.equal(j.finish('Anotei no roadmap do projeto.'), 'Anotei no roadmap do projeto.');
+});
+
 // A memory save has no time or recipient to get wrong: the model's own words stay
 // and no receipt is appended. Before 2026-10-13, "Informação salva na memória
 // permanente" went into 142 replies in 14 days and the model started copying it.
