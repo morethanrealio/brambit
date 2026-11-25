@@ -405,13 +405,16 @@ function claimFamily(line, authenticatedEmailSources, toolText = []) {
     || (authenticatedEmailSources.size && urls.some(url => !authenticatedEmailSources.has(url)) && new RegExp(ACTION_WORD.source).test(t) && { kind:'own' });
   if (!claim) return null;
   // "Pedido"/"demanda" name anything (an order, a client's request); only
-  // our own sending makes them a support request. Memory needs its noun
+  // our own sending makes them a support request. So does our own record on
+  // the team's roadmap or backlog ("registrei no roadmap do time"): the team
+  // there is the owner, not the destination `team` matches. Memory needs its noun
   // unless the claim is ours or a headline ("Anotado."): "o material
   // guardado na pasta" is not a memory.
   const asserted = claim.kind !== 'state';
   const memoryNoun = /\b(?:memoria|memory)\b/.test(t);
+  const teamRecord = new RegExp(String.raw`\b(?:roadmap|backlog)\s+(?:d[oa]s?|del|of\s+(?:the|our))\s+(?:time|equipe|equipo|suporte|soporte|desenvolvimento|support|team|${marcaNoTexto()})\b|\b(?:team|support)(?:'s)?\s+(?:roadmap|backlog)\b`);
   const family = /\b(?:lista|list|checklist)\b/.test(t) ? 'list'
-    : /\b(?:bug|sugestao|desenvolvimento|support)\b/.test(t) || team.test(t) || !memoryNoun && claim.kind === 'own' && /\b(?:pedido|demanda)\b/.test(t) ? 'support'
+    : /\b(?:bug|sugestao|desenvolvimento|support)\b/.test(t) || team.test(t) || !memoryNoun && claim.kind === 'own' && (/\b(?:pedido|demanda)\b/.test(t) || teamRecord.test(t)) ? 'support'
     : memoryNoun || asserted && /\b(?:anotei|guardei|salvei|memorizei|saved|stored|noted|guardad[oa]s?|anotad[oa]s?)\b/.test(t) ? 'memory'
     : /\b(?:lembretes?|avisos?|alarmes?|reminders?|alarms?|recordatorios?)\b/.test(t) ? 'reminder'
     : /\b(?:mensagem|whatsapp|telegram|email|e-mail|rascunho|message|draft|correo|borrador)\b/.test(t) ? 'message' : null;
