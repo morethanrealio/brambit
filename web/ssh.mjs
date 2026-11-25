@@ -30,8 +30,12 @@ const executionResult=(body,state,operation)=>JSON.stringify({...body,effect:exe
 // redacted. Covers what leaked into a chat on 15/07 (Postgres password in
 // DATABASE_URL, AWS_ACCESS_KEY_ID/SECRET) + the usual suspects. Used here and
 // in coding.mjs (which imports it to avoid duplication).
-export function maskSecrets(s, { prose = false } = {}) {
+// `keep`: values the platform itself handed over to be passed on (the login of
+// the owner's own app). Written as the value of a password, exactly these come
+// out as they are; a different value in the same place is still masked.
+export function maskSecrets(s, { prose = false, keep = null } = {}) {
   let t = String(s ?? '');
+  const kept = keptValues(keep);
   // Password in connection string: scheme://user:PASSWORD@host  ->  user:***@host
   t = t.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)([^@\s/]+)(@)/gi, '$1***$3');
   // AWS Access Key ID (AKIA/ASIA + 16 alfanum).
@@ -58,11 +62,11 @@ export function maskSecrets(s, { prose = false } = {}) {
   // behavior.
   t = t.replace(
     /\b([A-Za-z0-9_]*(?:SECRET|PASSWORD|PASSWD|PASS|TOKEN|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CLIENT_SECRET)[A-Za-z0-9_]*)(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
-    (m, name, sep) => (prose && !(name.includes('_') || /^[A-Z0-9]+$/.test(name)) ? m : `${name}${sep}***`),
+    (m, name, sep, value) => ((prose && !(name.includes('_') || /^[A-Z0-9]+$/.test(name))) || kept(value) ? m : `${name}${sep}***`),
   );
   // Entire PEM private key block.
   t = t.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '***PRIVATE_KEY***');
-  return maskPasswordLabels(t);
+  return maskPasswordLabels(t, kept);
 }
 
 // Password written in plain text (pt/es/en), which the by-NAME regex above doesn't catch
@@ -85,10 +89,21 @@ function maskPasswordValue(value) {
   return q ? `${q}***${q}` : '***';
 }
 
-function maskPasswordLabels(t) {
-  t = t.replace(RE_PW_SEP, (m, head, value) => (PW_EMPTY.test(value) ? m : head + maskPasswordValue(value)));
+// The value as it was written, without the quotes, backticks or bold around it
+// and without the punctuation that ends the sentence.
+function keptValues(keep) {
+  const values = new Set([...(keep || [])].filter((v) => typeof v === 'string' && v));
+  if (!values.size) return () => false;
+  return (written) => {
+    const bare = String(written).replace(/^(?:\*\*|["'`])/, '').replace(/(?:\*\*|["'`])$/, '');
+    return values.has(bare) || values.has(bare.replace(/[.,;!?)]+$/, ''));
+  };
+}
+
+function maskPasswordLabels(t, kept = () => false) {
+  t = t.replace(RE_PW_SEP, (m, head, value) => (PW_EMPTY.test(value) || kept(value) ? m : head + maskPasswordValue(value)));
   return t.replace(RE_PW_VERB, (m, head, value) => {
-    if (PW_EMPTY.test(value)) return m;
+    if (PW_EMPTY.test(value) || kept(value)) return m;
     const forte = /^(?:\*\*|["'`])/.test(value) || /[\p{N}\p{P}\p{S}]/u.test(value);
     return forte ? head + maskPasswordValue(value) : m;
   });

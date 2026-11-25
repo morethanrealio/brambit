@@ -1150,7 +1150,7 @@ import { crossChannelDigest, conversationsOverviewForPrompt } from './conversati
 import { wikiTools, wikiContext, updateUserProfile } from './wiki.mjs';
 import { pruneWikiPageVersions } from './db.mjs';
 import { spacesTools, spaceInviteTool, spacesContext, isPrivateSpace } from './spaces.mjs';
-import { turnGate } from './direct-actions.mjs';
+import { turnGate, ownerAppPasswords } from './direct-actions.mjs';
 import { skillsTools, skillInstallTool, skillShareTool, skillRunTool, skillsContext, stripStaleSkillReads } from './skills.mjs';
 import { trackersTools, trackersContext } from './trackers.mjs';
 import { checklistTools, CHECKLIST_CONTEXT } from './checklists.mjs';
@@ -1246,7 +1246,7 @@ function parseRecurrence({ repetirCadaMin, repetirAte, startMs, tz }) {
 // prose (extra defense; tool outputs already come out masked at the source).
 const TOOLS_COM_FONTES = new Set(['buscar_web', 'pesquisar', 'abrir_link']);
 function sanitizeAssistantText(t, opts = {}) {
-  return desgrudarPontuacaoDeLink(maskSecrets(limparTextoFinal(t, opts), { prose: true }).trim());
+  return desgrudarPontuacaoDeLink(maskSecrets(limparTextoFinal(t, opts), { prose: true, keep: opts.keep }).trim());
 }
 
 // Single Google reconnection message (used when there's no refresh_token or the
@@ -6512,7 +6512,7 @@ async function runConversationTurn(agent, thread, userId, message, opts = {}) {
   // returns a source list. Without that, a "[1]" in the text is from the assistant or the owner.
   text = sanitizeAssistantText(text, {
     comFontes: buscaNativa || Object.keys(toolCounts).some((n) => TOOLS_COM_FONTES.has(n)),
-    fontes: fontesDoTurno, language: idiomaResposta,
+    fontes: fontesDoTurno, language: idiomaResposta, keep: ownerAppPasswords(messages, { kind, agentCategory }),
   });
   if (buscaNativa && fontesGrounding?.length) platformChecks.add('busca_nativa'); // server-side, no tool call
   // Jev (#48): the "I just checked" claim the rule misses (turn-claim-guard.mjs). The rule still applies below.
