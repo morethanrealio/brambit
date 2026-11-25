@@ -19,6 +19,7 @@ const ROUTINE_ENDS_ITSELF = new Set(['cancelar_rotina', 'remover_monitor']);
 // Telegram bot, their WhatsApp. Email, Slack, devices, webhooks, routines and
 // onboarding keep the card, and so does a team assistant.
 const OWNER_CHANNELS = new Set(['chat', 'telegram', 'whatsapp']);
+const ownerIsTyping = ({ kind, agentCategory }) => OWNER_CHANNELS.has(kind) && agentCategory !== 'grupo';
 
 const guestList = (value) => (Array.isArray(value) ? value : String(value ?? '').split(/[,;\s]+/))
   .map((v) => String(v ?? '').trim()).filter(Boolean);
@@ -57,7 +58,7 @@ function either(...policies) {
 export function turnGate(tool, ctx) {
   if (!tool) return tool;
   const { kind, threadId, gateOpts, agentCategory } = ctx;
-  const ownerOnly = OWNER_CHANNELS.has(kind) && agentCategory !== 'grupo' && OWNER_ONLY[tool.name];
+  const ownerOnly = ownerIsTyping(ctx) && OWNER_ONLY[tool.name];
   const direct = ownerOnly ? (args) => ownerOnly(args, ctx) : null;
   const noCard = either(NO_CARD[tool.name], direct);
   // Already wrapped where it was registered (addGated), as the app tools are:
@@ -74,4 +75,22 @@ export function turnGate(tool, ctx) {
   if (kind === 'routine' && ROUTINE_ENDS_ITSELF.has(tool.name)) return selfStopOnly(tool);
   const policy = either(tool.runWithoutConfirmation, noCard);
   return gateTool(policy ? { ...tool, runWithoutConfirmation: policy } : tool, threadId, gateOpts);
+}
+
+// The passwords the access check gave the model in this conversation, for it
+// to pass on to the owner. The secret mask of the reply (maskSecrets) lets
+// exactly these through, and only where the owner is the one typing: without
+// this the owner asked for the app's password and read "***".
+// ctx: { kind, agentCategory }.
+export function ownerAppPasswords(messages, ctx) {
+  const passwords = new Set();
+  if (!ownerIsTyping(ctx)) return passwords;
+  for (const m of messages || []) {
+    if (m?.role !== 'tool' || m.name !== 'definir_acesso_sistema' || typeof m.content !== 'string') continue;
+    try {
+      const password = JSON.parse(m.content)?.credenciais?.senha;
+      if (typeof password === 'string' && password) passwords.add(password);
+    } catch { /* a collapsed or cut result carries no login */ }
+  }
+  return passwords;
 }

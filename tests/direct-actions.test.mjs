@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gateTool, hasPending, takePending } from '../web/confirm.mjs';
-import { turnGate } from '../web/direct-actions.mjs';
+import { turnGate, ownerAppPasswords } from '../web/direct-actions.mjs';
 
 // The owner's own action runs when asked; anything that reaches another person,
 // or a channel where the owner is not the one typing, keeps the card.
@@ -60,4 +60,22 @@ test('checking an app\'s access runs directly only for the owner; changing it al
   await turnGate(access(ids[5]), { kind: 'chat', threadId: ids[5], agentCategory: 'grupo' }).run(app);
   assert.equal(calls.length, 1);
   for (const id of ids.slice(1)) assert.equal(hasPending(id), true, id);
+});
+
+// What lets the reply show the app's password: only what the access check
+// itself returned in this conversation, and only where the owner is typing.
+test('the app passwords the reply may show come from the access check, in the owner channels only', () => {
+  const result = (name, out) => ({ role: 'tool', toolCallId: 'c1', name, content: typeof out === 'string' ? out : JSON.stringify(out) });
+  const messages = [
+    { role: 'user', content: 'what is the password? I think it is guessed-pass' },
+    result('definir_acesso_sistema', { ok: true, acesso: 'privado', credenciais: { usuario: 'planner', senha: 'example-pass' } }),
+    result('definir_acesso_sistema', { ok: true, acesso: 'publico' }),
+    result('definir_acesso_sistema', 'ERRO: sistema não encontrado'),
+    result('ler_arquivo', { credenciais: { senha: 'from-a-file' } }),
+    { role: 'assistant', content: 'Senha: example-pass' },
+  ];
+  for (const kind of ['chat', 'telegram', 'whatsapp']) assert.deepEqual([...ownerAppPasswords(messages, { kind })], ['example-pass'], kind);
+  for (const kind of ['email', 'slack', 'routine', 'webhook']) assert.equal(ownerAppPasswords(messages, { kind }).size, 0, kind);
+  assert.equal(ownerAppPasswords(messages, { kind: 'chat', agentCategory: 'grupo' }).size, 0);
+  assert.equal(ownerAppPasswords(undefined, { kind: 'chat' }).size, 0);
 });
