@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fotoGoogle, fotoOutlook, mudancas, textoAviso, createCalendarWatch } from '../web/calendar-watch.mjs';
+import { fotoGoogle, fotoOutlook, mudancas, textoAviso, createCalendarWatch, createCalendarNotice } from '../web/calendar-watch.mjs';
 
 const ev = (o = {}) => ({ id: 'e1', summary: 'Reunião X', status: 'confirmed', organizer: { email: 'outra@x.invalid' },
   start: { dateTime: '2026-09-30T15:00:00-03:00' }, end: { dateTime: '2026-09-30T16:00:00-03:00' }, ...o });
@@ -39,6 +39,34 @@ test("notice text in the person's timezone", () => {
   assert.match(t, /^Mudança na sua agenda: "Reunião X": mudou de .*30\/09 às 15:00 para .*30\/09 às 16:00\.$/);
   const dois = textoAviso([{ antes, atual, lista: [{ tipo: 'horario' }] }, { antes, atual: null, lista: [{ tipo: 'cancelado' }] }], 'America/Sao_Paulo');
   assert.match(dois, /^Mudanças na sua agenda:\n\n• .*\n• "Reunião X", que era .* foi cancelado ou saiu da sua agenda\.$/);
+});
+
+test('only the end changed: the notice says until when, not the unchanged start twice', () => {
+  const antes = fotoGoogle(ev({ end: { dateTime: '2026-09-30T15:30:00-03:00' } }));
+  const atual = fotoGoogle(ev());
+  const lista = mudancas(antes, atual);
+  assert.deepEqual(lista, [{ tipo: 'end' }]);
+  assert.match(textoAviso([{ antes, atual, lista }], 'America/Sao_Paulo'),
+    /^Mudança na sua agenda: "Reunião X" \(.*30\/09 às 15:00\): agora vai até as 16:00 \(antes ia até as 15:30\)\.$/);
+  const noite = fotoGoogle(ev({ end: { dateTime: '2026-10-01T01:00:00-03:00' } }));
+  assert.match(textoAviso([{ antes, atual: noite, lista: mudancas(antes, noite) }], 'America/Sao_Paulo'),
+    /agora vai até qui, 01\/10 às 01:00 \(antes ia até qua, 30\/09 às 15:30\)\.$/);
+  const dia = (fim) => fotoGoogle(ev({ start: { date: '2026-09-30' }, end: { date: fim } }));
+  assert.match(textoAviso([{ antes: dia('2026-10-01'), atual: dia('2026-10-03'), lista: mudancas(dia('2026-10-01'), dia('2026-10-03')) }], 'America/Sao_Paulo'),
+    /"Reunião X" \(30\/09 \(dia inteiro\)\): agora vai até 02\/10 \(antes ia até 30\/09\)\.$/);
+});
+
+test("a notice that went out is copied to the conversation of the channel's assistant", async () => {
+  const kept = [];
+  const notice = (sent) => createCalendarNotice({ notifyOwner: async () => sent, persist: async (r, text) => kept.push({ ...r, text }), firstAgentId: async () => 'a-first' });
+  await notice({ ok: true, channel: 'whatsapp', agentId: 'a-active' })('u1', 'x');
+  await notice({ ok: true, channel: 'whatsapp', agentId: null })('u1', 'y');
+  await notice({ ok: true, channel: 'telegram', agentId: null })('u1', 'no assistant bound to the bot');
+  await notice({ skipped: true, reason: 'sem_canal' })('u1', 'not sent');
+  assert.deepEqual(kept, [
+    { agent_id: 'a-active', user_id: 'u1', channel: 'whatsapp', text: 'x' },
+    { agent_id: 'a-first', user_id: 'u1', channel: 'whatsapp', text: 'y' },
+  ]);
 });
 
 // In-memory pool with only the queries the module uses.
