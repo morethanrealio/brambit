@@ -41,6 +41,21 @@ test("notice text in the person's timezone", () => {
   assert.match(dois, /^Mudanças na sua agenda:\n\n• .*\n• "Reunião X", que era .* foi cancelado ou saiu da sua agenda\.$/);
 });
 
+test('only the end changed: the notice says until when, not the unchanged start twice', () => {
+  const antes = fotoGoogle(ev({ end: { dateTime: '2026-09-30T15:30:00-03:00' } }));
+  const atual = fotoGoogle(ev());
+  const lista = mudancas(antes, atual);
+  assert.deepEqual(lista, [{ tipo: 'end' }]);
+  assert.match(textoAviso([{ antes, atual, lista }], 'America/Sao_Paulo'),
+    /^Mudança na sua agenda: "Reunião X" \(.*30\/09 às 15:00\): agora vai até as 16:00 \(antes ia até as 15:30\)\.$/);
+  const noite = fotoGoogle(ev({ end: { dateTime: '2026-10-01T01:00:00-03:00' } }));
+  assert.match(textoAviso([{ antes, atual: noite, lista: mudancas(antes, noite) }], 'America/Sao_Paulo'),
+    /agora vai até qui, 01\/10 às 01:00 \(antes ia até qua, 30\/09 às 15:30\)\.$/);
+  const dia = (fim) => fotoGoogle(ev({ start: { date: '2026-09-30' }, end: { date: fim } }));
+  assert.match(textoAviso([{ antes: dia('2026-10-01'), atual: dia('2026-10-03'), lista: mudancas(dia('2026-10-01'), dia('2026-10-03')) }], 'America/Sao_Paulo'),
+    /"Reunião X" \(30\/09 \(dia inteiro\)\): agora vai até 02\/10 \(antes ia até 30\/09\)\.$/);
+});
+
 // In-memory pool with only the queries the module uses.
 // `conectados` = who has a calendar connected (what the candidate SELECT would find).
 function fakePool(conectados = ['u1']) {

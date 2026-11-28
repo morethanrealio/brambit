@@ -52,6 +52,8 @@ export const SCHEMA = `
 // ── Normalization ────────────────────────────────────────────────────────────
 // Minimal snapshot of an event: only what decides whether a relevant change happened.
 const ms = (v) => { const t = Date.parse(v || ''); return Number.isFinite(t) ? t : null; };
+// Times are compared by the minute, which is what the notice text shows.
+const minute = (v) => { const t = ms(v); return t == null ? null : Math.floor(t / 60_000); };
 
 export function fotoGoogle(e) {
   const dia = !e.start?.dateTime;
@@ -91,26 +93,40 @@ export function mudancas(antes, atual) {
   if (!atual || atual.cancelado) return [{ tipo: 'cancelado' }];
   if (atual.recusei) return [];
   const out = [];
-  const horaMudou = antes.dia_inteiro !== atual.dia_inteiro
-    || (antes.dia_inteiro ? antes.inicio !== atual.inicio || antes.fim !== atual.fim
-      : ms(antes.inicio) !== ms(atual.inicio) || ms(antes.fim) !== ms(atual.fim));
-  if (horaMudou) out.push({ tipo: 'horario' });
+  const startChanged = antes.dia_inteiro !== atual.dia_inteiro
+    || (antes.dia_inteiro ? antes.inicio !== atual.inicio : minute(antes.inicio) !== minute(atual.inicio));
+  const endChanged = antes.dia_inteiro ? antes.fim !== atual.fim : minute(antes.fim) !== minute(atual.fim);
+  if (startChanged) out.push({ tipo: 'horario' });
+  // Same start, another end (the event got longer or shorter). Its own type: the 'horario'
+  // text only shows the start, and would say it moved from a time to that same time.
+  else if (endChanged) out.push({ tipo: 'end' });
   if ((antes.local || '').trim() !== (atual.local || '').trim()) out.push({ tipo: 'local' });
   return out;
 }
 
 // ── Texto ───────────────────────────────────────────────────────────────────
+const hourText = (v, tz) => new Date(v).toLocaleTimeString('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+const dayText = (v, tz) => new Date(v).toLocaleDateString('pt-BR', { timeZone: tz, weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
 function quando(f, tz) {
   if (!f?.inicio) return '?';
   if (f.dia_inteiro) {
     const [, m, d] = f.inicio.split('-');
     return `${d}/${m} (dia inteiro)`;
   }
-  const d = new Date(f.inicio);
-  const data = d.toLocaleDateString('pt-BR', { timeZone: tz, weekday: 'short', day: '2-digit', month: '2-digit' });
-  const hora = d.toLocaleTimeString('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
-  return `${data.replace('.', '')} às ${hora}`;
+  return `${dayText(f.inicio, tz)} às ${hourText(f.inicio, tz)}`;
 }
+
+// Where the event ends, for the 'end' notice. An all-day end is stored as the day after the
+// last one; the date of a timed end only shows when the event doesn't end on the day it starts.
+function untilWhen(f, tz, withDate) {
+  if (!f?.fim) return '?';
+  if (f.dia_inteiro) {
+    const [, m, d] = new Date(Date.parse(`${f.fim}T00:00:00Z`) - 86400_000).toISOString().slice(0, 10).split('-');
+    return `${d}/${m}`;
+  }
+  return withDate ? `${dayText(f.fim, tz)} às ${hourText(f.fim, tz)}` : `as ${hourText(f.fim, tz)}`;
+}
+const endsAnotherDay = (f, tz) => !f.dia_inteiro && !!f.inicio && !!f.fim && dayText(f.inicio, tz) !== dayText(f.fim, tz);
 
 export function linhaAviso({ antes, atual, lista }, tz = defaultTimezone()) {
   const t = `"${antes.titulo}"`;
@@ -119,6 +135,10 @@ export function linhaAviso({ antes, atual, lista }, tz = defaultTimezone()) {
   }
   const partes = [];
   if (lista.some((m) => m.tipo === 'horario')) partes.push(`mudou de ${quando(antes, tz)} para ${quando(atual, tz)}`);
+  if (lista.some((m) => m.tipo === 'end')) {
+    const withDate = endsAnotherDay(antes, tz) || endsAnotherDay(atual, tz);
+    partes.push(`agora vai até ${untilWhen(atual, tz, withDate)} (antes ia até ${untilWhen(antes, tz, withDate)})`);
+  }
   if (lista.some((m) => m.tipo === 'local')) partes.push(atual.local ? `o local agora é ${atual.local}` : 'ficou sem local definido');
   const ref = lista.some((m) => m.tipo === 'horario') ? '' : ` (${quando(atual, tz)})`;
   return `${t}${ref}: ${partes.join(' e ')}.`;
