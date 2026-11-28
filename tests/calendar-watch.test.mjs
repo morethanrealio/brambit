@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fotoGoogle, fotoOutlook, mudancas, textoAviso, createCalendarWatch } from '../web/calendar-watch.mjs';
+import { fotoGoogle, fotoOutlook, mudancas, textoAviso, createCalendarWatch, createCalendarNotice } from '../web/calendar-watch.mjs';
 
 const ev = (o = {}) => ({ id: 'e1', summary: 'Reunião X', status: 'confirmed', organizer: { email: 'outra@x.invalid' },
   start: { dateTime: '2026-09-30T15:00:00-03:00' }, end: { dateTime: '2026-09-30T16:00:00-03:00' }, ...o });
@@ -54,6 +54,19 @@ test('only the end changed: the notice says until when, not the unchanged start 
   const dia = (fim) => fotoGoogle(ev({ start: { date: '2026-09-30' }, end: { date: fim } }));
   assert.match(textoAviso([{ antes: dia('2026-10-01'), atual: dia('2026-10-03'), lista: mudancas(dia('2026-10-01'), dia('2026-10-03')) }], 'America/Sao_Paulo'),
     /"Reunião X" \(30\/09 \(dia inteiro\)\): agora vai até 02\/10 \(antes ia até 30\/09\)\.$/);
+});
+
+test("a notice that went out is copied to the conversation of the channel's assistant", async () => {
+  const kept = [];
+  const notice = (sent) => createCalendarNotice({ notifyOwner: async () => sent, persist: async (r, text) => kept.push({ ...r, text }), firstAgentId: async () => 'a-first' });
+  await notice({ ok: true, channel: 'whatsapp', agentId: 'a-active' })('u1', 'x');
+  await notice({ ok: true, channel: 'whatsapp', agentId: null })('u1', 'y');
+  await notice({ ok: true, channel: 'telegram', agentId: null })('u1', 'no assistant bound to the bot');
+  await notice({ skipped: true, reason: 'sem_canal' })('u1', 'not sent');
+  assert.deepEqual(kept, [
+    { agent_id: 'a-active', user_id: 'u1', channel: 'whatsapp', text: 'x' },
+    { agent_id: 'a-first', user_id: 'u1', channel: 'whatsapp', text: 'y' },
+  ]);
 });
 
 // In-memory pool with only the queries the module uses.

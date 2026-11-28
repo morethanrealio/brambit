@@ -92,7 +92,7 @@ const appTaskStore = createAppTaskStore({root: process.env.APP_TASK_STORE_DIR ||
 import { encryptSecret as sealAppTask, decryptSecret as openAppTask, vaultEnabled, vaultConfigured, encryptSecret, decryptSecret, initVaultNoBoot, nomeDaChaveExterna } from './vault.mjs';
 import { createAppTaskStore, pgTaskLock } from './app-task-store.mjs';
 import { onboardingStore, taskMetrics, creditSpend, calendarWatchDb, pgConfig } from './db.mjs';
-import { createCalendarWatch, JANELA_DIAS as AGENDA_JANELA_DIAS } from './calendar-watch.mjs';
+import { createCalendarWatch, createCalendarNotice, JANELA_DIAS as AGENDA_JANELA_DIAS } from './calendar-watch.mjs';
 import {programmingMeasurement, measuredActionState} from './task-metrics.mjs';
 import { publicState, starterPrompt, OnboardingError, id as onboardingId } from './onboarding-store.mjs';
 import { confirmationFailureContext } from './app-draft-validation.mjs';
@@ -1858,7 +1858,7 @@ const calendarWatch = createCalendarWatch({
     .map((a) => ({ email: a.google_email, token: () => validGoogleToken(userId, a.google_email) })),
   microsoftToken: calendarWatchMsToken,
   timezone: (userId) => getUserTimezone(userId),
-  notify: (userId, text) => notifyOwner(userId, text, { keepBreaks: true }),
+  notify: createCalendarNotice({ notifyOwner, persist: persistProactiveToThread, firstAgentId: async (userId) => (await listAgents(userId))[0]?.id }),
 });
 async function notifyOwner(userId, text, { channel, keepBreaks = false, strictChannel = false } = {}) {
   // By default the proactive note is ONE LINE (the a2a format, which is a short
@@ -1874,19 +1874,19 @@ async function notifyOwner(userId, text, { channel, keepBreaks = false, strictCh
     const bot = await getTelegramBotForUser(userId).catch(() => null);
     if (!bot?.token || !bot?.chat_id) return false;
     await sendTelegramMessage(bot.token, bot.chat_id, `💬 ${body}`);
-    return true;
+    return { channel: 'telegram', agentId: bot.agent_id || null };
   };
   const tryWhatsApp = async () => {
     if (!waEnabled()) return false;
     const link = await getWhatsAppLinkForUser(userId).catch(() => null);
     if (!link?.wa_phone) return false;
     await sendWhatsAppProactive(link.wa_phone, body);
-    return true;
+    return { channel: 'whatsapp', agentId: link.active_agent_id || null };
   };
   const tryEmail = async () => {
     if (!EMAIL_NOTIFY_ON()) return false;
     const r = await notifyOwnerEmail(userId, { subject: 'Recado do seu assistente', text: body });
-    return !!r?.ok;
+    return r?.ok ? { channel: 'email' } : false;
   };
   // Order of attempts per origin channel/override. Email only enters the
   // order when it was EXPLICITLY requested (channel==='email'); in other cases
@@ -1900,7 +1900,7 @@ async function notifyOwner(userId, text, { channel, keepBreaks = false, strictCh
   else if (channel === 'email') order = [tryEmail, tryTelegram, tryWhatsApp];
   else order = [tryTelegram, tryWhatsApp, tryEmail]; // web/unknown → push available
   for (const step of order) {
-    try { if (await step()) return { ok: true }; }
+    try { const sent = await step(); if (sent) return { ok: true, ...sent }; }
     catch (e) { console.error('[notifyOwner]', channel || 'auto', e?.message ?? e); }
   }
   return { skipped: true, reason: 'sem_canal' };

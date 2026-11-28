@@ -150,6 +150,21 @@ export function textoAviso(itens, tz) {
   return `Mudanças na sua agenda:\n\n${itens.map((i) => `• ${linhaAviso(i, tz)}`).join('\n')}`;
 }
 
+// Sends the notice and keeps a copy in the conversation of the channel it went to, as a
+// routine's delivery does. The person answers there, and an assistant with no copy has no
+// record of the notice: asked about it, it says nothing was sent.
+// deps: notifyOwner(userId, text, opts) -> { ok, channel, agentId }, persist({ agent_id, user_id, channel }, text),
+// firstAgentId(userId). WhatsApp with no active assistant talks to the person's first one.
+export function createCalendarNotice({ notifyOwner, persist, firstAgentId }) {
+  return async (userId, text) => {
+    const sent = await notifyOwner(userId, text, { keepBreaks: true });
+    if (!sent?.ok || !['telegram', 'whatsapp'].includes(sent.channel)) return sent;
+    const agentId = sent.agentId || (sent.channel === 'whatsapp' ? await firstAgentId(userId).catch(() => null) : null);
+    if (agentId) await persist({ agent_id: agentId, user_id: userId, channel: sent.channel }, text);
+    return sent;
+  };
+}
+
 // ── Reading calendars ─────────────────────────────────────────────────────
 class HttpErro extends Error { constructor(status, msg) { super(`${status}: ${msg}`); this.status = status; } }
 
